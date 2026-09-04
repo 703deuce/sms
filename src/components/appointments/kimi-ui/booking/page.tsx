@@ -23,7 +23,7 @@ export default function BookingView({ model, actions, saving = false, saved = fa
     <div className="booking-page">
       <div className="booking-header">
         <div className="booking-title-row">
-          <Globe size={22} className="text-foreground" strokeWidth={1.8} />
+          <Globe size={20} className="text-foreground" strokeWidth={1.8} />
           <h1 className="booking-title">Booking</h1>
         </div>
         <p className="booking-subtitle">
@@ -63,12 +63,17 @@ export default function BookingView({ model, actions, saving = false, saved = fa
           />
         </div>
         <div className="booking-right">
-          <LivePreview
-            businessInfo={model.businessInfo}
-            appointmentTypes={model.appointmentTypes}
-            whyBookItems={model.whyBookItems}
-            smsConsent={model.smsConsent}
-          />
+          <div className="booking-preview-sticky">
+            <LivePreview
+              businessInfo={model.businessInfo}
+              appointmentTypes={model.appointmentTypes}
+              whyBookItems={model.whyBookItems}
+              smsConsent={model.smsConsent}
+            />
+            <p className="mt-3 text-center text-[12px] leading-relaxed text-muted-foreground">
+              Preview is an approximation and may vary slightly from the live booking page.
+            </p>
+          </div>
         </div>
       </div>
     </div>

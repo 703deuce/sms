@@ -19,22 +19,23 @@ type Props = {
 export default function SetupView({ model, actions, saving = false, copied = false }: Props) {
   return (
     <div className="setup-page" style={{ background: "#f7f7fa", minHeight: "100%" }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 32px 48px" }}>
-        <div style={{ marginBottom: 22 }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 32px 56px" }}>
+        <div style={{ marginBottom: 24 }}>
           <h1
             style={{
-              fontSize: 26,
+              fontSize: 24,
               fontWeight: 700,
+              letterSpacing: "-0.02em",
               color: "#1c1c2e",
               margin: 0,
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: 8,
             }}
           >
-            Get Started <span style={{ fontSize: 24 }}>👋</span>
+            Get Started <span style={{ fontSize: 22 }}>👋</span>
           </h1>
-          <p style={{ fontSize: 13.5, color: "#8a8aa3", margin: "6px 0 0" }}>
+          <p style={{ fontSize: 13, color: "#8a8aa3", margin: "5px 0 0" }}>
             Set up your booking system and start taking appointments.
           </p>
         </div>
@@ -43,11 +44,11 @@ export default function SetupView({ model, actions, saving = false, copied = fal
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) 320px",
-            gap: 22,
+            gap: 24,
             alignItems: "start",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, minWidth: 0 }}>
             <SetupProgressCard progress={model.progress} onboardingComplete={model.onboardingComplete} />
             <StepList steps={model.steps} onNavigate={actions.onStepNavigate} />
             <AllSetBanner
@@ -58,7 +59,7 @@ export default function SetupView({ model, actions, saving = false, copied = fal
             />
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <LaunchReadinessCard readinessItems={model.readinessItems} />
             <BookingLinkCard
               bookingLink={model.bookingLink}

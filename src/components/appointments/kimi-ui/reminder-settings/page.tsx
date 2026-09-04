@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Lock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import MergeTagsCard from './components/MergeTagsCard';
 import SendTestCard from './components/SendTestCard';
 import ReminderCard from './components/ReminderCard';
@@ -33,28 +34,24 @@ export default function ReminderSettingsView({
 }: Props) {
   return (
     <div className="reminder-settings-page mx-auto max-w-[1100px] px-8 py-7">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">
             Reminder Settings
           </h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
             Automate appointment reminders to reduce no-shows and keep your schedule on track.
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-4 pt-1">
           {saved && !saving ? (
             <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600">
               <Check className="h-4 w-4" /> All changes saved
             </span>
           ) : null}
-          <button
-            onClick={actions.onSave}
-            disabled={saving}
-            className="h-9 rounded-lg bg-[#4f46e5] px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#4338ca] disabled:opacity-60"
-          >
+          <Button onClick={actions.onSave} disabled={saving} size="md" className="text-[13px]">
             {saving ? 'Saving…' : 'Save reminder settings'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -73,10 +70,12 @@ export default function ReminderSettingsView({
         />
       </div>
 
-      <div className="mt-7 flex items-start justify-between">
+      <div className="mt-7 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[15px] font-semibold text-foreground">Reminder sequence</h2>
-          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
+            Reminder sequence
+          </h2>
+          <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
             Confirmation is sent immediately after booking. Other reminders are scheduled relative
             to the appointment time.
           </p>

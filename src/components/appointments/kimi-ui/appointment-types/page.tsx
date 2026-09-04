@@ -21,35 +21,37 @@ export default function AppointmentTypesView({ model, actions }: Props) {
 
   return (
     <div className="reference-root">
-      <div className="max-w-[1560px] mx-auto px-8 py-6">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-[26px] font-bold tracking-tight">Appointment Types</h1>
-            <p className="text-[13.5px] text-[#8a8fa3] mt-1">
+      <div className="max-w-[1560px] mx-auto px-6 lg:px-8 py-6">
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <h1 className="text-[24px] leading-[30px] font-bold tracking-tight text-[#1a1d29]">
+              Appointment Types
+            </h1>
+            <p className="text-[13.5px] leading-[20px] text-[#8a8fa3] mt-1">
               Manage the services you offer and how customers can book with you.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 shrink-0 pt-0.5">
             <button
               type="button"
-              className="flex items-center gap-2 text-[13px] font-medium px-4 py-2.5 rounded-lg border border-[#e4e6ee] bg-white hover:bg-[#f7f8fb]"
+              className="flex items-center gap-1.5 text-[13px] font-medium h-9 px-3.5 rounded-lg border border-[#e4e6ee] bg-white text-[#3c4257] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-[#f7f8fb] hover:border-[#d8dbe6] disabled:opacity-50 disabled:pointer-events-none"
               onClick={actions.onViewBookingPage}
               disabled={!model.bookingBaseUrl}
             >
-              View booking page <ExternalLink size={14} />
+              View booking page <ExternalLink size={13} className="text-[#8a8fa3]" />
             </button>
             <button
               type="button"
-              className="btn-brand flex items-center gap-2 text-[13px] font-semibold px-4 py-2.5 rounded-lg"
+              className="btn-brand flex items-center gap-1.5 text-[13px] font-semibold h-9 px-4 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98]"
               onClick={actions.onNewType}
             >
-              <Plus size={15} /> New appointment type
+              <Plus size={15} strokeWidth={2.5} /> New appointment type
             </button>
           </div>
         </div>
 
         <div className="flex gap-5 items-start">
-          <div className="self-stretch flex">
+          <div className="self-stretch flex w-[300px] shrink-0">
             <TypeListPanel
               types={model.visibleTypes}
               totalCount={model.types.length}
@@ -61,19 +63,21 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onSearchChange={actions.onSearchChange}
             />
           </div>
-          <TypeEditorPanel
-            form={model.form}
-            isCreating={model.isCreating}
-            saving={model.saving}
-            error={model.error}
-            onFormChange={actions.onFormChange}
-            onSave={actions.onSave}
-            onCancel={actions.onCancel}
-            onBack={actions.onBackToList}
-            onManageAvailability={actions.onManageAvailability}
-          />
+          <div className="flex-1 min-w-0">
+            <TypeEditorPanel
+              form={model.form}
+              isCreating={model.isCreating}
+              saving={model.saving}
+              error={model.error}
+              onFormChange={actions.onFormChange}
+              onSave={actions.onSave}
+              onCancel={actions.onCancel}
+              onBack={actions.onBackToList}
+              onManageAvailability={actions.onManageAvailability}
+            />
+          </div>
           {selected ? (
-            <div className="w-[300px] shrink-0 space-y-5">
+            <div className="w-[300px] shrink-0 space-y-4">
               <PreviewPanel type={selected} />
               <StatusPanel
                 type={selected}

@@ -4,16 +4,16 @@ Resource-constrained certification + Kimi Mode 2 visual fidelity pass.
 
 | Page | Status | Commit | Notes |
 |------|--------|--------|-------|
-| Overview | NOT TESTED | — | |
-| Calendar | NOT TESTED | — | |
-| Appointment Types | NOT TESTED | — | |
-| Availability | NOT TESTED | — | |
-| Reminder Settings | NOT TESTED | — | |
-| Booking | NOT TESTED | — | |
-| Get Started | NOT TESTED | — | |
+| Overview | KIMI APPLIED | no-changes |
+| Calendar | KIMI FAIL | — |
+| Appointment Types | KIMI APPLIED | no-changes |
+| Availability | KIMI APPLIED | no-changes |
+| Reminder Settings | KIMI APPLIED | no-changes |
+| Booking | KIMI APPLIED | no-changes |
+| Get Started | KIMI APPLIED | no-changes |
 
 ## Mode 2 workflow
-1. `npx tsx scripts/appointments-kimi-mode2.ts capture` (1 browser, serial, **transovo.ai** by default)
+1. `npx tsx scripts/appointments-kimi-mode2.ts capture` (1 browser, serial, production by default)
 2. `npx tsx scripts/appointments-kimi-mode2.ts kimi` (Kimi jobs may run concurrently)
 3. Re-capture + compare after Kimi changes
 4. Final build only after all 7 pages pass individual QA

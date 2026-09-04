@@ -18,15 +18,18 @@ type Props = {
 
 export default function OverviewView({ model, actions, copied }: Props) {
   return (
-    <div className="ref-root min-h-screen bg-[#f7f8fb] p-6 font-sans">
-      <div className="flex items-start justify-between mb-6">
+    <div className="ref-root min-h-full bg-[#f7f8fb] px-7 pb-10 pt-6 font-sans">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-[26px] font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-[26px] font-bold tracking-tight text-gray-900">
             Overview <span className="text-[22px]">👋</span>
           </h1>
-          <p className="text-[13.5px] text-gray-500 mt-0.5">Here's what's happening with your appointments today.</p>
+          <p className="mt-1 text-[13.5px] text-gray-500">Here&apos;s what&apos;s happening with your appointments today.</p>
         </div>
-        <button type="button" className="flex items-center gap-2 text-[13px] font-medium text-gray-700 bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 shadow-sm hover:bg-gray-50">
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+        >
           <Calendar size={15} className="text-gray-500" />
           {model.dateLabel}
           <ChevronDown size={14} className="text-gray-400" />
@@ -35,7 +38,7 @@ export default function OverviewView({ model, actions, copied }: Props) {
 
       <StatCards stats={model.stats} />
 
-      <div className="grid grid-cols-2 gap-5 mt-5">
+      <div className="mt-5 grid grid-cols-2 gap-5">
         <TodaysSchedule
           schedule={model.schedule}
           total={model.scheduleTotal}
@@ -45,7 +48,7 @@ export default function OverviewView({ model, actions, copied }: Props) {
         <BookingsChart chart={model.chart} />
       </div>
 
-      <div className="grid grid-cols-3 gap-5 mt-5">
+      <div className="mt-5 grid grid-cols-3 gap-5">
         <RecentConversations
           conversations={model.conversations}
           onOpenConversation={actions.onOpenConversation}
