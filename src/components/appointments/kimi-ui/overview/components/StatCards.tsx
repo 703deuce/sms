@@ -1,9 +1,14 @@
 import { CalendarCheck2, CheckCircle2, Send, ShieldCheck } from 'lucide-react';
-import { stats } from '../mock-data';
+import type { OverviewStatItem } from '@/features/appointments/kimi/overview/types';
 
-const icons: Record<string, any> = { calendar: CalendarCheck2, check: CheckCircle2, send: Send, shield: ShieldCheck };
+const icons: Record<string, typeof CalendarCheck2> = {
+  calendar: CalendarCheck2,
+  check: CheckCircle2,
+  send: Send,
+  shield: ShieldCheck,
+};
 
-export default function StatCards() {
+export default function StatCards({ stats }: { stats: OverviewStatItem[] }) {
   return (
     <div className="grid grid-cols-4 gap-5">
       {stats.map((s) => {

@@ -1,7 +1,3 @@
 "use client";
 
-import AppointmentsOverviewPage from "@/components/appointments/kimi-ui/overview/page";
-
-export function AppointmentsOverviewClient() {
-  return <AppointmentsOverviewPage />;
-}
+export { OverviewConnected as AppointmentsOverviewClient } from "@/features/appointments/kimi/overview/overview-connected";
