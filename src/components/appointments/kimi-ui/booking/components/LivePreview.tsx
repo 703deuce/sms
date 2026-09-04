@@ -13,7 +13,7 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react";
-import { businessInfo, appointmentTypes, whyBookItems } from "../mock-data";
+import type { BookingPageModel } from "@/features/appointments/kimi/booking/types";
 
 const whyIcons: Record<string, React.ReactNode> = {
   clock: <Clock size={13} />,
@@ -21,8 +21,39 @@ const whyIcons: Record<string, React.ReactNode> = {
   message: <MessageSquare size={13} />,
 };
 
-export default function LivePreview() {
+type Props = {
+  businessInfo: BookingPageModel["businessInfo"];
+  appointmentTypes: BookingPageModel["appointmentTypes"];
+  whyBookItems: BookingPageModel["whyBookItems"];
+  smsConsent: BookingPageModel["smsConsent"];
+};
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+}
+
+export default function LivePreview({
+  businessInfo,
+  appointmentTypes,
+  whyBookItems,
+  smsConsent,
+}: Props) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const types = appointmentTypes.length
+    ? appointmentTypes
+    : [
+        {
+          id: "placeholder",
+          name: "Consultation",
+          duration: "30 min",
+          description: "Add an appointment type to preview your booking page.",
+        },
+      ];
 
   return (
     <div>
@@ -31,6 +62,7 @@ export default function LivePreview() {
           <span className="preview-head-title">Live preview</span>
           <div className="preview-device-btns">
             <button
+              type="button"
               className={`preview-device-btn${device === "desktop" ? " active" : ""}`}
               onClick={() => setDevice("desktop")}
               aria-label="Desktop preview"
@@ -38,6 +70,7 @@ export default function LivePreview() {
               <Monitor size={14} />
             </button>
             <button
+              type="button"
               className={`preview-device-btn${device === "mobile" ? " active" : ""}`}
               onClick={() => setDevice("mobile")}
               aria-label="Mobile preview"
@@ -49,18 +82,18 @@ export default function LivePreview() {
 
         <div className="preview-frame" style={device === "mobile" ? { maxWidth: 320, margin: "0 auto" } : undefined}>
           <div className="preview-banner">
-            <div className="preview-avatar">MT</div>
+            <div className="preview-avatar">{initials(businessInfo.displayName)}</div>
           </div>
           <div className="preview-body">
             <h4 className="preview-biz-name">{businessInfo.displayName}</h4>
             <div className="preview-biz-meta">
-              <span><Phone size={11} /> {businessInfo.phone}</span>
-              <span><MapPin size={11} /> {businessInfo.address}</span>
+              <span><Phone size={11} /> {businessInfo.phone || "—"}</span>
+              <span><MapPin size={11} /> {businessInfo.address || "—"}</span>
             </div>
 
             <p className="preview-section-title">Select appointment type</p>
-            {appointmentTypes.map((t) => (
-              <button key={t.id} className="preview-type">
+            {types.map((t) => (
+              <button key={t.id} type="button" className="preview-type">
                 <div>
                   <div className="preview-type-name">
                     <Calendar size={13} /> {t.name}
@@ -84,7 +117,8 @@ export default function LivePreview() {
             </div>
 
             <p className="preview-legal">
-              By booking, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+              By booking, you agree to our <a href={smsConsent.termsUrl}>Terms of Service</a> and{" "}
+              <a href={smsConsent.privacyUrl}>Privacy Policy</a>.
               <br />
               Message and data rates may apply. Reply STOP to opt out.
             </p>

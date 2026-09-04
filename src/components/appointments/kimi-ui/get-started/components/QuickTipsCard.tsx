@@ -1,5 +1,5 @@
 import { Clock4, HelpCircle, Rocket, ChevronRight, ExternalLink } from "lucide-react";
-import { quickTips } from "../mock-data";
+import type { SetupQuickTip } from "@/features/appointments/kimi/setup/types";
 
 const iconMap: Record<string, React.ReactNode> = {
   clock: <Clock4 size={17} />,
@@ -7,7 +7,11 @@ const iconMap: Record<string, React.ReactNode> = {
   rocket: <Rocket size={17} />,
 };
 
-export default function QuickTipsCard() {
+type Props = {
+  tips: SetupQuickTip[];
+};
+
+export default function QuickTipsCard({ tips }: Props) {
   return (
     <div className="setup-card" style={{ padding: "20px 22px" }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1c2e", marginBottom: 14 }}>
@@ -15,7 +19,7 @@ export default function QuickTipsCard() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {quickTips.map((tip) => (
+        {tips.map((tip) => (
           <div key={tip.title} className="tip-row">
             <div
               style={{

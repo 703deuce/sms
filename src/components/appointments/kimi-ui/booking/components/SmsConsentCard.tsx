@@ -1,12 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
-import { MessageSquare, HelpCircle } from "lucide-react";
-import { smsConsent } from "../mock-data";
+import React from "react";
+import { MessageSquare, HelpCircle, Check } from "lucide-react";
+import type { BookingPageModel } from "@/features/appointments/kimi/booking/types";
 
-export default function SmsConsentCard() {
-  const [form, setForm] = useState(smsConsent);
+type Props = {
+  smsConsent: BookingPageModel["smsConsent"];
+  saving?: boolean;
+  saved?: boolean;
+  onFieldChange: (field: keyof BookingPageModel["smsConsent"], value: string) => void;
+  onSave: () => void;
+};
 
+export default function SmsConsentCard({
+  smsConsent,
+  saving = false,
+  saved = false,
+  onFieldChange,
+  onSave,
+}: Props) {
   return (
     <div className="booking-card">
       <div className="booking-card-header">
@@ -30,8 +42,8 @@ export default function SmsConsentCard() {
           className="booking-input"
           style={{ height: "auto", padding: "10px 12px", resize: "vertical", lineHeight: 1.5 }}
           rows={2}
-          value={form.wording}
-          onChange={(e) => setForm({ ...form, wording: e.target.value })}
+          value={smsConsent.wording}
+          onChange={(e) => onFieldChange("wording", e.target.value)}
         />
         <p style={{ fontSize: 11.5, color: "#9b99a8", margin: "6px 0 0" }}>
           Displayed next to the SMS opt-in checkbox on your public booking page.
@@ -41,16 +53,36 @@ export default function SmsConsentCard() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
         <div>
           <label className="booking-label">Terms of service URL</label>
-          <input className="booking-input" value={form.termsUrl} onChange={(e) => setForm({ ...form, termsUrl: e.target.value })} />
+          <input
+            className="booking-input"
+            value={smsConsent.termsUrl}
+            onChange={(e) => onFieldChange("termsUrl", e.target.value)}
+          />
         </div>
         <div>
           <label className="booking-label">Privacy policy URL</label>
-          <input className="booking-input" value={form.privacyUrl} onChange={(e) => setForm({ ...form, privacyUrl: e.target.value })} />
+          <input
+            className="booking-input"
+            value={smsConsent.privacyUrl}
+            onChange={(e) => onFieldChange("privacyUrl", e.target.value)}
+          />
         </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="booking-btn booking-btn-primary">Save consent settings</button>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginTop: 16 }}>
+        {saved ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, color: "#12834a" }}>
+            <Check size={14} /> Saved
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="booking-btn booking-btn-primary"
+          onClick={onSave}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save consent settings"}
+        </button>
       </div>
     </div>
   );

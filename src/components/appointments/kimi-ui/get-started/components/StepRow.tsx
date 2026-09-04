@@ -11,7 +11,7 @@ import {
   ArrowRight,
   ExternalLink,
 } from "lucide-react";
-import type { SetupStep } from "../mock-data";
+import type { SetupStep } from "@/features/appointments/kimi/setup/types";
 
 const iconMap: Record<string, React.ReactNode> = {
   building: <Building2 size={20} />,
@@ -23,13 +23,17 @@ const iconMap: Record<string, React.ReactNode> = {
   party: <PartyPopper size={20} />,
 };
 
-export default function StepRow({ step }: { step: SetupStep }) {
+type Props = {
+  step: SetupStep;
+  onNavigate: (href: string) => void;
+};
+
+export default function StepRow({ step, onNavigate }: Props) {
   const done = step.status === "done";
   const upNext = step.status === "up-next";
 
   return (
     <div className="setup-step-row">
-      {/* status indicator */}
       <div style={{ width: 26, display: "flex", justifyContent: "center", flexShrink: 0 }}>
         {done ? (
           <CheckCircle2 size={22} color="#22c07a" fill="#e6f9f0" />
@@ -55,7 +59,6 @@ export default function StepRow({ step }: { step: SetupStep }) {
         )}
       </div>
 
-      {/* icon tile */}
       <div
         style={{
           width: 44,
@@ -72,7 +75,6 @@ export default function StepRow({ step }: { step: SetupStep }) {
         {iconMap[step.icon]}
       </div>
 
-      {/* text */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 2 }}>
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", color: "#9a9ab0" }}>
@@ -85,17 +87,16 @@ export default function StepRow({ step }: { step: SetupStep }) {
         <div style={{ fontSize: 12.5, color: "#8a8aa3" }}>{step.description}</div>
       </div>
 
-      {/* action */}
       {done ? (
-        <button className="btn-ghost">
+        <button type="button" className="btn-ghost" onClick={() => onNavigate(step.href)}>
           Review <ExternalLink size={13} />
         </button>
       ) : upNext ? (
-        <button className="btn-primary">
+        <button type="button" className="btn-primary" onClick={() => onNavigate(step.href)}>
           Start <ArrowRight size={14} />
         </button>
       ) : (
-        <button className="btn-soft">
+        <button type="button" className="btn-soft" onClick={() => onNavigate(step.href)}>
           Start <ArrowRight size={14} />
         </button>
       )}

@@ -6,13 +6,20 @@ import AllSetBanner from "./components/AllSetBanner";
 import LaunchReadinessCard from "./components/LaunchReadinessCard";
 import BookingLinkCard from "./components/BookingLinkCard";
 import QuickTipsCard from "./components/QuickTipsCard";
+import type { SetupPageActions, SetupPageModel } from "@/features/appointments/kimi/setup/types";
 import "./reference.css";
 
-export default function AppointmentsSetupPage() {
+type Props = {
+  model: SetupPageModel;
+  actions: SetupPageActions;
+  saving?: boolean;
+  copied?: boolean;
+};
+
+export default function SetupView({ model, actions, saving = false, copied = false }: Props) {
   return (
     <div className="setup-page" style={{ background: "#f7f7fa", minHeight: "100%" }}>
       <div style={{ maxWidth: 1240, margin: "0 auto", padding: "28px 32px 48px" }}>
-        {/* Header */}
         <div style={{ marginBottom: 22 }}>
           <h1
             style={{
@@ -32,7 +39,6 @@ export default function AppointmentsSetupPage() {
           </p>
         </div>
 
-        {/* Two-column layout */}
         <div
           style={{
             display: "grid",
@@ -41,18 +47,26 @@ export default function AppointmentsSetupPage() {
             alignItems: "start",
           }}
         >
-          {/* Left column */}
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-            <SetupProgressCard />
-            <StepList />
-            <AllSetBanner />
+            <SetupProgressCard progress={model.progress} onboardingComplete={model.onboardingComplete} />
+            <StepList steps={model.steps} onNavigate={actions.onStepNavigate} />
+            <AllSetBanner
+              onboardingComplete={model.onboardingComplete}
+              allDone={model.allDone}
+              saving={saving}
+              onMarkComplete={actions.onMarkComplete}
+            />
           </div>
 
-          {/* Right column */}
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <LaunchReadinessCard />
-            <BookingLinkCard />
-            <QuickTipsCard />
+            <LaunchReadinessCard readinessItems={model.readinessItems} />
+            <BookingLinkCard
+              bookingLink={model.bookingLink}
+              copied={copied}
+              onCopy={actions.onCopyBookingLink}
+              onPreview={actions.onPreviewBooking}
+            />
+            <QuickTipsCard tips={model.quickTips} />
           </div>
         </div>
       </div>

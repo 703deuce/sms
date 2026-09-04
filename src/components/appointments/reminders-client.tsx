@@ -1,7 +1,3 @@
 "use client";
 
-import ReminderSettingsPage from "@/components/appointments/kimi-ui/reminder-settings/page";
-
-export function AppointmentRemindersClient() {
-  return <ReminderSettingsPage />;
-}
+export { RemindersConnected as AppointmentRemindersClient } from "@/features/appointments/kimi/reminders/reminders-connected";

@@ -1,11 +1,13 @@
 import { Rocket, CheckCircle2, Circle, Loader } from "lucide-react";
-import { readinessItems } from "../mock-data";
+import type { SetupReadinessItem } from "@/features/appointments/kimi/setup/types";
 
-export default function LaunchReadinessCard() {
+type Props = {
+  readinessItems: SetupReadinessItem[];
+};
+
+export default function LaunchReadinessCard({ readinessItems }: Props) {
   const doneCount = readinessItems.filter((i) => i.state === "done").length;
   const frac = doneCount / readinessItems.length;
-
-  // semicircle gauge
   const R = 70;
   const C = Math.PI * R;
 
@@ -15,7 +17,6 @@ export default function LaunchReadinessCard() {
         Launch readiness
       </div>
 
-      {/* gauge */}
       <div style={{ position: "relative", height: 92, marginBottom: 4 }}>
         <svg width="100%" height="110" viewBox="0 0 180 100" style={{ display: "block" }}>
           <path

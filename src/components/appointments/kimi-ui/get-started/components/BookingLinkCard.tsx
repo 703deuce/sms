@@ -1,7 +1,13 @@
-import { Copy, ExternalLink } from "lucide-react";
-import { bookingLink } from "../mock-data";
+import { Copy, ExternalLink, Check } from "lucide-react";
 
-export default function BookingLinkCard() {
+type Props = {
+  bookingLink: string;
+  copied?: boolean;
+  onCopy: () => void;
+  onPreview: () => void;
+};
+
+export default function BookingLinkCard({ bookingLink, copied = false, onCopy, onPreview }: Props) {
   return (
     <div className="setup-card" style={{ padding: "20px 22px" }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1c2e" }}>Your booking link</div>
@@ -31,19 +37,25 @@ export default function BookingLinkCard() {
             whiteSpace: "nowrap",
           }}
         >
-          {bookingLink}
+          {bookingLink || "Set a workspace slug to get your booking link"}
         </span>
         <button
+          type="button"
+          onClick={onCopy}
+          disabled={!bookingLink}
           style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8aa3", padding: 2 }}
           aria-label="Copy link"
         >
-          <Copy size={15} />
+          {copied ? <Check size={15} color="#22c07a" /> : <Copy size={15} />}
         </button>
       </div>
 
       <button
+        type="button"
         className="btn-soft"
         style={{ width: "100%", justifyContent: "center", padding: "10px 14px" }}
+        onClick={onPreview}
+        disabled={!bookingLink}
       >
         Preview booking page <ExternalLink size={14} />
       </button>

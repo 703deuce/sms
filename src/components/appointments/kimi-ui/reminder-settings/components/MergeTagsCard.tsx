@@ -1,7 +1,6 @@
 import { ExternalLink } from 'lucide-react';
-import { mergeTags } from '../mock-data';
 
-export default function MergeTagsCard() {
+export default function MergeTagsCard({ tags }: { tags: string[] }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h3 className="text-[14px] font-semibold text-foreground">Merge tags</h3>
@@ -9,9 +8,10 @@ export default function MergeTagsCard() {
         Personalize your messages with dynamic information.
       </p>
       <div className="mt-3.5 flex flex-wrap gap-2">
-        {mergeTags.map((tag) => (
+        {tags.map((tag) => (
           <button
             key={tag}
+            type="button"
             className="rounded-md bg-[#eef2ff] px-2 py-1 text-[11.5px] font-medium text-[#4f46e5] transition-colors hover:bg-[#e0e7ff]"
           >
             {tag}

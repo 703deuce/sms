@@ -1,11 +1,35 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { ShieldCheck, Shield, ChevronRight } from "lucide-react";
-import { protectionLevels } from "../mock-data";
+import type { BookingPageModel } from "@/features/appointments/kimi/booking/types";
+import type { BookingProtectionMode } from "@/lib/appointments/types";
 
-export default function AiProtectionCard() {
-  const [level, setLevel] = useState("standard");
+type Props = {
+  protectionMode: BookingProtectionMode;
+  protectionOptions: BookingPageModel["protectionOptions"];
+  suspiciousBookings: BookingPageModel["suspiciousBookings"];
+  onModeChange: (mode: BookingProtectionMode) => void;
+};
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export default function AiProtectionCard({
+  protectionMode,
+  protectionOptions,
+  suspiciousBookings,
+  onModeChange,
+}: Props) {
+  const reviewCount = suspiciousBookings.length;
 
   return (
     <>
@@ -25,12 +49,13 @@ export default function AiProtectionCard() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 18 }}>
-          {protectionLevels.map((p) => {
-            const active = level === p.id;
+          {protectionOptions.map((p) => {
+            const active = protectionMode === p.id;
             return (
               <button
                 key={p.id}
-                onClick={() => setLevel(p.id)}
+                type="button"
+                onClick={() => onModeChange(p.id)}
                 style={{
                   textAlign: "left",
                   border: `1.5px solid ${active ? "#5b3df0" : "#e2e0ec"}`,
@@ -97,19 +122,52 @@ export default function AiProtectionCard() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             style={{
-              background: "#e5f8ee",
-              color: "#12834a",
+              background: reviewCount > 0 ? "#fff4e5" : "#e5f8ee",
+              color: reviewCount > 0 ? "#b45309" : "#12834a",
               fontSize: 12,
               fontWeight: 600,
               borderRadius: 999,
               padding: "4px 12px",
             }}
           >
-            0 to review
+            {reviewCount} to review
           </span>
           <ChevronRight size={16} style={{ color: "#9b99a8" }} />
         </div>
       </div>
+
+      {reviewCount > 0 ? (
+        <div className="booking-card">
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {suspiciousBookings.map((b) => (
+              <li
+                key={b.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "10px 0",
+                  borderBottom: "1px solid #ececf3",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#17161f" }}>
+                    {b.serviceName || "Booking"} · {formatDateTime(b.at)}
+                  </div>
+                  {b.signals?.length ? (
+                    <div style={{ marginTop: 4, fontSize: 11, color: "#6f6d7c" }}>
+                      {b.signals.slice(0, 3).join(" · ")}
+                    </div>
+                  ) : null}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "#6f6d7c", textTransform: "capitalize" }}>
+                  {b.riskLevel} · {b.action}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </>
   );
 }

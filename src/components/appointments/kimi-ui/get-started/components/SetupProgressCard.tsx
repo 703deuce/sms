@@ -1,8 +1,13 @@
 import { CheckCircle2 } from "lucide-react";
-import { progressSummary } from "../mock-data";
+import type { SetupProgressSummary } from "@/features/appointments/kimi/setup/types";
 
-export default function SetupProgressCard() {
-  const { completed, total, percent, inProgress, notStarted, estTime } = progressSummary;
+type Props = {
+  progress: SetupProgressSummary;
+  onboardingComplete: boolean;
+};
+
+export default function SetupProgressCard({ progress, onboardingComplete }: Props) {
+  const { completed, total, percent, inProgress, notStarted, estTime } = progress;
   const R = 27;
   const C = 2 * Math.PI * R;
   const frac = completed / total;
@@ -10,7 +15,6 @@ export default function SetupProgressCard() {
   return (
     <div className="setup-card" style={{ padding: "20px 24px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-        {/* Ring */}
         <div className="ring-wrap">
           <svg width="64" height="64" viewBox="0 0 64 64">
             <circle cx="32" cy="32" r={R} fill="none" stroke="#ecebfa" strokeWidth="5" />
@@ -42,10 +46,17 @@ export default function SetupProgressCard() {
           </div>
         </div>
 
-        {/* Bar + stats */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, color: "#1c1c2e", marginBottom: 10 }}>
-            <strong>Almost there!</strong> You&rsquo;re {percent}% complete.
+            {onboardingComplete ? (
+              <strong>Setup complete!</strong>
+            ) : percent >= 100 ? (
+              <strong>All steps done!</strong>
+            ) : (
+              <>
+                <strong>Almost there!</strong> You&rsquo;re {percent}% complete.
+              </>
+            )}
           </div>
           <div style={{ height: 6, borderRadius: 999, background: "#ecebfa", overflow: "hidden", marginBottom: 14 }}>
             <div

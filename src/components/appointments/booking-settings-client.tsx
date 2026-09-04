@@ -1,10 +1,3 @@
 "use client";
 
-import BookingPage from "@/components/appointments/kimi-ui/booking/page";
-
-export function AppointmentBookingSettingsClient(_props: {
-  workspaceSlug: string;
-  workspaceName: string;
-}) {
-  return <BookingPage />;
-}
+export { BookingConnected as AppointmentBookingSettingsClient } from "@/features/appointments/kimi/booking/booking-connected";
