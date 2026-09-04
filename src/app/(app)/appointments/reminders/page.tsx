@@ -2,7 +2,7 @@ import { AppointmentRemindersClient } from "@/components/appointments/reminders-
 
 export default function AppointmentRemindersPage() {
   return (
-    <div className="p-6">
+    <div className="px-6 py-6 lg:px-8">
       <AppointmentRemindersClient />
     </div>
   );

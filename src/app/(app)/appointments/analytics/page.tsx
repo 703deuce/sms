@@ -2,7 +2,7 @@ import { AppointmentsAnalyticsClient } from "@/components/appointments/analytics
 
 export default function AppointmentsAnalyticsPage() {
   return (
-    <div className="p-6">
+    <div className="mx-auto w-full max-w-6xl p-6">
       <AppointmentsAnalyticsClient />
     </div>
   );
