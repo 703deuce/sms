@@ -104,7 +104,19 @@ export function ConversationsThreadArea({
     }) => (
       <>
         {composerDisabledReason ? (
-          <div style={{ padding: "8px 16px", fontSize: 12, color: "#b45309", background: "#fffbeb", borderTop: "1px solid #fde68a" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: "#92400e",
+              background: "#fffbeb",
+              borderTop: "1px solid #fde68a",
+            }}
+          >
             {composerDisabledReason}
           </div>
         ) : null}
@@ -133,7 +145,8 @@ export function ConversationsThreadArea({
     >
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         {viewers.length > 0 ? (
-          <div style={{ padding: "8px 16px 0", background: "#fff", fontSize: 12, color: "#6b7280" }}>
+          <div className="tv-viewers-bar">
+            <span className="tv-viewers-dot" />
             Also viewing: {viewers.map((v) => v.userName).join(", ")}
           </div>
         ) : null}

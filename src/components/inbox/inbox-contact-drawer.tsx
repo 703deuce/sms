@@ -32,21 +32,22 @@ export function InboxContactDrawer({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-40 bg-black/20"
+        className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]"
         aria-label="Close contact details"
         onClick={onClose}
       />
       <aside
-        className="fixed right-0 top-0 z-50 flex h-full w-[360px] max-w-[92vw] flex-col border-l border-[#e5e7eb] bg-white shadow-2xl"
+        className="fixed right-0 top-0 z-50 flex h-full w-[360px] max-w-[92vw] flex-col border-l border-border bg-card shadow-2xl"
         role="dialog"
         aria-label="Contact details"
       >
-        <div className="flex items-center justify-between border-b border-[#f3f4f6] px-5 py-4">
-          <h2 className="text-[15px] font-semibold text-[#111827]">Contact Details</h2>
+        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+          <h2 className="font-display text-[15px] font-semibold tracking-tight text-foreground">Contact Details</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[#6b7280] hover:bg-[#f3f4f6]"
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="h-5 w-5" />
           </button>
@@ -54,29 +55,29 @@ export function InboxContactDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="text-center">
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#eef2ff] text-[18px] font-bold text-[#6366f1]">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 font-display text-[18px] font-bold text-primary ring-4 ring-primary/5">
               {initials}
             </span>
-            <p className="mt-3 text-[17px] font-bold text-[#111827]">{displayName}</p>
+            <p className="mt-3 font-display text-[17px] font-bold tracking-tight text-foreground">{displayName}</p>
             <span
               className={cn(
                 "mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
                 subscribed
-                  ? "bg-[#ecfdf5] text-[#059669]"
-                  : "bg-[#fef2f2] text-[#dc2626]",
+                  ? "bg-emerald-50 text-emerald-600"
+                  : "bg-red-50 text-red-600",
               )}
             >
               <CheckCircle2 className="h-3 w-3" />
               {contact?.status || (subscribed ? "Subscribed" : "Unknown")}
             </span>
             {contact?.dateAdded ? (
-              <p className="mt-1 text-[12px] text-[#6b7280]">
+              <p className="mt-1 text-[12px] text-muted-foreground">
                 Added {new Date(contact.dateAdded).toLocaleDateString()}
               </p>
             ) : null}
           </div>
 
-          <div className="mt-6 space-y-3 border-t border-[#f3f4f6] pt-5">
+          <div className="mt-6 space-y-3 border-t border-border/70 pt-5">
             <DetailRow
               icon={Phone}
               label="Mobile Number"
@@ -88,9 +89,9 @@ export function InboxContactDrawer({
             ) : null}
           </div>
 
-          <dl className="mt-6 space-y-4 border-t border-[#f3f4f6] pt-5 text-[13px]">
+          <dl className="mt-6 space-y-4 border-t border-border/70 pt-5 text-[13px]">
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Lists
               </dt>
               <dd className="mt-1.5 flex flex-wrap gap-1.5">
@@ -98,31 +99,31 @@ export function InboxContactDrawer({
                   contact.lists.map((l) => (
                     <span
                       key={l}
-                      className="rounded-full bg-[#f3f4f6] px-2.5 py-0.5 text-[11px] font-medium text-[#374151]"
+                      className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-foreground/80"
                     >
                       {l}
                     </span>
                   ))
                 ) : (
-                  <span className="text-[#6b7280]">None</span>
+                  <span className="text-muted-foreground">None</span>
                 )}
               </dd>
             </div>
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Opt-out
               </dt>
-              <dd className="mt-1 font-medium text-[#111827]">
+              <dd className="mt-1 font-medium text-foreground">
                 {contact?.status === "Unsubscribed" || contact?.status === "Blocked"
                   ? "Yes"
                   : "No"}
               </dd>
             </div>
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Last message
               </dt>
-              <dd className="mt-1 font-medium text-[#111827]">
+              <dd className="mt-1 font-medium text-foreground">
                 {contact?.lastMessaged
                   ? new Date(contact.lastMessaged).toLocaleString()
                   : conversation?.updatedAt
@@ -132,9 +133,9 @@ export function InboxContactDrawer({
             </div>
           </dl>
 
-          <div className="mt-6 border-t border-[#f3f4f6] pt-5">
+          <div className="mt-6 border-t border-border/70 pt-5">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Tags
               </p>
             </div>
@@ -142,14 +143,14 @@ export function InboxContactDrawer({
               {(conversation?.tags?.length ? conversation.tags : contact?.tags || []).map((t) => (
                 <span
                   key={t}
-                  className="rounded-full bg-[#eef2ff] px-2.5 py-0.5 text-[11px] font-semibold text-[#6366f1]"
+                  className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary"
                 >
                   {t}
                 </span>
               ))}
               <button
                 type="button"
-                className="rounded-full border border-dashed border-[#d1d5db] px-2 py-0.5 text-[11px] text-[#6b7280]"
+                className="rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
               >
                 +
               </button>
@@ -157,15 +158,15 @@ export function InboxContactDrawer({
           </div>
 
           {contact?.customFields && Object.keys(contact.customFields).length > 0 ? (
-            <div className="mt-6 border-t border-[#f3f4f6] pt-5">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+            <div className="mt-6 border-t border-border/70 pt-5">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Custom Fields
               </p>
               <dl className="space-y-2 text-[13px]">
                 {Object.entries(contact.customFields).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-3">
-                    <dt className="text-[#6b7280]">{key}</dt>
-                    <dd className="font-medium text-[#111827]">{value}</dd>
+                    <dt className="text-muted-foreground">{key}</dt>
+                    <dd className="font-medium text-foreground">{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -173,8 +174,8 @@ export function InboxContactDrawer({
           ) : null}
 
           {contact ? (
-            <div className="mt-6 border-t border-[#f3f4f6] pt-5">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#9ca3af]">
+            <div className="mt-6 border-t border-border/70 pt-5">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Connected apps
               </p>
               <ConnectedRecordsPanel contactId={contact.id} compact />
@@ -197,10 +198,12 @@ function DetailRow({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#9ca3af]" />
-      <div>
-        <p className="text-[11px] font-medium text-[#9ca3af]">{label}</p>
-        <p className="text-[13px] font-medium text-[#111827]">{value}</p>
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+        <p className="truncate text-[13px] font-medium text-foreground">{value}</p>
       </div>
     </div>
   );

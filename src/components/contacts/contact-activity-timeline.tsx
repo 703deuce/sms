@@ -39,10 +39,10 @@ const KIND_LABEL: Record<TimelineItem["kind"], string> = {
 };
 
 const KIND_TONE: Record<TimelineItem["kind"], string> = {
-  sms: "bg-primary/10 text-primary",
-  call: "bg-emerald-50 text-emerald-600",
-  voice_ai: "bg-violet-50 text-violet-600",
-  voicemail: "bg-amber-50 text-amber-600",
+  sms: "bg-primary/10 text-primary ring-primary/15",
+  call: "bg-emerald-50 text-emerald-600 ring-emerald-600/15",
+  voice_ai: "bg-violet-50 text-violet-600 ring-violet-600/15",
+  voicemail: "bg-amber-50 text-amber-600 ring-amber-600/15",
 };
 
 function kindIcon(kind: TimelineItem["kind"]) {
@@ -54,10 +54,18 @@ function kindIcon(kind: TimelineItem["kind"]) {
 function directionIcon(direction: string | null | undefined) {
   const dir = (direction || "").toLowerCase();
   if (dir === "in" || dir === "inbound") {
-    return <ArrowDownLeft className="h-3 w-3 text-emerald-600" />;
+    return (
+      <span title="Inbound">
+        <ArrowDownLeft className="h-3 w-3 text-emerald-600" />
+      </span>
+    );
   }
   if (dir === "out" || dir === "outbound") {
-    return <ArrowUpRight className="h-3 w-3 text-primary" />;
+    return (
+      <span title="Outbound">
+        <ArrowUpRight className="h-3 w-3 text-primary" />
+      </span>
+    );
   }
   return null;
 }
@@ -139,11 +147,11 @@ export function ContactActivityTimeline({ contactId }: { contactId: string }) {
         const recordingUrl =
           typeof item.meta?.recordingUrl === "string" ? item.meta.recordingUrl : null;
         const body = (
-          <div className="group rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-primary/30 hover:bg-muted/20">
+          <div className="group rounded-lg border border-border bg-card px-3.5 py-3 transition-all duration-150 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm">
             <div className="flex items-start gap-3">
               <span
                 className={cn(
-                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset",
                   KIND_TONE[item.kind],
                 )}
               >

@@ -7,7 +7,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { getActiveWorkspaceId } from "@/lib/auth";
 import type { Contact, Conversation } from "@/lib/types";
 import { loadContactById, loadConversations } from "@/lib/workspace-data";
-import { formatPhone } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { ContactAppointmentsPanel } from "@/components/appointments/contact-appointments-panel";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
@@ -15,12 +15,19 @@ import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-p
 import { IntegrationTimelineCard } from "@/components/contacts/integration-timeline-card";
 import {
   ArrowLeft,
+  ArrowUpRight,
+  Building2,
+  CalendarClock,
   Inbox,
+  ListChecks,
+  Mail,
   MessageSquare,
+  Phone,
   Shield,
   Tag,
   UserX,
   Users,
+  Workflow,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -89,34 +96,66 @@ function ProfileField({
   label,
   value,
   strong,
+  mono,
 }: {
   label: string;
   value: React.ReactNode;
   strong?: boolean;
+  mono?: boolean;
 }) {
+  const empty = value === "—" || value == null || value === "";
   return (
     <div className="min-w-0">
       <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
       <dd
-        className={
-          strong
-            ? "mt-1 truncate text-sm font-medium text-foreground"
-            : "mt-1 truncate text-sm text-foreground/80"
-        }
+        className={cn(
+          "mt-1 truncate text-sm",
+          mono && "tabular-nums",
+          empty
+            ? "text-muted-foreground/70"
+            : strong
+              ? "font-medium text-foreground"
+              : "text-foreground/80",
+        )}
       >
-        {value}
+        {empty ? "—" : value}
       </dd>
     </div>
   );
 }
 
-function CardDescription({ children }: { children: React.ReactNode }) {
+function SectionHeader({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-      {children}
-    </p>
+    <div className="flex items-start justify-between gap-3 border-b border-border/70 pb-3.5">
+      <div className="min-w-0">
+        <CardTitle className="flex items-center gap-2">
+          {icon ? (
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary [&>svg]:h-3.5 [&>svg]:w-3.5">
+              {icon}
+            </span>
+          ) : null}
+          {title}
+        </CardTitle>
+        {description ? (
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
   );
 }
 
@@ -184,30 +223,48 @@ export default async function ContactDetailPage({
   const conversation = conversations[0] ?? null;
   const consentHistory = consentHistoryFor(contact);
 
+  const fullName =
+    `${contact.firstName} ${contact.lastName}`.trim() || formatPhone(contact.phone);
+
   return (
     <div>
       <div className="mb-5">
         <BackLink />
 
+        {/* Identity header */}
         <div className="surface flex flex-col gap-4 rounded-xl bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 font-display text-base font-semibold text-primary ring-1 ring-inset ring-primary/15">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 font-display text-base font-semibold text-primary ring-1 ring-inset ring-primary/20">
               {initialsOf(contact)}
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
                 <h1 className="truncate font-display text-xl font-semibold tracking-tight text-foreground">
-                  {contact.firstName} {contact.lastName}
+                  {fullName}
                 </h1>
                 <StatusChip status={contact.status} />
               </div>
-              <p className="mt-1 truncate text-[13px] text-muted-foreground">
-                {contact.company ? `${contact.company} · ` : ""}
-                <span className="tabular-nums">{formatPhone(contact.phone)}</span>
-                {contact.assignedUser ? ` · Assigned to ${contact.assignedUser}` : ""}
-                {" · Added "}
-                {formatDate(contact.dateAdded)}
-              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 tabular-nums">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground/70" />
+                  {formatPhone(contact.phone)}
+                </span>
+                {contact.company ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5 text-muted-foreground/70" />
+                    {contact.company}
+                  </span>
+                ) : null}
+                {contact.assignedUser ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground/70" />
+                    {contact.assignedUser}
+                  </span>
+                ) : null}
+                <span className="text-muted-foreground/70">
+                  Added {formatDate(contact.dateAdded)}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -220,7 +277,7 @@ export default async function ContactDetailPage({
                 </Button>
               </Link>
             ) : (
-              <Button size="sm" disabled>
+              <Button size="sm" disabled title="Contact is not subscribed">
                 <MessageSquare className="h-3.5 w-3.5" />
                 Send message
               </Button>
@@ -230,11 +287,12 @@ export default async function ContactDetailPage({
       </div>
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Main column */}
         <div className="min-w-0 space-y-5">
           <Card>
-            <CardTitle>Contact profile</CardTitle>
+            <SectionHeader title="Contact profile" />
             <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-              <ProfileField label="Phone" value={formatPhone(contact.phone)} strong />
+              <ProfileField label="Phone" value={formatPhone(contact.phone)} strong mono />
               <ProfileField label="Email" value={contact.email || "—"} strong />
               <ProfileField label="Company" value={contact.company || "—"} />
               <ProfileField label="Consent source" value={contact.consentSource || "—"} />
@@ -245,10 +303,22 @@ export default async function ContactDetailPage({
           </Card>
 
           <Card>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              Consent history
-            </CardTitle>
+            <SectionHeader
+              icon={<CalendarClock className="h-4 w-4" />}
+              title="Appointments"
+              description="Upcoming and past bookings for this contact."
+            />
+            <div className="mt-4">
+              <ContactAppointmentsPanel contactId={contact.id} />
+            </div>
+          </Card>
+
+          <Card>
+            <SectionHeader
+              icon={<Shield className="h-4 w-4" />}
+              title="Consent history"
+              description="Opt-in, opt-out, and deliverability events for this contact."
+            />
             {consentHistory.length > 0 ? (
               <Table className="mt-4">
                 <THead>
@@ -278,12 +348,13 @@ export default async function ContactDetailPage({
           </Card>
 
           <Card>
-            <CardTitle>Activity</CardTitle>
-            <CardDescription>
-              Unified timeline of SMS, softphone calls, AI voice, and voicemail.
-            </CardDescription>
+            <SectionHeader
+              icon={<MessageSquare className="h-4 w-4" />}
+              title="Activity"
+              description="Unified timeline of SMS, softphone calls, AI voice, and voicemail."
+            />
             {conversation ? (
-              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3.5 py-2.5">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-3.5 py-2.5">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <Inbox className="h-3.5 w-3.5" />
@@ -294,12 +365,15 @@ export default async function ContactDetailPage({
                 <Link href={`/conversations?conversation=${encodeURIComponent(conversation.id)}`}>
                   <Button variant="outline" size="sm">
                     Open in inbox
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
               </div>
             ) : contact.status === "Subscribed" ? (
-              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/20 px-3.5 py-2.5">
-                <p className="text-sm text-muted-foreground">No inbox thread yet for this contact.</p>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-muted/20 px-3.5 py-2.5">
+                <p className="text-sm text-muted-foreground">
+                  No inbox thread yet for this contact.
+                </p>
                 <Link href={`/conversations?contactId=${encodeURIComponent(contact.id)}`}>
                   <Button variant="outline" size="sm">
                     <Inbox className="h-3.5 w-3.5" />
@@ -310,94 +384,92 @@ export default async function ContactDetailPage({
             ) : null}
             <ContactActivityTimeline contactId={contact.id} />
           </Card>
-
-          <Card>
-            <CardTitle>Appointments</CardTitle>
-            <CardDescription>
-              Upcoming and past bookings for this contact.
-            </CardDescription>
-            <div className="mt-4">
-              <ContactAppointmentsPanel contactId={contact.id} />
-            </div>
-          </Card>
-
-          <Card>
-            <CardTitle>Integration timeline</CardTitle>
-            <CardDescription>
-              CRM webhook events and mapping sync activity from Salesforce, Zoho, Pipedrive, and Calendly.
-            </CardDescription>
-            <IntegrationTimelineCard contactId={contact.id} />
-          </Card>
         </div>
 
+        {/* Sidebar column */}
         <div className="min-w-0 space-y-5">
           <Card>
-            <CardTitle>Connected records</CardTitle>
-            <CardDescription>
-              Salesforce, Zoho, Pipedrive, and Calendly records linked to this contact.
-            </CardDescription>
+            <SectionHeader
+              icon={<Workflow className="h-4 w-4" />}
+              title="Connected records"
+              description="Salesforce, Zoho, Pipedrive, and Calendly records linked to this contact."
+            />
             <div className="mt-4">
-              <ConnectedRecordsPanel contactId={contact.id} />
+              <ConnectedRecordsPanel contactId={contact.id} compact />
             </div>
             <Link
-              href="/integrations/crm"
-              className="mt-4 inline-block text-[13px] font-medium text-primary transition-colors hover:text-primary-hover"
+              href="/settings/integrations"
+              className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-primary transition-colors hover:text-primary-hover"
             >
               Manage CRM integrations
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </Card>
 
           <Card>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              Lists
-            </CardTitle>
-            <div className="mt-3.5 flex flex-wrap gap-1.5">
-              {contact.lists.length > 0 ? (
-                contact.lists.map((list) => (
-                  <Link
+            <SectionHeader
+              icon={<ListChecks className="h-4 w-4" />}
+              title="Lists"
+              action={
+                <Link href="/contacts/lists">
+                  <Button variant="outline" size="sm">
+                    Manage lists
+                  </Button>
+                </Link>
+              }
+            />
+            {contact.lists.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {contact.lists.map((list) => (
+                  <span
                     key={list}
-                    href="/contacts/lists"
-                    className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                    className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-inset ring-border/60"
                   >
                     {list}
-                  </Link>
-                ))
-              ) : (
-                <p className="text-[13px] text-muted-foreground">Not on any lists</p>
-              )}
-            </div>
-            <Link href="/contacts/lists">
-              <Button variant="outline" size="sm" className="mt-4 w-full">
-                Manage lists
-              </Button>
-            </Link>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <InlineEmpty>This contact is not in any lists.</InlineEmpty>
+            )}
           </Card>
 
           <Card>
-            <CardTitle className="flex items-center gap-2">
-              <Tag className="h-4 w-4 text-muted-foreground" />
-              Tags
-            </CardTitle>
-            <div className="mt-3.5 flex flex-wrap gap-1.5">
-              {contact.tags.length > 0 ? (
-                contact.tags.map((tag) => (
+            <SectionHeader
+              icon={<Tag className="h-4 w-4" />}
+              title="Tags"
+              action={
+                <Link href="/contacts">
+                  <Button variant="outline" size="sm">
+                    Manage tags
+                  </Button>
+                </Link>
+              }
+            />
+            {contact.tags.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {contact.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/15"
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/[0.06] px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/15"
                   >
+                    <Tag className="h-3 w-3" />
                     {tag}
                   </span>
-                ))
-              ) : (
-                <p className="text-[13px] text-muted-foreground">No tags applied</p>
-              )}
-            </div>
-            <Link href="/contacts/tags">
-              <Button variant="outline" size="sm" className="mt-4 w-full">
-                Manage tags
-              </Button>
-            </Link>
+                ))}
+              </div>
+            ) : (
+              <InlineEmpty>No tags applied.</InlineEmpty>
+            )}
+          </Card>
+
+          <Card>
+            <SectionHeader
+              icon={<Mail className="h-4 w-4" />}
+              title="Integration activity"
+              description="CRM sync and calendar events for this contact."
+            />
+            <IntegrationTimelineCard contactId={contact.id} />
           </Card>
         </div>
       </div>

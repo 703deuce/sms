@@ -4,6 +4,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, X } from "lucide-react";
 import ContactsList from "@/components/kimi/contacts/components/ContactsList";
 import CreateContact from "@/components/kimi/contacts/components/CreateContact";
 import ImportWizard from "@/components/kimi/contacts/components/ImportWizard";
@@ -162,8 +163,21 @@ export function KimiContactsConnected({
 
   return (
     <div className="flex min-h-screen bg-background">
-      <main className="flex-1 min-w-0">
-        {error && <p className="px-8 pt-4 text-sm text-red-600">{error}</p>}
+      <main className="min-w-0 flex-1">
+        {error && (
+          <div className="mx-auto mt-4 flex max-w-[1200px] items-center gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-700 lg:mx-auto mx-6 lg:mx-8 xl:mx-auto">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="rounded p-1 text-rose-500 transition-colors hover:bg-rose-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {view === "list" && (
           <ContactsList
             contacts={contacts}

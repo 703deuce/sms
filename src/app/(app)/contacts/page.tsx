@@ -11,7 +11,14 @@ export default async function ContactsPage() {
   ]);
 
   return (
-    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading…</p>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2.5 p-8 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
+          Loading contacts…
+        </div>
+      }
+    >
       <div className="kimi-surface kimi-contacts">
         <KimiContactsConnected
           initialContacts={contacts.map(mapApiContactToKimi)}

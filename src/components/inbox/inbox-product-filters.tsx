@@ -30,6 +30,8 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
     ? [BASE_CHIPS[0], APPOINTMENTS_CHIP, ...BASE_CHIPS.slice(1)]
     : BASE_CHIPS;
 
+  const hasActiveFilter = Boolean(activeProduct || activeFilter || unread);
+
   function setFilter(next: { product?: string | null; filter?: string | null; unread?: boolean }) {
     const params = new URLSearchParams(searchParams.toString());
     if (next.product === null || next.product === undefined) {
@@ -51,7 +53,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
   }
 
   return (
-    <div className="tv-product-filters">
+    <div className="tv-product-filters" role="group" aria-label="Conversation filters">
       {chips.map((chip) => {
         const isUnreadChip = "unread" in chip;
         const isFilterChip = "filter" in chip;
@@ -66,6 +68,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
           <button
             key={chip.label}
             type="button"
+            aria-pressed={active}
             onClick={() =>
               setFilter(
                 isUnreadChip
@@ -76,18 +79,38 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
               )
             }
             className={"tv-chip" + (active ? " active" : "")}
+            style={
+              isUnreadChip && !active
+                ? { borderColor: "#c7d2fe", color: "var(--tv-primary)", background: "var(--tv-primary-softer)", fontWeight: 600 }
+                : undefined
+            }
           >
+            {isUnreadChip ? (
+              <span
+                aria-hidden
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 9999,
+                  background: active ? "var(--tv-primary)" : "var(--tv-primary)",
+                  opacity: active ? 1 : 0.55,
+                  flexShrink: 0,
+                }}
+              />
+            ) : null}
             {chip.label}
           </button>
         );
       })}
-      <button
-        type="button"
-        onClick={() => setFilter({ product: null, filter: null, unread: false })}
-        className="tv-chip tv-chip-clear"
-      >
-        Clear filters
-      </button>
+      {hasActiveFilter ? (
+        <button
+          type="button"
+          onClick={() => setFilter({ product: null, filter: null, unread: false })}
+          className="tv-chip tv-chip-clear"
+        >
+          Clear filters
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -33,8 +33,17 @@ export default async function ConversationsPage({
     typeof params.draft === "string" ? decodeURIComponent(params.draft) : "";
 
   return (
-    <Suspense fallback={<p className="p-8 text-sm text-slate-500">Loading conversations…</p>}>
-      <div className="kimi-surface kimi-conversations" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          Loading conversations…
+        </div>
+      }
+    >
+      <div
+        className="kimi-surface kimi-conversations"
+        style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
+      >
         <KimiConversationsConnected
           initialConversations={conversations}
           teamMembers={teamMembers}

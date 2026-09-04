@@ -72,13 +72,15 @@ export function InboxAiBanner({
   if (!session || session.status !== "ai_active") return null;
 
   return (
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-      <div className="flex items-center gap-2 text-[13px] font-medium text-slate-800">
-        <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 shadow-sm">
+      <div className="flex items-center gap-2.5 text-[13px] font-medium text-foreground">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+        </span>
         <span>
-          AI Agent is currently handling this conversation
+          AI Agent is handling this conversation
           {session.aiReplyName ? (
-            <span className="font-normal text-slate-600"> · {session.aiReplyName}</span>
+            <span className="font-normal text-muted-foreground"> · {session.aiReplyName}</span>
           ) : null}
         </span>
       </div>
@@ -114,31 +116,44 @@ export function InboxAiAssistPanel({
   if (!loading && !hasContent) return null;
 
   return (
-    <aside className="hidden w-[280px] shrink-0 flex-col border-l border-slate-200 bg-slate-50 xl:flex">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500">AI Assist</p>
+    <aside className="hidden w-[280px] shrink-0 flex-col border-l border-border bg-muted/30 xl:flex">
+      <div className="flex items-center gap-2 border-b border-border bg-card/60 px-4 py-3">
+        <span className="flex h-5.5 w-5.5 items-center justify-center rounded-md bg-primary/10">
+          <Sparkles className="h-3 w-3 text-primary" />
+        </span>
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">AI Assist</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
-          <p className="text-[12px] text-slate-500">Loading AI assist…</p>
+          <div className="space-y-2">
+            <div className="h-16 animate-pulse rounded-xl bg-muted" />
+            <div className="h-20 animate-pulse rounded-xl bg-muted" />
+            <div className="h-20 animate-pulse rounded-xl bg-muted" />
+          </div>
         ) : (
           <>
             {session ? (
-              <div className="mb-4 rounded-lg border border-slate-200 bg-white p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <div className="mb-4 rounded-xl border border-border bg-card p-3.5 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Session status
                 </p>
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-medium text-slate-800">AI Auto-Reply</span>
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-medium text-foreground">AI Auto-Reply</span>
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                       session.status === "ai_active"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-600",
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        session.status === "ai_active" ? "bg-emerald-500" : "bg-slate-400",
+                      )}
+                    />
                     {session.status === "ai_active" ? "ON" : "OFF"}
                   </span>
                 </div>
@@ -147,14 +162,14 @@ export function InboxAiAssistPanel({
 
             {suggestions.length ? (
               <div className="mb-4">
-                <p className="mb-2 text-[12px] font-semibold text-slate-700">Suggested responses</p>
+                <p className="mb-2 text-[12px] font-semibold text-foreground">Suggested responses</p>
                 <div className="space-y-2">
                   {suggestions.map((s, i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => onUseSuggestion(s)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-[12px] leading-relaxed text-slate-700 hover:border-primary hover:bg-primary/5"
+                      className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-left text-[12px] leading-relaxed text-foreground/80 shadow-sm transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
                     >
                       {s}
                     </button>
@@ -165,15 +180,15 @@ export function InboxAiAssistPanel({
 
             {knowledge.length ? (
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-slate-700">Knowledge search</p>
+                <p className="mb-2 text-[12px] font-semibold text-foreground">Knowledge search</p>
                 <div className="relative mb-2">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="search"
                     value={knowledgeQuery}
                     onChange={(e) => setKnowledgeQuery(e.target.value)}
                     placeholder="Search knowledge…"
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-[12px] outline-none focus:border-primary"
+                    className="h-9 w-full rounded-lg border border-border bg-card pl-8 pr-3 text-[12px] outline-none transition-colors placeholder:text-muted-foreground/80 focus:border-primary focus:ring-2 focus:ring-ring/30"
                   />
                 </div>
                 <ul className="space-y-1.5">
@@ -181,13 +196,13 @@ export function InboxAiAssistPanel({
                     filteredKnowledge.map((k, i) => (
                       <li
                         key={i}
-                        className="rounded-lg border border-slate-100 bg-white px-2.5 py-2 text-[12px] text-slate-600"
+                        className="rounded-lg border border-border/70 bg-card px-2.5 py-2 text-[12px] leading-relaxed text-muted-foreground"
                       >
                         {k}
                       </li>
                     ))
                   ) : (
-                    <li className="text-[12px] text-slate-400">No matching knowledge</li>
+                    <li className="px-1 text-[12px] text-muted-foreground/70">No matching knowledge</li>
                   )}
                 </ul>
               </div>
@@ -197,7 +212,7 @@ export function InboxAiAssistPanel({
       </div>
 
       {session?.status === "ai_active" ? (
-        <div className="border-t border-slate-200 p-4">
+        <div className="border-t border-border bg-card/60 p-4">
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => void takeover()}>
             Take Over Conversation
           </Button>

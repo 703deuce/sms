@@ -27,6 +27,7 @@
 .kimi-contacts .text-primary{ color: rgb(var(--primary)); }
 .kimi-contacts .text-primary-foreground{ color: rgb(var(--primary-foreground)); }
 .kimi-contacts .border-border{ border-color: rgb(var(--border)); }
+.kimi-contacts .divide-border > * + *{ border-color: rgb(var(--border)); }
 
 /* Surface separation: cards float on the page background */
 .kimi-contacts .kc-card{
@@ -108,7 +109,20 @@
   accent-color: rgb(var(--primary));
   cursor: pointer;
 }
+.kimi-contacts .kc-check:focus-visible{
+  outline: 2px solid rgb(var(--primary) / 0.45);
+  outline-offset: 1px;
+}
 
 .kimi-contacts ::-webkit-scrollbar{ width: 8px; height: 8px; }
 .kimi-contacts ::-webkit-scrollbar-thumb{ background: #d4d6e0; border-radius: 4px; }
+.kimi-contacts ::-webkit-scrollbar-thumb:hover{ background: #bfc2d0; }
 .kimi-contacts ::-webkit-scrollbar-track{ background: transparent; }
+
+/* Focus ring consistency for interactive controls */
+.kimi-contacts button:focus-visible,
+.kimi-contacts input:focus-visible,
+.kimi-contacts select:focus-visible{
+  outline: 2px solid rgb(var(--primary) / 0.4);
+  outline-offset: 1px;
+}

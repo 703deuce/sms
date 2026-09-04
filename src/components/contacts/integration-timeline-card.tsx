@@ -89,7 +89,7 @@ export function IntegrationTimelineCard({ contactId }: { contactId: string }) {
   }
   if (!events.length) {
     return (
-      <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+      <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
         <p className="text-[13px] text-muted-foreground">
           No CRM or Calendly events recorded for this contact yet.
         </p>
@@ -118,7 +118,7 @@ export function IntegrationTimelineCard({ contactId }: { contactId: string }) {
                 {e.eventType.replace(/[._]/g, " ")}
               </p>
               <StatusChip status={e.sourceLabel || e.provider} />
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-inset ring-border/60">
                 {kindLabel(e.kind)}
               </span>
               {e.status ? (

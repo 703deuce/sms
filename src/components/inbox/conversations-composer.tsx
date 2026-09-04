@@ -93,6 +93,8 @@ export function ConversationsComposer({
     setMediaUrls([]);
   };
 
+  const canSend = !disabled && (Boolean(text.trim()) || mediaUrls.length > 0);
+
   return (
     <>
       <div style={{ borderTop: "1px solid var(--tv-border)", background: "#fff" }}>
@@ -112,7 +114,7 @@ export function ConversationsComposer({
           <div
             style={{
               border: "1px solid var(--tv-border)",
-              borderRadius: 10,
+              borderRadius: 12,
               background: "#fff",
               overflow: "hidden",
               boxShadow: "0 1px 2px rgba(16,24,40,.05)",
@@ -126,7 +128,7 @@ export function ConversationsComposer({
                 setText(e.target.value);
                 if (note && e.target.value.includes("@")) setMentionOpen(true);
               }}
-              placeholder={note ? "Type a note" : "Type a message"}
+              placeholder={note ? "Type an internal note — only your team can see this" : "Type a message"}
               rows={3}
               disabled={disabled}
               style={{
@@ -136,6 +138,7 @@ export function ConversationsComposer({
                 background: note ? "#fffbeb" : "#fff",
                 padding: "10px 12px",
                 lineHeight: 1.55,
+                borderRadius: 0,
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -167,6 +170,8 @@ export function ConversationsComposer({
                         background: "transparent",
                         cursor: "pointer",
                         fontSize: 12,
+                        borderRadius: 6,
+                        color: "var(--tv-text-2)",
                       }}
                     >
                       @{t.name}
@@ -179,9 +184,20 @@ export function ConversationsComposer({
                 {mediaUrls.map((url) => (
                   <span key={url} style={{ position: "relative" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} />
+                    <img
+                      src={url}
+                      alt=""
+                      style={{
+                        width: 56,
+                        height: 56,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        border: "1px solid var(--tv-border)",
+                      }}
+                    />
                     <button
                       type="button"
+                      aria-label="Remove attachment"
                       onClick={() => setMediaUrls((prev) => prev.filter((u) => u !== url))}
                       style={{
                         position: "absolute",
@@ -195,6 +211,9 @@ export function ConversationsComposer({
                         color: "#fff",
                         fontSize: 11,
                         cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
                       ×
@@ -222,24 +241,24 @@ export function ConversationsComposer({
               >
                 <Image size={16} />
               </button>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <button
-                type="button"
-                ref={emojiBtnRef}
-                className="tv-composer-tool"
-                title="Emoji"
-                disabled={disabled || note}
-                onClick={() => setEmojiOpen((v) => !v)}
-              >
-                <Smile size={16} />
-              </button>
-              <EmojiPickerPopover
-                open={emojiOpen}
-                onClose={() => setEmojiOpen(false)}
-                onSelect={insertEmoji}
-                anchorRef={emojiBtnRef}
-              />
-            </div>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <button
+                  type="button"
+                  ref={emojiBtnRef}
+                  className="tv-composer-tool"
+                  title="Emoji"
+                  disabled={disabled || note}
+                  onClick={() => setEmojiOpen((v) => !v)}
+                >
+                  <Smile size={16} />
+                </button>
+                <EmojiPickerPopover
+                  open={emojiOpen}
+                  onClose={() => setEmojiOpen(false)}
+                  onSelect={insertEmoji}
+                  anchorRef={emojiBtnRef}
+                />
+              </div>
               <button
                 type="button"
                 className="tv-composer-tool"
@@ -252,7 +271,7 @@ export function ConversationsComposer({
               {phoneNumbers.length > 1 && !note ? (
                 <select
                   className="tv-input"
-                  style={{ width: 120, padding: "2px 6px", fontSize: 11, marginLeft: 4 }}
+                  style={{ width: 120, padding: "3px 6px", fontSize: 11, marginLeft: 4, borderRadius: 7 }}
                   value={fromNumberId}
                   onChange={(e) => setFromNumberId(e.target.value)}
                   disabled={disabled}
@@ -278,9 +297,9 @@ export function ConversationsComposer({
               <button
                 type="button"
                 className="tv-btn"
-                disabled={disabled || (!text.trim() && !mediaUrls.length)}
+                disabled={!canSend}
                 onClick={send}
-                style={{ padding: "6px 14px", borderRadius: 7, opacity: text.trim() || mediaUrls.length ? 1 : 0.55 }}
+                style={{ padding: "6px 14px", borderRadius: 8 }}
               >
                 {note ? "Save" : "Send"} <SendHorizonal size={13} />
               </button>

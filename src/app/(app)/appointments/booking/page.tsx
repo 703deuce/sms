@@ -10,7 +10,7 @@ export default async function AppointmentBookingPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="px-6 py-6">
       <AppointmentBookingSettingsClient
         workspaceSlug={ws?.slug || ""}
         workspaceName={ws?.displayName || ws?.name || "Your business"}

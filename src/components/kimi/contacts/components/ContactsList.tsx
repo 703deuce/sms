@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   Users,
   UserCheck,
@@ -10,18 +9,16 @@ import {
   ChevronDown,
   UserPlus,
   Upload,
-  ArrowUpDown,
-  Info,
+  Check,
   CheckCircle2,
   Trash2,
   Copy,
-  Pencil,
   MoreHorizontal,
-  X,
   Download,
   UserMinus,
-  Ban,
   ListPlus,
+  Loader2,
+  Inbox,
 } from "lucide-react";
 import { contacts as seedContacts, stats as seedStats, type Contact, type OptInStatus } from "../mock-data";
 import { formatPhone } from "@/lib/utils";
@@ -37,15 +34,13 @@ const STATUS_FILTERS: Array<{ value: OptInStatus | "all"; label: string }> = [
 
 function StatCard({ icon: Icon, label, value, tint }: { icon: typeof Users; label: string; value: string; tint: string }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint}`}>
-        <Icon className="h-[18px] w-[18px]" />
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tint}`}>
+        <Icon className="h-4 w-4" />
       </div>
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-muted-foreground">
-          {label} <Info className="h-3 w-3 opacity-50" />
-        </span>
-        <span className="font-display text-[22px] font-semibold tracking-tight text-foreground">{value}</span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="font-display text-lg font-semibold tabular-nums leading-tight tracking-tight text-foreground">{value}</p>
       </div>
     </div>
   );
@@ -57,11 +52,19 @@ function StatusPill({ status }: { status: string }) {
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : status === "Unsubscribed"
         ? "border-rose-200 bg-rose-50 text-rose-600"
-        : "border-border bg-muted/60 text-muted-foreground";
+        : status === "Blocked"
+          ? "border-slate-300 bg-slate-100 text-slate-600"
+          : "border-border bg-muted/60 text-muted-foreground";
   const dot =
-    status === "Subscribed" ? "bg-emerald-500" : status === "Unsubscribed" ? "bg-rose-500" : "bg-muted-foreground/60";
+    status === "Subscribed"
+      ? "bg-emerald-500"
+      : status === "Unsubscribed"
+        ? "bg-rose-500"
+        : status === "Blocked"
+          ? "bg-slate-500"
+          : "bg-muted-foreground/60";
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] font-medium ${tone}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[12px] font-medium ${tone}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
       {status}
     </span>
@@ -72,6 +75,24 @@ function displayMobile(mobile: string) {
   if (!mobile) return "—";
   return formatPhone(mobile);
 }
+
+function contactName(c: Contact) {
+  const name = `${c.firstName} ${c.lastName}`.trim();
+  return name || displayMobile(c.mobile) || "Unknown";
+}
+
+function initials(c: Contact) {
+  const a = (c.firstName || "").trim()[0] || "";
+  const b = (c.lastName || "").trim()[0] || "";
+  return (a + b).toUpperCase() || "—";
+}
+
+const menuItemCls =
+  "flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-muted";
+const menuCls =
+  "absolute z-30 min-w-[200px] overflow-hidden rounded-xl border border-border bg-card py-1.5 shadow-[0_8px_24px_rgba(16,24,40,0.12),0_2px_6px_rgba(16,24,40,0.06)] animate-in fade-in zoom-in-95 duration-100";
+
+const checkCls = "kc-check h-4 w-4 rounded border-border accent-primary";
 
 export default function ContactsList({
   contacts = seedContacts,
@@ -125,16 +146,17 @@ export default function ContactsList({
   const filtersReadyRef = useRef(false);
 
   useEffect(() => {
-    if (!menuOpen && !filterOpen && !rowMenuFor) return;
+    if (!menuOpen && !filterOpen && !rowMenuFor && !actionsOpen) return;
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
       if (menuOpen && menuRef.current && !menuRef.current.contains(target)) setMenuOpen(false);
       if (filterOpen && filterRef.current && !filterRef.current.contains(target)) setFilterOpen(false);
+      if (actionsOpen && !(e.target as HTMLElement).closest?.("[data-bulk-actions]")) setActionsOpen(false);
       if (rowMenuFor && rowMenuRef.current && !rowMenuRef.current.contains(target)) setRowMenuFor(null);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen, filterOpen, rowMenuFor]);
+  }, [menuOpen, filterOpen, rowMenuFor, actionsOpen]);
 
   useEffect(() => {
     if (!filtersReadyRef.current) {
@@ -167,11 +189,8 @@ export default function ContactsList({
   const toggleSelectAll = () => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allVisibleSelected) {
-        filtered.forEach((c) => next.delete(c.id));
-      } else {
-        filtered.forEach((c) => next.add(c.id));
-      }
+      if (allVisibleSelected) filtered.forEach((c) => next.delete(c.id));
+      else filtered.forEach((c) => next.add(c.id));
       return next;
     });
   };
@@ -186,6 +205,11 @@ export default function ContactsList({
   };
 
   const clearSelection = () => setSelectedIds(new Set());
+
+  const showActionMessage = (msg: string, isError = false) => {
+    setActionMessage(msg);
+    window.setTimeout(() => setActionMessage(""), isError ? 4000 : 3000);
+  };
 
   const handleDeleteSelected = async () => {
     if (!onDeleteContacts || selectedIds.size === 0) return;
@@ -205,7 +229,7 @@ export default function ContactsList({
 
   const handleDeleteOne = async (contact: Contact) => {
     if (!onDeleteContacts) return;
-    if (!window.confirm(`Delete ${contact.firstName || contact.mobile || "this contact"}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${contactName(contact)}? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       await onDeleteContacts([contact.id]);
@@ -238,22 +262,17 @@ export default function ContactsList({
   };
 
   const activeFilterLabel = STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? "Filter";
-  const selectedContacts = contacts.filter((c) => selectedIds.has(c.id));
-  const filteredLists = listOptions.filter((l) =>
-    l.name.toLowerCase().includes(listSearch.toLowerCase()),
-  );
-  const filteredRemoveLists = listOptions.filter((l) =>
-    l.name.toLowerCase().includes(removeListSearch.toLowerCase()),
-  );
+  const filteredLists = listOptions.filter((l) => l.name.toLowerCase().includes(listSearch.toLowerCase()));
+  const filteredRemoveLists = listOptions.filter((l) => l.name.toLowerCase().includes(removeListSearch.toLowerCase()));
 
   const togglePick = (id: string) => {
     const s = new Set(pickedLists);
-    s.has(id) ? s.delete(id) : s.add(id);
+    if (s.has(id)) s.delete(id); else s.add(id);
     setPickedLists(s);
   };
   const toggleRemovePick = (id: string) => {
     const s = new Set(removeLists);
-    s.has(id) ? s.delete(id) : s.add(id);
+    if (s.has(id)) s.delete(id); else s.add(id);
     setRemoveLists(s);
   };
 
@@ -269,13 +288,11 @@ export default function ContactsList({
     }
   };
 
-  const showActionMessage = (msg: string, isError = false) => {
-    setActionMessage(msg);
-    window.setTimeout(() => setActionMessage(""), isError ? 4000 : 3000);
-  };
+  const hasSelection = selectedIds.size > 0;
+  const isFiltering = query.trim() !== "" || statusFilter !== "all";
 
   return (
-    <div className="px-8 pb-10 pt-6">
+    <div className="mx-auto max-w-[1200px] px-6 pb-12 pt-7 lg:px-8">
       {(savedToast || actionMessage) && (
         <div className="fixed right-6 top-5 z-40 flex items-center gap-2.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-[13px] font-medium text-white shadow-lg shadow-emerald-600/25 animate-in fade-in slide-in-from-top-2 duration-200">
           <CheckCircle2 className="h-4 w-4" />
@@ -283,383 +300,396 @@ export default function ContactsList({
         </div>
       )}
 
-      <div className="flex items-center gap-2.5">
+      {/* Page header */}
+      <div className="mb-1 flex items-center gap-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Users className="h-4 w-4" />
         </span>
         <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">Contacts</h1>
       </div>
-      <p className="mb-6 mt-1 text-[13px] text-muted-foreground">View and manage all of your contacts.</p>
+      <p className="mb-6 text-[13px] text-muted-foreground">View and manage all of your contacts.</p>
 
-      {stats.contacts > contacts.length && !serverFiltered && (
-        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-[12px] text-primary">
-          Showing {contacts.length.toLocaleString()} of {stats.contacts.toLocaleString()} contacts. Refine your search or use filters to find specific contacts.
-        </div>
-      )}
-
-      <div className="mb-7 flex items-center gap-16">
+      {/* Stats */}
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard icon={Users} label="Contacts" value={stats.contacts.toLocaleString()} tint="bg-indigo-50 text-indigo-600" />
-        <StatCard icon={UserCheck} label="Subscribed Contacts" value={stats.subscribed.toLocaleString()} tint="bg-emerald-50 text-emerald-600" />
-        <StatCard icon={UserX} label="Unsubscribed Contacts" value={String(stats.unsubscribed)} tint="bg-rose-50 text-rose-500" />
+        <StatCard icon={UserCheck} label="Subscribed" value={stats.subscribed.toLocaleString()} tint="bg-emerald-50 text-emerald-600" />
+        <StatCard icon={UserX} label="Unsubscribed" value={stats.unsubscribed.toLocaleString()} tint="bg-rose-50 text-rose-500" />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <div className="relative" ref={filterRef}>
-            <button
-              type="button"
-              onClick={() => setFilterOpen(!filterOpen)}
-              className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-[13px] font-medium shadow-sm transition-colors ${
-                statusFilter !== "all"
-                  ? "border-primary/30 bg-primary/5 text-primary"
-                  : "border-border bg-card text-foreground hover:bg-muted/60"
-              }`}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              {statusFilter === "all" ? "Filter" : activeFilterLabel}
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filterOpen ? "rotate-180" : ""}`} />
-            </button>
-            {filterOpen && (
-              <div className="absolute left-0 top-full z-30 mt-1.5 w-52 rounded-lg border border-border bg-card py-1.5 shadow-lg">
-                {STATUS_FILTERS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setStatusFilter(option.value);
-                      setFilterOpen(false);
-                    }}
-                    className={`flex w-full px-3.5 py-2 text-left text-[13px] transition-colors hover:bg-muted ${
-                      statusFilter === option.value ? "font-semibold text-primary" : "text-foreground"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-64 items-center gap-2 rounded-lg border border-border bg-card px-3 transition focus-within:border-primary focus-within:ring-2 focus-within:ring-ring/30">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search contacts…"
-                className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
-              />
+      {stats.contacts > contacts.length && contacts.length > 0 && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          Showing the most recent {contacts.length.toLocaleString()} of {stats.contacts.toLocaleString()} contacts. Use search to find a specific contact.
+        </p>
+      )}
+
+      {/* Toolbar */}
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        {/* Filter dropdown */}
+        <div className="relative" ref={filterRef}>
+          <button
+            type="button"
+            onClick={() => setFilterOpen((v) => !v)}
+            className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3.5 text-[13px] font-semibold shadow-sm transition-colors ${
+              statusFilter !== "all"
+                ? "border-primary/40 bg-primary/5 text-primary"
+                : "border-border bg-card text-foreground hover:bg-muted/60"
+            }`}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {statusFilter === "all" ? "Filter" : activeFilterLabel}
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+          {filterOpen && (
+            <div className={`${menuCls} left-0 top-full mt-1.5`}>
+              <p className="px-3.5 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Opt-in status
+              </p>
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => { setStatusFilter(f.value); setFilterOpen(false); }}
+                  className={menuItemCls}
+                >
+                  <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${statusFilter === f.value ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
+                    {statusFilter === f.value && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  {f.label}
+                </button>
+              ))}
             </div>
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex h-9 items-center gap-1.5 rounded-lg bg-primary pl-4 pr-3 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.98]"
-              >
-                Create Contact <ChevronDown className={`h-4 w-4 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 z-20 mt-1.5 w-48 rounded-lg border border-border bg-card py-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-100">
-                  <button
-                    type="button"
-                    onClick={() => { setMenuOpen(false); onCreateOne(); }}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-                  >
-                    <UserPlus className="h-4 w-4 text-muted-foreground" /> Create One
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setMenuOpen(false); onImportList(); }}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-                  >
-                    <Upload className="h-4 w-4 text-muted-foreground" /> Import List
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
-        {selectedIds.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/30 px-4 py-2.5">
-            <span className="text-[13px] font-medium text-foreground">
-              {selectedIds.size} selected
-            </span>
-            <div className="relative">
+        {/* Search */}
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs sm:flex-none lg:w-80">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search contacts…"
+            className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-8 text-[13px] shadow-sm outline-none transition-colors placeholder:text-muted-foreground/80 focus:border-primary focus:ring-2 focus:ring-ring/30"
+          />
+          {loading && (
+            <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+          )}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          {hasSelection && (
+            <div className="relative" data-bulk-actions>
               <button
                 type="button"
-                onClick={() => setActionsOpen(!actionsOpen)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10"
+                onClick={() => setActionsOpen((v) => !v)}
+                disabled={busy || deleting}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
               >
-                Actions <ChevronDown className={`h-3.5 w-3.5 transition-transform ${actionsOpen ? "rotate-180" : ""}`} />
+                {(busy || deleting) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {selectedIds.size} selected
+                <ChevronDown className="h-3.5 w-3.5" />
               </button>
               {actionsOpen && (
-                <div className="absolute left-0 top-full z-30 mt-1.5 w-52 rounded-lg border border-border bg-card py-1.5 shadow-lg">
+                <div className={`${menuCls} right-0 top-full mt-1.5 min-w-[230px]`}>
                   {onAddToLists && (
-                    <button type="button" className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { setActionsOpen(false); setAddOpen(true); }}>
-                      <ListPlus className="h-3.5 w-3.5 text-muted-foreground" /> Add to Lists
+                    <button type="button" className={menuItemCls} onClick={() => { setAddOpen(true); setActionsOpen(false); setPickedLists(new Set()); setListSearch(""); }}>
+                      <ListPlus className="h-4 w-4 text-muted-foreground" /> Add to lists
                     </button>
                   )}
                   {onRemoveFromLists && (
-                    <button type="button" className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted" onClick={() => { setActionsOpen(false); setRemoveOpen(true); }}>
-                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" /> Remove From Lists
+                    <button type="button" className={menuItemCls} onClick={() => { setRemoveOpen(true); setActionsOpen(false); setRemoveLists(new Set()); setRemoveListSearch(""); }}>
+                      <UserMinus className="h-4 w-4 text-muted-foreground" /> Remove from lists
                     </button>
                   )}
+                  <button type="button" className={menuItemCls} onClick={() => { void handleCopyPhones(); setActionsOpen(false); }}>
+                    <Copy className="h-4 w-4 text-muted-foreground" /> Copy phone numbers
+                  </button>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted"
-                    onClick={() => void runBulkAction(async () => {
+                    className={menuItemCls}
+                    onClick={() => {
                       downloadContactsCsv(
-                        selectedContacts,
-                        `contacts-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+                        contacts.filter((c) => selectedIds.has(c.id)).map((c) => ({
+                          firstName: c.firstName,
+                          lastName: c.lastName,
+                          mobile: c.mobile,
+                          email: c.email,
+                          optIn: c.status,
+                          created: c.created,
+                        })),
                       );
-                      showActionMessage(`Downloaded ${selectedContacts.length} contact${selectedContacts.length === 1 ? "" : "s"}.`);
-                    })}
+                      setActionsOpen(false);
+                    }}
                   >
-                    <Download className="h-3.5 w-3.5 text-muted-foreground" /> Download
+                    <Download className="h-4 w-4 text-muted-foreground" /> Export selected
                   </button>
                   {onUnsubscribeContacts && (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-[13px] hover:bg-muted"
-                      onClick={() => void runBulkAction(async () => {
-                        await onUnsubscribeContacts([...selectedIds]);
-                        showActionMessage(`Unsubscribed ${selectedIds.size} contact${selectedIds.size === 1 ? "" : "s"}.`);
-                      })}
+                      className={menuItemCls}
+                      onClick={() => void runBulkAction(async () => { await onUnsubscribeContacts([...selectedIds]); showActionMessage("Contacts unsubscribed."); })}
                     >
-                      <Ban className="h-3.5 w-3.5 text-muted-foreground" /> Unsubscribe
+                      <UserX className="h-4 w-4 text-muted-foreground" /> Mark unsubscribed
                     </button>
+                  )}
+                  {onDeleteContacts && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-rose-600 transition-colors hover:bg-rose-50"
+                        onClick={() => void handleDeleteSelected()}
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete contacts
+                      </button>
+                    </>
                   )}
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => void handleCopyPhones()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <Copy className="h-3.5 w-3.5" /> Copy numbers
-            </button>
-            {onDeleteContacts ? (
-              <button
-                type="button"
-                onClick={() => void handleDeleteSelected()}
-                disabled={deleting}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12px] font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-60"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Delete
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" /> Clear
-            </button>
-          </div>
-        )}
+          )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-left">
-                <th className="w-10 py-2.5 pl-4 pr-2">
-                  <input
-                    ref={selectAllRef}
-                    type="checkbox"
-                    className="kc-check"
-                    checked={allVisibleSelected}
-                    onChange={toggleSelectAll}
-                    aria-label="Select all contacts on this page"
-                  />
-                </th>
-                {["First Name", "Last Name", "Mobile Number", "Email", "Opt-In Status", "Created"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 text-[12px] font-semibold text-muted-foreground">
-                    <span className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-foreground">
-                      {h} <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    </span>
-                  </th>
-                ))}
-                <th className="w-12 px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => {
-                const selected = selectedIds.has(c.id);
-                return (
-                  <tr
-                    key={c.id}
-                    className={`border-b border-border transition-colors last:border-0 ${
-                      selected ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/30"
-                    }`}
-                  >
-                    <td className="py-3 pl-4 pr-2">
-                      <input
-                        type="checkbox"
-                        className="kc-check"
-                        checked={selected}
-                        onChange={() => toggleRow(c.id)}
-                        aria-label={`Select ${c.firstName} ${c.lastName}`.trim()}
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-medium">
-                      <Link href={`/contacts/${c.id}`} className="text-primary hover:underline">
-                        {c.firstName || "—"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      <Link href={`/contacts/${c.id}`} className="hover:text-primary hover:underline">
-                        {c.lastName || "—"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-primary">{displayMobile(c.mobile)}</td>
-                    <td className="px-4 py-3 text-foreground">{c.email || <span className="text-muted-foreground/50">—</span>}</td>
-                    <td className="px-4 py-3"><StatusPill status={c.status} /></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{c.created}</td>
-                    <td className="relative px-4 py-3" ref={rowMenuFor === c.id ? rowMenuRef : undefined}>
-                      <button
-                        type="button"
-                        onClick={() => setRowMenuFor(rowMenuFor === c.id ? null : c.id)}
-                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="Contact actions"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                      {rowMenuFor === c.id && (
-                        <div className="absolute right-4 top-10 z-30 w-40 rounded-lg border border-border bg-card py-1 shadow-lg">
-                          <Link
-                            href={`/contacts/${c.id}`}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-muted"
-                            onClick={() => setRowMenuFor(null)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> View / edit
-                          </Link>
-                          {onDeleteContacts ? (
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteOne(c)}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-[13px] text-rose-600 transition-colors hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
-                            </button>
-                          ) : null}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {loading && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-3 text-center text-[12px] text-muted-foreground">
-                    Loading contacts…
-                  </td>
-                </tr>
-              )}
-              {filtered.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center">
-                    <div className="mx-auto flex max-w-xs flex-col items-center">
-                      <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                        <Search className="h-4 w-4" />
-                      </span>
-                      <p className="text-[13px] font-medium text-foreground">No contacts found</p>
-                      <p className="mt-1 text-[13px] text-muted-foreground">
-                        {query || statusFilter !== "all"
-                          ? "Try a different search or filter."
-                          : "Create or import contacts to get started."}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {/* Create menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary pl-3.5 pr-3 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.98]"
+            >
+              <UserPlus className="h-4 w-4" />
+              Create Contact
+              <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+            </button>
+            {menuOpen && (
+              <div className={`${menuCls} right-0 top-full mt-1.5`}>
+                <button type="button" className={menuItemCls} onClick={() => { setMenuOpen(false); onCreateOne(); }}>
+                  <UserPlus className="h-4 w-4 text-muted-foreground" /> Create one contact
+                </button>
+                <button type="button" className={menuItemCls} onClick={() => { setMenuOpen(false); onImportList(); }}>
+                  <Upload className="h-4 w-4 text-muted-foreground" /> Import from CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {addOpen && onAddToLists && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAddOpen(false)}>
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-[15px] font-bold text-foreground">
-                <ListPlus size={15} className="text-primary" /> Add to Lists
-              </h3>
-              <button type="button" className="rounded-md p-1 text-muted-foreground hover:bg-muted" onClick={() => setAddOpen(false)}>
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px]" placeholder="Search lists" value={listSearch} onChange={(e) => setListSearch(e.target.value)} />
-            </div>
-            <div className="mb-5 max-h-48 overflow-y-auto rounded-lg border border-border">
+      {/* List-picker popovers for bulk list actions */}
+      {addOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-[1px]" onClick={() => setAddOpen(false)}>
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl animate-in zoom-in-95 fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-sm font-semibold text-foreground">Add to lists</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">{selectedIds.size} contact{selectedIds.size === 1 ? "" : "s"} selected</p>
+            <input
+              autoFocus
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+              placeholder="Search lists…"
+              className="mt-3 h-9 w-full rounded-lg border border-border bg-card px-3 text-[13px] outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+            />
+            <div className="mt-2 max-h-52 overflow-y-auto">
+              {filteredLists.length === 0 && <p className="py-4 text-center text-xs text-muted-foreground">No lists found.</p>}
               {filteredLists.map((l) => (
-                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-muted/40">
-                  <input type="checkbox" className="kc-check" checked={pickedLists.has(l.id)} onChange={() => togglePick(l.id)} />
-                  <span className="text-[13px]">{l.name}</span>
-                </label>
+                <button key={l.id} type="button" onClick={() => togglePick(l.id)} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-muted">
+                  <span className={`flex h-4 w-4 items-center justify-center rounded border ${pickedLists.has(l.id) ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
+                    {pickedLists.has(l.id) && <Check className="h-3 w-3" />}
+                  </span>
+                  {l.name}
+                </button>
               ))}
             </div>
-            <div className="flex gap-3">
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setAddOpen(false)} className="h-9 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted/60">Cancel</button>
               <button
                 type="button"
-                className="h-10 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
-                disabled={pickedLists.size === 0 || busy}
-                onClick={() => void runBulkAction(async () => {
-                  await onAddToLists([...selectedIds], [...pickedLists]);
+                disabled={pickedLists.size === 0}
+                onClick={() => {
+                  const ids = [...pickedLists];
                   setAddOpen(false);
-                  setPickedLists(new Set());
-                  showActionMessage("Contacts added to lists.");
-                })}
+                  void runBulkAction(async () => { await onAddToLists?.([...selectedIds], ids); showActionMessage("Contacts added to lists."); });
+                }}
+                className="h-9 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary-hover disabled:opacity-50"
               >
-                Add to Lists
+                Add
               </button>
-              <button type="button" className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold" onClick={() => setAddOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {removeOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 backdrop-blur-[1px]" onClick={() => setRemoveOpen(false)}>
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl animate-in zoom-in-95 fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-sm font-semibold text-foreground">Remove from lists</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">{selectedIds.size} contact{selectedIds.size === 1 ? "" : "s"} selected</p>
+            <input
+              autoFocus
+              value={removeListSearch}
+              onChange={(e) => setRemoveListSearch(e.target.value)}
+              placeholder="Search lists…"
+              className="mt-3 h-9 w-full rounded-lg border border-border bg-card px-3 text-[13px] outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
+            />
+            <div className="mt-2 max-h-52 overflow-y-auto">
+              {filteredRemoveLists.length === 0 && <p className="py-4 text-center text-xs text-muted-foreground">No lists found.</p>}
+              {filteredRemoveLists.map((l) => (
+                <button key={l.id} type="button" onClick={() => toggleRemovePick(l.id)} className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-muted">
+                  <span className={`flex h-4 w-4 items-center justify-center rounded border ${removeLists.has(l.id) ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
+                    {removeLists.has(l.id) && <Check className="h-3 w-3" />}
+                  </span>
+                  {l.name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setRemoveOpen(false)} className="h-9 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted/60">Cancel</button>
+              <button
+                type="button"
+                disabled={removeLists.size === 0}
+                onClick={() => {
+                  const ids = [...removeLists];
+                  setRemoveOpen(false);
+                  void runBulkAction(async () => { await onRemoveFromLists?.([...selectedIds], ids); showActionMessage("Contacts removed from lists."); });
+                }}
+                className="h-9 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary-hover disabled:opacity-50"
+              >
+                Remove
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {removeOpen && onRemoveFromLists && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRemoveOpen(false)}>
-          <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-[15px] font-bold text-foreground">
-                <UserMinus size={15} className="text-primary" /> Remove From Lists
-              </h3>
-              <button type="button" className="rounded-md p-1 text-muted-foreground hover:bg-muted" onClick={() => setRemoveOpen(false)}>
-                <X className="h-4 w-4" />
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
+          <div className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {isFiltering ? <Search className="h-5 w-5" /> : <Inbox className="h-5 w-5" />}
+          </div>
+          <h3 className="font-display text-sm font-semibold text-foreground">
+            {isFiltering ? "No contacts match your filters" : "No contacts yet"}
+          </h3>
+          <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
+            {isFiltering
+              ? "Try a different search term or clear the status filter."
+              : "Create your first contact or import a list to start sending reminders and campaigns."}
+          </p>
+          {!isFiltering && (
+            <div className="mt-5 flex gap-2">
+              <button type="button" onClick={onCreateOne} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary-hover">
+                <UserPlus className="h-4 w-4" /> Create contact
+              </button>
+              <button type="button" onClick={onImportList} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted/60">
+                <Upload className="h-4 w-4" /> Import CSV
               </button>
             </div>
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px]" placeholder="Search lists" value={removeListSearch} onChange={(e) => setRemoveListSearch(e.target.value)} />
-            </div>
-            <div className="mb-5 max-h-48 overflow-y-auto rounded-lg border border-border">
-              {filteredRemoveLists.map((l) => (
-                <label key={l.id} className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-muted/40">
-                  <input type="checkbox" className="kc-check" checked={removeLists.has(l.id)} onChange={() => toggleRemovePick(l.id)} />
-                  <span className="text-[13px]">{l.name}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="h-10 rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
-                disabled={removeLists.size === 0 || busy}
-                onClick={() => void runBulkAction(async () => {
-                  await onRemoveFromLists([...selectedIds], [...removeLists]);
-                  setRemoveOpen(false);
-                  setRemoveLists(new Set());
-                  showActionMessage("Contacts removed from lists.");
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="w-10 px-4 py-2.5">
+                    <input ref={selectAllRef} type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} className={checkCls} aria-label="Select all" />
+                  </th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Name</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Mobile</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Email</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Created</th>
+                  <th className="w-12 px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c) => {
+                  const selected = selectedIds.has(c.id);
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`border-b border-border/70 transition-colors last:border-0 ${selected ? "bg-primary/[0.04]" : "hover:bg-muted/40"}`}
+                    >
+                      <td className="px-4 py-2.5">
+                        <input type="checkbox" checked={selected} onChange={() => toggleRow(c.id)} className={checkCls} aria-label={`Select ${contactName(c)}`} />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                            {initials(c)}
+                          </span>
+                          <span className="max-w-[200px] truncate font-medium text-foreground">{contactName(c)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{displayMobile(c.mobile)}</td>
+                      <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">{c.email || "—"}</td>
+                      <td className="px-4 py-2.5"><StatusPill status={c.status} /></td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{c.created || "—"}</td>
+                      <td className="relative px-4 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setRowMenuFor(rowMenuFor === c.id ? null : c.id)}
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          aria-label="Row actions"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {rowMenuFor === c.id && (
+                          <div ref={rowMenuRef} className={`${menuCls} right-4 top-full z-40 mt-0.5 min-w-[180px]`}>
+                            <button
+                              type="button"
+                              className={menuItemCls}
+                              onClick={() => {
+                                if (!c.mobile) return;
+                                void navigator.clipboard.writeText(c.mobile).then(
+                                  () => showActionMessage("Phone number copied."),
+                                  () => showActionMessage("Could not copy.", true),
+                                );
+                                setRowMenuFor(null);
+                              }}
+                            >
+                              <Copy className="h-4 w-4 text-muted-foreground" /> Copy phone
+                            </button>
+                            {onUnsubscribeContacts && c.status === "Subscribed" && (
+                              <button
+                                type="button"
+                                className={menuItemCls}
+                                onClick={() => {
+                                  setRowMenuFor(null);
+                                  void onUnsubscribeContacts([c.id]).then(() => showActionMessage("Contact unsubscribed."));
+                                }}
+                              >
+                                <UserX className="h-4 w-4 text-muted-foreground" /> Unsubscribe
+                              </button>
+                            )}
+                            {onDeleteContacts && (
+                              <>
+                                <div className="my-1 border-t border-border" />
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] font-medium text-rose-600 transition-colors hover:bg-rose-50"
+                                  onClick={() => void handleDeleteOne(c)}
+                                >
+                                  <Trash2 className="h-4 w-4" /> Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
                 })}
-              >
-                Remove From Lists
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-border bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground">
+            <span className="tabular-nums">
+              {filtered.length.toLocaleString()} contact{filtered.length === 1 ? "" : "s"}
+              {isFiltering ? " (filtered)" : ""}
+            </span>
+            {hasSelection && (
+              <button type="button" onClick={clearSelection} className="font-medium text-primary transition-colors hover:text-primary-hover">
+                Clear selection
               </button>
-              <button type="button" className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold" onClick={() => setRemoveOpen(false)}>Cancel</button>
-            </div>
+            )}
           </div>
         </div>
       )}

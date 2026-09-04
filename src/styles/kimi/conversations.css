@@ -2,20 +2,22 @@
   --tv-primary: #4f46e5;
   --tv-primary-dark: #4338ca;
   --tv-primary-soft: #eef2ff;
-  --tv-primary-softer: #f5f7ff;
+  --tv-primary-softer: #f7f8ff;
   --tv-teal: #14b8a6;
-  --tv-bg: #f7f8fa;
-  --tv-panel: #fbfcfd;
-  --tv-border: #e5e7eb;
-  --tv-border-soft: #f1f3f5;
-  --tv-text: #111827;
-  --tv-text-2: #374151;
-  --tv-muted: #6b7280;
-  --tv-faint: #9ca3af;
+  --tv-bg: #f6f7f9;
+  --tv-panel: #fafbfc;
+  --tv-border: #e4e7ec;
+  --tv-border-soft: #eff1f4;
+  --tv-text: #101828;
+  --tv-text-2: #344054;
+  --tv-muted: #667085;
+  --tv-faint: #98a2b3;
   --tv-note: #fffbeb;
   --tv-note-border: #fde68a;
   --tv-note-text: #92400e;
+  --tv-ring: rgba(79,70,229,.14);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv11", "ss01";
   color: var(--tv-text);
   background: var(--tv-bg);
   flex: 1;
@@ -23,44 +25,49 @@
   height: 100%;
   display: flex;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 .kimi-conversations .ref-scope *{ box-sizing: border-box; }
 .kimi-conversations .ref-scroll::-webkit-scrollbar{ width: 6px; height: 6px; }
-.kimi-conversations .ref-scroll::-webkit-scrollbar-thumb{ background: #d6d9de; border-radius: 3px; }
-.kimi-conversations .ref-scroll::-webkit-scrollbar-thumb:hover{ background: #c0c4cb; }
+.kimi-conversations .ref-scroll::-webkit-scrollbar-thumb{ background: #d4d8de; border-radius: 3px; }
+.kimi-conversations .ref-scroll::-webkit-scrollbar-thumb:hover{ background: #bdc2ca; }
 .kimi-conversations .ref-scroll::-webkit-scrollbar-track{ background: transparent; }
 
 @keyframes refFadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
 @keyframes refOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes refModalIn { from { opacity: 0; transform: translateY(10px) scale(.985);} to { opacity: 1; transform: none;} }
+@keyframes tv-pop-in { from { opacity: 0; transform: scale(.97);} to { opacity: 1; transform: none;} }
 .kimi-conversations .ref-pop{ animation: refFadeIn .14s ease; }
 .kimi-conversations .ref-overlay{ animation: refOverlayIn .16s ease; }
 .kimi-conversations .ref-modal{ animation: refModalIn .18s cubic-bezier(.2,.8,.3,1); }
 
 /* ---------- buttons ---------- */
 .kimi-conversations .tv-btn{
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--tv-primary); color: #fff; border: none; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--tv-primary); color: #fff; border: none; border-radius: 8px;
   padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
   box-shadow: 0 1px 2px rgba(79,70,229,.25);
   transition: background .12s, box-shadow .12s, transform .06s;
+  letter-spacing: -0.1px;
 }
-.kimi-conversations .tv-btn:hover:not(:disabled){ background: var(--tv-primary-dark); box-shadow: 0 2px 6px rgba(79,70,229,.3); }
+.kimi-conversations .tv-btn:hover:not(:disabled){ background: var(--tv-primary-dark); box-shadow: 0 2px 8px rgba(79,70,229,.3); }
 .kimi-conversations .tv-btn:active:not(:disabled){ transform: translateY(.5px); }
+.kimi-conversations .tv-btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px var(--tv-ring); }
 .kimi-conversations .tv-btn:disabled{ background: #c7d2fe; box-shadow: none; cursor: not-allowed; }
 .kimi-conversations .tv-btn-ghost{
-  display: inline-flex; align-items: center; gap: 6px;
-  background: #fff; color: var(--tv-text-2); border: 1px solid var(--tv-border); border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: #fff; color: var(--tv-text-2); border: 1px solid var(--tv-border); border-radius: 8px;
   padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: background .12s, border-color .12s;
+  transition: background .12s, border-color .12s, box-shadow .12s;
 }
-.kimi-conversations .tv-btn-ghost:hover{ background: #f5f6f8; border-color: #d8dbe0; }
+.kimi-conversations .tv-btn-ghost:hover{ background: #f7f8fa; border-color: #cfd4dc; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+.kimi-conversations .tv-btn-ghost:disabled{ opacity: .55; cursor: not-allowed; }
 
 .kimi-conversations .tv-icon-btn{
   display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--tv-border);
-  background: #fff; color: #4b5563; cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--tv-border);
+  background: #fff; color: #475467; cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s, box-shadow .12s;
 }
 .kimi-conversations .tv-icon-btn:hover{ background: var(--tv-primary-softer); color: var(--tv-primary); border-color: #c7d2fe; }
 .kimi-conversations .tv-icon-btn.active{ background: var(--tv-primary-soft); color: var(--tv-primary); border-color: #c7d2fe; }
@@ -69,26 +76,33 @@
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 9999px; color: #fff; font-weight: 600; flex-shrink: 0;
   letter-spacing: .2px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
 }
 
+/* ---------- chips / product filters ---------- */
 .kimi-conversations .tv-chip{
   display: inline-flex; align-items: center; gap: 4px;
   border: 1px solid var(--tv-border); border-radius: 9999px;
-  padding: 2px 9px; font-size: 11px; font-weight: 500; color: #4b5563; background: #fff;
-  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+  padding: 3px 11px; font-size: 12px; font-weight: 500; color: #475467; background: #fff;
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+  line-height: 1.5; white-space: nowrap;
 }
-.kimi-conversations .tv-chip:hover{ background: #f8f9fb; border-color: #d8dbe0; }
+.kimi-conversations .tv-chip:hover{ background: #f8f9fb; border-color: #cfd4dc; }
 .kimi-conversations .tv-chip.active{
   background: var(--tv-primary-soft); color: var(--tv-primary);
   border-color: #c7d2fe; font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(79,70,229,.08);
 }
-.kimi-conversations .tv-chip-clear{ color: var(--tv-faint); }
+.kimi-conversations .tv-chip-clear{
+  color: var(--tv-faint); border-color: transparent; background: transparent;
+  padding: 3px 8px;
+}
+.kimi-conversations .tv-chip-clear:hover{ color: var(--tv-muted); background: #f2f4f7; border-color: transparent; }
 .kimi-conversations .tv-product-filters{
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
 }
-
 .kimi-conversations .tv-product-filters-bar{
-  padding: 10px 14px;
+  padding: 9px 16px;
   border-bottom: 1px solid var(--tv-border);
   background: #fff;
 }
@@ -100,11 +114,12 @@
   color: var(--tv-text-2); transition: background .1s, color .1s;
   user-select: none;
 }
-.kimi-conversations .tv-rail-item:hover{ background: #f3f4f6; }
+.kimi-conversations .tv-rail-item:hover{ background: #f2f4f7; }
 .kimi-conversations .tv-rail-item.active{ background: var(--tv-primary-soft); color: var(--tv-primary); font-weight: 600; }
 .kimi-conversations .tv-rail-item .tv-count{
-  font-size: 11px; color: var(--tv-faint); font-weight: 500;
-  background: #f3f4f6; border-radius: 9999px; padding: 1px 7px; min-width: 22px; text-align: center;
+  font-size: 11px; color: var(--tv-faint); font-weight: 600;
+  background: #f2f4f7; border-radius: 9999px; padding: 1px 7px; min-width: 22px; text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .kimi-conversations .tv-rail-item.active .tv-count{ background: #dfe4fd; color: var(--tv-primary); }
 .kimi-conversations .tv-rail-group{
@@ -113,6 +128,14 @@
   cursor: pointer; user-select: none; border-radius: 6px;
 }
 .kimi-conversations .tv-rail-group:hover{ color: var(--tv-muted); }
+
+.kimi-conversations .tv-online-pill{
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 9999px; padding: 3px 9px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: filter .12s;
+}
+.kimi-conversations .tv-online-pill:hover{ filter: brightness(.97); }
 
 /* ---------- conversation list rows ---------- */
 .kimi-conversations .tv-convo-row{
@@ -135,8 +158,9 @@
 .kimi-conversations .tv-msg-row.out{ justify-content: flex-end; }
 .kimi-conversations .tv-bubble{
   max-width: 72%; padding: 9px 13px; border-radius: 14px;
-  font-size: 13.5px; line-height: 1.45; position: relative;
+  font-size: 13.5px; line-height: 1.5; position: relative;
   box-shadow: 0 1px 2px rgba(16,24,40,.06);
+  word-break: break-word;
 }
 .kimi-conversations .tv-bubble-in{
   background: #fff; color: var(--tv-text);
@@ -157,17 +181,17 @@
 .kimi-conversations .tv-note-bubble{
   background: var(--tv-note); border: 1px solid var(--tv-note-border);
   border-radius: 10px; padding: 10px 14px; font-size: 13px; color: var(--tv-note-text);
-  max-width: 75%; display: flex; gap: 8px; line-height: 1.45;
+  max-width: 75%; display: flex; gap: 8px; line-height: 1.5;
 }
 .kimi-conversations .tv-event{
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   margin: 12px 0; font-size: 11px; color: var(--tv-faint); text-align: center;
 }
 .kimi-conversations .tv-event > span:first-child{
-  background: #f3f4f6; padding: 2px 12px; border-radius: 9999px;
+  background: #f2f4f7; padding: 2px 12px; border-radius: 9999px;
   color: var(--tv-muted); font-weight: 600;
 }
-.kimi-conversations .tv-day-divider{ display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.kimi-conversations .tv-day-divider{ display: flex; align-items: center; gap: 12px; margin: 14px 0 6px; }
 .kimi-conversations .tv-day-divider::before,
 .kimi-conversations .tv-day-divider::after{ content: ""; flex: 1; height: 1px; background: var(--tv-border); }
 .kimi-conversations .tv-day-divider span{ font-size: 11px; color: var(--tv-faint); font-weight: 500; }
@@ -183,32 +207,36 @@
 .kimi-conversations .tv-composer-tab.active{ color: var(--tv-primary); font-weight: 600; border-bottom-color: var(--tv-primary); }
 .kimi-conversations .tv-composer-tool{
   display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 6px; color: var(--tv-faint);
+  width: 28px; height: 28px; border-radius: 7px; color: var(--tv-faint);
   background: none; border: none; cursor: pointer; transition: background .1s, color .1s;
 }
-.kimi-conversations .tv-composer-tool:hover{ background: #f3f4f6; color: var(--tv-muted); }
+.kimi-conversations .tv-composer-tool:hover{ background: #eef0f3; color: var(--tv-muted); }
+.kimi-conversations .tv-composer-tool:disabled{ opacity: .4; cursor: not-allowed; }
 
 /* ---------- toggle ---------- */
-.kimi-conversations .tv-toggle{ position: relative; width: 34px; height: 19px; border-radius: 9999px; background: #d1d5db; border: none; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+.kimi-conversations .tv-toggle{ position: relative; width: 34px; height: 19px; border-radius: 9999px; background: #d0d5dd; border: none; cursor: pointer; transition: background .15s; flex-shrink: 0; }
 .kimi-conversations .tv-toggle.on{ background: var(--tv-primary); }
 .kimi-conversations .tv-toggle::after{ content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 9999px; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .kimi-conversations .tv-toggle.on::after{ left: 17px; }
 
 /* ---------- inputs ---------- */
 .kimi-conversations .tv-input{
-  width: 100%; border: 1px solid var(--tv-border); border-radius: 7px;
+  width: 100%; border: 1px solid var(--tv-border); border-radius: 8px;
   padding: 8px 12px; font-size: 13px; outline: none; background: #fff; color: var(--tv-text);
   transition: border-color .12s, box-shadow .12s;
+  font-family: inherit;
 }
 .kimi-conversations .tv-input::placeholder{ color: var(--tv-faint); }
-.kimi-conversations .tv-input:focus{ border-color: var(--tv-primary); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+.kimi-conversations .tv-input:hover:not(:focus){ border-color: #cfd4dc; }
+.kimi-conversations .tv-input:focus{ border-color: var(--tv-primary); box-shadow: 0 0 0 3px var(--tv-ring); }
+.kimi-conversations .tv-input:disabled{ background: #f2f4f7; color: var(--tv-faint); cursor: not-allowed; }
 
 /* ---------- status pills ---------- */
-.kimi-conversations .tv-status-btn{ display: inline-flex; align-items: center; gap: 6px; border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: filter .12s; }
+.kimi-conversations .tv-status-btn{ display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: filter .12s; }
 .kimi-conversations .tv-status-btn:hover{ filter: brightness(.97); }
 .kimi-conversations .tv-status-open{ background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
 .kimi-conversations .tv-status-pending{ background: #fffbeb; color: #d97706; border-color: #fde68a; }
-.kimi-conversations .tv-status-closed{ background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+.kimi-conversations .tv-status-closed{ background: #f2f4f7; color: #667085; border-color: #e4e7ec; }
 
 /* ---------- menus ---------- */
 .kimi-conversations .tv-menu-label{ font-size: 10.5px; font-weight: 700; letter-spacing: .6px; color: var(--tv-faint); padding: 4px 10px; }
@@ -217,35 +245,48 @@
   padding: 7px 10px; font-size: 13px; border-radius: 6px; cursor: pointer;
   color: var(--tv-text-2); transition: background .1s;
 }
-.kimi-conversations .tv-menu-item:hover{ background: #f3f4f6; }
+.kimi-conversations .tv-menu-item:hover{ background: #f2f4f7; }
 .kimi-conversations .tv-menu-sep{ border-top: 1px solid var(--tv-border-soft); margin-top: 4px; padding-top: 4px; }
 
-/* ---------- contact panel fields ---------- */
-.kimi-conversations .tv-field-value{
-  font-size: 13px; color: var(--tv-text);
-  border-bottom: 1px solid var(--tv-border-soft); padding-bottom: 4px;
+/* ---------- settings screens ---------- */
+.kimi-conversations .ar-panel{
+  background: #fff; border: 1px solid var(--tv-border);
+  padding: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
 }
-.kimi-conversations .tv-field-value.empty{ color: #d1d5db; }
-
-/* ---------- online pill ---------- */
-.kimi-conversations .tv-online-pill{
-  border: 1px solid #a7f3d0; background: #ecfdf5; color: #059669;
-  border-radius: 9999px; font-size: 11px; font-weight: 600; padding: 3px 10px;
-  cursor: pointer; display: flex; align-items: center; gap: 5px; transition: filter .12s;
+.kimi-conversations .day-pill{
+  border: 1px solid var(--tv-border); border-radius: 8px; background: #fff;
+  padding: 6px 12px; font-size: 12.5px; font-weight: 600; color: var(--tv-text-2);
+  cursor: pointer; transition: all .12s;
 }
-.kimi-conversations .tv-online-pill:hover{ filter: brightness(.97); }
+.kimi-conversations .day-pill:hover{ border-color: #cfd4dc; }
+.kimi-conversations .day-pill.active{
+  background: var(--tv-primary-soft); border-color: #c7d2fe; color: var(--tv-primary);
+}
+.kimi-conversations .time-select{
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--tv-border); border-radius: 8px; background: #fff;
+  padding: 6px 10px; font-size: 12.5px; font-weight: 500; color: var(--tv-text-2);
+  cursor: pointer; transition: border-color .12s;
+}
+.kimi-conversations .time-select:hover{ border-color: #cfd4dc; }
 
-/* ---------- responsive ---------- */
-@media (max-width: 900px) {
-  .kimi-conversations .conversations-list--mobile-hidden {
-    display: none !important;
-  }
-  .kimi-conversations .conversations-rail--mobile-hidden {
-    display: none !important;
-  }
-  .kimi-conversations .conversations-thread--mobile-full {
-    flex: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-  }
+/* ---------- presence viewers bar ---------- */
+.kimi-conversations .tv-viewers-bar{
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 16px; background: #fff;
+  font-size: 11.5px; color: var(--tv-muted);
+  border-bottom: 1px solid var(--tv-border-soft);
+}
+.kimi-conversations .tv-viewers-dot{
+  width: 6px; height: 6px; border-radius: 9999px; background: #12b76a;
+  box-shadow: 0 0 0 3px rgba(18,183,106,.14);
+  flex-shrink: 0;
+}
+
+/* ---------- thread layout ---------- */
+.kimi-conversations .conversations-thread-area{ background: #fff; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 900px){
+  .kimi-conversations .conversations-thread--mobile-full{ width: 100%; }
 }

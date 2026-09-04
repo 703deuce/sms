@@ -230,8 +230,8 @@ async function captureScreen(
   }
 
   const url = `${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
-  await page.goto(url, { waitUntil: "networkidle", timeout: 90_000 });
-  await page.waitForTimeout(800);
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.waitForTimeout(2000);
 
   if (screen.resolve === "types-edit") {
     await runActions(page, [{ type: "click", selector: 'button:has-text("Edit"), button:has-text("New")' }]);

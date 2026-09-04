@@ -3,6 +3,19 @@ import React from "react";
 import { ArrowDownUp, Inbox as InboxIcon } from "lucide-react";
 import { Conversation } from "../mock-data";
 
+function SkeletonRow() {
+  return (
+    <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--tv-border-soft)" }}>
+      <div style={{ width: 15, height: 15, marginTop: 11, borderRadius: 4, background: "#eef0f3", flexShrink: 0 }} />
+      <div style={{ width: 34, height: 34, borderRadius: 9999, background: "#eef0f3", flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ height: 11, width: "55%", borderRadius: 4, background: "#eef0f3", marginTop: 4 }} />
+        <div style={{ height: 10, width: "85%", borderRadius: 4, background: "#f3f4f6", marginTop: 7 }} />
+      </div>
+    </div>
+  );
+}
+
 export default function ConversationList({
   title,
   subtitle,
@@ -48,6 +61,7 @@ export default function ConversationList({
         display: "flex",
         flexDirection: "column",
         flexShrink: 0,
+        minHeight: 0,
       }}
     >
       <div
@@ -64,6 +78,7 @@ export default function ConversationList({
           type="checkbox"
           checked={allChecked}
           onChange={(e) => onCheckAll(e.target.checked)}
+          aria-label="Select all conversations"
           style={{
             accentColor: "var(--tv-primary)",
             width: 15,
@@ -92,9 +107,15 @@ export default function ConversationList({
       </div>
       <div className="ref-scroll" style={{ flex: 1, overflowY: "auto" }}>
         {loading && convos.length === 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "56px 24px", textAlign: "center" }}>
-            <div style={{ width: 28, height: 28, borderRadius: 9999, border: "2px solid var(--tv-border)", borderTopColor: "var(--tv-primary)", animation: "spin 0.8s linear infinite" }} />
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--tv-muted)" }}>Loading conversations…</div>
+          <div>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+            <div style={{ padding: "14px", textAlign: "center", fontSize: 12, fontWeight: 600, color: "var(--tv-faint)" }}>
+              Loading conversations…
+            </div>
           </div>
         ) : null}
         {!loading && convos.length === 0 && (
@@ -115,15 +136,20 @@ export default function ConversationList({
           const active = selectedId === c.id;
           return (
             <div key={c.id} onClick={() => onSelect(c)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter") onSelect(c); }}
+              aria-current={active || undefined}
               className={"tv-convo-row" + (isChecked ? " checked" : active ? " active" : "")}>
               <input type="checkbox" checked={isChecked} onClick={(e) => e.stopPropagation()}
+                aria-label={`Select conversation with ${c.name}`}
                 onChange={(e) => onCheck(c.id, e.target.checked)}
                 style={{ accentColor: "var(--tv-primary)", width: 15, height: 15, marginTop: 11, cursor: "pointer", flexShrink: 0 }} />
-              <span className="tv-avatar" style={{ width: 34, height: 34, fontSize: 12, background: c.color, marginTop: 1, boxShadow: "inset 0 0 0 1px rgba(255,255,255,.18)" }}>{c.initials}</span>
+              <span className="tv-avatar" style={{ width: 34, height: 34, fontSize: 12, background: c.color, marginTop: 1 }}>{c.initials}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
                   <span style={{ fontSize: 13.5, fontWeight: c.unread ? 700 : 600, letterSpacing: -0.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--tv-text)" }}>{c.name}</span>
-                  <span style={{ fontSize: 10.5, color: c.unread ? "var(--tv-primary)" : "var(--tv-faint)", fontWeight: c.unread ? 600 : 400, whiteSpace: "nowrap", flexShrink: 0 }}>{c.ago}</span>
+                  <span style={{ fontSize: 10.5, color: c.unread ? "var(--tv-primary)" : "var(--tv-faint)", fontWeight: c.unread ? 600 : 400, whiteSpace: "nowrap", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{c.ago}</span>
                 </div>
                 <div style={{
                   fontSize: 12.5, marginTop: 2.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.45,

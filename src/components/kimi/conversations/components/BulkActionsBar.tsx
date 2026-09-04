@@ -13,7 +13,7 @@ export default function BulkActionsBar({ count, onAction, tags, teammates, allow
   const [s, setS] = usePopover(); const [a, setA] = usePopover(); const [t, setT] = usePopover(); const [m, setM] = usePopover();
   const Btn = ({ label, icon, onClick }:{ label: string; icon?: React.ReactNode; onClick?: ()=>void }) => (
     <button className="tv-btn-ghost" onClick={onClick}
-      style={{ background: "#fff", border: "1px solid var(--tv-border)", boxShadow: "0 1px 2px rgba(16,24,40,.05)", borderRadius: 8, fontWeight: 600, color: "var(--tv-text-2)" }}>
+      style={{ borderRadius: 8, fontWeight: 600, padding: "7px 13px" }}>
       {icon}{label} <ChevronDown size={13} style={{ opacity: 0.6 }} />
     </button>
   );
@@ -21,7 +21,7 @@ export default function BulkActionsBar({ count, onAction, tags, teammates, allow
     <div className="tv-menu-item" onClick={onClick}>{label}</div>
   );
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, background: "var(--tv-panel)" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, background: "var(--tv-panel)", padding: 24 }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <span style={{
           width: 56, height: 56, borderRadius: 9999, background: "var(--tv-primary-soft)",
@@ -32,7 +32,7 @@ export default function BulkActionsBar({ count, onAction, tags, teammates, allow
         </span>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: "var(--tv-text)" }}>{count} Conversation{count !== 1 ? "s" : ""} Selected</div>
-          <div style={{ fontSize: 12.5, color: "var(--tv-faint)", marginTop: 4 }}>Choose an action below.</div>
+          <div style={{ fontSize: 12.5, color: "var(--tv-faint)", marginTop: 4 }}>Choose an action below to apply to the selection.</div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
