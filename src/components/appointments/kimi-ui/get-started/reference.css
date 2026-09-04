@@ -1,0 +1,133 @@
+.setup-page {
+  --brand: #5b4bd6;
+  --brand-600: #4f3fd1;
+  --brand-50: #f1efff;
+  --brand-100: #e6e2ff;
+  --success: #22c07a;
+  --success-bg: #e6f9f0;
+}
+
+.setup-card {
+  background: #ffffff;
+  border: 1px solid #ececf3;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(24, 24, 48, 0.04);
+}
+
+.setup-step-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #f2f2f7;
+}
+.setup-step-row:last-child {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.badge-done {
+  background: var(--success-bg);
+  color: #16a36a;
+}
+.badge-upnext {
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-primary:hover {
+  background: var(--brand-600);
+}
+
+.btn-soft {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--brand-50);
+  color: var(--brand-600);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-soft:hover {
+  background: var(--brand-100);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e5e5ee;
+  color: #5a5a72;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.btn-ghost:hover {
+  border-color: var(--brand);
+  color: var(--brand-600);
+}
+
+/* progress ring */
+.ring-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.ring-wrap svg {
+  transform: rotate(-90deg);
+}
+
+/* readiness gauge */
+.gauge-rocket {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%);
+}
+
+.tip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f0f0f6;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tip-row:hover {
+  border-color: var(--brand-100);
+  background: #fafaff;
+}

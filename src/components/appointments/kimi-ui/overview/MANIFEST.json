@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-04T10-13-42-821Z-fb3b63",
+  "targetRoute": "/appointments/overview",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T10:15:32.797Z",
+  "generatedFiles": [
+    "components/BookingsChart.tsx",
+    "components/NeedsAttention.tsx",
+    "components/QuickActions.tsx",
+    "components/RecentConversations.tsx",
+    "components/StatCards.tsx",
+    "components/TodaysSchedule.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/BookingsChart.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/NeedsAttention.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/QuickActions.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/RecentConversations.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/StatCards.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/components/TodaysSchedule.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/mock-data.ts",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/page.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-04T10-13-42-821Z-fb3b63/reference.css"
+  ],
+  "status": "generated"
+}

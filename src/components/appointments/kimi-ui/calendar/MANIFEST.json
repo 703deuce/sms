@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-04T10-17-22-980Z-5d4382",
+  "targetRoute": "/appointments/calendar",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T10:20:26.768Z",
+  "generatedFiles": [
+    "components/CalendarHeader.tsx",
+    "components/DayAgenda.tsx",
+    "components/MiniCalendar.tsx",
+    "components/NextAppointment.tsx",
+    "components/StatCards.tsx",
+    "components/WeekCalendar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/CalendarHeader.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/DayAgenda.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/MiniCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/NextAppointment.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/StatCards.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/components/WeekCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/mock-data.ts",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/page.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-04T10-17-22-980Z-5d4382/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,0 +1,11 @@
+.reminder-settings-page {
+  font-family: inherit;
+}
+
+.reminder-settings-page textarea {
+  font-family: inherit;
+}
+
+.reminder-settings-page ::selection {
+  background: rgba(79, 70, 229, 0.15);
+}

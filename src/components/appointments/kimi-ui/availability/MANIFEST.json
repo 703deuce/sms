@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-04T10-13-45-769Z-f8de9b",
+  "targetRoute": "/appointments/availability",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T10:16:02.272Z",
+  "generatedFiles": [
+    "components/AvailabilitySummary.tsx",
+    "components/BookingRules.tsx",
+    "components/DateOverrides.tsx",
+    "components/LivePreview.tsx",
+    "components/WeeklyHours.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/components/AvailabilitySummary.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/components/BookingRules.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/components/DateOverrides.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/components/LivePreview.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/components/WeeklyHours.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/mock-data.ts",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/page.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-04T10-13-45-769Z-f8de9b/reference.css"
+  ],
+  "status": "generated"
+}

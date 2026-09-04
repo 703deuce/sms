@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-04T10-17-25-900Z-eafd3e",
+  "targetRoute": "/appointments/booking",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T10:21:24.839Z",
+  "generatedFiles": [
+    "components/AiProtectionCard.tsx",
+    "components/BusinessInfoCard.tsx",
+    "components/LivePreview.tsx",
+    "components/PublicBookingCard.tsx",
+    "components/SmsConsentCard.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/components/AiProtectionCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/components/BusinessInfoCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/components/LivePreview.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/components/PublicBookingCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/components/SmsConsentCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/mock-data.ts",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/page.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-04T10-17-25-900Z-eafd3e/reference.css"
+  ],
+  "status": "generated"
+}

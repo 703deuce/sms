@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-04T10-17-25-920Z-54632f",
+  "targetRoute": "/appointments/reminders",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T10:19:06.064Z",
+  "generatedFiles": [
+    "components/MergeTagsCard.tsx",
+    "components/PhonePreview.tsx",
+    "components/ReminderCard.tsx",
+    "components/SendTestCard.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/components/MergeTagsCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/components/PhonePreview.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/components/ReminderCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/components/SendTestCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/mock-data.ts",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/page.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-04T10-17-25-920Z-54632f/reference.css"
+  ],
+  "status": "generated"
+}

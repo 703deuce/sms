@@ -7,9 +7,14 @@ import { buildReferenceImplementation } from "./reference-builder";
 import type { LabeledMedia, UiVisionProvider } from "./types";
 
 export async function screenshotGeneratedReference(sessionId: string): Promise<string> {
+  if (process.env.KIMI_SKIP_PREVIEW === "1" || process.env.KIMI_SKIP_PREVIEW === "true") {
+    log("preview screenshot skipped", "KIMI_SKIP_PREVIEW set");
+    return "";
+  }
   const generatedDir = generatedDirForSession(sessionId);
   const { startPreviewServer } = await import("./preview");
-  const { url, close } = await startPreviewServer(sessionId);
+  const port = 5174 + (sessionId.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 500);
+  const { url, close } = await startPreviewServer(sessionId, port);
 
   const browser = await chromium.launch({ headless: true });
   try {

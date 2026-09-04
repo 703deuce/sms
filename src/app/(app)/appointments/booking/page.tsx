@@ -10,11 +10,9 @@ export default async function AppointmentBookingPage() {
   });
 
   return (
-    <div className="px-6 py-6">
-      <AppointmentBookingSettingsClient
-        workspaceSlug={ws?.slug || ""}
-        workspaceName={ws?.displayName || ws?.name || "Your business"}
-      />
-    </div>
+    <AppointmentBookingSettingsClient
+      workspaceSlug={ws?.slug || ""}
+      workspaceName={ws?.displayName || ws?.name || "Your business"}
+    />
   );
 }
