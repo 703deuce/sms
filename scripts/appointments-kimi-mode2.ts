@@ -30,6 +30,19 @@ const BASE =
   "https://transovo.ai"; // pragma: allowlist secret
 const AUTH_EMAIL = process.env.DEV_AUTH_BYPASS_EMAIL || "alex@harborhome.co";
 
+const KIMI_UI_TARGETS: Record<string, string> = {
+  overview: "src/components/appointments/kimi-ui/overview/page.tsx",
+  calendar: "src/components/appointments/kimi-ui/calendar/page.tsx",
+  "appointment-types": "src/components/appointments/kimi-ui/appointment-types/page.tsx",
+  availability: "src/components/appointments/kimi-ui/availability/page.tsx",
+  "reminder-settings": "src/components/appointments/kimi-ui/reminder-settings/page.tsx",
+  booking: "src/components/appointments/kimi-ui/booking/page.tsx",
+  "get-started": "src/components/appointments/kimi-ui/get-started/page.tsx",
+};
+
+const MODE2_INSTRUCTION_SUFFIX =
+  "\n\nONLY edit files under src/components/appointments/kimi-ui/. Do NOT modify connected containers, API routes, or src/features/appointments/kimi/*.";
+
 const PAGE_WAIT: Record<string, { heading: string; content?: string }> = {
   overview: { heading: "Overview", content: "Upcoming appointments" },
   calendar: { heading: "Calendar", content: "Manage your appointments" },
@@ -122,9 +135,10 @@ async function captureSerial(): Promise<void> {
 
 function buildPolishOptions(job: ScreenshotPolishJob, instruction: string): CliOptions {
   const hasTarget = Boolean(job.targetScreenshot && existsSync(join(REPO_ROOT, job.targetScreenshot)));
+  const polishTarget = KIMI_UI_TARGETS[job.id] || job.target;
   return {
     mode: "polish",
-    target: job.target,
+    target: polishTarget,
     referenceImages: hasTarget ? [join(REPO_ROOT, job.targetScreenshot!)] : [],
     referenceVideos: [],
     referenceUrls: [],
@@ -151,7 +165,7 @@ function buildPolishOptions(job: ScreenshotPolishJob, instruction: string): CliO
     viewports: ["desktop"],
     maxPasses: 1,
     reasoningEffort: "low",
-    instruction: job.instruction || instruction,
+    instruction: `${job.instruction || instruction}${MODE2_INSTRUCTION_SUFFIX}`,
   };
 }
 

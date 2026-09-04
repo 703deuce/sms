@@ -19,15 +19,22 @@ export default function StatCards({ stats }: Props) {
     <div className="stat-row">
       {stats.map((s) => (
         <div key={s.label} className="stat-card">
-          <div className={`stat-icon stat-icon-${s.tone}`}>{icons[s.icon]}</div>
+          <div className={`stat-icon stat-icon-${s.tone}`} aria-hidden>
+            {icons[s.icon]}
+          </div>
           <div className="stat-body">
             <div className="stat-top">
               <span className="stat-value">{s.value}</span>
             </div>
             <div className="stat-label">{s.label}</div>
-            {s.delta && (
+            {s.delta ? (
               <div className={`stat-delta ${s.deltaUp ? "up" : "neutral"}`}>
-                {s.deltaUp && <TrendingUp size={12} />} {s.delta}
+                {s.deltaUp ? <TrendingUp size={12} aria-hidden /> : null}
+                <span>{s.delta}</span>
+              </div>
+            ) : (
+              <div className="stat-delta neutral stat-delta-empty" aria-hidden>
+                —
               </div>
             )}
           </div>

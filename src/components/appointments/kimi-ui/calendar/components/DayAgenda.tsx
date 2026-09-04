@@ -10,6 +10,12 @@ type Props = {
   onViewFullDay: () => void;
 };
 
+function statusLabel(status: string) {
+  if (status === "confirmed") return "Confirmed";
+  if (status === "pending") return "Pending";
+  return "Canceled";
+}
+
 export default function DayAgenda({
   dateLabel,
   count,
@@ -37,7 +43,7 @@ export default function DayAgenda({
               onClick={() => onOpenAppointment(a.id)}
             >
               <div className="agenda-left">
-                <span className="agenda-dot" style={{ background: a.dot }} />
+                <span className="agenda-dot" style={{ background: a.dot }} aria-hidden />
                 <div>
                   <div className="agenda-time">{a.time}</div>
                   <div className="agenda-dur">{a.duration}</div>
@@ -47,10 +53,8 @@ export default function DayAgenda({
                 <div className="agenda-title">{a.title}</div>
                 <div className="agenda-name">{a.name}</div>
               </div>
-              <span className={`badge badge-${a.status}`}>
-                {a.status === "confirmed" ? "Confirmed" : a.status === "pending" ? "Pending" : "Canceled"}
-              </span>
-              <span className="icon-btn sm" aria-hidden>
+              <span className={`badge badge-${a.status}`}>{statusLabel(a.status)}</span>
+              <span className="icon-btn sm agenda-kebab" aria-hidden>
                 <MoreVertical size={15} />
               </span>
             </button>

@@ -35,6 +35,7 @@ export default function MiniCalendar({ monthLabel, days, onPrev, onNext, onSelec
             className={`mini-day ${cell.muted ? "muted" : ""} ${cell.selected ? "selected" : ""} ${cell.hasEvent ? "has-event" : ""}`}
             onClick={() => !cell.muted && onSelectDay(cell.dateKey)}
             disabled={cell.muted}
+            aria-pressed={cell.selected}
           >
             {cell.day}
           </button>

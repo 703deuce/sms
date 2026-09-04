@@ -30,7 +30,7 @@ export default function CalendarHeader({
   return (
     <div className="cal-header">
       <div className="cal-title-wrap">
-        <Calendar size={22} className="cal-title-icon" />
+        <Calendar size={22} className="cal-title-icon" aria-hidden />
         <div>
           <h1 className="cal-title">Calendar</h1>
           <p className="cal-subtitle">Manage your appointments and schedule.</p>
@@ -41,21 +41,23 @@ export default function CalendarHeader({
           Today
         </button>
         <div className="nav-arrows">
-          <button type="button" className="icon-btn" onClick={onPrev} aria-label="Previous">
+          <button type="button" className="icon-btn" onClick={onPrev} aria-label="Previous period">
             <ChevronLeft size={16} />
           </button>
-          <button type="button" className="icon-btn" onClick={onNext} aria-label="Next">
+          <button type="button" className="icon-btn" onClick={onNext} aria-label="Next period">
             <ChevronRight size={16} />
           </button>
         </div>
-        <button type="button" className="btn-range">
-          {rangeLabel} <ChevronDown size={14} />
+        <button type="button" className="btn-range" aria-label="Current range">
+          <span className="btn-range-label">{rangeLabel}</span>
+          <ChevronDown size={14} />
         </button>
-        <div className="view-toggle">
+        <div className="view-toggle" role="group" aria-label="Calendar view">
           {VIEW_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
+              aria-pressed={view === opt.value}
               className={`vt-btn ${view === opt.value ? "active" : ""}`}
               onClick={() => onViewChange(opt.value)}
             >

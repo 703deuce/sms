@@ -48,9 +48,9 @@ export default function WeekCalendar({
             <span className="wg-dow">{d.label}</span>
             <span className="wg-date">
               {d.date}
-              {d.today && (
+              {d.today ? (
                 <span className="today-badge">{new Date(d.dateKey).getDate()}</span>
-              )}
+              ) : null}
             </span>
           </div>
         ))}
@@ -58,13 +58,13 @@ export default function WeekCalendar({
           <React.Fragment key={h}>
             <div className="wg-time">{h}</div>
             {weekDays.map((d) => (
-              <div key={d.dateKey + h} className="wg-cell" />
+              <div key={d.dateKey + h} className={`wg-cell ${d.today ? "today-col" : ""}`} />
             ))}
           </React.Fragment>
         ))}
 
         {nowLine ? (
-          <div className="now-line" style={{ top: nowLine.top }}>
+          <div className="now-line" style={{ top: nowLine.top }} aria-hidden>
             <span className="now-label">{nowLine.label}</span>
             <span className="now-track" />
             <span className="now-dot" />
@@ -82,6 +82,7 @@ export default function WeekCalendar({
               style={{ top, height }}
               data-day={ev.day}
               onClick={() => onOpenAppointment(ev.id)}
+              title={`${ev.timeLabel} — ${ev.title} with ${ev.name}`}
             >
               <div className="ev-time">{ev.timeLabel}</div>
               <div className="ev-title-row">
