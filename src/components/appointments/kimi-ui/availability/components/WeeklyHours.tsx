@@ -1,7 +1,14 @@
 import { Clock, CalendarDays, Plus, Trash2 } from "lucide-react";
-import { weeklyHours } from "../mock-data";
+import type { DayScheduleRow } from "@/features/appointments/kimi/availability/types";
 
-export default function WeeklyHours() {
+interface Props {
+  days: DayScheduleRow[];
+  onUpdateWindow: (day: string, index: number, field: "open" | "close", value: string) => void;
+  onAddWindow: (day: string) => void;
+  onRemoveWindow: (day: string, index: number) => void;
+}
+
+export default function WeeklyHours({ days, onUpdateWindow, onAddWindow, onRemoveWindow }: Props) {
   return (
     <section className="avail-card avail-fade-in avail-fade-in-2">
       <div className="avail-card-header">
@@ -16,18 +23,18 @@ export default function WeeklyHours() {
             </p>
           </div>
         </div>
-        <button className="avail-btn-ghost">
+        <button type="button" className="avail-btn-ghost">
           <CalendarDays size={13} />
           Copy from calendar
         </button>
       </div>
 
       <div className="px-[22px] py-3">
-        {weeklyHours.map((d, i) => (
+        {days.map((d, i) => (
           <div
-            key={d.day}
+            key={d.key}
             className={`flex items-center gap-4 py-3.5 ${
-              i < weeklyHours.length - 1 ? "border-b border-[#f2f1f7]" : ""
+              i < days.length - 1 ? "border-b border-[#f2f1f7]" : ""
             }`}
           >
             <div className="w-[110px] flex items-center gap-2.5 shrink-0">
@@ -37,28 +44,39 @@ export default function WeeklyHours() {
               </span>
             </div>
 
-            <div className="flex-1 flex items-center gap-3">
+            <div className="flex-1 flex flex-col gap-2">
               {d.open ? (
-                <>
-                  <div className="avail-input flex items-center gap-2 w-[110px] justify-between font-medium text-[12.5px]">
-                    {d.windows[0].start}
-                    <Clock size={13} className="text-[#8a87a0]" />
+                d.windows.map((window, idx) => (
+                  <div key={`${d.key}-${idx}`} className="flex items-center gap-3">
+                    <input
+                      type="time"
+                      className="avail-input w-[130px] font-medium text-[12.5px]"
+                      value={window.open}
+                      onChange={(e) => onUpdateWindow(d.key, idx, "open", e.target.value)}
+                    />
+                    <span className="text-[12.5px] text-[#8a87a0]">to</span>
+                    <input
+                      type="time"
+                      className="avail-input w-[130px] font-medium text-[12.5px]"
+                      value={window.close}
+                      onChange={(e) => onUpdateWindow(d.key, idx, "close", e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="avail-icon-btn"
+                      aria-label="Remove window"
+                      onClick={() => onRemoveWindow(d.key, idx)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <span className="text-[12.5px] text-[#8a87a0]">to</span>
-                  <div className="avail-input flex items-center gap-2 w-[110px] justify-between font-medium text-[12.5px]">
-                    {d.windows[0].end}
-                    <Clock size={13} className="text-[#8a87a0]" />
-                  </div>
-                  <button className="avail-icon-btn" aria-label="Remove window">
-                    <Trash2 size={14} />
-                  </button>
-                </>
+                ))
               ) : (
                 <span className="text-[13px] text-[#8a87a0]">{d.closedNote}</span>
               )}
             </div>
 
-            <button className="avail-add-link shrink-0">
+            <button type="button" className="avail-add-link shrink-0" onClick={() => onAddWindow(d.key)}>
               <Plus size={14} />
               Add window
             </button>

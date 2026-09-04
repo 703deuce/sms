@@ -25,9 +25,30 @@ export interface Override {
 }
 
 export const overrides: Override[] = [
-  { month: "MAY", dayNum: "27", date: "Tue, May 27, 2026", type: "custom", hours: "10:00 AM – 02:00 PM", note: "Team offsite" },
-  { month: "JUL", dayNum: "04", date: "Fri, Jul 4, 2026", type: "closed", hours: "—", note: "Independence Day" },
-  { month: "DEC", dayNum: "25", date: "Thu, Dec 25, 2026", type: "closed", hours: "—", note: "Christmas Day" },
+  {
+    month: "MAY",
+    dayNum: "27",
+    date: "Tue, May 27, 2026",
+    type: "custom",
+    hours: "10:00 AM – 02:00 PM",
+    note: "Team offsite",
+  },
+  {
+    month: "JUL",
+    dayNum: "04",
+    date: "Fri, Jul 4, 2026",
+    type: "closed",
+    hours: "—",
+    note: "Independence Day",
+  },
+  {
+    month: "DEC",
+    dayNum: "25",
+    date: "Thu, Dec 25, 2026",
+    type: "closed",
+    hours: "—",
+    note: "Christmas Day",
+  },
 ];
 
 export interface PreviewDay {

@@ -1,8 +1,9 @@
 "use client";
-import { CalendarDays, MapPin, Clock, DollarSign } from "lucide-react";
-import { AppointmentType } from "../mock-data";
 
-export default function PreviewPanel({ type }: { type: AppointmentType }) {
+import { CalendarDays, MapPin, Clock, DollarSign } from "lucide-react";
+import type { AppointmentTypeItem } from "@/features/appointments/kimi/appointment-types/types";
+
+export default function PreviewPanel({ type }: { type: AppointmentTypeItem }) {
   return (
     <div className="card p-5">
       <p className="text-[11.5px] font-semibold text-[#8a8fa3] uppercase tracking-wide mb-4">
@@ -19,7 +20,7 @@ export default function PreviewPanel({ type }: { type: AppointmentType }) {
         <p className="text-[12.5px] text-[#6b6f82] leading-relaxed mb-4">{type.description}</p>
         <div className="space-y-2.5 text-[12.5px] text-[#6b6f82]">
           <div className="flex items-center gap-2.5">
-            <MapPin size={14} className="text-[#a0a3b5]" /> {type.location}
+            <MapPin size={14} className="text-[#a0a3b5]" /> {type.location || "In-office"}
           </div>
           <div className="flex items-center gap-2.5">
             <Clock size={14} className="text-[#a0a3b5]" /> You&apos;ll choose a time on the next step

@@ -1,7 +1,3 @@
 "use client";
 
-import AvailabilityPage from "@/components/appointments/kimi-ui/availability/page";
-
-export function AppointmentAvailabilityClient() {
-  return <AvailabilityPage />;
-}
+export { AvailabilityConnected as AppointmentAvailabilityClient } from "@/features/appointments/kimi/availability/availability-connected";

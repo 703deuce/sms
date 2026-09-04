@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
-import { previewDays } from "../mock-data";
+import type { PreviewDayRow } from "@/features/appointments/kimi/availability/types";
 
-export default function LivePreview() {
+export default function LivePreview({ days }: { days: PreviewDayRow[] }) {
   return (
     <aside className="avail-card avail-fade-in avail-fade-in-2 p-5">
       <h3 className="text-[14px] font-semibold text-[#1c1a2e]">Live availability preview</h3>
@@ -10,7 +10,7 @@ export default function LivePreview() {
       </p>
 
       <div className="space-y-1">
-        {previewDays.map((d) => (
+        {days.map((d) => (
           <div key={d.date} className="flex items-start justify-between py-2.5">
             <div>
               {d.label && (
@@ -27,8 +27,8 @@ export default function LivePreview() {
                   d.status === "open"
                     ? "avail-pill-open"
                     : d.status === "closed"
-                    ? "avail-pill-closed"
-                    : "avail-pill-custom"
+                      ? "avail-pill-closed"
+                      : "avail-pill-custom"
                 }`}
               >
                 {d.status === "open" ? "Open" : d.status === "closed" ? "Closed" : "Override"}
@@ -38,7 +38,7 @@ export default function LivePreview() {
         ))}
       </div>
 
-      <button className="mt-3 inline-flex items-center gap-2 text-[13px] font-semibold text-[#5b45e0] hover:gap-3 transition-all">
+      <button type="button" className="mt-3 inline-flex items-center gap-2 text-[13px] font-semibold text-[#5b45e0] hover:gap-3 transition-all">
         View full calendar
         <ArrowRight size={15} />
       </button>

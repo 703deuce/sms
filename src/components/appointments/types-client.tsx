@@ -1,7 +1,3 @@
 "use client";
 
-import AppointmentTypesPage from "@/components/appointments/kimi-ui/appointment-types/page";
-
-export function AppointmentTypesClient() {
-  return <AppointmentTypesPage />;
-}
+export { AppointmentTypesConnected as AppointmentTypesClient } from "@/features/appointments/kimi/appointment-types/appointment-types-connected";
