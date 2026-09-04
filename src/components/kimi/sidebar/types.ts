@@ -12,6 +12,8 @@ export interface KimiNavItem {
   icon: LucideIcon;
   badge?: number;
   children?: KimiNavChild[];
+  sectionLabel?: string;
+  areaLabel?: string;
 }
 
 export interface KimiCredits {

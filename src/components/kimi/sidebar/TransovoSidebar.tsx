@@ -158,6 +158,20 @@ export function TransovoSidebar({
           const expanded = expandedGroups[item.label] ?? active;
           return (
             <div key={item.label}>
+              {item.sectionLabel ? (
+                <p className="px-2 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  {item.sectionLabel}
+                </p>
+              ) : null}
+              {item.areaLabel ? (
+                <p
+                  className={`px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground ${
+                    item.sectionLabel ? "" : "pt-3"
+                  }`}
+                >
+                  {item.areaLabel}
+                </p>
+              ) : null}
               <ExpandedNavRow
                 item={item}
                 active={active}

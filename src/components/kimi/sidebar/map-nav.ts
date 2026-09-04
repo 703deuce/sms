@@ -19,6 +19,8 @@ export function mapProductionNavToKimi(items: NavItem[]): KimiNavItem[] {
       icon: item.icon,
       badge: item.badge,
       children: children.length ? children : undefined,
+      sectionLabel: item.sectionLabel,
+      areaLabel: item.areaLabel,
     };
   });
 }

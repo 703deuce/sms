@@ -95,7 +95,7 @@
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
     "test:transovo-finish-gaps": "tsx scripts/test-transovo-finish-gaps.ts",
     "test:inbound-sms-workspace-routing": "tsx scripts/test-inbound-sms-workspace-routing.ts",
-    "test:appointments-v1": "tsx scripts/test-availability-engine.ts && tsx scripts/test-booking-protection.ts && tsx scripts/test-appointments-reminder-state.ts && tsx scripts/test-appointments-double-booking.ts && tsx scripts/test-appointments-tenant-isolation.ts",
+    "test:appointments-v1": "tsx scripts/test-availability-engine.ts && tsx scripts/test-booking-protection.ts && tsx scripts/test-appointments-reminder-state.ts && tsx scripts/test-appointments-double-booking.ts && tsx scripts/test-appointments-tenant-isolation.ts && tsx scripts/test-appointments-nav.ts",
     "test:v1-api-products": "tsx scripts/test-v1-api-products.ts",
     "test:verify": "tsx scripts/test-verify.ts",
     "test:fax-routing-regression": "tsx scripts/test-fax-routing-regression.ts",

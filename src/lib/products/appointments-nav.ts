@@ -1,28 +1,29 @@
 import { buildAccountNavItems } from "@/lib/products/account-nav";
 import {
   BarChart3,
+  Bell,
   Calendar,
   ClipboardList,
+  Clock,
+  Globe,
   LayoutDashboard,
+  ListChecks,
   MessageSquare,
-  Phone,
-  ShieldCheck,
+  Rocket,
   Users,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import {
   isAnalyticsInV1Nav,
-  isComplianceInV1Nav,
   isContactsInV1Nav,
   isConversationsInV1Nav,
-  isNumbersInV1Nav,
 } from "@/lib/products/v1-launch-nav";
 
 export type AppointmentsNavOptions = {
   conversationsBadge?: number;
 };
 
-/** V1 launch sidebar — Appointments + shared ops surfaces (MCTB deferred). */
+/** V1 launch sidebar — flat appointments surfaces + shared ops (no Numbers/Compliance). */
 export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
   const items: NavItem[] = [
@@ -33,18 +34,40 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       sectionLabel: "Main",
     },
     {
-      label: "Appointments",
+      label: "Calendar",
       href: "/appointments/calendar",
       icon: Calendar,
-      children: [
-        { label: "Calendar", href: "/appointments/calendar" },
-        { label: "Scheduled", href: "/appointments" },
-        { label: "Appointment Types", href: "/appointments/types" },
-        { label: "Availability", href: "/appointments/availability" },
-        { label: "Reminder Settings", href: "/appointments/reminders" },
-        { label: "Booking Page", href: "/appointments/booking" },
-        { label: "Get Started", href: "/appointments/setup" },
-      ],
+      areaLabel: "Appointments",
+    },
+    {
+      label: "Scheduled",
+      href: "/appointments",
+      icon: ClipboardList,
+    },
+    {
+      label: "Appointment Types",
+      href: "/appointments/types",
+      icon: ListChecks,
+    },
+    {
+      label: "Availability",
+      href: "/appointments/availability",
+      icon: Clock,
+    },
+    {
+      label: "Reminder Settings",
+      href: "/appointments/reminders",
+      icon: Bell,
+    },
+    {
+      label: "Booking",
+      href: "/appointments/booking",
+      icon: Globe,
+    },
+    {
+      label: "Get Started",
+      href: "/appointments/setup",
+      icon: Rocket,
     },
   ];
 
@@ -75,22 +98,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Analytics",
       href: "/appointments/analytics",
       icon: BarChart3,
-    });
-  }
-
-  if (isNumbersInV1Nav()) {
-    items.push({
-      label: "Numbers",
-      href: "/numbers",
-      icon: Phone,
-    });
-  }
-
-  if (isComplianceInV1Nav()) {
-    items.push({
-      label: "Compliance",
-      href: "/compliance",
-      icon: ShieldCheck,
+      sectionLabel: "Insights",
     });
   }
 
@@ -128,7 +136,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
-  if (pathname.startsWith("/appointments/booking")) return "Booking Page";
+  if (pathname.startsWith("/appointments/booking")) return "Booking";
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";
   if (pathname.startsWith("/appointments/new")) return "New Appointment";
   if (pathname.match(/\/appointments\/[^/]+$/)) return "Appointment";

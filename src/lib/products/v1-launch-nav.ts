@@ -18,8 +18,8 @@ export const MISSED_CALL_TEXT_BACK_IN_V1_NAV = false;
 export const CONVERSATIONS_IN_V1_NAV = true;
 export const CONTACTS_IN_V1_NAV = true;
 export const ANALYTICS_IN_V1_NAV = true;
-export const COMPLIANCE_IN_V1_NAV = true;
-export const NUMBERS_IN_V1_NAV = true;
+export const COMPLIANCE_IN_V1_NAV = false;
+export const NUMBERS_IN_V1_NAV = false;
 export const SETTINGS_IN_V1_NAV = true;
 
 /** Deferred from primary nav — routes preserved. */
