@@ -23,14 +23,13 @@ export async function loadAppointmentsOverview(workspaceId: string) {
   });
 
   const normalized = (status: string) => status.toLowerCase();
-  const reminderFailed = await prisma.voiceAppointment.count({
-    where: {
-      workspaceId,
-      startsAt: { gte: startOfDay },
-      metadata: { path: ["reminderStatus"], equals: "failed" },
-      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-    },
-  });
+  const inactiveStatuses = new Set(["canceled", "cancelled", "completed", "no_show"]);
+  // Count in memory — PostgREST compat does not support metadata JSON path filters.
+  const reminderFailed = today.filter(
+    (a) =>
+      !inactiveStatuses.has(normalized(a.status)) &&
+      normalized(a.reminderStatus || "") === "failed",
+  ).length;
 
   const counts = {
     todayTotal: today.length,
