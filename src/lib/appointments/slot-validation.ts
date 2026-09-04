@@ -74,4 +74,24 @@ export async function assertSlotAvailableForBooking(
     return Math.abs(slotMs - startMs) < 60_000;
   });
   if (!allowed) throw new Error("Selected time is not available — please choose another slot");
+
+  const limits = svcCfg.bookingLimits || platform.bookingLimits;
+  if (limits) {
+    const { checkBookingLimits } = await import("@/lib/appointments/scheduling-domain");
+    const limitCheck = await checkBookingLimits(workspaceId, input.serviceName, start, limits);
+    if (!limitCheck.allowed) throw new Error(limitCheck.reason || "Booking limit reached");
+  }
+
+  const capacity = svcCfg.groupBooking?.enabled ? svcCfg.groupBooking.capacity || 1 : 1;
+  if (capacity > 1) {
+    const { checkGroupCapacity } = await import("@/lib/appointments/scheduling-domain");
+    const cap = await checkGroupCapacity(
+      workspaceId,
+      input.serviceName,
+      start,
+      capacity,
+      input.excludeAppointmentId,
+    );
+    if (!cap.available) throw new Error("This group session is full");
+  }
 }

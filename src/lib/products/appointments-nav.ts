@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Rocket,
   Users,
+  Workflow,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import {
@@ -58,6 +59,11 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Reminder Settings",
       href: "/appointments/reminders",
       icon: Bell,
+    },
+    {
+      label: "Workflows",
+      href: "/appointments/workflows",
+      icon: Workflow,
     },
     {
       label: "Booking",
@@ -135,6 +141,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/types")) return "Appointment Types";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
+  if (pathname.startsWith("/appointments/workflows")) return "Workflows";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
   if (pathname.startsWith("/appointments/booking")) return "Booking";
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";

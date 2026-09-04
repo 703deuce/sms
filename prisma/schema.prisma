@@ -289,6 +289,10 @@ model Workspace {
   voiceToolExecutions VoiceToolExecution[]
   voiceAppointments VoiceAppointment[]
   appointmentSlotHolds AppointmentSlotHold[]
+  appointmentWorkflows AppointmentWorkflow[]
+  appointmentWorkflowExecutions AppointmentWorkflowExecution[]
+  appointmentWaitlistEntries AppointmentWaitlistEntry[]
+  appointmentRecurringSeries AppointmentRecurringSeries[]
   voiceTestRuns VoiceTestRun[]
   voiceComplianceProfile VoiceComplianceProfile?
   voiceUsageRecords VoiceUsageRecord[]
@@ -2791,6 +2795,115 @@ model AppointmentSlotHold {
   @@index([workspaceId, status, expiresAt])
   @@index([callId])
   @@map("appointment_slot_holds")
+}
+
+/** Appointment-specific workflows — isolated from SMS DripCampaign / Playbooks. */
+model AppointmentWorkflow {
+  id                   String   @id @default(cuid())
+  workspaceId          String
+  name                 String
+  sourceType           String   @default("custom") // template | custom
+  templateId           String?
+  active               Boolean  @default(true)
+  status               String   @default("active") // active | paused | draft
+  trigger              String
+  appointmentTypeScope Json     @default("{}")
+  channels             Json     @default("[]")
+  conditions           Json?
+  stepsJson            Json     @default("[]")
+  version              Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executions           AppointmentWorkflowExecution[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, trigger])
+  @@map("appointment_workflows")
+}
+
+model AppointmentWorkflowExecution {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  workflowId       String
+  workflowVersion  Int      @default(1)
+  appointmentId    String
+  contactId        String?
+  status           String   @default("active") // active | completed | invalidated | canceled
+  startedAt        DateTime @default(now())
+  completedAt      DateTime?
+  invalidatedAt    DateTime?
+  invalidateReason String?
+  metadata         Json?
+  workflow         AppointmentWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stepExecutions   AppointmentWorkflowStepExecution[]
+
+  @@index([workspaceId, appointmentId])
+  @@index([workflowId, status])
+  @@map("appointment_workflow_executions")
+}
+
+model AppointmentWorkflowStepExecution {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  executionId       String
+  workflowId        String
+  stepId            String
+  scheduledFor      DateTime
+  executedAt        DateTime?
+  state             String   @default("scheduled") // scheduled | sent | failed | skipped | canceled
+  channel           String?
+  idempotencyKey    String   @unique
+  providerMessageId String?
+  failureReason     String?
+  payload           Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  execution         AppointmentWorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scheduledFor, state])
+  @@index([executionId])
+  @@map("appointment_workflow_step_executions")
+}
+
+model AppointmentWaitlistEntry {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  contactId           String?
+  appointmentTypeId   String?
+  serviceName         String?
+  preferredDate       String?
+  preferredTimeStart  String?
+  preferredTimeEnd    String?
+  staffPreference     String?
+  locationId          String?
+  phone               String?
+  email               String?
+  status              String   @default("active")
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@map("appointment_waitlist_entries")
+}
+
+model AppointmentRecurringSeries {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  contactId    String?
+  serviceName  String
+  frequency    String
+  occurrences  Int?
+  endDate      DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("appointment_recurring_series")
 }
 
 model VoiceTestRun {

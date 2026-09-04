@@ -62,6 +62,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!enrollmentId) throw new Error("enrollmentId required");
       return processDripCampaignStep({ enrollmentId, stepIndex });
     }
+    case "appointment_workflow_step": {
+      const { processAppointmentWorkflowStep } = await import(
+        "@/lib/appointment-workflows/engine"
+      );
+      const stepExecutionId = String(payload.stepExecutionId || "");
+      if (!stepExecutionId) throw new Error("stepExecutionId required");
+      return processAppointmentWorkflowStep({ stepExecutionId });
+    }
+    case "appointment_waitlist_notify": {
+      const { processWaitlistNotification } = await import("@/lib/appointments/waitlist");
+      const waitlistEntryId = String(payload.waitlistEntryId || "");
+      if (!waitlistEntryId) throw new Error("waitlistEntryId required");
+      return processWaitlistNotification({
+        waitlistEntryId,
+        serviceName: String(payload.serviceName || ""),
+        startsAt: String(payload.startsAt || ""),
+      });
+    }
     case "ai_reply_respond": {
       const { processAiReplyRespond } = await import("@/lib/ai-replies/engine");
       return processAiReplyRespond({

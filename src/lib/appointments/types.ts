@@ -26,6 +26,111 @@ export type DateOverride = {
 
 export type BookingProtectionMode = "standard" | "strict" | "off";
 
+export type BookingQuestionType =
+  | "text"
+  | "textarea"
+  | "email"
+  | "phone"
+  | "number"
+  | "select"
+  | "radio"
+  | "checkbox"
+  | "multiselect"
+  | "date";
+
+export type BookingQuestion = {
+  id: string;
+  label: string;
+  description?: string;
+  type: BookingQuestionType;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  displayOrder?: number;
+  active?: boolean;
+};
+
+export type StaffAssignmentMode =
+  | "any_eligible"
+  | "specific_staff"
+  | "customer_chooses"
+  | "round_robin"
+  | "maximize_availability"
+  | "collective";
+
+export type BookableStaffMember = {
+  id: string;
+  name: string;
+  active?: boolean;
+  appointmentTypeIds?: string[];
+  locationIds?: string[];
+  weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+  dateOverrides?: DateOverride[];
+  blackoutDates?: string[];
+};
+
+export type AppointmentLocation = {
+  id: string;
+  name: string;
+  address?: string;
+  timezone?: string;
+  kind?: "office" | "store" | "branch" | "customer" | "phone" | "video" | "custom";
+  active?: boolean;
+};
+
+export type BookingLimitConfig = {
+  maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
+  maxPerTypePerDay?: number;
+};
+
+export type CancellationPolicy = {
+  allowed: "anytime" | "until_hours_before" | "disabled";
+  cutoffHours?: number;
+  policyText?: string;
+};
+
+export type ReschedulePolicy = {
+  allowed: "anytime" | "until_hours_before" | "disabled";
+  cutoffHours?: number;
+  policyText?: string;
+};
+
+export type PaymentRequirement = {
+  mode: "none" | "deposit" | "full";
+  priceCents?: number;
+  depositCents?: number;
+  depositPercent?: number;
+  currency?: string;
+};
+
+export type RoutingRule = {
+  id: string;
+  name?: string;
+  conditions: Array<{
+    field: string;
+    operator: "equals" | "not_equals";
+    value: string;
+  }>;
+  logic?: "and" | "or";
+  destination: {
+    appointmentTypeId?: string;
+    staffPoolIds?: string[];
+    locationId?: string;
+  };
+};
+
+export type GroupBookingConfig = {
+  enabled?: boolean;
+  capacity?: number;
+};
+
+export type RecurringConfig = {
+  enabled?: boolean;
+  allowedFrequencies?: Array<"weekly" | "biweekly" | "monthly">;
+  maxOccurrences?: number;
+};
+
 export type AppointmentPlatformConfig = {
   bookingEnabled: boolean;
   timezone: string;
@@ -57,6 +162,22 @@ export type AppointmentPlatformConfig = {
     action: "challenge" | "block";
     recovered?: boolean;
   }>;
+  /** Multi-staff scheduling */
+  staff?: BookableStaffMember[];
+  /** Multiple locations */
+  locations?: AppointmentLocation[];
+  /** Deterministic routing rules */
+  routingRules?: RoutingRule[];
+  /** Workspace-level booking limits */
+  bookingLimits?: BookingLimitConfig;
+  /** Round-robin assignment tracking */
+  roundRobinState?: Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>;
+  /** External calendar blocking */
+  externalCalendarBlocking?: {
+    enabled?: boolean;
+    connectionIds?: string[];
+    calendarIds?: string[];
+  };
   reminders: {
     confirmation: ReminderStepConfig;
     reminder24h: ReminderStepConfig;
@@ -68,6 +189,7 @@ export type AppointmentTypeConfig = {
   enabled?: boolean;
   description?: string;
   location?: string;
+  locationId?: string;
   priceDisplay?: string;
   bookingHours?: string;
   minimumBookingNoticeMinutes?: number;
@@ -75,13 +197,17 @@ export type AppointmentTypeConfig = {
   bufferBeforeMinutes?: number;
   bufferAfterMinutes?: number;
   timezone?: string;
-  bookingQuestions?: Array<{
-    id: string;
-    label: string;
-    type: "text" | "textarea" | "select" | "checkbox";
-    required?: boolean;
-    options?: string[];
-  }>;
+  bookingQuestions?: BookingQuestion[];
+  staffAssignment?: StaffAssignmentMode;
+  staffIds?: string[];
+  collectiveStaffIds?: string[];
+  locationIds?: string[];
+  bookingLimits?: BookingLimitConfig;
+  cancellationPolicy?: CancellationPolicy;
+  reschedulePolicy?: ReschedulePolicy;
+  payment?: PaymentRequirement;
+  groupBooking?: GroupBookingConfig;
+  recurring?: RecurringConfig;
 };
 
 export type AppointmentTimelineEvent = {
@@ -110,6 +236,14 @@ export type AppointmentMetadata = {
   timeline?: AppointmentTimelineEvent[];
   bookingAnswers?: Record<string, string>;
   location?: string;
+  locationId?: string;
+  staffId?: string;
+  paymentStatus?: string;
+  paymentAmountCents?: number;
+  recurringSeriesId?: string;
+  recurringOccurrenceIndex?: number;
+  waitlistEntryId?: string;
+  internalNotes?: Array<{ id: string; at: string; authorId?: string; authorName?: string; body: string }>;
   notes?: string;
   [key: string]: unknown;
 };

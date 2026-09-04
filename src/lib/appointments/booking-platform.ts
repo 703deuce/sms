@@ -248,6 +248,13 @@ export async function createPlatformAppointment(
     }
   }
 
+  try {
+    const { onAppointmentBooked } = await import("@/lib/appointment-workflows/triggers");
+    await onAppointmentBooked(workspaceId, appointmentId, contactId);
+  } catch (err) {
+    console.warn("[appointments] workflow trigger failed on book", err);
+  }
+
   return { appointmentId, contactId, ...result };
 }
 
@@ -274,10 +281,19 @@ export async function updatePlatformAppointmentStatus(
       }) as AppointmentMetadata;
     }
   }
-  return prisma.voiceAppointment.update({
+  const updated = await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: { status, metadata: meta as object },
   });
+
+  try {
+    const { onAppointmentStatusChanged } = await import("@/lib/appointment-workflows/triggers");
+    await onAppointmentStatusChanged(workspaceId, appointmentId, status);
+  } catch (err) {
+    console.warn("[appointments] workflow trigger failed on status change", err);
+  }
+
+  return updated;
 }
 
 export async function cancelPlatformAppointment(workspaceId: string, appointmentId: string) {
@@ -291,7 +307,20 @@ export async function cancelPlatformAppointment(workspaceId: string, appointment
     suppressAppointmentReminders((row.metadata || {}) as AppointmentMetadata),
     { type: "canceled", label: "Appointment canceled — pending reminders cleared" },
   ) as AppointmentMetadata;
-  return prisma.voiceAppointment.update({
+
+  try {
+    const { notifyWaitlistOnSlotAvailable } = await import("@/lib/appointments/waitlist");
+    if (row.serviceName && row.startsAt > new Date()) {
+      await notifyWaitlistOnSlotAvailable({
+        workspaceId,
+        serviceName: row.serviceName,
+        startsAt: row.startsAt,
+      });
+    }
+  } catch (err) {
+    console.warn("[appointments] waitlist notify failed", err);
+  }
+  const canceled = await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: {
       status: "canceled",
@@ -301,6 +330,15 @@ export async function cancelPlatformAppointment(workspaceId: string, appointment
       }) as object,
     },
   });
+
+  try {
+    const { onAppointmentCanceled } = await import("@/lib/appointment-workflows/triggers");
+    await onAppointmentCanceled(workspaceId, appointmentId);
+  } catch (err) {
+    console.warn("[appointments] workflow trigger failed on cancel", err);
+  }
+
+  return canceled;
 }
 
 export async function findAppointmentByPublicToken(token: string) {
@@ -356,7 +394,7 @@ export async function reschedulePlatformAppointment(
     detail: start.toISOString(),
   });
 
-  return prisma.voiceAppointment.update({
+  const rescheduled = await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: {
       startsAt: start,
@@ -365,5 +403,14 @@ export async function reschedulePlatformAppointment(
       metadata: metadata as object,
     },
   });
+
+  try {
+    const { onAppointmentRescheduled } = await import("@/lib/appointment-workflows/triggers");
+    await onAppointmentRescheduled(workspaceId, appointmentId);
+  } catch (err) {
+    console.warn("[appointments] workflow trigger failed on reschedule", err);
+  }
+
+  return rescheduled;
 }
 

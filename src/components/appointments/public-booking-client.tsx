@@ -14,6 +14,7 @@ import {
   MapPin,
   Phone,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -36,7 +37,7 @@ type BookingType = {
 
 type Slot = { startsAt: string; endsAt: string };
 
-type Step = "service" | "datetime" | "info" | "done";
+type Step = "service" | "datetime" | "info" | "done" | "ai";
 
 const STEP_LABELS: Array<{ key: Exclude<Step, "done">; label: string }> = [
   { key: "service", label: "Service" },
@@ -120,6 +121,11 @@ export function PublicBookingClient({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiHistory, setAiHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [aiSlots, setAiSlots] = useState<Slot[]>([]);
 
   useEffect(() => {
     fetch(`/api/public/book/${encodeURIComponent(slug)}`)
@@ -167,6 +173,52 @@ export function PublicBookingClient({
     }
     return [...map.entries()];
   }, [slots]);
+
+  async function sendAiMessage() {
+    const text = aiInput.trim();
+    if (!text) return;
+    setAiLoading(true);
+    setError("");
+    setAiInput("");
+    const nextHistory = [...aiHistory, { role: "user" as const, content: text }];
+    setAiHistory(nextHistory);
+    try {
+      const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}/ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, conversationHistory: nextHistory }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "AI booking unavailable");
+      const data = json.data;
+      setAiMessage(data.message || "");
+      setAiHistory((h) => [...h, { role: "assistant", content: data.message || "" }]);
+      if (data.slots?.length) {
+        setAiSlots(data.slots);
+      }
+      if (data.serviceName && !selectedType) {
+        const match = types.find((t) => t.name === data.serviceName);
+        if (match) setSelectedType(match);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not process request");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function selectAiSlot(slot: Slot) {
+    setStartsAt(slot.startsAt);
+    if (selectedType) {
+      setStep("info");
+    } else if (types.length === 1) {
+      setSelectedType(types[0]);
+      setStep("info");
+    } else {
+      setStep("service");
+      setError("Please select a service type first.");
+    }
+  }
 
   async function pickType(type: BookingType) {
     setSelectedType(type);
@@ -313,6 +365,30 @@ export function PublicBookingClient({
 
         {step === "service" ? (
           <div className="space-y-3">
+            <button
+              type="button"
+              className="group surface w-full rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 p-5 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+              onClick={() => setStep("ai")}
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-display text-[15px] font-semibold text-foreground">
+                    Tell us what works for you
+                  </p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">
+                    Describe when you&apos;d like to come — we&apos;ll find real available times.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <p className="text-center text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+              or choose a service
+            </p>
+
             {types.map((type) => (
               <button
                 key={type.id}
@@ -355,6 +431,85 @@ export function PublicBookingClient({
               </button>
             ))}
           </div>
+        ) : null}
+
+        {step === "ai" ? (
+          <Card className="p-5 sm:p-6">
+            <button
+              type="button"
+              className="mb-4 inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline"
+              onClick={() => setStep("service")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
+            </button>
+            <h2 className="font-display text-base font-semibold">Describe your ideal appointment time</h2>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Examples: &quot;I need a consultation Friday afternoon&quot; or &quot;Anything Tuesday after 3?&quot;
+            </p>
+
+            {aiHistory.length > 0 ? (
+              <div className="mt-4 max-h-64 space-y-3 overflow-y-auto rounded-lg bg-muted/40 p-3">
+                {aiHistory.map((m, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "rounded-lg px-3 py-2 text-[13px] whitespace-pre-wrap",
+                      m.role === "user"
+                        ? "ml-6 bg-primary text-primary-foreground"
+                        : "mr-6 bg-card border border-border",
+                    )}
+                  >
+                    {m.content}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {aiSlots.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-[13px] font-semibold">Available times</p>
+                {aiSlots.map((slot) => (
+                  <button
+                    key={slot.startsAt}
+                    type="button"
+                    className="w-full rounded-lg border border-border bg-card px-4 py-3 text-left text-[13px] font-medium hover:border-primary/40"
+                    onClick={() => selectAiSlot(slot)}
+                  >
+                    {new Date(slot.startsAt).toLocaleString(undefined, {
+                      weekday: "long",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex gap-2">
+              <Input
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                placeholder="Type your request…"
+                onKeyDown={(e) => e.key === "Enter" && sendAiMessage()}
+                disabled={aiLoading}
+              />
+              <Button onClick={sendAiMessage} disabled={aiLoading || !aiInput.trim()}>
+                {aiLoading ? "…" : "Send"}
+              </Button>
+            </div>
+
+            {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
+
+            <p className="mt-4 text-center text-[12px] text-muted-foreground">
+              Prefer to pick manually?{" "}
+              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => setStep("service")}>
+                Choose a time
+              </button>
+            </p>
+          </Card>
         ) : null}
 
         {step === "datetime" ? (
@@ -643,7 +798,7 @@ export function PublicBookingClient({
         ) : null}
 
         <p className="mt-8 text-center text-[11px] text-muted-foreground/70">
-          Powered by Transovo
+          Powered by your booking provider
         </p>
       </div>
     </div>
