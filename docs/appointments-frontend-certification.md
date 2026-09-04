@@ -26,9 +26,11 @@ Serialized certification on production. **One browser, one page at a time.** No 
 - Resume from first row not marked PASS if VM restarts
 
 ## Commands
+Set `PLAYWRIGHT_BASE_URL` to your deployment host, then:
+
 ```bash
-UI_AGENT_BASE_URL=$PRODUCTION_URL npx tsx scripts/appointments-frontend-certify-serial.ts next
-UI_AGENT_BASE_URL=$PRODUCTION_URL npx tsx scripts/appointments-frontend-certify-serial.ts overview
+npx tsx scripts/appointments-frontend-certify-serial.ts next
+npx tsx scripts/appointments-frontend-certify-serial.ts overview
 APPOINTMENTS_TEST_PHONE=5714776175 npx tsx scripts/appointments-frontend-certify-serial.ts reminders
 ```
 
