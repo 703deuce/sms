@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMerchantConnection, refreshStripeConnectAccount } from "@/lib/merchant-payments/connection-store";
-import { startStripeConnectOnboarding } from "@/lib/merchant-payments/stripe-connect";
+import { getMerchantConnection } from "@/lib/merchant-payments/connection-store";
+import { refreshStripeConnectAccount, startStripeConnectOnboarding } from "@/lib/merchant-payments/stripe-connect";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

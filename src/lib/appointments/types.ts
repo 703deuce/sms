@@ -1,3 +1,5 @@
+import { DEFAULT_SMS_CONSENT_TEXT } from "./sms-consent-disclosure";
+
 export type AppointmentStatus =
   | "scheduled"
   | "confirmed"
@@ -265,7 +267,7 @@ export type AppointmentMetadata = {
   [key: string]: unknown;
 };
 
-export { DEFAULT_SMS_CONSENT_TEXT } from "./sms-consent-disclosure";
+export { DEFAULT_SMS_CONSENT_TEXT };
 
 export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:
