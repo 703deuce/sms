@@ -1,3 +1,10 @@
+import type {
+  BookingQuestion,
+  CancellationPolicy,
+  ReschedulePolicy,
+  StaffAssignmentMode,
+} from "@/lib/appointments/types";
+
 export type AppointmentTypeQuestion = {
   id: string;
   label: string;
@@ -30,14 +37,32 @@ export type AppointmentTypeFormState = {
   bufferMinutes: number;
   description: string;
   location: string;
+  locationId: string;
+  locationIds: string[];
   priceDisplay: string;
   showPriceOnBooking: boolean;
   bookingHours: string;
   minimumBookingNoticeMinutes: number;
   maximumBookingDaysAhead: number;
   enabled: boolean;
-  customQuestion: string;
-  customQuestionRequired: boolean;
+  bookingQuestions: BookingQuestion[];
+  staffAssignment: StaffAssignmentMode;
+  staffIds: string[];
+  collectiveStaffIds: string[];
+  cancellationPolicy: CancellationPolicy;
+  reschedulePolicy: ReschedulePolicy;
+  paymentMode: "none" | "deposit" | "full";
+  paymentPriceCents: number;
+  paymentDepositCents: number;
+  paymentDepositPercent: number;
+  paymentCurrency: string;
+  groupBookingEnabled: boolean;
+  groupCapacity: number;
+  recurringEnabled: boolean;
+  recurringFrequencies: Array<"weekly" | "biweekly" | "monthly">;
+  maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
+  maxPerTypePerDay?: number;
 };
 
 export type AppointmentTypesPageModel = {
@@ -55,6 +80,8 @@ export type AppointmentTypesPageModel = {
   saving: boolean;
   error: string;
   copiedId: string | null;
+  staffOptions: Array<{ id: string; name: string }>;
+  locationOptions: Array<{ id: string; name: string }>;
 };
 
 export type AppointmentTypesPageActions = {
@@ -73,5 +100,7 @@ export type AppointmentTypesPageActions = {
   onCopyLink: (id: string) => void;
   onViewBookingPage: () => void;
   onManageAvailability: () => void;
+  onManageStaff: () => void;
+  onManageLocations: () => void;
   onRetry: () => void;
 };

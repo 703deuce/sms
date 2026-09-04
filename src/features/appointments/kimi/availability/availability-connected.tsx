@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CalendarIntegrationsCard } from "@/components/appointments/calendar-integrations-card";
 import AvailabilityView from "@/components/appointments/kimi-ui/availability/page";
 import {
   buildAvailabilityPageModel,
@@ -184,5 +185,67 @@ export function AvailabilityConnected() {
   if (loading) return <AvailabilityLoading />;
   if (failed || !model) return <AvailabilityError onRetry={load} />;
 
-  return <AvailabilityView model={model} actions={actions} />;
+  return (
+    <div>
+      <AvailabilityView model={model} actions={actions} />
+      <div className="max-w-[1280px] mx-auto px-10 pb-10 space-y-6">
+        <div className="avail-card p-6 space-y-4">
+          <h2 className="text-[15px] font-bold">Workspace booking limits</h2>
+          <p className="text-[12px] text-[#8a87a0]">
+            Optional caps applied across all appointment types unless overridden per type.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="label">Max bookings per day</label>
+              <input
+                type="number"
+                className="input w-full mt-1"
+                min={0}
+                value={form.maxBookingsPerDay ?? ""}
+                onChange={(e) =>
+                  patchForm({
+                    maxBookingsPerDay: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Max bookings per week</label>
+              <input
+                type="number"
+                className="input w-full mt-1"
+                min={0}
+                value={form.maxBookingsPerWeek ?? ""}
+                onChange={(e) =>
+                  patchForm({
+                    maxBookingsPerWeek: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Max per type per day</label>
+              <input
+                type="number"
+                className="input w-full mt-1"
+                min={0}
+                value={form.maxPerTypePerDay ?? ""}
+                onChange={(e) =>
+                  patchForm({
+                    maxPerTypePerDay: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : saved ? "Saved" : "Save limits"}
+            </Button>
+          </div>
+        </div>
+        <CalendarIntegrationsCard />
+      </div>
+    </div>
+  );
 }

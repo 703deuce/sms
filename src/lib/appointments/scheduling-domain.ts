@@ -106,6 +106,36 @@ export async function assignStaffRoundRobin(
   return selected;
 }
 
+/** Assign staff for a booking based on appointment type configuration. */
+export async function resolveStaffForBooking(
+  ctx: SchedulingContext,
+  options: { preferredStaffId?: string; preferredStaffName?: string },
+): Promise<BookableStaffMember | null> {
+  const eligible = resolveEligibleStaff(ctx, options.preferredStaffName);
+  if (!eligible.length) return null;
+
+  const mode = ctx.staffAssignment;
+
+  if (mode === "customer_chooses" && options.preferredStaffId) {
+    return eligible.find((s) => s.id === options.preferredStaffId) || null;
+  }
+
+  if (mode === "specific_staff" && ctx.svcCfg.staffIds?.length) {
+    const id = ctx.svcCfg.staffIds[0];
+    return eligible.find((s) => s.id === id) || eligible[0];
+  }
+
+  if (mode === "round_robin") {
+    return assignStaffRoundRobin(ctx.workspaceId, ctx.serviceName, eligible);
+  }
+
+  if (mode === "collective" && ctx.svcCfg.collectiveStaffIds?.length) {
+    return eligible.find((s) => ctx.svcCfg.collectiveStaffIds!.includes(s.id)) || eligible[0];
+  }
+
+  return eligible[0];
+}
+
 /** Deterministic routing from booking answers. */
 export function resolveRoutingDestination(
   rules: RoutingRule[] | undefined,

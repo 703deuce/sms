@@ -69,11 +69,15 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               isCreating={model.isCreating}
               saving={model.saving}
               error={model.error}
+              staffOptions={model.staffOptions}
+              locationOptions={model.locationOptions}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}
               onBack={actions.onBackToList}
               onManageAvailability={actions.onManageAvailability}
+              onManageStaff={actions.onManageStaff}
+              onManageLocations={actions.onManageLocations}
             />
           </div>
           {selected ? (

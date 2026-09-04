@@ -95,6 +95,8 @@ export type AppointmentWorkflowStep = {
   action: WorkflowStepAction;
   channel?: AppointmentWorkflowChannel;
   messageTemplate?: string;
+  /** Designated staff recipient for staff notification actions */
+  recipientStaffId?: string;
   /** Stop confirmation-chasing steps once confirmed */
   stopIfConfirmed?: boolean;
   enabled?: boolean;
@@ -159,6 +161,7 @@ export function parseWorkflowSteps(raw: unknown): AppointmentWorkflowStep[] {
         action,
         channel: o.channel as AppointmentWorkflowChannel | undefined,
         messageTemplate: typeof o.messageTemplate === "string" ? o.messageTemplate : undefined,
+        recipientStaffId: typeof o.recipientStaffId === "string" ? o.recipientStaffId : undefined,
         stopIfConfirmed: o.stopIfConfirmed === true,
         enabled: o.enabled !== false,
       };

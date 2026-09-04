@@ -1,52 +1,56 @@
-# Appointments Core Scheduling Parity — Gap Audit
+# Appointments Core Scheduling Parity — Implementation Status
 
-Audit date: 2026-09-04 (implementation pass)
+Updated: 2026-09-04 (customer-facing implementation pass)
 
-| Capability | Status | Notes |
-|------------|--------|-------|
-| Custom booking questions | PARTIAL → EXTENDED | `BookingQuestion` type extended with full field types; stored in `AppointmentTypeConfig.bookingQuestions` |
-| Multi-staff scheduling | PARTIAL → IMPLEMENTED | `BookableStaffMember` in platform config; `staffName` on appointments |
-| Staff-specific availability | PARTIAL → IMPLEMENTED | Staff weekly hours/overrides in `BookableStaffMember`; engine extension point in `scheduling-domain.ts` |
-| Round robin | MISSING → IMPLEMENTED | `assignStaffRoundRobin` in `scheduling-domain.ts` |
-| Collective appointments | PARTIAL → IMPLEMENTED | `collectiveStaffIds` + `StaffAssignmentMode.collective` |
-| Multiple locations | PARTIAL → IMPLEMENTED | `AppointmentLocation` in platform config; `locationId` on types/appointments |
-| Routing | MISSING → IMPLEMENTED | `RoutingRule` + `resolveRoutingDestination` |
-| Booking limits | PARTIAL → IMPLEMENTED | Extended existing min notice/horizon; added per-day/week limits in `checkBookingLimits` |
-| Recurring appointments | MISSING → IMPLEMENTED | `appointment_recurring_series` table + `recurring.ts` |
-| Group bookings / capacity | MISSING → IMPLEMENTED | `groupBooking` config + `checkGroupCapacity` in slot validation |
-| Payments / deposits | PARTIAL → EXTENDED | `PaymentRequirement` type; Stripe wiring deferred to existing `PaymentLink` infrastructure |
-| Cancellation/reschedule policies | PARTIAL → IMPLEMENTED | `evaluateCancellationPolicy` / `evaluateReschedulePolicy` |
-| Staff notifications | PARTIAL → IMPLEMENTED | Via appointment workflows (`send_sms_staff` / `send_email_staff` actions) |
-| Waitlist | MISSING → IMPLEMENTED | `appointment_waitlist_entries` + `waitlist.ts` |
-| Google Calendar conflict sync | PARTIAL → IMPLEMENTED | `getExternalBusyIntervals` via existing `voice/calendar/providers.ts` |
-| Outlook readiness | PARTIAL → PRESERVED | Provider abstraction in `CalendarProvider` type; Microsoft token refresh exists |
-| Appointment notes | PARTIAL → EXTENDED | `internalNotes` array in appointment metadata |
-| Timezone/DST | EXISTING — PRESERVE | Existing `timezone-slots` infrastructure unchanged |
-| AI integration | IMPLEMENTED | `ai-scheduling/` service extended for staff/location/recurring intent |
-| Workflows integration | IMPLEMENTED | Payment/waitlist triggers added to trigger enum |
-| Shared availability engine | EXISTING — EXTENDED | `generateNativeSlots` remains source of truth; external busy times via scheduling-domain |
-| Shared booking validation | EXISTING — EXTENDED | `assertSlotAvailableForBooking` now checks limits + group capacity |
+## Customer-Facing Surfaces — Implemented
+
+| Area | Status | Location |
+|------|--------|----------|
+| Staff management UI | IMPLEMENTED | `/appointments/staff` — `staff-connected.tsx` |
+| Round robin / assignment UI | IMPLEMENTED | Appointment Types → Advanced → Staff assignment |
+| Staff-specific availability UI | IMPLEMENTED | Staff page weekly hours editor with time inputs |
+| Locations UI | IMPLEMENTED | `/appointments/locations` |
+| Routing UI | IMPLEMENTED | `/appointments/routing` |
+| Recurring booking (public) | IMPLEMENTED | `public-booking-client.tsx` + book API |
+| Group/capacity (public) | IMPLEMENTED | Slot remaining display + seat picker |
+| Waitlist join (public) | IMPLEMENTED | Waitlist step + `/api/public/book/[slug]/waitlist` |
+| Payment/deposit checkout | IMPLEMENTED | Stripe checkout session + webhook routing |
+| Custom booking questions | IMPLEMENTED | Type editor + `BookingQuestionField` on public booking |
+| Cancellation/reschedule policies | IMPLEMENTED | Appointment Types → Advanced → Policies |
+| Internal notes | IMPLEMENTED | Appointment detail + PATCH API |
+| Booking limits | IMPLEMENTED | Availability page + per-type limits in type editor |
+| Google Calendar connection UI | IMPLEMENTED | `/appointments/integrations` + availability embed |
+| Workflow UI | IMPLEMENTED | `/appointments/workflows` with conditions + staff actions |
+| AI booking UI | IMPLEMENTED | Public booking AI step + `/api/public/book/[slug]/ai` |
+| Staff notifications | IMPLEMENTED | Workflow actions `send_sms_staff` / `send_email_staff` |
+
+## Domain Foundations (prior pass — preserved)
+
+- Appointment workflows (isolated), 7 prebuilt templates, job queue execution
+- AI parsing architecture with deterministic fallback
+- Scheduling domain: round robin, routing, limits, capacity, recurring, waitlist
+- External busy-time / calendar provider abstraction
+
+## Requires Runtime/Browser Certification Only
+
+- End-to-end Stripe checkout with live `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`
+- Google Calendar OAuth with live `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET`
+- Microsoft Outlook OAuth with live credentials
+- Visual QA of all appointment admin pages and public booking flows
+
+## Required Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `STRIPE_SECRET_KEY` | Appointment payment checkout sessions |
+| `STRIPE_WEBHOOK_SECRET` | Payment completion webhook (routes via `/api/webhooks/stripe`) |
+| `GOOGLE_CALENDAR_CLIENT_ID` | Google Calendar OAuth connect |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | Google Calendar OAuth connect |
+| `OPENAI_API_KEY` | Live AI natural-language booking (fallback parser works without it) |
+| `BREVO_API_KEY` | Workflow email actions (`BREVO_FROM_EMAIL` also required when set) |
 
 ## Explicitly Preserved
 
 - SMS Playbooks, Drips, Flow Builder, Mass SMS, MCTB
-- Conversations, Contacts (no rebuild)
-- Existing appointment calendar, types, availability engine core
-- Existing reminder worker (`appointments_platform_reminder_scan`)
-- Existing booking APIs and double-booking locks
-- Existing consent/compliance logic
-
-## Requires Runtime/Browser Certification
-
-- Full UI for staff management, locations, routing rules, payment checkout
-- Google Calendar OAuth flow with live credentials
-- Recurring booking UI on public booking page
-- Waitlist join UI on public booking page
-- Payment/deposit Stripe checkout for appointments
-
-## Requires External Configuration
-
-- `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` for calendar sync
-- `MICROSOFT_CALENDAR_CLIENT_ID` / `MICROSOFT_CALENDAR_CLIENT_SECRET` for Outlook
-- `OPENAI_API_KEY` for AI natural-language booking (fallback parser works without it)
-- `BREVO_API_KEY` for workflow email actions
+- Existing reminder worker, booking APIs, double-booking locks
+- Subscription billing architecture (appointment checkout is separate)

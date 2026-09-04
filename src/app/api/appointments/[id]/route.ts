@@ -7,6 +7,7 @@ import {
   loadAppointmentPlatformConfig,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
+import { addInternalNote } from "@/lib/appointments/internal-notes";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,7 +35,22 @@ export async function PATCH(request: Request, { params }: Params) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const { id } = await params;
-    const body = (await request.json()) as { status?: string; action?: string };
+    const body = (await request.json()) as {
+      status?: string;
+      action?: string;
+      internalNote?: string;
+    };
+
+    if (body.internalNote?.trim()) {
+      const note = await addInternalNote(auth.workspaceId, id, {
+        body: body.internalNote,
+        authorId: auth.session.userId,
+        authorName: auth.session.email || "Staff",
+      });
+      const data = await getAppointment(auth.workspaceId, id);
+      return NextResponse.json({ data, note });
+    }
+
     if (body.action === "cancel" || body.status === "canceled") {
       const data = await cancelPlatformAppointment(auth.workspaceId, id);
       return NextResponse.json({ data });

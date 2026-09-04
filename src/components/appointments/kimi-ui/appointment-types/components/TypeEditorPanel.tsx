@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronLeft, Info, GripVertical, MoreHorizontal, Check, Plus } from "lucide-react";
+import { ChevronLeft, Info } from "lucide-react";
+import TypeAdvancedSections from "./TypeAdvancedSections";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 
 interface Props {
@@ -8,6 +9,8 @@ interface Props {
   isCreating: boolean;
   saving: boolean;
   error: string;
+  staffOptions: Array<{ id: string; name: string }>;
+  locationOptions: Array<{ id: string; name: string }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -16,6 +19,8 @@ interface Props {
   onCancel: () => void;
   onBack: () => void;
   onManageAvailability: () => void;
+  onManageStaff: () => void;
+  onManageLocations: () => void;
 }
 
 export default function TypeEditorPanel({
@@ -23,22 +28,16 @@ export default function TypeEditorPanel({
   isCreating,
   saving,
   error,
+  staffOptions,
+  locationOptions,
   onFormChange,
   onSave,
   onCancel,
   onBack,
   onManageAvailability,
+  onManageStaff,
+  onManageLocations,
 }: Props) {
-  const questions = form.customQuestion.trim()
-    ? [
-        {
-          id: "custom_question",
-          label: form.customQuestion.trim(),
-          type: "Short answer",
-          required: form.customQuestionRequired,
-        },
-      ]
-    : [];
 
   return (
     <div className="card flex-1 min-w-[440px] overflow-hidden flex flex-col">
@@ -214,63 +213,24 @@ export default function TypeEditorPanel({
 
         <section>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-[14px] font-semibold">Booking form (questions shown to customers)</h3>
+            <h3 className="text-[14px] font-semibold">Team & locations</h3>
           </div>
-          <p className="text-[12.5px] text-[#8a8fa3] mb-3">Collect the right information before the appointment.</p>
-          <div className="mb-3">
-            <label className="label">Custom question (optional)</label>
-            <input
-              className="input w-full"
-              value={form.customQuestion}
-              onChange={(e) => onFormChange("customQuestion", e.target.value)}
-              placeholder="e.g. What brings you in today?"
-            />
+          <div className="flex gap-3">
+            <button type="button" className="text-[12px] font-medium text-[#5b4bff] hover:underline" onClick={onManageStaff}>
+              Manage staff →
+            </button>
+            <button type="button" className="text-[12px] font-medium text-[#5b4bff] hover:underline" onClick={onManageLocations}>
+              Manage locations →
+            </button>
           </div>
-          {form.customQuestion.trim() ? (
-            <label className="flex items-center gap-2 text-[12.5px] text-[#3f4254] cursor-pointer mb-3">
-              <input
-                type="checkbox"
-                className="checkbox"
-                checked={form.customQuestionRequired}
-                onChange={(e) => onFormChange("customQuestionRequired", e.target.checked)}
-              />
-              Require an answer on the booking form
-            </label>
-          ) : null}
-          {questions.length > 0 ? (
-            <div className="border border-[#ecedf2] rounded-xl overflow-hidden">
-              <div className="grid grid-cols-[24px_1fr_130px_70px_32px] gap-2 px-4 py-2.5 bg-[#f7f8fb] text-[11px] font-semibold text-[#8a8fa3] uppercase tracking-wide">
-                <span />
-                <span>Question</span>
-                <span>Type</span>
-                <span>Required</span>
-                <span />
-              </div>
-              {questions.map((q) => (
-                <div
-                  key={q.id}
-                  className="grid grid-cols-[24px_1fr_130px_70px_32px] gap-2 px-4 py-3 border-t border-[#ecedf2] items-center"
-                >
-                  <GripVertical size={14} className="text-[#c6c9d6]" />
-                  <span className="text-[13px] font-medium">{q.label}</span>
-                  <span className="text-[12.5px] text-[#8a8fa3]">{q.type}</span>
-                  <span className="flex justify-center">
-                    {q.required ? (
-                      <Check size={15} className="text-emerald-500" />
-                    ) : (
-                      <span className="text-[#c6c9d6]">—</span>
-                    )}
-                  </span>
-                  <MoreHorizontal size={15} className="text-[#a0a3b5]" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[#ecedf2] px-4 py-6 text-center text-[12.5px] text-[#8a8fa3]">
-              No custom questions yet.
-            </div>
-          )}
         </section>
+
+        <TypeAdvancedSections
+          form={form}
+          staffOptions={staffOptions}
+          locationOptions={locationOptions}
+          onFormChange={onFormChange}
+        />
 
         {error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/15">

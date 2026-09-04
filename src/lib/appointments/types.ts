@@ -62,6 +62,8 @@ export type BookableStaffMember = {
   id: string;
   name: string;
   active?: boolean;
+  /** When false, hidden from customer staff picker */
+  customerSelectable?: boolean;
   appointmentTypeIds?: string[];
   locationIds?: string[];
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
@@ -242,6 +244,7 @@ export type AppointmentMetadata = {
   paymentAmountCents?: number;
   recurringSeriesId?: string;
   recurringOccurrenceIndex?: number;
+  attendeeCount?: number;
   waitlistEntryId?: string;
   internalNotes?: Array<{ id: string; at: string; authorId?: string; authorName?: string; body: string }>;
   notes?: string;

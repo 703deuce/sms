@@ -55,6 +55,9 @@ export function formStateFromSettings(data: AppointmentPlatformConfig): Availabi
     timezone: data.timezone || "America/New_York",
     minimumNotice: data.minimumBookingNoticeMinutes ?? 60,
     maximumDays: data.maximumBookingDaysAhead ?? 14,
+    maxBookingsPerDay: data.bookingLimits?.maxBookingsPerDay,
+    maxBookingsPerWeek: data.bookingLimits?.maxBookingsPerWeek,
+    maxPerTypePerDay: data.bookingLimits?.maxPerTypePerDay,
   };
 }
 
@@ -232,11 +235,20 @@ export function buildAvailabilityPageModel(
 }
 
 export function buildSettingsPatch(form: AvailabilityFormState) {
+  const bookingLimits =
+    form.maxBookingsPerDay || form.maxBookingsPerWeek || form.maxPerTypePerDay
+      ? {
+          maxBookingsPerDay: form.maxBookingsPerDay || undefined,
+          maxBookingsPerWeek: form.maxBookingsPerWeek || undefined,
+          maxPerTypePerDay: form.maxPerTypePerDay || undefined,
+        }
+      : undefined;
   return {
     weeklyHours: form.weeklyHours,
     dateOverrides: form.dateOverrides,
     timezone: form.timezone,
     minimumBookingNoticeMinutes: form.minimumNotice,
     maximumBookingDaysAhead: form.maximumDays,
+    bookingLimits,
   };
 }

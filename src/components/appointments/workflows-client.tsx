@@ -115,15 +115,25 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
   const [steps, setSteps] = useState<AppointmentWorkflowStep[]>(
     initial?.steps?.length ? initial.steps : template?.defaultSteps || [newStep(0)],
   );
+  const [conditions, setConditions] = useState(
+    initial?.conditions || { logic: "and" as const, conditions: [] },
+  );
   const [active, setActive] = useState(initial?.active ?? true);
   const [types, setTypes] = useState<AppointmentType[]>([]);
+  const [staff, setStaff] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/appointments/types")
-      .then((r) => r.json())
-      .then((json) => setTypes(json.data || []))
+    Promise.all([
+      fetch("/api/appointments/types").then((r) => r.json()),
+      fetch("/api/appointments/settings").then((r) => r.json()),
+    ])
+      .then(([typesJson, settingsJson]) => {
+        setTypes(typesJson.data || []);
+        const staffList = (settingsJson.data?.staff || []) as Array<{ id: string; name: string }>;
+        setStaff(staffList.filter((s) => s.name));
+      })
       .catch(() => {});
   }, []);
 
@@ -165,6 +175,7 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
         typeIds: typeScope === "selected" ? selectedTypeIds : undefined,
       },
       steps,
+      conditions: conditions.conditions.length ? conditions : null,
     };
 
     const url =
@@ -289,6 +300,103 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
         </label>
       </Card>
 
+      {!isTemplateWizard ? (
+        <Card className="p-5 space-y-4">
+          <h2 className="font-display text-base font-semibold">Conditions (optional)</h2>
+          <p className="text-[13px] text-muted-foreground">
+            Run this workflow only when all conditions match.
+          </p>
+          <div>
+            <Label>Logic</Label>
+            <Select
+              value={conditions.logic}
+              onChange={(e) => setConditions((c) => ({ ...c, logic: e.target.value as "and" | "or" }))}
+              className="mt-1.5"
+            >
+              <option value="and">All conditions (AND)</option>
+              <option value="or">Any condition (OR)</option>
+            </Select>
+          </div>
+          {conditions.conditions.map((cond, index) => (
+            <div key={cond.id} className="flex flex-wrap items-end gap-2 rounded-lg border border-border p-3">
+              <div className="min-w-[120px] flex-1">
+                <Label>Field</Label>
+                <Input
+                  value={cond.field}
+                  onChange={(e) => {
+                    const next = [...conditions.conditions];
+                    next[index] = { ...cond, field: e.target.value };
+                    setConditions((c) => ({ ...c, conditions: next }));
+                  }}
+                  placeholder="e.g. status"
+                  className="mt-1"
+                />
+              </div>
+              <div className="min-w-[140px]">
+                <Label>Operator</Label>
+                <Select
+                  value={cond.operator}
+                  onChange={(e) => {
+                    const next = [...conditions.conditions];
+                    next[index] = { ...cond, operator: e.target.value as typeof cond.operator };
+                    setConditions((c) => ({ ...c, conditions: next }));
+                  }}
+                  className="mt-1"
+                >
+                  <option value="equals">Equals</option>
+                  <option value="not_equals">Does not equal</option>
+                  <option value="is_confirmed">Is confirmed</option>
+                  <option value="has_phone">Has phone</option>
+                  <option value="has_email">Has email</option>
+                  <option value="has_sms_consent">Has SMS consent</option>
+                </Select>
+              </div>
+              <div className="min-w-[120px] flex-1">
+                <Label>Value</Label>
+                <Input
+                  value={String(cond.value || "")}
+                  onChange={(e) => {
+                    const next = [...conditions.conditions];
+                    next[index] = { ...cond, value: e.target.value };
+                    setConditions((c) => ({ ...c, conditions: next }));
+                  }}
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setConditions((c) => ({
+                    ...c,
+                    conditions: c.conditions.filter((_, i) => i !== index),
+                  }))
+                }
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setConditions((c) => ({
+                ...c,
+                conditions: [
+                  ...c.conditions,
+                  { id: `cond_${Date.now()}`, field: "", operator: "equals", value: "" },
+                ],
+              }))
+            }
+          >
+            <Plus className="mr-1 h-4 w-4" /> Add condition
+          </Button>
+        </Card>
+      ) : null}
+
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-base font-semibold">Sequence steps</h2>
@@ -321,6 +429,41 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                 </Button>
               ) : null}
             </div>
+
+            <div>
+              <Label>Action</Label>
+              <Select
+                value={step.action}
+                onChange={(e) => updateStep(index, { action: e.target.value as AppointmentWorkflowStep["action"] })}
+                className="mt-1.5"
+              >
+                <option value="send_sms_customer">Send SMS to customer</option>
+                <option value="send_email_customer">Send email to customer</option>
+                <option value="send_sms_staff">Send SMS to staff</option>
+                <option value="send_email_staff">Send email to staff</option>
+                <option value="send_confirm_link">Send confirm link</option>
+                <option value="send_reschedule_link">Send reschedule link</option>
+                <option value="send_cancel_link">Send cancel link</option>
+                <option value="mark_confirmed">Mark confirmed</option>
+                <option value="stop_workflow">Stop workflow</option>
+              </Select>
+            </div>
+
+            {(step.action === "send_sms_staff" || step.action === "send_email_staff") && staff.length > 0 ? (
+              <div>
+                <Label>Staff recipient</Label>
+                <Select
+                  value={step.recipientStaffId || ""}
+                  onChange={(e) => updateStep(index, { recipientStaffId: e.target.value || undefined })}
+                  className="mt-1.5"
+                >
+                  <option value="">Assigned staff (default)</option>
+                  {staff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
 
             <div>
               <Label>Timing</Label>

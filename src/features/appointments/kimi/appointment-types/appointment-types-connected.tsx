@@ -67,6 +67,8 @@ export function AppointmentTypesConnected() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [staffOptions, setStaffOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [locationOptions, setLocationOptions] = useState<Array<{ id: string; name: string }>>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +85,10 @@ export function AppointmentTypesConnected() {
       setApiTypes(rows);
       setWorkspaceSlug(settingsJson.workspace?.slug || "");
       setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled));
+      const staff = (settingsJson.data?.staff || []) as Array<{ id: string; name: string; active?: boolean }>;
+      const locations = (settingsJson.data?.locations || []) as Array<{ id: string; name: string; active?: boolean }>;
+      setStaffOptions(staff.filter((s) => s.active !== false && s.name).map((s) => ({ id: s.id, name: s.name })));
+      setLocationOptions(locations.filter((l) => l.active !== false && l.name).map((l) => ({ id: l.id, name: l.name })));
     } catch {
       setFailed(true);
     } finally {
@@ -281,6 +287,8 @@ export function AppointmentTypesConnected() {
       saving,
       error,
       copiedId,
+      staffOptions,
+      locationOptions,
     };
   }, [
     bookingBaseUrl,
@@ -290,9 +298,11 @@ export function AppointmentTypesConnected() {
     failed,
     form,
     loading,
+    locationOptions,
     selected,
     selectedId,
     showInactive,
+    staffOptions,
     types,
     visibleTypes,
     workspaceSlug,
@@ -317,6 +327,8 @@ export function AppointmentTypesConnected() {
         if (bookingBaseUrl) window.open(bookingBaseUrl, "_blank");
       },
       onManageAvailability: () => router.push("/appointments/availability"),
+      onManageStaff: () => router.push("/appointments/staff"),
+      onManageLocations: () => router.push("/appointments/locations"),
       onRetry: load,
     }),
     [bookingBaseUrl, copyLink, load, resetEditor, router, save, selectType, startCreate, toggleActive, updateForm],

@@ -53,6 +53,9 @@ export type AvailabilityFormState = {
   timezone: string;
   minimumNotice: number;
   maximumDays: number;
+  maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
+  maxPerTypePerDay?: number;
   overrideDate: string;
   overrideClosed: boolean;
   overrideOpen: string;

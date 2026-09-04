@@ -9,6 +9,7 @@ import type { AppointmentTimelineEvent } from "@/lib/appointments/types";
 import { formatPhone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import {
   ArrowLeft,
   Bell,
@@ -33,6 +34,7 @@ type ReminderStep = { key: string; label: string; status: string };
 type AppointmentDetail = {
   id: string;
   serviceName: string | null;
+  staffName: string | null;
   startsAt: string;
   endsAt: string | null;
   timezone: string | null;
@@ -46,6 +48,16 @@ type AppointmentDetail = {
     timeline?: AppointmentTimelineEvent[];
     notes?: string;
     smsConsent?: boolean;
+    bookingAnswers?: Record<string, string>;
+    internalNotes?: Array<{ id: string; at: string; authorName?: string; body: string }>;
+    paymentStatus?: string;
+    paymentAmountCents?: number;
+    recurringSeriesId?: string;
+    recurringOccurrenceIndex?: number;
+    location?: string;
+    locationId?: string;
+    staffId?: string;
+    attendeeCount?: number;
   };
   contact?: { id: string } | null;
 };
@@ -81,6 +93,8 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   const [appt, setAppt] = useState<AppointmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [internalNote, setInternalNote] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -93,6 +107,19 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   useEffect(() => {
     load();
   }, [appointmentId]);
+
+  async function addNote() {
+    if (!internalNote.trim()) return;
+    setAddingNote(true);
+    await fetch(`/api/appointments/${appointmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ internalNote }),
+    });
+    setInternalNote("");
+    setAddingNote(false);
+    await load();
+  }
 
   async function patch(body: Record<string, unknown>) {
     setActing(true);
@@ -134,6 +161,8 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   }
 
   const timeline = appt.metadata.timeline || [];
+  const bookingAnswers = appt.metadata.bookingAnswers || {};
+  const internalNotes = appt.metadata.internalNotes || [];
   const name = appt.inviteeName || "Customer";
   const isCanceled = ["canceled", "cancelled"].includes(appt.status.toLowerCase());
   const messageHref = appt.contact?.id
@@ -179,6 +208,23 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               </span>
               {appt.timezone ? (
                 <span className="text-muted-foreground/70">{appt.timezone}</span>
+              ) : null}
+              {appt.staffName ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" />
+                  {appt.staffName}
+                </span>
+              ) : null}
+              {appt.metadata.location ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {appt.metadata.location}
+                </span>
+              ) : null}
+              {appt.metadata.recurringSeriesId ? (
+                <span className="text-primary">
+                  Recurring #{appt.metadata.recurringOccurrenceIndex || "?"}
+                </span>
               ) : null}
             </div>
           </div>
@@ -283,13 +329,76 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
             <div className="mt-4 rounded-lg bg-muted/40 p-3">
               <p className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <StickyNote className="h-3 w-3" />
-                Notes
+                Customer notes
               </p>
               <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
                 {appt.metadata.notes}
               </p>
             </div>
           ) : null}
+          {Object.keys(bookingAnswers).length > 0 ? (
+            <div className="mt-4 rounded-lg border border-border/70 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Booking answers
+              </p>
+              <dl className="space-y-2">
+                {Object.entries(bookingAnswers).map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-3 text-[13px]">
+                    <dt className="text-muted-foreground">{key}</dt>
+                    <dd className="font-medium text-right">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
+          {appt.metadata.paymentStatus ? (
+            <div className="mt-4 rounded-lg bg-muted/40 p-3 text-[13px]">
+              <p className="font-semibold">Payment: {appt.metadata.paymentStatus}</p>
+              {appt.metadata.paymentAmountCents ? (
+                <p className="text-muted-foreground">
+                  ${(appt.metadata.paymentAmountCents / 100).toFixed(2)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </Card>
+
+        {/* Internal notes */}
+        <Card className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <CardTitle>Internal notes</CardTitle>
+            <StickyNote className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="mb-3 text-[12px] text-muted-foreground">
+            Staff-only notes — never shown to customers.
+          </p>
+          {internalNotes.length > 0 ? (
+            <ul className="mb-4 max-h-48 space-y-3 overflow-y-auto">
+              {[...internalNotes].reverse().map((note) => (
+                <li key={note.id} className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
+                  <p className="text-[13px] whitespace-pre-wrap">{note.body}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {note.authorName || "Staff"} · {new Date(note.at).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-4 text-[13px] text-muted-foreground">No internal notes yet.</p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="internal-note">Add note</Label>
+            <Textarea
+              id="internal-note"
+              rows={3}
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              placeholder="Add a private staff note…"
+            />
+            <Button size="sm" disabled={addingNote || !internalNote.trim()} onClick={addNote}>
+              {addingNote ? "Saving…" : "Add note"}
+            </Button>
+          </div>
         </Card>
 
         {/* Reminders */}

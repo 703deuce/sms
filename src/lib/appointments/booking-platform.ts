@@ -129,6 +129,11 @@ export async function createPlatformAppointment(
     source?: "admin" | "public_booking";
     status?: string;
     skipSms?: boolean;
+    staffId?: string;
+    staffName?: string;
+    locationId?: string;
+    locationName?: string;
+    attendeeCount?: number;
   },
 ) {
   const prisma = getPrisma();
@@ -197,6 +202,11 @@ export async function createPlatformAppointment(
       cancelToken,
       rescheduleToken,
       notes: input.notes,
+      bookingAnswers: input.bookingAnswers,
+      staffId: input.staffId,
+      locationId: input.locationId,
+      location: input.locationName,
+      attendeeCount: input.attendeeCount,
       confirmUrl: publicActionUrl("confirm", confirmToken),
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
@@ -210,6 +220,7 @@ export async function createPlatformAppointment(
     where: { id: appointmentId },
     data: {
       status: input.status || "awaiting_confirmation",
+      staffName: input.staffName || undefined,
       metadata: metadata as object,
     },
   });

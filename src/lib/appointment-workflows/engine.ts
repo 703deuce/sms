@@ -444,12 +444,58 @@ async function executeWorkflowStepAction(input: {
       const email = input.appointmentCtx.contactEmail || input.meta.inviteeEmail;
       if (!email) throw new Error("No customer email");
       const { sendTransactionalEmail } = await import("@/lib/email/brevo");
-      await sendTransactionalEmail({
+      const result = await sendTransactionalEmail({
         to: email,
         subject: `Appointment update — ${workspace?.displayName || workspace?.name || "Transovo"}`,
         htmlContent: body,
         textContent: body,
       });
+      if (result.status === "failed") {
+        throw new Error(result.error || "Email delivery failed — check BREVO_API_KEY configuration");
+      }
+      break;
+    }
+    case "send_sms_staff":
+    case "send_email_staff": {
+      const platform = await loadAppointmentPlatformConfig(input.workspaceId);
+      const staffList = platform.staff || [];
+      let staffPhone: string | null = null;
+      let staffEmail: string | null = null;
+      let staffName: string | null = null;
+
+      if (input.step.recipientStaffId) {
+        const designated = staffList.find((s) => s.id === input.step.recipientStaffId);
+        staffName = designated?.name || null;
+      } else if (input.meta.staffId) {
+        const assigned = staffList.find((s) => s.id === input.meta.staffId);
+        staffName = assigned?.name || input.appointmentCtx.staffName || null;
+      } else {
+        staffName = input.appointmentCtx.staffName || null;
+      }
+
+      const businessPhone = platform.businessPhone || null;
+      staffPhone = businessPhone;
+
+      if (input.step.action === "send_sms_staff") {
+        if (!staffPhone) throw new Error("No staff phone configured — set business phone in appointment settings");
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        await sendQuickSms({ workspaceId: input.workspaceId, to: staffPhone, body });
+      } else {
+        const email = staffEmail || input.meta.staffEmail as string | undefined;
+        if (!email) {
+          throw new Error("No staff email configured for email notification");
+        }
+        const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+        const result = await sendTransactionalEmail({
+          to: email,
+          subject: `Staff notification — ${workspace?.displayName || workspace?.name || "Appointment"}`,
+          htmlContent: body.replace(/\{\{staff_name\}\}/g, staffName || "Team"),
+          textContent: body.replace(/\{\{staff_name\}\}/g, staffName || "Team"),
+        });
+        if (result.status === "failed") {
+          throw new Error(result.error || "Staff email failed — check BREVO_API_KEY configuration");
+        }
+      }
       break;
     }
     case "mark_confirmed": {

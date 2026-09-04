@@ -76,6 +76,12 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     await handleBillingCheckoutSessionCompleted(session);
     return { subsystem: "saas_billing" as const };
   }
+  const { isAppointmentCheckoutMetadata, handleAppointmentCheckoutCompleted } = await import(
+    "@/lib/appointments/payment-checkout"
+  );
+  if (isAppointmentCheckoutMetadata(metadata)) {
+    return handleAppointmentCheckoutCompleted(session);
+  }
   return { subsystem: "none" as const, skipped: true };
 }
 

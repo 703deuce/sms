@@ -5,11 +5,15 @@ import {
   Calendar,
   ClipboardList,
   Clock,
+  GitBranch,
   Globe,
   LayoutDashboard,
+  Link2,
   ListChecks,
+  MapPin,
   MessageSquare,
   Rocket,
+  UserCircle,
   Users,
   Workflow,
 } from "lucide-react";
@@ -54,6 +58,26 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Availability",
       href: "/appointments/availability",
       icon: Clock,
+    },
+    {
+      label: "Team",
+      href: "/appointments/staff",
+      icon: UserCircle,
+    },
+    {
+      label: "Locations",
+      href: "/appointments/locations",
+      icon: MapPin,
+    },
+    {
+      label: "Routing",
+      href: "/appointments/routing",
+      icon: GitBranch,
+    },
+    {
+      label: "Integrations",
+      href: "/appointments/integrations",
+      icon: Link2,
     },
     {
       label: "Reminder Settings",
@@ -140,6 +164,10 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/types")) return "Appointment Types";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
+  if (pathname.startsWith("/appointments/staff")) return "Team";
+  if (pathname.startsWith("/appointments/locations")) return "Locations";
+  if (pathname.startsWith("/appointments/routing")) return "Routing";
+  if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/workflows")) return "Workflows";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
