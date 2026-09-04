@@ -653,7 +653,9 @@ export default function ContactsList({
                                 className={menuItemCls}
                                 onClick={() => {
                                   setRowMenuFor(null);
-                                  void onUnsubscribeContacts([c.id]).then(() => showActionMessage("Contact unsubscribed."));
+                                  void Promise.resolve(onUnsubscribeContacts([c.id])).then(() =>
+                                    showActionMessage("Contact unsubscribed."),
+                                  );
                                 }}
                               >
                                 <UserX className="h-4 w-4 text-muted-foreground" /> Unsubscribe

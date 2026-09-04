@@ -27,13 +27,27 @@ function routeToPageFile(route: string): string[] {
     return candidates.filter((p) => existsSync(join(REPO_ROOT, p)));
   }
 
+  // Public booking — dynamic [slug] route
+  if (clean === "/book" || clean.startsWith("/book/")) {
+    candidates.push("src/app/(public)/book/[slug]/page.tsx");
+    candidates.push("src/app/(public)/book/[slug]/[serviceId]/page.tsx");
+    candidates.push("src/components/appointments/public-booking-client.tsx");
+    candidates.push("src/components/appointments/public-action-client.tsx");
+    return candidates.filter((p) => existsSync(join(REPO_ROOT, p)));
+  }
+
   const segments = clean.split("/").filter(Boolean);
   const pagePath = join("src/app/(app)", ...segments, "page.tsx");
   candidates.push(pagePath);
 
+  const publicPagePath = join("src/app/(public)", ...segments, "page.tsx");
+  candidates.push(publicPagePath);
+
   if (segments.length > 0) {
     candidates.push(join("src/app/(app)", ...segments, "page.ts"));
     candidates.push(join("src/app/(app)", ...segments, "layout.tsx"));
+    candidates.push(join("src/app/(public)", ...segments, "page.ts"));
+    candidates.push(join("src/app/(public)", ...segments, "layout.tsx"));
   }
 
   return candidates.filter((p) => existsSync(join(REPO_ROOT, p)));

@@ -308,7 +308,7 @@ function writeJobsFile(inv: InventoryFile, batch: number): void {
     .map((r) => ({
       id: r.id,
       path: r.path,
-      target: r.route,
+      target: r.path.startsWith("/book/") ? r.path : r.route,
       screenshot: r.screenshotPath!,
       instruction: `${APPOINTMENTS_V1_KIMI_INSTRUCTION}\n\nPage-specific purpose:\n${r.purpose}`,
     }));

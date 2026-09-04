@@ -260,7 +260,7 @@ export const APPOINTMENTS_V1_SCREENS: AppointmentsV1Screen[] = [
   // ── Batch 3: Public booking (consumer-facing) ──
   {
     id: "public-book-service",
-    route: "/book/[slug]",
+    route: "/book",
     path: "/book/demo",
     label: "Public booking — service selection",
     area: "Public booking",
@@ -272,7 +272,7 @@ export const APPOINTMENTS_V1_SCREENS: AppointmentsV1Screen[] = [
   },
   {
     id: "public-book-datetime",
-    route: "/book/[slug]",
+    route: "/book",
     path: "/book/demo",
     label: "Public booking — date/time",
     area: "Public booking",
@@ -288,7 +288,7 @@ export const APPOINTMENTS_V1_SCREENS: AppointmentsV1Screen[] = [
   },
   {
     id: "public-book-info",
-    route: "/book/[slug]",
+    route: "/book",
     path: "/book/demo",
     label: "Public booking — customer info",
     area: "Public booking",
@@ -306,7 +306,7 @@ export const APPOINTMENTS_V1_SCREENS: AppointmentsV1Screen[] = [
   },
   {
     id: "public-book-mobile",
-    route: "/book/[slug]",
+    route: "/book",
     path: "/book/demo",
     label: "Public booking — mobile service step",
     area: "Public booking",
