@@ -1,0 +1,54 @@
+{
+  "instruction": "This is a Kimi Mode 2 visual fidelity correction task.\n\nBEFORE_* image = current production-rendered Transovo page.\nREFERENCE_* image = approved target design (source of truth).\n\nInspect the actual frontend code and modify the implementation so the live page matches the approved target as closely as practical.\n\nDo NOT redesign the page. Do NOT merely make it look better. The approved target screenshot is the visual source of truth.\n\nPreserve all existing functionality, backend wiring, data fetching, actions, forms, mutations, loading/error/retry states, and responsive behavior.\n\nDo NOT introduce mock data or replace real controls with static elements. Do NOT hardcode sample values from the target screenshot.\n\nCorrect visual differences: layout, dimensions, positioning, whitespace, typography, card structure, borders, radius, shadows, colors, icons, buttons, tables, rows, panels, alignment, density.",
+  "jobs": [
+    {
+      "id": "overview",
+      "path": "/appointments/overview",
+      "target": "/appointments/overview",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/overview.png",
+      "targetScreenshot": "ui-rebuild/references/overview.jpg"
+    },
+    {
+      "id": "calendar",
+      "path": "/appointments/calendar",
+      "target": "/appointments/calendar",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/calendar.png",
+      "targetScreenshot": "ui-rebuild/references/calendar.jpg"
+    },
+    {
+      "id": "appointment-types",
+      "path": "/appointments/types",
+      "target": "/appointments/types",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/appointment-types.png",
+      "targetScreenshot": "ui-rebuild/references/appointment-types.jpg"
+    },
+    {
+      "id": "availability",
+      "path": "/appointments/availability",
+      "target": "/appointments/availability",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/availability.png",
+      "targetScreenshot": "ui-rebuild/references/availability.jpg"
+    },
+    {
+      "id": "reminder-settings",
+      "path": "/appointments/reminders",
+      "target": "/appointments/reminders",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/reminder-settings.png",
+      "targetScreenshot": "ui-rebuild/references/reminder-settings.jpg"
+    },
+    {
+      "id": "booking",
+      "path": "/appointments/booking",
+      "target": "/appointments/booking",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/booking.png",
+      "targetScreenshot": "ui-rebuild/references/booking.jpg"
+    },
+    {
+      "id": "get-started",
+      "path": "/appointments/setup",
+      "target": "/appointments/setup",
+      "screenshot": ".ui-agent/screenshots/appointments-mode2/current/get-started.png",
+      "targetScreenshot": "ui-rebuild/references/get-started.jpg"
+    }
+  ]
+}

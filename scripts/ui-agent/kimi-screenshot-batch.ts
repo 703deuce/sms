@@ -16,6 +16,8 @@ export type ScreenshotPolishJob = {
   path: string;
   target: string;
   screenshot: string;
+  /** Approved target design screenshot (Kimi Mode 2). */
+  targetScreenshot?: string;
   instruction?: string;
 };
 
@@ -42,10 +44,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 function buildOptions(job: ScreenshotPolishJob, instruction: string): CliOptions {
+  const hasTargetShot = Boolean(job.targetScreenshot && existsSync(job.targetScreenshot));
   return {
     mode: "polish",
     target: job.target,
-    referenceImages: [],
+    referenceImages: hasTargetShot ? [job.targetScreenshot!] : [],
     referenceVideos: [],
     referenceUrls: [],
     referenceNames: [],
@@ -66,7 +69,7 @@ function buildOptions(job: ScreenshotPolishJob, instruction: string): CliOptions
     revise: false,
     complete: false,
     walkthrough: false,
-    skipAutoReference: true,
+    skipAutoReference: !hasTargetShot,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop"],
     maxPasses: 1,
