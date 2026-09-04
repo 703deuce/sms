@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-04T09-25-24-449Z-29af23",
+  "targetRoute": "/appointments/setup",
+  "referenceNames": [],
+  "generatedAt": "2026-09-04T09:28:28.623Z",
+  "generatedFiles": [
+    "components/AllSetCard.tsx",
+    "components/BookingLinkCard.tsx",
+    "components/LaunchReadiness.tsx",
+    "components/ProgressHeader.tsx",
+    "components/QuickTips.tsx",
+    "components/SetupStepsList.tsx",
+    "components/StepRow.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/AllSetCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/BookingLinkCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/LaunchReadiness.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/ProgressHeader.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/QuickTips.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/SetupStepsList.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/components/StepRow.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/mock-data.ts",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/page.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-04T09-25-24-449Z-29af23/reference.css"
+  ],
+  "status": "generated"
+}
