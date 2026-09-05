@@ -1,5 +1,6 @@
 import { buildRuntimeContext, computeWorkflowState } from "./engine";
 import { deriveNextAction } from "./next-action";
+import { isInternalBookingConductorMode } from "./conductor-mode";
 import { isInternalOnlyTool } from "./tool-publish";
 import { isSchedulingGatedTool } from "./scheduling-tools";
 import { canonicalToolType, isToolAllowedForState, IRREVERSIBLE_TOOLS, toolsForState } from "./states";
@@ -24,33 +25,78 @@ export async function assertToolAllowed(input: {
 }): Promise<ToolGuardResult> {
   const canonical = canonicalToolType(input.toolType);
 
-  if (canonical === "runtime_turn" || input.toolType === "runtime_turn") {
-    return {
-      allowed: false,
-      state: "INTENT_DISCOVERY",
-      allowed_tools: toolsForState("INTENT_DISCOVERY"),
-      error_code: "TOOL_RETIRED",
-      speak:
-        "Answer from your Business knowledge section or use continue_workflow, record_current_field, or get_runtime_context as appropriate.",
-      retryable: false,
-      next_action:
-        "Do not call runtime_turn — it is retired. Use direct tools from allowed_tools.",
-    };
-  }
-
-  const preprodInternalOk = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1";
-
   let agentConfig: { advanced?: Record<string, unknown> } | null = null;
   if (input.agentId) {
     const { loadVoiceAgentRuntimeConfig } = await import("@/lib/voice/load-agent-config");
     agentConfig = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
   }
 
+  if (canonical === "runtime_turn" || input.toolType === "runtime_turn") {
+    if (agentConfig && isInternalBookingConductorMode(agentConfig)) {
+      // runtime_turn is the sole model-facing gateway in conductor mode.
+    } else {
+      return {
+        allowed: false,
+        state: "INTENT_DISCOVERY",
+        allowed_tools: toolsForState("INTENT_DISCOVERY"),
+        error_code: "TOOL_RETIRED",
+        speak:
+          "Answer from your Business knowledge section or use continue_workflow, record_current_field, or get_runtime_context as appropriate.",
+        retryable: false,
+        next_action:
+          "Do not call runtime_turn — it is retired. Use direct tools from allowed_tools.",
+      };
+    }
+  }
+
+  if (
+    agentConfig &&
+    isInternalBookingConductorMode(agentConfig) &&
+    !GUARD_EXEMPT.has(canonical) &&
+    !GUARD_EXEMPT.has(input.toolType)
+  ) {
+    const conductorTools = new Set([
+      "runtime_turn",
+      "take_structured_message",
+      "escalate_human",
+      "hangup",
+      "end_call",
+    ]);
+    if (!conductorTools.has(canonical) && !conductorTools.has(input.toolType)) {
+      const blockedState = input.callId ? "COLLECTING_FIELDS" : "INTENT_DISCOVERY";
+      return {
+        allowed: false,
+        state: blockedState,
+        allowed_tools: ["runtime_turn", "take_structured_message", "escalate_human"],
+        error_code: "USE_RUNTIME_TURN",
+        speak: "Use runtime_turn with the caller's latest words. The runtime controls booking steps.",
+        retryable: true,
+        next_action:
+          'Call runtime_turn({ utterance: "<caller words>", interpreted_intent: "<intent>" }).',
+      };
+    }
+  }
+
+  const preprodInternalOk = process.env.VOICE_PREPROD_ALLOW_INTERNAL_TOOLS === "1";
+
   if (
     !preprodInternalOk &&
     (isInternalOnlyTool(canonical, agentConfig) || isInternalOnlyTool(input.toolType, agentConfig))
   ) {
+    const conductor = agentConfig && isInternalBookingConductorMode(agentConfig);
     const blockedState = input.callId ? "COLLECTING_FIELDS" : "INTENT_DISCOVERY";
+    if (conductor && ["continue_workflow", "get_runtime_context", "record_current_field"].includes(canonical)) {
+      return {
+        allowed: false,
+        state: blockedState,
+        allowed_tools: ["runtime_turn", "take_structured_message", "escalate_human"],
+        error_code: "USE_RUNTIME_TURN",
+        speak: "Use runtime_turn with the caller's words — the booking runtime will decide the next step.",
+        retryable: true,
+        next_action:
+          'Call runtime_turn({ utterance: "<caller words>", interpreted_intent: "<intent>" }).',
+      };
+    }
     return {
       allowed: false,
       state: blockedState,

@@ -22,6 +22,8 @@ import {
   LEGACY_WORKFLOW_VOICE_TOOL_TYPES,
   isLegacyWorkflowVoicePathEnabled,
 } from "@/lib/voice/architecture/legacy-voice-path";
+import { isInternalBookingConductorMode } from "@/lib/voice/workflow-engine/conductor-mode";
+import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 
 function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
   return NextResponse.json(formatTelnyxToolPayload(payload), init);
@@ -71,6 +73,8 @@ export async function POST(request: Request) {
     }
 
     const prisma = getPrisma();
+    let conductorMode = false;
+    let runtimeAgentConfig = null as ReturnType<typeof parseVoiceAgentConfig> | null;
 
     if (agentId) {
       const agent = await prisma.voiceAgent.findFirst({
@@ -93,7 +97,11 @@ export async function POST(request: Request) {
         );
       }
 
-      const agentConfig = parseVoiceAgentConfig(agent.draftConfig);
+      runtimeAgentConfig = agent.publishedVersionId
+        ? await loadVoiceAgentRuntimeConfig(workspaceId, agentId)
+        : parseVoiceAgentConfig(agent.draftConfig);
+      conductorMode = isInternalBookingConductorMode(runtimeAgentConfig);
+      const agentConfig = runtimeAgentConfig;
       if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {
         return telnyxToolJson(
           {
@@ -109,7 +117,8 @@ export async function POST(request: Request) {
       if (
         toolType &&
         LEGACY_WORKFLOW_VOICE_TOOL_TYPES.has(toolType) &&
-        !isLegacyWorkflowVoicePathEnabled()
+        !isLegacyWorkflowVoicePathEnabled() &&
+        !conductorMode
       ) {
         return telnyxToolJson(
           {
@@ -344,6 +353,26 @@ export async function POST(request: Request) {
     }
 
     if (toolType) {
+      let effectiveToolType = toolType;
+      let effectiveBody = body;
+      if (
+        conductorMode &&
+        ["continue_workflow", "get_runtime_context", "record_current_field"].includes(toolType)
+      ) {
+        effectiveToolType = "runtime_turn";
+        effectiveBody = {
+          ...body,
+          utterance:
+            body.user_input ??
+            body.userInput ??
+            body.value ??
+            body.spoken ??
+            body.utterance ??
+            body.caller_message,
+          interpreted_intent: body.interpreted_intent ?? body.intent,
+        };
+      }
+
       const start = Date.now();
       const execution = await prisma.voiceToolExecution
         .create({
@@ -366,7 +395,7 @@ export async function POST(request: Request) {
           callId,
           workspaceId,
           agentId,
-          toolType,
+          toolType: effectiveToolType,
           workflow: workflow as import("@/lib/voice/field-runtime/types").WorkflowAction,
           serviceName,
         });
@@ -414,9 +443,9 @@ export async function POST(request: Request) {
           workspaceId,
           agentId,
           callId,
-          toolType,
+          toolType: effectiveToolType,
           input: {
-            ...body,
+            ...effectiveBody,
             call_control_id: callControlId || body.call_control_id,
           },
         })) as Record<string, unknown>;
@@ -486,14 +515,18 @@ export async function POST(request: Request) {
             })
             .catch(() => undefined);
         }
-        console.error("[telnyx/voice/tools]", toolType, message);
+        console.error("[telnyx/voice/tools]", effectiveToolType, message);
         // Never hang up on tool failure — return a speakable error.
+        const recoverable =
+          conductorMode &&
+          /callId required|missing|required field|collect/i.test(message);
         return telnyxToolJson(
           {
             ok: false,
             error: message,
-            speak:
-              "Sorry, I ran into a problem looking that up. Would you like me to take a message instead?",
+            speak: recoverable
+              ? "I still need a bit more information before we can check availability."
+              : "Sorry, I ran into a problem looking that up. Would you like me to take a message instead?",
             agentId,
             executionId: execution?.id,
           },

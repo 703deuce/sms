@@ -48,7 +48,7 @@ export function detectCallerIntent(input: {
     return { intent: "book_service", confidence: "medium", reason: "service_request" };
   }
 
-  return { intent: "book_service", confidence: "low", reason: "default_book" };
+  return { intent: "unknown", confidence: "low", reason: "unclassified" };
 }
 
 export function intentToWorkflowNode(intent: CallerIntent): string {

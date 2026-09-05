@@ -1,6 +1,5 @@
 /**
- * Switch ws_1 Amy (866) from Calendly + conversation-workflow SMS links
- * to live internal Transovo calendar booking via continue_workflow.
+ * ws_1 Amy internal Transovo calendar booking — deterministic runtime conductor.
  *
  * Run:
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/setup-ws1-internal-booking-test.ts
@@ -11,9 +10,10 @@ import { parseVoiceAgentConfig, type VoiceAgentConfig } from "../src/lib/voice/t
 import { restoreTexmlInboundRoute } from "../src/lib/telephony/provisioning/number-assignment";
 import { resolveEnabledBuiltinTools } from "../src/lib/voice/tools/catalog";
 import {
-  CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS,
-  filterToolsForCallerAmyPublish,
-} from "../src/lib/voice/workflow-engine/tool-publish";
+  CONDUCTOR_PUBLISHED_WEBHOOK_TOOLS,
+  CONDUCTOR_RUNTIME_AUTHORITY,
+} from "../src/lib/voice/workflow-engine/conductor-mode";
+import { filterToolsForCallerAmyPublish } from "../src/lib/voice/workflow-engine/tool-publish";
 import { applyLatencyProfileToConfig } from "../src/lib/voice/latency-profiles";
 import { AMY_FLUX_PROFILE, AMY_MINIMUM_SIDE_EFFECT_MODEL } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import { OPENAI_API_KEY_REF } from "../src/lib/voice/telnyx/official-baseline";
@@ -26,22 +26,26 @@ const PHONE_E164 = process.env.PHONE_E164 || "+18666020680";
 const PHONE_TELNYX_ID = process.env.PHONE_TELNYX_ID || "3020837399669245525";
 
 function buildLegacyInternalBookingConfig(current: VoiceAgentConfig): VoiceAgentConfig {
-  const enabledBuiltinTools = resolveEnabledBuiltinTools({
-    agentType: "appointment_booking",
-  });
-
   const advanced = {
     ...(current.advanced || {}),
     minimumSideEffectMode: false,
     conversationWorkflowMode: false,
+    internalBookingConductorMode: true,
     voiceArchitectureVersion: "telnyx-internal-booking-test-v1",
     internalBookingTestMode: true,
   };
 
+  const conductorTools = [
+    "runtime_turn",
+    "take_structured_message",
+    "escalate_human",
+    "hangup",
+  ];
+
   const tuned = applyLatencyProfileToConfig(
     {
       ...current,
-      enabledBuiltinTools,
+      enabledBuiltinTools: conductorTools,
       advanced,
     },
     AMY_FLUX_PROFILE,
@@ -62,10 +66,13 @@ function buildLegacyInternalBookingConfig(current: VoiceAgentConfig): VoiceAgent
       system: [
         tuned.instructions?.system || "",
         "",
+        CONDUCTOR_RUNTIME_AUTHORITY,
+        "",
         "INTERNAL BOOKING TEST MODE:",
         "- Book appointments on Transovo's own calendar (not Calendly, not SMS booking links).",
-        "- Collect caller name and phone, then use continue_workflow to check availability and book.",
-        "- Offer 2-3 available times from calendar_availability before confirming.",
+        "- On every caller turn, call runtime_turn once with the caller's words.",
+        "- Speak using the speak line returned by runtime_turn — never invent booking results.",
+        "- Offer only real availability slots returned by the runtime.",
         "- After booking, confirm date, time, and service verbally.",
       ]
         .filter(Boolean)
@@ -117,7 +124,7 @@ async function main() {
   });
   if (!agent) throw new Error(`Agent ${AMY_AGENT_ID} not found on ${WORKSPACE_ID}`);
 
-  console.log("\n=== 2. Switch Amy to legacy continue_workflow booking surface ===");
+  console.log("\n=== 2. Switch Amy to deterministic runtime_turn conductor ===");
   const current = parseVoiceAgentConfig(agent.draftConfig);
   const draftConfig = buildLegacyInternalBookingConfig(current);
 
@@ -127,12 +134,19 @@ async function main() {
   );
   console.log("Published webhook tools:", publishedTools.join(", "));
 
-  for (const required of CALLER_AMY_WORKFLOW_WEBHOOK_TOOLS) {
+  for (const required of CONDUCTOR_PUBLISHED_WEBHOOK_TOOLS) {
     if (!publishedTools.includes(required)) {
       throw new Error(`Missing required published tool: ${required}`);
     }
   }
-  for (const forbidden of ["send_resource", "calendar_availability", "book_appointment"]) {
+  for (const forbidden of [
+    "send_resource",
+    "calendar_availability",
+    "book_appointment",
+    "continue_workflow",
+    "get_runtime_context",
+    "record_current_field",
+  ]) {
     if (publishedTools.includes(forbidden)) {
       throw new Error(`Tool ${forbidden} should be internal-only, not published`);
     }
@@ -156,8 +170,8 @@ async function main() {
     })
     .filter(Boolean);
   console.log("Telnyx assistant tools:", telnyxNames.join(", "));
-  if (!telnyxNames.includes("continue_workflow")) {
-    throw new Error("Telnyx build missing continue_workflow");
+  if (!telnyxNames.includes("runtime_turn")) {
+    throw new Error("Telnyx build missing runtime_turn");
   }
   if (!telnyxNames.includes("hangup")) {
     throw new Error("Telnyx build missing hangup");

@@ -1,5 +1,9 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { STATE_ALLOWED_TOOLS } from "./states";
+import {
+  CONDUCTOR_PUBLISHED_WEBHOOK_TOOLS,
+  isInternalBookingConductorMode,
+} from "./conductor-mode";
 
 /** Union of all tools the runtime may invoke internally during a booking call. */
 export const CALLER_AMY_WORKFLOW_TOOL_UNION: readonly string[] = [
@@ -47,6 +51,9 @@ export function resolveCallerAmyPublishedWebhookTools(
   config?: { advanced?: Record<string, unknown> } | null,
 ): readonly string[] {
   const advanced = config?.advanced || {};
+  if (isInternalBookingConductorMode(config)) {
+    return CONDUCTOR_PUBLISHED_WEBHOOK_TOOLS;
+  }
   if (advanced.conversationWorkflowMode === true) {
     return WORKFLOW_PUBLISHED_WEBHOOK_TOOLS;
   }

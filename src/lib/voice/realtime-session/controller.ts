@@ -2,9 +2,11 @@
  * Fast realtime session controller — separates conversational routing from durable runtime.
  */
 import type { WorkflowAction } from "@/lib/voice/field-runtime/types";
+import type { RuntimeFieldManifestEntry } from "@/lib/voice/field-runtime/types";
 import { recordCurrentField } from "@/lib/voice/field-runtime/save";
 import { appendFieldReceipt, transitionState } from "@/lib/voice/workflow-engine/runtime-state";
 import { executeContinueWorkflow } from "@/lib/voice/workflow-engine/continue-workflow";
+import { classifyCallerUtterance } from "@/lib/voice/intent/classify-caller-utterance";
 import {
   computeWorkflowStateFromSession,
   getOrCreateRealtimeSession,
@@ -67,6 +69,46 @@ function inferConfirm(
   return CONFIRM_RE.test(utterance.trim());
 }
 
+function buildForcedFieldQuestion(
+  session: AmyRealtimeSession,
+  field?: RuntimeFieldManifestEntry | null,
+): string {
+  const active =
+    field ||
+    session.fieldManifest.find((f) => f.field_id === session.activeField) ||
+    session.fieldManifest.find((f) => session.missingFieldIds.includes(f.field_id)) ||
+    null;
+  if (active?.collection_instruction) return active.collection_instruction;
+  if (active?.label) return `Could I get your ${active.label.toLowerCase()}?`;
+  return "I still need a few details before we check availability.";
+}
+
+function recoverableSpeakFromSession(
+  session: AmyRealtimeSession,
+  result?: Record<string, unknown>,
+): string | null {
+  const errorCode = result?.error_code ? String(result.error_code) : "";
+  if (
+    errorCode === "MISSING_REQUIRED_FIELD" ||
+    result?.needsFieldCollection === true ||
+    (result?.data as { needsFieldCollection?: boolean })?.needsFieldCollection
+  ) {
+    return buildForcedFieldQuestion(session);
+  }
+  if (session.missingFieldIds.length > 0) {
+    return buildForcedFieldQuestion(session);
+  }
+  if (typeof result?.speak === "string" && result.speak.trim()) {
+    const generic =
+      /problem (looking|accessing)|couldn'?t complete|having trouble|wasn'?t able/i.test(
+        result.speak,
+      );
+    if (!generic) return result.speak;
+    return buildForcedFieldQuestion(session);
+  }
+  return null;
+}
+
 function normalizeResponse(
   session: AmyRealtimeSession,
   result: Record<string, unknown>,
@@ -75,6 +117,18 @@ function normalizeResponse(
   intent?: string,
   operationDurationMs?: number,
 ): RuntimeTurnResponse {
+  const forcedSpeak = recoverableSpeakFromSession(session, result);
+  if (forcedSpeak && result.ok === false) {
+    result = {
+      ...result,
+      ok: true,
+      success: true,
+      speak: forcedSpeak,
+      workflow_state:
+        session.missingFieldIds.length > 0 ? "COLLECTING_FIELDS" : result.workflow_state,
+      conductor_recovered: true,
+    };
+  }
   const stateAfter =
     (result.workflow_state as AmyRealtimeSession["currentState"]) ||
     session.currentState;
@@ -147,7 +201,99 @@ export async function executeRealtimeSessionTurn(
     serviceName: serviceName ?? session.serviceName,
   });
 
+  const utteranceClass = classifyCallerUtterance({
+    utterance,
+    workflowState: state,
+    hasMissingFields: session.missingFieldIds.length > 0,
+    activeFieldId: session.activeField,
+    bookingEnabled: true,
+    serviceNames: session.fieldManifest
+      .filter((f) => f.field_id === "sys_service")
+      .map((f) => f.label)
+      .filter(Boolean),
+  });
+
   const routingStart = Date.now();
+
+  if (utteranceClass.class === "capability_question") {
+    tracker.setRouting(Date.now() - routingStart);
+    return normalizeResponse(
+      session,
+      {
+        ok: true,
+        success: true,
+        action: "ANSWER_CAPABILITY",
+        workflow_state: state,
+        speak:
+          utteranceClass.suggestedSpeak ||
+          "Yes, I can help with appointments. Would you like to schedule one?",
+        conductor_action: "capability_answer",
+      },
+      tracker,
+      "capability_question",
+      utteranceClass.class,
+    );
+  }
+
+  if (utteranceClass.class === "general_question" && session.missingFieldIds.length > 0) {
+    tracker.setRouting(Date.now() - routingStart);
+    const field = session.fieldManifest.find((f) => f.field_id === session.activeField);
+    return normalizeResponse(
+      session,
+      {
+        ok: true,
+        success: true,
+        action: "FAQ_THEN_COLLECT",
+        workflow_state: state,
+        speak: `I can help with that from our business information. ${buildForcedFieldQuestion(session, field)}`,
+      },
+      tracker,
+      "faq_then_collect",
+      utteranceClass.class,
+    );
+  }
+
+  if (
+    utteranceClass.class === "booking_intent" &&
+    (state === "INTENT_DISCOVERY" || !session.runtime.intent)
+  ) {
+    session = await updateSessionAfterRuntimeChange(session, {
+      runtime: transitionState(
+        { ...session.runtime, intent: workflow, service_name: serviceName ?? session.serviceName },
+        "COLLECTING_FIELDS",
+        "booking_intent",
+      ),
+    });
+    state = session.currentState;
+  }
+
+  if (
+    session.missingFieldIds.length > 0 &&
+    (utteranceClass.class === "availability_question" ||
+      state === "CHECKING_AVAILABILITY" ||
+      state === "SELECTING_SLOT" ||
+      state === "READY_TO_BOOK")
+  ) {
+    tracker.setRouting(Date.now() - routingStart);
+    const field = session.fieldManifest.find((f) => f.field_id === session.activeField);
+    return normalizeResponse(
+      session,
+      {
+        ok: true,
+        success: true,
+        action: "COLLECT_BEFORE_SCHEDULING",
+        workflow_state: "COLLECTING_FIELDS",
+        speak: buildForcedFieldQuestion(session, field),
+        current_field: field || null,
+        missing_fields: session.missingFieldIds.map((id) =>
+          session.fieldManifest.find((f) => f.field_id === id),
+        ).filter(Boolean),
+      },
+      tracker,
+      "block_premature_scheduling",
+      utteranceClass.class,
+    );
+  }
 
   // Fast path: end call
   if (
@@ -229,9 +375,13 @@ export async function executeRealtimeSessionTurn(
   }
 
   // Fast path: field collection using cached manifest (no getWorkflowRequirements DB chain)
-  if (state === "COLLECTING_FIELDS" || state === "INTENT_DISCOVERY") {
-    const activeField = session.activeField;
-    if (activeField && utterance) {
+  if (
+    state === "COLLECTING_FIELDS" ||
+    state === "INTENT_DISCOVERY" ||
+    session.missingFieldIds.length > 0
+  ) {
+    const activeField = session.activeField || session.missingFieldIds[0];
+    if (activeField && utterance && utteranceClass.class !== "capability_question") {
       tracker.setRouting(Date.now() - routingStart);
       const dbStart = Date.now();
       const recorded = await recordCurrentField({
@@ -288,9 +438,7 @@ export async function executeRealtimeSessionTurn(
         success: true,
         action: "ASK_CALLER",
         workflow_state: state,
-        speak:
-          field?.collection_instruction ||
-          "I still need a few details before we check availability.",
+        speak: buildForcedFieldQuestion(session, field),
         current_field: field || null,
         missing_fields: session.missingFieldIds.map((id) =>
           session.fieldManifest.find((f) => f.field_id === id),
@@ -298,6 +446,25 @@ export async function executeRealtimeSessionTurn(
       },
       tracker,
       "collect_fields_prompt",
+      intent,
+    );
+  }
+
+  if (session.missingFieldIds.length > 0) {
+    tracker.setRouting(Date.now() - routingStart);
+    const field = session.fieldManifest.find((f) => f.field_id === session.activeField);
+    return normalizeResponse(
+      session,
+      {
+        ok: true,
+        success: true,
+        action: "COLLECT_BEFORE_SCHEDULING",
+        workflow_state: "COLLECTING_FIELDS",
+        speak: buildForcedFieldQuestion(session, field),
+        current_field: field || null,
+      },
+      tracker,
+      "block_scheduling_incomplete",
       intent,
     );
   }

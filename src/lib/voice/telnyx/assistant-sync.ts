@@ -19,6 +19,10 @@ import {
   CONVERSATION_WORKFLOW_PROMPT,
 } from "./amy-minimum-side-effect";
 import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
+import {
+  CONDUCTOR_RUNTIME_AUTHORITY,
+  isInternalBookingConductorMode,
+} from "@/lib/voice/workflow-engine/conductor-mode";
 import { syncConversationWorkflowToTelnyx } from "./workflow-sync";
 import {
   LOW_LATENCY_CONVERSATION_GUIDANCE,
@@ -308,6 +312,7 @@ export async function syncTelnyxAssistant(
 
   const minimumSideEffect = isMinimumSideEffectMode(config);
   const conversationWorkflow = isConversationWorkflowMode(config);
+  const conductorMode = isInternalBookingConductorMode(config);
   const enabledToolIds = resolveEnabledBuiltinTools({
     enabledBuiltinTools: config.enabledBuiltinTools,
     agentType: agent.agentType,
@@ -336,6 +341,7 @@ export async function syncTelnyxAssistant(
     TELNYX_SPEECH_PROMPT_GUIDANCE,
     minimumSideEffect ? MINIMUM_SIDE_EFFECT_PROMPT : "",
     conversationWorkflow ? CONVERSATION_WORKFLOW_PROMPT : "",
+    conductorMode ? CONDUCTOR_RUNTIME_AUTHORITY : "",
     isDeepgramFluxModel(
       config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
     ) || isLatencyOptimizedProfile(config.voiceTiming?.activeProfile)
@@ -348,7 +354,9 @@ export async function syncTelnyxAssistant(
     "Never claim an external action succeeded until the application tool confirms it.",
     minimumSideEffect
       ? "For booking or estimates, text an approved link with send_sms — do not book live on the phone."
-      : "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
+      : conductorMode
+        ? "Never tell a caller an appointment is booked until runtime_turn returns success with a confirmed appointment."
+        : "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
     minimumSideEffect
       ? ""
       : "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
