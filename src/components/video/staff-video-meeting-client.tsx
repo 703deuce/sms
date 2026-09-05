@@ -108,6 +108,16 @@ export function StaffVideoMeetingClient({
           hostDisplayName: meeting.hostDisplayName,
           recordingNotice: meeting.recordingNotice,
         }}
+        invite={
+          meeting.videoMeetingId
+            ? {
+                videoMeetingId: meeting.videoMeetingId,
+                token: meeting.token,
+                title: meeting.title,
+                scheduledStartAt: meeting.scheduledStartAt,
+              }
+            : undefined
+        }
         onJoined={setJoinPayload}
         onJoinRequest={requestHostJoin}
       />

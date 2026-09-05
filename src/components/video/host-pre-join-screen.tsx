@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { VideoInvitePanel } from "@/components/video/video-invite-panel";
 import { Loader2, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { TransovoVideoClient } from "@/lib/transovo-video/client/transovo-video-client";
 
@@ -27,9 +28,15 @@ type Props = {
   info: HostPreJoinInfo;
   onJoined: (payload: HostJoinPayload) => void;
   onJoinRequest: () => Promise<HostJoinPayload>;
+  invite?: {
+    videoMeetingId: string;
+    token: string;
+    title?: string | null;
+    scheduledStartAt?: string | null;
+  };
 };
 
-export function HostPreJoinScreen({ info, onJoined, onJoinRequest }: Props) {
+export function HostPreJoinScreen({ info, onJoined, onJoinRequest, invite }: Props) {
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
   const [devices, setDevices] = useState<{
@@ -126,6 +133,18 @@ export function HostPreJoinScreen({ info, onJoined, onJoinRequest }: Props) {
           <p className="mt-2 text-sm text-amber-700">{info.recordingNotice}</p>
         ) : null}
         {permissionError ? <p className="mt-2 text-sm text-amber-700">{permissionError}</p> : null}
+
+        {invite ? (
+          <div className="mt-4">
+            <VideoInvitePanel
+              videoMeetingId={invite.videoMeetingId}
+              token={invite.token}
+              title={invite.title ?? info.title}
+              scheduledStartAt={invite.scheduledStartAt ?? info.scheduledStartAt}
+              layout="card"
+            />
+          </div>
+        ) : null}
 
         <div className="mt-4 overflow-hidden rounded-xl bg-slate-950">
           <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />

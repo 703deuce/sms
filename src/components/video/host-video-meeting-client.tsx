@@ -106,6 +106,12 @@ export function HostVideoMeetingClient({
           hostDisplayName: meeting.hostDisplayName,
           recordingNotice: meeting.recordingNotice,
         }}
+        invite={{
+          videoMeetingId,
+          token: meeting.token,
+          title: meeting.title,
+          scheduledStartAt: meeting.scheduledStartAt,
+        }}
         onJoined={setJoinPayload}
         onJoinRequest={requestHostJoin}
       />

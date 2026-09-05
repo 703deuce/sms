@@ -483,6 +483,7 @@ export function MeetingRoom({
                 title={meetingTitle || join.settings.title}
                 scheduledStartAt={scheduledStartAt}
                 variant="dark"
+                layout="header"
               />
             ) : (
               <Button

@@ -59,6 +59,13 @@ export function VideoHomeClient() {
   const [notetakerDate, setNotetakerDate] = useState("");
   const [notetakerTime, setNotetakerTime] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
+  const [scheduledMeeting, setScheduledMeeting] = useState<{
+    videoMeetingId: string;
+    publicMeetingToken: string;
+    hostJoinUrl: string;
+    title: string;
+    scheduledStartAt: string;
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/video/overview")
@@ -107,7 +114,22 @@ export function VideoHomeClient() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not schedule meeting");
-      router.push(`/meetings?filter=upcoming`);
+      setScheduledMeeting({
+        videoMeetingId: json.data.videoMeetingId,
+        publicMeetingToken: json.data.publicMeetingToken,
+        hostJoinUrl: json.data.hostJoinUrl,
+        title: scheduleTitle || "Scheduled meeting",
+        scheduledStartAt: scheduledStartAt.toISOString(),
+      });
+      setMode("home");
+      setScheduleTitle("");
+      setScheduleDate("");
+      setScheduleTime("");
+      setScheduleDuration("30");
+      setBusy(false);
+      const overviewRes = await fetch("/api/video/overview");
+      const overviewJson = await overviewRes.json();
+      setData(overviewJson.data || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to schedule meeting");
       setBusy(false);
@@ -247,7 +269,41 @@ export function VideoHomeClient() {
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-          <div className="grid gap-6 lg:grid-cols-2">
+      {scheduledMeeting ? (
+        <Card className="space-y-4 border-emerald-200 bg-emerald-50 p-6">
+          <div>
+            <h3 className="font-semibold text-emerald-950">Meeting scheduled</h3>
+            <p className="mt-1 text-sm text-emerald-900">
+              {scheduledMeeting.title} ·{" "}
+              {new Date(scheduledMeeting.scheduledStartAt).toLocaleString()}
+            </p>
+            <p className="mt-2 text-sm text-emerald-800">
+              Copy the guest link below and send it to anyone who should join. You can also find
+              this meeting under Upcoming meetings.
+            </p>
+          </div>
+          <VideoInvitePanel
+            videoMeetingId={scheduledMeeting.videoMeetingId}
+            token={scheduledMeeting.publicMeetingToken}
+            title={scheduledMeeting.title}
+            scheduledStartAt={scheduledMeeting.scheduledStartAt}
+            layout="card"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href={scheduledMeeting.hostJoinUrl}>Join as host</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/meetings?filter=upcoming">View in meetings</Link>
+            </Button>
+            <Button variant="ghost" onClick={() => setScheduledMeeting(null)}>
+              Dismiss
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2">
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold">Upcoming meetings</h3>
@@ -279,6 +335,7 @@ export function VideoHomeClient() {
                             token={m.publicMeetingToken}
                             title={m.title}
                             scheduledStartAt={m.scheduledStartAt}
+                            layout="compact"
                           />
                         ) : null}
                         </div>

@@ -6,6 +6,8 @@ import { MEETING_STATUS_LABELS } from "@/lib/meeting-assistant/types";
 import { meetingPlatformLabel } from "@/lib/meeting-assistant/platform";
 import type { MeetingPlatform } from "@/lib/meeting-assistant/types";
 import { NewMeetingMenu } from "@/components/meetings/new-meeting-menu";
+import { VideoInvitePanel } from "@/components/video/video-invite-panel";
+import { GuestJoinLink } from "@/components/video/guest-join-link";
 import { ExternalLink, Sparkles, Video } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -36,6 +38,11 @@ const UPCOMING_STATUSES = new Set([
 
 function sourceLabel(row: MeetingRow) {
   return row.meetingSource === "transovo_video" ? "Transovo Video" : "AI Notetaker";
+}
+
+function guestTokenFromUrl(url: string): string | null {
+  const match = url.match(/\/video\/([^/?#]+)/);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 function primaryAction(row: MeetingRow) {
@@ -131,6 +138,11 @@ export function MeetingsListClient() {
         <div className="space-y-3">
           {sessions.map((s) => {
             const action = primaryAction(s);
+            const upcoming = UPCOMING_STATUSES.has(s.status);
+            const guestToken =
+              s.meetingSource === "transovo_video" && s.meetingUrl
+                ? guestTokenFromUrl(s.meetingUrl)
+                : null;
             return (
               <Card key={s.id} className="p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -165,7 +177,7 @@ export function MeetingsListClient() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {action.external ? (
                       <Button asChild size="sm" variant="outline">
                         <a href={action.href} target="_blank" rel="noreferrer">
@@ -180,6 +192,26 @@ export function MeetingsListClient() {
                     )}
                   </div>
                 </div>
+                {s.meetingSource === "transovo_video" && upcoming && s.meetingUrl ? (
+                  <div className="mt-4 border-t pt-4">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Guest join link</p>
+                    {guestToken && s.videoMeetingId ? (
+                      <VideoInvitePanel
+                        videoMeetingId={s.videoMeetingId}
+                        token={guestToken}
+                        title={s.title}
+                        scheduledStartAt={s.scheduledStartAt}
+                        layout="compact"
+                      />
+                    ) : (
+                      <GuestJoinLink
+                        guestUrl={s.meetingUrl}
+                        title={s.title}
+                        scheduledStartAt={s.scheduledStartAt}
+                      />
+                    )}
+                  </div>
+                ) : null}
               </Card>
             );
           })}

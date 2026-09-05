@@ -481,13 +481,7 @@ export async function provisionStandaloneVideoMeeting(input: {
   }
 
   const meetingUrl = publicVideoMeetingUrl(meeting.publicMeetingToken);
-  if (
-    videoConfig.aiRecap ||
-    videoConfig.transcription ||
-    recordingEnabledForMode(meeting.recordingMode)
-  ) {
-    await ensureMeetingSessionForVideo(meeting.id);
-  }
+  await ensureMeetingSessionForVideo(meeting.id);
 
   return {
     videoMeetingId: meeting.id,
