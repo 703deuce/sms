@@ -149,5 +149,9 @@ export function isInternalOnlyTool(
   if (isConversationWorkflowMode(config) && WORKFLOW_RETIRED_FLAT_TOOLS.has(toolType)) {
     return true;
   }
+  // Model-facing Telnyx webhooks in legacy/minimum modes must execute when invoked.
+  if (resolveCallerAmyPublishedWebhookTools(config).includes(toolType)) {
+    return false;
+  }
   return CALLER_AMY_INTERNAL_ONLY_TOOLS.has(toolType);
 }
