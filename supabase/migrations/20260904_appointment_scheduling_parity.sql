@@ -2,37 +2,37 @@
 
 CREATE TABLE IF NOT EXISTS appointment_waitlist_entries (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  contact_id TEXT,
-  appointment_type_id TEXT,
-  service_name TEXT,
-  preferred_date TEXT,
-  preferred_time_start TEXT,
-  preferred_time_end TEXT,
-  staff_preference TEXT,
-  location_id TEXT,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
+  "contactId" TEXT,
+  "appointmentTypeId" TEXT,
+  "serviceName" TEXT,
+  "preferredDate" TEXT,
+  "preferredTimeStart" TEXT,
+  "preferredTimeEnd" TEXT,
+  "staffPreference" TEXT,
+  "locationId" TEXT,
   phone TEXT,
   email TEXT,
   status TEXT NOT NULL DEFAULT 'active',
   metadata JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS appointment_waitlist_ws_status_idx
-  ON appointment_waitlist_entries (workspace_id, status);
+  ON appointment_waitlist_entries ("workspaceId", status);
 
 CREATE TABLE IF NOT EXISTS appointment_recurring_series (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  contact_id TEXT,
-  service_name TEXT NOT NULL,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
+  "contactId" TEXT,
+  "serviceName" TEXT NOT NULL,
   frequency TEXT NOT NULL,
   occurrences INTEGER,
-  end_date TIMESTAMPTZ,
+  "endDate" TIMESTAMPTZ,
   metadata JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS appointment_recurring_series_ws_idx
-  ON appointment_recurring_series (workspace_id);
+  ON appointment_recurring_series ("workspaceId");

@@ -96,6 +96,8 @@ export async function markAppointmentPaymentSucceeded(
 
   try {
     const { emitWorkflowTrigger } = await import("@/lib/appointment-workflows/triggers");
+    const { cancelPaymentFollowUpSteps } = await import("@/lib/appointment-workflows/engine");
+    await cancelPaymentFollowUpSteps(workspaceId, appointmentId);
     await emitWorkflowTrigger({
       workspaceId,
       appointmentId,
@@ -153,6 +155,11 @@ export async function markAppointmentPaymentFailed(
       appointmentId,
       trigger: "payment_failed",
     });
+    await emitWorkflowTrigger({
+      workspaceId,
+      appointmentId,
+      trigger: "payment_required",
+    });
   } catch {
     // optional
   }
@@ -207,4 +214,15 @@ export async function setAppointmentPendingPayment(
       } as object,
     },
   });
+
+  try {
+    const { emitWorkflowTrigger } = await import("@/lib/appointment-workflows/triggers");
+    await emitWorkflowTrigger({
+      workspaceId,
+      appointmentId,
+      trigger: "payment_required",
+    });
+  } catch {
+    // optional
+  }
 }

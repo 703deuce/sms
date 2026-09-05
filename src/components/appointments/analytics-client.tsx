@@ -188,7 +188,7 @@ export function AppointmentsAnalyticsClient() {
           title={`No appointments booked in the last ${range} days`}
           description="Once customers book online or you add appointments manually, metrics will appear here."
           actionLabel="View scheduled appointments"
-          actionHref="/appointments/scheduled"
+          actionHref="/appointments"
         />
       ) : (
         <>
@@ -205,7 +205,7 @@ export function AppointmentsAnalyticsClient() {
                 <p className="mt-0.5 text-[13px] leading-relaxed text-amber-800/80">
                   Review failed reminder deliveries in this period —{" "}
                   <Link
-                    href="/appointments/scheduled"
+                    href="/appointments"
                     className="font-semibold underline underline-offset-2 hover:text-amber-900"
                   >
                     check appointment timelines

@@ -1,8 +1,9 @@
 "use client";
 
-import { AppointmentWorkflowEditor, PrebuiltWorkflowCard } from "@/components/appointments/workflows-client";
+import { PrebuiltWorkflowCard } from "@/components/appointments/workflows-client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { PREBUILT_WORKFLOW_TEMPLATES } from "@/lib/appointment-workflows/templates";
 import type { AppointmentWorkflowRecord } from "@/lib/appointment-workflows/types";
 import { triggerLabel } from "@/lib/appointment-workflows/labels";
@@ -15,6 +16,7 @@ export function WorkflowsListClient() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<AppointmentWorkflowRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetch("/api/appointments/workflows")
@@ -56,6 +58,15 @@ export function WorkflowsListClient() {
   );
 
   const customWorkflows = workflows.filter((w) => w.sourceType === "custom" && !w.templateId);
+  const query = search.trim().toLowerCase();
+  const filteredWorkflows = query
+    ? workflows.filter((w) => w.name.toLowerCase().includes(query) || triggerLabel(w.trigger).toLowerCase().includes(query))
+    : workflows;
+  const filteredTemplates = query
+    ? PREBUILT_WORKFLOW_TEMPLATES.filter((t) =>
+        t.name.toLowerCase().includes(query) || t.description.toLowerCase().includes(query),
+      )
+    : PREBUILT_WORKFLOW_TEMPLATES;
 
   if (loading) {
     return <div className="text-sm text-muted-foreground">Loading workflows…</div>;
@@ -63,25 +74,33 @@ export function WorkflowsListClient() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">Workflows</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Automated appointment reminders, confirmations, and follow-ups.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/appointments/workflows/new">
-            <Plus className="mr-1.5 h-4 w-4" />
-            Create custom workflow
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search workflows…"
+            className="sm:w-56"
+          />
+          <Button asChild>
+            <Link href="/appointments/workflows/new">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Create custom workflow
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <section>
         <h2 className="mb-4 font-display text-lg font-semibold">Recommended workflows</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {PREBUILT_WORKFLOW_TEMPLATES.map((template) => {
+          {filteredTemplates.map((template) => {
             const installed = installedByTemplate.get(template.id);
             return (
               <PrebuiltWorkflowCard
@@ -112,7 +131,7 @@ export function WorkflowsListClient() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {workflows.map((wf) => (
+            {filteredWorkflows.map((wf) => (
               <Card key={wf.id} className="flex items-center justify-between gap-4 p-4">
                 <div className="min-w-0">
                   <p className="font-semibold">{wf.name}</p>

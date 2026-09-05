@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { probeCfnaIngress } from "@/lib/mctb/cfna-ingress-probe";
 import { runMctbConsentTexmlDemoCallDetect } from "@/lib/mctb/consent-prompt/texml-inbound-call-event";
 import {
   buildMctbConsentControlledHangupTexml,
@@ -19,6 +20,7 @@ import {
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
+import { logMctbEntryTiming } from "@/lib/mctb/texml-ingress/entry-timing";
 import {
   parseMctbTexmlFields,
   pickMctbTexmlField,
@@ -85,6 +87,30 @@ export async function POST(request: Request) {
     const digits = pickMctbTexmlField(fields, "Digits", "digits");
     const callSid = pickMctbTexmlField(fields, "CallSid", "call_sid");
     const callStatus = pickMctbTexmlField(fields, "CallStatus", "call_status");
+
+    probeCfnaIngress({
+      layer: "mctb-consent",
+      eventType: `texml.consent.${event}`,
+      payload: { ...fields, call_control_id: callSid },
+      note: digits ? `DTMF digit=${digits}` : "consent gather callback",
+    });
+
+    if (event === "gather") {
+      logMctbEntryTiming({
+        phase: "gather_start",
+        callSid,
+        to,
+        certMode,
+        extra: { digits: digits || null, callback: "mctb-consent" },
+      });
+      traceMctbTexml("MCTB_DTMF_RECEIVED", {
+        from: from ? "[present]" : "[missing]",
+        to,
+        callSid,
+        digit: digits || null,
+        gatherCallback: true,
+      });
+    }
     const forwardedFrom =
       normalizeForwardedFromE164(url.searchParams.get("forwardedFrom")) ||
       normalizeForwardedFromE164(pickMctbTexmlField(fields, "ForwardedFrom", "forwarded_from")) ||

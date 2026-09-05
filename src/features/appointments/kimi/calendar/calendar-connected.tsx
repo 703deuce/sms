@@ -71,6 +71,20 @@ export function CalendarConnected() {
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
+  const loadMeetingIndicators = useCallback(async (appointments: CalendarApiAppointment[]) => {
+    const ids = appointments.map((row) => row.id);
+    if (!ids.length) return appointments;
+    const params = new URLSearchParams({ ids: ids.join(",") });
+    const res = await fetch(`/api/appointments/meeting-indicators?${params}`);
+    if (!res.ok) return appointments;
+    const json = await res.json();
+    const indicators = (json.data || {}) as Record<string, CalendarApiAppointment["meeting"]>;
+    return appointments.map((row) => ({
+      ...row,
+      meeting: indicators[row.id] || row.meeting,
+    }));
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     setFailed(false);
@@ -83,10 +97,14 @@ export function CalendarConnected() {
         if (!r.ok) throw new Error("calendar fetch failed");
         return r.json();
       })
-      .then((json) => setRows(json.data || []))
+      .then(async (json) => {
+        const appointments = (json.data || []) as CalendarApiAppointment[];
+        const enriched = await loadMeetingIndicators(appointments);
+        setRows(enriched);
+      })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
-  }, [range.from, range.to]);
+  }, [loadMeetingIndicators, range.from, range.to]);
 
   useEffect(() => {
     load();

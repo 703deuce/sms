@@ -89,6 +89,7 @@ export default function ReminderSettingsView({
             reminder={r}
             onToggle={() => actions.onToggle(r.stepKey)}
             onTemplateChange={(value) => actions.onTemplateChange(r.stepKey, value)}
+            onChannelChange={(channel) => actions.onChannelChange(r.stepKey, channel)}
             onReset={() => actions.onResetTemplate(r.stepKey)}
           />
         ))}

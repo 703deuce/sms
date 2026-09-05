@@ -102,14 +102,18 @@ export function OverviewConnected() {
       onSendTestReminder: () => router.push("/appointments/reminders"),
       onConfigureAvailability: () => router.push("/appointments/availability"),
       onManageTypes: () => router.push("/appointments/types"),
-      onReviewIssues: () => router.push("/appointments/calendar"),
+      onReviewIssues: () => {
+        const first = data?.needsAttention?.[0]?.href;
+        router.push(first || "/appointments");
+      },
       onOpenAppointment: (id) => router.push(`/appointments/${id}`),
-      onOpenConversation: (id) => router.push(`/conversations/${id}`),
+      onOpenConversation: (id) =>
+        router.push(`/conversations?conversation=${encodeURIComponent(id)}`),
       onViewAllConversations: () => router.push("/conversations"),
       onOpenAttentionItem: (href) => router.push(href),
       onRetry: load,
     }),
-    [bookingUrl, load, router],
+    [bookingUrl, data?.needsAttention, load, router],
   );
 
   if (loading) return <OverviewLoading />;

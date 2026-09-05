@@ -25,6 +25,7 @@ export type SolutionsNavOptions = {
 
 /** Paths that belong under the AI Receptionist sidebar section. */
 export const RECEPTIONIST_SECTION_PREFIXES = [
+  "/voice/setup",
   "/voice/receptionist",
   "/voice/agents",
 ] as const;
@@ -44,7 +45,7 @@ export { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 
 /** Receptionist submenu under the primary launch sidebar. */
 export function buildReceptionistNavChildren(agentId?: string | null) {
-  const landing = "/voice/receptionist";
+  const landing = "/voice/setup";
   const agentsList = "/voice/agents";
   if (!agentId) {
     return [

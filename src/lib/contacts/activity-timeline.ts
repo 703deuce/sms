@@ -13,7 +13,7 @@ export type TimelineCrmSync = {
 
 export type TimelineItem = {
   id: string;
-  kind: "sms" | "call" | "voice_ai" | "voicemail";
+  kind: "sms" | "call" | "voice_ai" | "voicemail" | "voice_reminder";
   direction?: string | null;
   summary: string;
   status?: string | null;
@@ -99,16 +99,46 @@ export async function getContactActivityTimeline(
     take: limit,
   });
   for (const c of voiceCalls) {
+    const meta = (c.metadata || {}) as Record<string, unknown>;
+    const isReminder = meta.kind === "appointment_voice_reminder";
     items.push({
       id: `voice:${c.id}`,
-      kind: "voice_ai",
+      kind: isReminder ? "voice_reminder" : "voice_ai",
       direction: String(c.direction || "").toLowerCase(),
-      summary: `AI voice · ${c.status}${c.outcome ? ` · ${c.outcome}` : ""}`,
+      summary: isReminder
+        ? `Voice reminder · ${c.outcome || c.status || "queued"}`
+        : `AI voice · ${c.status}${c.outcome ? ` · ${c.outcome}` : ""}`,
       status: c.status,
       at: new Date(c.startedAt).toISOString(),
-      href: `/voice/calls/${c.id}`,
-      meta: { appointmentBooked: c.appointmentBooked, leadScore: c.leadScore },
+      href: isReminder ? `/appointments/${meta.appointmentId}` : `/voice/calls/${c.id}`,
+      meta: {
+        appointmentBooked: c.appointmentBooked,
+        leadScore: c.leadScore,
+        appointmentId: meta.appointmentId,
+        lastAction: meta.lastAction,
+      },
     });
+  }
+
+  try {
+    const meetingSessions = await prisma.meetingSession.findMany({
+      where: { workspaceId, contactId, deletedAt: null },
+      orderBy: { scheduledStartAt: "desc" },
+      take: limit,
+    });
+    for (const m of meetingSessions) {
+      items.push({
+        id: `meeting:${m.id}`,
+        kind: "voice_reminder",
+        summary: `Meeting recap · ${m.title || "Meeting"} · ${m.status}`,
+        status: m.status,
+        at: new Date(m.scheduledStartAt || m.createdAt).toISOString(),
+        href: `/meetings/${m.id}`,
+        meta: { meetingSessionId: m.id, appointmentId: m.appointmentId },
+      });
+    }
+  } catch {
+    // meeting_sessions table may not be migrated yet
   }
 
   const voicemails = await prisma.voicemailMessage.findMany({

@@ -650,6 +650,35 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
+  // Canonical appointment AI for natural-language SMS (after STOP/HELP/YES/C/X).
+  try {
+    const appointmentAi = await (
+      await import("@/lib/appointments/ai-scheduling/channel-adapters")
+    ).tryHandleInboundAppointmentAi({
+      workspaceId: input.workspaceId,
+      contactId: contact.id,
+      conversationId: conversation.id,
+      message: body || "",
+      providerMessageId: input.providerMessageId,
+    });
+    if (appointmentAi.handled && appointmentAi.replyText) {
+      await prisma.conversationMessage.create({
+        data: {
+          conversationId: conversation.id,
+          direction: "outbound",
+          body: appointmentAi.replyText,
+        },
+      });
+      return {
+        kind: "message",
+        replyText: appointmentAi.replyText,
+        conversationId: conversation.id,
+      };
+    }
+  } catch {
+    /* non-fatal — fall through to general AI replies */
+  }
+
   // AI conversational replies (scheduled with optional delay).
   try {
     const phone = await prisma.phoneNumber.findFirst({

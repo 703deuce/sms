@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import type { Prisma } from "@/lib/domain";
+import { probeCfnaIngress, shouldProbeCfnaPayload } from "@/lib/mctb/cfna-ingress-probe";
 import { readTelnyxWebhook } from "@/lib/messaging/telnyx/webhook-auth";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 
@@ -40,6 +41,18 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
   });
   if (existing?.status === "processed") {
     return { ok: true, duplicate: true };
+  }
+
+  if (shouldProbeCfnaPayload(eventPayload)) {
+    probeCfnaIngress({
+      layer: "telnyx-voice-cc",
+      eventType,
+      payload: eventPayload,
+      note:
+        eventType === "call.initiated"
+          ? "Call Control call.initiated — programmable leg created"
+          : undefined,
+    });
   }
 
   const clientState = decodeClientState(
@@ -111,6 +124,36 @@ export async function processVoiceWebhookEvent(input: {
 }) {
   const prisma = getPrisma();
   const { eventType, callId, humanCallId, isHuman, eventPayload } = input;
+
+  const { processCallerIdVerificationWebhook } = await import(
+    "@/lib/smart-routing/caller-id-verification"
+  );
+  const callerIdEvent = await processCallerIdVerificationWebhook({
+    eventType,
+    eventPayload,
+  });
+  if (callerIdEvent.handled) {
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return { ok: true, kind: "caller_id_verification" };
+  }
+
+  const { processAppointmentVoiceReminderWebhook } = await import(
+    "@/lib/appointment-voice-reminders/runtime"
+  );
+  const voiceReminderEvent = await processAppointmentVoiceReminderWebhook({
+    eventType,
+    eventPayload,
+  });
+  if (voiceReminderEvent.handled) {
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return { ok: true, kind: "appointment_voice_reminder" };
+  }
 
   // Softphone call screening gather (accept / voicemail).
   if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {

@@ -388,3 +388,24 @@
   .cal-main { grid-template-columns: 1fr; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
 }
+
+.cal-meeting-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.cal-meeting-badges.compact { margin-top: 2px; }
+.cal-meeting-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1.4;
+}
+.cal-meeting-badge.tone-indigo { background: #eef2ff; color: #4338ca; }
+.cal-meeting-badge.tone-violet { background: #f3e8ff; color: #7e22ce; }
+.cal-meeting-badge.tone-green { background: #ecfdf5; color: #047857; }

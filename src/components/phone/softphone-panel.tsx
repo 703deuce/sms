@@ -360,10 +360,11 @@ export function SoftphonePanel({
       .then(({ subscribeToPush }) => subscribeToPush().catch(() => undefined))
       .catch(() => undefined);
 
-    // Click-to-call / deep-link: /phone?dial=+1... or /phone?incoming=<callId>
+    // Click-to-call / deep-link: /phone?dial=+1..., /phone?contact=<id>, or /phone?incoming=<callId>
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const dialParam = params.get("dial");
+      const contactParam = params.get("contact") || params.get("contactId");
       const incomingParam = params.get("incoming");
       if (dialParam) {
         setDialNumber(dialParam);
@@ -373,6 +374,24 @@ export function SoftphonePanel({
         // Clear query so refresh doesn't re-dial.
         const url = new URL(window.location.href);
         url.searchParams.delete("dial");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      }
+      if (contactParam) {
+        fetch(`/api/contacts/${encodeURIComponent(contactParam)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((json) => {
+            const contact = json?.data as ContactRow | undefined;
+            if (!contact?.phone) return;
+            setDialNumber(contact.phone);
+            setLastDialed(contact.phone);
+            localStorage.setItem(LS_LAST_DIALED, contact.phone);
+            pendingDialRef.current = contact.phone;
+            setScreenPop(contact);
+          })
+          .catch(() => undefined);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("contact");
+        url.searchParams.delete("contactId");
         window.history.replaceState({}, "", url.pathname + url.search);
       }
       if (incomingParam) {

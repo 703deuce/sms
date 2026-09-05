@@ -64,6 +64,20 @@ export type AppointmentTypeFormState = {
   maxBookingsPerDay?: number;
   maxBookingsPerWeek?: number;
   maxPerTypePerDay?: number;
+  transovoVideoEnabled?: boolean;
+  videoMaxParticipants?: number;
+  videoRequireGuestEmail?: boolean;
+  videoRequireHost?: boolean;
+  videoWaitingRoom?: boolean;
+  videoRecordingMode?: "off" | "manual" | "automatic";
+  videoTranscription?: boolean;
+  videoAiRecap?: boolean;
+  notetakerEnabled?: boolean;
+  notetakerAutoJoin?: boolean;
+  notetakerTranscript?: boolean;
+  notetakerSummary?: boolean;
+  notetakerActionItems?: boolean;
+  notetakerSummaryTemplate?: string;
 };
 
 export type AppointmentTypesPageModel = {

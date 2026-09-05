@@ -28,7 +28,7 @@ function test(name: string, fn: () => void | Promise<void>) {
 }
 
 async function main() {
-  await test("fail-open profile builds press-1 TeXML synchronously", () => {
+  await test("fail-open profile builds press-1 TeXML synchronously for cert D", () => {
     const profile = buildFailOpenInboundRoutingProfile(E164_571);
     const built = buildInstantMctbInboundTexml({
       profile,
@@ -39,6 +39,22 @@ async function main() {
     assert.equal(built!.branch, "press_1_gather");
     assert.match(built!.body, new RegExp(MCTB_FINAL_PRESS1_CONSENT_AUDIO_ASSET_ID));
     assert.match(built!.body, /<Gather[^>]*numDigits="1"/);
+  });
+
+  await test("cert C3 uses instant press-1 gather without DB (answer-first)", () => {
+    const profile = buildFailOpenInboundRoutingProfile(E164_571);
+    const built = buildInstantMctbInboundTexml({
+      profile,
+      fields: {
+        ForwardedFrom: "sip:+14107900000@one.att.net",
+        ToSipUri: "+15714073615@one.att.net",
+      },
+      certMode: "C3",
+    });
+    assert.ok(built);
+    assert.equal(built!.branch, "press_1_gather");
+    assert.match(built!.body, /<Play>/);
+    assert.match(built!.body, /cert=C3/);
   });
 
   await test("fail-open build is sub-millisecond (no DB)", () => {

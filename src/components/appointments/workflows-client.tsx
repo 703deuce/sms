@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-  APPOINTMENT_WORKFLOW_TRIGGERS,
   type AppointmentWorkflowChannel,
   type AppointmentWorkflowRecord,
   type AppointmentWorkflowStep,
@@ -13,6 +12,13 @@ import {
   type WorkflowStepTiming,
 } from "@/lib/appointment-workflows/types";
 import { triggerLabel } from "@/lib/appointment-workflows/labels";
+import type { WorkflowPreviewResult } from "@/lib/appointment-workflows/preview";
+import {
+  CHANGE_INITIATED_BY_VALUES,
+  WORKFLOW_ACTION_OPTIONS,
+  WORKFLOW_CONDITION_OPTIONS,
+  WORKFLOW_TRIGGER_OPTIONS,
+} from "@/lib/appointment-workflows/metadata";
 import { getPrebuiltTemplate, PREBUILT_WORKFLOW_TEMPLATES } from "@/lib/appointment-workflows/templates";
 import {
   ArrowLeft,
@@ -23,6 +29,10 @@ import {
   Trash2,
   Workflow,
 } from "lucide-react";
+import {
+  DEFAULT_KEYPAD_OPTIONS,
+  type VoiceReminderTemplate,
+} from "@/lib/appointment-voice-reminders/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -50,11 +60,41 @@ function newStep(index: number): AppointmentWorkflowStep {
 const TIMING_PRESETS: Array<{ label: string; timing: WorkflowStepTiming }> = [
   { label: "Immediately", timing: { kind: "immediate" } },
   {
+    label: "7 days before",
+    timing: {
+      kind: "relative",
+      anchor: "appointment_start",
+      amount: 7,
+      unit: "days",
+      direction: "before",
+    },
+  },
+  {
+    label: "48 hours before",
+    timing: {
+      kind: "relative",
+      anchor: "appointment_start",
+      amount: 48,
+      unit: "hours",
+      direction: "before",
+    },
+  },
+  {
     label: "24 hours before",
     timing: {
       kind: "relative",
       anchor: "appointment_start",
       amount: 24,
+      unit: "hours",
+      direction: "before",
+    },
+  },
+  {
+    label: "6 hours before",
+    timing: {
+      kind: "relative",
+      anchor: "appointment_start",
+      amount: 6,
       unit: "hours",
       direction: "before",
     },
@@ -80,7 +120,17 @@ const TIMING_PRESETS: Array<{ label: string; timing: WorkflowStepTiming }> = [
     },
   },
   {
-    label: "2 hours after",
+    label: "30 minutes before",
+    timing: {
+      kind: "relative",
+      anchor: "appointment_start",
+      amount: 30,
+      unit: "minutes",
+      direction: "before",
+    },
+  },
+  {
+    label: "2 hours after appointment end",
     timing: {
       kind: "relative",
       anchor: "appointment_end",
@@ -89,7 +139,47 @@ const TIMING_PRESETS: Array<{ label: string; timing: WorkflowStepTiming }> = [
       direction: "after",
     },
   },
+  {
+    label: "1 day after appointment end",
+    timing: {
+      kind: "relative",
+      anchor: "appointment_end",
+      amount: 1,
+      unit: "days",
+      direction: "after",
+    },
+  },
 ];
+
+function describeTiming(timing: WorkflowStepTiming): string {
+  const preset = TIMING_PRESETS.find((p) => JSON.stringify(p.timing) === JSON.stringify(timing));
+  if (preset) return preset.label;
+  if (timing.kind === "immediate") return "Immediately";
+  const anchor =
+    timing.anchor === "appointment_end"
+      ? "appointment end"
+      : timing.anchor === "booking_created"
+        ? "booking created"
+        : "appointment start";
+  return `${timing.amount} ${timing.unit} ${timing.direction} ${anchor}`;
+}
+
+function timingSelectValue(timing: WorkflowStepTiming): string {
+  const match = TIMING_PRESETS.find((p) => JSON.stringify(p.timing) === JSON.stringify(timing));
+  return match ? JSON.stringify(match.timing) : "__custom__";
+}
+
+function voiceStepSummary(step: AppointmentWorkflowStep, templates: VoiceReminderTemplate[]): string {
+  const template =
+    templates.find((t) => t.id === step.voiceReminderTemplateId) ||
+    templates.find((t) => t.isDefault) ||
+    templates[0];
+  const keypad = (template?.keypadOptions || DEFAULT_KEYPAD_OPTIONS)
+    .filter((o) => o.action !== "none")
+    .map((o) => `${o.digit} = ${o.label || o.action}`)
+    .join(" · ");
+  return `${template?.name || "Default voice reminder"}${keypad ? `\n${keypad}` : ""}`;
+}
 
 export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) {
   const router = useRouter();
@@ -116,23 +206,29 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
     initial?.steps?.length ? initial.steps : template?.defaultSteps || [newStep(0)],
   );
   const [conditions, setConditions] = useState(
-    initial?.conditions || { logic: "and" as const, conditions: [] },
+    initial?.conditions ||
+      template?.defaultConditions || { logic: "and" as const, conditions: [] },
   );
   const [active, setActive] = useState(initial?.active ?? true);
   const [types, setTypes] = useState<AppointmentType[]>([]);
   const [staff, setStaff] = useState<Array<{ id: string; name: string }>>([]);
+  const [voiceTemplates, setVoiceTemplates] = useState<VoiceReminderTemplate[]>([]);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [preview, setPreview] = useState<WorkflowPreviewResult | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     Promise.all([
       fetch("/api/appointments/types").then((r) => r.json()),
       fetch("/api/appointments/settings").then((r) => r.json()),
+      fetch("/api/appointments/voice-reminders").then((r) => r.json()),
     ])
-      .then(([typesJson, settingsJson]) => {
+      .then(([typesJson, settingsJson, voiceJson]) => {
         setTypes(typesJson.data || []);
         const staffList = (settingsJson.data?.staff || []) as Array<{ id: string; name: string }>;
         setStaff(staffList.filter((s) => s.name));
+        setVoiceTemplates((voiceJson.data?.templates || []) as VoiceReminderTemplate[]);
       })
       .catch(() => {});
   }, []);
@@ -153,6 +249,48 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
       [copy[index], copy[next]] = [copy[next], copy[index]];
       return copy;
     });
+  }
+
+  async function testWorkflow() {
+    setTesting(true);
+    setError("");
+    const payload = {
+      name: name.trim() || "Preview",
+      trigger,
+      channels,
+      steps,
+      conditions: conditions.conditions.length ? conditions : null,
+    };
+    const url =
+      mode === "edit" && initial
+        ? `/api/appointments/workflows/${initial.id}/test`
+        : "/api/appointments/workflows/preview";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(json.error || "Could not preview workflow");
+      setTesting(false);
+      return;
+    }
+    setPreview(json.data as WorkflowPreviewResult);
+    setTesting(false);
+  }
+
+  async function duplicateWorkflow() {
+    if (!initial) return;
+    const res = await fetch(`/api/appointments/workflows/${initial.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "duplicate" }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.data?.id) {
+      router.push(`/appointments/workflows/${json.data.id}/edit`);
+    }
   }
 
   async function save() {
@@ -202,8 +340,8 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
   const isTemplateWizard = Boolean(templateId);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/appointments/workflows"
           className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
@@ -211,6 +349,24 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
           <ArrowLeft className="h-4 w-4" />
           Workflows
         </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={testWorkflow} disabled={testing}>
+            {testing ? "Testing…" : "Test workflow"}
+          </Button>
+          {mode === "edit" && initial ? (
+            <Button type="button" variant="outline" size="sm" onClick={duplicateWorkflow}>
+              <Copy className="mr-1 h-4 w-4" />
+              Duplicate
+            </Button>
+          ) : null}
+          <label className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm">
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+            Active
+          </label>
+          <Button onClick={save} disabled={saving} size="sm">
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
       </div>
 
       <div>
@@ -228,6 +384,8 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
         </div>
       ) : null}
 
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
       <Card className="p-5 space-y-4">
         <div>
           <Label>Workflow name</Label>
@@ -242,8 +400,8 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
               onChange={(e) => setTrigger(e.target.value as AppointmentWorkflowTrigger)}
               className="mt-1.5"
             >
-              {APPOINTMENT_WORKFLOW_TRIGGERS.map((t) => (
-                <option key={t} value={t}>{triggerLabel(t)}</option>
+              {WORKFLOW_TRIGGER_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </Select>
           </div>
@@ -293,11 +451,6 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
             <option value="both">SMS + Email</option>
           </Select>
         </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          Active
-        </label>
       </Card>
 
       {!isTemplateWizard ? (
@@ -343,16 +496,9 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                   }}
                   className="mt-1"
                 >
-                  <option value="equals">Equals</option>
-                  <option value="not_equals">Does not equal</option>
-                  <option value="is_confirmed">Is confirmed</option>
-                  <option value="has_phone">Has phone</option>
-                  <option value="has_email">Has email</option>
-                  <option value="has_sms_consent">Has SMS consent</option>
-                  <option value="payment_status_equals">Payment status equals</option>
-                  <option value="deposit_paid">Deposit paid (balance remains)</option>
-                  <option value="balance_due">Balance due</option>
-                  <option value="payment_failed">Payment failed</option>
+                  {WORKFLOW_CONDITION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
                 </Select>
               </div>
               <div className="min-w-[120px] flex-1">
@@ -441,17 +587,35 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                 onChange={(e) => updateStep(index, { action: e.target.value as AppointmentWorkflowStep["action"] })}
                 className="mt-1.5"
               >
-                <option value="send_sms_customer">Send SMS to customer</option>
-                <option value="send_email_customer">Send email to customer</option>
-                <option value="send_sms_staff">Send SMS to staff</option>
-                <option value="send_email_staff">Send email to staff</option>
-                <option value="send_confirm_link">Send confirm link</option>
-                <option value="send_reschedule_link">Send reschedule link</option>
-                <option value="send_cancel_link">Send cancel link</option>
-                <option value="mark_confirmed">Mark confirmed</option>
-                <option value="stop_workflow">Stop workflow</option>
+                {WORKFLOW_ACTION_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </Select>
             </div>
+
+            {step.action === "send_webhook" ? (
+              <>
+                <div>
+                  <Label>Webhook URL (HTTPS)</Label>
+                  <Input
+                    value={step.webhookUrl || ""}
+                    onChange={(e) => updateStep(index, { webhookUrl: e.target.value })}
+                    className="mt-1.5 font-mono text-xs"
+                    placeholder="https://example.com/webhooks/appointments"
+                  />
+                </div>
+                <div>
+                  <Label>Webhook secret (optional)</Label>
+                  <Input
+                    type="password"
+                    value={step.webhookSecret || ""}
+                    onChange={(e) => updateStep(index, { webhookSecret: e.target.value })}
+                    className="mt-1.5 font-mono text-xs"
+                    placeholder="Signing secret"
+                  />
+                </div>
+              </>
+            ) : null}
 
             {(step.action === "send_sms_staff" || step.action === "send_email_staff") && staff.length > 0 ? (
               <div>
@@ -472,8 +636,9 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
             <div>
               <Label>Timing</Label>
               <Select
-                value={JSON.stringify(step.timing)}
+                value={timingSelectValue(step.timing)}
                 onChange={(e) => {
+                  if (e.target.value === "__custom__") return;
                   const preset = TIMING_PRESETS.find((p) => JSON.stringify(p.timing) === e.target.value);
                   if (preset) updateStep(index, { timing: preset.timing });
                 }}
@@ -482,9 +647,44 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                 {TIMING_PRESETS.map((p) => (
                   <option key={p.label} value={JSON.stringify(p.timing)}>{p.label}</option>
                 ))}
+                {timingSelectValue(step.timing) === "__custom__" ? (
+                  <option value="__custom__">{describeTiming(step.timing)} (template)</option>
+                ) : null}
               </Select>
             </div>
 
+            {step.action === "make_voice_call" ? (
+              <div className="space-y-3">
+                <div>
+                  <Label>Voice reminder template</Label>
+                  <Select
+                    value={step.voiceReminderTemplateId || ""}
+                    onChange={(e) =>
+                      updateStep(index, { voiceReminderTemplateId: e.target.value || undefined })
+                    }
+                    className="mt-1.5"
+                  >
+                    <option value="">Default voice reminder</option>
+                    {voiceTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="rounded-md border border-border bg-muted/30 p-3 text-xs whitespace-pre-wrap">
+                  <p className="font-semibold">Voice Call</p>
+                  {voiceStepSummary(step, voiceTemplates)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Configure templates on the{" "}
+                  <Link href="/appointments/voice-reminders" className="text-primary underline">
+                    Voice Reminders
+                  </Link>{" "}
+                  page.
+                </p>
+              </div>
+            ) : null}
+
+            {step.action !== "make_voice_call" && step.action !== "send_webhook" ? (
             <div>
               <Label>Message template</Label>
               <Textarea
@@ -495,28 +695,92 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
                 placeholder="Hi {{first_name}}, reminder for {{appointment_date}} at {{appointment_time}}..."
               />
             </div>
-
-            {step.stopIfConfirmed !== undefined ? (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={step.stopIfConfirmed}
-                  onChange={(e) => updateStep(index, { stopIfConfirmed: e.target.checked })}
-                />
-                Stop if appointment is confirmed
-              </label>
             ) : null}
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(step.stopIfConfirmed)}
+                onChange={(e) => updateStep(index, { stopIfConfirmed: e.target.checked })}
+              />
+              Stop if appointment is confirmed
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(step.stopIfPaid)}
+                onChange={(e) => updateStep(index, { stopIfPaid: e.target.checked })}
+              />
+              Stop if payment succeeded
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(step.stopIfRebooked)}
+                onChange={(e) => updateStep(index, { stopIfRebooked: e.target.checked })}
+              />
+              Stop if customer has a future appointment
+            </label>
           </div>
         ))}
       </Card>
+        </div>
 
-      <div className="flex justify-end gap-3">
-        <Button variant="outline" asChild>
-          <Link href="/appointments/workflows">Cancel</Link>
-        </Button>
-        <Button onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save workflow"}
-        </Button>
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <Card className="p-4 space-y-3">
+            <h2 className="font-display text-sm font-semibold">Workflow preview</h2>
+            <p className="text-xs text-muted-foreground">
+              Dry-run schedule and messages. No SMS or email is sent.
+            </p>
+            {preview ? (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Trigger</p>
+                  <p>{preview.triggerLabel}</p>
+                </div>
+                {preview.conditionsMatch !== null ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Conditions</p>
+                    <p>{preview.conditionsMatch ? "Would match sample appointment" : "Would not match"}</p>
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Steps</p>
+                  {preview.steps.map((step, i) => (
+                    <div key={step.stepId} className="rounded-md border border-border p-2 text-xs">
+                      <p className="font-semibold">{i + 1}. {step.name}</p>
+                      <p className="text-muted-foreground">{step.timingLabel}</p>
+                      <p className="text-muted-foreground">{step.action} · {step.channel}</p>
+                      {step.messagePreview ? (
+                        <p className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{step.messagePreview}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Click Test workflow to preview.</p>
+            )}
+          </Card>
+
+          <Card className="p-4 space-y-2 text-sm">
+            <h2 className="font-display text-sm font-semibold">Workflow details</h2>
+            <p><span className="text-muted-foreground">Name:</span> {name || "—"}</p>
+            <p><span className="text-muted-foreground">Trigger:</span> {triggerLabel(trigger)}</p>
+            <p><span className="text-muted-foreground">Steps:</span> {steps.length}</p>
+            <p><span className="text-muted-foreground">Status:</span> {active ? "Active" : "Paused"}</p>
+            {templateId ? <p><span className="text-muted-foreground">Template:</span> {template?.name}</p> : null}
+          </Card>
+        </aside>
+      </div>
+
+      <div className="flex justify-end">
+        <Link
+          href="/appointments/workflows"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-medium hover:bg-muted"
+        >
+          Cancel
+        </Link>
       </div>
     </div>
   );

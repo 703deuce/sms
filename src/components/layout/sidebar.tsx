@@ -13,6 +13,7 @@ import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
+import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { productLogoHome } from "@/lib/products/context";
 import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import {
@@ -76,6 +77,10 @@ function isNavHrefActive(pathname: string, search: string, href: string): boolea
       return pathname === pathPart || pathname.startsWith(`${pathPart}/`);
     }
     return false;
+  }
+
+  if (pathPart === "/appointments") {
+    return isAppointmentsNavItemActive("/appointments", pathname);
   }
 
   if (pathname === pathPart) {
@@ -420,7 +425,9 @@ export function Sidebar({
     router.refresh();
   }
 
-  const homeHref = realtorMode
+  const homeHref = isAppointmentsV1Primary()
+    ? appointmentsShellHome()
+    : realtorMode
     ? "/realtor/dashboard"
     : isLauncher
       ? "/app"

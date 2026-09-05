@@ -80,6 +80,69 @@ export async function submitCallerIdVerificationCode(input: {
   return { verified, providerResponse: res?.data ?? null };
 }
 
+/** Telnyx Verified Numbers webhook — e.g. caller_id_verification.completed */
+export async function processCallerIdVerificationWebhook(input: {
+  eventType: string;
+  eventPayload: Record<string, unknown>;
+}): Promise<{ handled: boolean }> {
+  const eventType = input.eventType.toLowerCase();
+  if (
+    !eventType.includes("caller_id") &&
+    !eventType.includes("verified_number") &&
+    !eventType.includes("verified_numbers")
+  ) {
+    return { handled: false };
+  }
+
+  const payload = input.eventPayload;
+  const phoneRaw =
+    (payload.phone_number as string | undefined) ||
+    (payload.verified_number as string | undefined) ||
+    ((payload.data as { phone_number?: string } | undefined)?.phone_number);
+  if (!phoneRaw) return { handled: false };
+
+  const phone = normalizeE164(phoneRaw);
+  const prisma = getPrisma();
+  const settings = await prisma.smartRoutingWorkspaceSettings.findFirst({
+    where: {
+      publicBusinessE164: phone,
+      callerIdStatus: { in: ["pending", "not_verified"] },
+    },
+  });
+  if (!settings) return { handled: false };
+
+  const statusRaw = String(
+    (payload.verification_status as string | undefined) ||
+      (payload.status as string | undefined) ||
+      eventType,
+  ).toLowerCase();
+
+  if (statusRaw.includes("fail") || statusRaw.includes("expired")) {
+    await prisma.smartRoutingWorkspaceSettings.update({
+      where: { workspaceId: settings.workspaceId },
+      data: {
+        callerIdStatus: "failed",
+        callerIdFailedReason: statusRaw,
+      },
+    });
+    return { handled: true };
+  }
+
+  if (statusRaw.includes("verified") || statusRaw.includes("completed") || statusRaw.includes("success")) {
+    await prisma.smartRoutingWorkspaceSettings.update({
+      where: { workspaceId: settings.workspaceId },
+      data: {
+        callerIdStatus: "verified",
+        callerIdVerifiedAt: new Date(),
+        callerIdFailedReason: null,
+      },
+    });
+    return { handled: true };
+  }
+
+  return { handled: false };
+}
+
 export async function getCallerIdVerificationStatus(workspaceId: string) {
   const prisma = getPrisma();
   const settings = await prisma.smartRoutingWorkspaceSettings.findUnique({

@@ -10,6 +10,7 @@ import { cn, estimateSmsSegments, formatCurrency, formatNumber, formatPhone } fr
 import { Check, Paperclip, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MediaPicker, AttachedMediaThumbs } from "@/components/messaging/media-picker";
 import { MASS_TEXT_MMS_CREDIT_MULTIPLIER } from "@/lib/mass-texting/pricing";
 
@@ -48,6 +49,7 @@ function mapContact(c: ApiContact): Contact {
 }
 
 export default function QuickSendPage() {
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [numberId, setNumberId] = useState("");
@@ -85,6 +87,12 @@ export default function QuickSendPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const contactId = searchParams.get("contact") || searchParams.get("contactId");
+    if (!contactId) return;
+    setSelectedIds((prev) => (prev.includes(contactId) ? prev : [contactId, ...prev]));
+  }, [searchParams]);
 
   const sendableContacts = contacts.filter((c) => c.status === "Subscribed");
 

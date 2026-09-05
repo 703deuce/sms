@@ -6,18 +6,20 @@ import { warmMctbInboundRoutingProfileForWorkspace } from "../src/lib/mctb/texml
 import { peekMctbInboundRoutingProfileByE164 } from "../src/lib/mctb/texml-ingress/routing-profile";
 
 const WS = process.env.WORKSPACE_ID || "ws_1";
-const E164_571 = "+15714073615";
+const ACTIVE_E164 = process.env.PHONE_E164 || "+15717491060";
 
 async function main() {
   await warmMctbInboundRoutingProfileForWorkspace(WS);
-  const profile = peekMctbInboundRoutingProfileByE164(E164_571);
+  const profile = peekMctbInboundRoutingProfileByE164(ACTIVE_E164);
   console.log(
     JSON.stringify(
       {
         ok: Boolean(profile),
         workspaceId: WS,
-        profile571: profile
+        activeE164: ACTIVE_E164,
+        profile: profile
           ? {
+              e164: profile.e164,
               routingToken: profile.routingToken,
               consentMode: profile.consentMode,
               automationActive: profile.automationActive,

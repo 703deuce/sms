@@ -46,6 +46,12 @@ export function certModeUsesPlayGather(mode?: ResolvedMctbTexmlCertMode): boolea
   return m === "B3" || m === "C3";
 }
 
+/** Zero-DB answer-first path: production D + cert press-1 gather modes (B/B3/C/C3). */
+export function certModeUsesInstantAnswerPath(mode?: ResolvedMctbTexmlCertMode): boolean {
+  const m = mode ?? resolveMctbTexmlCertMode();
+  return m === "D" || certModeForcesPress1Gather(m);
+}
+
 export function mctbEntryVoiceUrlWithCert(baseEntryUrl: string, cert?: string | null): string {
   const mode = resolveMctbTexmlCertMode(cert);
   if (mode === "D") return baseEntryUrl.replace(/\/$/, "");

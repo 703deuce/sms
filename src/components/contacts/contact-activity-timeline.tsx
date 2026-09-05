@@ -14,7 +14,7 @@ type TimelineCrmSync = {
 
 type TimelineItem = {
   id: string;
-  kind: "sms" | "call" | "voice_ai" | "voicemail";
+  kind: "sms" | "call" | "voice_ai" | "voicemail" | "voice_reminder";
   direction?: string | null;
   summary: string;
   status?: string | null;
@@ -35,6 +35,7 @@ const KIND_LABEL: Record<TimelineItem["kind"], string> = {
   sms: "SMS",
   call: "Call",
   voice_ai: "AI voice",
+  voice_reminder: "Voice reminder",
   voicemail: "Voicemail",
 };
 
@@ -42,6 +43,7 @@ const KIND_TONE: Record<TimelineItem["kind"], string> = {
   sms: "bg-primary/10 text-primary ring-primary/15",
   call: "bg-emerald-50 text-emerald-600 ring-emerald-600/15",
   voice_ai: "bg-violet-50 text-violet-600 ring-violet-600/15",
+  voice_reminder: "bg-sky-50 text-sky-600 ring-sky-600/15",
   voicemail: "bg-amber-50 text-amber-600 ring-amber-600/15",
 };
 

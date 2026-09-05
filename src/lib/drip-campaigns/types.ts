@@ -9,12 +9,16 @@ export type DripCampaignTriggerType = (typeof DRIP_CAMPAIGN_TRIGGERS)[number];
 
 export type DripDelayUnit = "immediate" | "minutes" | "hours" | "days";
 
+export type DripStepChannel = "sms" | "voice";
+
 export type DripStep = {
   id: string;
   delayAmount: number;
   delayUnit: DripDelayUnit;
+  channel?: DripStepChannel;
   message: string;
   mediaUrls?: string[];
+  voiceReminderTemplateId?: string;
 };
 
 export type DripTriggerConfig = {
@@ -86,8 +90,12 @@ export function parseDripSteps(raw: unknown): DripStep[] {
     .map((item, index) => {
       if (!item || typeof item !== "object") return null;
       const o = item as Record<string, unknown>;
+      const channel = (o.channel === "voice" ? "voice" : "sms") as DripStepChannel;
       const message = typeof o.message === "string" ? o.message : "";
-      if (!message.trim()) return null;
+      const voiceReminderTemplateId =
+        typeof o.voiceReminderTemplateId === "string" ? o.voiceReminderTemplateId : undefined;
+      if (!message.trim() && channel === "sms") return null;
+      if (channel === "voice" && !message.trim() && !voiceReminderTemplateId) return null;
       return {
         id: typeof o.id === "string" ? o.id : `step_${index + 1}`,
         delayAmount: Number(o.delayAmount ?? 0),
@@ -96,7 +104,9 @@ export function parseDripSteps(raw: unknown): DripStep[] {
           : index === 0
             ? "immediate"
             : "days") as DripDelayUnit,
+        channel,
         message,
+        voiceReminderTemplateId,
         mediaUrls: Array.isArray(o.mediaUrls)
           ? o.mediaUrls.filter((u): u is string => typeof u === "string")
           : undefined,
@@ -146,6 +156,7 @@ export function newDripStep(index: number): DripStep {
     id: `step_${Date.now()}_${index}`,
     delayAmount: index === 0 ? 0 : 1,
     delayUnit: index === 0 ? "immediate" : "days",
+    channel: "sms",
     message: "",
   };
 }

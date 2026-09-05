@@ -22,6 +22,7 @@ import {
 } from "@/lib/appointments/reminder-state";
 import { bookAppointment, cancelAppointment } from "@/lib/voice/calendar/booking";
 import { generateNativeSlots } from "@/lib/appointments/availability-engine";
+import { resolveMeetingUrlForAppointment, extractMeetingUrlFromText } from "@/lib/meeting-assistant/meeting-url";
 
 export async function getAvailability(
   workspaceId: string,
@@ -196,6 +197,10 @@ export async function createPlatformAppointment(
   if (!appointmentId) throw new Error("Booking failed");
 
   const startsAt = new Date(String(result.startsAt || input.startsAt));
+  const resolvedMeetingUrl =
+    extractMeetingUrlFromText(input.locationName) ||
+    extractMeetingUrlFromText(input.notes) ||
+    undefined;
   const metadata = appendTimeline(
     resetAppointmentReminders({
       source: input.source || "admin",
@@ -214,7 +219,17 @@ export async function createPlatformAppointment(
       staffId: input.staffId,
       locationId: input.locationId,
       location: input.locationName,
+      locationKind: input.locationName?.toLowerCase().includes("zoom")
+        ? "zoom"
+        : input.locationName?.toLowerCase().includes("meet")
+          ? "google_meet"
+          : input.locationName?.toLowerCase().includes("teams")
+            ? "microsoft_teams"
+            : input.locationName?.toLowerCase().includes("webex")
+              ? "webex"
+              : undefined,
       attendeeCount: input.attendeeCount,
+      meetingUrl: resolvedMeetingUrl,
       confirmUrl: publicActionUrl("confirm", confirmToken),
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
@@ -233,37 +248,64 @@ export async function createPlatformAppointment(
     },
   });
 
-  if (!input.skipSms && input.smsConsent && platform.reminders.confirmation.enabled) {
-    const body = renderAppointmentTemplate(
-      platform.reminders.confirmation.template,
-      appointmentMergeVars({
-        firstName: input.firstName,
-        businessName: workspace?.displayName || workspace?.name,
-        service: serviceName,
-        startsAt,
-        timezone: platform.timezone,
-        confirmLink: publicActionUrl("confirm", confirmToken),
-        cancelLink: publicActionUrl("cancel", cancelToken),
-        rescheduleLink: publicActionUrl("reschedule", rescheduleToken),
-      }),
+  try {
+    const { autoProvisionTransovoVideoForAppointment } = await import(
+      "@/lib/transovo-video/workflow-triggers"
     );
-    try {
-      const { sendQuickSms } = await import("@/lib/sms/send-quick");
-      await sendQuickSms({ workspaceId, to: input.phone, body });
-      await prisma.voiceAppointment.update({
-        where: { id: appointmentId },
-        data: {
-          metadata: markReminderSentInMeta(
-            appendTimeline(metadata, {
-              type: "confirmation_sent",
-              label: "Booking confirmation sent",
-            }) as AppointmentMetadata,
-            "confirmation_sent",
-          ) as object,
-        },
-      });
-    } catch (err) {
-      console.warn("[appointments] confirmation SMS failed", err);
+    await autoProvisionTransovoVideoForAppointment(workspaceId, appointmentId);
+  } catch (err) {
+    console.warn("[appointments] transovo video auto-provision failed", err);
+  }
+
+  const appointmentRow = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+  });
+  const latestMeta = (appointmentRow?.metadata || metadata) as AppointmentMetadata;
+  const meetingLink = latestMeta.meetingUrl || latestMeta.joinUrl || null;
+
+  if (!input.skipSms && input.smsConsent && platform.reminders.confirmation.enabled) {
+    const { shouldSkipPlatformRemindersForAppointment } = await import(
+      "@/lib/appointment-workflows/platform-guard"
+    );
+    const skipPlatformConfirmation = await shouldSkipPlatformRemindersForAppointment(
+      workspaceId,
+      input.serviceId,
+      serviceName,
+    );
+
+    if (!skipPlatformConfirmation) {
+      const body = renderAppointmentTemplate(
+        platform.reminders.confirmation.template,
+        appointmentMergeVars({
+          firstName: input.firstName,
+          businessName: workspace?.displayName || workspace?.name,
+          service: serviceName,
+          startsAt,
+          timezone: platform.timezone,
+          confirmLink: publicActionUrl("confirm", confirmToken),
+          cancelLink: publicActionUrl("cancel", cancelToken),
+          rescheduleLink: publicActionUrl("reschedule", rescheduleToken),
+          meetingLink,
+        }),
+      );
+      try {
+        const { sendQuickSms } = await import("@/lib/sms/send-quick");
+        await sendQuickSms({ workspaceId, to: input.phone, body });
+        await prisma.voiceAppointment.update({
+          where: { id: appointmentId },
+          data: {
+            metadata: markReminderSentInMeta(
+              appendTimeline(metadata, {
+                type: "confirmation_sent",
+                label: "Booking confirmation sent",
+              }) as AppointmentMetadata,
+              "confirmation_sent",
+            ) as object,
+          },
+        });
+      } catch (err) {
+        console.warn("[appointments] confirmation SMS failed", err);
+      }
     }
   }
 
@@ -274,6 +316,13 @@ export async function createPlatformAppointment(
     console.warn("[appointments] workflow trigger failed on book", err);
   }
 
+  try {
+    const { autoEnableNotetakerForAppointment } = await import("@/lib/meeting-assistant/workflow-triggers");
+    await autoEnableNotetakerForAppointment(workspaceId, appointmentId);
+  } catch (err) {
+    console.warn("[appointments] notetaker auto-enable failed", err);
+  }
+
   return { appointmentId, contactId, ...result };
 }
 
@@ -282,6 +331,8 @@ export async function updatePlatformAppointmentStatus(
   appointmentId: string,
   status: string,
   timeline?: { type: string; label: string; detail?: string },
+  initiatedBy: "customer" | "staff" | "system" | "api" | "workflow" = "staff",
+  options?: { confirmationSource?: import("./types").ConfirmationSource },
 ) {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
@@ -289,8 +340,12 @@ export async function updatePlatformAppointmentStatus(
   });
   if (!row) throw new Error("Appointment not found");
   let meta = (row.metadata || {}) as AppointmentMetadata;
+  meta = { ...meta, lastChangeInitiatedBy: initiatedBy };
   if (timeline) meta = appendTimeline(meta, timeline) as AppointmentMetadata;
   const normalized = status.toLowerCase();
+  if (normalized === "confirmed" && options?.confirmationSource) {
+    meta = { ...meta, confirmationSource: options.confirmationSource };
+  }
   if (["canceled", "cancelled", "completed", "no_show"].includes(normalized)) {
     meta = suppressAppointmentReminders(meta);
     if (normalized !== "canceled" && normalized !== "cancelled") {
@@ -315,7 +370,11 @@ export async function updatePlatformAppointmentStatus(
   return updated;
 }
 
-export async function cancelPlatformAppointment(workspaceId: string, appointmentId: string) {
+export async function cancelPlatformAppointment(
+  workspaceId: string,
+  appointmentId: string,
+  initiatedBy: "customer" | "staff" | "system" | "api" | "workflow" = "staff",
+) {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
     where: { id: appointmentId, workspaceId },
@@ -323,7 +382,10 @@ export async function cancelPlatformAppointment(workspaceId: string, appointment
   if (!row) throw new Error("Appointment not found");
   await cancelAppointment(workspaceId, appointmentId);
   const meta = appendTimeline(
-    suppressAppointmentReminders((row.metadata || {}) as AppointmentMetadata),
+    suppressAppointmentReminders({
+      ...(row.metadata || {}) as AppointmentMetadata,
+      lastChangeInitiatedBy: initiatedBy,
+    }),
     { type: "canceled", label: "Appointment canceled — pending reminders cleared" },
   ) as AppointmentMetadata;
 
@@ -357,6 +419,25 @@ export async function cancelPlatformAppointment(workspaceId: string, appointment
     console.warn("[appointments] workflow trigger failed on cancel", err);
   }
 
+  try {
+    const { cancelVideoMeetingForAppointment } = await import("@/lib/transovo-video/service");
+    await cancelVideoMeetingForAppointment(workspaceId, appointmentId);
+  } catch (err) {
+    console.warn("[appointments] video meeting cancel failed", err);
+  }
+
+  try {
+    const { findMeetingForAppointment, disableNotetakerForSession } = await import(
+      "@/lib/meeting-assistant/service"
+    );
+    const session = await findMeetingForAppointment(workspaceId, appointmentId);
+    if (session && session.enabled) {
+      await disableNotetakerForSession(workspaceId, session.id);
+    }
+  } catch (err) {
+    console.warn("[appointments] notetaker cancel failed", err);
+  }
+
   return canceled;
 }
 
@@ -379,6 +460,7 @@ export async function reschedulePlatformAppointment(
   workspaceId: string,
   appointmentId: string,
   startsAt: string,
+  initiatedBy: "customer" | "staff" | "system" | "api" | "workflow" = "staff",
 ) {
   const prisma = getPrisma();
   const row = await prisma.voiceAppointment.findFirst({
@@ -406,7 +488,10 @@ export async function reschedulePlatformAppointment(
   const start = new Date(startsAt);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
 
-  const baseMeta = resetAppointmentReminders((row.metadata || {}) as AppointmentMetadata);
+  const baseMeta = resetAppointmentReminders({
+    ...(row.metadata || {}) as AppointmentMetadata,
+    lastChangeInitiatedBy: initiatedBy,
+  });
   const metadata = appendTimeline(baseMeta, {
     type: "rescheduled",
     label: "Appointment rescheduled — reminders reset",
@@ -428,6 +513,25 @@ export async function reschedulePlatformAppointment(
     await onAppointmentRescheduled(workspaceId, appointmentId);
   } catch (err) {
     console.warn("[appointments] workflow trigger failed on reschedule", err);
+  }
+
+  try {
+    const { syncAppointmentMeetingSession } = await import("@/lib/meeting-assistant/service");
+    await syncAppointmentMeetingSession({ workspaceId, appointmentId });
+  } catch (err) {
+    console.warn("[appointments] notetaker reschedule sync failed", err);
+  }
+
+  try {
+    const { syncVideoMeetingSchedule } = await import("@/lib/transovo-video/service");
+    await syncVideoMeetingSchedule({
+      workspaceId,
+      appointmentId,
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+    });
+  } catch (err) {
+    console.warn("[appointments] video meeting reschedule sync failed", err);
   }
 
   return rescheduled;

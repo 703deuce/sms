@@ -27,6 +27,7 @@ const AI_AFTER_HOURS_PATH_PREFIXES = [
   "/voice/calls",
   "/voice/knowledge",
   "/voice/inbound-routing",
+  "/voice/setup",
   "/voice/receptionist",
 ] as const;
 

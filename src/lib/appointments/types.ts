@@ -1,4 +1,5 @@
 import { DEFAULT_SMS_CONSENT_TEXT } from "./sms-consent-disclosure";
+import type { VoiceRemindersPlatformConfig } from "@/lib/appointment-voice-reminders/types";
 
 export type AppointmentStatus =
   | "scheduled"
@@ -10,7 +11,9 @@ export type AppointmentStatus =
   | "cancelled"
   | "no_show";
 
-export type ReminderChannel = "sms" | "email";
+export type ReminderChannel = "sms" | "email" | "voice";
+
+export type ConfirmationSource = "sms" | "email" | "voice" | "web" | "staff" | "workflow" | "api";
 
 export type ReminderStepConfig = {
   enabled: boolean;
@@ -18,6 +21,8 @@ export type ReminderStepConfig = {
   minutesBefore?: number;
   template: string;
   label: string;
+  /** Voice reminder template when channel is voice */
+  voiceReminderTemplateId?: string;
 };
 
 export type DateOverride = {
@@ -78,7 +83,7 @@ export type AppointmentLocation = {
   name: string;
   address?: string;
   timezone?: string;
-  kind?: "office" | "store" | "branch" | "customer" | "phone" | "video" | "custom";
+  kind?: "office" | "store" | "branch" | "customer" | "phone" | "video" | "transovo_video" | "custom";
   active?: boolean;
 };
 
@@ -189,6 +194,8 @@ export type AppointmentPlatformConfig = {
     reminder24h: ReminderStepConfig;
     reminder2h: ReminderStepConfig;
   };
+  /** Automated outbound voice reminder templates and settings */
+  voiceReminders?: VoiceRemindersPlatformConfig;
 };
 
 export type AppointmentTypeConfig = {
@@ -214,6 +221,10 @@ export type AppointmentTypeConfig = {
   payment?: PaymentRequirement;
   groupBooking?: GroupBookingConfig;
   recurring?: RecurringConfig;
+  /** AI Notetaker defaults for this appointment type */
+  notetaker?: import("@/lib/meeting-assistant/types").EventTypeNotetakerConfig;
+  /** Transovo Video defaults for this appointment type */
+  transovoVideo?: import("@/lib/transovo-video/types").EventTypeVideoConfig;
 };
 
 export type AppointmentTimelineEvent = {
@@ -258,6 +269,17 @@ export type AppointmentMetadata = {
   refundStatus?: string;
   paymentHoldExpiresAt?: string;
   paymentAbandonedAt?: string;
+  paymentCheckoutUrl?: string;
+  initiatedBy?: "customer" | "staff" | "system" | "api" | "workflow";
+  lastChangeInitiatedBy?: "customer" | "staff" | "system" | "api" | "workflow";
+  confirmationSource?: ConfirmationSource;
+  meetingUrl?: string;
+  joinUrl?: string;
+  videoMeetingId?: string;
+  notetakerEnabled?: boolean;
+  meetingSessionId?: string;
+  locationKind?: string;
+  eventUrl?: string;
   recurringSeriesId?: string;
   recurringOccurrenceIndex?: number;
   attendeeCount?: number;

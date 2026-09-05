@@ -175,7 +175,7 @@ export function PremiumSuccessPanel({
         { label: "Park This Number", href: "/numbers", icon: Vault },
         { label: "Forward Calls", href: "/phone/settings", icon: Forward },
         { label: "Smart Routing", href: "/smart-routing", icon: Phone },
-        { label: "AI Receptionist", href: "/voice/receptionist", icon: Brain },
+        { label: "AI Receptionist", href: "/voice/setup", icon: Brain },
         { label: "Business Texting", href: "/compliance", icon: MessageSquare },
       ];
 

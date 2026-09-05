@@ -273,14 +273,27 @@ export async function processDripCampaignStep(payload: {
   const body = await mergeMessageVars(enrollment.workspaceId, contact, step.message);
   const idempotencyKey = `drip:${enrollment.dripCampaignId}:${enrollment.contactId}:${payload.stepIndex}`;
 
-  await sendQuickSms({
-    workspaceId: enrollment.workspaceId,
-    to: contact.phone,
-    body,
-    from: fromE164,
-    mediaUrls: step.mediaUrls,
-    idempotencyKey,
-  });
+  if ((step.channel || "sms") === "voice") {
+    const { executeDripVoiceStep } = await import("@/lib/appointment-voice-reminders/drip-voice");
+    await executeDripVoiceStep({
+      workspaceId: enrollment.workspaceId,
+      contactId: enrollment.contactId,
+      phone: contact.phone,
+      message: step.message,
+      voiceReminderTemplateId: step.voiceReminderTemplateId,
+      dripCampaignId: enrollment.dripCampaignId,
+      stepIndex: payload.stepIndex,
+    });
+  } else {
+    await sendQuickSms({
+      workspaceId: enrollment.workspaceId,
+      to: contact.phone,
+      body,
+      from: fromE164,
+      mediaUrls: step.mediaUrls,
+      idempotencyKey,
+    });
+  }
 
   const now = new Date();
   const nextIndex = payload.stepIndex + 1;

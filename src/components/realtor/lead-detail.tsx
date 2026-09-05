@@ -112,10 +112,13 @@ export function RealtorLeadDetailView({
               <Phone className="h-4 w-4" />
               Call
             </Link>
-            <Link href={`/inbox?contact=${leadId}`} className="realtor-btn-outline">
+            <Link href={`/conversations?contact=${leadId}`} className="realtor-btn-outline">
               Text
             </Link>
-            <Link href={`/send?contact=${leadId}`} className="realtor-btn-outline">
+            <Link
+              href={email ? `mailto:${email}` : `/send/quick?contact=${leadId}`}
+              className="realtor-btn-outline"
+            >
               <Mail className="h-4 w-4" />
               Email
             </Link>
@@ -289,7 +292,7 @@ export function RealtorLeadDetailView({
                 </li>
                 <li>
                   <p className="font-medium text-[#111827]">Send pre-approval resources</p>
-                  <Link href={`/send?contact=${leadId}`} className="mt-2 realtor-btn-outline inline-flex text-[12px]">
+                  <Link href={`/send/quick?contact=${leadId}`} className="mt-2 realtor-btn-outline inline-flex text-[12px]">
                     Send Resources
                   </Link>
                 </li>

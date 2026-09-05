@@ -181,19 +181,19 @@ export function SetupHomeView({
             <h3 className="font-semibold text-[#111827]">Need help?</h3>
             <ul className="mt-3 space-y-3 text-[13px]">
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                <Link href="/getting-started" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
                   <Play className="h-4 w-4 text-[#6366f1]" />
                   Watch Setup Guide
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                <Link href="/getting-started" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
                   <span className="flex h-4 w-4 items-center justify-center text-[#6366f1]">📅</span>
                   Join Live Training
                 </Link>
               </li>
               <li>
-                <Link href="/help" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
+                <Link href="/getting-started" className="flex items-center gap-2 text-[#374151] hover:text-[#6366f1]">
                   <Headphones className="h-4 w-4 text-[#6366f1]" />
                   Contact Support
                 </Link>

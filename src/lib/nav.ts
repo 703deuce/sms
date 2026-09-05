@@ -185,6 +185,9 @@ export const appNav: NavItem[] = [
           { label: "All Conversations", href: "/conversations" },
           { label: "Assigned to Me", href: "/conversations?filter=mine" },
           { label: "Unassigned", href: "/conversations?filter=unassigned" },
+          { label: "Inbox (legacy)", href: "/inbox" },
+          { label: "My Inbox (legacy)", href: "/inbox/mine" },
+          { label: "Unassigned Inbox (legacy)", href: "/inbox/unassigned" },
         ],
       },
       {
@@ -472,7 +475,7 @@ export const appNav: NavItem[] = [
 export const mobilePrimaryNav = [
   { label: "Home", href: "/dashboard", icon: LayoutDashboard },
   { label: "Calls", href: "/voice/calls", icon: PhoneCall },
-  { label: "Receptionist", href: "/voice/receptionist", icon: AudioLines },
+  { label: "Receptionist", href: "/voice/setup", icon: AudioLines },
 ];
 
 export const adminNav: NavItem[] = [

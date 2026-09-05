@@ -1,6 +1,6 @@
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { normalizeAppointmentStatus } from "@/lib/appointments/types";
-import type { WorkflowCondition, WorkflowConditionGroup } from "./types";
+import type { AppointmentWorkflowTrigger, WorkflowCondition, WorkflowConditionGroup } from "./types";
 
 export type AppointmentConditionContext = {
   appointmentId: string;
@@ -15,8 +15,15 @@ export type AppointmentConditionContext = {
   metadata: AppointmentMetadata;
   contactPhone?: string | null;
   contactEmail?: string | null;
+  contactId?: string | null;
   paymentStatus?: string | null;
+  hasFutureAppointment?: boolean;
+  workflowTrigger?: AppointmentWorkflowTrigger;
 };
+
+function normalizeInitiatedBy(value: unknown): string {
+  return String(value || "").toLowerCase();
+}
 
 function evaluateCondition(
   condition: WorkflowCondition,
@@ -76,6 +83,21 @@ function evaluateCondition(
       return (ctx.metadata.balanceDueCents ?? 0) > 0;
     case "payment_failed":
       return ctx.paymentStatus === "failed";
+    case "customer_has_future_appointment":
+      return ctx.hasFutureAppointment === true;
+    case "customer_no_future_appointment":
+      return ctx.hasFutureAppointment === false;
+    case "change_initiated_by_equals":
+      return (
+        normalizeInitiatedBy(ctx.metadata.lastChangeInitiatedBy || ctx.metadata.initiatedBy) ===
+        normalizeInitiatedBy(condition.value)
+      );
+    case "is_recurring":
+      return Boolean(ctx.metadata.recurringSeriesId);
+    case "not_recurring":
+      return !ctx.metadata.recurringSeriesId;
+    case "is_first_recurring_occurrence":
+      return Boolean(ctx.metadata.recurringSeriesId) && ctx.metadata.recurringOccurrenceIndex === 1;
     default:
       return true;
   }
@@ -105,4 +127,32 @@ export function workflowMatchesAppointmentType(
     if (id && scope.typeIds.includes(id)) return true;
   }
   return false;
+}
+
+export function shouldAllowStatusForWorkflow(
+  trigger: AppointmentWorkflowTrigger,
+  status: string,
+): boolean {
+  const normalized = normalizeAppointmentStatus(status);
+  if (normalized === "canceled") return trigger === "appointment_canceled";
+
+  switch (trigger) {
+    case "appointment_completed":
+    case "after_appointment":
+      return normalized === "completed";
+    case "appointment_no_show":
+      return normalized === "no_show";
+    case "payment_required":
+    case "payment_failed":
+    case "balance_due":
+    case "deposit_paid":
+      return normalized !== "completed" && normalized !== "no_show";
+    case "payment_received":
+      return true;
+    case "meeting_completed":
+    case "meeting_recap_ready":
+      return !["canceled", "no_show"].includes(normalized);
+    default:
+      return !["completed", "no_show"].includes(normalized);
+  }
 }

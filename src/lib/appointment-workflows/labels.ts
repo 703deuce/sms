@@ -14,11 +14,14 @@ export function triggerLabel(trigger: AppointmentWorkflowTrigger): string {
     booking_requested: "Booking requested",
     booking_approved: "Booking approved",
     booking_rejected: "Booking rejected",
-    payment_received: "Payment received",
+    payment_received: "Payment succeeded",
+    payment_required: "Payment required",
     payment_failed: "Payment failed",
     deposit_paid: "Deposit paid",
     balance_due: "Balance due",
     waitlist_slot_available: "Waitlist slot available",
+    meeting_completed: "Meeting completed",
+    meeting_recap_ready: "Meeting recap ready",
   };
   return labels[trigger] || trigger;
 }

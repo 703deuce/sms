@@ -10,6 +10,7 @@ import type {
   CalendarViewMode,
   CalendarWeekDay,
   CalendarWeekEvent,
+  AppointmentMeetingIndicator,
 } from "./types";
 
 export type CalendarApiAppointment = {
@@ -22,6 +23,7 @@ export type CalendarApiAppointment = {
   status: string;
   timezone: string | null;
   metadata?: { location?: string };
+  meeting?: AppointmentMeetingIndicator;
 };
 
 const HOUR_H = 56;
@@ -248,6 +250,7 @@ function mapWeekEvents(
         name: row.inviteeName || "Customer",
         type,
         status: mapUiStatus(row.status),
+        meeting: row.meeting,
       };
     });
 }
@@ -342,6 +345,7 @@ function mapAgenda(
         name: row.inviteeName || "Customer",
         status: mapUiStatus(row.status),
         dot: TYPE_COLORS[type]?.dot || TYPE_COLORS.consultation.dot,
+        meeting: row.meeting,
       };
     });
 
@@ -394,6 +398,7 @@ function mapNextAppointment(appointments: CalendarApiAppointment[]): CalendarNex
     method: upcoming.metadata?.location || "Phone Call",
     phone: upcoming.inviteePhone || "—",
     status: mapUiStatus(upcoming.status),
+    meeting: upcoming.meeting,
   };
 }
 

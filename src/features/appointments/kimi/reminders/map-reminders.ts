@@ -1,5 +1,5 @@
 import { DEFAULT_REMINDER_TEMPLATES } from "@/lib/appointments/types";
-import type { ReminderStepConfig } from "@/lib/appointments/types";
+import type { ReminderChannel, ReminderStepConfig } from "@/lib/appointments/types";
 import { estimateSmsSegments } from "@/lib/utils";
 import type {
   ReminderItem,
@@ -65,6 +65,7 @@ function mapReminderItem(
     title: step.label,
     badge: meta.badge,
     description: meta.description,
+    channel: step.channel || "sms",
     template: step.template,
     preview,
     characters,
@@ -118,6 +119,20 @@ export function patchReminderEnabled(
     reminders: {
       ...config.reminders,
       [stepKey]: { ...config.reminders[stepKey], enabled },
+    },
+  };
+}
+
+export function patchReminderChannel(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepKey,
+  channel: ReminderChannel,
+): RemindersApiConfig {
+  return {
+    ...config,
+    reminders: {
+      ...config.reminders,
+      [stepKey]: { ...config.reminders[stepKey], channel },
     },
   };
 }

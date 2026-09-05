@@ -8,11 +8,13 @@ export type ReminderItem = {
   title: string;
   badge: string;
   description: string;
+  channel: ReminderChannel;
   template: string;
   preview: string;
   characters: number;
   segments: number;
   enabled: boolean;
+  voiceReminderTemplateId?: string;
 };
 
 export type ReminderTestOption = {
@@ -31,6 +33,7 @@ export type RemindersPageActions = {
   onSave: () => void;
   onToggle: (stepKey: ReminderStepKey) => void;
   onTemplateChange: (stepKey: ReminderStepKey, template: string) => void;
+  onChannelChange: (stepKey: ReminderStepKey, channel: ReminderChannel) => void;
   onResetTemplate: (stepKey: ReminderStepKey) => void;
   onTestPhoneChange: (phone: string) => void;
   onTestStepChange: (stepKey: ReminderStepKey) => void;

@@ -3,6 +3,8 @@
 import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
+import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
+import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
 
 interface Props {
   form: AppointmentTypeFormState;
@@ -97,12 +99,25 @@ export default function TypeEditorPanel({
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="label">Location</label>
-              <input
+              <select
                 className="input w-full"
                 value={form.location}
-                onChange={(e) => onFormChange("location", e.target.value)}
-                placeholder="In-office, video call, phone…"
-              />
+                onChange={(e) => {
+                  const value = e.target.value;
+                  onFormChange("location", value);
+                  onFormChange("transovoVideoEnabled", value === "Transovo Video");
+                }}
+              >
+                <option value="">Select location</option>
+                <option value="In person">In person</option>
+                <option value="Phone call">Phone call</option>
+                <option value="Transovo Video">Transovo Video</option>
+                <option value="Zoom">Zoom</option>
+                <option value="Google Meet">Google Meet</option>
+                <option value="Microsoft Teams">Microsoft Teams</option>
+                <option value="Webex">Webex</option>
+                <option value="Custom meeting link">Custom meeting link</option>
+              </select>
             </div>
             <div>
               <label className="label">Price (optional)</label>
@@ -142,6 +157,8 @@ export default function TypeEditorPanel({
               </span>
             </div>
           </div>
+          <EventTypeVideoSettings form={form} onChange={onFormChange} />
+          <EventTypeNotetakerSettings form={form} onChange={onFormChange} />
         </section>
 
         <section>

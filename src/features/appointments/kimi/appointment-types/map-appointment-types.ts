@@ -79,6 +79,20 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   maxBookingsPerDay: undefined,
   maxBookingsPerWeek: undefined,
   maxPerTypePerDay: undefined,
+  transovoVideoEnabled: false,
+  videoMaxParticipants: 10,
+  videoRequireGuestEmail: true,
+  videoRequireHost: false,
+  videoWaitingRoom: false,
+  videoRecordingMode: "off",
+  videoTranscription: false,
+  videoAiRecap: false,
+  notetakerEnabled: false,
+  notetakerAutoJoin: false,
+  notetakerTranscript: true,
+  notetakerSummary: true,
+  notetakerActionItems: true,
+  notetakerSummaryTemplate: "general",
 };
 
 function parsePrice(priceDisplay?: string): { price: number | null; free: boolean } {
@@ -180,6 +194,20 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     maxBookingsPerDay: cfg.bookingLimits?.maxBookingsPerDay,
     maxBookingsPerWeek: cfg.bookingLimits?.maxBookingsPerWeek,
     maxPerTypePerDay: cfg.bookingLimits?.maxPerTypePerDay,
+    transovoVideoEnabled: Boolean(cfg.transovoVideo?.enabled || cfg.location === "Transovo Video"),
+    videoMaxParticipants: cfg.transovoVideo?.maxParticipants ?? 10,
+    videoRequireGuestEmail: cfg.transovoVideo?.requireGuestEmail ?? true,
+    videoRequireHost: cfg.transovoVideo?.requireHost ?? false,
+    videoWaitingRoom: cfg.transovoVideo?.waitingRoom ?? false,
+    videoRecordingMode: cfg.transovoVideo?.recordingMode ?? "off",
+    videoTranscription: cfg.transovoVideo?.transcription ?? false,
+    videoAiRecap: cfg.transovoVideo?.aiRecap ?? false,
+    notetakerEnabled: cfg.notetaker?.enabled ?? false,
+    notetakerAutoJoin: cfg.notetaker?.autoJoin ?? false,
+    notetakerTranscript: cfg.notetaker?.transcriptEnabled ?? true,
+    notetakerSummary: cfg.notetaker?.summaryEnabled ?? true,
+    notetakerActionItems: cfg.notetaker?.actionItemsEnabled ?? true,
+    notetakerSummaryTemplate: cfg.notetaker?.summaryTemplate ?? "general",
   };
 }
 
@@ -258,6 +286,29 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
             maxPerTypePerDay: form.maxPerTypePerDay,
           }
         : undefined,
+    transovoVideo:
+      form.transovoVideoEnabled || form.location === "Transovo Video"
+        ? {
+            enabled: true,
+            maxParticipants: form.videoMaxParticipants || 10,
+            requireGuestEmail: form.videoRequireGuestEmail,
+            requireHost: form.videoRequireHost,
+            waitingRoom: form.videoWaitingRoom,
+            recordingMode: form.videoRecordingMode,
+            transcription: form.videoTranscription,
+            aiRecap: form.videoAiRecap,
+          }
+        : undefined,
+    notetaker: form.notetakerEnabled
+      ? {
+          enabled: true,
+          autoJoin: form.notetakerAutoJoin,
+          transcriptEnabled: form.notetakerTranscript,
+          summaryEnabled: form.notetakerSummary,
+          actionItemsEnabled: form.notetakerActionItems,
+          summaryTemplate: (form.notetakerSummaryTemplate || "general") as import("@/lib/meeting-assistant/types").SummaryTemplateId,
+        }
+      : undefined,
   };
 
   return {

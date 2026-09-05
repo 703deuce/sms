@@ -29,13 +29,13 @@ export function LocationsConnected() {
       const json = res.ok ? await res.json() : { data: {} };
       const list = (json.data?.locations || []) as AppointmentLocation[];
       setLocations(list);
-      if (list.length && !selectedId) setSelectedId(list[0].id);
+      setSelectedId((current) => current ?? (list[0]?.id ?? null));
     } catch {
       setError("Could not load locations");
     } finally {
       setLoading(false);
     }
-  }, [selectedId]);
+  }, []);
 
   useEffect(() => {
     load();

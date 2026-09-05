@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { KimiCredits, KimiNavItem, KimiSidebarUser } from "./types";
+import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 
 /** Kimi session 2026-08-30T22-24-04-122Z-b95821 — production wiring only. */
 export interface TransovoSidebarProps {
@@ -113,6 +114,14 @@ function CollapsedNavButton({ item, active }: { item: KimiNavItem; active: boole
   );
 }
 
+function isChildNavActive(childHref: string, activeRoute: string): boolean {
+  const childPath = childHref.split("?")[0];
+  const routePath = activeRoute.split("?")[0];
+  if (routePath === childPath) return true;
+  if (childPath !== "/contacts" && routePath.startsWith(`${childPath}/`)) return true;
+  return false;
+}
+
 export function TransovoSidebar({
   navItems,
   activeRoute = "/conversations",
@@ -128,10 +137,16 @@ export function TransovoSidebar({
   const toggleGroup = (label: string) =>
     setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
 
-  const isActive = (item: KimiNavItem) =>
-    activeRoute === item.href ||
-    item.children?.some((c) => activeRoute === c.href) ||
-    activeRoute.startsWith(`${item.href}/`);
+  const isActive = (item: KimiNavItem) => {
+    if (item.href === "/appointments" || item.href.startsWith("/appointments/")) {
+      return isAppointmentsNavItemActive(item.href, activeRoute);
+    }
+    return (
+      activeRoute === item.href ||
+      item.children?.some((c) => activeRoute === c.href) ||
+      activeRoute.startsWith(`${item.href}/`)
+    );
+  };
 
   const creditsPct = Math.min(
     100,
@@ -184,7 +199,7 @@ export function TransovoSidebar({
                     <Link
                       key={child.label}
                       href={child.href}
-                      data-active={activeRoute === child.href ? "true" : undefined}
+                      data-active={isChildNavActive(child.href, activeRoute) ? "true" : undefined}
                       className="transovo-nav-item flex w-full items-center rounded-md px-2 py-[6px] text-[13px] text-muted-foreground hover:text-foreground"
                     >
                       <span className="whitespace-nowrap">{child.label}</span>

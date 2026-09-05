@@ -10,11 +10,14 @@ import {
 import {
   certModeForcesPress1Gather,
   certModeSkipsConsentBackend,
+  certModeUsesInstantAnswerPath,
   certModeUsesPlayGather,
   isMinimalCertMode,
   isPlayOnlyCertMode,
   resolveMctbTexmlCertMode,
 } from "@/lib/mctb/texml-ingress/cert-mode";
+import { buildMctbInstantAnswerTestTexml, certModeUsesZeroDbAnswerTest } from "@/lib/mctb/texml-ingress/answer-test-texml";
+import { logMctbEntryTiming } from "@/lib/mctb/texml-ingress/entry-timing";
 import { buildInstantMctbInboundTexml } from "@/lib/mctb/texml-ingress/inbound-texml";
 import { buildMinimalCertTexml } from "@/lib/mctb/texml-ingress/minimal-texml";
 import {
@@ -28,6 +31,11 @@ import {
   warmMctbInboundRoutingProfileForE164,
 } from "@/lib/mctb/texml-ingress/routing-profile";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
+import {
+  beginMctbEntryCfnaProbe,
+  finishMctbEntryCfnaProbe,
+  type MctbEntryProbeHandle,
+} from "@/lib/mctb/cfna-ingress-probe";
 import { normalizeForwardedFromE164, parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 
 export const runtime = "nodejs";
@@ -37,8 +45,47 @@ const CONTROLLED_HANGUP = buildMctbConsentControlledHangupTexml(
   "We are unable to complete your call. Goodbye.",
 );
 
-function texmlResponse(body: string, meta?: Record<string, unknown>) {
+function texmlResponse(
+  body: string,
+  meta?: Record<string, unknown>,
+  probe?: MctbEntryProbeHandle | null,
+  timing?: { callSid?: string | null; to?: string | null; certMode?: string | null },
+) {
   const xml = wrapMctbConsentTexmlBody(body);
+  const branch = typeof meta?.branch === "string" ? meta.branch : null;
+  const latencyMs =
+    typeof meta?.latencyMs === "number" ? meta.latencyMs : undefined;
+
+  logMctbEntryTiming({
+    phase: "response_complete",
+    callSid: timing?.callSid,
+    to: timing?.to,
+    certMode: timing?.certMode,
+    branch,
+    extra: {
+      responseStatus: 200,
+      xmlBytes: Buffer.byteLength(xml, "utf8"),
+      latencyMs,
+      instant: meta?.instant ?? null,
+    },
+  });
+
+  if (
+    branch === "press_1_gather" ||
+    branch === "cert_play_only" ||
+    branch === "cert_minimal" ||
+    branch === "answer_test_say"
+  ) {
+    logMctbEntryTiming({
+      phase: "gather_start",
+      callSid: timing?.callSid,
+      to: timing?.to,
+      certMode: timing?.certMode,
+      branch,
+      extra: { note: "TeXML returned with media-generating verb — Telnyx should answer on execute" },
+    });
+  }
+
   console.log(
     JSON.stringify({
       source: "mctb-entry",
@@ -50,6 +97,14 @@ function texmlResponse(body: string, meta?: Record<string, unknown>) {
       ...meta,
     }),
   );
+  finishMctbEntryCfnaProbe(probe, {
+    texmlGenerated: true,
+    responseStatus: 200,
+    texmlBranch: branch,
+    xmlBytes: Buffer.byteLength(xml, "utf8"),
+    errorPayload:
+      typeof meta?.handlerError === "string" ? { message: meta.handlerError } : null,
+  });
   return new NextResponse(xml, {
     status: 200,
     headers: { "Content-Type": TEXML_CONTENT_TYPE },
@@ -92,14 +147,23 @@ function scheduleDemoCallDetect(input: {
   );
 }
 
+type EntryTimingCtx = {
+  callSid: string | null;
+  to: string | null;
+  certMode: string;
+};
+
 /**
  * TeXML-first MCTB ingress — FROZEN pipeline mctb_texml_final_v1
- * Production cert=D returns XML immediately from setup-time routing profile (no DB).
+ * Answer-first: cert D and cert press-1 modes return Gather/Play TeXML with zero DB on the hot path.
  * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md
  */
 export async function POST(request: Request) {
   const started = Date.now();
   const requestUrl = new URL(request.url);
+  let entryProbe: MctbEntryProbeHandle | null = null;
+  let timingCtx: EntryTimingCtx = { callSid: null, to: null, certMode: "D" };
+
   try {
     const fields = await parseMctbTexmlFields(request);
     const from = pickMctbTexmlField(fields, "From", "from", "Caller");
@@ -109,6 +173,70 @@ export async function POST(request: Request) {
     const certMode = resolveMctbTexmlCertMode(requestUrl.searchParams.get("cert"));
     const routingTokenParam = requestUrl.searchParams.get("r");
 
+    timingCtx = { callSid: callSid || null, to: to || null, certMode };
+
+    logMctbEntryTiming({
+      phase: "voice_url_arrival",
+      callSid: callSid,
+      to,
+      certMode,
+    });
+    logMctbEntryTiming({
+      phase: "fields_parsed",
+      callSid: callSid,
+      to,
+      certMode,
+      extra: { parseMs: Date.now() - started },
+    });
+
+    // ── cert=C3 zero-DB answer test: Say only, immediate pickup ─────────────
+    if (certModeUsesZeroDbAnswerTest(certMode)) {
+      logMctbEntryTiming({
+        phase: "texml_build_start",
+        callSid,
+        to,
+        certMode,
+        extra: { path: "zero_db_answer_test_say", db: false },
+      });
+      traceMctbTexml("MCTB_TEXML_RETURNED", {
+        branch: "answer_test_say",
+        latencyMs: Date.now() - started,
+        to,
+        callSid,
+        certMode,
+        instant: true,
+        zeroDb: true,
+      });
+      traceMctbTexml("MCTB_PROMPT_STARTED", {
+        branch: "answer_test_say",
+        callSid,
+        to,
+        certMode,
+        instant: true,
+        zeroDb: true,
+      });
+      return texmlResponse(
+        buildMctbInstantAnswerTestTexml(),
+        { branch: "answer_test_say", certMode, instant: true, zeroDb: true, latencyMs: Date.now() - started },
+        null,
+        timingCtx,
+      );
+    }
+
+    entryProbe = beginMctbEntryCfnaProbe({
+      payload: { ...fields, connection_id: connectionId, call_control_id: callSid },
+      requestUrl: requestUrl.toString(),
+      note: "mctb-entry voice_url invoked — programmable TeXML ingress reached",
+    });
+
+    const respondTexml = (body: string, meta?: Record<string, unknown>) =>
+      texmlResponse(
+        body,
+        { ...meta, latencyMs: Date.now() - started },
+        entryProbe,
+        timingCtx,
+      );
+
     traceMctbTexml("MCTB_INGRESS", {
       to,
       from: from ? "[present]" : "[missing]",
@@ -116,6 +244,7 @@ export async function POST(request: Request) {
       connectionId,
       certMode,
       routingToken: routingTokenParam || null,
+      parseMs: Date.now() - started,
     });
 
     if (isMinimalCertMode(certMode)) {
@@ -125,7 +254,7 @@ export async function POST(request: Request) {
         to,
         callSid,
       });
-      return texmlResponse(buildMinimalCertTexml(), { branch: "cert_minimal", certMode });
+      return respondTexml(buildMinimalCertTexml(), { branch: "cert_minimal", certMode });
     }
 
     if (isPlayOnlyCertMode(certMode)) {
@@ -137,7 +266,7 @@ export async function POST(request: Request) {
         callSid,
         audioUrl,
       });
-      return texmlResponse(buildMctbCertPlayOnlyTexml(), {
+      return respondTexml(buildMctbCertPlayOnlyTexml(), {
         branch: "cert_play_only",
         certMode,
         audioUrl,
@@ -146,7 +275,7 @@ export async function POST(request: Request) {
 
     if (!to) {
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "missing_to_did" });
-      return texmlResponse(CONTROLLED_HANGUP, { branch: "error_missing_to" });
+      return respondTexml(CONTROLLED_HANGUP, { branch: "error_missing_to" });
     }
 
     const forwardedFrom =
@@ -154,13 +283,21 @@ export async function POST(request: Request) {
       parseTelnyxForwardedFrom(fields as Record<string, unknown>) ||
       "";
 
-    // ── Instant path (cert=D): zero DB before first audio ──────────────────
-    if (certMode === "D") {
+    // ── Instant answer-first path (cert=D, B, B3, C, C3): zero DB before TeXML ─
+    if (certModeUsesInstantAnswerPath(certMode)) {
+      logMctbEntryTiming({
+        phase: "texml_build_start",
+        callSid,
+        to,
+        certMode,
+        extra: { path: "instant" },
+      });
+
       let profile =
         peekMctbInboundRoutingProfileByToken(routingTokenParam) ||
         peekMctbInboundRoutingProfileByE164(to);
 
-      let cacheHit = Boolean(profile);
+      const cacheHit = Boolean(profile);
       if (!profile) {
         profile = buildFailOpenInboundRoutingProfile(to);
         scheduleInboundWarm(to);
@@ -189,11 +326,12 @@ export async function POST(request: Request) {
               event: "routing_profile_cache_miss_fail_open",
               to,
               callSid,
+              certMode,
             }),
           );
         }
 
-        if (!certModeSkipsConsentBackend(certMode) && from && profile.workspaceId) {
+        if (!certModeSkipsConsentBackend(certMode) && from) {
           scheduleDemoCallDetect({
             from,
             to: profile.e164 || to,
@@ -203,7 +341,15 @@ export async function POST(request: Request) {
           });
         }
 
-        return texmlResponse(instant.body, {
+        traceMctbTexml("MCTB_PROMPT_STARTED", {
+          branch: instant.branch,
+          callSid,
+          to: profile.e164 || to,
+          certMode,
+          instant: true,
+        });
+
+        return respondTexml(instant.body, {
           branch: instant.branch,
           certMode,
           consentMode: profile.consentMode,
@@ -213,7 +359,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Cert / legacy slow path (B, C, C3, cache-miss non-D) ───────────────
+    // ── Legacy slow path (unprovisioned / unexpected cert) ───────────────────
+    logMctbEntryTiming({
+      phase: "texml_build_start",
+      callSid,
+      to,
+      certMode,
+      extra: { path: "slow_db" },
+    });
+
     const { resolveMctbTexmlIngressConfig } = await import("@/lib/mctb/texml-ingress/config-cache");
     const { MCTB_CONSENT_MODE_EXISTING } = await import("@/lib/mctb/consent-mode");
     const { MCTB_TEXML_ROUTING_MODE } = await import("@/lib/mctb/texml-ingress/constants");
@@ -228,12 +382,12 @@ export async function POST(request: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "config_db_error", error: message, to });
-      return texmlResponse(CONTROLLED_HANGUP, { branch: "config_db_error" });
+      return respondTexml(CONTROLLED_HANGUP, { branch: "config_db_error" });
     }
 
     if (!config) {
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "unknown_or_unprovisioned_did", to });
-      return texmlResponse(CONTROLLED_HANGUP, { branch: "unknown_did" });
+      return respondTexml(CONTROLLED_HANGUP, { branch: "unknown_did" });
     }
 
     if (config.branch === "ai_assistant" && config.routingMode === "telnyx_assistant") {
@@ -242,7 +396,7 @@ export async function POST(request: Request) {
         reason: "did_still_on_ai_assistant_routing",
         routingMode: config.routingMode,
       });
-      return texmlResponse(
+      return respondTexml(
         buildMctbConsentControlledHangupTexml(
           "This line is configured for AI receptionist routing. Goodbye.",
         ),
@@ -298,10 +452,11 @@ export async function POST(request: Request) {
         voicemailPlayUrl,
         instant: false,
       });
-      return texmlResponse(voicemailBody, {
+      return respondTexml(voicemailBody, {
         branch: consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "paused_voicemail",
         consentMode,
         voicemailPlayUrl,
+        instant: false,
       });
     }
 
@@ -309,16 +464,14 @@ export async function POST(request: Request) {
       ? resolveMctbConsentTexmlPromptMode("play-gather")
       : certMode === "B" || certMode === "C"
         ? resolveMctbConsentTexmlPromptMode("say-gather")
-        : certMode === "D"
-          ? resolveMctbConsentTexmlPromptMode("play-gather")
-          : resolveMctbConsentTexmlPromptMode(null);
+        : resolveMctbConsentTexmlPromptMode(null);
 
     const playback = await (
       await import("@/lib/mctb/texml-ingress/press1-playback")
     ).resolveMctbPress1TexmlPlayback({ workspaceId });
     if (playback.failClosed) {
       traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "consent_audio_unpublished", workspaceId });
-      return texmlResponse(CONTROLLED_HANGUP, { branch: "consent_audio_unpublished" });
+      return respondTexml(CONTROLLED_HANGUP, { branch: "consent_audio_unpublished" });
     }
 
     const built = buildMctbConsentInboundTexml(forwardedFrom, {
@@ -354,12 +507,22 @@ export async function POST(request: Request) {
       });
     }
 
-    return texmlResponse(built.body, { branch: "press_1_gather", certMode, consentMode });
+    return respondTexml(built.body, {
+      branch: "press_1_gather",
+      certMode,
+      consentMode,
+      instant: false,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(JSON.stringify({ source: "mctb-entry", event: "handler_error", error: message }));
     traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "handler_exception", error: message });
-    return texmlResponse(CONTROLLED_HANGUP, { branch: "error_fallback" });
+    return texmlResponse(
+      CONTROLLED_HANGUP,
+      { branch: "error_fallback", handlerError: message },
+      entryProbe,
+      timingCtx,
+    );
   }
 }
 

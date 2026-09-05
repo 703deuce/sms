@@ -17,7 +17,10 @@ import {
   normalizeForwardedFromE164,
   parseTelnyxForwardedFrom,
 } from "@/lib/voice/telnyx/forwarded-from";
+import { probeCfnaIngress, shouldProbeCfnaPayload } from "@/lib/mctb/cfna-ingress-probe";
 import { resolveMctbTexmlCallLegContext } from "@/lib/mctb/texml-ingress/call-leg-context";
+import { logMctbEntryTiming } from "@/lib/mctb/texml-ingress/entry-timing";
+import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 
 function formToRecord(raw: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -151,6 +154,67 @@ export async function handleTexmlStatusCallback(request: Request) {
     providerEventId = String(
       data.id || root.id || `texml-json:${Date.now()}`,
     );
+  }
+
+  if (shouldProbeCfnaPayload(eventPayload)) {
+    const callSidEarly = pick(
+      eventPayload.CallSid,
+      eventPayload.call_sid,
+      eventPayload.call_control_id,
+    );
+    probeCfnaIngress({
+      layer: "texml-status",
+      eventType: `texml.${eventType}`,
+      payload: {
+        ...eventPayload,
+        _raw_body_preview: rawBody.slice(0, 1200),
+        _content_type: contentType,
+      },
+      note:
+        eventType === "call.hangup" && !callSidEarly
+          ? "texml hangup with no CallSid — mctb-entry likely never ran"
+          : eventType === "call.initiated"
+            ? "texml initiated via status_callback"
+            : undefined,
+    });
+
+    const timingTo = pick(eventPayload.To, eventPayload.to);
+    if (eventType === "call.answered") {
+      logMctbEntryTiming({
+        phase: "call_answered",
+        callSid: callSidEarly,
+        to: timingTo,
+        extra: { texmlCallStatus: pick(eventPayload.CallStatus, eventPayload.texml_call_status) },
+      });
+      logMctbEntryTiming({
+        phase: "first_media",
+        callSid: callSidEarly,
+        to: timingTo,
+        extra: { note: "TeXML leg in-progress — media verbs should be executing" },
+      });
+      traceMctbTexml("MCTB_GATHER_STARTED", {
+        callSid: callSidEarly,
+        to: timingTo,
+        source: "texml_status_callback",
+      });
+    }
+    if (eventType === "call.hangup") {
+      logMctbEntryTiming({
+        phase: "hangup",
+        callSid: callSidEarly,
+        to: timingTo,
+        extra: {
+          duration: pick(eventPayload.CallDuration, eventPayload.call_duration),
+          hangupCause: pick(eventPayload.HangupCause, eventPayload.hangup_cause),
+          texmlCallStatus: pick(eventPayload.CallStatus, eventPayload.texml_call_status),
+        },
+      });
+      traceMctbTexml("MCTB_CALL_COMPLETED", {
+        callSid: callSidEarly,
+        to: timingTo,
+        duration: pick(eventPayload.CallDuration, eventPayload.call_duration),
+      });
+    }
   }
 
   const prisma = getPrisma();

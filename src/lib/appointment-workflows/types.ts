@@ -15,11 +15,14 @@ export const APPOINTMENT_WORKFLOW_TRIGGERS = [
   "booking_requested",
   "booking_approved",
   "booking_rejected",
+  "payment_required",
   "payment_received",
   "payment_failed",
   "deposit_paid",
   "balance_due",
   "waitlist_slot_available",
+  "meeting_completed",
+  "meeting_recap_ready",
 ] as const;
 
 export type AppointmentWorkflowTrigger = (typeof APPOINTMENT_WORKFLOW_TRIGGERS)[number];
@@ -67,7 +70,13 @@ export type WorkflowConditionOperator =
   | "payment_status_equals"
   | "deposit_paid"
   | "balance_due"
-  | "payment_failed";
+  | "payment_failed"
+  | "customer_has_future_appointment"
+  | "customer_no_future_appointment"
+  | "change_initiated_by_equals"
+  | "is_recurring"
+  | "not_recurring"
+  | "is_first_recurring_occurrence";
 
 export type WorkflowCondition = {
   id: string;
@@ -92,7 +101,11 @@ export type WorkflowStepAction =
   | "send_reschedule_link"
   | "send_cancel_link"
   | "send_review_link"
-  | "stop_workflow";
+  | "send_booking_link"
+  | "send_payment_link"
+  | "send_webhook"
+  | "stop_workflow"
+  | "make_voice_call";
 
 export type AppointmentWorkflowStep = {
   id: string;
@@ -105,6 +118,16 @@ export type AppointmentWorkflowStep = {
   recipientStaffId?: string;
   /** Stop confirmation-chasing steps once confirmed */
   stopIfConfirmed?: boolean;
+  /** Stop payment follow-up once payment succeeds */
+  stopIfPaid?: boolean;
+  /** Skip when customer already has a future appointment */
+  stopIfRebooked?: boolean;
+  /** HTTPS webhook destination for send_webhook action */
+  webhookUrl?: string;
+  /** Optional HMAC signing secret for send_webhook */
+  webhookSecret?: string;
+  /** Saved voice reminder template for make_voice_call */
+  voiceReminderTemplateId?: string;
   enabled?: boolean;
 };
 
@@ -147,6 +170,9 @@ export const PREBUILT_WORKFLOW_TEMPLATE_IDS = [
   "post_appointment_follow_up",
   "review_request",
   "reschedule_follow_up",
+  "no_show_recovery",
+  "re_engagement",
+  "payment_follow_up",
 ] as const;
 
 export type PrebuiltWorkflowTemplateId = (typeof PREBUILT_WORKFLOW_TEMPLATE_IDS)[number];
@@ -169,6 +195,12 @@ export function parseWorkflowSteps(raw: unknown): AppointmentWorkflowStep[] {
         messageTemplate: typeof o.messageTemplate === "string" ? o.messageTemplate : undefined,
         recipientStaffId: typeof o.recipientStaffId === "string" ? o.recipientStaffId : undefined,
         stopIfConfirmed: o.stopIfConfirmed === true,
+        stopIfPaid: o.stopIfPaid === true,
+        stopIfRebooked: o.stopIfRebooked === true,
+        webhookUrl: typeof o.webhookUrl === "string" ? o.webhookUrl : undefined,
+        webhookSecret: typeof o.webhookSecret === "string" ? o.webhookSecret : undefined,
+        voiceReminderTemplateId:
+          typeof o.voiceReminderTemplateId === "string" ? o.voiceReminderTemplateId : undefined,
         enabled: o.enabled !== false,
       };
     })

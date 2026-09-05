@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ReminderItem } from '@/features/appointments/kimi/reminders/types';
+import type { ReminderChannel } from '@/lib/appointments/types';
 import PhonePreview from './PhonePreview';
 
 const iconMap = {
@@ -23,11 +24,13 @@ export default function ReminderCard({
   reminder,
   onToggle,
   onTemplateChange,
+  onChannelChange,
   onReset,
 }: {
   reminder: ReminderItem;
   onToggle: () => void;
   onTemplateChange: (value: string) => void;
+  onChannelChange: (channel: ReminderChannel) => void;
   onReset: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -113,8 +116,27 @@ export default function ReminderCard({
 
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
+            <div className="mb-3">
+              <label className="text-[12px] font-medium text-foreground">Channel</label>
+              <select
+                value={reminder.channel}
+                onChange={(e) => onChannelChange(e.target.value as ReminderChannel)}
+                className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-3 text-[12.5px]"
+              >
+                <option value="sms">SMS</option>
+                <option value="email">Email</option>
+                <option value="voice">Voice call</option>
+              </select>
+              {reminder.channel === 'voice' ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Uses your Voice Reminders templates and keypad options.
+                </p>
+              ) : null}
+            </div>
             <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-[12px] font-medium text-foreground">Message template</label>
+              <label className="text-[12px] font-medium text-foreground">
+                {reminder.channel === 'voice' ? 'Call script' : 'Message template'}
+              </label>
               <button
                 type="button"
                 onClick={onReset}
@@ -130,11 +152,19 @@ export default function ReminderCard({
               className="w-full resize-y rounded-lg border border-border bg-background p-3 text-[12.5px] leading-relaxed text-foreground outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#4f46e5]/15"
             />
             <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[11.5px] text-muted-foreground">
-              <span>
-                {reminder.template.length || reminder.characters} characters • {segmentCount} SMS
-                segment{segmentCount > 1 ? 's' : ''}
-              </span>
-              <Info className="h-3 w-3" />
+              {reminder.channel === 'sms' ? (
+                <>
+                  <span>
+                    {reminder.template.length || reminder.characters} characters • {segmentCount} SMS
+                    segment{segmentCount > 1 ? 's' : ''}
+                  </span>
+                  <Info className="h-3 w-3" />
+                </>
+              ) : reminder.channel === 'voice' ? (
+                <span>Spoken on answer · voicemail script uses same template</span>
+              ) : (
+                <span>Sent via email when email channel is configured</span>
+              )}
             </div>
           </div>
           <div>

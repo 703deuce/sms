@@ -2,6 +2,7 @@
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildAppointmentsMobileNav } from "@/lib/products/appointments-nav";
+import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
@@ -114,8 +115,7 @@ export function MobileNav({
         >
           {items.map((item) => {
             const Icon = item.icon;
-            const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = isAppointmentsNavItemActive(item.href, pathname);
             return (
               <Link
                 key={item.href}

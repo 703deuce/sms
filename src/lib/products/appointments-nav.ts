@@ -12,7 +12,9 @@ import {
   ListChecks,
   MapPin,
   MessageSquare,
+  Phone,
   Rocket,
+  Sparkles,
   UserCircle,
   Users,
   Workflow,
@@ -83,6 +85,16 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Reminder Settings",
       href: "/appointments/reminders",
       icon: Bell,
+    },
+    {
+      label: "Voice Reminders",
+      href: "/appointments/voice-reminders",
+      icon: Phone,
+    },
+    {
+      label: "Meetings",
+      href: "/meetings",
+      icon: Sparkles,
     },
     {
       label: "Workflows",
@@ -169,6 +181,9 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/routing")) return "Routing";
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
+  if (pathname.startsWith("/appointments/voice-reminders")) return "Voice Reminders";
+  if (pathname.startsWith("/meetings")) return "Meetings";
+  if (pathname.startsWith("/appointments/workflows/setup/")) return "Set up workflow";
   if (pathname.startsWith("/appointments/workflows")) return "Workflows";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
   if (pathname.startsWith("/appointments/booking")) return "Booking";

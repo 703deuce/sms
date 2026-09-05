@@ -17,6 +17,8 @@ export type TransovoProductFeature =
   | "visual_voicemail"
   | "callback_requests"
   | "ai_transcription"
+  | "ai_notetaker"
+  | "transovo_video"
   | "fax"
   | "verify";
 
@@ -28,6 +30,8 @@ const FEATURE_KEYS: TransovoProductFeature[] = [
   "visual_voicemail",
   "callback_requests",
   "ai_transcription",
+  "ai_notetaker",
+  "transovo_video",
   "fax",
   "verify",
 ];
@@ -51,6 +55,8 @@ const PRISMA_FEATURE_MAP: Record<
   visual_voicemail: "VISUAL_VOICEMAIL",
   callback_requests: "CALLBACK_REQUESTS",
   ai_transcription: "AI_TRANSCRIPTION",
+  ai_notetaker: "AI_TRANSCRIPTION",
+  transovo_video: "AI_TRANSCRIPTION",
   fax: "FAX",
   verify: "VERIFY",
 };
@@ -71,6 +77,8 @@ function allActiveSnapshot(): WorkspaceFeatureSnapshot {
     visual_voicemail: "active",
     callback_requests: "active",
     ai_transcription: "active",
+    ai_notetaker: "active",
+    transovo_video: "active",
     fax: "active",
     verify: "active",
   };
@@ -85,6 +93,8 @@ function defaultSnapshot(): WorkspaceFeatureSnapshot {
     visual_voicemail: "inactive",
     callback_requests: "inactive",
     ai_transcription: "inactive",
+    ai_notetaker: "inactive",
+    transovo_video: "inactive",
     fax: "inactive",
     verify: "inactive",
   };

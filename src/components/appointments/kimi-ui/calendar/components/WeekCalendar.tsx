@@ -1,5 +1,6 @@
 import React from "react";
 import { CheckCircle2, Clock, XCircle, Settings } from "lucide-react";
+import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
 import type {
   CalendarNowLine,
   CalendarTypeColor,
@@ -90,6 +91,7 @@ export default function WeekCalendar({
                 <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
+              <CalendarMeetingBadges meeting={ev.meeting} appointmentId={ev.id} compact />
             </button>
           );
         })}

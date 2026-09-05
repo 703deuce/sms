@@ -169,7 +169,7 @@ export default function VoiceCallDetailPage() {
   return (
     <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-8">
       <nav className="mb-4 flex flex-wrap items-center gap-1 text-sm text-[#6b7280]">
-        <Link href="/voice/receptionist" className="hover:text-[#374151]">AI Receptionist</Link>
+        <Link href="/voice/setup" className="hover:text-[#374151]">AI Receptionist</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href="/voice/calls" className="hover:text-[#374151]">Calls</Link>
         <ChevronRight className="h-3.5 w-3.5" />

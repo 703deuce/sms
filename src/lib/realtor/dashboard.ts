@@ -255,11 +255,19 @@ export async function loadRealtorAmyActivity(
 
   for (const audit of recentAudits) {
     const detail = asRecord(JSON.parse(String(audit.detail || "{}")));
+    const leadId =
+      typeof detail.contactId === "string"
+        ? detail.contactId
+        : typeof detail.leadId === "string"
+          ? detail.leadId
+          : undefined;
     items.push({
       id: audit.id,
       title: String(detail.title || audit.event),
       detail: String(detail.intents || detail.leadStatus || "Amy activity"),
       kind: audit.event.includes("appointment") ? "completed" : "following_up",
+      leadId,
+      href: leadId ? `/realtor/leads/${leadId}` : "/realtor/needs-attention",
       createdAt: audit.createdAt.toISOString(),
     });
   }

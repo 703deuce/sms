@@ -22,6 +22,8 @@ export async function onAppointmentBooked(
 }
 
 export async function onAppointmentConfirmed(workspaceId: string, appointmentId: string) {
+  const { cancelConfirmationChasingSteps } = await import("./engine");
+  await cancelConfirmationChasingSteps(workspaceId, appointmentId);
   await dispatchAppointmentWorkflowTrigger({
     workspaceId,
     appointmentId,

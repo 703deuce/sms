@@ -42,6 +42,9 @@ export async function loadAppointmentPlatformConfig(
         ...(stored.reminders?.reminder2h || {}),
       },
     },
+    voiceReminders: stored.voiceReminders
+      ? { ...(stored.voiceReminders as AppointmentPlatformConfig["voiceReminders"]) }
+      : undefined,
   };
 }
 
@@ -58,6 +61,7 @@ export async function saveAppointmentPlatformConfig(
       ...current.reminders,
       ...(patch.reminders || {}),
     },
+    voiceReminders: patch.voiceReminders ?? current.voiceReminders,
   };
 
   const existing = await prisma.solutionSetup.findFirst({

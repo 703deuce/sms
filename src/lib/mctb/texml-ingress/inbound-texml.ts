@@ -6,7 +6,10 @@ import {
 } from "@/lib/mctb/consent-prompt/texml-response";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import type { ResolvedMctbTexmlCertMode } from "@/lib/mctb/texml-ingress/cert-mode";
-import { certModeForcesPress1Gather } from "@/lib/mctb/texml-ingress/cert-mode";
+import {
+  certModeForcesPress1Gather,
+  certModeUsesPlayGather,
+} from "@/lib/mctb/texml-ingress/cert-mode";
 import {
   type MctbInboundRoutingProfile,
 } from "@/lib/mctb/texml-ingress/routing-profile";
@@ -47,17 +50,60 @@ function appendRoutingTokenToGatherUrl(gatherActionUrl: string | null, routingTo
   }
 }
 
-/** Synchronous TeXML — no DB. Uses setup-time routing profile only. */
+function buildInstantPress1GatherTexml(input: {
+  profile: MctbInboundRoutingProfile;
+  fields: Record<string, string>;
+  certMode: ResolvedMctbTexmlCertMode;
+}): InstantInboundTexml {
+  const forwardedFrom = parseForwardedFrom(input.fields);
+  const promptMode =
+    input.certMode === "D" || certModeUsesPlayGather(input.certMode)
+      ? resolveMctbConsentTexmlPromptMode("play-gather")
+      : resolveMctbConsentTexmlPromptMode("say-gather");
+
+  const built = buildMctbConsentInboundTexml(forwardedFrom, {
+    promptMode,
+    gatherBasePath: "mctb-consent",
+    certMode: input.certMode === "D" ? "D" : input.certMode,
+    press1PlayUrl: input.profile.press1PlayUrl,
+    press1SayText: null,
+  });
+
+  const gatherWithToken = appendRoutingTokenToGatherUrl(
+    built.gatherActionUrl,
+    input.profile.routingToken,
+  );
+  const body =
+    gatherWithToken && built.gatherActionUrl
+      ? built.body.replace(built.gatherActionUrl, gatherWithToken)
+      : built.body;
+
+  return {
+    body,
+    branch: "press_1_gather",
+    routingToken: input.profile.routingToken,
+    press1PlayUrl: input.profile.press1PlayUrl,
+  };
+}
+
+/**
+ * Synchronous TeXML — no DB. Uses setup-time routing profile (or fail-open).
+ * Gather+Play/Say answers the PSTN leg as soon as Telnyx executes the response.
+ */
 export function buildInstantMctbInboundTexml(input: {
   profile: MctbInboundRoutingProfile;
   fields: Record<string, string>;
   certMode: ResolvedMctbTexmlCertMode;
 }): InstantInboundTexml | null {
-  if (input.certMode !== "D" || certModeForcesPress1Gather(input.certMode)) {
+  if (!certModeForcesPress1Gather(input.certMode) && input.certMode !== "D") {
     return null;
   }
 
-  const forwardedFrom = parseForwardedFrom(input.fields);
+  // Cert B/B3/C/C3: always press-1 gather — no voicemail/automation DB branching before answer.
+  if (certModeForcesPress1Gather(input.certMode)) {
+    return buildInstantPress1GatherTexml(input);
+  }
+
   const routeToVoicemailInitial = input.profile.consentMode === MCTB_CONSENT_MODE_EXISTING;
   const routeToVoicemail =
     routeToVoicemailInitial ||
@@ -81,24 +127,5 @@ export function buildInstantMctbInboundTexml(input: {
     };
   }
 
-  const built = buildMctbConsentInboundTexml(forwardedFrom, {
-    promptMode: resolveMctbConsentTexmlPromptMode("play-gather"),
-    gatherBasePath: "mctb-consent",
-    certMode: "D",
-    press1PlayUrl: input.profile.press1PlayUrl,
-    press1SayText: null,
-  });
-
-  const gatherWithToken = appendRoutingTokenToGatherUrl(built.gatherActionUrl, input.profile.routingToken);
-  const body =
-    gatherWithToken && built.gatherActionUrl
-      ? built.body.replace(built.gatherActionUrl, gatherWithToken)
-      : built.body;
-
-  return {
-    body,
-    branch: "press_1_gather",
-    routingToken: input.profile.routingToken,
-    press1PlayUrl: input.profile.press1PlayUrl,
-  };
+  return buildInstantPress1GatherTexml({ ...input, certMode: "D" });
 }

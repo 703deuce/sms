@@ -2,14 +2,17 @@ import type {
   AppointmentWorkflowRecord,
   AppointmentWorkflowStep,
   PrebuiltWorkflowTemplateId,
+  WorkflowConditionGroup,
 } from "./types";
 
 export type PrebuiltWorkflowTemplate = {
   id: PrebuiltWorkflowTemplateId;
   name: string;
   description: string;
+  category?: "reminders" | "follow_up" | "recovery" | "payments";
   channels: Array<"sms" | "email">;
   trigger: AppointmentWorkflowRecord["trigger"];
+  defaultConditions?: WorkflowConditionGroup | null;
   defaultSteps: AppointmentWorkflowStep[];
 };
 
@@ -170,6 +173,15 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
         channel: "sms",
         messageTemplate: DEFAULT_REMINDER,
       },
+      {
+        id: "staff_alert",
+        name: "Staff notification",
+        timing: { kind: "immediate" },
+        action: "send_sms_staff",
+        channel: "sms",
+        messageTemplate:
+          "High-value booking: {{first_name}} — {{service}} on {{appointment_date}} at {{appointment_time}}.",
+      },
     ],
   },
   {
@@ -213,8 +225,16 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
     id: "post_appointment_follow_up",
     name: "Post-Appointment Follow-Up",
     description: "Thank-you message after completion.",
+    category: "follow_up",
     channels: ["sms"],
     trigger: "appointment_completed",
+    defaultConditions: {
+      logic: "and",
+      conditions: [
+        { id: "completed", field: "status", operator: "is_completed", value: true },
+        { id: "not_no_show", field: "status", operator: "not_no_show", value: true },
+      ],
+    },
     defaultSteps: [
       {
         id: "thank_you",
@@ -237,8 +257,17 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
     id: "review_request",
     name: "Review Request",
     description: "Ask for a review after the appointment.",
+    category: "follow_up",
     channels: ["sms"],
     trigger: "appointment_completed",
+    defaultConditions: {
+      logic: "and",
+      conditions: [
+        { id: "completed", field: "status", operator: "is_completed", value: true },
+        { id: "not_no_show", field: "status", operator: "not_no_show", value: true },
+        { id: "not_canceled", field: "status", operator: "not_canceled", value: true },
+      ],
+    },
     defaultSteps: [
       {
         id: "review",
@@ -272,6 +301,130 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
         channel: "sms",
         messageTemplate:
           "Your appointment has been moved to {{appointment_date}} at {{appointment_time}}. {{confirm_link}}",
+      },
+    ],
+  },
+  {
+    id: "no_show_recovery",
+    name: "No-Show Recovery",
+    description: "Reach out after a missed appointment and offer to reschedule.",
+    category: "recovery",
+    channels: ["sms"],
+    trigger: "appointment_no_show",
+    defaultConditions: {
+      logic: "and",
+      conditions: [{ id: "no_show", field: "status", operator: "is_no_show", value: true }],
+    },
+    defaultSteps: [
+      {
+        id: "no_show_immediate",
+        name: "Missed appointment message",
+        timing: { kind: "immediate" },
+        action: "send_reschedule_link",
+        channel: "sms",
+        messageTemplate:
+          "Hi {{first_name}}, we missed you today for {{service}}. Would you like to reschedule? {{reschedule_link}}",
+      },
+      {
+        id: "no_show_followup",
+        name: "Next-day follow-up",
+        timing: {
+          kind: "relative",
+          anchor: "appointment_start",
+          amount: 1,
+          unit: "days",
+          direction: "after",
+        },
+        action: "send_reschedule_link",
+        channel: "sms",
+        messageTemplate:
+          "Hi {{first_name}}, still hoping to get you rescheduled for {{service}}. {{reschedule_link}}",
+        stopIfRebooked: true,
+      },
+      {
+        id: "no_show_staff",
+        name: "Staff no-show alert",
+        timing: { kind: "immediate" },
+        action: "send_sms_staff",
+        channel: "sms",
+        messageTemplate:
+          "No-show: {{first_name}} for {{service}} on {{appointment_date}} at {{appointment_time}}.",
+      },
+    ],
+  },
+  {
+    id: "re_engagement",
+    name: "Re-Engagement / Book Again",
+    description: "Invite completed customers back when they have no upcoming appointment.",
+    category: "follow_up",
+    channels: ["sms"],
+    trigger: "appointment_completed",
+    defaultConditions: {
+      logic: "and",
+      conditions: [
+        { id: "completed", field: "status", operator: "is_completed", value: true },
+        { id: "no_future", field: "customer", operator: "customer_no_future_appointment", value: true },
+      ],
+    },
+    defaultSteps: [
+      {
+        id: "rebook_30d",
+        name: "30 days after visit",
+        timing: {
+          kind: "relative",
+          anchor: "appointment_end",
+          amount: 30,
+          unit: "days",
+          direction: "after",
+        },
+        action: "send_booking_link",
+        channel: "sms",
+        messageTemplate:
+          "Hi {{first_name}}, ready to book your next {{service}} with {{business_name}}? {{booking_link}}",
+        stopIfRebooked: true,
+      },
+      {
+        id: "rebook_60d",
+        name: "60 days after visit",
+        timing: {
+          kind: "relative",
+          anchor: "appointment_end",
+          amount: 60,
+          unit: "days",
+          direction: "after",
+        },
+        action: "send_booking_link",
+        channel: "sms",
+        messageTemplate:
+          "Hi {{first_name}}, we'd love to see you again. Book your next appointment: {{booking_link}}",
+        stopIfRebooked: true,
+      },
+    ],
+  },
+  {
+    id: "payment_follow_up",
+    name: "Payment Follow-Up",
+    description: "Remind customers to complete outstanding appointment payments.",
+    category: "payments",
+    channels: ["sms"],
+    trigger: "payment_required",
+    defaultConditions: null,
+    defaultSteps: [
+      {
+        id: "payment_reminder",
+        name: "Payment reminder",
+        timing: {
+          kind: "relative",
+          anchor: "booking_created",
+          amount: 1,
+          unit: "hours",
+          direction: "after",
+        },
+        action: "send_payment_link",
+        channel: "sms",
+        messageTemplate:
+          "Hi {{first_name}}, please complete payment for your {{service}} appointment: {{payment_link}}",
+        stopIfPaid: true,
       },
     ],
   },

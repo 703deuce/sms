@@ -32,7 +32,7 @@ export function buildRealtorMobileNav(): NavItem[] {
   return [
     { label: "Dashboard", href: "/realtor/dashboard", icon: LayoutDashboard },
     { label: "Leads", href: "/realtor/leads", icon: Users },
-    { label: "Inbox", href: "/inbox", icon: Inbox },
+    { label: "Inbox", href: "/conversations", icon: Inbox },
     { label: "Calls", href: "/phone/calls", icon: PhoneCall },
   ];
 }
@@ -70,18 +70,18 @@ export function buildRealtorNav(inboxBadge?: number): NavItem[] {
     { label: "Leads", href: "/realtor/leads", icon: Users },
     {
       label: "Inbox",
-      href: "/inbox",
+      href: "/conversations",
       icon: Inbox,
       badge: inboxBadge && inboxBadge > 0 ? inboxBadge : undefined,
     },
     { label: "Calls", href: "/phone/calls", icon: PhoneCall },
-    { label: "Messages", href: "/realtor/messages", icon: MessageSquare },
+    { label: "Messages", href: "/send/quick", icon: MessageSquare },
     { label: "AI Agents", href: "/realtor/agents/front-desk", icon: Bot },
     { label: "Automations", href: "/automations", icon: Workflow },
     { label: "Appointments", href: "/realtor/appointments", icon: CalendarDays },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Integrations", href: "/integrations", icon: Puzzle },
-    { label: "Reports", href: "/reports", icon: BarChart3 },
+    { label: "Reports", href: "/sms/analytics", icon: BarChart3 },
     { label: "Settings", href: "/settings", icon: Settings },
   ];
 }

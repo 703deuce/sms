@@ -1,0 +1,74 @@
+import type { AppointmentWorkflowTrigger, WorkflowConditionOperator, WorkflowStepAction } from "./types";
+
+/** Canonical UI metadata — drives dropdowns without hardcoding in React components. */
+export const WORKFLOW_TRIGGER_OPTIONS: Array<{ value: AppointmentWorkflowTrigger; label: string }> = [
+  { value: "appointment_booked", label: "Appointment booked" },
+  { value: "appointment_confirmed", label: "Appointment confirmed" },
+  { value: "appointment_rescheduled", label: "Appointment rescheduled" },
+  { value: "appointment_canceled", label: "Appointment canceled" },
+  { value: "appointment_completed", label: "Appointment completed" },
+  { value: "appointment_no_show", label: "No-show" },
+  { value: "appointment_status_changed", label: "Status changed" },
+  { value: "before_appointment", label: "Before appointment" },
+  { value: "after_appointment", label: "After appointment" },
+  { value: "payment_required", label: "Payment required" },
+  { value: "payment_received", label: "Payment succeeded" },
+  { value: "payment_failed", label: "Payment failed" },
+  { value: "deposit_paid", label: "Deposit paid" },
+  { value: "balance_due", label: "Balance due" },
+  { value: "waitlist_slot_available", label: "Waitlist slot available" },
+  { value: "meeting_completed", label: "Meeting completed" },
+  { value: "meeting_recap_ready", label: "Meeting recap ready" },
+];
+
+export const WORKFLOW_CONDITION_OPTIONS: Array<{ value: WorkflowConditionOperator; label: string; needsValue?: boolean }> = [
+  { value: "equals", label: "Equals", needsValue: true },
+  { value: "not_equals", label: "Does not equal", needsValue: true },
+  { value: "is_confirmed", label: "Is confirmed" },
+  { value: "not_confirmed", label: "Not confirmed" },
+  { value: "is_canceled", label: "Is canceled" },
+  { value: "not_canceled", label: "Not canceled" },
+  { value: "is_completed", label: "Is completed" },
+  { value: "not_completed", label: "Not completed" },
+  { value: "is_no_show", label: "Is no-show" },
+  { value: "not_no_show", label: "Not no-show" },
+  { value: "is_upcoming", label: "Is upcoming" },
+  { value: "was_rescheduled", label: "Was rescheduled" },
+  { value: "appointment_type_equals", label: "Appointment type equals", needsValue: true },
+  { value: "appointment_type_not_equals", label: "Appointment type does not equal", needsValue: true },
+  { value: "customer_has_future_appointment", label: "Customer has future appointment" },
+  { value: "customer_no_future_appointment", label: "Customer has no future appointment" },
+  { value: "change_initiated_by_equals", label: "Change initiated by", needsValue: true },
+  { value: "is_recurring", label: "Is recurring appointment" },
+  { value: "not_recurring", label: "Is not recurring" },
+  { value: "is_first_recurring_occurrence", label: "Is first recurring occurrence" },
+  { value: "reminder_sent", label: "Reminder already sent", needsValue: true },
+  { value: "reminder_not_sent", label: "Reminder not sent", needsValue: true },
+  { value: "has_phone", label: "Has phone" },
+  { value: "has_email", label: "Has email" },
+  { value: "has_sms_consent", label: "Has SMS consent" },
+  { value: "payment_status_equals", label: "Payment status equals", needsValue: true },
+  { value: "deposit_paid", label: "Deposit paid (balance remains)" },
+  { value: "balance_due", label: "Balance due" },
+  { value: "payment_failed", label: "Payment failed" },
+];
+
+export const WORKFLOW_ACTION_OPTIONS: Array<{ value: WorkflowStepAction; label: string }> = [
+  { value: "send_sms_customer", label: "Send SMS to customer" },
+  { value: "send_email_customer", label: "Send email to customer" },
+  { value: "send_sms_staff", label: "Send SMS to staff" },
+  { value: "send_email_staff", label: "Send email to staff" },
+  { value: "send_confirm_link", label: "Send confirm link" },
+  { value: "send_reschedule_link", label: "Send reschedule link" },
+  { value: "send_cancel_link", label: "Send cancel link" },
+  { value: "send_review_link", label: "Send review link" },
+  { value: "send_booking_link", label: "Send booking link" },
+  { value: "send_payment_link", label: "Send payment link" },
+  { value: "make_voice_call", label: "Make voice call" },
+  { value: "send_webhook", label: "Send webhook" },
+  { value: "mark_confirmed", label: "Mark confirmed" },
+  { value: "stop_workflow", label: "Stop workflow" },
+];
+
+export const CHANGE_INITIATED_BY_VALUES = ["customer", "staff", "system", "api", "workflow"] as const;
+export type ChangeInitiatedBy = (typeof CHANGE_INITIATED_BY_VALUES)[number];

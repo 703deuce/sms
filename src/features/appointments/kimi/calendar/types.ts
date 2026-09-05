@@ -17,6 +17,18 @@ export type CalendarWeekDay = {
   dayOfWeek: number;
 };
 
+export type AppointmentMeetingIndicator = {
+  notetakerStatus?: string | null;
+  notetakerSessionId?: string | null;
+  notetakerEnabled?: boolean;
+  videoStatus?: string | null;
+  videoProvisioningStatus?: string | null;
+  videoMeetingId?: string | null;
+  videoJoinUrl?: string | null;
+  recapReady?: boolean;
+  recapSessionId?: string | null;
+};
+
 export type CalendarWeekEvent = {
   id: string;
   day: number;
@@ -27,6 +39,7 @@ export type CalendarWeekEvent = {
   name: string;
   type: "consultation" | "call" | "followup" | "onboarding" | "canceled";
   status: "confirmed" | "pending" | "canceled";
+  meeting?: AppointmentMeetingIndicator;
 };
 
 export type CalendarTypeColor = {
@@ -50,6 +63,7 @@ export type CalendarAgendaItem = {
   name: string;
   status: "confirmed" | "pending" | "canceled";
   dot: string;
+  meeting?: AppointmentMeetingIndicator;
 };
 
 export type CalendarNextAppointment = {
@@ -62,6 +76,7 @@ export type CalendarNextAppointment = {
   method: string;
   phone: string;
   status: "confirmed" | "pending" | "canceled";
+  meeting?: AppointmentMeetingIndicator;
 };
 
 export type CalendarNowLine = {

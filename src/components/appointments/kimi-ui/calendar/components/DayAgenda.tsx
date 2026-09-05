@@ -1,5 +1,6 @@
 import React from "react";
 import { MoreVertical, ArrowRight } from "lucide-react";
+import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
 import type { CalendarAgendaItem } from "@/features/appointments/kimi/calendar/types";
 
 type Props = {
@@ -52,6 +53,7 @@ export default function DayAgenda({
               <div className="agenda-mid">
                 <div className="agenda-title">{a.title}</div>
                 <div className="agenda-name">{a.name}</div>
+                <CalendarMeetingBadges meeting={a.meeting} appointmentId={a.id} />
               </div>
               <span className={`badge badge-${a.status}`}>{statusLabel(a.status)}</span>
               <span className="icon-btn sm agenda-kebab" aria-hidden>

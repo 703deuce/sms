@@ -5,7 +5,7 @@ ALTER TYPE "WorkspaceProductFeatureKey" ADD VALUE IF NOT EXISTS 'VERIFY';
 
 CREATE TABLE IF NOT EXISTS fax_accounts (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   tier TEXT NOT NULL DEFAULT 'starter',
   status TEXT NOT NULL DEFAULT 'active',
   notify_email TEXT,
@@ -31,9 +31,9 @@ CREATE TABLE IF NOT EXISTS fax_accounts (
 
 CREATE TABLE IF NOT EXISTS fax_numbers (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "faxAccountId" TEXT NOT NULL REFERENCES fax_accounts(id) ON DELETE CASCADE,
-  "phoneNumberId" TEXT REFERENCES phone_numbers(id) ON DELETE SET NULL,
+  "phoneNumberId" TEXT REFERENCES "PhoneNumber"(id) ON DELETE SET NULL,
   e164 TEXT NOT NULL,
   label TEXT,
   telnyx_number_id TEXT,
@@ -49,7 +49,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS fax_numbers_e164_idx ON fax_numbers (e164);
 
 CREATE TABLE IF NOT EXISTS fax_transmissions (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "faxAccountId" TEXT NOT NULL REFERENCES fax_accounts(id) ON DELETE CASCADE,
   "faxNumberId" TEXT REFERENCES fax_numbers(id) ON DELETE SET NULL,
   direction TEXT NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS fax_webhook_events (
 
 CREATE TABLE IF NOT EXISTS fax_intelligence (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "faxTransmissionId" TEXT NOT NULL UNIQUE REFERENCES fax_transmissions(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending',
   extracted_text TEXT,
@@ -125,7 +125,7 @@ CREATE INDEX IF NOT EXISTS fax_intelligence_search_idx ON fax_intelligence USING
 
 CREATE TABLE IF NOT EXISTS fax_extraction_templates (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   document_category TEXT,
   fields_json JSONB NOT NULL DEFAULT '[]',
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS fax_extraction_templates (
 
 CREATE TABLE IF NOT EXISTS fax_automation_rules (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT true,
   conditions_json JSONB NOT NULL DEFAULT '[]',
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS fax_automation_rules (
 
 CREATE TABLE IF NOT EXISTS fax_contacts (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   company TEXT,
   fax_e164 TEXT NOT NULL,
@@ -163,7 +163,7 @@ CREATE INDEX IF NOT EXISTS fax_contacts_workspace_idx ON fax_contacts ("workspac
 
 CREATE TABLE IF NOT EXISTS fax_blocked_senders (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   fax_e164 TEXT NOT NULL,
   reason TEXT,
   blocked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS fax_blocked_senders (
 
 CREATE TABLE IF NOT EXISTS fax_activity_log (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "faxTransmissionId" TEXT NOT NULL REFERENCES fax_transmissions(id) ON DELETE CASCADE,
   event_type TEXT NOT NULL,
   message TEXT,
@@ -184,7 +184,7 @@ CREATE INDEX IF NOT EXISTS fax_activity_transmission_idx ON fax_activity_log ("f
 
 CREATE TABLE IF NOT EXISTS fax_comments (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "faxTransmissionId" TEXT NOT NULL REFERENCES fax_transmissions(id) ON DELETE CASCADE,
   author_user_id TEXT NOT NULL,
   body TEXT NOT NULL,
@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS fax_comments (
 
 CREATE TABLE IF NOT EXISTS verify_credit_ledger (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   entry_type TEXT NOT NULL,
   amount INTEGER NOT NULL,
   balance_after INTEGER NOT NULL,
@@ -209,7 +209,7 @@ CREATE INDEX IF NOT EXISTS verify_credit_ledger_workspace_idx ON verify_credit_l
 
 CREATE TABLE IF NOT EXISTS verify_credit_reservations (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "bulkJobId" TEXT,
   reserved_credits INTEGER NOT NULL,
   consumed_credits INTEGER NOT NULL DEFAULT 0,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS verify_credit_reservations (
 
 CREATE TABLE IF NOT EXISTS verify_lookups (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   input_raw TEXT NOT NULL,
   normalized_e164 TEXT,
   line_type TEXT,
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS verify_lookup_cache (
 
 CREATE TABLE IF NOT EXISTS verify_bulk_jobs (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'pending',
   filename TEXT,
   phone_column TEXT,
@@ -277,7 +277,7 @@ CREATE INDEX IF NOT EXISTS verify_bulk_jobs_workspace_idx ON verify_bulk_jobs ("
 
 CREATE TABLE IF NOT EXISTS verify_bulk_job_rows (
   id TEXT PRIMARY KEY,
-  "workspaceId" TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   "bulkJobId" TEXT NOT NULL REFERENCES verify_bulk_jobs(id) ON DELETE CASCADE,
   row_index INTEGER NOT NULL,
   input_raw TEXT,

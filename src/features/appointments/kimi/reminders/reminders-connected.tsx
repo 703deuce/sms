@@ -8,6 +8,7 @@ import {
   buildRemindersPageModel,
   patchReminderEnabled,
   patchReminderTemplate,
+  patchReminderChannel,
   resetReminderTemplate,
   type RemindersApiConfig,
   type ReminderPreviewMap,
@@ -148,6 +149,11 @@ export function RemindersConnected() {
       onTemplateChange: (stepKey, template) => {
         if (!config) return;
         setConfig(patchReminderTemplate(config, stepKey, template));
+        setSaved(false);
+      },
+      onChannelChange: (stepKey, channel) => {
+        if (!config) return;
+        setConfig(patchReminderChannel(config, stepKey, channel));
         setSaved(false);
       },
       onResetTemplate: (stepKey) => {

@@ -117,8 +117,49 @@ async function trySendStep(input: {
   cancelToken?: string;
   rescheduleToken?: string;
 }) {
-  if (!input.step.enabled || input.step.channel !== "sms") return false;
+  if (!input.step.enabled) return false;
   if (wasReminderSent(input.metadata, input.timelineType)) return false;
+
+  if (input.step.channel === "voice") {
+    try {
+      const { executeAppointmentVoiceReminder } = await import(
+        "@/lib/appointment-voice-reminders/service"
+      );
+      await executeAppointmentVoiceReminder({
+        workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        toE164: input.phone,
+        templateId: input.step.voiceReminderTemplateId,
+        inlineTemplate: input.step.template
+          ? { humanScript: input.step.template, voicemailScript: input.step.template }
+          : undefined,
+      });
+      const prisma = getPrisma();
+      const nextMeta = markReminderSentInMeta(
+        appendTimeline(input.metadata, {
+          type: input.timelineType,
+          label: input.step.label,
+          detail: "Voice reminder",
+        }),
+        input.timelineType,
+      );
+      await prisma.voiceAppointment.update({
+        where: { id: input.appointmentId },
+        data: { metadata: nextMeta as object },
+      });
+      return true;
+    } catch (err) {
+      await markReminderFailed({
+        appointmentId: input.appointmentId,
+        metadata: input.metadata,
+        timelineType: input.timelineType,
+        detail: err instanceof Error ? err.message : "voice send failed",
+      });
+      return false;
+    }
+  }
+
+  if (input.step.channel !== "sms") return false;
 
   const body = renderAppointmentTemplate(
     input.step.template,
@@ -133,6 +174,7 @@ async function trySendStep(input: {
       rescheduleLink: input.rescheduleToken
         ? publicActionUrl("reschedule", input.rescheduleToken)
         : "",
+      meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
     }),
   );
 
@@ -178,6 +220,25 @@ export async function scanPlatformAppointmentReminders() {
     const meta = (row.metadata || {}) as AppointmentMetadata;
     if (meta.remindersSuppressed) continue;
     if (meta.smsConsent === false) continue;
+
+    const { shouldSkipPlatformRemindersForAppointment } = await import(
+      "@/lib/appointment-workflows/platform-guard"
+    );
+    const service = row.serviceName
+      ? await prisma.voiceService.findFirst({
+          where: { workspaceId: row.workspaceId, name: row.serviceName },
+          select: { id: true },
+        })
+      : null;
+    if (
+      await shouldSkipPlatformRemindersForAppointment(
+        row.workspaceId,
+        service?.id,
+        row.serviceName,
+      )
+    ) {
+      continue;
+    }
 
     const config = await loadAppointmentPlatformConfig(row.workspaceId);
     const steps = configuredReminderSteps(config).filter((s) => !s.immediate);

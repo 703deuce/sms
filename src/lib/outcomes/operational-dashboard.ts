@@ -492,7 +492,7 @@ export async function loadOperationalDashboardData(
 
   const editHref = agentId
     ? `/voice/agents/${agentId}/about`
-    : "/voice/receptionist";
+    : "/voice/setup";
   const testHref = agentId
     ? `/voice/agents/${agentId}/voice-test`
     : "/voice/agents";

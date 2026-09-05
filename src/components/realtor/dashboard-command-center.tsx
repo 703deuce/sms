@@ -262,7 +262,7 @@ export function RealtorDashboardView({
               amyActivity.slice(0, 5).map((item) => (
                 <Link
                   key={item.id}
-                  href={item.href || "#"}
+                  href={item.href || "/realtor/needs-attention"}
                   className="flex items-start gap-3 p-4 hover:bg-[#f9fafb]"
                 >
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eff6ff] text-[#6366f1]">

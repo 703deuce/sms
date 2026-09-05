@@ -25,7 +25,7 @@ export function ReceptionistEditorShell({
     <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
         <Link
-          href="/voice/receptionist"
+          href="/voice/setup"
           className="text-sm font-medium text-[#6b7280] hover:text-[#111827]"
         >
           ← Back to AI Receptionist
@@ -35,7 +35,7 @@ export function ReceptionistEditorShell({
         </div>
         <div className="flex items-center justify-end gap-4 lg:col-start-3">
           <Link
-            href="/help"
+            href="/getting-started"
             className="flex items-center gap-1.5 text-sm text-[#6b7280] hover:text-[#111827]"
           >
             <HelpCircle className="h-4 w-4" />

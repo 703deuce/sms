@@ -15,9 +15,17 @@ import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { normalizeAppointmentStatus } from "@/lib/appointments/types";
 import {
   evaluateConditionGroup,
+  shouldAllowStatusForWorkflow,
   workflowMatchesAppointmentType,
   type AppointmentConditionContext,
 } from "./conditions";
+import {
+  customerHasFutureAppointment,
+  isPaymentOutstanding,
+  resolveAppointmentBookingLink,
+  resolveAppointmentPaymentLink,
+} from "./payment-link";
+import { deliverAppointmentWorkflowWebhook, webhookHostForLog } from "./webhook-delivery";
 import { resolveStepScheduledTime, stepIdempotencyKey } from "./scheduler";
 import { listActiveWorkflowsForTrigger } from "./service";
 import type {
@@ -55,6 +63,12 @@ async function loadAppointmentContext(workspaceId: string, appointmentId: string
       })
     : null;
 
+  const hasFutureAppointment = await customerHasFutureAppointment(
+    workspaceId,
+    row.contactId,
+    row.id,
+  );
+
   const ctx: AppointmentConditionContext = {
     appointmentId: row.id,
     workspaceId: row.workspaceId,
@@ -68,7 +82,9 @@ async function loadAppointmentContext(workspaceId: string, appointmentId: string
     metadata: meta,
     contactPhone: contact?.phone || meta.inviteePhone,
     contactEmail: contact?.email || meta.inviteeEmail,
+    contactId: row.contactId,
     paymentStatus: typeof meta.paymentStatus === "string" ? meta.paymentStatus : null,
+    hasFutureAppointment,
   };
 
   return { row, ctx, meta };
@@ -211,6 +227,71 @@ async function scheduleWorkflowStep(input: {
   });
 }
 
+export async function cancelPaymentFollowUpSteps(workspaceId: string, appointmentId: string) {
+  const prisma = getPrisma();
+  const active = await prisma.appointmentWorkflowExecution.findMany({
+    where: { workspaceId, appointmentId, status: "active" },
+    include: { stepExecutions: true },
+  });
+
+  for (const exec of active) {
+    const workflow = await prisma.appointmentWorkflow.findFirst({
+      where: { id: exec.workflowId, workspaceId },
+    });
+    if (!workflow) continue;
+
+    const steps = JSON.parse(JSON.stringify(workflow.stepsJson)) as AppointmentWorkflowStep[];
+    const paidStepIds = new Set(steps.filter((s) => s.stopIfPaid).map((s) => s.id));
+    if (!paidStepIds.size) continue;
+
+    const pendingIds = exec.stepExecutions
+      .filter((s) => s.state === "scheduled" && paidStepIds.has(s.stepId))
+      .map((s) => s.id);
+
+    if (pendingIds.length) {
+      await prisma.appointmentWorkflowStepExecution.updateMany({
+        where: { id: { in: pendingIds } },
+        data: { state: "canceled", failureReason: "payment_succeeded" },
+      });
+    }
+  }
+}
+
+export async function cancelConfirmationChasingSteps(
+  workspaceId: string,
+  appointmentId: string,
+) {
+  const prisma = getPrisma();
+  const active = await prisma.appointmentWorkflowExecution.findMany({
+    where: { workspaceId, appointmentId, status: "active" },
+    include: { stepExecutions: true },
+  });
+
+  for (const exec of active) {
+    const workflow = await prisma.appointmentWorkflow.findFirst({
+      where: { id: exec.workflowId, workspaceId },
+    });
+    if (!workflow) continue;
+
+    const steps = JSON.parse(JSON.stringify(workflow.stepsJson)) as AppointmentWorkflowStep[];
+    const chasingStepIds = new Set(
+      steps.filter((s) => s.stopIfConfirmed).map((s) => s.id),
+    );
+    if (!chasingStepIds.size) continue;
+
+    const pendingIds = exec.stepExecutions
+      .filter((s) => s.state === "scheduled" && chasingStepIds.has(s.stepId))
+      .map((s) => s.id);
+
+    if (pendingIds.length) {
+      await prisma.appointmentWorkflowStepExecution.updateMany({
+        where: { id: { in: pendingIds } },
+        data: { state: "canceled", failureReason: "appointment_confirmed" },
+      });
+    }
+  }
+}
+
 export async function invalidateWorkflowExecutionsForAppointment(
   workspaceId: string,
   appointmentId: string,
@@ -333,7 +414,8 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
   }
 
   const status = normalizeAppointmentStatus(appointmentCtx.ctx.status);
-  if (["canceled", "completed", "no_show"].includes(status)) {
+  const workflowTrigger = workflow.trigger as AppointmentWorkflowTrigger;
+  if (!shouldAllowStatusForWorkflow(workflowTrigger, status)) {
     await prisma.appointmentWorkflowStepExecution.update({
       where: { id: stepExec.id },
       data: { state: "canceled", failureReason: `appointment_${status}` },
@@ -345,6 +427,29 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
     await prisma.appointmentWorkflowStepExecution.update({
       where: { id: stepExec.id },
       data: { state: "skipped", failureReason: "already_confirmed" },
+    });
+    return;
+  }
+
+  if (step.stopIfPaid && !isPaymentOutstanding(appointmentCtx.meta)) {
+    await prisma.appointmentWorkflowStepExecution.update({
+      where: { id: stepExec.id },
+      data: { state: "skipped", failureReason: "payment_already_succeeded" },
+    });
+    return;
+  }
+
+  const hasFuture = await customerHasFutureAppointment(
+    stepExec.workspaceId,
+    appointmentCtx.row.contactId,
+    execution.appointmentId,
+  );
+  appointmentCtx.ctx.hasFutureAppointment = hasFuture;
+
+  if (step.stopIfRebooked && hasFuture) {
+    await prisma.appointmentWorkflowStepExecution.update({
+      where: { id: stepExec.id },
+      data: { state: "skipped", failureReason: "customer_rebooked" },
     });
     return;
   }
@@ -362,6 +467,7 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
     await executeWorkflowStepAction({
       step,
       stepExecId: stepExec.id,
+      workflowId: stepExec.workflowId,
       workspaceId: stepExec.workspaceId,
       appointmentId: execution.appointmentId,
       appointmentCtx: appointmentCtx.ctx,
@@ -385,6 +491,7 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
 async function executeWorkflowStepAction(input: {
   step: AppointmentWorkflowStep;
   stepExecId: string;
+  workflowId: string;
   workspaceId: string;
   appointmentId: string;
   appointmentCtx: AppointmentConditionContext;
@@ -396,6 +503,17 @@ async function executeWorkflowStepAction(input: {
     where: { id: input.workspaceId },
     select: { displayName: true, name: true },
   });
+
+  const bookingLink = await resolveAppointmentBookingLink(
+    input.workspaceId,
+    input.appointmentCtx.serviceId,
+  );
+  const paymentLink = await resolveAppointmentPaymentLink(
+    input.workspaceId,
+    input.appointmentId,
+    input.meta,
+    input.appointmentCtx.serviceName,
+  );
 
   const mergeVars = appointmentMergeVars({
     firstName: input.meta.inviteeName?.split(/\s+/)[0],
@@ -413,6 +531,8 @@ async function executeWorkflowStepAction(input: {
       ? publicActionUrl("reschedule", input.meta.rescheduleToken)
       : "",
     reviewLink: typeof input.meta.reviewLink === "string" ? input.meta.reviewLink : "",
+    bookingLink,
+    paymentLink,
   });
 
   const body = renderAppointmentTemplate(input.step.messageTemplate || "", mergeVars);
@@ -424,7 +544,9 @@ async function executeWorkflowStepAction(input: {
     case "send_confirm_link":
     case "send_reschedule_link":
     case "send_cancel_link":
-    case "send_review_link": {
+    case "send_review_link":
+    case "send_booking_link":
+    case "send_payment_link": {
       if (!phone) throw new Error("No customer phone");
       if (input.meta.smsConsent === false) throw new Error("SMS consent not granted");
       const { sendQuickSms } = await import("@/lib/sms/send-quick");
@@ -511,12 +633,75 @@ async function executeWorkflowStepAction(input: {
       });
       break;
     }
+    case "send_webhook": {
+      if (!input.step.webhookUrl) throw new Error("Webhook URL is required");
+      const result = await deliverAppointmentWorkflowWebhook({
+        url: input.step.webhookUrl,
+        secret: input.step.webhookSecret,
+        idempotencyKey: `appt-wf-webhook:${input.stepExecId}`,
+        payload: {
+          event: "appointment.workflow.step",
+          workflowId: input.workflowId,
+          workflowStepId: input.step.id,
+          stepExecutionId: input.stepExecId,
+          workspaceId: input.workspaceId,
+          appointmentId: input.appointmentId,
+          appointmentType: input.appointmentCtx.serviceName,
+          status: input.appointmentCtx.status,
+          scheduledStart: input.appointmentCtx.startsAt.toISOString(),
+          scheduledEnd: input.appointmentCtx.endsAt?.toISOString() || null,
+          staffId: typeof input.meta.staffId === "string" ? input.meta.staffId : null,
+          staffName: input.appointmentCtx.staffName || null,
+          locationId: typeof input.meta.locationId === "string" ? input.meta.locationId : null,
+          locationName: input.appointmentCtx.location || null,
+          contactId: input.appointmentCtx.contactId || null,
+          paymentStatus: input.appointmentCtx.paymentStatus || null,
+          triggeredAt: new Date().toISOString(),
+        },
+      });
+      if (!result.ok) {
+        console.warn(
+          "[appointment-workflows] webhook failed",
+          webhookHostForLog(input.step.webhookUrl),
+          result.error,
+        );
+        throw new Error(result.error || "Webhook delivery failed");
+      }
+      const timelineType = `workflow_${input.step.id}_webhook_sent`;
+      const nextMeta = appendTimeline(input.meta, {
+        type: timelineType,
+        label: `Workflow webhook: ${input.step.name}`,
+        detail: webhookHostForLog(input.step.webhookUrl),
+      });
+      await prisma.voiceAppointment.update({
+        where: { id: input.appointmentId },
+        data: { metadata: nextMeta as object },
+      });
+      break;
+    }
     case "stop_workflow": {
       await invalidateWorkflowExecutionsForAppointment(
         input.workspaceId,
         input.appointmentId,
         "stop_workflow_action",
       );
+      break;
+    }
+    case "make_voice_call": {
+      const phone = input.appointmentCtx.contactPhone || input.meta.inviteePhone;
+      if (!phone) throw new Error("No customer phone");
+      const { executeAppointmentVoiceReminder } = await import(
+        "@/lib/appointment-voice-reminders/service"
+      );
+      await executeAppointmentVoiceReminder({
+        workspaceId: input.workspaceId,
+        appointmentId: input.appointmentId,
+        toE164: phone,
+        templateId: input.step.voiceReminderTemplateId,
+        workflowId: input.workflowId,
+        workflowStepId: input.step.id,
+        stepExecutionId: input.stepExecId,
+      });
       break;
     }
     default:

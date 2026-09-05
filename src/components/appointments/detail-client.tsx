@@ -25,7 +25,8 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import Link from "next/link";
+import { NotetakerPanel } from "@/components/meetings/notetaker-panel";
+import { VideoMeetingPanel } from "@/components/video/video-meeting-panel";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -480,6 +481,9 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
             </p>
           ) : null}
         </Card>
+
+        <NotetakerPanel appointmentId={appt.id} />
+        <VideoMeetingPanel appointmentId={appt.id} />
 
         {/* Timeline */}
         <Card className="p-5">

@@ -36,6 +36,9 @@ Jobs of type `appointment_workflow_step` are enqueued into the **existing** `job
 5. Post-Appointment Follow-Up
 6. Review Request
 7. Reschedule Follow-Up
+8. No-Show Recovery
+9. Re-Engagement / Book Again
+10. Payment Follow-Up
 
 ## Invalidation Rules
 
@@ -46,7 +49,7 @@ Jobs of type `appointment_workflow_step` are enqueued into the **existing** `job
 
 ## Preserved Systems
 
-Existing `scanPlatformAppointmentReminders` (24h/2h) continues unchanged. Workflows are additive.
+`scanPlatformAppointmentReminders` (24h/2h) and booking confirmation SMS continue for workspaces **without** an active `appointment_booked` workflow scoped to the appointment type. When such a workflow is active, platform default reminders are skipped for that lifecycle so workflow steps are the single source of truth (see `platform-guard.ts`).
 
 ## UI
 

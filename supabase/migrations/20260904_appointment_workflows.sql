@@ -2,66 +2,66 @@
 
 CREATE TABLE IF NOT EXISTS appointment_workflows (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  source_type TEXT NOT NULL DEFAULT 'custom',
-  template_id TEXT,
+  "sourceType" TEXT NOT NULL DEFAULT 'custom',
+  "templateId" TEXT,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   status TEXT NOT NULL DEFAULT 'active',
   trigger TEXT NOT NULL,
-  appointment_type_scope JSONB NOT NULL DEFAULT '{}',
+  "appointmentTypeScope" JSONB NOT NULL DEFAULT '{}',
   channels JSONB NOT NULL DEFAULT '[]',
   conditions JSONB,
-  steps_json JSONB NOT NULL DEFAULT '[]',
+  "stepsJson" JSONB NOT NULL DEFAULT '[]',
   version INTEGER NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS appointment_workflows_workspace_status_idx
-  ON appointment_workflows (workspace_id, status);
+  ON appointment_workflows ("workspaceId", status);
 CREATE INDEX IF NOT EXISTS appointment_workflows_workspace_trigger_idx
-  ON appointment_workflows (workspace_id, trigger);
+  ON appointment_workflows ("workspaceId", trigger);
 
 CREATE TABLE IF NOT EXISTS appointment_workflow_executions (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  workflow_id TEXT NOT NULL REFERENCES appointment_workflows(id) ON DELETE CASCADE,
-  workflow_version INTEGER NOT NULL DEFAULT 1,
-  appointment_id TEXT NOT NULL,
-  contact_id TEXT,
+  "workspaceId" TEXT NOT NULL REFERENCES "Workspace"(id) ON DELETE CASCADE,
+  "workflowId" TEXT NOT NULL REFERENCES appointment_workflows(id) ON DELETE CASCADE,
+  "workflowVersion" INTEGER NOT NULL DEFAULT 1,
+  "appointmentId" TEXT NOT NULL,
+  "contactId" TEXT,
   status TEXT NOT NULL DEFAULT 'active',
-  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  invalidated_at TIMESTAMPTZ,
-  invalidate_reason TEXT,
+  "startedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "completedAt" TIMESTAMPTZ,
+  "invalidatedAt" TIMESTAMPTZ,
+  "invalidateReason" TEXT,
   metadata JSONB
 );
 
 CREATE INDEX IF NOT EXISTS appointment_workflow_executions_ws_appt_idx
-  ON appointment_workflow_executions (workspace_id, appointment_id);
+  ON appointment_workflow_executions ("workspaceId", "appointmentId");
 CREATE INDEX IF NOT EXISTS appointment_workflow_executions_wf_status_idx
-  ON appointment_workflow_executions (workflow_id, status);
+  ON appointment_workflow_executions ("workflowId", status);
 
 CREATE TABLE IF NOT EXISTS appointment_workflow_step_executions (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  execution_id TEXT NOT NULL REFERENCES appointment_workflow_executions(id) ON DELETE CASCADE,
-  workflow_id TEXT NOT NULL,
-  step_id TEXT NOT NULL,
-  scheduled_for TIMESTAMPTZ NOT NULL,
-  executed_at TIMESTAMPTZ,
+  "workspaceId" TEXT NOT NULL,
+  "executionId" TEXT NOT NULL REFERENCES appointment_workflow_executions(id) ON DELETE CASCADE,
+  "workflowId" TEXT NOT NULL,
+  "stepId" TEXT NOT NULL,
+  "scheduledFor" TIMESTAMPTZ NOT NULL,
+  "executedAt" TIMESTAMPTZ,
   state TEXT NOT NULL DEFAULT 'scheduled',
   channel TEXT,
-  idempotency_key TEXT NOT NULL UNIQUE,
-  provider_message_id TEXT,
-  failure_reason TEXT,
+  "idempotencyKey" TEXT NOT NULL UNIQUE,
+  "providerMessageId" TEXT,
+  "failureReason" TEXT,
   payload JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS appointment_workflow_step_exec_schedule_idx
-  ON appointment_workflow_step_executions (workspace_id, scheduled_for, state);
+  ON appointment_workflow_step_executions ("workspaceId", "scheduledFor", state);
 CREATE INDEX IF NOT EXISTS appointment_workflow_step_exec_execution_idx
-  ON appointment_workflow_step_executions (execution_id);
+  ON appointment_workflow_step_executions ("executionId");

@@ -176,7 +176,7 @@ export function RealtorLeadsListView({
             Import Leads
           </Link>
           <LeadsExportButton leads={leads} />
-          <Link href="/contacts/new" className="realtor-btn-primary">
+          <Link href="/contacts/create" className="realtor-btn-primary">
             + Add Lead
           </Link>
         </div>
@@ -347,7 +347,7 @@ export function RealtorLeadsListView({
                       <Link href={`/phone?contact=${lead.id}`} aria-label="Call">
                         <Phone className="h-4 w-4" />
                       </Link>
-                      <Link href={`/inbox?contact=${lead.id}`} aria-label="Message">
+                      <Link href={`/conversations?contact=${lead.id}`} aria-label="Message">
                         <MessageSquare className="h-4 w-4" />
                       </Link>
                       <Link href={`/realtor/leads/${lead.id}`} aria-label="More">

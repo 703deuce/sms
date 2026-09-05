@@ -27,6 +27,7 @@ voice-runtime-python/**/__pycache__/
 *.pem
 
 # debug
+.cfna-probe/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

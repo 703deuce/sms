@@ -289,6 +289,7 @@ model Workspace {
   voiceToolExecutions VoiceToolExecution[]
   voiceAppointments VoiceAppointment[]
   appointmentSlotHolds AppointmentSlotHold[]
+  appointmentAiMutationRecords AppointmentAiMutationRecord[]
   appointmentWorkflows AppointmentWorkflow[]
   appointmentWorkflowExecutions AppointmentWorkflowExecution[]
   appointmentWaitlistEntries AppointmentWaitlistEntry[]
@@ -388,6 +389,8 @@ model Workspace {
   smartRoutingAiRecommendations SmartRoutingAiRecommendation[]
   smartRoutingEmployeeAccessTokens SmartRoutingEmployeeAccessToken[]
   smartRoutingCallRecordings SmartRoutingCallRecording[]
+  meetingSessions MeetingSession[]
+  videoMeetings VideoMeeting[]
   smartRoutingCallControlSessions SmartRoutingCallControlSession[]
   smartRoutingCallbackCodes SmartRoutingCallbackCode[]
   productEntitlements ProductEntitlement[]
@@ -2799,6 +2802,30 @@ model AppointmentSlotHold {
   @@map("appointment_slot_holds")
 }
 
+/// Durable idempotency ledger for appointment AI consequential mutations.
+model AppointmentAiMutationRecord {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  idempotencyKey   String
+  requestId        String?
+  contactId        String?
+  channel          String
+  actionKind       String
+  actionPayloadJson Json     @default("{}")
+  /// pending | completed | failed
+  status           String    @default("pending")
+  outcomeJson      Json?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, contactId, createdAt])
+  @@index([workspaceId, status, createdAt])
+  @@map("appointment_ai_mutation_records")
+}
+
 /** Appointment-specific workflows — isolated from SMS DripCampaign / Playbooks. */
 model AppointmentWorkflow {
   id                   String   @id @default(cuid())
@@ -4402,6 +4429,55 @@ model MctbVoiceBridgeCallEvent {
   @@map("mctb_voice_bridge_call_events")
 }
 
+/// Production CFNA ingress probe — proves whether mctb-entry voice_url was hit on live forwards.
+/// Enable with MCTB_CFNA_PROBE_DB=1 for one live CFNA test, then query this table.
+model CfnaIngressProbe {
+  id                  String    @id @default(cuid())
+  recordedAt          DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  completedAt         DateTime?
+
+  layer               String
+  eventType           String
+  probeSessionId      String?
+
+  calledDid           String?
+  callerE164          String?
+  toRaw               String?
+  fromRaw             String?
+  requestUri          String?
+  diversionHeader     String?
+  historyInfo         String?
+  callSid             String?
+  connectionId        String?
+
+  mctbEntryInvoked    Boolean   @default(false)
+  texmlGenerated      Boolean?
+  texmlBranch         String?
+  responseStatus      Int?
+  responseLatencyMs   Int?
+  xmlBytes            Int?
+
+  attNetInPayload     Boolean   @default(false)
+  telnyxHostInPayload Boolean   @default(false)
+  forwardedFrom       String?
+  hasDiversionHeader  Boolean   @default(false)
+  hasCallControlId    Boolean   @default(false)
+
+  sipHints            Json?
+  fieldKeys           Json?
+  payloadSnapshot     Json?
+  errorPayload        Json?
+  note                String?
+
+  @@index([recordedAt])
+  @@index([calledDid, recordedAt])
+  @@index([callSid])
+  @@index([mctbEntryInvoked, recordedAt])
+  @@index([probeSessionId])
+  @@map("cfna_ingress_probes")
+}
+
 /// Machine-readable trace for John MCTB runs.
 model MissedCallTextTrace {
   id                String   @id @default(cuid())
@@ -5315,5 +5391,219 @@ model VerifyBulkJobRow {
 
   @@index([bulkJobId, rowIndex])
   @@map("verify_bulk_job_rows")
+}
+
+/// AI Notetaker — external meeting capture via Telnyx Meeting API.
+model MeetingSession {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  appointmentId        String?
+  contactId            String?
+  eventTypeId          String?
+  videoMeetingId       String?   @unique
+  meetingSource        String    @default("external_notetaker")
+  provider             String    @default("telnyx")
+  providerSessionId    String?
+  meetingUrl           String
+  meetingPlatform      String    @default("unknown_supported")
+  title                String?
+  botName              String    @default("Transovo Notetaker")
+  enabled              Boolean   @default(true)
+  status               String    @default("pending")
+  scheduledStartAt     DateTime?
+  actualJoinAt         DateTime?
+  actualStartAt        DateTime?
+  endedAt              DateTime?
+  durationSeconds      Int?
+  recordingEnabled     Boolean   @default(true)
+  transcriptEnabled    Boolean   @default(true)
+  summaryEnabled       Boolean   @default(true)
+  actionItemsEnabled   Boolean   @default(true)
+  followUpEnabled      Boolean   @default(true)
+  summaryTemplate      String    @default("general")
+  transcriptStatus     String    @default("pending")
+  recordingStatus      String    @default("pending")
+  summaryStatus        String    @default("pending")
+  actionItemsStatus    String    @default("pending")
+  followUpStatus       String    @default("pending")
+  summaryText          String?   @db.Text
+  summaryOriginal      String?   @db.Text
+  followUpEmailDraft   String?   @db.Text
+  followUpSmsDraft     String?   @db.Text
+  recordingStoragePath String?
+  recordingProviderUrl String?
+  providerMetadata     Json?
+  failureCode          String?
+  failureMessage       String?
+  idempotencyKey       String?
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  videoMeeting         VideoMeeting? @relation(fields: [videoMeetingId], references: [id], onDelete: SetNull)
+  transcriptSegments   MeetingTranscriptSegment[]
+  actionItems          MeetingActionItem[]
+  shares               MeetingRecapShare[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, status, scheduledStartAt])
+  @@index([appointmentId])
+  @@index([contactId])
+  @@map("meeting_sessions")
+}
+
+/// Native Transovo Video — Telnyx Video Rooms powered meetings.
+model VideoMeeting {
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  appointmentId            String?
+  eventTypeId              String?
+  hostUserId               String?
+  provider                 String    @default("telnyx")
+  providerRoomId           String?
+  providerActiveSessionId  String?
+  publicMeetingToken       String    @unique
+  title                    String?
+  scheduledStartAt         DateTime?
+  scheduledEndAt           DateTime?
+  status                   String    @default("scheduled")
+  provisioningStatus       String    @default("pending")
+  maxParticipants          Int       @default(10)
+  waitingRoomEnabled       Boolean   @default(false)
+  requireHost              Boolean   @default(false)
+  requireGuestEmail        Boolean   @default(true)
+  requireGuestName         Boolean   @default(false)
+  passcodeHash             String?
+  lockedAt                 DateTime?
+  hostPresentAt            DateTime?
+  recordingMode            String    @default("off")
+  transcriptionEnabled     Boolean   @default(false)
+  aiRecapEnabled           Boolean   @default(false)
+  chatEnabled              Boolean   @default(true)
+  screenSharePolicy        String    @default("all")
+  guestCameraEnabled       Boolean   @default(true)
+  guestMicEnabled          Boolean   @default(true)
+  postMeetingRedirect      String?
+  joinWindowMinutesBefore  Int       @default(15)
+  joinWindowMinutesAfter   Int       @default(30)
+  recordingStatus          String    @default("disabled")
+  compositionStatus        String    @default("disabled")
+  transcriptStatus         String    @default("disabled")
+  compositionId            String?
+  recordingStoragePath     String?
+  recordingProviderUrl     String?
+  providerMetadata         Json?
+  idempotencyKey           String?
+  endedAt                  DateTime?
+  canceledAt               DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  meetingSession           MeetingSession?
+  participants             VideoParticipant[]
+  chatMessages             VideoChatMessage[]
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, status, scheduledStartAt])
+  @@index([appointmentId])
+  @@map("video_meetings")
+}
+
+model VideoParticipant {
+  id                    String    @id @default(cuid())
+  videoMeetingId        String
+  workspaceId           String
+  appointmentAttendeeId String?
+  contactId             String?
+  userId                String?
+  providerParticipantId String?
+  displayName           String
+  email                 String?
+  role                  String    @default("guest")
+  state                 String    @default("invited")
+  requestedJoinAt       DateTime?
+  admittedAt            DateTime?
+  joinedAt              DateTime?
+  leftAt                DateTime?
+  removedAt             DateTime?
+  durationSeconds       Int?
+  isHost                Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  videoMeeting          VideoMeeting @relation(fields: [videoMeetingId], references: [id], onDelete: Cascade)
+
+  @@index([videoMeetingId, state])
+  @@index([workspaceId])
+  @@map("video_participants")
+}
+
+model VideoChatMessage {
+  id               String   @id @default(cuid())
+  videoMeetingId   String
+  workspaceId      String
+  participantId    String?
+  senderName       String
+  text             String   @db.Text
+  sentAt           DateTime @default(now())
+  videoMeeting     VideoMeeting @relation(fields: [videoMeetingId], references: [id], onDelete: Cascade)
+
+  @@index([videoMeetingId, sentAt])
+  @@map("video_chat_messages")
+}
+
+model MeetingTranscriptSegment {
+  id                String   @id @default(cuid())
+  meetingSessionId  String
+  workspaceId       String
+  providerSegmentId String?
+  speakerId         String?
+  speakerName       String?
+  startMs           Int?
+  endMs             Int?
+  text              String   @db.Text
+  sequence          Int      @default(0)
+  confidence        Float?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  meetingSession    MeetingSession @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([meetingSessionId, sequence])
+  @@map("meeting_transcript_segments")
+}
+
+model MeetingActionItem {
+  id               String   @id @default(cuid())
+  meetingSessionId String
+  workspaceId      String
+  description      String   @db.Text
+  assigneeText     String?
+  dueDate          DateTime?
+  completed        Boolean  @default(false)
+  sourceRef        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  meetingSession   MeetingSession @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([meetingSessionId])
+  @@map("meeting_action_items")
+}
+
+model MeetingRecapShare {
+  id               String    @id @default(cuid())
+  meetingSessionId String
+  workspaceId      String
+  token            String    @unique
+  includeSummary   Boolean   @default(true)
+  includeActionItems Boolean @default(true)
+  includeTranscript Boolean  @default(false)
+  includeRecording Boolean   @default(false)
+  passwordHash     String?
+  expiresAt        DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  meetingSession   MeetingSession @relation(fields: [meetingSessionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("meeting_recap_shares")
 }
 

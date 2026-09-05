@@ -106,13 +106,17 @@ export async function createAppointmentWorkflow(
   workspaceId: string,
   input: CreateAppointmentWorkflowInput,
 ): Promise<AppointmentWorkflowRecord> {
+  const template = input.templateId ? getPrebuiltTemplate(input.templateId) : null;
   const steps = input.steps?.length
     ? input.steps
-    : input.templateId
-      ? getPrebuiltTemplate(input.templateId)?.defaultSteps || []
-      : [];
+    : template?.defaultSteps || [];
 
   if (!steps.length) throw new Error("At least one workflow step is required");
+
+  const conditions =
+    input.conditions !== undefined
+      ? input.conditions
+      : template?.defaultConditions ?? null;
 
   const row = await getPrisma().appointmentWorkflow.create({
     data: {
@@ -125,7 +129,7 @@ export async function createAppointmentWorkflow(
       trigger: input.trigger,
       appointmentTypeScope: (input.appointmentTypeScope || { mode: "all" }) as object,
       channels: (input.channels || ["sms"]) as object,
-      conditions: (input.conditions || null) as object,
+      conditions: conditions as object,
       stepsJson: steps as object,
       version: 1,
     },

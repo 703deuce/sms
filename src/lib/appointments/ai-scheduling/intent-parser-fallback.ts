@@ -67,11 +67,15 @@ function parseAfterTime(text: string): string | undefined {
 
 function parseIntentType(text: string): SchedulingIntent["intent"] {
   const lower = text.toLowerCase();
-  if (/\bcancel\b|\bcan'?t make it\b|\bneed to cancel\b/.test(lower)) return "cancel";
-  if (/\breschedule\b|\bmove\b|\bchange.*(time|date|appointment)\b/.test(lower)) {
-    return "reschedule";
+
+  if (/\b(might not|may not|don't know if i can|not sure if i can|uncertain)\b/.test(lower)) {
+    return "availability_request";
   }
-  if (/\bconfirm\b|\byes\b/.test(lower)) return "confirm";
+
+  if (/\bcancel my\b|\bneed to cancel\b|\bplease cancel\b/.test(lower)) return "cancel";
+  if (/\breschedule my\b|\bmove my appointment\b/.test(lower)) return "reschedule";
+  if (/\b(could i move|can i move|could we move)\b/.test(lower)) return "reschedule";
+  if (/\bconfirm\b/.test(lower)) return "confirm";
   if (/\bavailable\b|\bavailability\b|\bdo you have\b|\banything\b/.test(lower)) {
     return "availability_request";
   }

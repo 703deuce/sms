@@ -70,6 +70,41 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!stepExecutionId) throw new Error("stepExecutionId required");
       return processAppointmentWorkflowStep({ stepExecutionId });
     }
+    case "appointment_voice_reminder_retry": {
+      const { processVoiceReminderRetry } = await import(
+        "@/lib/appointment-voice-reminders/service"
+      );
+      const workspaceId = String(payload.workspaceId || "");
+      const appointmentId = String(payload.appointmentId || "");
+      const toE164 = String(payload.toE164 || "");
+      const templateId = String(payload.templateId || "");
+      const attempt = Number(payload.attempt ?? 1);
+      if (!workspaceId || !appointmentId || !toE164 || !templateId) {
+        throw new Error("appointment voice reminder retry payload incomplete");
+      }
+      return processVoiceReminderRetry({
+        workspaceId,
+        appointmentId,
+        toE164,
+        templateId,
+        workflowId: payload.workflowId ? String(payload.workflowId) : undefined,
+        workflowStepId: payload.workflowStepId ? String(payload.workflowStepId) : undefined,
+        stepExecutionId: payload.stepExecutionId ? String(payload.stepExecutionId) : undefined,
+        attempt,
+      });
+    }
+    case "meeting_assistant_process": {
+      const { processMeetingSessionArtifacts } = await import("@/lib/meeting-assistant/processing");
+      const sessionId = String(payload.sessionId || "");
+      if (!sessionId) throw new Error("sessionId required");
+      return processMeetingSessionArtifacts(sessionId);
+    }
+    case "transovo_video_process": {
+      const { processTransovoVideoArtifacts } = await import("@/lib/transovo-video/processing");
+      const videoMeetingId = String(payload.videoMeetingId || "");
+      if (!videoMeetingId) throw new Error("videoMeetingId required");
+      return processTransovoVideoArtifacts(videoMeetingId);
+    }
     case "appointment_waitlist_notify": {
       const { processWaitlistNotification } = await import("@/lib/appointments/waitlist");
       const waitlistEntryId = String(payload.waitlistEntryId || "");

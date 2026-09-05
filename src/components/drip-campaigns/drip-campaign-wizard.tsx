@@ -430,20 +430,47 @@ export function DripCampaignWizard({ mode = "create", initial }: Props) {
                   <div className="mb-4 flex items-center justify-between gap-2">
                     <p className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                       <MessageSquare className="h-4 w-4 text-primary" />
-                      Message {activeMessageIndex + 1}
+                      {activeStep?.channel === "voice" ? "Voice call" : "Message"} {activeMessageIndex + 1}
                     </p>
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
                         characters === 0
                           ? "bg-muted text-muted-foreground"
-                          : segments > 1
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-emerald-100 text-emerald-700",
+                          : activeStep?.channel === "voice"
+                            ? "bg-sky-100 text-sky-700"
+                            : segments > 1
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700",
                       )}
                     >
-                      {characters} chars · {segments || 0} SMS
+                      {activeStep?.channel === "voice"
+                        ? "Voice call"
+                        : `${characters} chars · ${segments || 0} SMS`}
                     </span>
+                  </div>
+
+                  <div className="mb-4">
+                    <Label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Channel
+                    </Label>
+                    <Select
+                      value={activeStep?.channel || "sms"}
+                      onChange={(e) =>
+                        updateStep(activeMessageIndex, {
+                          channel: e.target.value as DripStep["channel"],
+                        })
+                      }
+                      className="h-9 text-[13px]"
+                    >
+                      <option value="sms">SMS</option>
+                      <option value="voice">Voice call</option>
+                    </Select>
+                    {activeStep?.channel === "voice" ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Requires an upcoming appointment for the contact. Uses Voice Reminders when configured.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mb-4 grid grid-cols-[1fr_130px] gap-2">
