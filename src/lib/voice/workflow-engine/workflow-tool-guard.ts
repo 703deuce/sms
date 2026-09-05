@@ -2,8 +2,6 @@
  * Final-layer authorization for Telnyx workflow-scoped tools.
  */
 
-import { getPrisma } from "@/lib/db";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   isConversationWorkflowMode,
   WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
@@ -33,11 +31,8 @@ export async function assertWorkflowToolAllowed(input: {
     return { allowed: true };
   }
 
-  const agent = await getPrisma().voiceAgent.findFirst({
-    where: { id: input.agentId, workspaceId: input.workspaceId },
-    select: { draftConfig: true },
-  });
-  const config = agent ? parseVoiceAgentConfig(agent.draftConfig) : null;
+  const { loadVoiceAgentRuntimeConfig } = await import("@/lib/voice/load-agent-config");
+  const config = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
   if (!isConversationWorkflowMode(config)) {
     return { allowed: true };
   }

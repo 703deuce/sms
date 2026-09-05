@@ -5,6 +5,7 @@ import {
   ensureWorkflowFieldSession,
   saveWorkflowFieldSession,
   setSessionField,
+  syncKnownServiceToSession,
 } from "./session";
 import { SYSTEM_FIELD_IDS } from "./system-fields";
 import { FieldValidationError, validateFieldValue } from "./validate";
@@ -88,6 +89,7 @@ export async function saveCollectedFields(
 
   session.workflow = workflow;
   if (input.serviceName) session.service_name = input.serviceName;
+  session = syncKnownServiceToSession(session, input.serviceName);
 
   await saveWorkflowFieldSession(callId, session);
   await syncSystemFieldsToContact({

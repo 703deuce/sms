@@ -42,13 +42,8 @@ export async function assertToolAllowed(input: {
 
   let agentConfig: { advanced?: Record<string, unknown> } | null = null;
   if (input.agentId) {
-    const { getPrisma } = await import("@/lib/db");
-    const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
-    const agent = await getPrisma().voiceAgent.findFirst({
-      where: { id: input.agentId, workspaceId: input.workspaceId },
-      select: { draftConfig: true },
-    });
-    if (agent) agentConfig = parseVoiceAgentConfig(agent.draftConfig);
+    const { loadVoiceAgentRuntimeConfig } = await import("@/lib/voice/load-agent-config");
+    agentConfig = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
   }
 
   if (

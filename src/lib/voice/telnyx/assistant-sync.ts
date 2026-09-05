@@ -354,7 +354,10 @@ export async function syncTelnyxAssistant(
       : "If book_appointment fails or returns an error, explain the issue and offer alternatives.",
     "CRITICAL TOOL RULES: When the caller asks for a human/person/agent, use Transfer (not hangup, not AI handoff). When they ask to look up a contact, use search_crm_contacts or crm_lookup, then speak the result. Never call hangup after a tool. Tool failures must stay on the call.",
     shouldInjectCallerPlaybook("caller_amy", enabledToolIds)
-      ? compileCallerToolPlaybookForPrompt(enabledToolIds, { minimumSideEffect })
+      ? compileCallerToolPlaybookForPrompt(enabledToolIds, {
+          minimumSideEffect,
+          conversationWorkflow,
+        })
       : "",
   ]
     .filter(Boolean)

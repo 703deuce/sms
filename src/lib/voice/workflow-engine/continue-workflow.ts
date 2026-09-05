@@ -254,27 +254,52 @@ export async function executeContinueWorkflow(
   }
 
   if (state === "INTENT_DISCOVERY" || state === "COLLECTING_FIELDS") {
-    const ctx = await buildRuntimeContext({
-      callId: input.callId,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      workflow,
-      serviceName: resolvedServiceName,
-    });
-    return normalizeResponse({
-      success: true,
-      workflowState: state,
-      nextAction: "COLLECT_CURRENT_FIELD",
-      speak:
-        ctx.current_field?.collection_instruction ||
-        ctx.speak ||
-        "I still need a few details before we check availability.",
-      data: {
-        current_field: ctx.current_field,
-        missing_fields: ctx.missing_fields,
-        workflow_complete: ctx.workflow_complete,
-      },
-    });
+    if (userInput) {
+      const { recordCurrentField } = await import("@/lib/voice/field-runtime/save");
+      const saved = await recordCurrentField({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        value: userInput,
+        workflow,
+        serviceName: resolvedServiceName,
+      });
+      if (saved.saved || saved.saved_field_ids) {
+        const recomputed = await computeWorkflowState({
+          callId: input.callId,
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          workflow,
+          serviceName: resolvedServiceName,
+        });
+        state = recomputed.state;
+        runtime = recomputed.runtime;
+      }
+    }
+
+    if (state === "INTENT_DISCOVERY" || state === "COLLECTING_FIELDS") {
+      const ctx = await buildRuntimeContext({
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        workflow,
+        serviceName: resolvedServiceName,
+      });
+      return normalizeResponse({
+        success: true,
+        workflowState: state,
+        nextAction: "COLLECT_CURRENT_FIELD",
+        speak:
+          ctx.current_field?.collection_instruction ||
+          ctx.speak ||
+          "I still need a few details before we check availability.",
+        data: {
+          current_field: ctx.current_field,
+          missing_fields: ctx.missing_fields,
+          workflow_complete: ctx.workflow_complete,
+        },
+      });
+    }
   }
 
   if (state === "CHECKING_AVAILABILITY") {

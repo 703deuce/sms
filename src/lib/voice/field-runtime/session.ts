@@ -1,8 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { setCachedWorkflowFieldSession } from "./session-cache";
+import { SYSTEM_FIELD_IDS } from "./system-fields";
 import type {
-  CollectedFieldValue,
   FieldValueSource,
   WorkflowAction,
   WorkflowFieldSession,
@@ -40,6 +40,16 @@ export function isStubInboundContactName(
   if ((firstName || "").trim() !== "Caller") return false;
   const last = (lastName || "").trim();
   return /^\d{4}$/.test(last);
+}
+
+export function syncKnownServiceToSession(
+  session: WorkflowFieldSession,
+  serviceName?: string | null,
+): WorkflowFieldSession {
+  const resolved = String(serviceName || session.service_name || "").trim();
+  if (!resolved) return session;
+  if (getSessionFieldValue(session, SYSTEM_FIELD_IDS.service)) return session;
+  return setSessionField(session, SYSTEM_FIELD_IDS.service, resolved, "derived", "Service");
 }
 
 export async function loadWorkflowFieldSession(
@@ -95,6 +105,12 @@ export async function ensureWorkflowFieldSession(input: {
 }): Promise<WorkflowFieldSession> {
   const existing = await loadWorkflowFieldSession(input.callId);
   if (existing) {
+    const synced = syncKnownServiceToSession(existing, input.serviceName);
+    if (synced !== existing) {
+      await saveWorkflowFieldSession(input.callId, synced);
+      setCachedWorkflowFieldSession(input.callId, synced);
+      return synced;
+    }
     setCachedWorkflowFieldSession(input.callId, existing);
     return existing;
   }
@@ -104,6 +120,7 @@ export async function ensureWorkflowFieldSession(input: {
     workflow: input.workflow,
     serviceName: input.serviceName,
   });
+  session = syncKnownServiceToSession(session, input.serviceName);
 
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findUnique({

@@ -150,7 +150,13 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       const shares = await listMeetingRecapShares(auth.workspaceId, id);
       return NextResponse.json({
         data: {
-          shares: shares.map((share) => ({
+          shares: shares.map((share: {
+            id: string;
+            token: string;
+            expiresAt: Date | null;
+            revokedAt: Date | null;
+            createdAt: Date;
+          }) => ({
             id: share.id,
             token: share.token,
             publicUrl: publicRecapShareUrl(share.token),

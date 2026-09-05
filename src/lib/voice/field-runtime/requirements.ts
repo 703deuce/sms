@@ -4,6 +4,8 @@ import { loadWorkflowFieldDefinitions, toManifestEntries } from "./loader";
 import {
   ensureWorkflowFieldSession,
   getSessionFieldValue,
+  saveWorkflowFieldSession,
+  syncKnownServiceToSession,
 } from "./session";
 import type { WorkflowFieldSession } from "./types";
 import type {
@@ -77,7 +79,7 @@ export async function getWorkflowRequirements(input: {
   workflow: WorkflowAction;
   serviceName?: string | null;
 }): Promise<WorkflowRequirementsResult> {
-  const session = input.callId
+  let session = input.callId
     ? await ensureWorkflowFieldSession({
         callId: input.callId,
         workspaceId: input.workspaceId,
@@ -87,11 +89,23 @@ export async function getWorkflowRequirements(input: {
       })
     : null;
 
+  let serviceName = input.serviceName || session?.service_name || null;
+  if (input.callId && session) {
+    const { loadAgentRuntime } = await import("@/lib/voice/workflow-engine/runtime-state");
+    const runtime = await loadAgentRuntime(input.callId);
+    serviceName = serviceName || runtime?.service_name || null;
+    const synced = syncKnownServiceToSession(session, serviceName);
+    if (synced !== session) {
+      await saveWorkflowFieldSession(input.callId, synced);
+      session = synced;
+    }
+  }
+
   const defs = await loadWorkflowFieldDefinitions({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     workflow: input.workflow,
-    serviceName: input.serviceName || undefined,
+    serviceName: serviceName || undefined,
   });
   const entries = toManifestEntries(defs);
   const missing = session ? missingFields(entries, session) : entries.filter((e) => e.required);
