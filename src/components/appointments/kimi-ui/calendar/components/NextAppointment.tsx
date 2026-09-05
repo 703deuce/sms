@@ -1,6 +1,5 @@
 import React from "react";
 import { Phone, Video, ArrowRight } from "lucide-react";
-import Link from "next/link";
 import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
 import type { CalendarNextAppointment } from "@/features/appointments/kimi/calendar/types";
 
@@ -45,11 +44,6 @@ export default function NextAppointment({ appointment: a, onOpenAppointment }: P
           <Video size={14} className="muted-icon" aria-hidden />
           <CalendarMeetingBadges meeting={a.meeting} appointmentId={a.id} />
         </div>
-        {a.meeting?.videoJoinUrl ? (
-          <Link href={`/appointments/${a.id}/video/host`} className="link-btn mt-2 inline-flex">
-            Join video as host <ArrowRight size={14} />
-          </Link>
-        ) : null}
       </div>
       <button type="button" className="btn-primary full" onClick={() => onOpenAppointment(a.id)}>
         View appointment <ArrowRight size={15} />

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { VIDEO_STATUS_LABELS } from "@/lib/transovo-video/types";
-import { Copy, ExternalLink, Video } from "lucide-react";
+import { Copy, Video } from "lucide-react";
 import Link from "next/link";
 
 type VideoMeetingRow = {
@@ -22,6 +22,7 @@ export function VideoMeetingPanel({ appointmentId }: { appointmentId: string }) 
   const [meeting, setMeeting] = useState<VideoMeetingRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [entitled, setEntitled] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch(`/api/appointments/${appointmentId}/video`)
@@ -49,7 +50,7 @@ export function VideoMeetingPanel({ appointmentId }: { appointmentId: string }) 
   if (!meeting) {
     return (
       <Card className="p-4">
-        <CardTitle className="text-base">Video Meeting</CardTitle>
+        <CardTitle className="text-base">Transovo Video</CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
           No Transovo Video room is linked to this appointment.
         </p>
@@ -59,6 +60,12 @@ export function VideoMeetingPanel({ appointmentId }: { appointmentId: string }) 
 
   const meetingUrl = meeting.meetingUrl || `/video/${meeting.publicMeetingToken}`;
   const hostJoinUrl = `/appointments/${appointmentId}/video/host`;
+
+  async function copyGuestLink() {
+    await navigator.clipboard.writeText(meetingUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <Card className="p-4">
@@ -76,8 +83,10 @@ export function VideoMeetingPanel({ appointmentId }: { appointmentId: string }) 
         </div>
       </div>
 
-      <div className="mt-4 space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Meeting link</p>
+      <div className="mt-4 space-y-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Your meeting
+        </p>
         <div className="flex flex-wrap gap-2">
           <Button asChild size="sm">
             <Link href={hostJoinUrl}>
@@ -87,20 +96,17 @@ export function VideoMeetingPanel({ appointmentId }: { appointmentId: string }) 
           </Button>
           <Button asChild size="sm" variant="outline">
             <a href={meetingUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Guest link
+              Preview guest join
             </a>
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigator.clipboard.writeText(meetingUrl)}
-          >
+          <Button size="sm" variant="ghost" onClick={() => void copyGuestLink()}>
             <Copy className="mr-2 h-4 w-4" />
-            Copy Link
+            {copied ? "Copied" : "Copy guest link"}
           </Button>
         </div>
-        <p className="break-all text-xs text-muted-foreground">{meetingUrl}</p>
+        <p className="text-sm text-muted-foreground">
+          Customers receive this join link automatically in confirmation and reminder messages.
+        </p>
       </div>
 
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">

@@ -8,6 +8,7 @@ import { meetingPlatformLabel } from "@/lib/meeting-assistant/platform";
 import type { MeetingPlatform } from "@/lib/meeting-assistant/types";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { MeetingSharePanel } from "@/components/meetings/meeting-share-panel";
 
 type MeetingDetail = {
   id: string;
@@ -112,6 +113,9 @@ export function MeetingDetailClient({ meetingId }: { meetingId: string }) {
             View appointment
           </Link>
         ) : null}
+        <div className="mt-4">
+          <MeetingSharePanel meetingId={meetingId} />
+        </div>
       </div>
 
       <Card className="space-y-3 p-5">

@@ -4,7 +4,7 @@ import { formatAppointmentWhen } from "@/components/appointments/appointment-ui"
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { CalendarCheck, Check } from "lucide-react";
+import { CalendarCheck, Check, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type ActionKind = "confirm" | "cancel" | "reschedule";
@@ -15,6 +15,9 @@ type AppointmentPreview = {
   startsAt: string;
   status: string;
   timezone?: string | null;
+  meetingLink?: string | null;
+  isTransovoVideo?: boolean;
+  locationLabel?: string | null;
 };
 
 type Slot = { startsAt: string; endsAt: string };
@@ -119,6 +122,8 @@ export function PublicAppointmentActionClient({
     );
   }
 
+  const showJoinMeeting = Boolean(appt?.meetingLink) && kind !== "cancel" && (!done || kind === "confirm");
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-10">
       <Card className="w-full max-w-md p-6 sm:p-8">
@@ -135,6 +140,14 @@ export function PublicAppointmentActionClient({
                 {appt.serviceName || "Appointment"} ·{" "}
                 {formatAppointmentWhen(appt.startsAt, appt.timezone)}
               </p>
+            ) : null}
+            {showJoinMeeting && appt?.meetingLink ? (
+              <Button asChild size="lg" className="mt-6 w-full">
+                <a href={appt.meetingLink} target="_blank" rel="noreferrer">
+                  <Video className="mr-2 h-4 w-4" />
+                  {appt.isTransovoVideo ? "Join meeting" : "Open meeting link"}
+                </a>
+              </Button>
             ) : null}
           </div>
         ) : (
@@ -154,8 +167,20 @@ export function PublicAppointmentActionClient({
                   <p className="text-[12px] text-muted-foreground">
                     {formatAppointmentWhen(appt.startsAt, appt.timezone)}
                   </p>
+                  {appt.locationLabel ? (
+                    <p className="text-[12px] text-muted-foreground">{appt.locationLabel}</p>
+                  ) : null}
                 </div>
               </div>
+            ) : null}
+
+            {showJoinMeeting && appt?.meetingLink ? (
+              <Button asChild size="lg" className="mt-4 w-full" variant="outline">
+                <a href={appt.meetingLink} target="_blank" rel="noreferrer">
+                  <Video className="mr-2 h-4 w-4" />
+                  {appt.isTransovoVideo ? "Join meeting" : "Open meeting link"}
+                </a>
+              </Button>
             ) : null}
 
             {kind === "reschedule" ? (

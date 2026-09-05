@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
 import {
+  buildPublicAppointmentCustomerPreview,
   findAppointmentByPublicToken,
   getAvailability,
   loadAppointmentPlatformConfig,
@@ -27,12 +28,8 @@ export async function GET(_request: Request, { params }: Params) {
     );
     return NextResponse.json({
       data: {
-        id: row.id,
-        serviceName: row.serviceName,
-        startsAt: row.startsAt,
+        ...buildPublicAppointmentCustomerPreview(row),
         endsAt: row.endsAt,
-        status: row.status,
-        timezone: row.timezone || config.timezone,
         slots,
       },
     });
@@ -54,11 +51,7 @@ export async function POST(request: Request, { params }: Params) {
     }
     const updated = await reschedulePlatformAppointment(row.workspaceId, row.id, body.startsAt);
     return NextResponse.json({
-      data: {
-        id: updated.id,
-        startsAt: updated.startsAt,
-        status: updated.status,
-      },
+      data: buildPublicAppointmentCustomerPreview(updated),
     });
   } catch (err) {
     return jsonError(err, 400);

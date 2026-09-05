@@ -197,5 +197,48 @@ export function appointmentMergeVars(input: {
     booking_link: input.bookingLink || "",
     payment_link: input.paymentLink || "",
     meeting_link: input.meetingLink || "",
+    join_meeting_line: input.meetingLink ? ` Join meeting: ${input.meetingLink}` : "",
+  };
+}
+
+export type PublicAppointmentCustomerPreview = {
+  id: string;
+  serviceName: string | null;
+  startsAt: string;
+  status: string;
+  timezone?: string | null;
+  meetingLink?: string | null;
+  isTransovoVideo?: boolean;
+  locationLabel?: string | null;
+};
+
+export function buildPublicAppointmentCustomerPreview(row: {
+  id: string;
+  serviceName: string | null;
+  startsAt: Date;
+  status: string;
+  timezone?: string | null;
+  metadata?: unknown;
+}): PublicAppointmentCustomerPreview {
+  const meta = (row.metadata || {}) as AppointmentMetadata;
+  const meetingLink = meta.meetingUrl || meta.joinUrl || null;
+  const isTransovoVideo =
+    meta.locationKind === "transovo_video" || Boolean(meta.videoMeetingId);
+  const locationLabel =
+    typeof meta.location === "string" && !meta.location.startsWith("http")
+      ? meta.location
+      : isTransovoVideo
+        ? "Transovo Video"
+        : null;
+
+  return {
+    id: row.id,
+    serviceName: row.serviceName,
+    startsAt: row.startsAt.toISOString(),
+    status: row.status,
+    timezone: row.timezone,
+    meetingLink,
+    isTransovoVideo,
+    locationLabel,
   };
 }

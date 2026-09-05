@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
 import {
+  buildPublicAppointmentCustomerPreview,
   findAppointmentByPublicToken,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
@@ -33,12 +33,7 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
     return NextResponse.json({
-      data: {
-        id: row.id,
-        serviceName: row.serviceName,
-        startsAt: row.startsAt,
-        status: row.status,
-      },
+      data: buildPublicAppointmentCustomerPreview(row),
     });
   } catch (err) {
     return jsonError(err, 400);

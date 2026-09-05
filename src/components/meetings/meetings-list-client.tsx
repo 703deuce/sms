@@ -70,7 +70,7 @@ export function MeetingsListClient() {
             variant={source === s ? "default" : "outline"}
             onClick={() => setSource(s)}
           >
-            {s === "all" ? "All sources" : s === "transovo_video" ? "Transovo Video" : "External"}
+            {s === "all" ? "All sources" : s === "transovo_video" ? "Transovo Video" : "Zoom, Meet & Teams"}
           </Button>
         ))}
       </div>

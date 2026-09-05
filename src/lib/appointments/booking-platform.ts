@@ -323,7 +323,15 @@ export async function createPlatformAppointment(
     console.warn("[appointments] notetaker auto-enable failed", err);
   }
 
-  return { appointmentId, contactId, ...result };
+  return {
+    appointmentId,
+    contactId,
+    meetingLink,
+    joinUrl: meetingLink,
+    locationKind: latestMeta.locationKind || null,
+    isTransovoVideo: latestMeta.locationKind === "transovo_video" || Boolean(latestMeta.videoMeetingId),
+    ...result,
+  };
 }
 
 export async function updatePlatformAppointmentStatus(

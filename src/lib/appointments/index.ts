@@ -12,6 +12,7 @@ export {
   mapAppointmentRow,
   appointmentMergeVars,
   renderAppointmentTemplate,
+  buildPublicAppointmentCustomerPreview,
 } from "./appointments-service";
 export {
   listAppointmentTypes,

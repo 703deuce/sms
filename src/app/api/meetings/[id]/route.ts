@@ -13,6 +13,7 @@ import {
   resetMeetingSummary,
   updateMeetingSummary,
 } from "@/lib/meeting-assistant/processing";
+import { publicRecapShareUrl } from "@/lib/meeting-assistant/recap-share-url";
 import { getPrisma } from "@/lib/db";
 
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -88,7 +89,11 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     }
 
     if (action === "share") {
-      const data = await createMeetingShareLink({
+      const expiresAt =
+        body.expiresAt ? new Date(String(body.expiresAt)) : body.expiresInDays
+          ? new Date(Date.now() + Number(body.expiresInDays) * 24 * 60 * 60 * 1000)
+          : null;
+      const share = await createMeetingShareLink({
         workspaceId: auth.workspaceId,
         sessionId: id,
         includeSummary: body.includeSummary !== false,
@@ -96,8 +101,14 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
         includeTranscript: body.includeTranscript === true,
         includeRecording: body.includeRecording === true,
         password: body.password ? String(body.password) : null,
+        expiresAt,
       });
-      return NextResponse.json({ data });
+      return NextResponse.json({
+        data: {
+          ...share,
+          publicUrl: publicRecapShareUrl(share.token),
+        },
+      });
     }
 
     if (action === "toggle_action_item") {

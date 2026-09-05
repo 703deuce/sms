@@ -22,6 +22,12 @@ export async function GET(request: Request) {
     const meta = (row.metadata || {}) as Record<string, unknown>;
     const paymentStatus = typeof meta.paymentStatus === "string" ? meta.paymentStatus : null;
     const paid = paymentStatus === "succeeded" || paymentStatus === "paid";
+    const meetingLink =
+      typeof meta.meetingUrl === "string"
+        ? meta.meetingUrl
+        : typeof meta.joinUrl === "string"
+          ? meta.joinUrl
+          : null;
 
     return NextResponse.json({
       data: {
@@ -31,6 +37,9 @@ export async function GET(request: Request) {
         amountPaidCents: typeof meta.paymentAmountCents === "number" ? meta.paymentAmountCents : null,
         balanceDueCents: typeof meta.balanceDueCents === "number" ? meta.balanceDueCents : null,
         paymentMode: typeof meta.paymentMode === "string" ? meta.paymentMode : null,
+        meetingLink,
+        isTransovoVideo:
+          meta.locationKind === "transovo_video" || Boolean(meta.videoMeetingId),
       },
     });
   } catch (err) {

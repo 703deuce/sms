@@ -16,6 +16,9 @@ export const REMINDER_MERGE_TAGS = [
   "{{business_name}}",
   "{{reschedule_link}}",
   "{{cancel_link}}",
+  "{{confirm_link}}",
+  "{{meeting_link}}",
+  "{{join_meeting_line}}",
 ];
 
 const STEP_META: Record<

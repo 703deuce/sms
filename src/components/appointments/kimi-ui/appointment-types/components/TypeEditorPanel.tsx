@@ -106,6 +106,16 @@ export default function TypeEditorPanel({
                   const value = e.target.value;
                   onFormChange("location", value);
                   onFormChange("transovoVideoEnabled", value === "Transovo Video");
+                  const externalMeeting =
+                    value === "Zoom" ||
+                    value === "Google Meet" ||
+                    value === "Microsoft Teams" ||
+                    value === "Webex" ||
+                    value === "Custom meeting link";
+                  if (externalMeeting) {
+                    onFormChange("notetakerEnabled", true);
+                    onFormChange("notetakerAutoJoin", true);
+                  }
                 }}
               >
                 <option value="">Select location</option>

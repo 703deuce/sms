@@ -35,6 +35,7 @@ const ACTIVE_STATUSES = new Set([
 export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
   const [session, setSession] = useState<MeetingSessionRow | null>(null);
   const [resolvedMeetingUrl, setResolvedMeetingUrl] = useState("");
+  const [notetakerAutoJoin, setNotetakerAutoJoin] = useState(false);
   const [meetingUrl, setMeetingUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,6 +47,7 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
       const json = await res.json();
       const external = json.data?.externalSession as MeetingSessionRow | null;
       setSession(external);
+      setNotetakerAutoJoin(Boolean(json.data?.notetakerAutoJoin));
       const resolved = String(json.data?.resolvedMeetingUrl || "");
       setResolvedMeetingUrl(resolved);
       if (external?.meetingUrl) setMeetingUrl(external.meetingUrl);
@@ -116,6 +118,10 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
     "Off";
 
   const joinUrl = session?.meetingUrl || resolvedMeetingUrl || meetingUrl;
+  const showManualFallback =
+    !session &&
+    !notetakerAutoJoin &&
+    (meetingUrl.trim() || resolvedMeetingUrl);
 
   return (
     <Card className="p-5 space-y-4">
@@ -124,7 +130,8 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
         <h2 className="font-display text-base font-semibold">AI Notetaker</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Transovo joins your Zoom, Meet, Teams, or Webex meeting, captures transcript and recording, and generates a recap.
+        Bring AI notes to Zoom, Google Meet, Microsoft Teams, or Webex. Transovo joins the call,
+        captures transcript and recording, and prepares a recap.
       </p>
 
       {session?.status === "completed" ? (
@@ -136,6 +143,11 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
         </div>
       ) : session && session.status !== "disabled" ? (
         <div className="space-y-3 text-sm">
+          {notetakerAutoJoin ? (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+              AI Notetaker was added automatically for this appointment.
+            </p>
+          ) : null}
           <p>
             <span className="text-muted-foreground">Platform:</span>{" "}
             {meetingPlatformLabel(session.meetingPlatform as MeetingPlatform)}
@@ -158,11 +170,25 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
             <p className="text-muted-foreground">Processing transcript, recording, and recap…</p>
           ) : null}
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void disable()}>
-            Disable Notetaker
+            Turn off AI Notetaker
           </Button>
         </div>
-      ) : (
+      ) : notetakerAutoJoin && resolvedMeetingUrl ? (
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-900">
+            AI Notetaker is set to join automatically when this appointment starts.
+          </p>
+          <p className="text-muted-foreground break-all">{resolvedMeetingUrl}</p>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void enable()}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Add now
+          </Button>
+        </div>
+      ) : showManualFallback ? (
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Add AI Notetaker manually if auto-join is turned off for this appointment type.
+          </p>
           <div>
             <Label>Meeting link</Label>
             <Input
@@ -182,6 +208,10 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
             Add AI Notetaker
           </Button>
         </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Add a Zoom, Meet, Teams, or Webex link to this appointment to enable AI Notetaker.
+        </p>
       )}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
     </Card>

@@ -293,11 +293,11 @@ export { DEFAULT_SMS_CONSENT_TEXT };
 
 export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:
-    "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}. Reply YES to confirm. Reschedule: {{reschedule_link}} Cancel: {{cancel_link}}",
+    "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.{{join_meeting_line}} Reply YES to confirm. Reschedule: {{reschedule_link}} Cancel: {{cancel_link}}",
   reminder24h:
-    "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}. Reply YES to confirm. Reschedule: {{reschedule_link}}",
+    "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}.{{join_meeting_line}} Reply YES to confirm. Reschedule: {{reschedule_link}}",
   reminder2h:
-    "Reminder: {{service}} with {{business_name}} today at {{appointment_time}}. See you soon!",
+    "Reminder: {{service}} with {{business_name}} today at {{appointment_time}}.{{join_meeting_line}} See you soon!",
 };
 
 export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {

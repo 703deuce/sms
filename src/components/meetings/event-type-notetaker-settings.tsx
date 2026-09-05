@@ -25,7 +25,7 @@ export function EventTypeNotetakerSettings({ form, onChange }: Props) {
       <div>
         <h3 className="text-sm font-semibold">AI Notetaker</h3>
         <p className="text-xs text-muted-foreground">
-          Automatically join supported external meetings for this appointment type.
+          Automatically add AI Notetaker when an appointment is booked with a meeting link.
         </p>
       </div>
       <label className="flex items-center gap-2 text-sm">
@@ -43,7 +43,7 @@ export function EventTypeNotetakerSettings({ form, onChange }: Props) {
           onChange={(e) => onChange("notetakerAutoJoin", e.target.checked)}
           disabled={!form.notetakerEnabled}
         />
-        Auto-join when appointment is booked
+        Auto-add when appointment is booked
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input

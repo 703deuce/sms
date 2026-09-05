@@ -164,6 +164,8 @@ export function PublicBookingClient({
     currency: string;
     sandbox?: boolean;
   } | null>(null);
+  const [bookingMeetingLink, setBookingMeetingLink] = useState<string | null>(null);
+  const [bookingIsTransovoVideo, setBookingIsTransovoVideo] = useState(false);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHistory, setAiHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
@@ -436,6 +438,8 @@ export function PublicBookingClient({
       setSubmitting(false);
       return;
     }
+    setBookingMeetingLink(json.data?.meetingLink || json.data?.joinUrl || null);
+    setBookingIsTransovoVideo(Boolean(json.data?.isTransovoVideo));
     setStep("done");
     setSubmitting(false);
   }
@@ -827,7 +831,20 @@ export function PublicBookingClient({
             slug={slug}
             appointmentId={pendingAppointmentId}
             square={squareConfig}
-            onSuccess={() => setStep("done")}
+            onSuccess={async () => {
+              try {
+                const res = await fetch(
+                  `/api/public/appointment-payment/status?appointmentId=${encodeURIComponent(pendingAppointmentId)}`,
+                );
+                const json = await res.json();
+                setBookingMeetingLink(json.data?.meetingLink || null);
+                setBookingIsTransovoVideo(Boolean(json.data?.isTransovoVideo));
+              } catch {
+                setBookingMeetingLink(null);
+                setBookingIsTransovoVideo(false);
+              }
+              setStep("done");
+            }}
             onCancel={() => setStep("info")}
           />
         ) : null}
@@ -845,9 +862,24 @@ export function PublicBookingClient({
                 {selectedType?.config?.payment?.mode === "deposit" ? "Deposit paid" : "Payment received"}
               </p>
             ) : null}
-            <div className="mx-auto mt-6 max-w-xs rounded-xl bg-muted/50 px-4 py-3 text-[12px] text-muted-foreground">
-              You&apos;ll receive a confirmation text shortly with options to reschedule or cancel.
-            </div>
+            {bookingMeetingLink ? (
+              <div className="mx-auto mt-6 max-w-sm space-y-3">
+                <Button asChild size="lg" className="w-full">
+                  <a href={bookingMeetingLink} target="_blank" rel="noreferrer">
+                    {bookingIsTransovoVideo ? "Join meeting" : "Open meeting link"}
+                  </a>
+                </Button>
+                <p className="text-[12px] text-muted-foreground">
+                  {bookingIsTransovoVideo
+                    ? "Your join link is also in your confirmation text."
+                    : "We also sent this link in your confirmation message."}
+                </p>
+              </div>
+            ) : (
+              <div className="mx-auto mt-6 max-w-xs rounded-xl bg-muted/50 px-4 py-3 text-[12px] text-muted-foreground">
+                You&apos;ll receive a confirmation text shortly with your appointment details.
+              </div>
+            )}
           </Card>
         ) : null}
 

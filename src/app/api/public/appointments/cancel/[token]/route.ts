@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
-import { cancelPlatformAppointment, findAppointmentByPublicToken } from "@/lib/appointments";
+import {
+  buildPublicAppointmentCustomerPreview,
+  cancelPlatformAppointment,
+  findAppointmentByPublicToken,
+} from "@/lib/appointments";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -26,12 +30,7 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
     return NextResponse.json({
-      data: {
-        id: row.id,
-        serviceName: row.serviceName,
-        startsAt: row.startsAt,
-        status: row.status,
-      },
+      data: buildPublicAppointmentCustomerPreview(row),
     });
   } catch (err) {
     return jsonError(err, 400);

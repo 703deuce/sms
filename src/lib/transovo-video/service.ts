@@ -347,6 +347,7 @@ export async function provisionVideoMeetingForAppointment(input: {
           joinUrl: meetingUrl,
           videoMeetingId: meeting.id,
           locationKind: "transovo_video",
+          location: meetingUrl,
         } as object,
       },
     });
