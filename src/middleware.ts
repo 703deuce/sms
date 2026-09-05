@@ -110,7 +110,9 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/embed/f/")) return true;
   if (pathname.startsWith("/embed/w/")) return true;
   if (pathname.startsWith("/embed/voice/")) return true;
-  if (pathname === "/embed/form.js") return true;
+  if (pathname.startsWith("/embed/form.js")) return true;
+  // Microsoft publisher domain verification (Azure app / calendar integration)
+  if (pathname.startsWith("/.well-known/")) return true;
   // Public Telnyx AI Assistants voice catalog downloads (NaturalHD + Ultra UUID)
   if (pathname.startsWith("/telnyx-agent-voices")) return true;
   // Prerecorded connection greeting media (public HTTPS for Telnyx playback_start)
