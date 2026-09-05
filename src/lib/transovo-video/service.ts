@@ -1022,6 +1022,69 @@ export async function syncVideoMeetingSchedule(input: {
   });
 }
 
+export async function rescheduleStandaloneVideoMeeting(input: {
+  workspaceId: string;
+  videoMeetingId: string;
+  scheduledStartAt: Date;
+  scheduledEndAt?: Date | null;
+  durationMinutes?: number;
+}) {
+  const prisma = getPrisma();
+  const meeting = await getVideoMeeting(input.workspaceId, input.videoMeetingId);
+  if (!meeting) throw new Error("Video meeting not found");
+  if (meeting.appointmentId) throw new Error("Reschedule from the appointment instead");
+
+  const scheduledEndAt =
+    input.scheduledEndAt ||
+    (input.durationMinutes
+      ? new Date(input.scheduledStartAt.getTime() + input.durationMinutes * 60_000)
+      : meeting.scheduledEndAt ||
+        new Date(input.scheduledStartAt.getTime() + 30 * 60_000));
+
+  const updated = await prisma.videoMeeting.update({
+    where: { id: meeting.id },
+    data: {
+      scheduledStartAt: input.scheduledStartAt,
+      scheduledEndAt,
+      status: meeting.status === "canceled" ? "scheduled" : meeting.status,
+      canceledAt: null,
+    },
+  });
+
+  await prisma.meetingSession.updateMany({
+    where: { videoMeetingId: meeting.id, workspaceId: input.workspaceId, deletedAt: null },
+    data: { scheduledStartAt: input.scheduledStartAt },
+  });
+
+  return updated;
+}
+
+export async function cancelStandaloneVideoMeeting(workspaceId: string, videoMeetingId: string) {
+  const prisma = getPrisma();
+  const meeting = await getVideoMeeting(workspaceId, videoMeetingId);
+  if (!meeting) throw new Error("Video meeting not found");
+  if (meeting.appointmentId) throw new Error("Cancel from the appointment instead");
+
+  if (meeting.providerActiveSessionId && process.env.TELNYX_API_KEY) {
+    await telnyxEndRoomSession(meeting.providerActiveSessionId).catch(() => undefined);
+  }
+
+  const updated = await prisma.videoMeeting.update({
+    where: { id: meeting.id },
+    data: {
+      status: "canceled",
+      canceledAt: new Date(),
+    },
+  });
+
+  await prisma.meetingSession.updateMany({
+    where: { videoMeetingId: meeting.id, workspaceId, deletedAt: null },
+    data: { status: "canceled" },
+  });
+
+  return updated;
+}
+
 export async function deleteVideoMeetingProviderRoom(videoMeetingId: string) {
   const prisma = getPrisma();
   const meeting = await prisma.videoMeeting.findUnique({ where: { id: videoMeetingId } });

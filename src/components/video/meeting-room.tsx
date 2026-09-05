@@ -22,6 +22,7 @@ import {
   VideoOff,
 } from "lucide-react";
 import { parseParticipantContext } from "@/lib/transovo-video/participant-context";
+import { VideoInvitePanel } from "@/components/video/video-invite-panel";
 
 type JoinPayload = {
   participantId: string;
@@ -100,11 +101,17 @@ export function MeetingRoom({
   join,
   businessName,
   showInviteLink = false,
+  videoMeetingId,
+  meetingTitle,
+  scheduledStartAt,
 }: {
   token: string;
   join: JoinPayload;
   businessName: string;
   showInviteLink?: boolean;
+  videoMeetingId?: string;
+  meetingTitle?: string | null;
+  scheduledStartAt?: string | null;
 }) {
   const clientRef = useRef<TransovoVideoClient | null>(null);
   const [connection, setConnection] = useState<TransovoConnectionState>("preparing");
@@ -392,21 +399,31 @@ export function MeetingRoom({
         </div>
         <div className="flex items-center gap-3 text-sm text-white/80">
           {showInviteLink || join.role === "host" ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-white/20 bg-white/5 text-white hover:bg-white/10"
-              onClick={() => void copyInvite()}
-            >
-              {copiedInvite ? (
-                "Copied"
-              ) : (
-                <>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  Copy invite link
-                </>
-              )}
-            </Button>
+            videoMeetingId ? (
+              <VideoInvitePanel
+                videoMeetingId={videoMeetingId}
+                token={token}
+                title={meetingTitle || join.settings.title}
+                scheduledStartAt={scheduledStartAt}
+                variant="dark"
+              />
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+                onClick={() => void copyInvite()}
+              >
+                {copiedInvite ? (
+                  "Copied"
+                ) : (
+                  <>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    Copy invite link
+                  </>
+                )}
+              </Button>
+            )
           ) : null}
           {join.settings.recordingActive ? <span className="text-rose-300">● Recording</span> : null}
           <span>{elapsed}</span>

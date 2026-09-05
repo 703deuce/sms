@@ -42,11 +42,15 @@ export default function NextAppointment({ appointment: a, onOpenAppointment }: P
         </div>
         <div className="next-meta-row muted-row">
           <Video size={14} className="muted-icon" aria-hidden />
-          <CalendarMeetingBadges meeting={a.meeting} appointmentId={a.id} />
+          <CalendarMeetingBadges
+            meeting={a.meeting}
+            appointmentId={a.id}
+            eventKind={a.eventKind}
+          />
         </div>
       </div>
       <button type="button" className="btn-primary full" onClick={() => onOpenAppointment(a.id)}>
-        View appointment <ArrowRight size={15} />
+        {a.eventKind === "appointment" ? "View appointment" : "Open meeting"} <ArrowRight size={15} />
       </button>
     </div>
   );

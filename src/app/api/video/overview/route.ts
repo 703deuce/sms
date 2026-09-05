@@ -36,6 +36,7 @@ export async function GET() {
           title: m.title,
           status: m.status,
           scheduledStartAt: m.scheduledStartAt?.toISOString() || null,
+          publicMeetingToken: m.publicMeetingToken,
           meetingUrl: publicVideoMeetingUrl(m.publicMeetingToken),
           hostJoinUrl: `/video/rooms/${m.id}/host`,
           appointmentId: m.appointmentId,

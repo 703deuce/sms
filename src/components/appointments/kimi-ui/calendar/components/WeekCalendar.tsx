@@ -91,7 +91,12 @@ export default function WeekCalendar({
                 <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
-              <CalendarMeetingBadges meeting={ev.meeting} appointmentId={ev.id} compact />
+              <CalendarMeetingBadges
+                meeting={ev.meeting}
+                appointmentId={ev.id}
+                eventKind={ev.eventKind}
+                compact
+              />
             </button>
           );
         })}

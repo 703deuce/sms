@@ -10,6 +10,7 @@ import {
   Sparkles,
   Video,
 } from "lucide-react";
+import { VideoInvitePanel } from "@/components/video/video-invite-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -20,6 +21,7 @@ type OverviewData = {
     id: string;
     title: string | null;
     scheduledStartAt: string | null;
+    publicMeetingToken?: string;
     hostJoinUrl: string;
     meetingUrl: string;
   }>;
@@ -53,6 +55,9 @@ export function VideoHomeClient() {
   const [scheduleDuration, setScheduleDuration] = useState("30");
   const [notetakerUrl, setNotetakerUrl] = useState("");
   const [notetakerTitle, setNotetakerTitle] = useState("");
+  const [notetakerMode, setNotetakerMode] = useState<"now" | "schedule">("now");
+  const [notetakerDate, setNotetakerDate] = useState("");
+  const [notetakerTime, setNotetakerTime] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
 
   useEffect(() => {
@@ -114,20 +119,31 @@ export function VideoHomeClient() {
       setError("Meeting URL is required.");
       return;
     }
+    if (notetakerMode === "schedule" && (!notetakerDate || !notetakerTime)) {
+      setError("Date and time are required for scheduled notetaker.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
+      const scheduledStartAt =
+        notetakerMode === "schedule"
+          ? new Date(`${notetakerDate}T${notetakerTime}`).toISOString()
+          : undefined;
       const res = await fetch("/api/meetings/standalone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           meetingUrl: notetakerUrl.trim(),
           title: notetakerTitle.trim() || undefined,
+          scheduledStartAt,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not add AI Notetaker");
-      router.push(`/meetings/${json.data.id}`);
+      router.push(
+        notetakerMode === "schedule" ? "/meetings?filter=upcoming" : `/meetings/${json.data.id}`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add AI Notetaker");
       setBusy(false);
@@ -253,9 +269,19 @@ export function VideoHomeClient() {
                               : ""}
                           </p>
                         </div>
+                        <div className="flex flex-wrap items-center gap-2">
                         <Button asChild size="sm">
                           <Link href={m.hostJoinUrl}>Join as host</Link>
                         </Button>
+                        {m.publicMeetingToken ? (
+                          <VideoInvitePanel
+                            videoMeetingId={m.id}
+                            token={m.publicMeetingToken}
+                            title={m.title}
+                            scheduledStartAt={m.scheduledStartAt}
+                          />
+                        ) : null}
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -387,11 +413,51 @@ export function VideoHomeClient() {
             <Label>Title (optional)</Label>
             <Input value={notetakerTitle} onChange={(e) => setNotetakerTitle(e.target.value)} className="mt-1.5" />
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={notetakerMode === "now" ? "default" : "outline"}
+              onClick={() => setNotetakerMode("now")}
+            >
+              Start now
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={notetakerMode === "schedule" ? "default" : "outline"}
+              onClick={() => setNotetakerMode("schedule")}
+            >
+              Schedule for later
+            </Button>
+          </div>
+          {notetakerMode === "schedule" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={notetakerDate}
+                  onChange={(e) => setNotetakerDate(e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>Start time</Label>
+                <Input
+                  type="time"
+                  value={notetakerTime}
+                  onChange={(e) => setNotetakerTime(e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          ) : null}
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <div className="flex gap-2">
             <Button disabled={busy} onClick={() => void addNotetaker()}>
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Add AI Notetaker
+              {notetakerMode === "schedule" ? "Schedule AI Notetaker" : "Add AI Notetaker"}
             </Button>
             <Button variant="outline" onClick={() => setMode("home")}>Cancel</Button>
           </div>

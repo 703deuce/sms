@@ -40,6 +40,7 @@ export type CalendarWeekEvent = {
   type: "consultation" | "call" | "followup" | "onboarding" | "canceled";
   status: "confirmed" | "pending" | "canceled";
   meeting?: AppointmentMeetingIndicator;
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
 };
 
 export type CalendarTypeColor = {
@@ -64,6 +65,7 @@ export type CalendarAgendaItem = {
   status: "confirmed" | "pending" | "canceled";
   dot: string;
   meeting?: AppointmentMeetingIndicator;
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
 };
 
 export type CalendarNextAppointment = {
@@ -77,6 +79,7 @@ export type CalendarNextAppointment = {
   phone: string;
   status: "confirmed" | "pending" | "canceled";
   meeting?: AppointmentMeetingIndicator;
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
 };
 
 export type CalendarNowLine = {

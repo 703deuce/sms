@@ -72,7 +72,9 @@ export function CalendarConnected() {
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
   const loadMeetingIndicators = useCallback(async (appointments: CalendarApiAppointment[]) => {
-    const ids = appointments.map((row) => row.id);
+    const ids = appointments
+      .filter((row) => !row.eventKind || row.eventKind === "appointment")
+      .map((row) => row.id);
     if (!ids.length) return appointments;
     const params = new URLSearchParams({ ids: ids.join(",") });
     const res = await fetch(`/api/appointments/meeting-indicators?${params}`);
@@ -81,7 +83,10 @@ export function CalendarConnected() {
     const indicators = (json.data || {}) as Record<string, CalendarApiAppointment["meeting"]>;
     return appointments.map((row) => ({
       ...row,
-      meeting: indicators[row.id] || row.meeting,
+      meeting:
+        row.eventKind && row.eventKind !== "appointment"
+          ? row.meeting
+          : indicators[row.id] || row.meeting,
     }));
   }, []);
 
@@ -92,7 +97,7 @@ export function CalendarConnected() {
       from: range.from.toISOString(),
       to: range.to.toISOString(),
     });
-    fetch(`/api/appointments?${params}`)
+    fetch(`/api/calendar/events?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error("calendar fetch failed");
         return r.json();
@@ -157,7 +162,17 @@ export function CalendarConnected() {
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
-      onOpenAppointment: (id) => router.push(`/appointments/${id}`),
+      onOpenAppointment: (id) => {
+        if (id.startsWith("video:")) {
+          router.push(`/video/rooms/${id.slice("video:".length)}/host`);
+          return;
+        }
+        if (id.startsWith("meeting:")) {
+          router.push(`/meetings/${id.slice("meeting:".length)}`);
+          return;
+        }
+        router.push(`/appointments/${id}`);
+      },
       onSelectDay: (key) => {
         setSelectedDayKey(key);
         const d = new Date(key);

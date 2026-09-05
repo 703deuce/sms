@@ -53,7 +53,11 @@ export default function DayAgenda({
               <div className="agenda-mid">
                 <div className="agenda-title">{a.title}</div>
                 <div className="agenda-name">{a.name}</div>
-                <CalendarMeetingBadges meeting={a.meeting} appointmentId={a.id} />
+                <CalendarMeetingBadges
+                  meeting={a.meeting}
+                  appointmentId={a.id}
+                  eventKind={a.eventKind}
+                />
               </div>
               <span className={`badge badge-${a.status}`}>{statusLabel(a.status)}</span>
               <span className="icon-btn sm agenda-kebab" aria-hidden>

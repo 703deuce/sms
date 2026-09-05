@@ -24,6 +24,7 @@ export async function getMeetingSession(workspaceId: string, id: string) {
     include: {
       actionItems: { orderBy: { createdAt: "asc" } },
       transcriptSegments: { orderBy: { sequence: "asc" } },
+      shares: { orderBy: { createdAt: "desc" } },
     },
   });
 }
@@ -303,6 +304,33 @@ export async function enableStandaloneNotetaker(input: {
   });
 
   return session;
+}
+
+export async function rescheduleStandaloneMeetingSession(input: {
+  workspaceId: string;
+  sessionId: string;
+  scheduledStartAt: Date;
+}) {
+  const prisma = getPrisma();
+  const session = await prisma.meetingSession.findFirst({
+    where: { id: input.sessionId, workspaceId: input.workspaceId, deletedAt: null },
+  });
+  if (!session) throw new Error("Meeting not found");
+  if (session.appointmentId) throw new Error("Use appointment reschedule for linked meetings");
+
+  if (session.providerSessionId && process.env.TELNYX_API_KEY) {
+    await telnyxUpdateMeetingSession(session.providerSessionId, {
+      scheduled_start_time: input.scheduledStartAt.toISOString(),
+    }).catch(() => undefined);
+  }
+
+  return prisma.meetingSession.update({
+    where: { id: session.id },
+    data: {
+      scheduledStartAt: input.scheduledStartAt,
+      status: session.status === "canceled" ? "scheduled" : session.status,
+    },
+  });
 }
 
 function meetingPlatformLabelSafe(platform: string): string {

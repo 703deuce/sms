@@ -4,22 +4,34 @@ import type { AppointmentMeetingIndicator } from "@/features/appointments/kimi/c
 type Props = {
   meeting?: AppointmentMeetingIndicator;
   appointmentId: string;
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
   compact?: boolean;
 };
 
-export function CalendarMeetingBadges({ meeting, appointmentId, compact = false }: Props) {
+export function CalendarMeetingBadges({
+  meeting,
+  appointmentId,
+  eventKind = "appointment",
+  compact = false,
+}: Props) {
   if (!meeting) return null;
 
   const badges: Array<{ key: string; label: string; href?: string; tone: string }> = [];
 
-  if (meeting.videoJoinUrl || meeting.videoStatus) {
+  if (meeting.videoJoinUrl || meeting.videoStatus || meeting.videoMeetingId) {
     const canJoin =
       meeting.videoProvisioningStatus === "ready" &&
       ["scheduled", "active", "waiting"].includes(meeting.videoStatus || "");
+    const hostHref =
+      eventKind === "standalone_video" && meeting.videoMeetingId
+        ? `/video/rooms/${meeting.videoMeetingId}/host`
+        : canJoin
+          ? `/appointments/${appointmentId}/video/host`
+          : undefined;
     badges.push({
       key: "video",
       label: compact ? "Join" : "Join video",
-      href: canJoin ? `/appointments/${appointmentId}/video/host` : undefined,
+      href: hostHref,
       tone: "violet",
     });
   } else if (meeting.notetakerEnabled || meeting.notetakerStatus) {
@@ -28,7 +40,9 @@ export function CalendarMeetingBadges({ meeting, appointmentId, compact = false 
         ? `/meetings/${meeting.recapSessionId}`
         : meeting.notetakerSessionId
           ? `/meetings/${meeting.notetakerSessionId}`
-          : `/appointments/${appointmentId}`;
+          : eventKind === "standalone_notetaker"
+            ? `/meetings/${appointmentId.replace(/^meeting:/, "")}`
+            : `/appointments/${appointmentId}`;
     badges.push({
       key: "notetaker",
       label: compact ? "AI" : "AI notes",

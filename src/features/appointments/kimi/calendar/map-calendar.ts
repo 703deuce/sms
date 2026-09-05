@@ -15,6 +15,7 @@ import type {
 
 export type CalendarApiAppointment = {
   id: string;
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
   inviteeName: string | null;
   inviteePhone?: string | null;
   serviceName: string | null;
@@ -23,6 +24,8 @@ export type CalendarApiAppointment = {
   status: string;
   timezone: string | null;
   metadata?: { location?: string };
+  standaloneVideoMeetingId?: string | null;
+  standaloneMeetingSessionId?: string | null;
   meeting?: AppointmentMeetingIndicator;
 };
 
@@ -240,17 +243,30 @@ function mapWeekEvents(
         ? decimalHour(row.endsAt, row.timezone)
         : startHour + 0.5;
       const type = mapEventType(row.serviceName, row.status);
+      const title =
+        row.eventKind === "standalone_video"
+          ? row.serviceName || "Transovo Video"
+          : row.eventKind === "standalone_notetaker"
+            ? row.serviceName || "AI Notetaker"
+            : row.serviceName || "Appointment";
+      const name =
+        row.eventKind === "standalone_video"
+          ? "Video meeting"
+          : row.eventKind === "standalone_notetaker"
+            ? row.inviteeName || "External meeting"
+            : row.inviteeName || "Customer";
       return {
         id: row.id,
         day: Math.max(0, Math.min(6, dayIndex)),
         start: startHour,
         duration: Math.max(0.25, endHour - startHour),
         timeLabel: formatAppointmentTime(row.startsAt, row.timezone),
-        title: row.serviceName || "Appointment",
-        name: row.inviteeName || "Customer",
+        title,
+        name,
         type,
         status: mapUiStatus(row.status),
         meeting: row.meeting,
+        eventKind: row.eventKind,
       };
     });
 }
@@ -337,15 +353,28 @@ function mapAgenda(
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     .map((row) => {
       const type = mapEventType(row.serviceName, row.status);
+      const title =
+        row.eventKind === "standalone_video"
+          ? row.serviceName || "Transovo Video"
+          : row.eventKind === "standalone_notetaker"
+            ? row.serviceName || "AI Notetaker"
+            : row.serviceName || "Appointment";
+      const name =
+        row.eventKind === "standalone_video"
+          ? "Video meeting"
+          : row.eventKind === "standalone_notetaker"
+            ? row.inviteeName || "External meeting"
+            : row.inviteeName || "Customer";
       return {
         id: row.id,
         time: formatAppointmentTime(row.startsAt, row.timezone),
         duration: formatDuration(row.startsAt, row.endsAt),
-        title: row.serviceName || "Appointment",
-        name: row.inviteeName || "Customer",
+        title,
+        name,
         status: mapUiStatus(row.status),
         dot: TYPE_COLORS[type]?.dot || TYPE_COLORS.consultation.dot,
         meeting: row.meeting,
+        eventKind: row.eventKind,
       };
     });
 
@@ -393,12 +422,23 @@ function mapNextAppointment(appointments: CalendarApiAppointment[]): CalendarNex
       ? `${formatAppointmentTime(upcoming.startsAt, upcoming.timezone)} – ${endLabel}`
       : formatAppointmentTime(upcoming.startsAt, upcoming.timezone),
     duration: formatDurationLong(upcoming.startsAt, upcoming.endsAt),
-    title: upcoming.serviceName || "Appointment",
-    name: upcoming.inviteeName || "Customer",
-    method: upcoming.metadata?.location || "Phone Call",
+    title:
+      upcoming.eventKind === "standalone_video"
+        ? upcoming.serviceName || "Transovo Video"
+        : upcoming.eventKind === "standalone_notetaker"
+          ? upcoming.serviceName || "AI Notetaker"
+          : upcoming.serviceName || "Appointment",
+    name:
+      upcoming.eventKind === "standalone_video"
+        ? "Video meeting"
+        : upcoming.eventKind === "standalone_notetaker"
+          ? upcoming.inviteeName || "External meeting"
+          : upcoming.inviteeName || "Customer",
+    method: upcoming.metadata?.location || (upcoming.eventKind ? "Meeting" : "Phone Call"),
     phone: upcoming.inviteePhone || "—",
     status: mapUiStatus(upcoming.status),
     meeting: upcoming.meeting,
+    eventKind: upcoming.eventKind,
   };
 }
 

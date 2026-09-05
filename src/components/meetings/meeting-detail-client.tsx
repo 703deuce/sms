@@ -28,6 +28,14 @@ type MeetingDetail = {
   summaryStatus?: string;
   actionItemsStatus?: string;
   followUpStatus?: string;
+  recapShares?: Array<{
+    id: string;
+    publicUrl: string;
+    expiresAt: string | null;
+    revokedAt: string | null;
+    createdAt: string;
+    status: "active" | "expired" | "revoked";
+  }>;
   actionItems: Array<{ id: string; description: string; assigneeText: string | null; completed: boolean }>;
   transcriptSegments: Array<{ id: string; speakerName: string | null; text: string; startMs: number | null }>;
 };
@@ -114,7 +122,7 @@ export function MeetingDetailClient({ meetingId }: { meetingId: string }) {
           </Link>
         ) : null}
         <div className="mt-4">
-          <MeetingSharePanel meetingId={meetingId} />
+          <MeetingSharePanel meetingId={meetingId} initialShares={meeting.recapShares || []} />
         </div>
       </div>
 

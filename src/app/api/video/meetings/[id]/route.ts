@@ -3,11 +3,13 @@ import { jsonEntitlementError, requireSession } from "@/lib/api-auth";
 import { assertTransovoVideoEntitlement } from "@/lib/transovo-video/entitlements";
 import {
   admitVideoParticipant,
+  cancelStandaloneVideoMeeting,
   declineVideoParticipant,
   endVideoMeetingForEveryone,
   getVideoMeeting,
   lockVideoMeeting,
   moderateVideoParticipant,
+  rescheduleStandaloneVideoMeeting,
   unlockVideoMeeting,
 } from "@/lib/transovo-video/service";
 
@@ -31,7 +33,6 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    await assertTransovoVideoEntitlement(auth.workspaceId);
     await assertTransovoVideoEntitlement(auth.workspaceId);
     const { id } = await context.params;
     const body = await request.json().catch(() => ({}));
@@ -87,6 +88,41 @@ export async function POST(request: Request, context: RouteContext) {
     }
     const meeting = await getVideoMeeting(auth.workspaceId, id);
     return NextResponse.json({ data: { meeting } });
+  } catch (err) {
+    return jsonEntitlementError(err, 400);
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    await assertTransovoVideoEntitlement(auth.workspaceId);
+    const { id } = await context.params;
+    const body = await request.json().catch(() => ({}));
+    const action = String(body.action || "");
+
+    if (action === "reschedule") {
+      const scheduledStartAt = new Date(String(body.scheduledStartAt || ""));
+      if (Number.isNaN(scheduledStartAt.getTime())) {
+        return NextResponse.json({ error: "scheduledStartAt is required" }, { status: 400 });
+      }
+      const meeting = await rescheduleStandaloneVideoMeeting({
+        workspaceId: auth.workspaceId,
+        videoMeetingId: id,
+        scheduledStartAt,
+        scheduledEndAt: body.scheduledEndAt ? new Date(String(body.scheduledEndAt)) : undefined,
+        durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
+      });
+      return NextResponse.json({ data: { meeting } });
+    }
+
+    if (action === "cancel") {
+      const meeting = await cancelStandaloneVideoMeeting(auth.workspaceId, id);
+      return NextResponse.json({ data: { meeting } });
+    }
+
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
     return jsonEntitlementError(err, 400);
   }

@@ -5,12 +5,15 @@ import {
   disableNotetakerForSession,
   enableNotetakerForAppointment,
   getMeetingSession,
+  rescheduleStandaloneMeetingSession,
 } from "@/lib/meeting-assistant/service";
 import {
   askMeetingQuestion,
   createMeetingShareLink,
+  listMeetingRecapShares,
   processMeetingSessionArtifacts,
   resetMeetingSummary,
+  revokeMeetingRecapShare,
   updateMeetingSummary,
 } from "@/lib/meeting-assistant/processing";
 import { publicRecapShareUrl } from "@/lib/meeting-assistant/recap-share-url";
@@ -26,7 +29,36 @@ export async function GET(_request: Request, ctx: RouteCtx) {
     const { id } = await ctx.params;
     const session = await getMeetingSession(auth.workspaceId, id);
     if (!session) return jsonEntitlementError(new Error("Meeting not found"), 404);
-    return NextResponse.json({ data: session });
+    const shares = (session.shares || []).map((share: {
+      id: string;
+      token: string;
+      includeSummary: boolean;
+      includeActionItems: boolean;
+      includeTranscript: boolean;
+      includeRecording: boolean;
+      expiresAt: Date | null;
+      revokedAt: Date | null;
+      createdAt: Date;
+    }) => ({
+      id: share.id,
+      token: share.token,
+      publicUrl: publicRecapShareUrl(share.token),
+      includeSummary: share.includeSummary,
+      includeActionItems: share.includeActionItems,
+      includeTranscript: share.includeTranscript,
+      includeRecording: share.includeRecording,
+      expiresAt: share.expiresAt?.toISOString() || null,
+      revokedAt: share.revokedAt?.toISOString() || null,
+      createdAt: share.createdAt.toISOString(),
+      status:
+        share.revokedAt
+          ? "revoked"
+          : share.expiresAt && share.expiresAt.getTime() < Date.now()
+            ? "expired"
+            : "active",
+    }));
+    const { shares: _shares, ...sessionData } = session;
+    return NextResponse.json({ data: { ...sessionData, recapShares: shares } });
   } catch (err) {
     return jsonEntitlementError(err, 500);
   }
@@ -111,6 +143,59 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       });
     }
 
+    if (action === "revoke_share") {
+      const shareId = String(body.shareId || "");
+      if (!shareId) throw new Error("shareId is required");
+      await revokeMeetingRecapShare(auth.workspaceId, shareId);
+      const shares = await listMeetingRecapShares(auth.workspaceId, id);
+      return NextResponse.json({
+        data: {
+          shares: shares.map((share) => ({
+            id: share.id,
+            token: share.token,
+            publicUrl: publicRecapShareUrl(share.token),
+            expiresAt: share.expiresAt?.toISOString() || null,
+            revokedAt: share.revokedAt?.toISOString() || null,
+            createdAt: share.createdAt.toISOString(),
+            status:
+              share.revokedAt
+                ? "revoked"
+                : share.expiresAt && share.expiresAt.getTime() < Date.now()
+                  ? "expired"
+                  : "active",
+          })),
+        },
+      });
+    }
+
+    if (action === "reschedule") {
+      const scheduledStartAt = new Date(String(body.scheduledStartAt || ""));
+      if (Number.isNaN(scheduledStartAt.getTime())) {
+        throw new Error("scheduledStartAt is required");
+      }
+      const session = await getMeetingSession(auth.workspaceId, id);
+      if (!session) throw new Error("Meeting not found");
+      if (session.appointmentId) throw new Error("Reschedule from the appointment instead");
+      if (session.meetingSource === "transovo_video" && session.videoMeetingId) {
+        const { rescheduleStandaloneVideoMeeting } = await import("@/lib/transovo-video/service");
+        await rescheduleStandaloneVideoMeeting({
+          workspaceId: auth.workspaceId,
+          videoMeetingId: session.videoMeetingId,
+          scheduledStartAt,
+          scheduledEndAt: body.scheduledEndAt ? new Date(String(body.scheduledEndAt)) : undefined,
+          durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
+        });
+      } else {
+        await rescheduleStandaloneMeetingSession({
+          workspaceId: auth.workspaceId,
+          sessionId: id,
+          scheduledStartAt,
+        });
+      }
+      const data = await getMeetingSession(auth.workspaceId, id);
+      return NextResponse.json({ data });
+    }
+
     if (action === "toggle_action_item") {
       const itemId = String(body.itemId || "");
       const completed = Boolean(body.completed);
@@ -144,6 +229,16 @@ export async function DELETE(_request: Request, ctx: RouteCtx) {
     if ("error" in auth) return auth.error;
     await assertAiNotetakerEntitlement(auth.workspaceId);
     const { id } = await ctx.params;
+    const session = await getMeetingSession(auth.workspaceId, id);
+    if (
+      session?.meetingSource === "transovo_video" &&
+      session.videoMeetingId &&
+      !session.appointmentId
+    ) {
+      const { cancelStandaloneVideoMeeting } = await import("@/lib/transovo-video/service");
+      await cancelStandaloneVideoMeeting(auth.workspaceId, session.videoMeetingId);
+      return NextResponse.json({ ok: true });
+    }
     const prisma = getPrisma();
     await prisma.meetingSession.updateMany({
       where: { id, workspaceId: auth.workspaceId },

@@ -2,12 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { HostPreJoinScreen, type HostJoinPayload } from "@/components/video/host-pre-join-screen";
 import { MeetingRoom } from "@/components/video/meeting-room";
 
-export function StaffVideoMeetingClient({ appointmentId }: { appointmentId: string }) {
-  const [info, setInfo] = useState<{ token: string; businessName: string } | null>(null);
+type LoadedMeeting = {
+  token: string;
+  businessName: string;
+  title: string | null;
+  scheduledStartAt: string | null;
+  recordingNotice: string | null;
+  hostDisplayName: string;
+  videoMeetingId?: string | null;
+};
+
+export function StaffVideoMeetingClient({
+  appointmentId,
+  hostDisplayName,
+}: {
+  appointmentId: string;
+  hostDisplayName?: string;
+}) {
+  const [meeting, setMeeting] = useState<LoadedMeeting | null>(null);
   const [error, setError] = useState("");
-  const [joinPayload, setJoinPayload] = useState<Record<string, unknown> | null>(null);
+  const [joinPayload, setJoinPayload] = useState<HostJoinPayload | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -15,26 +33,13 @@ export function StaffVideoMeetingClient({ appointmentId }: { appointmentId: stri
       try {
         const videoRes = await fetch(`/api/appointments/${appointmentId}/video`);
         const videoJson = await videoRes.json();
-        const meeting = videoJson.data?.meeting;
-        if (!meeting?.publicMeetingToken) {
+        const row = videoJson.data?.meeting;
+        if (!row?.publicMeetingToken) {
           if (active) setError("No Transovo Video room is linked to this appointment.");
           return;
         }
 
-        const joinRes = await fetch(`/api/appointments/${appointmentId}/video/join`, {
-          method: "POST",
-        });
-        const joinJson = await joinRes.json();
-        if (!joinRes.ok) {
-          if (active) setError(joinJson.error || "Unable to join as host.");
-          return;
-        }
-        if (joinJson.data?.waiting) {
-          if (active) setError("Unexpected waiting-room state for host join.");
-          return;
-        }
-
-        const publicRes = await fetch(`/api/video/public/${meeting.publicMeetingToken}`);
+        const publicRes = await fetch(`/api/video/public/${row.publicMeetingToken}`);
         const publicJson = await publicRes.json();
         if (!publicJson.data) {
           if (active) setError("Unable to load meeting details.");
@@ -42,39 +47,82 @@ export function StaffVideoMeetingClient({ appointmentId }: { appointmentId: stri
         }
 
         if (!active) return;
-        setInfo({ token: meeting.publicMeetingToken, businessName: publicJson.data.businessName });
-        setJoinPayload(joinJson.data);
+        setMeeting({
+          token: row.publicMeetingToken,
+          businessName: publicJson.data.businessName,
+          title: row.title || publicJson.data.title,
+          scheduledStartAt: row.scheduledStartAt || publicJson.data.scheduledStartAt,
+          recordingNotice: publicJson.data.recordingNotice,
+          hostDisplayName: hostDisplayName || "Host",
+          videoMeetingId: row.id || null,
+        });
       } catch {
-        if (active) setError("Unable to start host join.");
+        if (active) setError("Unable to load meeting.");
+      } finally {
+        if (active) setLoading(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [appointmentId]);
+  }, [appointmentId, hostDisplayName]);
 
-  if (error) {
+  async function requestHostJoin(): Promise<HostJoinPayload> {
+    const joinRes = await fetch(`/api/appointments/${appointmentId}/video/join`, {
+      method: "POST",
+    });
+    const joinJson = await joinRes.json();
+    if (!joinRes.ok) {
+      throw new Error(joinJson.error || "Unable to join as host.");
+    }
+    if (joinJson.data?.waiting) {
+      throw new Error("Unexpected waiting-room state for host join.");
+    }
+    return joinJson.data as HostJoinPayload;
+  }
+
+  if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        {error}
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading meeting…</p>
       </div>
     );
   }
 
-  if (!info || !joinPayload) {
+  if (error || !meeting) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Joining as host…</p>
+      <div className="flex min-h-screen items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        {error || "Meeting not found."}
       </div>
+    );
+  }
+
+  if (!joinPayload) {
+    return (
+      <HostPreJoinScreen
+        info={{
+          title: meeting.title,
+          scheduledStartAt: meeting.scheduledStartAt,
+          businessName: meeting.businessName,
+          hostDisplayName: meeting.hostDisplayName,
+          recordingNotice: meeting.recordingNotice,
+        }}
+        onJoined={setJoinPayload}
+        onJoinRequest={requestHostJoin}
+      />
     );
   }
 
   return (
     <MeetingRoom
-      token={info.token}
+      token={meeting.token}
       join={joinPayload as never}
-      businessName={info.businessName}
+      businessName={meeting.businessName}
+      showInviteLink
+      videoMeetingId={meeting.videoMeetingId || undefined}
+      meetingTitle={meeting.title}
+      scheduledStartAt={meeting.scheduledStartAt}
     />
   );
 }

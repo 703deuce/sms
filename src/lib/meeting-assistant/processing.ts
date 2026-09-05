@@ -478,6 +478,30 @@ export async function createMeetingShareLink(input: {
   });
 }
 
+export async function listMeetingRecapShares(workspaceId: string, sessionId: string) {
+  const prisma = getPrisma();
+  const session = await prisma.meetingSession.findFirst({
+    where: { id: sessionId, workspaceId },
+  });
+  if (!session) throw new Error("Meeting not found");
+  return prisma.meetingRecapShare.findMany({
+    where: { meetingSessionId: session.id, workspaceId },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function revokeMeetingRecapShare(workspaceId: string, shareId: string) {
+  const prisma = getPrisma();
+  const share = await prisma.meetingRecapShare.findFirst({
+    where: { id: shareId, workspaceId },
+  });
+  if (!share) throw new Error("Share link not found");
+  return prisma.meetingRecapShare.update({
+    where: { id: share.id },
+    data: { revokedAt: new Date() },
+  });
+}
+
 export async function getMeetingRecordingAccessUrl(
   workspaceId: string,
   sessionId: string,

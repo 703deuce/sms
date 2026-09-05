@@ -3,20 +3,30 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
-import { Check, Copy, Link2, Share2, X } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, Link2, Share2, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 type ShareResult = {
   token: string;
   publicUrl: string;
 };
 
+type ExistingShare = {
+  id: string;
+  publicUrl: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  status: "active" | "expired" | "revoked";
+};
+
 type Props = {
   meetingId: string;
+  initialShares?: ExistingShare[];
   onClose?: () => void;
 };
 
-export function MeetingSharePanel({ meetingId, onClose }: Props) {
+export function MeetingSharePanel({ meetingId, initialShares = [], onClose }: Props) {
   const [open, setOpen] = useState(false);
   const [includeSummary, setIncludeSummary] = useState(true);
   const [includeActionItems, setIncludeActionItems] = useState(true);
@@ -27,12 +37,23 @@ export function MeetingSharePanel({ meetingId, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ShareResult | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shares, setShares] = useState<ExistingShare[]>(initialShares);
+
+  useEffect(() => {
+    setShares(initialShares);
+  }, [initialShares]);
+
+  async function refreshShares() {
+    const res = await fetch(`/api/meetings/${meetingId}`);
+    const json = await res.json();
+    setShares(json.data?.recapShares || []);
+  }
 
   async function createShareLink() {
     setBusy(true);
     setError("");
-    setCopied(false);
+    setCopiedId(null);
     try {
       const res = await fetch(`/api/meetings/${meetingId}`, {
         method: "PATCH",
@@ -53,6 +74,7 @@ export function MeetingSharePanel({ meetingId, onClose }: Props) {
         token: json.data.token,
         publicUrl: json.data.publicUrl,
       });
+      await refreshShares();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create share link");
     } finally {
@@ -60,11 +82,38 @@ export function MeetingSharePanel({ meetingId, onClose }: Props) {
     }
   }
 
-  async function copyLink() {
-    if (!result?.publicUrl) return;
-    await navigator.clipboard.writeText(result.publicUrl);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+  async function copyLink(url: string, id: string) {
+    await navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function revokeShare(shareId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/meetings/${meetingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "revoke_share", shareId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not revoke share link");
+      setShares(json.data?.shares || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke share link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function shareStatusLabel(share: ExistingShare) {
+    if (share.status === "revoked") return "Revoked";
+    if (share.status === "expired") return "Expired";
+    if (share.expiresAt) {
+      return `Active · expires ${new Date(share.expiresAt).toLocaleString()}`;
+    }
+    return "Active";
   }
 
   if (!open) {
@@ -98,6 +147,48 @@ export function MeetingSharePanel({ meetingId, onClose }: Props) {
         </Button>
       </div>
 
+      {shares.length ? (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium">Active share links</h3>
+          <ul className="space-y-2">
+            {shares.map((share) => (
+              <li key={share.id} className="rounded-lg border p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">{shareStatusLabel(share)}</p>
+                    <code className="mt-1 block break-all text-xs">{share.publicUrl}</code>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Created {new Date(share.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void copyLink(share.publicUrl, share.id)}>
+                      {copiedId === share.id ? (
+                        <Check className="mr-2 h-4 w-4" />
+                      ) : (
+                        <Copy className="mr-2 h-4 w-4" />
+                      )}
+                      {copiedId === share.id ? "Copied" : "Copy"}
+                    </Button>
+                    {share.status === "active" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void revokeShare(share.id)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Revoke
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {result ? (
         <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm font-medium text-emerald-900">Share link created</p>
@@ -105,9 +196,9 @@ export function MeetingSharePanel({ meetingId, onClose }: Props) {
             <code className="flex-1 break-all rounded bg-white px-3 py-2 text-xs text-emerald-900">
               {result.publicUrl}
             </code>
-            <Button size="sm" variant="outline" onClick={() => void copyLink()}>
-              {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-              {copied ? "Copied" : "Copy link"}
+            <Button size="sm" variant="outline" onClick={() => void copyLink(result.publicUrl, "new")}>
+              {copiedId === "new" ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copiedId === "new" ? "Copied" : "Copy link"}
             </Button>
           </div>
           <Button size="sm" variant="ghost" onClick={() => setResult(null)}>
