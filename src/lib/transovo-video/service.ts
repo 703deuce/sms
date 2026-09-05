@@ -366,6 +366,163 @@ export async function provisionVideoMeetingForAppointment(input: {
   return { videoMeetingId: meeting.id, meetingUrl };
 }
 
+export async function provisionStandaloneVideoMeeting(input: {
+  workspaceId: string;
+  hostUserId: string;
+  title?: string;
+  scheduledStartAt?: Date;
+  scheduledEndAt?: Date | null;
+  recordingMode?: string;
+  transcriptionEnabled?: boolean;
+  aiRecapEnabled?: boolean;
+  waitingRoomEnabled?: boolean;
+}): Promise<{ videoMeetingId: string; meetingUrl: string; publicMeetingToken: string }> {
+  await assertTransovoVideoEntitlement(input.workspaceId);
+  const prisma = getPrisma();
+  const platform = await loadTransovoVideoConfig(input.workspaceId);
+  if (!platform.enabled) throw new Error("Transovo Video is disabled for this workspace");
+
+  const videoConfig = resolveEventTypeVideoConfig(platform, {
+    enabled: true,
+    maxParticipants: platform.defaultMaxParticipants,
+    recordingMode: (input.recordingMode || platform.defaultRecordingMode || "off") as import("./types").VideoRecordingMode,
+    transcription: input.transcriptionEnabled ?? platform.defaultTranscription,
+    aiRecap: input.aiRecapEnabled ?? platform.defaultAiRecap,
+    waitingRoom: input.waitingRoomEnabled ?? platform.waitingRoom,
+    requireGuestEmail: platform.requireGuestEmail,
+    requireHost: platform.requireHost,
+    guestScreenShare: platform.guestScreenShare,
+    guestChat: platform.guestChat,
+  });
+
+  const now = new Date();
+  const scheduledStartAt = input.scheduledStartAt || now;
+  const scheduledEndAt =
+    input.scheduledEndAt ||
+    new Date(scheduledStartAt.getTime() + 30 * 60_000);
+  const idempotencyKey = `standalone:${crypto.randomUUID()}`;
+  const publicMeetingToken = generatePublicMeetingToken();
+  const maxParticipants = clampParticipants(videoConfig.maxParticipants || 10);
+
+  const baseData = {
+    workspaceId: input.workspaceId,
+    appointmentId: null,
+    eventTypeId: null,
+    hostUserId: input.hostUserId,
+    title: input.title?.trim() || "Instant meeting",
+    scheduledStartAt,
+    scheduledEndAt,
+    maxParticipants,
+    waitingRoomEnabled: Boolean(videoConfig.waitingRoom),
+    requireHost: Boolean(videoConfig.requireHost),
+    requireGuestEmail: Boolean(videoConfig.requireGuestEmail),
+    requireGuestName: Boolean(videoConfig.requireGuestName),
+    passcodeHash: null,
+    recordingMode: videoConfig.recordingMode || "off",
+    transcriptionEnabled: Boolean(videoConfig.transcription),
+    aiRecapEnabled: Boolean(videoConfig.aiRecap),
+    chatEnabled: Boolean(videoConfig.guestChat),
+    screenSharePolicy: videoConfig.guestScreenShare ? "all" : "host_only",
+    guestCameraEnabled: Boolean(videoConfig.guestCamera),
+    guestMicEnabled: Boolean(videoConfig.guestMicrophone),
+    postMeetingRedirect: videoConfig.postMeetingRedirect || null,
+    recordingStatus: recordingEnabledForMode(videoConfig.recordingMode || "off")
+      ? "pending"
+      : "disabled",
+    transcriptStatus: videoConfig.transcription ? "pending" : "disabled",
+    compositionStatus: recordingEnabledForMode(videoConfig.recordingMode || "off")
+      ? "pending"
+      : "disabled",
+    idempotencyKey,
+    provisioningStatus: "provisioning",
+    status: scheduledStartAt.getTime() <= now.getTime() + 60_000 ? "active" : "scheduled",
+  };
+
+  const meeting = await prisma.videoMeeting.create({
+    data: { ...baseData, publicMeetingToken },
+  });
+
+  let providerRoomId = meeting.providerRoomId;
+  try {
+    if (!providerRoomId) {
+      const room = await telnyxCreateVideoRoom({
+        uniqueName: `transovo-${meeting.id}`,
+        maxParticipants,
+        enableRecording: recordingEnabledForMode(meeting.recordingMode),
+        idempotencyKey: `room:${meeting.id}`,
+      });
+      providerRoomId = room.id;
+    }
+    await prisma.videoMeeting.update({
+      where: { id: meeting.id },
+      data: {
+        providerRoomId,
+        provisioningStatus: "ready",
+        status: baseData.status,
+      },
+    });
+  } catch (err) {
+    if (!process.env.TELNYX_API_KEY) {
+      await prisma.videoMeeting.update({
+        where: { id: meeting.id },
+        data: { provisioningStatus: "ready", status: baseData.status },
+      });
+    } else {
+      await prisma.videoMeeting.update({
+        where: { id: meeting.id },
+        data: {
+          provisioningStatus: "failed",
+          providerMetadata: { error: String(err) } as object,
+        },
+      });
+      throw err;
+    }
+  }
+
+  const meetingUrl = publicVideoMeetingUrl(meeting.publicMeetingToken);
+  if (
+    videoConfig.aiRecap ||
+    videoConfig.transcription ||
+    recordingEnabledForMode(meeting.recordingMode)
+  ) {
+    await ensureMeetingSessionForVideo(meeting.id);
+  }
+
+  return {
+    videoMeetingId: meeting.id,
+    meetingUrl,
+    publicMeetingToken: meeting.publicMeetingToken,
+  };
+}
+
+export async function requestHostVideoJoinByMeetingId(input: {
+  workspaceId: string;
+  videoMeetingId: string;
+  userId: string;
+  email?: string | null;
+  name?: string | null;
+}) {
+  const meeting = await getVideoMeeting(input.workspaceId, input.videoMeetingId);
+  if (!meeting) throw new Error("Video meeting not found");
+
+  const authorized = await isAuthorizedVideoHost({
+    workspaceId: input.workspaceId,
+    meeting,
+    userId: input.userId,
+    email: input.email,
+  });
+  if (!authorized) throw new Error("Not authorized to host this meeting.");
+
+  const displayName = input.name?.trim() || input.email?.split("@")[0] || "Host";
+  return requestVideoJoin({
+    publicMeetingToken: meeting.publicMeetingToken,
+    displayName,
+    email: input.email || undefined,
+    userId: input.userId,
+    isStaffHost: true,
+  });
+}
+
 export async function ensureMeetingSessionForVideo(videoMeetingId: string) {
   const prisma = getPrisma();
   const meeting = await prisma.videoMeeting.findUnique({ where: { id: videoMeetingId } });

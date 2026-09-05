@@ -15,6 +15,7 @@ import {
   Mic,
   MicOff,
   MonitorUp,
+  Link2,
   PhoneOff,
   Users,
   Video,
@@ -98,10 +99,12 @@ export function MeetingRoom({
   token,
   join,
   businessName,
+  showInviteLink = false,
 }: {
   token: string;
   join: JoinPayload;
   businessName: string;
+  showInviteLink?: boolean;
 }) {
   const clientRef = useRef<TransovoVideoClient | null>(null);
   const [connection, setConnection] = useState<TransovoConnectionState>("preparing");
@@ -119,6 +122,20 @@ export function MeetingRoom({
   const [kicked, setKicked] = useState(false);
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
   const [startedAt] = useState(() => Date.now());
+  const [copiedInvite, setCopiedInvite] = useState(false);
+
+  const guestUrl = useMemo(() => {
+    if (typeof window === "undefined") return `/video/${token}`;
+    return `${window.location.origin}/video/${token}`;
+  }, [token]);
+
+  async function copyInvite() {
+    const title = join.settings.title || "Transovo Video meeting";
+    const text = `${title}\nJoin: ${guestUrl}`;
+    await navigator.clipboard.writeText(text);
+    setCopiedInvite(true);
+    window.setTimeout(() => setCopiedInvite(false), 2000);
+  }
 
   const elapsed = useMemo(() => {
     const secs = Math.floor((Date.now() - startedAt) / 1000);
@@ -374,6 +391,23 @@ export function MeetingRoom({
           <h1 className="font-medium">{join.settings.title || "Transovo Video"}</h1>
         </div>
         <div className="flex items-center gap-3 text-sm text-white/80">
+          {showInviteLink || join.role === "host" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+              onClick={() => void copyInvite()}
+            >
+              {copiedInvite ? (
+                "Copied"
+              ) : (
+                <>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Copy invite link
+                </>
+              )}
+            </Button>
+          ) : null}
           {join.settings.recordingActive ? <span className="text-rose-300">● Recording</span> : null}
           <span>{elapsed}</span>
           <span className="capitalize">{connection}</span>

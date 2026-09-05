@@ -223,6 +223,88 @@ export async function enableNotetakerForAppointment(input: {
   return session;
 }
 
+export async function enableStandaloneNotetaker(input: {
+  workspaceId: string;
+  meetingUrl: string;
+  title?: string;
+  botName?: string;
+  scheduledStartAt?: Date | null;
+  recordingEnabled?: boolean;
+  transcriptEnabled?: boolean;
+  summaryEnabled?: boolean;
+  actionItemsEnabled?: boolean;
+}) {
+  await assertAiNotetakerEntitlement(input.workspaceId);
+  const prisma = getPrisma();
+  const config = await loadNotetakerConfig(input.workspaceId);
+  if (!config.enabled) throw new Error("AI Notetaker is disabled for this workspace");
+
+  const meetingUrl = input.meetingUrl.trim();
+  if (!meetingUrl || !isSupportedMeetingUrl(meetingUrl)) {
+    throw new Error("A supported Zoom, Google Meet, Teams, or Webex meeting URL is required");
+  }
+
+  const notetakerCfg = await resolveNotetakerConfigForAppointment({
+    workspaceId: input.workspaceId,
+  });
+  const platform = detectMeetingPlatform(meetingUrl);
+  const botName = input.botName?.trim() || (await resolveBotName(input.workspaceId));
+  const scheduledStartAt = input.scheduledStartAt || new Date();
+  const idempotencyKey = `standalone:${crypto.randomUUID()}`;
+
+  let providerSessionId: string | null = null;
+  let providerStatus = "scheduled";
+  let providerPatch: Record<string, unknown> = {};
+  try {
+    const provider = await telnyxCreateMeetingSession({
+      meetingUrl,
+      botName,
+      idempotencyKey,
+      scheduledStartAt,
+      summarizeOnEnd: notetakerCfg.summaryEnabled,
+      metadata: {
+        workspace_id: input.workspaceId,
+        source: "standalone",
+      },
+    });
+    providerSessionId = String(provider.id || "");
+    providerStatus = String(provider.status || "scheduled");
+    providerPatch = mapTelnyxMeetingSessionToDbPatch(provider);
+  } catch (err) {
+    if (!process.env.TELNYX_API_KEY) {
+      providerStatus = "scheduled";
+    } else {
+      throw err;
+    }
+  }
+
+  const session = await prisma.meetingSession.create({
+    data: {
+      workspaceId: input.workspaceId,
+      appointmentId: null,
+      idempotencyKey,
+      enabled: true,
+      meetingUrl,
+      meetingPlatform: platform,
+      meetingSource: "external_notetaker",
+      botName,
+      scheduledStartAt,
+      providerSessionId,
+      status: mapTelnyxMeetingStatus(providerStatus),
+      title: input.title?.trim() || "External meeting",
+      recordingEnabled: input.recordingEnabled ?? notetakerCfg.recordingEnabled,
+      transcriptEnabled: input.transcriptEnabled ?? notetakerCfg.transcriptEnabled,
+      summaryEnabled: input.summaryEnabled ?? notetakerCfg.summaryEnabled,
+      actionItemsEnabled: input.actionItemsEnabled ?? notetakerCfg.actionItemsEnabled,
+      followUpEnabled: notetakerCfg.followUpEnabled,
+      summaryTemplate: notetakerCfg.summaryTemplate,
+      ...providerPatch,
+    },
+  });
+
+  return session;
+}
+
 function meetingPlatformLabelSafe(platform: string): string {
   return platform.replace(/_/g, " ");
 }

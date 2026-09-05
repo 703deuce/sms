@@ -17,6 +17,7 @@ import {
   Sparkles,
   UserCircle,
   Users,
+  Video,
   Workflow,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
@@ -92,6 +93,12 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       icon: Phone,
     },
     {
+      label: "Video",
+      href: "/video",
+      icon: Video,
+      sectionLabel: "Meetings",
+    },
+    {
       label: "Meetings",
       href: "/meetings",
       icon: Sparkles,
@@ -155,6 +162,7 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
   const items: NavItem[] = [
     { label: "Overview", href: "/appointments/overview", icon: LayoutDashboard },
     { label: "Calendar", href: "/appointments/calendar", icon: Calendar },
+    { label: "Video", href: "/video", icon: Video },
     { label: "Scheduled", href: "/appointments", icon: ClipboardList },
   ];
   if (isConversationsInV1Nav()) {
@@ -182,6 +190,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/voice-reminders")) return "Voice Reminders";
+  if (pathname.startsWith("/video")) return "Video";
   if (pathname.startsWith("/meetings")) return "Meetings";
   if (pathname.startsWith("/appointments/workflows/setup/")) return "Set up workflow";
   if (pathname.startsWith("/appointments/workflows")) return "Workflows";
