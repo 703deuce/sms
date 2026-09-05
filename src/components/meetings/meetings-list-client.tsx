@@ -2,13 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { parseJsonResponse } from "@/lib/api/parse-json-response";
 import { MEETING_STATUS_LABELS } from "@/lib/meeting-assistant/types";
 import { meetingPlatformLabel } from "@/lib/meeting-assistant/platform";
 import type { MeetingPlatform } from "@/lib/meeting-assistant/types";
 import { NewMeetingMenu } from "@/components/meetings/new-meeting-menu";
-import { VideoInvitePanel } from "@/components/video/video-invite-panel";
-import { GuestJoinLink } from "@/components/video/guest-join-link";
-import { ExternalLink, Sparkles, Video } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -20,7 +19,6 @@ type MeetingRow = {
   meetingSource?: string | null;
   scheduledStartAt: string | null;
   appointmentId?: string | null;
-  videoMeetingId?: string | null;
   meetingUrl?: string;
   recordingStatus?: string;
   summaryStatus?: string;
@@ -36,24 +34,9 @@ const UPCOMING_STATUSES = new Set([
   "waiting",
 ]);
 
-function sourceLabel(row: MeetingRow) {
-  return row.meetingSource === "transovo_video" ? "Transovo Video" : "AI Notetaker";
-}
-
-function guestTokenFromUrl(url: string): string | null {
-  const match = url.match(/\/video\/([^/?#]+)/);
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
-}
-
 function primaryAction(row: MeetingRow) {
   const upcoming = UPCOMING_STATUSES.has(row.status);
-  if (row.meetingSource === "transovo_video" && upcoming && row.videoMeetingId) {
-    return { label: "Join as host", href: `/video/rooms/${row.videoMeetingId}/host` };
-  }
-  if (row.meetingSource === "transovo_video" && upcoming && row.appointmentId) {
-    return { label: "Join as host", href: `/appointments/${row.appointmentId}/video/host` };
-  }
-  if (row.meetingSource !== "transovo_video" && upcoming && row.meetingUrl) {
+  if (upcoming && row.meetingUrl) {
     return { label: "Open meeting", href: row.meetingUrl, external: true };
   }
   if (row.status === "completed" || row.summaryStatus === "ready") {
@@ -70,17 +53,17 @@ function primaryAction(row: MeetingRow) {
 
 export function MeetingsListClient() {
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("all");
-  const [source, setSource] = useState<"all" | "transovo_video" | "external">("all");
   const [sessions, setSessions] = useState<MeetingRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/meetings?filter=${filter}&source=${source}`)
-      .then((r) => r.json())
+    fetch(`/api/meetings?filter=${filter}&source=external`)
+      .then((r) => parseJsonResponse<{ data?: { sessions?: MeetingRow[] } }>(r))
       .then((json) => setSessions(json.data?.sessions || []))
+      .catch(() => setSessions([]))
       .finally(() => setLoading(false));
-  }, [filter, source]);
+  }, [filter]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -88,14 +71,11 @@ export function MeetingsListClient() {
         <div>
           <h1 className="font-display text-2xl font-semibold">Meetings</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Meeting history, recordings, transcripts, recaps, and action items.
+            AI Notetaker history — recordings, transcripts, recaps, and action items.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <NewMeetingMenu />
-          <Link href="/settings/transovo-video">
-            <Button variant="outline" size="sm">Video settings</Button>
-          </Link>
           <Link href="/settings/ai-notetaker">
             <Button variant="outline" size="sm">Notetaker settings</Button>
           </Link>
@@ -113,16 +93,6 @@ export function MeetingsListClient() {
             {f === "upcoming" ? "Upcoming" : f === "past" ? "Past" : "All"}
           </Button>
         ))}
-        {(["all", "transovo_video", "external"] as const).map((s) => (
-          <Button
-            key={s}
-            size="sm"
-            variant={source === s ? "default" : "outline"}
-            onClick={() => setSource(s)}
-          >
-            {s === "all" ? "All" : s === "transovo_video" ? "Transovo Video" : "AI Notetaker"}
-          </Button>
-        ))}
       </div>
 
       {loading ? (
@@ -131,37 +101,25 @@ export function MeetingsListClient() {
         <Card className="p-8 text-center text-sm text-muted-foreground">
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
           No meetings yet.{" "}
-          <Link href="/video" className="text-primary underline">Start a video meeting</Link>
-          {" "}or add AI Notetaker to an external link.
+          <Link href="/video" className="text-primary underline">Add AI Notetaker</Link>
+          {" "}to a Zoom, Meet, Teams, or Webex link.
         </Card>
       ) : (
         <div className="space-y-3">
           {sessions.map((s) => {
             const action = primaryAction(s);
-            const upcoming = UPCOMING_STATUSES.has(s.status);
-            const guestToken =
-              s.meetingSource === "transovo_video" && s.meetingUrl
-                ? guestTokenFromUrl(s.meetingUrl)
-                : null;
             return (
               <Card key={s.id} className="p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {s.meetingSource === "transovo_video" ? (
-                        <Video className="h-4 w-4 text-violet-600" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 text-indigo-600" />
-                      )}
+                      <Sparkles className="h-4 w-4 text-indigo-600" />
                       <p className="font-medium">{s.title || "Meeting"}</p>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {sourceLabel(s)}
+                      {meetingPlatformLabel(s.meetingPlatform as MeetingPlatform)}
                       {s.scheduledStartAt
                         ? ` · ${new Date(s.scheduledStartAt).toLocaleString()}`
-                        : ""}
-                      {s.meetingSource !== "transovo_video"
-                        ? ` · ${meetingPlatformLabel(s.meetingPlatform as MeetingPlatform)}`
                         : ""}
                     </p>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -192,26 +150,6 @@ export function MeetingsListClient() {
                     )}
                   </div>
                 </div>
-                {s.meetingSource === "transovo_video" && upcoming && s.meetingUrl ? (
-                  <div className="mt-4 border-t pt-4">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Guest join link</p>
-                    {guestToken && s.videoMeetingId ? (
-                      <VideoInvitePanel
-                        videoMeetingId={s.videoMeetingId}
-                        token={guestToken}
-                        title={s.title}
-                        scheduledStartAt={s.scheduledStartAt}
-                        layout="compact"
-                      />
-                    ) : (
-                      <GuestJoinLink
-                        guestUrl={s.meetingUrl}
-                        title={s.title}
-                        scheduledStartAt={s.scheduledStartAt}
-                      />
-                    )}
-                  </div>
-                ) : null}
               </Card>
             );
           })}

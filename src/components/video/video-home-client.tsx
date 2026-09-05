@@ -315,7 +315,7 @@ export function VideoHomeClient() {
                 <div className="space-y-2">
                   {data?.upcomingVideoMeetings.map((m) => (
                     <Card key={m.id} className="p-4">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-medium">{m.title || "Transovo Video"}</p>
                           <p className="text-xs text-muted-foreground">
@@ -325,11 +325,15 @@ export function VideoHomeClient() {
                               : ""}
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
                         <Button asChild size="sm">
                           <Link href={m.hostJoinUrl}>Join as host</Link>
                         </Button>
-                        {m.publicMeetingToken ? (
+                      </div>
+                      {m.publicMeetingToken ? (
+                        <div className="mt-4 border-t pt-4">
+                          <p className="mb-2 text-xs font-medium text-muted-foreground">
+                            Guest join link
+                          </p>
                           <VideoInvitePanel
                             videoMeetingId={m.id}
                             token={m.publicMeetingToken}
@@ -337,9 +341,8 @@ export function VideoHomeClient() {
                             scheduledStartAt={m.scheduledStartAt}
                             layout="compact"
                           />
-                        ) : null}
                         </div>
-                      </div>
+                      ) : null}
                     </Card>
                   ))}
                   {data?.upcomingSessions

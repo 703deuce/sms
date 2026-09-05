@@ -115,3 +115,5 @@ export function jsonError(err: unknown, status = 400) {
   const code = /forbidden|unauthorized/i.test(message) ? 403 : status;
   return NextResponse.json({ error: message }, { status: code });
 }
+
+export { jsonEntitlementError } from "@/lib/products/entitlement-errors";

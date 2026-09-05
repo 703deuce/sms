@@ -1,5 +1,10 @@
-import { VideoHomeClient } from "@/components/video/video-home-client";
+import { Suspense } from "react";
+import { NotetakerHomeClient } from "@/components/meetings/notetaker-home-client";
 
 export default function VideoPage() {
-  return <VideoHomeClient />;
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading AI Notetaker…</div>}>
+      <NotetakerHomeClient />
+    </Suspense>
+  );
 }

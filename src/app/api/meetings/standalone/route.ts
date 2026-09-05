@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonEntitlementError, requireSession } from "@/lib/api-auth";
 import { assertAiNotetakerEntitlement } from "@/lib/meeting-assistant/entitlements";
+import { extractMeetingUrlFromText } from "@/lib/meeting-assistant/meeting-url";
 import { enableStandaloneNotetaker } from "@/lib/meeting-assistant/service";
 
 export async function POST(request: Request) {
@@ -10,7 +11,8 @@ export async function POST(request: Request) {
     await assertAiNotetakerEntitlement(auth.workspaceId);
 
     const body = await request.json();
-    const meetingUrl = String(body.meetingUrl || "").trim();
+    const rawMeetingUrl = String(body.meetingUrl || "").trim();
+    const meetingUrl = extractMeetingUrlFromText(rawMeetingUrl) || rawMeetingUrl;
     if (!meetingUrl) {
       return NextResponse.json({ error: "meetingUrl is required" }, { status: 400 });
     }
