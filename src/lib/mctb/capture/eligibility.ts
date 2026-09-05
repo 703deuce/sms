@@ -7,6 +7,7 @@ import { validateExistingConsentAttestation } from "@/lib/mctb/capture/attestati
 import type { MctbCaptureEligibilityStatus, MctbInboundCallEvent } from "@/lib/mctb/capture/types";
 import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
 import { logMctbCapture } from "@/lib/mctb/capture/logging";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 
 export type MctbRecoveryEligibilityResult = {
   eligible: boolean;
@@ -33,7 +34,23 @@ export async function evaluateMctbRecoveryEligibility(input: {
 }): Promise<MctbRecoveryEligibilityResult> {
   const consentMode = await loadMctbConsentMode(input.workspaceId);
 
+  traceMctbPipeline({
+    layer: "eligibility",
+    step: "start",
+    outcome: "ok",
+    workspaceId: input.workspaceId,
+    consentMode,
+    caller: input.event.callerE164,
+    transovoNumber: input.event.transovoNumberE164,
+    providerCallId: input.event.providerCallId,
+    demoMode: Boolean(input.demoMode),
+  });
+
   if (isVerifiedCallConsentMode(consentMode)) {
+    traceMctbPipelineSkip("eligibility", "consent_mode", "not_existing_consent", {
+      workspaceId: input.workspaceId,
+      consentMode,
+    });
     return {
       eligible: false,
       status: "NOT_EXISTING_CONSENT",
@@ -43,6 +60,10 @@ export async function evaluateMctbRecoveryEligibility(input: {
   }
 
   if (!isExistingConsentMode(consentMode)) {
+    traceMctbPipelineSkip("eligibility", "consent_mode", "not_existing_consent", {
+      workspaceId: input.workspaceId,
+      consentMode,
+    });
     return {
       eligible: false,
       status: "NOT_EXISTING_CONSENT",
@@ -64,6 +85,9 @@ export async function evaluateMctbRecoveryEligibility(input: {
   });
 
   if (!attestation.valid) {
+    traceMctbPipelineSkip("eligibility", "attestation", attestation.reason || "missing_attestation", {
+      workspaceId: input.workspaceId,
+    });
     return {
       eligible: false,
       status: (attestation.reason as MctbCaptureEligibilityStatus) || "MISSING_ATTESTATION",
@@ -76,6 +100,10 @@ export async function evaluateMctbRecoveryEligibility(input: {
   try {
     caller = normalizeE164(input.event.callerE164);
   } catch {
+    traceMctbPipelineSkip("eligibility", "caller", "invalid_caller", {
+      workspaceId: input.workspaceId,
+      caller: input.event.callerE164,
+    });
     return {
       eligible: false,
       status: "INVALID_CALLER",
@@ -173,6 +201,10 @@ export async function evaluateMctbRecoveryEligibility(input: {
 
   if (!base.eligible) {
     const mapped = base.reason ? statusMap[base.reason] || "SUPPRESSED" : "SUPPRESSED";
+    traceMctbPipelineSkip("eligibility", "evaluate", mapped, {
+      workspaceId: input.workspaceId,
+      baseReason: base.reason || null,
+    });
     return {
       eligible: false,
       status: mapped,
@@ -180,6 +212,15 @@ export async function evaluateMctbRecoveryEligibility(input: {
       existingConsentValid: true,
     };
   }
+
+  traceMctbPipeline({
+    layer: "eligibility",
+    step: "evaluate",
+    outcome: "ok",
+    workspaceId: input.workspaceId,
+    status: "ELIGIBLE",
+    consentMode,
+  });
 
   return {
     eligible: true,

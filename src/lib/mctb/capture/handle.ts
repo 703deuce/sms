@@ -7,6 +7,7 @@ import {
   evaluateMctbRecoveryEligibility,
 } from "@/lib/mctb/capture/eligibility";
 import { logMctbCapture } from "@/lib/mctb/capture/logging";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 import { buildMctbTexmlTerminalCallInput } from "@/lib/mctb/texml-ingress/texml-call-classification";
 import type { MctbInboundCallEvent } from "@/lib/mctb/capture/types";
 
@@ -75,6 +76,11 @@ export async function captureMctbMissedCall(
       transovoNumber: event.transovoNumberE164,
       providerCallId: event.providerCallId,
     });
+    traceMctbPipelineSkip("capture", "resolve_workspace", "workspace_unresolved", {
+      caller: event.callerE164,
+      transovoNumber: event.transovoNumberE164,
+      providerCallId: event.providerCallId,
+    });
     return { ok: false, reason: "workspace_unresolved" };
   }
 
@@ -133,6 +139,14 @@ export async function captureMctbMissedCall(
   });
 
   if (!eligibility.eligible) {
+    traceMctbPipeline({
+      layer: "capture",
+      step: "ineligible",
+      outcome: "suppressed",
+      reason: eligibility.status,
+      workspaceId: target.workspaceId,
+      providerCallId: event.providerCallId,
+    });
     const result = await processMissedInboundCall({
       workspaceId: target.workspaceId,
       callerE164: event.callerE164,
@@ -155,6 +169,15 @@ export async function captureMctbMissedCall(
       deduped: result.deduped,
     };
   }
+
+  traceMctbPipeline({
+    layer: "capture",
+    step: "eligible",
+    outcome: "queued",
+    workspaceId: target.workspaceId,
+    providerCallId: event.providerCallId,
+    eligibilityStatus: eligibility.status,
+  });
 
   const result = await processMissedInboundCall({
     workspaceId: target.workspaceId,

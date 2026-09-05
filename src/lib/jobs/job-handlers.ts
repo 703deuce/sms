@@ -148,13 +148,29 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { executeMissedCallTextSend } = await import(
         "@/lib/agents/missed-call-text-back/send"
       );
+      const { traceMctbPipeline, traceMctbPipelineOk } = await import("@/lib/mctb/pipeline-trace");
       const workspaceId = String(payload.workspaceId || "");
       const missedCallEventId = String(payload.missedCallEventId || "");
       const traceId = String(payload.traceId || "");
       if (!workspaceId || !missedCallEventId) {
         throw new Error("workspaceId and missedCallEventId required");
       }
-      return executeMissedCallTextSend({ workspaceId, missedCallEventId, traceId });
+      traceMctbPipeline({
+        layer: "job",
+        step: "john_mctb_send_start",
+        outcome: "ok",
+        workspaceId,
+        missedCallEventId,
+        traceId,
+      });
+      const result = await executeMissedCallTextSend({ workspaceId, missedCallEventId, traceId });
+      traceMctbPipelineOk("job", "john_mctb_send_complete", {
+        workspaceId,
+        missedCallEventId,
+        traceId,
+        result,
+      });
+      return result;
     }
     case "ai_transcription_run": {
       const { executeTranscriptionJob } = await import("@/lib/transcription/service");
@@ -968,14 +984,26 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { runMctbTexmlExistingConsentCapture } = await import(
         "@/lib/mctb/texml-ingress/existing-consent-capture"
       );
+      const { traceMctbPipeline, traceMctbPipelineOk } = await import("@/lib/mctb/pipeline-trace");
       const workspaceId = String(payload.workspaceId || "");
       if (!workspaceId) throw new Error("workspaceId required");
-      return runMctbTexmlExistingConsentCapture({
+      traceMctbPipeline({
+        layer: "job",
+        step: "mctb_texml_existing_consent_capture_start",
+        outcome: "ok",
+        workspaceId,
+      });
+      const result = await runMctbTexmlExistingConsentCapture({
         workspaceId,
         eventPayload: (payload.eventPayload as Record<string, unknown>) || payload,
         forwardedFromE164:
           typeof payload.forwardedFromE164 === "string" ? payload.forwardedFromE164 : null,
       });
+      traceMctbPipelineOk("job", "mctb_texml_existing_consent_capture_complete", {
+        workspaceId,
+        result,
+      });
+      return result;
     }
     case "fax_intelligence_process": {
       const { processFaxIntelligence } = await import("@/lib/fax/intelligence/processor");

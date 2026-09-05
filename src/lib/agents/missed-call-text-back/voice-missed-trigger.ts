@@ -11,6 +11,7 @@ import { getPrisma } from "@/lib/db";
 import { classifyInboundCallOutcome, classificationTriggersMctb } from "@/lib/agents/missed-call-text-back/classify";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { readCallHandlingMode } from "@/lib/numbers/call-handling-mode-shared";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 
 const MISSED_STATUSES = new Set(["NO_ANSWER", "BUSY", "CANCELLED", "FAILED"]);
 
@@ -69,7 +70,26 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   | "agentId"
   | "direction"
 >) {
-  if (!isMissedInboundVoiceCall(call)) return { triggered: false, reason: "not_missed" };
+  const baseFields = {
+    callId: call.id,
+    workspaceId: call.workspaceId,
+    from: call.fromE164,
+    to: call.toE164,
+    status: call.status,
+    answeredAt: call.answeredAt,
+    direction: call.direction,
+  };
+  traceMctbPipeline({
+    layer: "voice-missed-trigger",
+    step: "start",
+    outcome: "ok",
+    ...baseFields,
+  });
+
+  if (!isMissedInboundVoiceCall(call)) {
+    traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "not_missed", baseFields);
+    return { triggered: false, reason: "not_missed" };
+  }
 
   const { resolveOnboardingWorkspaceForDemoCall } = await import(
     "@/lib/agents/missed-call-text-back/demo-bypass"
@@ -83,6 +103,15 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
 
   const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
   const consentMode = await loadMctbConsentMode(targetWorkspaceId);
+  traceMctbPipeline({
+    layer: "voice-missed-trigger",
+    step: "consent_mode_resolved",
+    outcome: "ok",
+    consentMode,
+    targetWorkspaceId,
+    isDemo,
+    ...baseFields,
+  });
 
   const { isPlatform571E164, isMctb571ConsentTexmlConnection } = await import(
     "@/lib/mctb/consent-prompt/telnyx-texml-route"
@@ -100,6 +129,11 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     isPlatform571E164(call.toE164) &&
     (isMctb571ConsentTexmlConnection(connectionId) || consentMode === "press_1")
   ) {
+    traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "mctb_texml_press_1", {
+      ...baseFields,
+      consentMode,
+      connectionId,
+    });
     return { triggered: false, reason: "mctb_texml_press_1" };
   }
 
@@ -132,6 +166,16 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     routingWorkspaceId,
     routingPhoneNumberId,
   );
+  traceMctbPipeline({
+    layer: "voice-missed-trigger",
+    step: "routing_state",
+    outcome: "ok",
+    smartRouting,
+    callForwarding,
+    routingWorkspaceId,
+    routingPhoneNumberId,
+    ...baseFields,
+  });
 
   if (routingPhoneNumberId) {
     const routingPn = await getPrisma().phoneNumber.findFirst({
@@ -143,6 +187,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
       readCallHandlingMode(routingPn.settingsJson) === "smart_routing" &&
       !smartRouting
     ) {
+      traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "smart_routing_mode_paused", baseFields);
       return { triggered: false, reason: "smart_routing_mode_paused" };
     }
     if (
@@ -150,6 +195,7 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
       readCallHandlingMode(routingPn.settingsJson) === "call_forwarding" &&
       !callForwarding
     ) {
+      traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "call_forwarding_mode_paused", baseFields);
       return { triggered: false, reason: "call_forwarding_mode_paused" };
     }
   }
@@ -157,17 +203,29 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
   // Verified Call Consent: smart routing / call forwarding must own inbound before MCTB.
   if (consentMode === "press_1") {
     if (smartRouting || callForwarding) {
-      return { triggered: false, reason: smartRouting ? "smart_routing_active" : "call_forwarding_active" };
+      const reason = smartRouting ? "smart_routing_active" : "call_forwarding_active";
+      traceMctbPipelineSkip("voice-missed-trigger", "evaluate", reason, {
+        ...baseFields,
+        consentMode,
+      });
+      return { triggered: false, reason };
     }
+    traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "consent_prompt_not_published", {
+      ...baseFields,
+      consentMode,
+    });
     return { triggered: false, reason: "consent_prompt_not_published" };
   }
 
   // Existing Consent: proceed directly (no Press-1). Production still defers if unrelated SR/CF active.
   if (!isDemo && (smartRouting || callForwarding)) {
-    return {
-      triggered: false,
-      reason: smartRouting ? "smart_routing_active" : "call_forwarding_active",
-    };
+    const reason = smartRouting ? "smart_routing_active" : "call_forwarding_active";
+    traceMctbPipelineSkip("voice-missed-trigger", "evaluate", reason, {
+      ...baseFields,
+      consentMode,
+      isDemo,
+    });
+    return { triggered: false, reason };
   }
 
   const config = await loadMissedCallTextConfig(targetWorkspaceId);
@@ -179,8 +237,23 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
     voicemailDetected: call.voicemailDetected,
   });
   if (!isDemo && !classificationTriggersMctb(classification, config)) {
+    traceMctbPipelineSkip("voice-missed-trigger", "evaluate", "trigger_disabled", {
+      ...baseFields,
+      classification,
+      configEnabled: config.enabled,
+    });
     return { triggered: false, reason: "trigger_disabled", classification };
   }
+
+  traceMctbPipeline({
+    layer: "voice-missed-trigger",
+    step: "process_missed_inbound_call",
+    outcome: "ok",
+    targetWorkspaceId,
+    classification,
+    isDemo,
+    ...baseFields,
+  });
 
   const { processMissedInboundCall } = await import(
     "@/lib/agents/missed-call-text-back/process"
@@ -201,6 +274,15 @@ export async function triggerJohnMctbForVoiceCall(call: Pick<
       answeredAt: call.answeredAt,
       voicemailDetected: call.voicemailDetected,
     },
+  });
+  traceMctbPipeline({
+    layer: "voice-missed-trigger",
+    step: "process_complete",
+    outcome: result.scheduled ? "queued" : result.eligible === false ? "suppressed" : "ok",
+    result,
+    traceId: result.traceId,
+    missedCallEventId: result.missedCallEventId,
+    ...baseFields,
   });
   return { triggered: true, result, classification, demoMode: isDemo };
 }

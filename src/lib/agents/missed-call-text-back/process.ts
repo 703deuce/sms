@@ -6,6 +6,7 @@ import { classifyInboundCallOutcome } from "./classify";
 import { evaluateMissedCallTextEligibility } from "./eligibility";
 import { scheduleMissedCallText } from "./schedule";
 import { appendMctbTrace, newMctbTraceId } from "./trace";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 
 export type ProcessMissedCallInput = {
   workspaceId: string;
@@ -45,10 +46,29 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
   const classification = classifyInboundCallOutcome(input.call);
   const idempotencyKey = buildIdempotencyKey(input);
 
+  traceMctbPipeline({
+    layer: "process",
+    step: "start",
+    outcome: "ok",
+    traceId,
+    workspaceId: input.workspaceId,
+    caller: input.callerE164,
+    business: input.businessE164,
+    classification,
+    eventOnly: Boolean(input.eventOnly),
+    demoMode: Boolean(input.demoMode),
+    providerCallId: input.providerCallId || null,
+  });
+
   let caller = input.callerE164;
   try {
     caller = normalizeE164(input.callerE164);
   } catch {
+    traceMctbPipelineSkip("process", "normalize_caller", "invalid_phone", {
+      traceId,
+      workspaceId: input.workspaceId,
+      caller: input.callerE164,
+    });
     return { ok: false, reason: "INVALID_PHONE", traceId };
   }
 
@@ -75,6 +95,14 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     where: { idempotencyKey },
   });
   if (existing) {
+    traceMctbPipeline({
+      layer: "process",
+      step: "deduped",
+      outcome: "deduped",
+      traceId: existing.traceId,
+      missedCallEventId: existing.id,
+      workspaceId: input.workspaceId,
+    });
     return {
       ok: true,
       deduped: true,
@@ -147,6 +175,15 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
 
   if (!eligibility.eligible) {
     const suppressionReason = input.forceEligibilityStatus || eligibility.reason;
+    traceMctbPipeline({
+      layer: "process",
+      step: "eligibility_failed",
+      outcome: "suppressed",
+      reason: suppressionReason,
+      traceId,
+      missedCallEventId: event.id,
+      workspaceId: input.workspaceId,
+    });
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: {
@@ -186,6 +223,12 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
   const { isExistingConsentMode } = await import("@/lib/mctb/consent-mode");
   const consentMode = await loadMctbConsentMode(input.workspaceId);
   if (input.eventOnly && !isExistingConsentMode(consentMode)) {
+    traceMctbPipelineSkip("process", "consent_gate", "not_existing_consent", {
+      traceId,
+      consentMode,
+      workspaceId: input.workspaceId,
+      missedCallEventId: event.id,
+    });
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: {
@@ -225,6 +268,17 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
     traceId,
     delaySeconds,
     demoMode: input.demoMode,
+  });
+
+  traceMctbPipeline({
+    layer: "process",
+    step: "scheduled",
+    outcome: "queued",
+    traceId,
+    missedCallEventId: event.id,
+    workspaceId: input.workspaceId,
+    delaySeconds: delaySeconds ?? null,
+    demoMode: Boolean(input.demoMode),
   });
 
   return {

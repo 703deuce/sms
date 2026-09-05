@@ -15,6 +15,7 @@ import {
   resolveMctbTemplateVars,
 } from "@/lib/mctb/template-vars";
 import { wrapMctbMessageUrlsWithTracking } from "@/lib/mctb/link-tracking";
+import { traceMctbPipeline, traceMctbPipelineSkip } from "@/lib/mctb/pipeline-trace";
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return renderMctbMessageTemplate(template, vars);
@@ -26,12 +27,28 @@ export async function executeMissedCallTextSend(input: {
   missedCallEventId: string;
   traceId: string;
 }) {
+  traceMctbPipeline({
+    layer: "send",
+    step: "start",
+    outcome: "ok",
+    traceId: input.traceId,
+    workspaceId: input.workspaceId,
+    missedCallEventId: input.missedCallEventId,
+  });
+
   const prisma = getPrisma();
   const event = await prisma.missedCallEvent.findFirst({
     where: { id: input.missedCallEventId, workspaceId: input.workspaceId },
   });
-  if (!event) return { ok: false, reason: "event_not_found" };
+  if (!event) {
+    traceMctbPipelineSkip("send", "load_event", "event_not_found", input);
+    return { ok: false, reason: "event_not_found" };
+  }
   if (event.smsSentAt || event.status === "SENT") {
+    traceMctbPipelineSkip("send", "load_event", "already_sent", {
+      ...input,
+      status: event.status,
+    });
     return { ok: true, skipped: true, reason: "already_sent" };
   }
 
@@ -51,6 +68,7 @@ export async function executeMissedCallTextSend(input: {
 
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.enabled && !demoMode) {
+    traceMctbPipelineSkip("send", "feature_gate", "feature_disabled", input);
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: { status: "SUPPRESSED", suppressionReason: "FEATURE_DISABLED" },
@@ -64,6 +82,7 @@ export async function executeMissedCallTextSend(input: {
     );
     const attestation = await validateExistingConsentAttestation(input.workspaceId);
     if (!attestation.valid) {
+      traceMctbPipelineSkip("send", "attestation", attestation.reason || "missing_attestation", input);
       await prisma.missedCallEvent.update({
         where: { id: event.id },
         data: {
@@ -104,6 +123,11 @@ export async function executeMissedCallTextSend(input: {
     },
   });
   if (!eligibility.eligible) {
+    traceMctbPipelineSkip("send", "eligibility", eligibility.reason || "ineligible", {
+      ...input,
+      caller: event.callerE164,
+      business: event.businessE164,
+    });
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: {
@@ -182,6 +206,11 @@ export async function executeMissedCallTextSend(input: {
   });
 
   if (!route?.fromE164) {
+    const routeReason = demoMode ? "NOT_SMS_CAPABLE" : "MESSAGING_NOT_APPROVED";
+    traceMctbPipelineSkip("send", "outbound_route", routeReason, {
+      ...input,
+      demoMode,
+    });
     if (trialReservation?.reserved) {
       await releaseTrialSmsSegmentReservation(input.workspaceId, trialReservation.segments).catch(
         () => undefined,
@@ -301,6 +330,19 @@ export async function executeMissedCallTextSend(input: {
       }).catch(() => undefined);
     }
 
+    traceMctbPipeline({
+      layer: "send",
+      step: "sms_sent",
+      outcome: "sent",
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      missedCallEventId: event.id,
+      messageId,
+      from: resolvedSender.e164,
+      to: event.callerE164,
+      demoMode,
+    });
+
     return { ok: true, messageId, status: "queued" };
   } catch (err) {
     if (trialReservation?.reserved) {
@@ -309,6 +351,15 @@ export async function executeMissedCallTextSend(input: {
       );
     }
     const msg = err instanceof Error ? err.message : String(err);
+    traceMctbPipeline({
+      layer: "send",
+      step: "sms_failed",
+      outcome: "fail",
+      reason: msg,
+      traceId: input.traceId,
+      workspaceId: input.workspaceId,
+      missedCallEventId: event.id,
+    });
     await prisma.missedCallEvent.update({
       where: { id: event.id },
       data: { status: "FAILED", suppressionReason: "PROVIDER_ERROR" },

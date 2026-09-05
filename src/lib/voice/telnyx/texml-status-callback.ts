@@ -12,7 +12,15 @@ import { getPrisma } from "@/lib/db";
 import { getTelnyxApiKey, getTelnyxPublicKey } from "@/lib/messaging/telnyx/config";
 import { telnyxProvider } from "@/lib/messaging/telnyx/provider";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { tryNormalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  summarizeTexmlPayload,
+  traceMctbPipeline,
+  traceMctbPipelineError,
+  traceMctbPipelineOk,
+  traceMctbPipelineSkip,
+  tracePhoneNormalization,
+} from "@/lib/mctb/pipeline-trace";
 import {
   normalizeForwardedFromE164,
   parseTelnyxForwardedFrom,
@@ -77,6 +85,7 @@ function hangupStatusFromTexml(status: string): string {
 }
 
 export async function handleTexmlStatusCallback(request: Request) {
+  const startedAt = Date.now();
   const contentType = (request.headers.get("content-type") || "").toLowerCase();
   const rawBody = await request.text();
 
@@ -155,6 +164,23 @@ export async function handleTexmlStatusCallback(request: Request) {
       data.id || root.id || `texml-json:${Date.now()}`,
     );
   }
+
+  const callSidForTrace = pick(
+    eventPayload.CallSid,
+    eventPayload.call_sid,
+    eventPayload.call_control_id,
+  );
+  traceMctbPipeline({
+    layer: "texml-status",
+    step: "callback_received",
+    outcome: "ok",
+    eventType,
+    providerEventId,
+    callSid: callSidForTrace || null,
+    texmlCallStatus: pick(eventPayload.CallStatus, eventPayload.texml_call_status),
+    payload: summarizeTexmlPayload(eventPayload),
+    parseMs: Date.now() - startedAt,
+  });
 
   if (shouldProbeCfnaPayload(eventPayload)) {
     const callSidEarly = pick(
@@ -239,14 +265,25 @@ export async function handleTexmlStatusCallback(request: Request) {
     },
   });
 
-  const toEarly = normalizeE164(
-    pick(eventPayload.to, eventPayload.To, eventPayload.destination_number),
-  );
+  const toRawEarly = pick(eventPayload.to, eventPayload.To, eventPayload.destination_number);
+  const toEarly = tracePhoneNormalization({
+    layer: "texml-status",
+    field: "to",
+    raw: toRawEarly,
+    normalized: toRawEarly ? tryNormalizeE164(toRawEarly) : null,
+    callSid: callSidForTrace || null,
+    extra: { eventType },
+  });
   const connectionId = pick(eventPayload.ConnectionId, eventPayload.connection_id);
   const { isPlatform571E164, isMctb571ConsentTexmlConnection } = await import(
     "@/lib/mctb/consent-prompt/telnyx-texml-route"
   );
   if (toEarly && isPlatform571E164(toEarly) && isMctb571ConsentTexmlConnection(connectionId)) {
+    traceMctbPipelineSkip("texml-status", "mctb_571_consent", "platform_571_consent_texml", {
+      to: toEarly,
+      connectionId,
+      callSid: callSidForTrace || null,
+    });
     await prisma.providerWebhookEvent.update({
       where: { providerEventId },
       data: { status: "processed", processedAt: new Date() },
@@ -262,6 +299,12 @@ export async function handleTexmlStatusCallback(request: Request) {
     const { isMctbTexmlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
     const { MCTB_CONSENT_MODE_EXISTING } = await import("@/lib/mctb/consent-mode");
     if (pnMctb && isMctbTexmlVoiceIngress(pnMctb.settingsJson)) {
+      traceMctbPipelineOk("texml-status", "mctb_texml_ingress_detected", {
+        to: toEarly,
+        workspaceId: pnMctb.workspaceId,
+        eventType,
+        callSid: callSidForTrace || null,
+      });
       const terminal = eventType === "call.hangup";
       if (terminal) {
         const fromEarly = pick(eventPayload.from, eventPayload.From, eventPayload.Caller);
@@ -284,6 +327,10 @@ export async function handleTexmlStatusCallback(request: Request) {
         );
         const ingressConfig = await resolveMctbTexmlIngressConfig(toEarly).catch(() => null);
         if (!ingressConfig?.workspaceId) {
+          traceMctbPipelineSkip("texml-status", "existing_consent_capture", "workspace_unresolved", {
+            to: toEarly,
+            callSid: callSidEarly || null,
+          });
           await prisma.providerWebhookEvent.update({
             where: { providerEventId },
             data: { status: "processed", processedAt: new Date() },
@@ -300,6 +347,12 @@ export async function handleTexmlStatusCallback(request: Request) {
           forwardedFrom: forwardedFrom || null,
         });
         if (!tenant.workspaceId) {
+          traceMctbPipelineSkip("texml-status", "existing_consent_capture", "tenant_unresolved", {
+            to: toEarly,
+            from: fromEarly || null,
+            forwardedFrom: forwardedFrom || null,
+            callSid: callSidEarly || null,
+          });
           await prisma.providerWebhookEvent.update({
             where: { providerEventId },
             data: { status: "processed", processedAt: new Date() },
@@ -311,11 +364,23 @@ export async function handleTexmlStatusCallback(request: Request) {
 
         const { loadMctbConsentMode } = await import("@/lib/mctb/consent-prompt/service");
         const mode = await loadMctbConsentMode(tenantWorkspaceId).catch(() => "press_1");
+        traceMctbPipeline({
+          layer: "texml-status",
+          step: "mctb_terminal_hangup",
+          outcome: "ok",
+          consentMode: mode,
+          workspaceId: tenantWorkspaceId,
+          to: toEarly,
+          from: fromEarly || null,
+          forwardedFrom: forwardedFrom || null,
+          callSid: callSidEarly || null,
+          texmlCallStatus: pick(eventPayload.CallStatus, eventPayload.texml_call_status),
+        });
         if (mode === MCTB_CONSENT_MODE_EXISTING) {
           const { scheduleMctbTexmlExistingConsentCapture } = await import(
             "@/lib/mctb/texml-ingress/existing-consent-capture"
           );
-          await scheduleMctbTexmlExistingConsentCapture({
+          const queued = await scheduleMctbTexmlExistingConsentCapture({
             eventPayload: {
               ...eventPayload,
               ...(forwardedFrom ? { ForwardedFrom: forwardedFrom, forwarded_from: forwardedFrom } : {}),
@@ -323,7 +388,27 @@ export async function handleTexmlStatusCallback(request: Request) {
             workspaceId: tenantWorkspaceId,
             forwardedFromE164: forwardedFrom || null,
           });
+          traceMctbPipeline({
+            layer: "texml-status",
+            step: "existing_consent_capture_scheduled",
+            outcome: queued.queued ? "queued" : "skip",
+            reason: queued.queued ? undefined : "missing_call_sid",
+            workspaceId: tenantWorkspaceId,
+            callSid: queued.callSid || callSidEarly || null,
+          });
+        } else {
+          traceMctbPipelineSkip("texml-status", "existing_consent_capture", "press_1_mode_uses_gather", {
+            consentMode: mode,
+            workspaceId: tenantWorkspaceId,
+            callSid: callSidEarly || null,
+          });
         }
+      } else {
+        traceMctbPipelineSkip("texml-status", "mctb_texml_ingress", "non_terminal_event", {
+          eventType,
+          to: toEarly,
+          callSid: callSidForTrace || null,
+        });
       }
       await prisma.providerWebhookEvent.update({
         where: { providerEventId },
@@ -363,6 +448,10 @@ export async function handleTexmlStatusCallback(request: Request) {
     eventType,
     eventPayload,
   }).catch((err) => {
+    traceMctbPipelineError("texml-status", "ensure_voice_call", err, {
+      eventType,
+      callSid: callSidForTrace || null,
+    });
     console.error("[texml-status] ensureVoiceCall", err);
     return null;
   });
@@ -467,13 +556,46 @@ export async function handleTexmlStatusCallback(request: Request) {
           payload: { callId, workspaceId: call.workspaceId },
           idempotencyKey: `voice-post-call:${callId}`,
         }).catch(() => undefined);
+        traceMctbPipeline({
+          layer: "texml-status",
+          step: "voice_post_call_enqueued",
+          outcome: "queued",
+          callId,
+          workspaceId: call.workspaceId,
+          status: internalStatus,
+          answeredAt: call.answeredAt,
+        });
 
         const { isMissedInboundVoiceCall, triggerJohnMctbForVoiceCall } = await import(
           "@/lib/agents/missed-call-text-back/voice-missed-trigger"
         );
-        if (isMissedInboundVoiceCall(call)) {
-          await triggerJohnMctbForVoiceCall(call).catch((err) => {
+        const missed = isMissedInboundVoiceCall(call);
+        traceMctbPipeline({
+          layer: "texml-status",
+          step: "john_mctb_precheck",
+          outcome: missed ? "ok" : "skip",
+          reason: missed ? undefined : "not_missed_inbound",
+          callId,
+          workspaceId: call.workspaceId,
+          status: call.status,
+          answeredAt: call.answeredAt,
+          from: call.fromE164,
+          to: call.toE164,
+        });
+        if (missed) {
+          const mctbResult = await triggerJohnMctbForVoiceCall(call).catch((err) => {
+            traceMctbPipelineError("texml-status", "john_mctb_trigger", err, { callId });
             console.warn("[texml-status] John MCTB trigger failed", callId, err);
+            return { triggered: false, reason: "exception" };
+          });
+          traceMctbPipeline({
+            layer: "texml-status",
+            step: "john_mctb_trigger_result",
+            outcome: mctbResult?.triggered ? "triggered" : "skip",
+            reason: mctbResult?.reason || undefined,
+            callId,
+            workspaceId: call.workspaceId,
+            result: mctbResult,
           });
         }
       }
@@ -497,8 +619,22 @@ export async function handleTexmlStatusCallback(request: Request) {
     }
   } else {
     // Last resort: resolve by To/From without call_control_id.
-    const to = normalizeE164(pick(eventPayload.to, eventPayload.To)) || "";
-    const from = normalizeE164(pick(eventPayload.from, eventPayload.From)) || "";
+    const toRaw = pick(eventPayload.to, eventPayload.To);
+    const fromRaw = pick(eventPayload.from, eventPayload.From);
+    const to = tracePhoneNormalization({
+      layer: "texml-status",
+      field: "to_fallback",
+      raw: toRaw,
+      normalized: toRaw ? tryNormalizeE164(toRaw) : null,
+      callSid: callSidForTrace || null,
+    });
+    const from = tracePhoneNormalization({
+      layer: "texml-status",
+      field: "from_fallback",
+      raw: fromRaw,
+      normalized: fromRaw ? tryNormalizeE164(fromRaw) : null,
+      callSid: callSidForTrace || null,
+    });
     if (to && from) {
       const pn = await prisma.phoneNumber.findFirst({
         where: { e164: to },
@@ -517,9 +653,28 @@ export async function handleTexmlStatusCallback(request: Request) {
           },
         }).catch(() => null);
         callId = ensured2?.callId || null;
+        traceMctbPipelineOk("texml-status", "fallback_voice_call_ensured", {
+          callId,
+          to,
+          from,
+          eventType,
+        });
       }
+    } else {
+      traceMctbPipelineSkip("texml-status", "fallback_voice_call", "missing_or_invalid_to_from", {
+        toRaw,
+        fromRaw,
+        callSid: callSidForTrace || null,
+      });
     }
   }
+
+  traceMctbPipelineOk("texml-status", "callback_complete", {
+    eventType,
+    callId,
+    providerEventId,
+    durationMs: Date.now() - startedAt,
+  });
 
   await prisma.providerWebhookEvent.update({
     where: { providerEventId },

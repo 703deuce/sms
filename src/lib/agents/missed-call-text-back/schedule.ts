@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
+import { traceMctbPipeline } from "@/lib/mctb/pipeline-trace";
 
 export async function scheduleMissedCallText(input: {
   workspaceId: string;
@@ -44,5 +45,17 @@ export async function scheduleMissedCallText(input: {
     },
     idempotencyKey: `john-mctb-send:${input.missedCallEventId}`,
     runAfter: runAt,
+  });
+
+  traceMctbPipeline({
+    layer: "schedule",
+    step: "john_mctb_send_enqueued",
+    outcome: "queued",
+    traceId: input.traceId,
+    workspaceId: input.workspaceId,
+    missedCallEventId: input.missedCallEventId,
+    runAt: runAt.toISOString(),
+    delayMs,
+    demoMode: Boolean(input.demoMode),
   });
 }
