@@ -156,8 +156,14 @@ export function MeetingRoom({
     if (state) setRoomState(state);
   }, []);
 
+  const joinSessionKey = useMemo(
+    () => `${join.roomId}:${join.clientToken}:${join.participantId}`,
+    [join.roomId, join.clientToken, join.participantId],
+  );
+
   useEffect(() => {
     let client: TransovoVideoClient | null = null;
+    let cancelled = false;
     (async () => {
       client = new TransovoVideoClient({
         roomId: join.roomId,
@@ -167,8 +173,9 @@ export function MeetingRoom({
         onRemoteParticipantJoined: () => refreshState(),
         onRemoteParticipantLeft: () => refreshState(),
         onMessage: (participantId, message: Message) => {
+          const state = clientRef.current?.getState();
           const ctx = parseParticipantContext(
-            roomState?.participants.get(participantId)?.context,
+            state?.participants.get(participantId)?.context,
           );
           setChat((prev) => [
             ...prev,
@@ -184,7 +191,9 @@ export function MeetingRoom({
       });
       clientRef.current = client;
       await client.connect();
+      if (cancelled) return;
       await client.publishCameraMicrophone({ audio: true, video: true });
+      if (cancelled) return;
       refreshState();
       const state = client.getState();
       let localTelnyxId: string | undefined;
@@ -204,12 +213,16 @@ export function MeetingRoom({
           providerParticipantId: localTelnyxId,
         }),
       }).catch(() => undefined);
-    })().catch(() => setConnection("failed"));
+    })().catch(() => {
+      if (!cancelled) setConnection("failed");
+    });
 
     return () => {
+      cancelled = true;
       void client?.disconnect();
+      clientRef.current = null;
     };
-  }, [join, refreshState, roomState?.participants, token]);
+  }, [joinSessionKey, join.context, join.participantId, refreshState, token]);
 
   useEffect(() => {
     const id = window.setInterval(refreshState, 2000);
@@ -358,6 +371,21 @@ export function MeetingRoom({
     }).catch(() => undefined);
     await clientRef.current?.disconnect();
     setEnded(true);
+  }
+
+  if (connection === "failed") {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-3">
+          <h1 className="text-xl font-semibold">Unable to connect to this meeting</h1>
+          <p className="text-muted-foreground">
+            The video room disconnected unexpectedly. Check your camera and microphone permissions,
+            then try again.
+          </p>
+          <Button onClick={() => window.location.reload()}>Reload and try again</Button>
+        </div>
+      </div>
+    );
   }
 
   if (kicked) {
