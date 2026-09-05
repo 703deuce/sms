@@ -54,6 +54,7 @@ function buildInstantPress1GatherTexml(input: {
   profile: MctbInboundRoutingProfile;
   fields: Record<string, string>;
   certMode: ResolvedMctbTexmlCertMode;
+  publicBaseUrl?: string;
 }): InstantInboundTexml {
   const forwardedFrom = parseForwardedFrom(input.fields);
   const promptMode =
@@ -67,6 +68,7 @@ function buildInstantPress1GatherTexml(input: {
     certMode: input.certMode === "D" ? "D" : input.certMode,
     press1PlayUrl: input.profile.press1PlayUrl,
     press1SayText: null,
+    publicBaseUrl: input.publicBaseUrl,
   });
 
   const gatherWithToken = appendRoutingTokenToGatherUrl(
@@ -94,6 +96,7 @@ export function buildInstantMctbInboundTexml(input: {
   profile: MctbInboundRoutingProfile;
   fields: Record<string, string>;
   certMode: ResolvedMctbTexmlCertMode;
+  publicBaseUrl?: string;
 }): InstantInboundTexml | null {
   if (!certModeForcesPress1Gather(input.certMode) && input.certMode !== "D") {
     return null;
@@ -115,6 +118,7 @@ export function buildInstantMctbInboundTexml(input: {
       toE164,
       greetingToken: input.profile.greetingToken,
       routingToken: input.profile.routingToken,
+      publicBaseUrl: input.publicBaseUrl,
     });
     return {
       body: built.body,

@@ -1,6 +1,8 @@
 const DEFAULT_CONSENT_AUDIO_ASSET_ID = "cmt3o8tyd1o5r0o4k3e4n5v2l";
 
-function appBaseUrl(): string {
+function appBaseUrl(override?: string): string {
+  const base = override?.trim().replace(/\/$/, "") || "";
+  if (base) return base;
   return (
     process.env.APP_URL?.replace(/\/$/, "") ||
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
@@ -10,8 +12,9 @@ function appBaseUrl(): string {
 
 function consentTexmlVoiceUrl(
   segment: "mctb-consent" | "mctb-entry" | "mctb-texml-voicemail" = "mctb-consent",
+  publicBaseUrl?: string,
 ): string {
-  const base = appBaseUrl();
+  const base = appBaseUrl(publicBaseUrl);
   if (!base) {
     throw new Error(
       "MCTB TeXML requires APP_URL or NEXT_PUBLIC_APP_URL for Gather action URLs",
@@ -21,25 +24,35 @@ function consentTexmlVoiceUrl(
 }
 
 /** TeXML &lt;Record&gt; recordingStatusCallback for MCTB voicemail collection. */
-export function getMctbTexmlVoicemailRecordCallbackUrl(): string {
-  return consentTexmlVoiceUrl("mctb-texml-voicemail");
+export function getMctbTexmlVoicemailRecordCallbackUrl(publicBaseUrl?: string): string {
+  return consentTexmlVoiceUrl("mctb-texml-voicemail", publicBaseUrl);
 }
 
 /** Production MCTB Press-1 prerecorded prompt URL (Telnyx &lt;Play&gt;). */
-export function getMctbConsentPlaybackUrl(): string {
+export function getMctbConsentPlaybackUrl(publicBaseUrl?: string): string {
   const assetId =
     process.env.MCTB_PLATFORM_CONSENT_AUDIO_ASSET_ID?.trim() || DEFAULT_CONSENT_AUDIO_ASSET_ID;
-  const base = appBaseUrl();
+  const base = appBaseUrl(publicBaseUrl);
   const path = `/api/public/smart-routing-audio/${assetId}`;
-  return base ? `${base}${path}` : path;
+  if (!base) {
+    throw new Error(
+      "MCTB TeXML requires APP_URL or NEXT_PUBLIC_APP_URL for consent Play URLs",
+    );
+  }
+  return `${base}${path}`;
 }
 
 /** Production existing-consent voicemail greeting (&lt;Play&gt; before &lt;Record&gt;). */
-export function getMctbVoicemailGreetingPlaybackUrl(): string {
+export function getMctbVoicemailGreetingPlaybackUrl(publicBaseUrl?: string): string {
   const assetId = getMctbVoicemailGreetingAudioAssetId();
-  const base = appBaseUrl();
+  const base = appBaseUrl(publicBaseUrl);
   const path = `/api/public/smart-routing-audio/${assetId}`;
-  return base ? `${base}${path}` : path;
+  if (!base) {
+    throw new Error(
+      "MCTB TeXML requires APP_URL or NEXT_PUBLIC_APP_URL for voicemail Play URLs",
+    );
+  }
+  return `${base}${path}`;
 }
 
 export function getMctbVoicemailGreetingAudioAssetId(): string {
@@ -111,12 +124,15 @@ export function buildMctbConsentInboundTexml(
     /** Workspace Press-1 audio (overrides platform consent asset when set). */
     press1PlayUrl?: string | null;
     press1SayText?: string | null;
+    /** Request-derived public origin when APP_URL is unset. */
+    publicBaseUrl?: string;
   },
 ): MctbConsentInboundTexmlBuild {
   const requestPrompt = options?.requestPrompt ?? null;
   const promptMode = options?.promptMode ?? resolveMctbConsentTexmlPromptMode(requestPrompt);
   const gatherBasePath = options?.gatherBasePath || "mctb-consent";
-  const audioUrl = getMctbConsentPlaybackUrl();
+  const publicBaseUrl = options?.publicBaseUrl;
+  const audioUrl = getMctbConsentPlaybackUrl(publicBaseUrl);
 
   if (promptMode === "say-only") {
     const rawPrompt = (requestPrompt || process.env.MCTB_CONSENT_TEXML_PROMPT || "").toLowerCase();
@@ -135,7 +151,7 @@ export function buildMctbConsentInboundTexml(
     };
   }
 
-  const voiceUrl = consentTexmlVoiceUrl(gatherBasePath);
+  const voiceUrl = consentTexmlVoiceUrl(gatherBasePath, publicBaseUrl);
   const actionUrl = new URL(voiceUrl);
   actionUrl.searchParams.set("event", "gather");
   actionUrl.searchParams.set("path", "texml_mctb_ingress");
@@ -180,8 +196,8 @@ export function buildMctbConsentControlledHangupTexml(message: string): string {
 }
 
 /** Cert B2 — Play production consent audio only (no Gather/SMS/DB). */
-export function buildMctbCertPlayOnlyTexml(): string {
-  const audioUrl = getMctbConsentPlaybackUrl();
+export function buildMctbCertPlayOnlyTexml(publicBaseUrl?: string): string {
+  const audioUrl = getMctbConsentPlaybackUrl(publicBaseUrl);
   return `<Play>${escapeXml(audioUrl)}</Play><Pause length="2"/><Hangup/>`;
 }
 
@@ -190,10 +206,11 @@ export function buildMctbVoicemailGreetingTexml(input: {
   playUrl: string | null;
   sayText: string | null;
   recordCallbackUrl?: string | null;
+  publicBaseUrl?: string;
 }): string {
   const fallbackSay = "Please leave a message after the tone.";
   const recordCallback =
-    input.recordCallbackUrl?.trim() || getMctbTexmlVoicemailRecordCallbackUrl();
+    input.recordCallbackUrl?.trim() || getMctbTexmlVoicemailRecordCallbackUrl(input.publicBaseUrl);
   const recordVerb = `<Record maxLength="180" playBeep="true" recordingStatusCallback="${escapeXml(recordCallback)}" recordingStatusCallbackMethod="POST"/>`;
   if (input.playUrl?.trim()) {
     return `<Play>${escapeXml(input.playUrl.trim())}</Play>${recordVerb}`;

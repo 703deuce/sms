@@ -24,14 +24,23 @@ export function buildInstantVoicemailTexml(input: {
   toE164: string;
   greetingToken?: string | null;
   routingToken?: string | null;
+  publicBaseUrl?: string;
 }): { body: string; greetingToken: string; routingToken: string; playUrl: string } {
   const greetingToken = input.greetingToken?.trim() || greetingTokenForE164(input.toE164);
   const routingToken = input.routingToken?.trim() || routingTokenForE164(input.toE164);
   const playUrl = resolveStableVoicemailGreetingPlayUrl(greetingToken);
+  const recordBase = input.publicBaseUrl
+    ? (() => {
+        const url = new URL(getMctbTexmlVoicemailRecordCallbackUrl(input.publicBaseUrl));
+        url.searchParams.set("r", routingToken);
+        return url.toString();
+      })()
+    : recordCallbackWithRoutingToken(routingToken);
   const body = buildMctbVoicemailGreetingTexml({
     playUrl,
     sayText: null,
-    recordCallbackUrl: recordCallbackWithRoutingToken(routingToken),
+    recordCallbackUrl: recordBase,
+    publicBaseUrl: input.publicBaseUrl,
   });
   return { body, greetingToken, routingToken, playUrl };
 }

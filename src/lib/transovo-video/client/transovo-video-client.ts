@@ -180,8 +180,9 @@ export class TransovoVideoClient {
       traceVideoPipeline({
         layer: "video-client",
         step: "state_changed",
-        outcome: this.mapConnectionStatus(state.status),
+        outcome: "ok",
         roomId: this.options.roomId,
+        connectionStatus: this.mapConnectionStatus(state.status),
         state: summarizeVideoRoomState(state),
       });
     });

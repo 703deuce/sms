@@ -36,6 +36,11 @@ import {
   finishMctbEntryCfnaProbe,
   type MctbEntryProbeHandle,
 } from "@/lib/mctb/cfna-ingress-probe";
+import { traceMctbPipeline, traceMctbPipelineError } from "@/lib/mctb/pipeline-trace";
+import {
+  mctbPublicBaseUrlDiagnostics,
+  resolveMctbPublicBaseUrl,
+} from "@/lib/mctb/texml-ingress/public-base-url";
 import { normalizeForwardedFromE164, parseTelnyxForwardedFrom } from "@/lib/voice/telnyx/forwarded-from";
 
 export const runtime = "nodejs";
@@ -97,6 +102,15 @@ function texmlResponse(
       ...meta,
     }),
   );
+  traceMctbPipeline({
+    layer: "mctb-entry",
+    step: "texml_response",
+    outcome: "ok",
+    branch: branch,
+    xmlBytes: Buffer.byteLength(xml, "utf8"),
+    latencyMs,
+    ...meta,
+  });
   finishMctbEntryCfnaProbe(probe, {
     texmlGenerated: true,
     responseStatus: 200,
@@ -161,8 +175,18 @@ type EntryTimingCtx = {
 export async function POST(request: Request) {
   const started = Date.now();
   const requestUrl = new URL(request.url);
+  const publicBaseUrl = resolveMctbPublicBaseUrl(request);
   let entryProbe: MctbEntryProbeHandle | null = null;
   let timingCtx: EntryTimingCtx = { callSid: null, to: null, certMode: "D" };
+
+  traceMctbPipeline({
+    layer: "mctb-entry",
+    step: "request_received",
+    outcome: "ok",
+    cert: requestUrl.searchParams.get("cert"),
+    publicBaseUrl,
+    baseUrlDiagnostics: mctbPublicBaseUrlDiagnostics(request),
+  });
 
   try {
     const fields = await parseMctbTexmlFields(request);
@@ -266,7 +290,7 @@ export async function POST(request: Request) {
         callSid,
         audioUrl,
       });
-      return respondTexml(buildMctbCertPlayOnlyTexml(), {
+      return respondTexml(buildMctbCertPlayOnlyTexml(publicBaseUrl), {
         branch: "cert_play_only",
         certMode,
         audioUrl,
@@ -303,7 +327,12 @@ export async function POST(request: Request) {
         scheduleInboundWarm(to);
       }
 
-      const instant = buildInstantMctbInboundTexml({ profile, fields, certMode });
+      const instant = buildInstantMctbInboundTexml({
+        profile,
+        fields,
+        certMode,
+        publicBaseUrl,
+      });
       if (instant) {
         traceMctbTexml("MCTB_TEXML_RETURNED", {
           branch: instant.branch,
@@ -439,6 +468,7 @@ export async function POST(request: Request) {
         playUrl: voicemailPlayUrl,
         sayText: null,
         recordCallbackUrl: getMctbVoicemailRecordCallbackWithRoutingToken(recordToken),
+        publicBaseUrl,
       });
 
       traceMctbTexml("MCTB_TEXML_RETURNED", {
@@ -480,6 +510,7 @@ export async function POST(request: Request) {
       certMode: certMode === "D" ? "D" : certMode,
       press1PlayUrl: playback.playUrl,
       press1SayText: playback.sayText,
+      publicBaseUrl,
     });
 
     traceMctbTexml("MCTB_TEXML_RETURNED", {
@@ -515,6 +546,10 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    traceMctbPipelineError("mctb-entry", "handler_exception", err, {
+      publicBaseUrl,
+      cert: requestUrl.searchParams.get("cert"),
+    });
     console.error(JSON.stringify({ source: "mctb-entry", event: "handler_error", error: message }));
     traceMctbTexml("MCTB_ROUTING_FAIL", { reason: "handler_exception", error: message });
     return texmlResponse(
@@ -526,6 +561,13 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  return texmlResponse(buildMinimalCertTexml(), { branch: "health" });
+export async function GET(request: Request) {
+  const publicBaseUrl = resolveMctbPublicBaseUrl(request);
+  return NextResponse.json({
+    ok: true,
+    service: "mctb-entry",
+    publicBaseUrl,
+    diagnostics: mctbPublicBaseUrlDiagnostics(request),
+    cert: resolveMctbTexmlCertMode(new URL(request.url).searchParams.get("cert")),
+  });
 }
