@@ -10,6 +10,10 @@ import {
   type TransovoConnectionState,
 } from "@/lib/transovo-video/client/transovo-video-client";
 import {
+  traceVideoPipeline,
+  traceVideoPipelineError,
+} from "@/lib/transovo-video/video-pipeline-trace";
+import {
   Loader2,
   MessageSquare,
   Mic,
@@ -128,6 +132,7 @@ export function MeetingRoom({
   const [ended, setEnded] = useState(false);
   const [kicked, setKicked] = useState(false);
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const [startedAt] = useState(() => Date.now());
   const [copiedInvite, setCopiedInvite] = useState(false);
 
@@ -164,12 +169,24 @@ export function MeetingRoom({
   useEffect(() => {
     let client: TransovoVideoClient | null = null;
     let cancelled = false;
+
     (async () => {
+      traceVideoPipeline({
+        layer: "meeting-room",
+        step: "join_session_start",
+        outcome: "ok",
+        meetingToken: token,
+        roomId: join.roomId,
+        participantId: join.participantId,
+        role: join.role,
+      });
       client = new TransovoVideoClient({
         roomId: join.roomId,
         clientToken: join.clientToken,
         context: join.context,
         onStateChange: setConnection,
+        onRoomStateChange: setRoomState,
+        onAudioActivity: setActiveSpeaker,
         onRemoteParticipantJoined: () => refreshState(),
         onRemoteParticipantLeft: () => refreshState(),
         onMessage: (participantId, message: Message) => {
@@ -205,6 +222,14 @@ export function MeetingRoom({
           }
         }
       }
+      traceVideoPipeline({
+        layer: "meeting-room",
+        step: "connected_callback",
+        outcome: "ok",
+        meetingToken: token,
+        participantId: join.participantId,
+        providerParticipantId: localTelnyxId || null,
+      });
       await fetch(`/api/video/public/${token}/connected`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,8 +238,16 @@ export function MeetingRoom({
           providerParticipantId: localTelnyxId,
         }),
       }).catch(() => undefined);
-    })().catch(() => {
-      if (!cancelled) setConnection("failed");
+    })().catch((err) => {
+      traceVideoPipelineError("meeting-room", "join_session", err, {
+        meetingToken: token,
+        roomId: join.roomId,
+        participantId: join.participantId,
+      });
+      if (!cancelled) {
+        setConnectError(err instanceof Error ? err.message : String(err));
+        setConnection("failed");
+      }
     });
 
     return () => {
@@ -222,7 +255,7 @@ export function MeetingRoom({
       void client?.disconnect();
       clientRef.current = null;
     };
-  }, [joinSessionKey, join.context, join.participantId, refreshState, token]);
+  }, [joinSessionKey, join.context, join.participantId, join.role, join.roomId, refreshState, token]);
 
   useEffect(() => {
     const id = window.setInterval(refreshState, 2000);
@@ -259,16 +292,25 @@ export function MeetingRoom({
   }, [roomState]);
 
   const participants = useMemo(() => {
-    if (!roomState) return [];
+    if (!roomState || !clientRef.current) return [];
+    const room = clientRef.current.getRoom();
     return Array.from(roomState.participants.values()).map((p) => {
       const ctx = parseParticipantContext(p.context);
-      const streams = clientRef.current?.getRoom()?.getParticipantStreams(p.id);
+      const streams =
+        p.origin === "local"
+          ? room?.getLocalStreams()
+          : room?.getParticipantStreams(p.id);
       let videoTrack: MediaStreamTrack | undefined;
       let muted = true;
-      streams?.forEach((stream) => {
-        if (stream.videoTrack) videoTrack = stream.videoTrack;
-        if (stream.audioTrack) muted = !stream.isAudioEnabled;
-      });
+      if (streams) {
+        const streamList =
+          streams instanceof Map ? Array.from(streams.values()) : Object.values(streams);
+        for (const stream of streamList) {
+          if (stream.key === SCREEN_STREAM_KEY) continue;
+          if (stream.videoTrack) videoTrack = stream.videoTrack;
+          if (stream.audioTrack) muted = !stream.isAudioEnabled;
+        }
+      }
       return {
         id: p.id,
         transovoParticipantId: ctx.transovoParticipantId || transovoByTelnyxId.get(p.id),
@@ -373,14 +415,21 @@ export function MeetingRoom({
     setEnded(true);
   }
 
-  if (connection === "failed") {
+  if (connection === "failed" || connection === "disconnected") {
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-center">
         <div className="max-w-md space-y-3">
-          <h1 className="text-xl font-semibold">Unable to connect to this meeting</h1>
+          <h1 className="text-xl font-semibold">
+            {connection === "disconnected"
+              ? "Disconnected from this meeting"
+              : "Unable to connect to this meeting"}
+          </h1>
           <p className="text-muted-foreground">
-            The video room disconnected unexpectedly. Check your camera and microphone permissions,
-            then try again.
+            {connectError
+              ? connectError
+              : connection === "disconnected"
+                ? "The video room closed or your network connection was lost."
+                : "The video room disconnected unexpectedly. Check your camera and microphone permissions, then try again."}
           </p>
           <Button onClick={() => window.location.reload()}>Reload and try again</Button>
         </div>

@@ -23,6 +23,7 @@ import {
   telnyxRetrieveVideoRoom,
   telnyxUnmuteRoomParticipants,
 } from "./telnyx-video-provider";
+import { traceVideoPipeline, traceVideoPipelineError } from "./video-pipeline-trace";
 import {
   TELNYX_VIDEO_MAX_PARTICIPANTS,
   TELNYX_VIDEO_MIN_PARTICIPANTS,
@@ -700,10 +701,35 @@ export async function requestVideoJoin(input: {
     };
   }
 
-  const tokenData = await telnyxGenerateJoinClientToken(meeting.providerRoomId);
+  const tokenData = await telnyxGenerateJoinClientToken(meeting.providerRoomId).catch((err) => {
+    traceVideoPipelineError("join-api", "generate_join_token", err, {
+      roomId: meeting.providerRoomId,
+      meetingId: meeting.id,
+    });
+    throw err;
+  });
   if (!tokenData?.token) {
+    traceVideoPipeline({
+      layer: "join-api",
+      step: "generate_join_token",
+      outcome: "fail",
+      reason: "missing_token",
+      roomId: meeting.providerRoomId,
+      meetingId: meeting.id,
+    });
     throw new Error("Failed to generate join credentials");
   }
+
+  traceVideoPipeline({
+    layer: "join-api",
+    step: "join_credentials_issued",
+    outcome: "ok",
+    roomId: meeting.providerRoomId,
+    meetingId: meeting.id,
+    participantId: participant.id,
+    role,
+    tokenTtlSecs: tokenData.token_ttl_secs,
+  });
 
   const context = buildParticipantContext({
     displayName: participant.displayName,

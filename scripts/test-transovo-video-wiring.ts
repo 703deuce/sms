@@ -27,6 +27,10 @@ assert("video webhook route", read("src/app/api/webhooks/telnyx/video-rooms/rout
 assert("public video page", read("src/app/(public)/video/[token]/page.tsx").includes("VideoMeetingClient"));
 assert("telnyx video sdk dep", read("package.json").includes("@telnyx/video"));
 assert("video client wrapper", read("src/lib/transovo-video/client/transovo-video-client.ts").includes("initialize"));
+assert("video remote subscriptions", read("src/lib/transovo-video/client/transovo-video-client.ts").includes("addSubscription"));
+assert("video state_changed wiring", read("src/lib/transovo-video/client/transovo-video-client.ts").includes("state_changed"));
+assert("video pipeline trace", read("src/lib/transovo-video/video-pipeline-trace.ts").includes("video-pipeline"));
+assert("meeting room state sync", read("src/components/video/meeting-room.tsx").includes("onRoomStateChange"));
 assert("booking auto-provision", read("src/lib/appointments/booking-platform.ts").includes("autoProvisionTransovoVideoForAppointment"));
 assert("meeting link merge var", read("src/lib/appointments/appointments-service.ts").includes("meeting_link"));
 assert("video process job", read("src/lib/jobs/job-handlers.ts").includes("transovo_video_process"));
