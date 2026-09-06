@@ -38,6 +38,7 @@ import {
   loadStandardsPack,
   writeStandardsPackArtifact,
 } from "./mode4-standards-pack";
+import { MODE4_SCOPE_SUPERSESSION } from "./mode4-scope-supersession";
 import type { CliOptions } from "./types";
 
 const MODE4_DIR = join(UI_AGENT_DIR, "mode4");
@@ -141,6 +142,8 @@ function buildMode4Instruction(entry: Mode4ManifestEntry): string {
   const standards = formatStandardsForKimi(loadStandardsPack());
   const contract = buildPageContract({ id: entry.id });
   return [
+    MODE4_SCOPE_SUPERSESSION,
+    "",
     KIMI_MODE4_SYSTEM_PREFIX,
     "",
     "AUTHORITY ORDER (mandatory):",

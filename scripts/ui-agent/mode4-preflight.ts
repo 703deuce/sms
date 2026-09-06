@@ -19,6 +19,11 @@ import {
   standardsPackTotals,
   writeStandardsPackArtifact,
 } from "./mode4-standards-pack";
+import {
+  MODE4_SCOPE_SUPERSESSION,
+  REQUIRED_SCOPE_MARKERS,
+  SCOPE_CONFLICT_PATTERNS,
+} from "./mode4-scope-supersession";
 
 const REPORT_DIR = join(UI_AGENT_DIR, "mode4", "preflight");
 
@@ -194,6 +199,87 @@ function auditFeatureCoverage(manifest: ReturnType<typeof loadMode4Manifest>): F
   });
 }
 
+function auditScopeConsistency(): {
+  pass: boolean;
+  conflicts: string[];
+  resolutions: string[];
+} {
+  const conflicts: string[] = [];
+  const resolutions: string[] = [];
+
+  const scopeDoc = join(REPO_ROOT, "docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md");
+  const v1Doc = join(REPO_ROOT, "docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md");
+  const legacyProductArch = join(REPO_ROOT, "docs/PRODUCT_ARCHITECTURE.md");
+
+  if (!existsSync(scopeDoc)) {
+    conflicts.push("Missing docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md");
+  } else {
+    resolutions.push("Scope authority doc present and first in standards pack");
+  }
+
+  const packPaths = TRANSOVO_STANDARDS_DOCS.map((d) => d.path);
+  if (packPaths.includes("docs/PRODUCT_ARCHITECTURE.md")) {
+    conflicts.push("docs/PRODUCT_ARCHITECTURE.md is still in standards pack (mass-SMS catalog)");
+  } else {
+    resolutions.push("Legacy PRODUCT_ARCHITECTURE.md excluded from pack");
+  }
+
+  if (!packPaths.includes("docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md")) {
+    conflicts.push("Scope authority doc not registered in standards pack");
+  }
+
+  if (!packPaths.includes("docs/TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md")) {
+    conflicts.push("Appointments domain architecture doc not in standards pack");
+  }
+
+  if (existsSync(v1Doc)) {
+    const v1 = readFileSync(v1Doc, "utf8");
+    if (!v1.includes(REQUIRED_SCOPE_MARKERS.v1Doc)) {
+      conflicts.push(`V1 doc missing supersession marker: ${REQUIRED_SCOPE_MARKERS.v1Doc}`);
+    } else {
+      resolutions.push("V1 doc contains MODE 4 ACTIVE SCOPE supersession banner");
+    }
+    if (!v1.includes(REQUIRED_SCOPE_MARKERS.mctbSection)) {
+      conflicts.push("V1 doc missing OUT OF MODE 4 SCOPE section markers");
+    } else {
+      resolutions.push("V1 doc marks MCTB/Compliance/Numbers sections as OUT OF MODE 4 SCOPE");
+    }
+    for (const { pattern, label, doc } of SCOPE_CONFLICT_PATTERNS) {
+      if (doc !== "docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md") continue;
+      if (pattern.test(v1)) {
+        // Allowed if only inside OUT OF MODE 4 sections — check no active "Wire to new nav" outside markers
+        if (/Wire to new nav/i.test(v1) && !/out-of-mode4/i.test(v1)) {
+          conflicts.push(`V1 doc: ${label}`);
+        }
+      }
+      if (/Tighten MCTB UI/i.test(v1)) {
+        conflicts.push(`V1 doc: ${label} still present`);
+      }
+    }
+  }
+
+  if (existsSync(scopeDoc)) {
+    const scope = readFileSync(scopeDoc, "utf8");
+    if (!scope.includes(REQUIRED_SCOPE_MARKERS.scopeDoc)) {
+      conflicts.push("Scope doc missing explicit exclusion list");
+    }
+  }
+
+  if (existsSync(legacyProductArch)) {
+    resolutions.push(
+      "Legacy PRODUCT_ARCHITECTURE.md exists in repo but is excluded from Kimi payload",
+    );
+  }
+
+  if (!MODE4_SCOPE_SUPERSESSION.includes("TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE")) {
+    conflicts.push("MODE4_SCOPE_SUPERSESSION preamble missing scope doc reference");
+  } else {
+    resolutions.push("Kimi job preamble includes scope supersession block");
+  }
+
+  return { pass: conflicts.length === 0, conflicts, resolutions };
+}
+
 function verifyKimiJobPayload(): { pass: boolean; checks: string[] } {
   const checks: string[] = [];
   const pack = loadStandardsPack();
@@ -202,7 +288,8 @@ function verifyKimiJobPayload(): { pass: boolean; checks: string[] } {
   checks.push(`Standards pack: ${totals.documents} docs, ${totals.totalSuppliedChars} chars supplied`);
   checks.push(`Truncation: ${totals.truncated === 0 ? "NONE (required)" : `FAIL — ${totals.truncated} truncated`}`);
   checks.push(`Missing docs: ${totals.missing === 0 ? "NONE" : `FAIL — ${totals.missing}`}`);
-  checks.push("Page Contract: supplemental only (embedded after standards in batch instruction)");
+  checks.push("Page Contract: supplemental only (embedded after scope supersession + standards)");
+  checks.push("Scope supersession preamble: prepended to every Kimi Mode 4 job");
   checks.push(`Art direction: Campaign default, Inbox for /conversations, Workflows for workflow surfaces`);
   checks.push("Golden screens: referenced after Stage E completion (batch uses golden artDirection flag)");
 
@@ -283,6 +370,12 @@ function main(): void {
     console.log(`✓ ${row.feature} → ${row.canonicalManifestId} (${row.route})`);
   }
 
+  const scopeCheck = auditScopeConsistency();
+  console.log("\n## Scope consistency audit\n");
+  for (const r of scopeCheck.resolutions) console.log(`✓ ${r}`);
+  for (const c of scopeCheck.conflicts) console.log(`✗ CONFLICT: ${c}`);
+  console.log(`\nScope consistency: ${scopeCheck.pass ? "PASS" : "FAIL"}`);
+
   const payloadCheck = verifyKimiJobPayload();
   console.log("\n## Kimi job payload verification\n");
   for (const c of payloadCheck.checks) console.log(`- ${c}`);
@@ -291,7 +384,13 @@ function main(): void {
   const manifestPass = missingSurfaces.length === 0;
   const featurePass = orphanFeatures.length === 0;
   const videoPass = videoCheck.pass;
-  const overallPass = standardsPass && manifestPass && featurePass && videoPass && payloadCheck.pass;
+  const overallPass =
+    standardsPass &&
+    manifestPass &&
+    featurePass &&
+    videoPass &&
+    payloadCheck.pass &&
+    scopeCheck.pass;
 
   console.log("\n================================");
   console.log("PREFLIGHT RESULTS");
@@ -302,6 +401,10 @@ function main(): void {
   console.log(`Manifest coverage (57 surfaces): ${manifestPass ? "PASS" : "FAIL"} (${missingSurfaces.length} missing)`);
   console.log(`Feature coverage: ${featurePass ? "PASS" : "FAIL"} (${orphanFeatures.length} orphan)`);
   console.log(`Art direction videos: ${videoPass ? "PASS" : "FAIL"}`);
+  console.log(`Scope consistency: ${scopeCheck.pass ? "PASS" : "FAIL"}`);
+  if (scopeCheck.conflicts.length) {
+    for (const c of scopeCheck.conflicts) console.log(`  → ${c}`);
+  }
   console.log(`Kimi payload structure: ${payloadCheck.pass ? "PASS" : "FAIL"}`);
   console.log(`\nOVERALL: ${overallPass ? "PASS" : "FAIL"}`);
   console.log(overallPass ? "\nSafe to proceed to Stage D/E/G." : "\nDo NOT launch Kimi until failures are resolved.");

@@ -71,7 +71,10 @@ Cursor must **not** launch the app merely to see whether Kimi's UI looks right. 
 
 Kimi Mode 4 must receive the **complete governing Transovo system** — not summaries.
 
-**Minimum bundle** (see `scripts/ui-agent/mode4-standards-pack.ts`):
+**Preflight (mandatory):** `npm run ui:kimi-mode4-preflight -- --write-report`  
+Must return **OVERALL: PASS** before any Kimi generation. Verifies full document bytes, no truncation, manifest coverage, and feature coverage.
+
+**Minimum bundle** (see `scripts/ui-agent/mode4-standards-pack.ts` — 22 document slots, ~703K chars full content):
 
 | Layer | Document |
 |-------|----------|
@@ -365,6 +368,7 @@ One canonical shell, visual language, page architecture, component system, termi
 
 | Command | Purpose |
 |---------|---------|
+| **`npm run ui:kimi-mode4-preflight`** | **Mandatory preflight audit — must PASS before Stage D/E/G** |
 | `npm run ui:kimi-mode4-sync-manifest` | Sync JSON manifest |
 | `npm run ui:kimi-mode4-contract -- --id <id>` | Generate Page Contract |
 | `npm run ui:kimi-mode4-standards` | Print standards pack |

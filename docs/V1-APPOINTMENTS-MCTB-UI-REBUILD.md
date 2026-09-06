@@ -1,27 +1,38 @@
-# Transovo V1 Refocus — Appointments + Missed-Call Text Back
+# Transovo V1 Refocus — Appointments Platform
 
-**Status:** Active product/UI rebuild directive  
+> **Historical filename note:** This file was originally named for Appointments + MCTB.  
+> **MODE 4 ACTIVE SCOPE:** For Kimi Mode 4, `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md` is the authoritative product-scope document. It **supersedes** stale passages below that reference MCTB UI, standalone Compliance/Numbers nav, mass SMS, Grow, Campaigns, or legacy `/voice/**`. Sections marked **OUT OF MODE 4 SCOPE** are preserved for engineering history only — Kimi must not implement them.
+
+**Status:** Active product/UI rebuild directive (appointments sections)  
 **Audience:** Cursor agents and engineers  
-**Principle:** Audit and reuse before building. **Do not delete** mass-SMS infrastructure — hide from launch nav.
+**Principle:** Audit and reuse before building. **Do not delete** legacy infrastructure — hide from launch nav.
 
 **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`  
+**Mode 4 scope (read first for Kimi):** `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`  
 **Mode 4 rebuild:** `docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md` · `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md`
 
 Related: `src/lib/products/v1-launch-nav.ts` (nav flags) · Appendix A (reuse map)
 
 ---
 
-## Launch products (V1)
+## Launch products (V1 — Mode 4 active subset)
+
+**Mode 4 rebuilds only the appointments-platform surfaces in** `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`.
 
 1. **Appointments / Scheduling**
-2. **Appointment SMS reminders**
-3. **Missed-Call Text Back**
-4. **Conversations**
-5. **Contacts**
-6. **Basic Analytics / Overview**
-7. **Numbers / Compliance / Billing / Settings**
+2. **Appointment SMS reminders** (reminder sequences + appointment workflows)
+3. **Conversations (Messages)**
+4. **Contacts**
+5. **Booking** (types, pages, availability, AI booking, routing, polls)
+6. **Automations** (appointment workflows — not legacy mass-SMS builder)
+7. **Meetings** (notetaker recaps)
+8. **Payments** (transactions)
+9. **Operational Analytics**
+10. **Integrations + Settings**
 
-Mass SMS (Campaigns, Drips, Keywords, bulk send, list/segment marketing) is **preserved but hidden** from primary navigation until reactivation.
+**OUT OF MODE 4 SCOPE** (preserved in repo, hidden from appointments nav): Missed-Call Text Back, standalone Compliance, standalone Numbers, Mass SMS (Campaigns, Drips, Keywords, Grow), legacy `/voice/**`, AI receptionist.
+
+Mass SMS infrastructure is **preserved but hidden** from primary navigation until reactivation.
 
 ---
 
@@ -52,23 +63,25 @@ Before creating a new component, audit existing app surfaces.
 
 ---
 
-## 3. New primary navigation (V1)
+## 3. Primary navigation (V1)
+
+> **MODE 4:** Use `src/lib/products/appointments-nav.ts` (10-domain IA) and `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md`. The table below is **obsolete** for Mode 4.
 
 | Section | Items |
 |---------|--------|
-| **Overview** | Operations dashboard |
-| **Appointments** | Calendar · Scheduled Appointments · Appointment Types · Reminder Settings |
-| **Conversations** | Shared inbox |
-| **Contacts** | Shared contacts |
-| **Missed Calls** | MCTB list + setup entry |
-| **Analytics** | Operational metrics |
-| **Setup / Numbers** | Forwarding, sender, provider status |
-| **Compliance** | Appointment + MCTB consent audit |
-| **Settings** | Business, billing, team, integrations |
+| **Home** | Operations dashboard (`/appointments/overview`) |
+| **Appointments** | Calendar · List · Waitlist · Recalls |
+| **Booking** | Types · Pages · Availability · AI Booking · Routing · Polls |
+| **Contacts** | Contacts (+ lists, segments, fields, imports) |
+| **Messages** | Inbox (`/conversations`) |
+| **Automations** | Reminder Sequences · Workflows · Templates · Activity |
+| **Meetings** | Upcoming · Recaps |
+| **Payments** | Transactions |
+| **Analytics** | Overview · Booking · Reminders · Automations · Reports |
+| **Integrations** | Calendars · Payments |
+| **Settings** | Business · Team · Messaging · Calendar · Meetings · Security · Billing |
 
-Billing under Settings or top-level — match existing app structure.
-
-Nav flags: `src/lib/products/v1-launch-nav.ts`
+Nav flags: `src/lib/products/v1-launch-nav.ts` · Canonical builder: `appointments-nav.ts`
 
 ---
 
@@ -93,7 +106,7 @@ One product feel:
 - Consistent content width, padding, cards, filters, tables, drawers
 - Responsive; no horizontal overflow
 - Operational first — user sees what needs attention in seconds
-- Do not create separate-looking mini-apps for Appointments, Conversations, MCTB
+- Do not create separate-looking mini-apps for Appointments, Conversations, or Booking
 
 ---
 
@@ -101,14 +114,13 @@ One product feel:
 
 **Job:** *What is happening with my appointments and customer conversations today?*
 
-**Summary cards:** Appointments Today · Confirmed · Awaiting Confirmation · Reschedule Requests · Missed Calls Recovered · Unread Conversations
+**Summary cards:** Appointments Today · Confirmed · Awaiting Confirmation · Reschedule Requests · Unread Conversations
 
 **Sections:**
 
 - **Today's Appointments** — time, customer, service, confirmation, reminder state → click opens detail
-- **Needs Attention** — awaiting confirmation, reschedule requests, unread MCTB conversations, failed reminders → each links to proper screen
+- **Needs Attention** — awaiting confirmation, reschedule requests, unread conversations, failed reminders → each links to proper screen
 - **Recent Conversations** — reuse existing components
-- **Recent Missed Calls** — reuse MCTB data
 
 No generic marketing charts. **Operations dashboard.**
 
@@ -283,9 +295,8 @@ Deterministic. Idempotent worker behavior.
 Show context on every thread:
 
 - *Appointment:* Water Heater Estimate — Sept 10 at 2 PM  
-- *Missed Call:* Missed call — Sept 8 at 11:42 AM  
 
-Filters: All · Unread · Appointments · Missed Calls (hide campaign filters for launch if needed)
+Filters: All · Unread · Appointments (hide legacy campaign filters)
 
 ---
 
@@ -302,9 +313,11 @@ Keep existing Contacts. Extend profile with:
 
 ---
 
-## 18. Missed Call Text Back
+## 18. Missed Call Text Back — OUT OF MODE 4 SCOPE
 
-**Do not rebuild.** Audit and tighten UI to match Appointments shell.
+> **MODE 4:** `MISSED_CALL_TEXT_BACK_IN_V1_NAV = false`. Do not rebuild `/voice/**` MCTB surfaces. Preserved in repo for future reactivation only.
+
+**Do not rebuild in Mode 4.** Audit and tighten UI to match Appointments shell *(deferred)*.
 
 Pages: Missed Calls · Setup · Numbers/Forwarding
 
@@ -322,9 +335,9 @@ Preserve **both** MCTB modes: `press_1` and `existing_consent`.
 
 ---
 
-## 19. Numbers
+## 19. Numbers — OUT OF MODE 4 SCOPE
 
-Shared toll-free messaging infrastructure — UI must clarify:
+> **MODE 4:** `NUMBERS_IN_V1_NAV = false`. Sender/number configuration belongs under **Settings → Messaging**, not a standalone Numbers product area.
 
 - Business phone vs forwarding setup vs messaging sender vs provider status
 
@@ -332,9 +345,9 @@ Do not show mass-SMS dedicated-number registration to Appointments/MCTB-only use
 
 ---
 
-## 20. Compliance
+## 20. Compliance — OUT OF MODE 4 SCOPE (standalone page)
 
-Reuse Compliance page. Sections:
+> **MODE 4:** `COMPLIANCE_IN_V1_NAV = false`. Surface appointment/SMS consent **in-context** per `TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` — not a standalone Compliance nav item.
 
 - **Appointment consent** — wording · captured? · timestamp · source · terms version  
 - **MCTB consent** — Press-1 · timestamp · call ID · sender · opt-out state  
@@ -346,9 +359,9 @@ Reuse Compliance page. Sections:
 
 **Appointments:** Booked · Confirmed · Canceled · No-Shows · Confirmation Rate · Reminder Delivery · Reschedule Requests
 
-**MCTB:** Missed Calls · Press-1 Opt-Ins · Conversations Started · Recovered · Voicemails
-
 **Conversations:** unread · response rate (if reliable)
+
+*(MCTB metrics excluded from Mode 4 — see scope doc.)*
 
 Ranges: 7 days · 30 days. No fake/mock production data.
 
@@ -406,7 +419,7 @@ Checklist (non-blocking between tracks):
 
 **Appointments:** hours · first service/type · enable booking · reminders · test appointment  
 
-**MCTB:** forwarding · test call · Press-1 flow  
+*(MCTB onboarding track excluded from Mode 4.)*
 
 ---
 
@@ -427,8 +440,6 @@ AI receptionist, AI calendar optimizer, transcription, classes/group scheduling,
 ## 31. Product positioning → UI emphasis
 
 **Appointments:** reduce no-shows, stop manual chasing → show confirmation state, reminders, replies, reschedule/cancel, needs attention
-
-**MCTB:** turn missed calls into conversations → show missed calls, consent, recovery, unread
 
 Not just calendar boxes.
 
@@ -462,12 +473,13 @@ Not just calendar boxes.
 1. **Audit** routes/components/backend (done — Appendix A)  
 2. **Reuse map** — keep / modify / hide / new-build  
 3. **Do not delete** existing functionality  
-4. **Consolidate** global sidebar/header first (`v1-launch-nav.ts` + nav builders)  
-5. **Build Appointments** on Contacts, Conversations, SMS, scheduler, compliance, billing  
-6. **Tighten MCTB UI** — match new shell  
-7. **Hide** mass-SMS from launch nav  
-8. Browser tests on every launch-visible page  
-9. Real SMS/reminder/MCTB E2E before declaring V1 ready  
+4. **Consolidate** global sidebar/header first (`appointments-nav.ts` + `v1-launch-nav.ts`)  
+5. **Build Appointments** on Contacts, Conversations, SMS, scheduler, billing  
+6. **Hide** mass-SMS and legacy voice from launch nav  
+7. Static verification on every Mode-4-visible page  
+8. Real SMS/reminder E2E before declaring V1 ready  
+
+*(MCTB UI tightening deferred — out of Mode 4 scope.)*
 
 ---
 
@@ -475,8 +487,8 @@ Not just calendar boxes.
 
 | Area | Path(s) | Action | Notes |
 |------|---------|--------|-------|
-| MCTB Missed Calls | `/voice/missed-calls`, `components/mctb/*` | keep-as-is | Wire to new nav |
-| MCTB Setup | `/voice/setup` | keep-as-is | Press-1 + existing_consent |
+| MCTB Missed Calls | `/voice/missed-calls` | **out-of-mode4** | Preserved; not in rebuild manifest |
+| MCTB Setup | `/voice/setup` | **out-of-mode4** | Preserved; not in rebuild manifest |
 | MCTB Consent Log | `/voice/consent-log` | keep-as-is | Audit trail |
 | MCTB Schedule | `/voice/schedule` | keep-as-is | Business hours |
 | MCTB Conversations | `/voice/conversations`, `/conversations` | modify | Consolidate entry |
@@ -499,7 +511,7 @@ Not just calendar boxes.
 | Compliance | `/compliance` | keep-as-is | Extend sections |
 | Numbers | `/numbers`, `/voice/numbers` | modify | Canonical route pick |
 
-**Current gap:** `SMS_ONLY_APP_NAV = true` shows mass-SMS items in sidebar — opposite of V1 intent. Flip to appointments+MCTB nav builder.
+**Current nav:** Use `buildAppointmentsV1Nav()` from `appointments-nav.ts` with `v1-launch-nav.ts` flags.
 
 ---
 

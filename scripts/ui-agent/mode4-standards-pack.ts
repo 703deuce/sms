@@ -34,10 +34,18 @@ export type StandardsDoc = {
 export const TRANSOVO_STANDARDS_DOCS: StandardsDoc[] = [
   // ── Layer 1: Product definition & complete feature/page specification ──
   {
+    id: "mode4-active-scope",
+    path: "docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md",
+    layer: "product-definition",
+    layerLabel: "MODE 4 ACTIVE SCOPE — product/feature authority (supersedes stale V1 passages)",
+    required: true,
+    applicableJobs: "all",
+  },
+  {
     id: "product-scope-v1",
     path: "docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md",
     layer: "product-definition",
-    layerLabel: "Product scope, domain architecture, per-page feature specs (V1)",
+    layerLabel: "Per-page feature specs (appointments sections; ignore OUT OF MODE 4 sections)",
     required: true,
     applicableJobs: "all",
   },
@@ -51,9 +59,9 @@ export const TRANSOVO_STANDARDS_DOCS: StandardsDoc[] = [
   },
   {
     id: "domain-architecture",
-    path: "docs/PRODUCT_ARCHITECTURE.md",
+    path: "docs/TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md",
     layer: "product-definition",
-    layerLabel: "Canonical domain architecture overview",
+    layerLabel: "Appointments platform domain architecture (replaces legacy PRODUCT_ARCHITECTURE.md)",
     required: true,
     applicableJobs: "all",
   },
@@ -225,8 +233,12 @@ export const TRANSOVO_STANDARDS_DOCS: StandardsDoc[] = [
  */
 export const EXCLUDED_FROM_STANDARDS_PACK: Array<{ path: string; reason: string }> = [
   {
+    path: "docs/PRODUCT_ARCHITECTURE.md",
+    reason: "Legacy mass-SMS campaign catalog — replaced by TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md",
+  },
+  {
     path: "docs/FEATURE_INVENTORY.md",
-    reason: "Full legacy platform inventory including mass SMS — superseded by V1-APPOINTMENTS-MCTB-UI-REBUILD.md",
+    reason: "Full legacy platform inventory including mass SMS — superseded by TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md",
   },
   {
     path: "docs/V1-ACTIVE-PAGE-MANIFEST.md",
