@@ -599,8 +599,8 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 7. TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md   → Guide #5: Forms & validation
 8. TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md   → Guide #6: Responsive/reflow/zoom
 9. Implementation standards Guides #4, #7–12       → Interaction, tables, etc. (coming)
-9. Page-by-page spec                              → Per-screen worksheet
-10. Implementation in Kimi / components           → Must satisfy all applicable guides
+10. Page-by-page spec                             → Per-screen worksheet
+11. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```
 
 ---
