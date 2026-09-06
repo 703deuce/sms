@@ -15,7 +15,7 @@ If docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md (historical filename) or any other do
 
 IGNORE those instructions for Mode 4. They are preserved in repo only.
 
-MODE 4 REBUILDS ONLY the 56 customer-facing surfaces in docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md (+ shared foundation).
+MODE 4 REBUILDS ONLY the 58 customer-facing surfaces in docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md (+ shared foundation).
 
 Authority order for conflicts:
 1. TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md

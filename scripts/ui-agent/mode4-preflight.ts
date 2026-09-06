@@ -24,6 +24,7 @@ import {
   REQUIRED_SCOPE_MARKERS,
   SCOPE_CONFLICT_PATTERNS,
 } from "./mode4-scope-supersession";
+import { ATOMIC_FEATURES, countAtomicFeatures, type AtomicFeature } from "./mode4-atomic-features";
 
 const REPORT_DIR = join(UI_AGENT_DIR, "mode4", "preflight");
 
@@ -57,6 +58,25 @@ type FeatureRow = {
   status: "MAPPED" | "ORPHAN";
 };
 
+type AtomicFeatureRow = {
+  id: string;
+  capability: string;
+  domain: string;
+  manifestIds: string[];
+  uiRepresentation: string;
+  runtimeContract: string;
+  status: "MAPPED" | "ORPHAN";
+  orphanReason?: string;
+};
+
+type AtomicAuditResult = {
+  rows: AtomicFeatureRow[];
+  orphans: AtomicFeatureRow[];
+  excludedViolations: AtomicFeature[];
+  invalidManifestRefs: Array<{ featureId: string; manifestId: string }>;
+  byDomain: Record<string, { mapped: number; orphan: number }>;
+};
+
 /** Approved V1 customer-facing surfaces from V1-APPOINTMENTS-MCTB-UI-REBUILD.md §6–23 + appointments-nav IA */
 const REQUIRED_SURFACE_SPECS: CoverageRow[] = [
   { specRef: "V1 §6", surface: "Home / Operations dashboard", manifestId: "home", route: "/appointments/overview", status: "COVERED" },
@@ -64,6 +84,8 @@ const REQUIRED_SURFACE_SPECS: CoverageRow[] = [
   { specRef: "V1 §8", surface: "Scheduled appointments list", manifestId: "appointments-list", route: "/appointments", status: "COVERED" },
   { specRef: "IA", surface: "Waitlist", manifestId: "appointments-waitlist", route: "/appointments/waitlist", status: "COVERED" },
   { specRef: "IA", surface: "Recalls", manifestId: "appointments-recalls", route: "/appointments/recalls", status: "COVERED" },
+  { specRef: "IA", surface: "Recall campaigns", manifestId: "appointments-recall-campaigns", route: "/appointments/recall-campaigns", status: "COVERED" },
+  { specRef: "IA", surface: "No-show recovery", manifestId: "appointments-no-show-recovery", route: "/appointments/no-show-recovery", status: "COVERED" },
   { specRef: "V1 §11", surface: "Appointment detail + timeline", manifestId: "appointment-detail", route: "/appointments/[id]", status: "COVERED" },
   { specRef: "V1 §10", surface: "Create appointment", manifestId: "appointments-new", route: "/appointments/new", status: "COVERED" },
   { specRef: "V1 §10", surface: "Edit appointment", manifestId: "appointment-detail", route: "/appointments/[id]", status: "COVERED", notes: "Edit on detail surface" },
@@ -117,7 +139,7 @@ const REQUIRED_SURFACE_SPECS: CoverageRow[] = [
   { specRef: "V1 §22", surface: "Settings — billing", manifestId: "settings-billing", route: "/settings/billing", status: "COVERED" },
   { specRef: "IA", surface: "Help / getting started", manifestId: "help-getting-started", route: "/getting-started", status: "COVERED" },
   // Explicitly out of appointments-platform Mode 4 scope (v1-launch-nav flags)
-  { specRef: "V1 §18", surface: "Missed Call Text Back", manifestId: null, route: null, status: "N/A", notes: "MISSED_CALL_TEXT_BACK_IN_V1_NAV=false — excluded from 57-surface allowlist" },
+  { specRef: "V1 §18", surface: "Missed Call Text Back", manifestId: null, route: null, status: "N/A", notes: "MISSED_CALL_TEXT_BACK_IN_V1_NAV=false — excluded from Mode 4 allowlist" },
   { specRef: "V1 §20", surface: "Compliance standalone page", manifestId: null, route: null, status: "N/A", notes: "COMPLIANCE_IN_V1_NAV=false — consent surfaced in-context per standards" },
   { specRef: "V1 §19", surface: "Numbers standalone", manifestId: null, route: null, status: "N/A", notes: "NUMBERS_IN_V1_NAV=false — numbers in Settings/Messaging" },
 ];
@@ -197,6 +219,57 @@ function auditFeatureCoverage(manifest: ReturnType<typeof loadMode4Manifest>): F
     if (!entry) return { ...row, status: "ORPHAN" as const };
     return row;
   });
+}
+
+/** FINAL PRE-EXECUTION CHECK — atomic capabilities must map to real manifest surfaces (not category buckets). */
+function auditAtomicFeatureCoverage(manifest: ReturnType<typeof loadMode4Manifest>): AtomicAuditResult {
+  const byId = new Map(manifest.entries.map((e) => [e.id, e]));
+  const rows: AtomicFeatureRow[] = [];
+  const orphans: AtomicFeatureRow[] = [];
+  const invalidManifestRefs: Array<{ featureId: string; manifestId: string }> = [];
+  const byDomain: Record<string, { mapped: number; orphan: number }> = {};
+
+  for (const feature of ATOMIC_FEATURES) {
+    if (!feature.inScope) continue;
+
+    let status: "MAPPED" | "ORPHAN" = "MAPPED";
+    let orphanReason: string | undefined;
+
+    if (feature.manifestIds.length === 0) {
+      status = "ORPHAN";
+      orphanReason = "in-scope atomic feature has no manifestIds";
+    } else {
+      const missing = feature.manifestIds.filter((id) => !byId.has(id));
+      if (missing.length > 0) {
+        status = "ORPHAN";
+        orphanReason = `missing manifest id(s): ${missing.join(", ")}`;
+        for (const manifestId of missing) {
+          invalidManifestRefs.push({ featureId: feature.id, manifestId });
+        }
+      }
+    }
+
+    const row: AtomicFeatureRow = {
+      id: feature.id,
+      capability: feature.capability,
+      domain: feature.domain,
+      manifestIds: feature.manifestIds,
+      uiRepresentation: feature.uiRepresentation,
+      runtimeContract: feature.runtimeContract,
+      status,
+      orphanReason,
+    };
+    rows.push(row);
+    if (status === "ORPHAN") orphans.push(row);
+
+    if (!byDomain[feature.domain]) byDomain[feature.domain] = { mapped: 0, orphan: 0 };
+    if (status === "MAPPED") byDomain[feature.domain].mapped += 1;
+    else byDomain[feature.domain].orphan += 1;
+  }
+
+  const excludedViolations = ATOMIC_FEATURES.filter((f) => !f.inScope && f.manifestIds.length > 0);
+
+  return { rows, orphans, excludedViolations, invalidManifestRefs, byDomain };
 }
 
 function auditScopeConsistency(): {
@@ -365,9 +438,39 @@ function main(): void {
   const features = auditFeatureCoverage(manifest);
   const orphanFeatures = features.filter((f) => f.status === "ORPHAN");
 
-  console.log("\n## Feature coverage audit\n");
+  console.log("\n## Coarse feature coverage (category groups — informational)\n");
   for (const row of features) {
     console.log(`✓ ${row.feature} → ${row.canonicalManifestId} (${row.route})`);
+  }
+  console.log(`Coarse groups: ${features.length} mapped, ${orphanFeatures.length} orphan`);
+
+  const atomicCounts = countAtomicFeatures();
+  const atomicAudit = auditAtomicFeatureCoverage(manifest);
+
+  console.log("\n## FINAL PRE-EXECUTION CHECK — ATOMIC FEATURE COVERAGE\n");
+  console.log(
+    `Atomic inventory: ${atomicCounts.inScope} in-scope capabilities (+ ${atomicCounts.excluded} explicitly excluded legacy)`,
+  );
+  console.log(`Mapped: ${atomicAudit.rows.length - atomicAudit.orphans.length}`);
+  console.log(`Orphans: ${atomicAudit.orphans.length}`);
+  if (atomicAudit.excludedViolations.length > 0) {
+    console.log(`Excluded legacy wrongly mapped: ${atomicAudit.excludedViolations.length}`);
+    for (const v of atomicAudit.excludedViolations) {
+      console.log(`  ✗ ${v.id} (${v.capability}) → ${v.manifestIds.join(", ")}`);
+    }
+  }
+  console.log("\nBy domain:");
+  for (const [domain, counts] of Object.entries(atomicAudit.byDomain).sort(([a], [b]) => a.localeCompare(b))) {
+    const mark = counts.orphan === 0 ? "✓" : "✗";
+    console.log(`  ${mark} ${domain}: ${counts.mapped} mapped, ${counts.orphan} orphan`);
+  }
+  if (atomicAudit.orphans.length > 0) {
+    console.log("\nOrphan atomic capabilities:");
+    for (const row of atomicAudit.orphans) {
+      console.log(`  ✗ ${row.id}: ${row.capability} — ${row.orphanReason}`);
+    }
+  } else {
+    console.log("\nAll in-scope atomic capabilities map to at least one approved manifest surface.");
   }
 
   const scopeCheck = auditScopeConsistency();
@@ -382,12 +485,14 @@ function main(): void {
 
   const standardsPass = totals.missing === 0 && totals.truncated === 0 && interactionCheck.pass;
   const manifestPass = missingSurfaces.length === 0;
-  const featurePass = orphanFeatures.length === 0;
+  const coarseFeaturePass = orphanFeatures.length === 0;
+  const atomicFeaturePass =
+    atomicAudit.orphans.length === 0 && atomicAudit.excludedViolations.length === 0;
   const videoPass = videoCheck.pass;
   const overallPass =
     standardsPass &&
     manifestPass &&
-    featurePass &&
+    atomicFeaturePass &&
     videoPass &&
     payloadCheck.pass &&
     scopeCheck.pass;
@@ -398,8 +503,13 @@ function main(): void {
   console.log(`Standards pack (full content): ${standardsPass ? "PASS" : "FAIL"}`);
   if (totals.truncated > 0) console.log(`  → ${totals.truncated} document(s) truncated — Mode 4 must not truncate`);
   if (totals.missing > 0) console.log(`  → ${totals.missing} document(s) missing`);
-  console.log(`Manifest coverage (57 surfaces): ${manifestPass ? "PASS" : "FAIL"} (${missingSurfaces.length} missing)`);
-  console.log(`Feature coverage: ${featurePass ? "PASS" : "FAIL"} (${orphanFeatures.length} orphan)`);
+  console.log(`Manifest coverage (${bulkCount} surfaces): ${manifestPass ? "PASS" : "FAIL"} (${missingSurfaces.length} missing)`);
+  console.log(
+    `Coarse feature groups: ${coarseFeaturePass ? "PASS" : "FAIL"} (${features.length} groups, ${orphanFeatures.length} orphan)`,
+  );
+  console.log(
+    `Atomic feature coverage: ${atomicFeaturePass ? "PASS" : "FAIL"} (${atomicCounts.inScope} capabilities, ${atomicAudit.orphans.length} orphan)`,
+  );
   console.log(`Art direction videos: ${videoPass ? "PASS" : "FAIL"}`);
   console.log(`Scope consistency: ${scopeCheck.pass ? "PASS" : "FAIL"}`);
   if (scopeCheck.conflicts.length) {
@@ -430,9 +540,26 @@ function main(): void {
       "",
       ...coverage.map((c) => `- ${c.status}: ${c.surface}`),
       "",
-      "## Feature coverage",
+      "## Coarse feature coverage",
       "",
       ...features.map((f) => `- ${f.feature} → ${f.canonicalManifestId}`),
+      "",
+      "## Atomic feature coverage",
+      "",
+      `In-scope atomic capabilities: ${atomicCounts.inScope}`,
+      `Mapped: ${atomicAudit.rows.length - atomicAudit.orphans.length}`,
+      `Orphans: ${atomicAudit.orphans.length}`,
+      `Excluded legacy violations: ${atomicAudit.excludedViolations.length}`,
+      "",
+      "### By domain",
+      "",
+      ...Object.entries(atomicAudit.byDomain)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([domain, counts]) => `- ${domain}: ${counts.mapped} mapped, ${counts.orphan} orphan`),
+      "",
+      ...(atomicAudit.orphans.length > 0
+        ? ["### Orphans", "", ...atomicAudit.orphans.map((o) => `- ${o.id}: ${o.capability} (${o.orphanReason})`)]
+        : []),
       "",
       `Artifacts: ${artifactPath}`,
     ].join("\n");

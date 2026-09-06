@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-09-06T18:11:27.371Z",
+  "updatedAt": "2026-09-06T18:31:50.598Z",
   "maxConcurrentJobs": 10,
   "staggerMs": 5000,
   "entries": [
@@ -278,6 +278,65 @@
         "src/app/globals.css",
         "src/app/(app)/product-theme.css"
       ]
+    },
+    {
+      "id": "appointments-recall-campaigns",
+      "route": "/appointments/recall-campaigns",
+      "canonicalPath": "Appointments → Recall Campaigns",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/recall-campaigns/page.tsx",
+        "src/components/appointments/recall-campaigns-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointments/scheduling-capabilities.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "notes": "Reachable from Recalls hub"
+    },
+    {
+      "id": "appointments-no-show-recovery",
+      "route": "/appointments/no-show-recovery",
+      "canonicalPath": "Appointments → No-Show Recovery",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/no-show-recovery/page.tsx",
+        "src/components/appointments/no-show-recovery-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "notes": "Reachable from Recalls hub"
     },
     {
       "id": "appointments-new",

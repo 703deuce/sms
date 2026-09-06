@@ -70,6 +70,8 @@ After golden screens pass acceptance, subsequent jobs receive them as **Transovo
 | `appointments-list` | Appointments → List | `/appointments` | List ★ |
 | `appointments-waitlist` | Appointments → Waitlist | `/appointments/waitlist` | List |
 | `appointments-recalls` | Appointments → Recalls | `/appointments/recalls` | List |
+| `appointments-recall-campaigns` | Appointments → Recall Campaigns | `/appointments/recall-campaigns` | Configuration |
+| `appointments-no-show-recovery` | Appointments → No-Show Recovery | `/appointments/no-show-recovery` | Configuration |
 | `appointment-detail` | Appointments → Detail | `/appointments/[id]` | Detail ★ |
 | `appointments-new` | Appointments → New | `/appointments/new` | Configuration |
 | `appointments-setup` | Appointments → Get Started | `/appointments/setup` | Configuration |
@@ -167,7 +169,7 @@ Even if code/routes exist:
 | AI Receptionist | `/voice/agents/**` | Deferred |
 | Legacy dashboard | `/dashboard`, `/sms/**` | Replaced by `/appointments/overview` |
 | Admin / internal | `/admin/**`, `/verify/**` | Not customer-facing |
-| Duplicate appointment experiments | `/appointments/recall-campaigns`, `/no-show-recovery`, `/enterprise`, `/staff`, `/locations` | Not in approved IA |
+| Duplicate appointment experiments | `/appointments/enterprise`, `/staff`, `/locations` | Not in approved IA |
 
 ---
 
@@ -179,7 +181,7 @@ Even if code/routes exist:
 | Calendar views | Appointments | `/appointments/calendar` | Home cards |
 | Scheduled list / filters | Appointments | `/appointments` | Home → Today's appointments |
 | Waitlist | Appointments | `/appointments/waitlist` | Appointment detail |
-| Recalls | Appointments | `/appointments/recalls` | — |
+| Recalls | Appointments | `/appointments/recalls` | Recall campaigns, no-show recovery |
 | Appointment detail / timeline | Appointments | `/appointments/[id]` | Calendar overlay, Home |
 | Create / edit appointment | Appointments | `/appointments/new`, detail edit | Calendar slot click |
 | Booking types | Booking | `/appointments/types` | Settings (read-only links only) |
