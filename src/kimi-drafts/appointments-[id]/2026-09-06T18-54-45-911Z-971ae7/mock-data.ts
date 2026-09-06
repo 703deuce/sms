@@ -49,6 +49,9 @@ export type Appointment = {
   internalNotes: InternalNote[];
   extraRecipients: Array<{ name?: string; email?: string; phone?: string }>;
   contactId: string;
+  /** Integration availability flags (drive disconnected/unavailable states) */
+  paymentsConnected: boolean;
+  videoProvisioned: boolean;
 };
 
 export const appointment: Appointment = {
@@ -155,6 +158,108 @@ export const appointment: Appointment = {
   ],
   extraRecipients: [{ name: "Dan Johnson", email: "dan.johnson@example.com" }],
   contactId: "ct_8412",
+  paymentsConnected: true,
+  videoProvisioned: true,
+};
+
+/* ---------------- State variants (preview states by id) ---------------- */
+
+const canceledAppt: Appointment = {
+  ...appointment,
+  id: "appt_canceled",
+  status: "canceled",
+  paymentStatus: "refunded",
+  reminderSchedule: appointment.reminderSchedule.map((s) =>
+    s.status === "scheduled" ? { ...s, status: "skipped" as const } : s,
+  ),
+  timeline: [
+    {
+      id: "tc1",
+      at: "2026-09-09T08:12:00-04:00",
+      type: "canceled",
+      title: "Appointment canceled",
+      detail: "Pending reminders stopped. Customer notified by SMS and email.",
+    },
+    ...appointment.timeline,
+  ],
+};
+
+const completedAppt: Appointment = {
+  ...appointment,
+  id: "appt_completed",
+  status: "completed",
+  reminderSchedule: appointment.reminderSchedule.map((s) => ({
+    ...s,
+    status: "sent" as const,
+  })),
+  timeline: [
+    {
+      id: "td1",
+      at: "2026-09-10T14:52:00-04:00",
+      type: "confirmed",
+      title: "Appointment completed",
+      detail: "Marked complete by Mike Torres.",
+    },
+    ...appointment.timeline,
+  ],
+};
+
+const noShowAppt: Appointment = {
+  ...appointment,
+  id: "appt_noshow",
+  status: "no_show",
+  reminderSchedule: appointment.reminderSchedule.map((s) => ({
+    ...s,
+    status: "sent" as const,
+  })),
+  timeline: [
+    {
+      id: "tn1",
+      at: "2026-09-10T15:10:00-04:00",
+      type: "canceled",
+      title: "Marked as no-show",
+      detail: "Customer did not arrive and did not respond. Auto-scan confirmed no-show.",
+    },
+    ...appointment.timeline,
+  ],
+};
+
+const noConsentAppt: Appointment = {
+  ...appointment,
+  id: "appt_noconsent",
+  smsConsent: false,
+  source: "Imported from Google Calendar",
+  reminderSchedule: appointment.reminderSchedule.map((s) => ({
+    ...s,
+    status: "disabled" as const,
+  })),
+};
+
+const pendingApprovalAppt: Appointment = {
+  ...appointment,
+  id: "appt_pending",
+  status: "scheduled",
+  pendingApproval: true,
+};
+
+const disconnectedAppt: Appointment = {
+  ...appointment,
+  id: "appt_disconnected",
+  paymentsConnected: false,
+  videoProvisioned: false,
+};
+
+/** Mock record store. "error" simulates a load failure. */
+export const appointmentsById: Record<string, Appointment | "error"> = {
+  [appointment.id]: appointment,
+  appt_canceled: canceledAppt,
+  appt_completed: completedAppt,
+  appt_noshow: noShowAppt,
+  appt_noconsent: noConsentAppt,
+  appt_pending: pendingApprovalAppt,
+  appt_disconnected: disconnectedAppt,
+  appt_error: "error",
+  // appt_missing intentionally absent → not-found state
 };
 
 export const rescheduleSlots = [

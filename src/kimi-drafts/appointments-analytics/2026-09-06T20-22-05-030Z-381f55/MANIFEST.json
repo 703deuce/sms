@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-22-05-030Z-381f55",
+  "targetRoute": "/appointments/analytics",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:25:32.050Z",
+  "generatedFiles": [
+    "components/analytics-client.tsx",
+    "components/analytics-shell.tsx",
+    "components/bookings-chart.tsx",
+    "components/metric-card.tsx",
+    "components/popular-panel.tsx",
+    "components/schedule-report-card.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/analytics-client.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/analytics-shell.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/bookings-chart.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/metric-card.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/popular-panel.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/schedule-report-card.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/components/ui.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/mock-data.ts",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/page.tsx",
+    "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55/reference.css"
+  ],
+  "status": "generated"
+}

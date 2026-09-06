@@ -1,0 +1,158 @@
+{
+  "updatedAt": "2026-09-06T22:42:00.000Z",
+  "description": "Bulk surfaces that did NOT finish Mode 4 completion pass (pass 2). First-pass drafts exist; completion pass not marked in batch-state. Cursor should fix blockers then re-run: npm run ui:kimi-mode4-completion -- --only <manifestId>",
+  "summary": {
+    "bulkCompletionDone": 42,
+    "bulkCompletionTotal": 52,
+    "goldenCompletionDone": 6,
+    "totalCompletionDone": 48,
+    "totalCompletionTarget": 58,
+    "pendingCount": 10
+  },
+  "resumeCommand": "bash scripts/ui-agent/run-bulk-completion-pairs.sh",
+  "resumeCommandAlt": "npm run ui:kimi-mode4-completion -- --bulk-batch --concurrency 15",
+  "pending": [
+    {
+      "manifestId": "booking-pages",
+      "canonicalPath": "Booking → Booking Pages",
+      "route": "/appointments/booking",
+      "sessionId": "2026-09-06T20-21-01-558Z-20a85c",
+      "draftPath": "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored. No draft syntax fix required for screenshot."
+    },
+    {
+      "manifestId": "ai-booking",
+      "canonicalPath": "Booking → AI Booking",
+      "route": "/appointments/ai-booking",
+      "sessionId": "2026-09-06T20-22-55-573Z-1a6c6a",
+      "draftPath": "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "screenshot_esbuild",
+      "blockerDetail": "esbuild syntax error in components/AiBookingClient.tsx:393 (broken JSX around gap: 11px)",
+      "cursorFixWhenIntegrating": "Fix syntax in AiBookingClient.tsx so preview bundles; then re-run completion pass."
+    },
+    {
+      "manifestId": "workflow-setup",
+      "canonicalPath": "Automations → Workflow Setup Wizard",
+      "route": "/appointments/workflows/setup/[templateId]",
+      "sessionId": "2026-09-06T20-21-03-159Z-246dac",
+      "draftPath": "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "screenshot_esbuild",
+      "blockerDetail": "reference.css uses @import \"tailwindcss\" — does not resolve in Kimi preview esbuild bundle",
+      "cursorFixWhenIntegrating": "Replace tailwindcss import in reference.css with preview-safe CSS (or empty file + tailwind CDN in preview shell). Then re-run completion."
+    },
+    {
+      "manifestId": "automation-activity",
+      "canonicalPath": "Automations → Activity",
+      "route": "/appointments/automations/activity",
+      "sessionId": "2026-09-06T20-21-02-523Z-68c9cd",
+      "draftPath": "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored."
+    },
+    {
+      "manifestId": "analytics-overview",
+      "canonicalPath": "Analytics → Overview",
+      "route": "/appointments/analytics",
+      "sessionId": "2026-09-06T20-22-05-030Z-381f55",
+      "draftPath": "src/kimi-drafts/appointments-analytics/2026-09-06T20-22-05-030Z-381f55",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "screenshot_esbuild",
+      "blockerDetail": "reference.css @import \"tailwindcss\" — preview esbuild cannot resolve",
+      "cursorFixWhenIntegrating": "Fix reference.css for preview bundling; then re-run completion."
+    },
+    {
+      "manifestId": "analytics-booking",
+      "canonicalPath": "Analytics → Booking",
+      "route": "/appointments/analytics/booking",
+      "sessionId": "2026-09-06T20-22-48-735Z-eb4574",
+      "draftPath": "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "screenshot_esbuild",
+      "blockerDetail": "esbuild syntax error in components/AnalyticsShell.tsx:278 (em-dash in JSX string)",
+      "cursorFixWhenIntegrating": "Fix AnalyticsShell.tsx syntax; then re-run completion."
+    },
+    {
+      "manifestId": "settings-business",
+      "canonicalPath": "Settings → Business",
+      "route": "/settings/business",
+      "sessionId": "2026-09-06T20-24-07-888Z-6a3334",
+      "draftPath": "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored."
+    },
+    {
+      "manifestId": "settings-billing",
+      "canonicalPath": "Settings → Billing",
+      "route": "/settings/billing",
+      "sessionId": "2026-09-06T20-25-08-968Z-54baa2",
+      "draftPath": "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored."
+    },
+    {
+      "manifestId": "help-getting-started",
+      "canonicalPath": "Help → Getting Started",
+      "route": "/getting-started",
+      "sessionId": "2026-09-06T20-25-00-548Z-8ff40c",
+      "draftPath": "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored."
+    },
+    {
+      "manifestId": "public-booking",
+      "canonicalPath": "Public → Booking Page",
+      "route": "/book/[slug]",
+      "sessionId": "2026-09-06T20-25-05-662Z-e20331",
+      "draftPath": "src/kimi-drafts/book-[slug]/2026-09-06T20-25-05-662Z-e20331",
+      "firstPassStatus": "complete",
+      "completionPassStatus": "pending",
+      "blocker": "kimi_api",
+      "blockerDetail": "Kimi 429 insufficient balance — screenshot captured OK; failed during Kimi stream",
+      "cursorFixWhenIntegrating": "Re-run completion after credits restored."
+    }
+  ],
+  "byBlocker": {
+    "kimi_api_insufficient_balance": [
+      "booking-pages",
+      "automation-activity",
+      "settings-business",
+      "settings-billing",
+      "help-getting-started",
+      "public-booking"
+    ],
+    "screenshot_esbuild_draft_broken": [
+      "ai-booking",
+      "workflow-setup",
+      "analytics-overview",
+      "analytics-booking"
+    ]
+  },
+  "notes": [
+    "Golden screens (6) all have completion pass marked — still need independent Blueprint re-audit.",
+    "First pass (generate) is 58/58 complete for all customer surfaces.",
+    "Live API probe 2026-09-06T22:42Z: GET /models 200, POST /chat/completions 429 insufficient balance.",
+    "Log reference: .ui-agent/mode4/bulk-completion-pairs-20260906T222235Z.log"
+  ]
+}

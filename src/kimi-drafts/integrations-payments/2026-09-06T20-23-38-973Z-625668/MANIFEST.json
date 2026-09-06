@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-06T20-23-38-973Z-625668",
+  "targetRoute": "/integrations/payments",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:51:49.714Z",
+  "generatedFiles": [
+    "components/DisconnectModal.tsx",
+    "components/MerchantPaymentsPanel.tsx",
+    "components/PaymentExperiencePreview.tsx",
+    "components/ProviderCard.tsx",
+    "components/StatusChip.tsx",
+    "components/Tabs.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/DisconnectModal.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/MerchantPaymentsPanel.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/PaymentExperiencePreview.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/ProviderCard.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/StatusChip.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/components/Tabs.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/mock-data.ts",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/page.tsx",
+    "src/kimi-drafts/integrations-payments/2026-09-06T20-23-38-973Z-625668/reference.css"
+  ],
+  "status": "generated"
+}

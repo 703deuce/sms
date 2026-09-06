@@ -9,15 +9,16 @@ type Props = {
   copied: boolean;
   onToggleActive: (active: boolean) => void;
   onCopyLink: () => void;
+  onOpenPage: () => void;
 };
 
-export default function StatusPanel({ type, bookingBaseUrl, copied, onToggleActive, onCopyLink }: Props) {
+export default function StatusPanel({ type, bookingBaseUrl, copied, onToggleActive, onCopyLink, onOpenPage }: Props) {
   const bookingUrl = `${bookingBaseUrl}/${type.slug}`;
 
   return (
     <div className="panel">
       <div className="px-4 py-3 border-b border-[#ecedf2]">
-        <h3 className="text-[13px] font-semibold text-[#1a1d29]">Status & sharing</h3>
+        <h3 className="text-[13px] font-semibold text-[#1a1d29]">Status &amp; sharing</h3>
       </div>
       <div className="px-4 py-4 space-y-4">
         {/* Active toggle */}
@@ -67,7 +68,9 @@ export default function StatusPanel({ type, bookingBaseUrl, copied, onToggleActi
             <button
               type="button"
               className="btn-secondary flex items-center justify-center gap-1.5 h-8.5 rounded-lg text-[12.5px] font-medium"
+              onClick={onOpenPage}
               disabled={!type.isLive}
+              title={type.isLive ? "Preview this booking page" : "Activate this type to open its page"}
             >
               Open page <ExternalLink size={12} className="text-[#8a8fa3]" />
             </button>

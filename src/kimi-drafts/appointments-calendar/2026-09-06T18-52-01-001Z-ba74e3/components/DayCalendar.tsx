@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { Video } from "lucide-react";
 import { HOURS, TYPE_COLORS, type CalEvent } from "../mock-data";
 
 const HOUR_H = 56;
@@ -10,13 +11,15 @@ type Props = {
   weekEvents: CalEvent[];
   hours: string[];
   onOpenAppointment: (id: string) => void;
+  onSlotClick: (dayIndex: number, hour: number) => void;
   onShowCalendarSettings: () => void;
 };
 
-export default function DayCalendar({ weekDays, weekEvents, onOpenAppointment }: Props) {
+export default function DayCalendar({ weekDays, weekEvents, onOpenAppointment, onSlotClick }: Props) {
   const todayIdx = weekDays.findIndex((d) => d.today);
-  const day = weekDays[todayIdx >= 0 ? todayIdx : 0];
-  const events = weekEvents.filter((e) => e.day === (todayIdx >= 0 ? todayIdx : 0));
+  const dayIdx = todayIdx >= 0 ? todayIdx : 0;
+  const day = weekDays[dayIdx];
+  const events = weekEvents.filter((e) => e.day === dayIdx);
   return (
     <div className="card week-card overflow-hidden">
       <div className="border-b border-gray-200 px-4 py-3">
@@ -38,13 +41,22 @@ export default function DayCalendar({ weekDays, weekEvents, onOpenAppointment }:
           {HOURS.map((_, hi) => (
             <div key={hi} className="border-b border-gray-100" style={{ height: HOUR_H }} />
           ))}
+          {HOURS.map((_, hi) => (
+            <button
+              key={`slot-${hi}`}
+              aria-label={`New appointment at ${HOURS[hi]}`}
+              className="slot-btn"
+              style={{ top: hi * HOUR_H, height: HOUR_H }}
+              onClick={() => onSlotClick(dayIdx, hi + 8)}
+            />
+          ))}
           {events.map((e, i) => {
             const c = TYPE_COLORS[e.type];
             return (
               <button
                 key={e.id}
                 onClick={() => onOpenAppointment(e.id)}
-                className="absolute overflow-hidden rounded-md border px-2 py-1.5 text-left transition-shadow hover:shadow-md"
+                className="absolute z-[2] overflow-hidden rounded-md border px-2 py-1.5 text-left transition-shadow hover:shadow-md"
                 style={{
                   top: (e.start - 8) * HOUR_H + 2,
                   height: e.duration * HOUR_H - 4,
@@ -55,7 +67,10 @@ export default function DayCalendar({ weekDays, weekEvents, onOpenAppointment }:
                   borderLeft: `3px solid ${c.dot}`,
                 }}
               >
-                <div className="truncate text-[12px] font-semibold" style={{ color: c.text }}>{e.title}</div>
+                <div className="flex items-center gap-1">
+                  <div className="truncate text-[12px] font-semibold" style={{ color: c.text }}>{e.title}</div>
+                  {e.hasVideo && <Video className="h-3 w-3 shrink-0" style={{ color: c.text }} aria-label="Video meeting" />}
+                </div>
                 <div className="truncate text-[11px] text-gray-500">{e.timeLabel} · {e.name}</div>
               </button>
             );

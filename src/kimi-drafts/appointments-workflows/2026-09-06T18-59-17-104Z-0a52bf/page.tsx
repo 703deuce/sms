@@ -59,7 +59,6 @@ export default function ReferencePage() {
         />
       )}
       {toastMsg && <Toast message={toastMsg} />}
-      {/* workflows kept in state for continuity across views */}
       <span className="hidden">{workflows.length}</span>
     </div>
   );

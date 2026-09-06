@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T20-25-00-548Z-8ff40c",
+  "targetRoute": "/getting-started",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:27:20.451Z",
+  "generatedFiles": [
+    "components/GettingStartedPage.tsx",
+    "components/ProgressRing.tsx",
+    "components/ResourceCards.tsx",
+    "components/StepRow.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/components/GettingStartedPage.tsx",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/components/ProgressRing.tsx",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/components/ResourceCards.tsx",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/components/StepRow.tsx",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/mock-data.ts",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/page.tsx",
+    "src/kimi-drafts/getting-started/2026-09-06T20-25-00-548Z-8ff40c/reference.css"
+  ],
+  "status": "generated"
+}

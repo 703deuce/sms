@@ -169,6 +169,56 @@ export async function runKimiCommand(
     return finishKimiSession(session, referenceVideoNames, build);
   }
 
+  if (options.sessionId && options.completion) {
+    session = loadSession(options.sessionId);
+    session.status = "generating";
+    updateSession(session);
+
+    const screenshotMedia =
+      options.currentImages?.length
+        ? buildLabeledMedia(
+            options.currentImages.map((p) => ({
+              path: p,
+              label: "CURRENT_RENDERED_DRAFT",
+              purpose:
+                "Latest rendered screenshot of this draft before completion — visual baseline for Preserve → Complete → Correct → Polish",
+            })),
+          )
+        : [];
+    const sessionMedia = await collectCurrentMediaForKimi(options, session);
+    const currentMedia = [...screenshotMedia, ...sessionMedia];
+
+    log("Kimi Mode 4 completion pass (gap-fill, no video)", options.instruction?.slice(0, 120) || "(no instruction)");
+    if (screenshotMedia.length === 0) {
+      log("completion warning", "no CURRENT_RENDERED_DRAFT screenshot attached — visual polish may be limited");
+    }
+    startKimiTiming(session.id);
+    const build = await buildReferenceImplementation(provider, {
+      sessionId: session.id,
+      target: session.target,
+      manifest: session.manifest,
+      referenceMedia: screenshotMedia,
+      currentMedia: sessionMedia,
+      instruction: options.instruction || "",
+      isCompletionPass: true,
+    });
+
+    persistKimiGeneratedSource({
+      sessionId: session.id,
+      targetRoute: session.target,
+      referenceNames: sessionReferenceVideoNames(session.id),
+      status: "reviewed",
+    });
+    assertKimiOutputPersisted(session.id, session.target);
+
+    session.status = "ready";
+    session.refinementPasses = (session.refinementPasses || 0) + 1;
+    updateSession(session);
+    writeHandoff(session);
+    printKimiTimingReport(session.id);
+    return finishKimiSession(session, sessionReferenceVideoNames(session.id), build);
+  }
+
   if (options.sessionId && options.revise) {
     session = loadSession(options.sessionId);
     session.status = "generating";

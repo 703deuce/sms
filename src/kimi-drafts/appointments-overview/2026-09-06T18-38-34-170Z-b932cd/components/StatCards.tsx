@@ -5,7 +5,7 @@ const icons = { calendar: Calendar, check: CheckCircle2, send: Send, shield: Shi
 
 export default function StatCards({ stats }: { stats: StatItem[] }) {
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="ref-grid-stats">
       {stats.map((s) => {
         const Icon = icons[s.icon];
         return (

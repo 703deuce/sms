@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-21-01-558Z-20a85c",
+  "targetRoute": "/appointments/booking",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:25:00.240Z",
+  "generatedFiles": [
+    "components/AdvancedPanel.tsx",
+    "components/AiProtectionCard.tsx",
+    "components/BusinessInfoCard.tsx",
+    "components/LivePreview.tsx",
+    "components/PublicBookingCard.tsx",
+    "components/SmsConsentCard.tsx",
+    "components/States.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/AdvancedPanel.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/AiProtectionCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/BusinessInfoCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/LivePreview.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/PublicBookingCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/SmsConsentCard.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/components/States.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/mock-data.ts",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/page.tsx",
+    "src/kimi-drafts/appointments-booking/2026-09-06T20-21-01-558Z-20a85c/reference.css"
+  ],
+  "status": "generated"
+}

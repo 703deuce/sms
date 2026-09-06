@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-20-07-235Z-47e02c",
+  "targetRoute": "/appointments/reminders",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:04:43.864Z",
+  "generatedFiles": [
+    "components/CalendarDefaults.tsx",
+    "components/MergeTagsCard.tsx",
+    "components/ReminderCard.tsx",
+    "components/ReminderSettings.tsx",
+    "components/SchedulePreview.tsx",
+    "components/SendTestCard.tsx",
+    "components/StatusViews.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/CalendarDefaults.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/MergeTagsCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/ReminderCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/ReminderSettings.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/SchedulePreview.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/SendTestCard.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/components/StatusViews.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/mock-data.ts",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/page.tsx",
+    "src/kimi-drafts/appointments-reminders/2026-09-06T20-20-07-235Z-47e02c/reference.css"
+  ],
+  "status": "generated"
+}

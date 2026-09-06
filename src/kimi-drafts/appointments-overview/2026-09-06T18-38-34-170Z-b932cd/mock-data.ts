@@ -37,6 +37,14 @@ export type AttentionItem = {
   href: string;
 };
 
+export type OnboardingStep = {
+  id: string;
+  label: string;
+  sub: string;
+  done: boolean;
+  cta: string;
+};
+
 export const stats: StatItem[] = [
   { label: "Upcoming appointments", value: "18", sub: "Next: Today 2:00 PM →", icon: "calendar", tint: "purple" },
   { label: "Confirmation rate", value: "92%", sub: "Last 7 days", icon: "check", tint: "green" },
@@ -77,6 +85,13 @@ export const attention: AttentionItem[] = [
   { id: "n4", icon: "bell", tint: "purple", title: "2 unread conversations", sub: "Customers replied in Messages", href: "/conversations" },
 ];
 
+export const onboardingSteps: OnboardingStep[] = [
+  { id: "s1", label: "Connect your calendar", sub: "Sync Microsoft or Google to block busy times", done: true, cta: "Connect" },
+  { id: "s2", label: "Create a booking type", sub: "Define a service customers can book", done: true, cta: "Create type" },
+  { id: "s3", label: "Set your availability", sub: "Hours, buffers, and blackout dates", done: false, cta: "Set hours" },
+  { id: "s4", label: "Share your booking link", sub: "Copy your public booking page URL", done: false, cta: "Copy link" },
+];
+
 export const overviewModel = {
   dateLabel: "Today, Oct 9",
   stats,
@@ -85,4 +100,27 @@ export const overviewModel = {
   chart,
   conversations,
   attention,
+};
+
+// First-use / zero-data model (guided empty dashboard)
+export const emptyModel = {
+  dateLabel: "Today, Oct 9",
+  stats: [
+    { label: "Upcoming appointments", value: "0", sub: "No upcoming appointments", icon: "calendar", tint: "purple" },
+    { label: "Confirmation rate", value: "—", sub: "No bookings yet", icon: "check", tint: "green" },
+    { label: "Reminders sent", value: "0", sub: "Last 7 days", icon: "send", tint: "blue" },
+    { label: "Reminder health", value: "—", sub: "No reminders yet", icon: "shield", tint: "amber" },
+  ] as StatItem[],
+  schedule: [] as ScheduleItem[],
+  scheduleTotal: 0,
+  chart: {
+    points: [0, 0, 0, 0, 0, 0, 0],
+    days: ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"],
+    total: 0,
+    deltaLabel: "No bookings yet",
+    peakLabel: "—",
+    vsLastWeek: "—",
+  },
+  conversations: [] as ConversationItem[],
+  attention: [] as AttentionItem[],
 };

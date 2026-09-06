@@ -106,33 +106,50 @@ async function uploadBytesToKimi(input: {
   form.append("purpose", "video");
   form.append("file", new Blob([input.bytes], { type: input.mimeType }), input.filename);
 
-  const res = await kimiFetch(`${input.baseUrl}/files`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${input.apiKey}` },
-    body: form,
-    timeoutMs: KIMI_FILE_UPLOAD_TIMEOUT_MS,
-    label: `Kimi video upload (${input.filename})`,
-    sessionId: input.sessionId,
-    maxRetries: 2,
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Kimi video upload failed ${res.status}: ${redactSecrets(text.slice(0, 500))}`);
+  const maxUploadRetries = Number(process.env.KIMI_VIDEO_UPLOAD_RETRIES || 6);
+  let lastError = "";
+
+  for (let attempt = 0; attempt <= maxUploadRetries; attempt += 1) {
+    const res = await kimiFetch(`${input.baseUrl}/files`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${input.apiKey}` },
+      body: form,
+      timeoutMs: KIMI_FILE_UPLOAD_TIMEOUT_MS,
+      label: `Kimi video upload (${input.filename})`,
+      sessionId: input.sessionId,
+      maxRetries: 2,
+    });
+    const text = await res.text();
+    if (res.ok) {
+      const json = JSON.parse(text) as KimiFileObject & { data?: KimiFileObject };
+      const fileId = json.id || json.data?.id;
+      if (!fileId) throw new Error("Kimi video upload did not return a file id");
+
+      const uploadMs = Date.now() - uploadStarted;
+      const status = (json.status || "ready").toLowerCase();
+      if (input.sessionId) {
+        markKimiTiming(input.sessionId, "videoUploadCompleteMs", uploadMs);
+        markKimiTiming(input.sessionId, "kimiFileId", fileId);
+        appendProgressLog(input.sessionId, `kimi_upload_completed_ms=${uploadMs} kimi_file_status=${status} file_id=${fileId}`);
+      }
+
+      return { fileId, status, uploadMs };
+    }
+
+    lastError = `Kimi video upload failed ${res.status}: ${redactSecrets(text.slice(0, 500))}`;
+    const isRateLimited = res.status === 429 || /rate limit|too many requests/i.test(text);
+    if (isRateLimited && attempt < maxUploadRetries) {
+      const waitSec = Math.min(180, 30 * (attempt + 1));
+      const line = `${lastError} — backing off ${waitSec}s (attempt ${attempt + 1}/${maxUploadRetries})`;
+      if (input.sessionId) appendProgressLog(input.sessionId, line);
+      else console.warn(`[ui-agent] ${line}`);
+      await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+      continue;
+    }
+    throw new Error(lastError);
   }
 
-  const json = JSON.parse(text) as KimiFileObject & { data?: KimiFileObject };
-  const fileId = json.id || json.data?.id;
-  if (!fileId) throw new Error("Kimi video upload did not return a file id");
-
-  const uploadMs = Date.now() - uploadStarted;
-  const status = (json.status || "ready").toLowerCase();
-  if (input.sessionId) {
-    markKimiTiming(input.sessionId, "videoUploadCompleteMs", uploadMs);
-    markKimiTiming(input.sessionId, "kimiFileId", fileId);
-    appendProgressLog(input.sessionId, `kimi_upload_completed_ms=${uploadMs} kimi_file_status=${status} file_id=${fileId}`);
-  }
-
-  return { fileId, status, uploadMs };
+  throw new Error(lastError || "Kimi video upload failed");
 }
 
 function deliveryFromFileId(

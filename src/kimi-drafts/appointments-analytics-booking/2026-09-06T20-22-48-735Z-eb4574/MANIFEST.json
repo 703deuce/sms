@@ -1,0 +1,35 @@
+{
+  "sessionId": "2026-09-06T20-22-48-735Z-eb4574",
+  "targetRoute": "/appointments/analytics/booking",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:26:48.000Z",
+  "generatedFiles": [
+    "components/AnalyticsShell.tsx",
+    "components/AnalyticsTabs.tsx",
+    "components/BookingTrendChart.tsx",
+    "components/ExportMenu.tsx",
+    "components/MetricCard.tsx",
+    "components/PopularBookingTypes.tsx",
+    "components/PopularTimes.tsx",
+    "components/States.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/AnalyticsShell.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/AnalyticsTabs.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/BookingTrendChart.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/ExportMenu.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/MetricCard.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/PopularBookingTypes.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/PopularTimes.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/components/States.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/mock-data.ts",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/page.tsx",
+    "src/kimi-drafts/appointments-analytics-booking/2026-09-06T20-22-48-735Z-eb4574/reference.css"
+  ],
+  "status": "generated"
+}

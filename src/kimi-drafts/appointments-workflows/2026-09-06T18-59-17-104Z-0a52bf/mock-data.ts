@@ -1,4 +1,4 @@
-export type Channel = "sms" | "email" | "voice";
+export type Channel = "sms" | "email" | "voice" | "webhook" | "payment_link";
 export type TimingKind = "immediate" | "relative";
 
 export interface WorkflowStepTiming {
@@ -7,6 +7,13 @@ export interface WorkflowStepTiming {
   amount?: number;
   unit?: "minutes" | "hours" | "days";
   direction?: "before" | "after";
+}
+
+export interface StepCondition {
+  id: string;
+  field: string;
+  operator: string;
+  value: string;
 }
 
 export interface WorkflowStep {
@@ -18,6 +25,9 @@ export interface WorkflowStep {
   messageTemplate: string;
   enabled: boolean;
   voiceReminderTemplateId?: string;
+  conditions?: StepCondition[];
+  webhook?: { url: string; headers: string; payload: string };
+  paymentLink?: { amountSource: string; amount?: string; memo: string };
 }
 
 export interface WorkflowRecord {
@@ -77,7 +87,49 @@ export const ACTION_OPTIONS: Array<{ value: string; label: string; channel: Chan
   { value: "send_voice_reminder", label: "Call customer (voice reminder)", channel: "voice" },
   { value: "send_sms_team", label: "Send SMS to team", channel: "sms" },
   { value: "send_email_team", label: "Send email to team", channel: "email" },
+  { value: "create_payment_link", label: "Create payment link", channel: "payment_link" },
+  { value: "send_webhook", label: "Send outbound webhook", channel: "webhook" },
 ];
+
+export const CONDITION_FIELD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "status", label: "Appointment status" },
+  { value: "booking_type", label: "Booking type" },
+  { value: "payment_status", label: "Payment status" },
+  { value: "sms_consent", label: "SMS consent" },
+];
+
+export const CONDITION_VALUE_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+  status: [
+    { value: "scheduled", label: "Scheduled" },
+    { value: "confirmed", label: "Confirmed" },
+    { value: "completed", label: "Completed" },
+    { value: "canceled", label: "Canceled" },
+    { value: "no_show", label: "No-show" },
+  ],
+  booking_type: [
+    { value: "type_1", label: "Initial Consultation" },
+    { value: "type_2", label: "Follow-Up Visit" },
+    { value: "type_3", label: "Water Heater Estimate" },
+    { value: "type_4", label: "Annual Checkup" },
+  ],
+  payment_status: [
+    { value: "paid", label: "Paid in full" },
+    { value: "deposit_paid", label: "Deposit paid" },
+    { value: "balance_due", label: "Balance due" },
+    { value: "unpaid", label: "Unpaid" },
+  ],
+  sms_consent: [
+    { value: "granted", label: "Consent captured" },
+    { value: "not_captured", label: "Consent not captured" },
+    { value: "opted_out", label: "Opted out" },
+  ],
+};
+
+export function conditionLabel(c: StepCondition): string {
+  const field = CONDITION_FIELD_OPTIONS.find((f) => f.value === c.field)?.label || c.field;
+  const value = (CONDITION_VALUE_OPTIONS[c.field] || []).find((v) => v.value === c.value)?.label || c.value;
+  return `${field} ${c.operator} ${value}`;
+}
 
 export const TIMING_PRESETS: Array<{ label: string; timing: WorkflowStepTiming }> = [
   { label: "Immediately", timing: { kind: "immediate" } },

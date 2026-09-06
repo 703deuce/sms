@@ -4,10 +4,12 @@
   "referenceNames": [
     "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
   ],
-  "generatedAt": "2026-09-06T18:40:36.142Z",
+  "generatedAt": "2026-09-06T20:04:24.050Z",
   "generatedFiles": [
     "components/BookingsChart.tsx",
+    "components/DatePickerPanel.tsx",
     "components/NeedsAttention.tsx",
+    "components/OnboardingChecklist.tsx",
     "components/QuickActions.tsx",
     "components/RecentConversations.tsx",
     "components/StatCards.tsx",
@@ -18,7 +20,9 @@
   ],
   "persistedFiles": [
     "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/BookingsChart.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/DatePickerPanel.tsx",
     "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/NeedsAttention.tsx",
+    "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/OnboardingChecklist.tsx",
     "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/QuickActions.tsx",
     "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/RecentConversations.tsx",
     "src/kimi-drafts/appointments-overview/2026-09-06T18-38-34-170Z-b932cd/components/StatCards.tsx",

@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-06T20-25-32-701Z-bab503",
+  "targetRoute": "/appointments/cancel/[token]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:05:04.053Z",
+  "generatedFiles": [
+    "components/appointment-ui.tsx",
+    "components/public-cancel-client.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/components/appointment-ui.tsx",
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/components/public-cancel-client.tsx",
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/components/ui.tsx",
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/mock-data.ts",
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/page.tsx",
+    "src/kimi-drafts/appointments-cancel-[token]/2026-09-06T20-25-32-701Z-bab503/reference.css"
+  ],
+  "status": "generated"
+}

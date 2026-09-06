@@ -1,0 +1,43 @@
+{
+  "sessionId": "2026-09-06T20-25-15-150Z-c71f38",
+  "targetRoute": "/embed/book/[slug]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:06:54.751Z",
+  "generatedFiles": [
+    "components/AiBookingStep.tsx",
+    "components/ConfirmationStep.tsx",
+    "components/DateTimeStep.tsx",
+    "components/DetailsStep.tsx",
+    "components/EmbedBookingShell.tsx",
+    "components/EmptyState.tsx",
+    "components/LoadingStep.tsx",
+    "components/OtpStep.tsx",
+    "components/PaymentStep.tsx",
+    "components/ServiceStep.tsx",
+    "components/StepIndicator.tsx",
+    "components/WaitlistStep.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/AiBookingStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/ConfirmationStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/DateTimeStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/DetailsStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/EmbedBookingShell.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/EmptyState.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/LoadingStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/OtpStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/PaymentStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/ServiceStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/StepIndicator.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/components/WaitlistStep.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/mock-data.ts",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/page.tsx",
+    "src/kimi-drafts/embed-book-[slug]/2026-09-06T20-25-15-150Z-c71f38/reference.css"
+  ],
+  "status": "generated"
+}

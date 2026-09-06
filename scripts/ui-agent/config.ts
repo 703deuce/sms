@@ -85,6 +85,55 @@ Implement all applicable states: loading, empty, no-results, error, degraded, su
 
 Hard rule: only rebuild surfaces in the approved page inventory. Do not reactivate legacy/out-of-scope repo routes.`;
 
+/**
+ * Mode 4 Completion & Polish — surgical gap-fill on an existing Kimi draft.
+ * Separate from first-pass generation and from Mode 3 production polish.
+ * @see docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md § Stage I
+ */
+export const KIMI_MODE4_COMPLETION_PREFIX = `MODE 4 — UI COMPLETION & POLISH (GAP-FILL REPASS)
+
+You are NOT creating this screen from scratch. You are completing an existing Kimi draft.
+
+WORK HIERARCHY (strict order — do not skip or reverse):
+1. PRESERVE — Keep everything that already works visually and structurally. Do not redesign for taste.
+2. COMPLETE — Add missing UI: subflows, modals, drawers, popovers, accordion interiors, wizards, confirmations, states, responsive behavior.
+3. CORRECT — Fix only what violates Page Contract, atomic features, standards, or creates dead-end controls.
+4. POLISH — Tighten spacing, hierarchy, alignment, density, typography — only after 1–3 are satisfied.
+
+Never jump to POLISH before COMPLETE. Never redesign sections that already satisfy requirements.
+
+BASELINE (mandatory):
+- The attached CURRENT_RENDERED_DRAFT screenshot + existing sandbox code are the visual baseline.
+- Do NOT full-regenerate the page unless the existing draft is fundamentally unusable.
+- Do NOT change backend architecture, API logic, database logic, integrations, or production wiring.
+- Do NOT remove working UI that already satisfies a requirement unless consolidating duplicates.
+
+FRESH REQUIREMENT COMPARISON (mandatory):
+- Perform an independent requirement-to-current-UI comparison on EVERY pass.
+- Compare against: full Page Contract, all applicable atomic features, governing standards, and global rules.
+- Structured audit gaps (if provided) are HINTS — never assume they are exhaustive.
+- If the audit missed something, still add it when the spec requires it.
+
+YOUR JOB:
+1. Study CURRENT_RENDERED_DRAFT screenshot and existing code together.
+2. Identify every missing UI element, state, subflow, and dead-end control vs the full spec.
+3. Add missing UI only; wire or remove dead ends.
+4. Apply minimal visual polish where it improves clarity without changing established patterns.
+
+STOPPING CONDITION (when to stop — do not keep "improving"):
+Stop when ALL of the following are true:
+- Every applicable required UI element, state, and subflow for this surface is represented in code.
+- No known dead-end controls remain (every button/tab/menu/accordion/link/row action has a designed destination or state).
+- Required loading, empty, error, disabled, paused, and unavailable states are designed where applicable.
+- Responsive behavior is defined for layouts that would break on narrow viewports.
+- Further changes would be subjective redesign or variation, not requirement completion or clear visual correction.
+
+Do NOT continue iterating for aesthetics alone. Do NOT grade or accept your own work — a separate Blueprint Audit will verify completeness.
+
+OUTPUT:
+Emit updated sandbox files (page.tsx, components/**, mock-data.ts, reference.css).
+Use KIMI_FILE_BEGIN/END. Prefer updating existing component files over creating parallel duplicates.`;
+
 /** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
 export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate ALL screens shown in this SlickText tutorial video as a Transovo-branded sandbox.
 The video is a walkthrough — it is NOT one page. Generate every list, create, edit, review, success, import, builder, and settings screen shown.

@@ -1,0 +1,23 @@
+{
+  "sessionId": "2026-09-06T20-22-55-573Z-1a6c6a",
+  "targetRoute": "/appointments/ai-booking",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:26:42.384Z",
+  "generatedFiles": [
+    "components/AiBookingClient.tsx",
+    "components/AppShell.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a/components/AiBookingClient.tsx",
+    "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a/components/AppShell.tsx",
+    "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a/mock-data.ts",
+    "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a/page.tsx",
+    "src/kimi-drafts/appointments-ai-booking/2026-09-06T20-22-55-573Z-1a6c6a/reference.css"
+  ],
+  "status": "generated"
+}

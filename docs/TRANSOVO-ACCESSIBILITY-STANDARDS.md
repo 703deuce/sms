@@ -605,6 +605,7 @@ A page or feature is **not complete** until all applicable items pass:
 ## Implementation stack (where this guide sits)
 
 ```
+TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md → Authority & conflict resolution (read first)
 TRANSOVO-UI-DESIGN-GUIDE.md           → IA
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md   → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md       → Visual tokens & components

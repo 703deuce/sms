@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-06T20-21-01-822Z-a8fb5b",
+  "targetRoute": "/appointments/polls",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:53:21.486Z",
+  "generatedFiles": [
+    "components/ConfirmActionModal.tsx",
+    "components/CreatePollModal.tsx",
+    "components/MeetingPollsClient.tsx",
+    "components/PollCard.tsx",
+    "components/PollDetailDrawer.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/ConfirmActionModal.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/CreatePollModal.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/MeetingPollsClient.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/PollCard.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/PollDetailDrawer.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/components/ui.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/mock-data.ts",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/page.tsx",
+    "src/kimi-drafts/appointments-polls/2026-09-06T20-21-01-822Z-a8fb5b/reference.css"
+  ],
+  "status": "generated"
+}

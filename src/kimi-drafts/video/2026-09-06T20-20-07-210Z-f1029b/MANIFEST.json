@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T20-20-07-210Z-f1029b",
+  "targetRoute": "/video",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:34:29.724Z",
+  "generatedFiles": [
+    "components/AddNotetakerForm.tsx",
+    "components/JoinPanel.tsx",
+    "components/MeetingList.tsx",
+    "components/NotetakerHome.tsx",
+    "components/StatusChip.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/components/AddNotetakerForm.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/components/JoinPanel.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/components/MeetingList.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/components/NotetakerHome.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/components/StatusChip.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/mock-data.ts",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/page.tsx",
+    "src/kimi-drafts/video/2026-09-06T20-20-07-210Z-f1029b/reference.css"
+  ],
+  "status": "generated"
+}

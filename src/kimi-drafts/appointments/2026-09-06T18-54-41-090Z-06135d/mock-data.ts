@@ -31,6 +31,16 @@ export type AppointmentRow = {
   contact?: { id: string } | null;
 };
 
+export const BOOKING_TYPES = [
+  { id: "bt_consult", name: "Initial Consultation", durationMinutes: 30, location: "Phone call" },
+  { id: "bt_estimate", name: "Water Heater Estimate", durationMinutes: 45, location: "On-site" },
+  { id: "bt_followup", name: "Follow-up Visit", durationMinutes: 30, location: "Office — Suite 204" },
+  { id: "bt_hvac", name: "HVAC Maintenance", durationMinutes: 60, location: "On-site" },
+  { id: "bt_review", name: "Annual Review", durationMinutes: 45, location: "Video meeting" },
+] as const;
+
+export const STAFF = ["You", "Mike Torres", "Dr. Chen"] as const;
+
 const now = Date.now();
 const H = 3600_000;
 const D = 24 * H;

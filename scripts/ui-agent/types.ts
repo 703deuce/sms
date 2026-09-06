@@ -240,6 +240,8 @@ export type CliOptions = {
   revise: boolean;
   /** Run completeness pass — re-watch video, fill missing screens/builders */
   complete: boolean;
+  /** Mode 4 completion & polish — gap-fill repass on existing draft (no video, no full regen) */
+  completion?: boolean;
   walkthrough: boolean;
   /** Polish mode: capture AFTER screenshots (required for remote/production base URLs post-deploy) */
   captureAfter?: boolean;

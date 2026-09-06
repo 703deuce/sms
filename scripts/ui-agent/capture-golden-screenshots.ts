@@ -1,14 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Screenshot Kimi golden-screen sandboxes for visual review.
+ * Screenshot Kimi golden-screen sandboxes for visual review (post-completion drafts).
+ * Seeds sandbox from src/kimi-drafts before capture so screenshots reflect latest code.
+ *
  *   npx tsx scripts/ui-agent/capture-golden-screenshots.ts
+ *   npx tsx scripts/ui-agent/capture-golden-screenshots.ts --out /opt/cursor/artifacts/golden-post-completion
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright";
+import { UI_AGENT_DIR } from "./config";
+import { draftDirForSession, seedSandboxFromDraft } from "./kimi-persist";
 import { startPreviewServer } from "./preview";
 
-const OUT_DIR = "/opt/cursor/artifacts/mode4-golden-screens";
+const DEFAULT_OUT_DIR = "/opt/cursor/artifacts/golden-post-completion";
 
 const GOLDEN_SCREENS = [
   { id: "home", label: "01-home", sessionId: "2026-09-06T18-38-34-170Z-b932cd", route: "/appointments/overview" },
@@ -19,19 +24,46 @@ const GOLDEN_SCREENS = [
   { id: "workflow-builder", label: "06-workflow-builder", sessionId: "2026-09-06T18-59-17-104Z-0a52bf", route: "/appointments/workflows" },
 ];
 
-function previewPort(sessionId: string): number {
-  return 5174 + (sessionId.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 500);
+function parseArg(args: string[], flag: string): string | undefined {
+  const eq = args.find((a) => a.startsWith(`${flag}=`));
+  if (eq) return eq.split("=").slice(1).join("=");
+  const idx = args.indexOf(flag);
+  if (idx >= 0 && args[idx + 1] && !args[idx + 1].startsWith("--")) return args[idx + 1];
+  return undefined;
 }
 
-async function captureOne(screen: (typeof GOLDEN_SCREENS)[number]): Promise<string> {
-  const port = previewPort(screen.sessionId);
-  const { url, close } = await startPreviewServer(screen.sessionId, port);
+function resolveDraftPath(screen: (typeof GOLDEN_SCREENS)[number]): string {
+  const statePath = join(UI_AGENT_DIR, "mode4", "batch-state.json");
+  if (existsSync(statePath)) {
+    const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+      jobs?: Array<{ id: string; sessionId?: string; draftPath?: string; route?: string }>;
+    };
+    const job = state.jobs?.find((j) => j.id === screen.id);
+    if (job?.draftPath && existsSync(job.draftPath)) return job.draftPath;
+    if (job?.sessionId && job.route) {
+      const draft = draftDirForSession(job.sessionId, job.route);
+      if (existsSync(draft)) return draft;
+    }
+  }
+  const fallback = draftDirForSession(screen.sessionId, screen.route);
+  if (existsSync(fallback)) return fallback;
+  throw new Error(`No draft found for ${screen.id}`);
+}
+
+
+async function captureOne(
+  screen: (typeof GOLDEN_SCREENS)[number],
+  outDir: string,
+): Promise<string> {
+  const draftPath = resolveDraftPath(screen);
+  seedSandboxFromDraft(screen.sessionId, draftPath);
+  const { url, close } = await startPreviewServer(screen.sessionId);
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await page.goto(url, { waitUntil: "networkidle", timeout: 120_000 });
     await page.waitForTimeout(1500);
-    const out = join(OUT_DIR, `${screen.label}.png`);
+    const out = join(outDir, `${screen.label}.png`);
     await page.screenshot({ path: out, fullPage: true });
     return out;
   } finally {
@@ -41,14 +73,21 @@ async function captureOne(screen: (typeof GOLDEN_SCREENS)[number]): Promise<stri
 }
 
 async function main(): Promise<void> {
-  mkdirSync(OUT_DIR, { recursive: true });
+  const args = process.argv.slice(2);
+  const outDir = parseArg(args, "--out") || DEFAULT_OUT_DIR;
+  const only = parseArg(args, "--only");
+  const screens = only
+    ? GOLDEN_SCREENS.filter((s) => s.id === only || s.label.includes(only))
+    : GOLDEN_SCREENS;
+
+  mkdirSync(outDir, { recursive: true });
   const results: Array<{ screen: string; path: string; ok: boolean; error?: string }> = [];
 
-  for (const screen of GOLDEN_SCREENS) {
+  for (const screen of screens) {
     process.stdout.write(`Capturing ${screen.label} (${screen.sessionId})… `);
     try {
-      const path = await captureOne(screen);
-      console.log("ok");
+      const path = await captureOne(screen, outDir);
+      console.log(`ok → ${path}`);
       results.push({ screen: screen.label, path, ok: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -59,15 +98,17 @@ async function main(): Promise<void> {
 
   const manifest = {
     capturedAt: new Date().toISOString(),
-    outDir: OUT_DIR,
-    screens: GOLDEN_SCREENS.map((s, i) => ({
+    outDir,
+    note: "Seeded from src/kimi-drafts post-completion before capture",
+    screens: screens.map((s, i) => ({
       ...s,
+      draftPath: existsSync(resolveDraftPath(s)) ? resolveDraftPath(s) : null,
       screenshot: results[i]?.ok ? results[i].path : null,
       error: results[i]?.error,
     })),
   };
-  writeFileSync(join(OUT_DIR, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
-  console.log(`\nManifest: ${join(OUT_DIR, "manifest.json")}`);
+  writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+  console.log(`\nManifest: ${join(outDir, "manifest.json")}`);
   const failed = results.filter((r) => !r.ok);
   if (failed.length) process.exit(1);
 }

@@ -35,6 +35,25 @@ ${INCREMENTAL_FILE_PROTOCOL}
 
 Emit only files that changed, or the full set if easier. Use KIMI_FILE_BEGIN/END for each file.`;
 
+const COMPLETION_SYSTEM = `You complete an EXISTING Kimi sandbox UI to implementation-ready blueprint quality.
+This is a surgical gap-fill repass — NOT first-pass generation and NOT production integration.
+
+WORK HIERARCHY: Preserve → Complete → Correct → Polish (in that order).
+
+RULES:
+- Study CURRENT_RENDERED_DRAFT screenshot AND existing code as the baseline.
+- Perform a fresh requirement comparison against Page Contract, atomic features, and standards.
+- Audit gap hints are non-exhaustive — add anything else the spec requires.
+- Add missing UI; wire or remove dead ends; minimal polish only after requirements are met.
+- Stop when the stopping condition in the instruction is met — do not redesign for variation.
+- Do NOT full-regenerate unless the baseline is unusable.
+- Do NOT touch production routes or backend logic.
+- Do NOT grade or accept your own work.
+
+${INCREMENTAL_FILE_PROTOCOL}
+
+Emit updated files using KIMI_FILE_BEGIN/END. Update existing components in place when possible.`;
+
 function formatExistingSources(sessionId: string): string {
   const sources = readAllGeneratedSources(sessionId);
   if (sources.length === 0) return "(no existing sandbox files)";
@@ -53,19 +72,38 @@ export async function buildReferenceImplementation(
     feedback?: string;
     isRevision?: boolean;
     isCompletenessPass?: boolean;
+    isCompletionPass?: boolean;
     referenceNames?: string[];
   },
 ): Promise<ReferenceBuildResult> {
   const isRevision = Boolean(input.isRevision);
   const isCompletenessPass = Boolean(input.isCompletenessPass);
+  const isCompletionPass = Boolean(input.isCompletionPass);
 
   const result = await provider.analyze({
-    systemPrompt: isCompletenessPass
+    systemPrompt: isCompletionPass
+      ? COMPLETION_SYSTEM
+      : isCompletenessPass
       ? COMPLETENESS_SYSTEM
       : isRevision
         ? REVISE_SYSTEM
         : REFERENCE_BUILD_SYSTEM,
-    userPrompt: isCompletenessPass
+    userPrompt: isCompletionPass
+      ? `MODE 4 COMPLETION & POLISH — GAP-FILL REPASS
+
+TARGET ROUTE: ${input.target}
+INSTRUCTION:
+${input.instruction || "Complete the UI blueprint for this surface."}
+
+CURRENT_RENDERED_DRAFT screenshot (if attached) shows what renders today.
+EXISTING SANDBOX FILES (baseline — extend and improve, do not discard):
+${formatExistingSources(input.sessionId)}
+
+Work hierarchy: Preserve → Complete → Correct → Polish.
+Perform fresh requirement comparison. Audit gaps are hints only.
+Stop at the stopping condition — do not redesign for taste.
+Emit updated files using KIMI_FILE_BEGIN/END.`
+      : isCompletenessPass
       ? `COMPLETENESS PASS — MISSING UI
 
 TARGET ROUTE: ${input.target}
@@ -105,15 +143,21 @@ MEDIA:
 - CURRENT_TRANSOVO_* = our page today (brand shell reference)
 
 Watch the reference video. Then emit sandbox files incrementally with KIMI_FILE_BEGIN/END.`,
-    labeledMedia: isRevision && !isCompletenessPass
+    labeledMedia: isCompletionPass
+      ? [...input.referenceMedia, ...input.currentMedia]
+      : isRevision && !isCompletenessPass
       ? input.currentMedia
       : [...input.referenceMedia, ...input.currentMedia],
     expectJson: false,
     useIncrementalFiles: true,
-    skipReferenceVideo: isRevision && !isCompletenessPass,
-    leanPrompt: !isRevision && !isCompletenessPass,
+    skipReferenceVideo: (isRevision || isCompletionPass) && !isCompletenessPass,
+    leanPrompt: !isRevision && !isCompletenessPass && !isCompletionPass,
     sessionId: input.sessionId,
-    phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
+    phaseLabel: isCompletionPass
+      ? "Kimi Mode 4 completion"
+      : input.feedback
+        ? "Kimi refinement"
+        : "Kimi initial build",
     draftTargetRoute: input.target,
     referenceNames: input.referenceNames,
   });

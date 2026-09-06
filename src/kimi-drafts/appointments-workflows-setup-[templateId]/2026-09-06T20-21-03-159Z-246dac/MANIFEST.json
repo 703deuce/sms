@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T20-21-03-159Z-246dac",
+  "targetRoute": "/appointments/workflows/setup/[templateId]",
+  "referenceNames": [
+    "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:25:38.444Z",
+  "generatedFiles": [
+    "components/SetupWizard.tsx",
+    "components/StepCard.tsx",
+    "components/StepConfigPanel.tsx",
+    "components/TestPreviewModal.tsx",
+    "components/WorkflowPreviewPane.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/components/SetupWizard.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/components/StepCard.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/components/StepConfigPanel.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/components/TestPreviewModal.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/components/WorkflowPreviewPane.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/mock-data.ts",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/page.tsx",
+    "src/kimi-drafts/appointments-workflows-setup-[templateId]/2026-09-06T20-21-03-159Z-246dac/reference.css"
+  ],
+  "status": "generated"
+}

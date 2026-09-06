@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { Button, StatusBadge, fmtDate, fmtTime, initials } from "./ui";
 import type { Appointment } from "../mock-data";
 
+const TERMINAL = new Set(["canceled", "completed", "no_show"]);
+
 export function AppointmentHeader({
   appt,
   acting,
@@ -25,6 +27,7 @@ export function AppointmentHeader({
   onNoShow: () => void;
   onCancel: () => void;
 }) {
+  const isTerminal = TERMINAL.has(appt.status);
   const isOpen = ["scheduled", "awaiting_confirmation", "confirmed", "reschedule_requested"].includes(appt.status);
   return (
     <div style={{ marginBottom: 18 }}>
@@ -33,7 +36,9 @@ export function AppointmentHeader({
       </button>
       <div className="detail-header" style={{ marginTop: 12 }}>
         <div className="identity">
-          <span className="avatar-lg">{initials(appt.inviteeName)}</span>
+          <span className="avatar-lg" style={isTerminal ? { filter: "grayscale(0.6)", opacity: 0.75 } : undefined}>
+            {initials(appt.inviteeName)}
+          </span>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h1>{appt.inviteeName}</h1>

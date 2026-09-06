@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T20-25-57-235Z-0f6054",
+  "targetRoute": "/appointments/reschedule/[token]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:05:24.928Z",
+  "generatedFiles": [
+    "components/PublicShell.tsx",
+    "components/RescheduleFlow.tsx",
+    "components/SlotPicker.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/components/PublicShell.tsx",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/components/RescheduleFlow.tsx",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/components/SlotPicker.tsx",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/components/ui.tsx",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/mock-data.ts",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/page.tsx",
+    "src/kimi-drafts/appointments-reschedule-[token]/2026-09-06T20-25-57-235Z-0f6054/reference.css"
+  ],
+  "status": "generated"
+}

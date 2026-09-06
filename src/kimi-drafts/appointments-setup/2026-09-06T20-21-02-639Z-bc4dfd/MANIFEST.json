@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-21-02-639Z-bc4dfd",
+  "targetRoute": "/appointments/setup",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:33:59.149Z",
+  "generatedFiles": [
+    "components/AllSetBanner.tsx",
+    "components/BookingLinkCard.tsx",
+    "components/LaunchReadinessCard.tsx",
+    "components/QuickTipsCard.tsx",
+    "components/SetupProgressCard.tsx",
+    "components/States.tsx",
+    "components/StepList.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/AllSetBanner.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/BookingLinkCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/LaunchReadinessCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/QuickTipsCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/SetupProgressCard.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/States.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/components/StepList.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/mock-data.ts",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/page.tsx",
+    "src/kimi-drafts/appointments-setup/2026-09-06T20-21-02-639Z-bc4dfd/reference.css"
+  ],
+  "status": "generated"
+}

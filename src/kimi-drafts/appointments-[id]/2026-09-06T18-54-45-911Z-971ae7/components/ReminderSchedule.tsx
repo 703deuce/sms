@@ -1,16 +1,20 @@
 "use client";
 
-import { Bell, MessageSquare, Mail } from "lucide-react";
+import { Bell, MessageSquare, Mail, ShieldAlert } from "lucide-react";
 import { Card, StatusBadge, fmtDateTime } from "./ui";
 import type { ReminderStep } from "../mock-data";
 
 export function ReminderSchedule({
   steps,
   suppressed,
+  consentMissing,
+  readOnly,
   onToggleSuppressed,
 }: {
   steps: ReminderStep[];
   suppressed: boolean;
+  consentMissing?: boolean;
+  readOnly?: boolean;
   onToggleSuppressed: (v: boolean) => void;
 }) {
   return (
@@ -22,6 +26,18 @@ export function ReminderSchedule({
       }
       sub="Standard reminders — workspace default"
     >
+      {consentMissing ? (
+        <div className="banner banner-danger" style={{ marginBottom: 10 }}>
+          <ShieldAlert size={17} className="banner-icon" style={{ color: "#f04438" }} />
+          <span className="banner-body">
+            <div className="banner-title" style={{ color: "#912018" }}>SMS consent missing</div>
+            <div className="banner-text" style={{ color: "#b42318" }}>
+              Transovo did not capture SMS consent for this appointment, so SMS reminders will not be sent.
+              This appointment was imported — business texting registration and recipient permission are required before SMS can be used.
+            </div>
+          </span>
+        </div>
+      ) : null}
       {suppressed ? (
         <div className="banner" style={{ marginBottom: 10 }}>
           <span className="banner-body">
@@ -39,7 +55,7 @@ export function ReminderSchedule({
             <div className="reminder-body">
               <div className="reminder-name">{s.label}</div>
               <div className="reminder-when">
-                {s.status === "sent" ? "Sent " : "Scheduled for "}
+                {s.status === "sent" ? "Sent " : s.status === "disabled" ? "Not scheduled — was " : "Scheduled for "}
                 {s.scheduledFor ? fmtDateTime(s.scheduledFor) : "—"} · {s.channel}
               </div>
             </div>
@@ -56,8 +72,11 @@ export function ReminderSchedule({
         <button
           role="switch"
           aria-checked={suppressed}
+          aria-label="Suppress reminders for this appointment"
           className={`toggle${suppressed ? " on" : ""}`}
-          onClick={() => onToggleSuppressed(!suppressed)}
+          disabled={readOnly}
+          style={readOnly ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+          onClick={() => !readOnly && onToggleSuppressed(!suppressed)}
         />
       </div>
     </Card>

@@ -266,3 +266,8 @@ export function countAtomicFeatures(): { total: number; inScope: number; exclude
   const inScope = ATOMIC_FEATURES.filter((f) => f.inScope);
   return { total: ATOMIC_FEATURES.length, inScope: inScope.length, excluded: ATOMIC_FEATURES.length - inScope.length };
 }
+
+/** In-scope atomic features mapped to a manifest entry id (e.g. "appointments-calendar"). */
+export function getInScopeFeaturesForManifest(manifestId: string): AtomicFeature[] {
+  return ATOMIC_FEATURES.filter((f) => f.inScope && f.manifestIds.includes(manifestId));
+}

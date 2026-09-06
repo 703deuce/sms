@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-06T20-21-02-523Z-68c9cd",
+  "targetRoute": "/appointments/automations/activity",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:24:49.853Z",
+  "generatedFiles": [
+    "components/AutomationsActivityClient.tsx",
+    "components/UnknownRepliesPanel.tsx",
+    "components/WorkflowLogsPanel.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/components/AutomationsActivityClient.tsx",
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/components/UnknownRepliesPanel.tsx",
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/components/WorkflowLogsPanel.tsx",
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/mock-data.ts",
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/page.tsx",
+    "src/kimi-drafts/appointments-automations-activity/2026-09-06T20-21-02-523Z-68c9cd/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,0 +1,19 @@
+{
+  "stage": "D",
+  "completedAt": "2026-09-06T18:38:00.000Z",
+  "kimiSidebarSession": "2026-09-06T18-36-09-917Z-daeeac",
+  "generatedPath": ".ui-agent/generated/2026-09-06T18-36-09-917Z-daeeac",
+  "productionWiring": {
+    "sidebar": "src/components/kimi/sidebar/TransovoSidebar.tsx",
+    "layoutSidebar": "src/components/layout/sidebar.tsx",
+    "header": "src/components/layout/header.tsx",
+    "tokens": "src/app/globals.css",
+    "productTheme": "src/app/(app)/product-theme.css",
+    "sidebarStyles": "src/styles/kimi/sidebar.css"
+  },
+  "notes": [
+    "Stage D Kimi sidebar regenerated from Inbox reference video; production component retains appointments-nav wiring via mapProductionNavToKimi.",
+    "Foundation tokens and transovo-nav-item styles already integrated in globals + sidebar.css.",
+    "No legacy mass-SMS nav items introduced — appointments-platform IA from appointments-nav.ts governs structure."
+  ]
+}

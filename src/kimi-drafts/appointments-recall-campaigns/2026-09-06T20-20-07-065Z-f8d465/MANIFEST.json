@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-06T20-20-07-065Z-f8d465",
+  "targetRoute": "/appointments/recall-campaigns",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:51:35.284Z",
+  "generatedFiles": [
+    "components/CampaignEditor.tsx",
+    "components/CampaignList.tsx",
+    "components/ConfirmDialog.tsx",
+    "components/EmptyState.tsx",
+    "components/RecallCampaignsClient.tsx",
+    "components/RunResultDialog.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/CampaignEditor.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/CampaignList.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/ConfirmDialog.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/EmptyState.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/RecallCampaignsClient.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/components/RunResultDialog.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/mock-data.ts",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/page.tsx",
+    "src/kimi-drafts/appointments-recall-campaigns/2026-09-06T20-20-07-065Z-f8d465/reference.css"
+  ],
+  "status": "generated"
+}

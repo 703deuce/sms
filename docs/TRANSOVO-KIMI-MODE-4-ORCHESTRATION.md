@@ -72,13 +72,19 @@ Cursor must **not** launch the app merely to see whether Kimi's UI looks right. 
 Kimi Mode 4 must receive the **complete governing Transovo system** — not summaries.
 
 **Preflight (mandatory):** `npm run ui:kimi-mode4-preflight -- --write-report`  
-Must return **OVERALL: PASS** before any Kimi generation. Verifies full document bytes, no truncation, manifest coverage, and feature coverage.
+Must return **OVERALL: PASS** before any Kimi generation. Verifies:
+- full document bytes (no truncation)
+- manifest + feature coverage
+- **scope consistency** (no stale MCTB/mass-SMS instructions in active payload)
 
-**Minimum bundle** (see `scripts/ui-agent/mode4-standards-pack.ts` — 22 document slots, ~703K chars full content):
+**Minimum bundle** (see `scripts/ui-agent/mode4-standards-pack.ts` — 23 document slots, ~712K chars full content):
 
 | Layer | Document |
 |-------|----------|
-| Product scope | `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` |
+| Layer | Document |
+|-------|----------|
+| **Mode 4 active scope** | `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md` |
+| Product scope / domain | `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` (appointments sections; ignore OUT OF MODE 4) · `docs/TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md` |
 | Page inventory | `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md` |
 | Governance | `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` |
 | IA & terminology | `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` |
@@ -317,9 +323,32 @@ Failed jobs: retry individually with original contract + failure reason.
 
 ## 50–52. Refinement passes
 
-Use controlled Mode 4 refinement (Mode 2 concept) for polish-only second pass — spacing, typography, hierarchy — **not** behavior changes.
+**Three distinct Kimi modes — do not mix them:**
 
-Mode 3 (generic polish) remains optional. **Mode 4 is default** for this rebuild.
+| Mode | Command | Purpose |
+|------|---------|---------|
+| **Mode 4 Generate** | `npm run ui:kimi-mode4` | First-pass screen from reference video + full standards |
+| **Mode 4 Completion & Polish** | `npm run ui:kimi-mode4-completion` | **Gap-fill repass** on existing draft — adds missing subflows/states/modals; no full regen |
+| **Mode 3 Polish** | `npm run ui:kimi-batch-polish` | Production in-place polish (post-integration only) |
+
+**Mode 4 Completion & Polish** is a separate dedicated mode. It must NOT create the first-pass screen and must NOT wire backend.
+
+**Surface-agnostic:** each run requires `--only <manifestId>`. Run one surface at a time. Golden batch ordering is orchestration config only: `.ui-agent/mode4/golden-completion-order.json`.
+
+**Inputs per job (standard):**
+- Existing draft code (`src/kimi-drafts/<route>/<sessionId>/`)
+- **Latest rendered screenshot** (`CURRENT_RENDERED_DRAFT`) — auto-captured before each pass unless capture fails or `--skip-screenshot`
+- Full Page Contract + standards pack + atomic features (same authority as first-pass)
+- Audit gap hints (`mode4-golden-gaps.ts` or `--gaps-file`) — **non-exhaustive**
+- Fresh requirement comparison mandated on every pass
+
+**Work hierarchy:** Preserve → Complete → Correct → Polish (never redesign for taste).
+
+**Stopping condition:** Stop when all required UI is represented, no dead ends, required states exist, responsive behavior defined, and further work would be subjective redesign.
+
+**Completion does not self-audit.** Blueprint Audit runs independently afterward.
+
+Mode 3 (generic production polish) remains optional. **Mode 4 Generate + Completion** is the default for this rebuild.
 
 ---
 
@@ -331,12 +360,14 @@ Mode 3 (generic polish) remains optional. **Mode 4 is default** for this rebuild
 | B | Load all governing docs |
 | C | Map features → canonical pages |
 | D | Foundations (serial) |
-| E | Golden screens |
-| F | Golden consistency pass |
-| G | Bulk Mode 4 (≤10 concurrent) |
-| H | Static completeness review |
-| I | Targeted Mode 4 refinement |
-| J | Cursor backend integration review |
+| E | Golden screens (first-pass Mode 4 generate) |
+| F | **Blueprint completeness audit** (UI subflows/states — not backend) |
+| G | **Golden gap-fill** (`ui:kimi-mode4-completion` on 6 authority screens) |
+| H | Re-audit golden screens — lock as visual authority |
+| I | Bulk Mode 4 generate (≤10 concurrent) |
+| J | Static completeness review per page |
+| K | Targeted completion passes on bulk surfaces as needed |
+| L | Cursor backend integration review |
 
 ---
 
@@ -372,7 +403,11 @@ One canonical shell, visual language, page architecture, component system, termi
 | `npm run ui:kimi-mode4-sync-manifest` | Sync JSON manifest |
 | `npm run ui:kimi-mode4-contract -- --id <id>` | Generate Page Contract |
 | `npm run ui:kimi-mode4-standards` | Print standards pack |
-| `npm run ui:kimi-mode4 -- --stage golden` | Golden screen batch |
+| `npm run ui:kimi-mode4 -- --stage golden` | Golden screen batch (first-pass generate) |
+| `npm run ui:kimi-mode4-completion` | **Gap-fill repass** — requires `--only <manifestId>` |
+| `npm run ui:kimi-mode4-completion -- --only <id>` | Single-surface completion pass (one at a time) |
+| `npm run ui:kimi-mode4-completion -- --print-instruction --only <id>` | Preview completion prompt |
+| `npm run ui:kimi-mode4-completion -- --skip-screenshot --only <id>` | Only if screenshot capture fails |
 | `npm run ui:kimi-mode4 -- --stage bulk` | Bulk concurrent rebuild |
 | `npm run ui:kimi-mode4 -- --status` | Completion records |
 | `npm run ui:kimi -- --target <route> --video <name>` | Single Mode 1/4 page (manual) |

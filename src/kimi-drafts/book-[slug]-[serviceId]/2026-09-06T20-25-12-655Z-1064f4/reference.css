@@ -1,0 +1,86 @@
+:root {
+  --background: 220 20% 97%;
+  --foreground: 224 24% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 24% 14%;
+  --muted: 220 16% 94%;
+  --muted-foreground: 222 10% 44%;
+  --border: 220 14% 89%;
+  --primary: 234 72% 59%;
+  --primary-hover: 234 72% 54%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 234 72% 59%;
+  --danger: 350 74% 50%;
+  --danger-foreground: 0 0% 100%;
+  --radius: 0.625rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+}
+
+/* Booking-page specific polish */
+.booking-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 50% -180px, hsl(234 72% 59% / 0.06), transparent 70%),
+    hsl(var(--background));
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.fade-in {
+  animation: bookingFade 0.22s ease-out;
+}
+
+@keyframes bookingFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted));
+  border-radius: 8px;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.55), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+.chat-scroll::-webkit-scrollbar { width: 5px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .skeleton-shimmer::after { animation: none; }
+}

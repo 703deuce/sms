@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T20-20-07-259Z-013935",
+  "targetRoute": "/appointments/no-show-recovery",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:03:35.103Z",
+  "generatedFiles": [
+    "components/InstallWorkflowModal.tsx",
+    "components/NoShowRecoveryClient.tsx",
+    "components/RecoveryDetailDrawer.tsx",
+    "components/RunScanModal.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/components/InstallWorkflowModal.tsx",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/components/NoShowRecoveryClient.tsx",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/components/RecoveryDetailDrawer.tsx",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/components/RunScanModal.tsx",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/mock-data.ts",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/page.tsx",
+    "src/kimi-drafts/appointments-no-show-recovery/2026-09-06T20-20-07-259Z-013935/reference.css"
+  ],
+  "status": "generated"
+}

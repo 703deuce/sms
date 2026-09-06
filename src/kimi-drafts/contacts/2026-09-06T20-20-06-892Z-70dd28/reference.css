@@ -1,0 +1,119 @@
+/* Transovo Mode 4 — Contacts surface reference styles.
+   Production tokens (bg-card, text-foreground, border-border, primary) come from
+   the global design system; this file only carries surface-specific helpers. */
+
+.kimi-contacts {
+  --kc-primary: #4f46e5;
+  --kc-primary-hover: #4338ca;
+  --kc-ring: rgba(79, 70, 229, 0.24);
+  --kc-border: #e5e7eb;
+  --kc-muted: #6b7280;
+  --kc-card: #ffffff;
+}
+
+.kimi-contacts .font-display {
+  font-family: var(--font-display, var(--font-sans, inherit));
+}
+
+/* Checkbox treatment matching the design system */
+.kimi-contacts .kc-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--kc-border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.kimi-contacts .kc-check:hover {
+  border-color: #c7c9d1;
+}
+
+.kimi-contacts .kc-check:checked {
+  background: var(--kc-primary);
+  border-color: var(--kc-primary);
+}
+
+.kimi-contacts .kc-check:checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.kimi-contacts .kc-check:indeterminate {
+  background: var(--kc-primary);
+  border-color: var(--kc-primary);
+}
+
+.kimi-contacts .kc-check:indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 7px;
+  width: 10px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+}
+
+.kimi-contacts .kc-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--kc-ring);
+}
+
+/* Subtle entrance animations used by menus / toasts / modals */
+@keyframes kc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes kc-zoom-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes kc-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.kimi-contacts .animate-in {
+  animation-duration: 150ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kimi-contacts .fade-in { animation-name: kc-fade-in; }
+.kimi-contacts .zoom-in-95 { animation-name: kc-zoom-in; }
+.kimi-contacts .slide-in-from-bottom-2 { animation-name: kc-slide-up; }
+
+/* Scrollbar polish for dropdown lists */
+.kimi-contacts .kc-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.kimi-contacts .kc-scroll::-webkit-scrollbar-thumb {
+  background: #d7d9df;
+  border-radius: 8px;
+}
+
+.kimi-contacts .kc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kimi-contacts .animate-in {
+    animation: none;
+  }
+}

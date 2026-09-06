@@ -1,0 +1,35 @@
+{
+  "sessionId": "2026-09-06T20-20-07-040Z-d0a59d",
+  "targetRoute": "/appointments/team-pages",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:04:31.803Z",
+  "generatedFiles": [
+    "components/AddGroupModal.tsx",
+    "components/AddPageModal.tsx",
+    "components/AppShell.tsx",
+    "components/ConfirmDeleteModal.tsx",
+    "components/GroupCard.tsx",
+    "components/PageCard.tsx",
+    "components/States.tsx",
+    "components/TeamPagesClient.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/AddGroupModal.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/AddPageModal.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/AppShell.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/ConfirmDeleteModal.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/GroupCard.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/PageCard.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/States.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/components/TeamPagesClient.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/mock-data.ts",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/page.tsx",
+    "src/kimi-drafts/appointments-team-pages/2026-09-06T20-20-07-040Z-d0a59d/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-06T20-20-05-704Z-9dc3da",
+  "targetRoute": "/appointments/waitlist",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:34:02.769Z",
+  "generatedFiles": [
+    "components/ConfirmRemoveModal.tsx",
+    "components/WaitlistAdminClient.tsx",
+    "components/WaitlistEntryRow.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/components/ConfirmRemoveModal.tsx",
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/components/WaitlistAdminClient.tsx",
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/components/WaitlistEntryRow.tsx",
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/mock-data.ts",
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/page.tsx",
+    "src/kimi-drafts/appointments-waitlist/2026-09-06T20-20-05-704Z-9dc3da/reference.css"
+  ],
+  "status": "generated"
+}

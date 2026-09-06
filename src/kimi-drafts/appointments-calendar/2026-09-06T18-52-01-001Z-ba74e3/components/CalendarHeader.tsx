@@ -19,14 +19,14 @@ export default function CalendarHeader({ rangeLabel, view, onToday, onPrev, onNe
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <div className="flex items-center gap-2.5 mr-auto">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white">
-          <CalendarDays className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+          <CalendarDays className="h-[18px] w-[18px]" />
         </div>
         <div>
           <h1 className="text-[17px] font-semibold leading-tight text-gray-900">Calendar</h1>
           <p className="text-[12px] text-gray-500">{rangeLabel}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center rounded-lg border border-gray-200 bg-white shadow-sm">
           <button onClick={onPrev} aria-label="Previous" className="flex h-8 w-8 items-center justify-center rounded-l-lg text-gray-500 hover:bg-gray-50">
             <ChevronLeft className="h-4 w-4" />

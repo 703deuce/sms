@@ -4,21 +4,43 @@ import { useEffect, useState } from "react";
 import {
   Calendar, Clock, CreditCard, MapPin, MessageSquare, Phone, Mail,
   ShieldCheck, StickyNote, User, Users, X, AlertTriangle, Plus, Info,
+  Lock, FileQuestion, RefreshCcw,
 } from "lucide-react";
-import { appointment as mockAppt } from "../mock-data";
+import { appointmentsById, appointment as fallbackAppt } from "../mock-data";
+import type { Appointment } from "../mock-data";
 import { Button, Card, StatusBadge, fmtPhone, money, fmtDateTime } from "./ui";
 import { AppointmentHeader } from "./AppointmentHeader";
 import { ReminderSchedule } from "./ReminderSchedule";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { RescheduleModal } from "./RescheduleModal";
+import { CancelModal } from "./CancelModal";
 import { VideoMeetingPanel } from "./VideoMeetingPanel";
 import { NotetakerPanel } from "./NotetakerPanel";
 
+const TERMINAL = new Set(["canceled", "completed", "no_show"]);
+const TERMINAL_COPY: Record<string, { title: string; text: string }> = {
+  canceled: {
+    title: "This appointment was canceled",
+    text: "Pending reminders were stopped and the customer was notified. The record is read-only — booking activity is preserved in the timeline below.",
+  },
+  completed: {
+    title: "This appointment is complete",
+    text: "The appointment took place and was marked complete. The record is read-only.",
+  },
+  no_show: {
+    title: "Customer was a no-show",
+    text: "The customer did not arrive. The record is read-only. No-show follow-up can be configured under No-Show Recovery.",
+  },
+};
+
 export function AppointmentDetail({ appointmentId }: { appointmentId: string }) {
   const [loading, setLoading] = useState(true);
-  const [appt, setAppt] = useState(mockAppt);
+  const [loadError, setLoadError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [appt, setAppt] = useState<Appointment>(fallbackAppt);
   const [acting, setActing] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [internalNote, setInternalNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -26,9 +48,26 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
   const [extraName, setExtraName] = useState("");
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
+  function fetchAppt() {
+    setLoading(true);
+    setLoadError(false);
+    setNotFound(false);
+    setTimeout(() => {
+      const record = appointmentsById[appointmentId];
+      if (record === "error") {
+        setLoadError(true);
+      } else if (!record) {
+        setNotFound(true);
+      } else {
+        setAppt(record);
+      }
+      setLoading(false);
+    }, 650);
+  }
+
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 650);
-    return () => clearTimeout(t);
+    fetchAppt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appointmentId]);
 
   function showToast(msg: string) {
@@ -56,6 +95,11 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
           },
           ...a.timeline,
         ];
+        if (update.action === "cancel") {
+          next.reminderSchedule = next.reminderSchedule.map((s) =>
+            s.status === "scheduled" ? { ...s, status: "skipped" as const } : s,
+          );
+        }
         return next;
       });
       setActing(false);
@@ -136,6 +180,7 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
     setDiagnostic("The current time is held for this appointment. Nearby times remain bookable per Standard Hours with a 15-minute buffer.");
   }
 
+  /* ---------- Loading ---------- */
   if (loading) {
     return (
       <div className="stack" aria-busy="true" aria-label="Loading appointment">
@@ -155,7 +200,49 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
     );
   }
 
+  /* ---------- Error state ---------- */
+  if (loadError) {
+    return (
+      <div className="state-panel">
+        <div className="state-icon"><AlertTriangle size={22} /></div>
+        <h2 className="state-title">This appointment couldn’t be loaded</h2>
+        <p className="state-text">
+          Something went wrong while fetching the appointment. Your data is safe — try again.
+        </p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+          <Button size="sm" onClick={fetchAppt}>
+            <RefreshCcw size={13} /> Retry
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => showToast("Back to Appointments list")}>
+            Back to Appointments
+          </Button>
+        </div>
+        {toast && <div className="toast" role="status"><ShieldCheck size={15} /> {toast}</div>}
+      </div>
+    );
+  }
+
+  /* ---------- Not found ---------- */
+  if (notFound) {
+    return (
+      <div className="state-panel">
+        <div className="state-icon"><FileQuestion size={22} /></div>
+        <h2 className="state-title">Appointment not found</h2>
+        <p className="state-text">
+          This appointment doesn’t exist or may have been removed. Check the link, or return to
+          the appointments list to find what you need.
+        </p>
+        <Button size="sm" onClick={() => showToast("Back to Appointments list")}>
+          Back to Appointments
+        </Button>
+        {toast && <div className="toast" role="status"><ShieldCheck size={15} /> {toast}</div>}
+      </div>
+    );
+  }
+
+  const isTerminal = TERMINAL.has(appt.status);
   const isPendingApproval = appt.pendingApproval;
+  const terminal = TERMINAL_COPY[appt.status];
 
   return (
     <div>
@@ -168,7 +255,7 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
         onConfirm={() => patch({ status: "confirmed" }, "Appointment confirmed.")}
         onComplete={() => patch({ status: "completed" }, "Marked complete.")}
         onNoShow={() => patch({ status: "no_show" }, "Marked as no-show.")}
-        onCancel={() => patch({ action: "cancel", status: "canceled" }, "Appointment canceled. Reminders stopped.")}
+        onCancel={() => setCancelOpen(true)}
       />
 
       {isPendingApproval ? (
@@ -176,10 +263,20 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
           <AlertTriangle size={17} className="banner-icon" />
           <div className="banner-body">
             <div className="banner-title">Booking request needs your approval</div>
-            <div className="banner-text">This time is held but not confirmed. Approve to confirm it, or reject to release the slot.</div>
+            <div className="banner-text">This booking type requires approval. The time is held but not confirmed. Approve to confirm it, or reject to release the slot.</div>
           </div>
           <Button size="sm" onClick={() => patch({ pendingApproval: false, status: "confirmed" }, "Booking approved.")}>Approve</Button>
           <Button size="sm" variant="outline" onClick={() => patch({ pendingApproval: false, action: "cancel", status: "canceled" }, "Booking rejected.")}>Reject</Button>
+        </div>
+      ) : null}
+
+      {isTerminal && terminal ? (
+        <div className="banner banner-neutral" style={{ marginBottom: 18 }}>
+          <Lock size={17} className="banner-icon" style={{ color: "#667085" }} />
+          <div className="banner-body">
+            <div className="banner-title" style={{ color: "#344054" }}>{terminal.title}</div>
+            <div className="banner-text" style={{ color: "#667085" }}>{terminal.text}</div>
+          </div>
         </div>
       ) : null}
 
@@ -212,8 +309,13 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                 <span className="info-value" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <StatusBadge status={appt.paymentStatus} />
                   <span>{money(appt.paymentAmountCents)} deposit</span>
-                  {appt.paymentStatus === "paid" && (
+                  {appt.paymentStatus === "paid" && appt.paymentsConnected && !isTerminal && (
                     <Button size="sm" variant="ghost" disabled={acting} onClick={refundPayment}>Refund</Button>
+                  )}
+                  {appt.paymentStatus === "paid" && !appt.paymentsConnected && (
+                    <span className="sub" style={{ display: "inline" }}>
+                      Payments provider disconnected — refunds unavailable. Reconnect under Integrations → Payments.
+                    </span>
                   )}
                 </span>
               </div>
@@ -226,7 +328,10 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                       <span className="sub">Booking page checkbox · Sep 7, 2026 at 10:03 AM</span>
                     </>
                   ) : (
-                    "Not captured"
+                    <>
+                      Not captured
+                      <span className="sub">No consent evidence on file — SMS reminders are unavailable for this appointment.</span>
+                    </>
                   )}
                 </span>
               </div>
@@ -270,6 +375,8 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
           <ReminderSchedule
             steps={appt.reminderSchedule}
             suppressed={appt.remindersSuppressed}
+            consentMissing={!appt.smsConsent}
+            readOnly={isTerminal}
             onToggleSuppressed={(v) =>
               patch({ remindersSuppressed: v }, v ? "Reminders suppressed for this appointment." : "Reminders restored for this appointment.")
             }
@@ -283,19 +390,23 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
               {appt.extraRecipients.map((r, i) => (
                 <span className="chip" key={i}>
                   {r.name ? `${r.name} — ` : ""}{r.email || r.phone}
-                  <button onClick={() => removeExtraRecipient(i)} aria-label={`Remove ${r.email || r.phone}`}>
-                    <X size={12} />
-                  </button>
+                  {!isTerminal && (
+                    <button onClick={() => removeExtraRecipient(i)} aria-label={`Remove ${r.email || r.phone}`}>
+                      <X size={12} />
+                    </button>
+                  )}
                 </span>
               ))}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
-              <input className="input" placeholder="Name (optional)" value={extraName} onChange={(e) => setExtraName(e.target.value)} aria-label="Recipient name" />
-              <input className="input" placeholder="Email or phone" value={extraEmail} onChange={(e) => setExtraEmail(e.target.value)} aria-label="Recipient email or phone" />
-              <Button variant="outline" size="sm" style={{ height: 36 }} onClick={addExtraRecipient} disabled={!extraEmail.trim()}>
-                <Plus size={13} /> Add
-              </Button>
-            </div>
+            {!isTerminal && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
+                <input className="input" placeholder="Name (optional)" value={extraName} onChange={(e) => setExtraName(e.target.value)} aria-label="Recipient name" />
+                <input className="input" placeholder="Email or phone" value={extraEmail} onChange={(e) => setExtraEmail(e.target.value)} aria-label="Recipient email or phone" />
+                <Button variant="outline" size="sm" style={{ height: 36 }} onClick={addExtraRecipient} disabled={!extraEmail.trim()}>
+                  <Plus size={13} /> Add
+                </Button>
+              </div>
+            )}
           </Card>
 
           <ActivityTimeline events={appt.timeline} />
@@ -328,7 +439,10 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
             </Button>
           </Card>
 
-          <VideoMeetingPanel onCopied={() => showToast("Guest link copied.")} />
+          <VideoMeetingPanel
+            provisioned={appt.videoProvisioned}
+            onCopied={() => showToast("Guest link copied.")}
+          />
           <NotetakerPanel />
 
           <Card title={<><StickyNote size={15} className="muted" /> Internal notes</>} sub="Only visible to your team">
@@ -342,26 +456,41 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                   <div className="muted small" style={{ marginTop: 5 }}>{n.authorName} · {fmtDateTime(n.at)}</div>
                 </div>
               ))}
-              <textarea
-                className="textarea"
-                placeholder="Add a note for your team…"
-                value={internalNote}
-                onChange={(e) => setInternalNote(e.target.value)}
-                aria-label="Internal note"
-              />
-              <Button variant="outline" size="sm" style={{ alignSelf: "flex-start" }} onClick={addNote} disabled={!internalNote.trim() || addingNote}>
-                {addingNote ? "Adding…" : "Add note"}
-              </Button>
+              {!isTerminal && (
+                <>
+                  <textarea
+                    className="textarea"
+                    placeholder="Add a note for your team…"
+                    value={internalNote}
+                    onChange={(e) => setInternalNote(e.target.value)}
+                    aria-label="Internal note"
+                  />
+                  <Button variant="outline" size="sm" style={{ alignSelf: "flex-start" }} onClick={addNote} disabled={!internalNote.trim() || addingNote}>
+                    {addingNote ? "Adding…" : "Add note"}
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         </div>
       </div>
 
-      {rescheduleOpen && (
+      {rescheduleOpen && !isTerminal && (
         <RescheduleModal
           timezone={appt.timezone}
           onClose={() => setRescheduleOpen(false)}
           onSave={saveReschedule}
+        />
+      )}
+
+      {cancelOpen && (
+        <CancelModal
+          appt={appt}
+          onClose={() => setCancelOpen(false)}
+          onConfirm={() => {
+            setCancelOpen(false);
+            patch({ action: "cancel", status: "canceled" }, "Appointment canceled. Reminders stopped and customer notified.");
+          }}
         />
       )}
 

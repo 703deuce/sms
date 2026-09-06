@@ -1,0 +1,39 @@
+{
+  "sessionId": "2026-09-06T20-22-55-145Z-c2208c",
+  "targetRoute": "/appointments/availability",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:03:20.758Z",
+  "generatedFiles": [
+    "components/AvailabilitySummary.tsx",
+    "components/BookingLimits.tsx",
+    "components/BookingRules.tsx",
+    "components/CalendarIntegrationsCard.tsx",
+    "components/DateOverrides.tsx",
+    "components/Holidays.tsx",
+    "components/LivePreview.tsx",
+    "components/NamedSchedules.tsx",
+    "components/SlotDiagnostics.tsx",
+    "components/WeeklyHours.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/AvailabilitySummary.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/BookingLimits.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/BookingRules.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/CalendarIntegrationsCard.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/DateOverrides.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/Holidays.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/LivePreview.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/NamedSchedules.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/SlotDiagnostics.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/components/WeeklyHours.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/mock-data.ts",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/page.tsx",
+    "src/kimi-drafts/appointments-availability/2026-09-06T20-22-55-145Z-c2208c/reference.css"
+  ],
+  "status": "generated"
+}

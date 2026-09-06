@@ -173,6 +173,8 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 **Read first:** `docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md` · Allowlist: `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md`
 
+**Before any Mode 4 run:** `npm run ui:kimi-mode4-preflight` must return **PASS** (full standards content, manifest coverage, feature coverage).
+
 ### Mode 4 — Cursor orchestration rules (mandatory)
 
 **Cursor orchestrates. Kimi implements UI. Cursor does NOT redesign production pages manually.**

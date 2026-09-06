@@ -1,0 +1,181 @@
+.kimi-cl {
+  --accent: #3b4ef5;
+  --ink: #0f1b3d;
+  --muted: #7a85a8;
+  --faint: #9aa3c0;
+  --border: #eceef5;
+  --bg: #f7f8fc;
+}
+.kimi-cl .page-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink);
+  margin: 0;
+}
+.kimi-cl .page-subtitle { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.kimi-cl .breadcrumb { font-size: 12px; color: var(--faint); margin-bottom: 10px; }
+.kimi-cl .breadcrumb span { color: var(--ink); font-weight: 600; }
+
+.kimi-cl .btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer;
+  transition: background .15s ease;
+}
+.kimi-cl .btn-primary:hover:not(:disabled) { background: #2f3fd6; }
+.kimi-cl .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.kimi-cl .btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: #fff; color: var(--ink); border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer;
+  transition: all .15s ease;
+}
+.kimi-cl .btn-secondary:hover:not(:disabled) { border-color: #d5d9ea; background: #fafbfe; }
+.kimi-cl .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
+
+.kimi-cl .input {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  font-size: 13px; color: var(--ink); padding: 8px 12px; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.kimi-cl .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,78,245,.12); }
+.kimi-cl .input::placeholder { color: var(--faint); }
+.kimi-cl .field-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+
+.kimi-cl .metric-card {
+  display: flex; flex-direction: column; gap: 8px;
+  background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+}
+.kimi-cl .table-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+}
+.kimi-cl .table-head {
+  display: grid; align-items: center; gap: 12px; padding: 10px 16px;
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--faint);
+  border-bottom: 1px solid var(--border); background: #fafbfe;
+}
+.kimi-cl .table-row {
+  display: grid; align-items: center; gap: 12px; padding: 13px 16px;
+  border-bottom: 1px solid #f3f4f9;
+}
+.kimi-cl .table-row:last-of-type { border-bottom: none; }
+.kimi-cl .table-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-top: 1px solid var(--border); background: #fafbfe;
+}
+.kimi-cl .cell-primary { font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.kimi-cl .cell-sub { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+.kimi-cl .cell-body { font-size: 13px; color: var(--muted); }
+
+.kimi-cl .menu-pop {
+  position: absolute; z-index: 30; background: #fff; border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(15,27,61,.10); padding: 4px; min-width: 160px;
+}
+.kimi-cl .menu-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  font-size: 13px; font-weight: 500; color: var(--ink); background: none; border: none;
+  border-radius: 7px; padding: 8px 10px; cursor: pointer;
+}
+.kimi-cl .menu-item:hover { background: #f4f6fd; }
+
+.kimi-cl .form-card, .kimi-cl .section-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+}
+.kimi-cl .section-card { padding: 0; overflow: hidden; }
+.kimi-cl .section-head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 20px;
+  font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.kimi-cl .step-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 7px; background: #eef1fe;
+  color: var(--accent); font-size: 12px; font-weight: 700;
+}
+.kimi-cl .toggle {
+  width: 36px; height: 20px; border-radius: 999px; background: #dfe3f0; position: relative;
+  cursor: pointer; flex-shrink: 0;
+}
+.kimi-cl .toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform .15s ease;
+}
+.kimi-cl .toggle.on { background: var(--accent); }
+.kimi-cl .toggle.on::after { transform: translateX(16px); }
+.kimi-cl .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kimi-cl .seg-control {
+  display: inline-flex; background: #f1f3f9; border-radius: 9px; padding: 3px; gap: 2px;
+}
+.kimi-cl .seg-option {
+  border: none; background: transparent; font-size: 13px; font-weight: 600; color: var(--muted);
+  padding: 6px 20px; border-radius: 7px; cursor: pointer;
+}
+.kimi-cl .seg-option.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(15,27,61,.10); }
+
+.kimi-cl .sidebar-link {
+  display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500;
+  color: #525c80; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+  transition: all .12s ease;
+}
+.kimi-cl .sidebar-link:hover { background: #f4f6fd; color: var(--ink); }
+.kimi-cl .sidebar-link.active { background: #eef1fe; color: var(--accent); font-weight: 600; }
+
+.kimi-cl .tab-link {
+  font-size: 13px; font-weight: 600; color: var(--muted); padding: 8px 2px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-right: 20px; background: none; border-top: none;
+  border-left: none; border-right: none;
+}
+.kimi-cl .tab-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.kimi-cl .chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px;
+}
+.kimi-cl .chip-green { background: #e7f8f0; color: #12b76a; }
+.kimi-cl .chip-gray { background: #f1f3f9; color: var(--muted); }
+.kimi-cl .chip-red { background: #feeeef; color: #f04438; }
+
+.kimi-cl .modal-overlay {
+  position: fixed; inset: 0; background: rgba(15,27,61,.35); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.kimi-cl .modal-card {
+  background: #fff; border-radius: 14px; width: 100%; max-width: 440px;
+  box-shadow: 0 20px 50px rgba(15,27,61,.2); overflow: hidden;
+}
+.kimi-cl .toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: #fff; font-size: 13px; font-weight: 600;
+  padding: 10px 18px; border-radius: 10px; z-index: 60;
+  box-shadow: 0 8px 24px rgba(15,27,61,.25);
+  display: flex; align-items: center; gap: 8px;
+}
+.kimi-cl .checkbox {
+  width: 16px; height: 16px; border: 1.5px solid #cdd3e6; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: #fff; flex-shrink: 0; transition: all .12s ease;
+}
+.kimi-cl .checkbox.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+.kimi-cl .checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kimi-cl .phone-frame {
+  width: 280px; border: 1px solid var(--border); border-radius: 28px; background: #fff;
+  padding: 14px; box-shadow: 0 12px 32px rgba(15,27,61,.08); flex-shrink: 0;
+}
+.kimi-cl .phone-bubble {
+  background: #f1f3f9; border-radius: 14px; border-bottom-left-radius: 4px;
+  padding: 10px 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink);
+}
+
+/* Responsive: narrow viewports */
+@media (max-width: 900px) {
+  .kimi-cl main { padding-left: 20px; padding-right: 20px; }
+  .kimi-cl .table-head, .kimi-cl .table-row { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .kimi-cl .hide-md { display: none !important; }
+}
+@media (max-width: 720px) {
+  .kimi-cl .grid-cols-3 { grid-template-columns: 1fr !important; }
+  .kimi-cl .hide-sm { display: none !important; }
+  .kimi-cl .toolbar-stack { flex-direction: column; align-items: stretch !important; }
+  .kimi-cl .toolbar-stack .input { width: 100% !important; }
+}

@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-24-14-892Z-fa1a11",
+  "targetRoute": "/settings/users",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:48:48.264Z",
+  "generatedFiles": [
+    "components/InviteUserPanel.tsx",
+    "components/PendingInvites.tsx",
+    "components/RolePermissions.tsx",
+    "components/SettingsTabs.tsx",
+    "components/TeamMemberRow.tsx",
+    "components/TeamMembersTable.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/InviteUserPanel.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/PendingInvites.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/RolePermissions.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/SettingsTabs.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/TeamMemberRow.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/TeamMembersTable.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/components/ui.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/mock-data.ts",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/page.tsx",
+    "src/kimi-drafts/settings-users/2026-09-06T20-24-14-892Z-fa1a11/reference.css"
+  ],
+  "status": "generated"
+}

@@ -1,0 +1,112 @@
+:root {
+  --background: #f7f8fa;
+  --foreground: #17181c;
+  --card: #ffffff;
+  --card-foreground: #17181c;
+  --primary: #5b5bd6;
+  --primary-foreground: #ffffff;
+  --muted: #f1f2f5;
+  --muted-foreground: #62646e;
+  --border: #e6e7ec;
+  --ring: #5b5bd6;
+  --radius: 0.75rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bg-card { background-color: var(--card); }
+.bg-muted { background-color: var(--muted); }
+.bg-primary { background-color: var(--primary); }
+.text-foreground { color: var(--foreground); }
+.text-muted-foreground { color: var(--muted-foreground); }
+.text-primary { color: var(--primary); }
+.border-border { border-color: var(--border); }
+
+.surface {
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(23, 24, 28, 0.04);
+}
+
+.font-display {
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.bar-track {
+  background: var(--muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  background: var(--primary);
+  border-radius: 999px;
+  height: 100%;
+  transition: width 300ms ease;
+}
+
+.chart-bar {
+  background: color-mix(in srgb, var(--primary) 78%, white);
+  border-radius: 4px 4px 0 0;
+  transition: height 250ms ease, background 150ms ease;
+}
+.chart-bar:hover {
+  background: var(--primary);
+}
+
+input[type="email"],
+select {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2362646e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+  cursor: pointer;
+}
+input[type="email"]:focus,
+select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+input[type="email"]::placeholder {
+  color: var(--muted-foreground);
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.45; }
+  100% { opacity: 1; }
+}
+.animate-pulse {
+  animation: shimmer 1.4s ease-in-out infinite;
+}

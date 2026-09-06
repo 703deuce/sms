@@ -61,6 +61,9 @@ public/voicemail/
 !.ui-agent/sessions/.gitkeep
 !.ui-agent/generated/.gitkeep
 !.ui-agent/batch/**
+.ui-agent/mode4/*.log
+.ui-agent/mode4/completion-screenshots/
+.ui-agent/mode4/last-job-standards/
 # Kimi source drafts in src/kimi-drafts/ are tracked (not ignored)
 .sms-visual-review/
 .v1-visual-review/

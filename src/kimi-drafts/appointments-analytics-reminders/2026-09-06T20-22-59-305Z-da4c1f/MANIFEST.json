@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T20-22-59-305Z-da4c1f",
+  "targetRoute": "/appointments/analytics/reminders",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:02:46.838Z",
+  "generatedFiles": [
+    "components/analytics-client.tsx",
+    "components/analytics-shell.tsx",
+    "components/metric-card.tsx",
+    "components/reminder-series-chart.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/components/analytics-client.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/components/analytics-shell.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/components/metric-card.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/components/reminder-series-chart.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/components/ui.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/mock-data.ts",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/page.tsx",
+    "src/kimi-drafts/appointments-analytics-reminders/2026-09-06T20-22-59-305Z-da4c1f/reference.css"
+  ],
+  "status": "generated"
+}

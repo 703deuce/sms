@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T20-20-06-510Z-be63c4",
+  "targetRoute": "/appointments/recalls",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:33:55.637Z",
+  "generatedFiles": [
+    "components/RecallActivityList.tsx",
+    "components/RecallActivityModal.tsx",
+    "components/RecallFeatureCard.tsx",
+    "components/RecallStatsRow.tsx",
+    "components/RecallsHub.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/components/RecallActivityList.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/components/RecallActivityModal.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/components/RecallFeatureCard.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/components/RecallStatsRow.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/components/RecallsHub.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/mock-data.ts",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/page.tsx",
+    "src/kimi-drafts/appointments-recalls/2026-09-06T20-20-06-510Z-be63c4/reference.css"
+  ],
+  "status": "generated"
+}

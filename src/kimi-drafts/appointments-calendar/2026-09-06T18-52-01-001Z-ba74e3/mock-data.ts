@@ -9,8 +9,10 @@ export type CalEvent = {
   timeLabel: string;
   title: string;
   name: string;
+  phone?: string;
   type: EventType;
   status: EventStatus;
+  hasVideo?: boolean;
 };
 
 export const TYPE_COLORS: Record<EventType, { label: string; dot: string; bg: string; border: string; text: string }> = {
@@ -37,16 +39,16 @@ export const WEEK_DAYS = [
 ];
 
 export const WEEK_EVENTS: CalEvent[] = [
-  { id: "1", day: 1, start: 9, duration: 1, timeLabel: "9:00 AM", title: "Initial Consultation", name: "Sarah Johnson", type: "consultation", status: "confirmed" },
-  { id: "2", day: 1, start: 13, duration: 0.5, timeLabel: "1:00 PM", title: "Discovery Call", name: "Marcus Lee", type: "call", status: "pending" },
-  { id: "3", day: 2, start: 10, duration: 0.5, timeLabel: "10:00 AM", title: "Follow-up Call", name: "Priya Patel", type: "followup", status: "confirmed" },
-  { id: "4", day: 2, start: 14, duration: 1, timeLabel: "2:00 PM", title: "Water Heater Estimate", name: "Tom Alvarez", type: "consultation", status: "confirmed" },
-  { id: "5", day: 3, start: 9, duration: 1, timeLabel: "9:00 AM", title: "Onboarding Session", name: "Emily Chen", type: "onboarding", status: "confirmed" },
-  { id: "6", day: 3, start: 11, duration: 0.5, timeLabel: "11:00 AM", title: "Rescheduled Consult", name: "Dan Wright", type: "consultation", status: "canceled" },
-  { id: "7", day: 3, start: 15, duration: 1, timeLabel: "3:00 PM", title: "Follow-up Visit", name: "Alicia Gomez", type: "followup", status: "pending" },
-  { id: "8", day: 4, start: 10, duration: 0.5, timeLabel: "10:00 AM", title: "Demo Call", name: "Jordan Kim", type: "call", status: "confirmed" },
-  { id: "9", day: 4, start: 13, duration: 1, timeLabel: "1:00 PM", title: "Quarterly Review", name: "Noah Smith", type: "consultation", status: "confirmed" },
-  { id: "10", day: 5, start: 11, duration: 0.5, timeLabel: "11:00 AM", title: "Onboarding Call", name: "Grace Miller", type: "onboarding", status: "pending" },
+  { id: "1", day: 1, start: 9, duration: 1, timeLabel: "9:00 AM", title: "Initial Consultation", name: "Sarah Johnson", phone: "(571) 555-0108", type: "consultation", status: "confirmed", hasVideo: true },
+  { id: "2", day: 1, start: 13, duration: 0.5, timeLabel: "1:00 PM", title: "Discovery Call", name: "Marcus Lee", phone: "(571) 555-0119", type: "call", status: "pending" },
+  { id: "3", day: 2, start: 10, duration: 0.5, timeLabel: "10:00 AM", title: "Follow-up Call", name: "Priya Patel", phone: "(571) 555-0131", type: "followup", status: "confirmed" },
+  { id: "4", day: 2, start: 14, duration: 1, timeLabel: "2:00 PM", title: "Water Heater Estimate", name: "Tom Alvarez", phone: "(571) 555-0167", type: "consultation", status: "confirmed" },
+  { id: "5", day: 3, start: 9, duration: 1, timeLabel: "9:00 AM", title: "Onboarding Session", name: "Emily Chen", phone: "(571) 555-0125", type: "onboarding", status: "confirmed", hasVideo: true },
+  { id: "6", day: 3, start: 11, duration: 0.5, timeLabel: "11:00 AM", title: "Rescheduled Consult", name: "Dan Wright", phone: "(571) 555-0173", type: "consultation", status: "canceled" },
+  { id: "7", day: 3, start: 15, duration: 1, timeLabel: "3:00 PM", title: "Follow-up Visit", name: "Alicia Gomez", phone: "(571) 555-0142", type: "followup", status: "pending", hasVideo: true },
+  { id: "8", day: 4, start: 10, duration: 0.5, timeLabel: "10:00 AM", title: "Demo Call", name: "Jordan Kim", phone: "(571) 555-0156", type: "call", status: "confirmed" },
+  { id: "9", day: 4, start: 13, duration: 1, timeLabel: "1:00 PM", title: "Quarterly Review", name: "Noah Smith", phone: "(571) 555-0189", type: "consultation", status: "confirmed", hasVideo: true },
+  { id: "10", day: 5, start: 11, duration: 0.5, timeLabel: "11:00 AM", title: "Onboarding Call", name: "Grace Miller", phone: "(571) 555-0194", type: "onboarding", status: "pending" },
 ];
 
 export const STATS = [
@@ -78,13 +80,12 @@ export const NEXT_APPOINTMENT = {
 export const MINI_MONTH = {
   monthLabel: "September 2026",
   days: [
-    // 6 weeks x 7; muted = prev/next month, selected day = 17, event days marked
     ...Array.from({ length: 31 }, (_, i) => ({ day: i + 1, muted: false })),
   ].map((d) => ({
     ...d,
     selected: d.day === 17,
     hasEvent: [1, 3, 8, 10, 14, 15, 16, 17, 18, 19, 22, 25, 29].includes(d.day),
   })),
-  leadMuted: [30, 31], // prev-month trailing days
+  leadMuted: [30, 31],
   trailMuted: [1, 2, 3],
 };

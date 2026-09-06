@@ -1,0 +1,37 @@
+{
+  "sessionId": "2026-09-06T20-25-08-968Z-54baa2",
+  "targetRoute": "/settings/billing",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:30:01.592Z",
+  "generatedFiles": [
+    "components/BillingSettingsPanel.tsx",
+    "components/BillingStatCards.tsx",
+    "components/CreditPurchaseCard.tsx",
+    "components/EstimateCard.tsx",
+    "components/InvoicesCard.tsx",
+    "components/LedgerCard.tsx",
+    "components/SettingsTabs.tsx",
+    "components/UsageTable.tsx",
+    "components/icons.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/BillingSettingsPanel.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/BillingStatCards.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/CreditPurchaseCard.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/EstimateCard.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/InvoicesCard.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/LedgerCard.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/SettingsTabs.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/UsageTable.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/components/icons.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/mock-data.ts",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/page.tsx",
+    "src/kimi-drafts/settings-billing/2026-09-06T20-25-08-968Z-54baa2/reference.css"
+  ],
+  "status": "generated"
+}

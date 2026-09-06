@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-21-02-303Z-8216a9",
+  "targetRoute": "/contacts/fields",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:54:00.881Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/ConfirmModal.tsx",
+    "components/ContactEdit.tsx",
+    "components/ContactsList.tsx",
+    "components/CreateFieldForm.tsx",
+    "components/CustomFieldsList.tsx",
+    "components/Sidebar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/AppShell.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/ConfirmModal.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/ContactEdit.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/ContactsList.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/CreateFieldForm.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/CustomFieldsList.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/components/Sidebar.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/mock-data.ts",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/page.tsx",
+    "src/kimi-drafts/contacts-fields/2026-09-06T20-21-02-303Z-8216a9/reference.css"
+  ],
+  "status": "generated"
+}

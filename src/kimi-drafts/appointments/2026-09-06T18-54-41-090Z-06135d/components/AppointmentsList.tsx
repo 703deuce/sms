@@ -12,6 +12,10 @@ import {
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import { RowActionsMenu } from "./RowActionsMenu";
 import { EmptyState } from "./EmptyState";
+import { NewAppointmentModal } from "./NewAppointmentModal";
+import { RescheduleModal } from "./RescheduleModal";
+import { CancelAppointmentModal } from "./CancelAppointmentModal";
+import { AppointmentPreview } from "./AppointmentPreview";
 
 function initials(name: string | null) {
   if (!name) return "?";
@@ -76,6 +80,9 @@ export function AppointmentsList({
   onRetry,
   onSimulateError,
   onSimulateEmpty,
+  onCreated,
+  onCanceled,
+  onRescheduled,
 }: {
   tab: string;
   onTabChange: (t: string) => void;
@@ -87,8 +94,15 @@ export function AppointmentsList({
   onRetry: () => void;
   onSimulateError: () => void;
   onSimulateEmpty: () => void;
+  onCreated: (row: AppointmentRow) => void;
+  onCanceled: (id: string) => void;
+  onRescheduled: (id: string, iso: string) => void;
 }) {
   const [toast, setToast] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [preview, setPreview] = useState<AppointmentRow | null>(null);
+  const [rescheduling, setRescheduling] = useState<AppointmentRow | null>(null);
+  const [canceling, setCanceling] = useState<AppointmentRow | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<string, AppointmentRow[]>();
@@ -103,14 +117,17 @@ export function AppointmentsList({
 
   const fire = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3200);
+    setTimeout(() => setToast(null), 3400);
   };
 
+  const openRow = (row: AppointmentRow) => setPreview(row);
+
   const onRowAction = (row: AppointmentRow, action: string) => {
-    if (action === "open") fire(`Opening ${row.inviteeName ?? "appointment"} — detail view`);
-    if (action === "message") fire(`Opening conversation with ${row.inviteeName ?? "customer"}`);
-    if (action === "reschedule") fire(`Reschedule flow started for ${row.inviteeName ?? "appointment"}`);
-    if (action === "cancel") fire(`Appointment canceled. Future reminders stopped and customer notified.`);
+    if (action === "open") openRow(row);
+    if (action === "message") fire(`Conversation with ${row.inviteeName ?? "customer"} opens in Messages → Inbox.`);
+    if (action === "reschedule") { setPreview(null); setRescheduling(row); }
+    if (action === "cancel") { setPreview(null); setCanceling(row); }
+    if (action === "full") fire(`Navigating to appointment detail — ${row.inviteeName ?? "appointment"} (full timeline, reminders, activity).`);
   };
 
   const tabCount = (id: string) => {
@@ -128,7 +145,7 @@ export function AppointmentsList({
           <p className="tv-subtitle">Operational list of booked events and their reminder status.</p>
         </div>
         <div className="tv-pageheader__actions">
-          <button type="button" className="tv-btn tv-btn--primary" onClick={() => fire("New appointment — fast-create form")}>
+          <button type="button" className="tv-btn tv-btn--primary" onClick={() => setNewOpen(true)}>
             <CalendarPlusIcon />
             New Appointment
           </button>
@@ -212,9 +229,9 @@ export function AppointmentsList({
             title="No appointments yet"
             description="Appointments appear here when customers book through your booking page or you add one manually."
             actionLabel="New Appointment"
-            onAction={() => fire("New appointment — fast-create form")}
+            onAction={() => setNewOpen(true)}
             secondaryLabel="Set up booking page"
-            onSecondary={() => fire("Booking → Booking Pages")}
+            onSecondary={() => fire("Booking → Booking Pages — create your public booking page.")}
           />
         </div>
       )}
@@ -226,7 +243,7 @@ export function AppointmentsList({
             title={q ? `No appointments match “${q}”` : "No appointments in this view"}
             description={q ? "Try a different name, phone number, email, or service." : "Try a different filter or create an appointment."}
             actionLabel={q ? "Clear search" : "New Appointment"}
-            onAction={() => (q ? onSearch("") : fire("New appointment — fast-create form"))}
+            onAction={() => (q ? onSearch("") : setNewOpen(true))}
             secondaryLabel={q ? undefined : "Clear filters"}
             onSecondary={q ? undefined : () => { onTabChange("all"); onSearch(""); }}
           />
@@ -258,9 +275,9 @@ export function AppointmentsList({
                     className="tv-rowgrid tv-row"
                     role="button"
                     tabIndex={0}
-                    onClick={() => onRowAction(row, "open")}
-                    onKeyDown={(e) => { if (e.key === "Enter") onRowAction(row, "open"); }}
-                    aria-label={`${name}, ${row.serviceName ?? "appointment"}, ${formatDay(row.startsAt, row.timezone)} at ${formatTime(row.startsAt, row.timezone)}`}
+                    onClick={() => openRow(row)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRow(row); } }}
+                    aria-label={`Open preview: ${name}, ${row.serviceName ?? "appointment"}, ${formatDay(row.startsAt, row.timezone)} at ${formatTime(row.startsAt, row.timezone)}`}
                   >
                     <div className="tv-cellcustomer">
                       <span className="tv-avatar" aria-hidden>{initials(row.inviteeName)}</span>
@@ -306,6 +323,27 @@ export function AppointmentsList({
         <button type="button" className="tv-linkbtn" onClick={onSimulateEmpty}>First-use empty</button>
         <button type="button" className="tv-linkbtn" onClick={onRetry}>Reload</button>
       </div>
+
+      {/* Subflows */}
+      <NewAppointmentModal
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        onCreated={(row) => { onCreated(row); fire(`Appointment created for ${row.inviteeName}. Confirmation and reminders scheduled.`); }}
+      />
+      <RescheduleModal
+        row={rescheduling}
+        onClose={() => setRescheduling(null)}
+        onRescheduled={(id, iso) => {
+          onRescheduled(id, iso);
+          fire(`Appointment rescheduled to ${formatDay(iso, null)} at ${formatTime(iso, null)}. Customer notified.`);
+        }}
+      />
+      <CancelAppointmentModal
+        row={canceling}
+        onClose={() => setCanceling(null)}
+        onCanceled={(id) => { onCanceled(id); fire("Appointment canceled. Future reminders stopped and customer notified."); }}
+      />
+      <AppointmentPreview row={preview} onClose={() => setPreview(null)} onAction={(a) => preview && onRowAction(preview, a)} />
 
       {toast && (
         <div className="tv-toast" role="status">

@@ -1,0 +1,143 @@
+/* Transovo Mode 4 — Contacts → Segments surface styles (sandbox) */
+
+:root {
+  --background: #f7f8fa;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --ring: #6366f1;
+  --radius: 0.5rem;
+}
+
+.kimi-surface,
+.seg-shell {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -0.02em; }
+
+/* Primary button */
+.seg-btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+.seg-btn-primary:hover { background: #4338ca; }
+.seg-btn-primary:disabled { opacity: 0.55; pointer-events: none; }
+
+/* Cards */
+.seg-card {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.seg-card-hover:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+/* Inputs */
+.seg-input {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.seg-input:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+/* Dropdown panels */
+.seg-dropdown {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+/* Fade-in */
+@keyframes segFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.seg-fade { animation: segFadeIn 160ms ease-out both; }
+
+/* Skeleton pulse */
+@keyframes segPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.seg-pulse { animation: segPulse 1.4s ease-in-out infinite; }
+
+/* Scrollbars */
+.seg-scroll::-webkit-scrollbar { width: 8px; }
+.seg-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+.seg-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Condition value chips */
+.seg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 9px;
+  border-radius: 9999px;
+  background: rgba(79, 70, 229, 0.08);
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid rgba(79, 70, 229, 0.18);
+}
+.seg-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  color: inherit;
+}
+.seg-chip button:hover { background: rgba(79, 70, 229, 0.16); }
+
+/* Condition group logic divider */
+.seg-logic-or,
+.seg-logic-and {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+.seg-logic-or::before,
+.seg-logic-or::after,
+.seg-logic-and::before,
+.seg-logic-and::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.seg-logic-or span,
+.seg-logic-and span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+}
+.seg-logic-and span { color: var(--primary); }
+
+/* Focus visibility */
+.seg-shell button:focus-visible,
+.seg-shell input:focus-visible,
+.seg-shell a:focus-visible,
+.seg-shell textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-fade { animation: none; }
+  .seg-pulse { animation: none; }
+  .seg-card-hover:hover { transform: none; }
+}

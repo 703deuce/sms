@@ -1,0 +1,437 @@
+.reminder-settings-page {
+  --rs-accent: #4f46e5;
+  --rs-accent-hover: #4338ca;
+  --rs-accent-soft: #eef2ff;
+  --rs-border: #e5e7eb;
+  --rs-border-subtle: #eef0f3;
+  --rs-text: #111827;
+  --rs-text-2: #4b5563;
+  --rs-text-3: #6b7280;
+  --rs-surface: #ffffff;
+  --rs-surface-2: #f9fafb;
+  font-family: inherit;
+}
+
+.reminder-settings-page .rs-card {
+  background: var(--rs-surface);
+  border: 1px solid var(--rs-border);
+  border-radius: 10px;
+}
+
+.reminder-settings-page .rs-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--rs-border-subtle);
+}
+
+.reminder-settings-page .rs-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--rs-accent-soft);
+  color: var(--rs-accent);
+  flex-shrink: 0;
+}
+
+.reminder-settings-page .rs-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: #f3f4f6;
+  color: var(--rs-text-2);
+  border: 1px solid var(--rs-border);
+  white-space: nowrap;
+}
+
+.reminder-settings-page .rs-badge-on {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.reminder-settings-page .rs-badge-off {
+  background: #f3f4f6;
+  color: var(--rs-text-3);
+  border-color: var(--rs-border);
+}
+
+.reminder-settings-page .rs-badge-info {
+  background: var(--rs-accent-soft);
+  color: var(--rs-accent);
+  border-color: #c7d2fe;
+}
+
+.reminder-settings-page .rs-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  border: 1px solid var(--rs-border);
+  color: var(--rs-text-2);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+.reminder-settings-page .rs-tag:hover {
+  background: var(--rs-accent-soft);
+  border-color: #c7d2fe;
+  color: var(--rs-accent);
+}
+
+.reminder-settings-page .rs-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  border: none;
+  background: #d1d5db;
+  cursor: pointer;
+  transition: background 150ms ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+.reminder-settings-page .rs-switch[aria-checked="true"] {
+  background: var(--rs-accent);
+}
+.reminder-settings-page .rs-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms ease;
+}
+.reminder-settings-page .rs-switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+}
+.reminder-settings-page .rs-switch:focus-visible {
+  outline: 2px solid var(--rs-accent);
+  outline-offset: 2px;
+}
+.reminder-settings-page .rs-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reminder-settings-page .rs-channel {
+  display: inline-flex;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.reminder-settings-page .rs-channel button {
+  border: none;
+  background: transparent;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  color: var(--rs-text-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 120ms ease;
+}
+.reminder-settings-page .rs-channel button[data-active="true"] {
+  background: #fff;
+  color: var(--rs-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.reminder-settings-page .rs-channel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reminder-settings-page .rs-template {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid var(--rs-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--rs-text);
+  background: #fff;
+  font-family: inherit;
+}
+.reminder-settings-page .rs-template:focus {
+  outline: 2px solid var(--rs-accent);
+  outline-offset: 0;
+  border-color: var(--rs-accent);
+}
+.reminder-settings-page .rs-template:disabled {
+  background: var(--rs-surface-2);
+  color: var(--rs-text-3);
+}
+
+.reminder-settings-page .rs-preview {
+  background: var(--rs-surface-2);
+  border: 1px solid var(--rs-border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--rs-text-2);
+}
+
+.reminder-settings-page .rs-input,
+.reminder-settings-page .rs-select {
+  height: 34px;
+  border: 1px solid var(--rs-border);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--rs-text);
+  background: #fff;
+}
+.reminder-settings-page .rs-input:focus,
+.reminder-settings-page .rs-select:focus {
+  outline: 2px solid var(--rs-accent);
+  outline-offset: 0;
+  border-color: var(--rs-accent);
+}
+.reminder-settings-page .rs-input:disabled,
+.reminder-settings-page .rs-select:disabled {
+  background: var(--rs-surface-2);
+  color: var(--rs-text-3);
+}
+
+.reminder-settings-page .rs-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--rs-text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.reminder-settings-page .rs-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--rs-accent);
+  cursor: pointer;
+}
+.reminder-settings-page .rs-check[data-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reminder-settings-page .reminder-card {
+  transition: border-color 150ms ease, opacity 150ms ease;
+}
+.reminder-settings-page .reminder-card[data-disabled="true"] {
+  opacity: 0.72;
+}
+
+.reminder-settings-page details.rs-advanced > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--rs-accent);
+  padding: 2px 0;
+}
+.reminder-settings-page details.rs-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.reminder-settings-page details.rs-advanced > summary:focus-visible {
+  outline: 2px solid var(--rs-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.reminder-settings-page details.rs-advanced > summary svg {
+  transition: transform 150ms ease;
+}
+.reminder-settings-page details.rs-advanced[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+/* ── Timeline (reminder schedule preview) ─────────────────── */
+.reminder-settings-page .rs-timeline {
+  position: relative;
+  margin: 4px 0 0;
+  padding: 0 0 0 26px;
+  list-style: none;
+}
+.reminder-settings-page .rs-timeline::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--rs-border);
+  border-radius: 2px;
+}
+.reminder-settings-page .rs-timeline-item {
+  position: relative;
+  padding: 9px 0;
+}
+.reminder-settings-page .rs-timeline-dot {
+  position: absolute;
+  left: -26px;
+  top: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 2px solid var(--rs-border);
+  color: var(--rs-text-3);
+}
+.reminder-settings-page .rs-timeline-item[data-state="delivered"] .rs-timeline-dot,
+.reminder-settings-page .rs-timeline-item[data-state="clicked"] .rs-timeline-dot,
+.reminder-settings-page .rs-timeline-item[data-state="opened"] .rs-timeline-dot {
+  border-color: #34d399;
+  background: #ecfdf5;
+  color: #047857;
+}
+.reminder-settings-page .rs-timeline-item[data-state="scheduled"] .rs-timeline-dot {
+  border-color: #c7d2fe;
+  background: var(--rs-accent-soft);
+  color: var(--rs-accent);
+}
+.reminder-settings-page .rs-timeline-item[data-state="regenerated"] .rs-timeline-dot {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+/* ── Status chips in timeline ─────────────────────────────── */
+.reminder-settings-page .rs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.reminder-settings-page .rs-chip-done {
+  background: #ecfdf5;
+  color: #047857;
+}
+.reminder-settings-page .rs-chip-scheduled {
+  background: var(--rs-accent-soft);
+  color: var(--rs-accent);
+}
+.reminder-settings-page .rs-chip-note {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+/* ── Banners ──────────────────────────────────────────────── */
+.reminder-settings-page .rs-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.reminder-settings-page .rs-banner-warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+.reminder-settings-page .rs-banner-info {
+  background: var(--rs-accent-soft);
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+}
+
+/* ── Calendar defaults ────────────────────────────────────── */
+.reminder-settings-page .rs-cal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--rs-border-subtle);
+}
+.reminder-settings-page .rs-cal-row:first-of-type {
+  border-top: none;
+}
+.reminder-settings-page .rs-step-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--rs-border);
+  background: #fff;
+  color: var(--rs-text-3);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.reminder-settings-page .rs-step-chip[data-on="true"] {
+  background: var(--rs-accent-soft);
+  border-color: #c7d2fe;
+  color: var(--rs-accent);
+}
+.reminder-settings-page .rs-step-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@keyframes rsPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.reminder-settings-page .rs-skel {
+  background: #eceef1;
+  border-radius: 8px;
+  animation: rsPulse 1.6s ease-in-out infinite;
+}
+
+/* ── Responsive reflow ────────────────────────────────────── */
+@media (max-width: 860px) {
+  .reminder-settings-page .rs-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .reminder-settings-page .rs-page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .reminder-settings-page .rs-page-head-actions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .reminder-settings-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .reminder-settings-page .rs-advanced-grid {
+    grid-template-columns: 1fr;
+  }
+  .reminder-settings-page .rs-cal-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

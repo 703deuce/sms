@@ -1,0 +1,11 @@
+{
+  "description": "Orchestration-only completion order for Stage E golden authority screens. Not used by the completion mode unless --status references this batch.",
+  "manifestIds": [
+    "appointments-calendar",
+    "booking-types",
+    "home",
+    "appointments-list",
+    "appointment-detail",
+    "workflow-builder"
+  ]
+}

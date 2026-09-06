@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T20-24-07-888Z-6a3334",
+  "targetRoute": "/settings/business",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T20:27:10.693Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/BusinessProfileCard.tsx",
+    "components/MessagingRegistrationCard.tsx",
+    "components/SettingsTabs.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/components/AppShell.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/components/BusinessProfileCard.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/components/MessagingRegistrationCard.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/components/SettingsTabs.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/components/ui.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/mock-data.ts",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/page.tsx",
+    "src/kimi-drafts/settings-business/2026-09-06T20-24-07-888Z-6a3334/reference.css"
+  ],
+  "status": "generated"
+}

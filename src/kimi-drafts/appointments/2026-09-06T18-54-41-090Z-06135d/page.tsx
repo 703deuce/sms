@@ -13,6 +13,7 @@ export default function ReferencePage() {
   const [q, setQ] = useState("");
   const [state, setState] = useState<LoadState>("loading");
   const [rows, setRows] = useState<AppointmentRow[]>([]);
+  const [local, setLocal] = useState<AppointmentRow[]>(MOCK_APPOINTMENTS);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Simulates GET /api/appointments?status|from|to&q=
@@ -23,7 +24,7 @@ export default function ReferencePage() {
       const now = Date.now();
       const start = new Date(); start.setHours(0, 0, 0, 0);
       const end = new Date(); end.setHours(23, 59, 59, 999);
-      let data = [...MOCK_APPOINTMENTS];
+      let data = [...local];
       if (tab === "today") {
         data = data.filter((r) => {
           const t = new Date(r.startsAt).getTime();
@@ -49,13 +50,25 @@ export default function ReferencePage() {
       setState("ready");
     }, 450);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [tab, q]);
+  }, [tab, q, local]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const r of MOCK_APPOINTMENTS) c[r.status] = (c[r.status] || 0) + 1;
+    for (const r of local) c[r.status] = (c[r.status] || 0) + 1;
     return c;
-  }, []);
+  }, [local]);
+
+  const handleCreated = (row: AppointmentRow) => setLocal((l) => [...l, row]);
+  const handleCanceled = (id: string) =>
+    setLocal((l) =>
+      l.map((r) =>
+        r.id === id
+          ? { ...r, status: "canceled", reminderStatus: "suppressed", metadata: { ...r.metadata, reminderSchedule: (r.metadata.reminderSchedule ?? []).map((s) => (s.state === "scheduled" ? { ...s, state: "suppressed" as const } : s)) } }
+          : r,
+      ),
+    );
+  const handleRescheduled = (id: string, startsAt: string) =>
+    setLocal((l) => l.map((r) => (r.id === id ? { ...r, startsAt, status: "scheduled" } : r)));
 
   return (
     <div className="tv-page">
@@ -70,6 +83,9 @@ export default function ReferencePage() {
         onRetry={() => setTab((t) => t)}
         onSimulateError={() => setState("error")}
         onSimulateEmpty={() => setState("empty")}
+        onCreated={handleCreated}
+        onCanceled={handleCanceled}
+        onRescheduled={handleRescheduled}
       />
     </div>
   );

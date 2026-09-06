@@ -765,7 +765,7 @@ export function buildMode4Manifest(): Mode4RebuildManifest {
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
-    maxConcurrentJobs: Number(process.env.MAX_CONCURRENT_KIMI_MODE4_JOBS || 10),
+    maxConcurrentJobs: Number(process.env.MAX_CONCURRENT_KIMI_MODE4_JOBS || 30),
     staggerMs: Number(process.env.KIMI_MODE4_STAGGER_MS || 5_000),
     entries: MODE4_REBUILD_ENTRIES,
   };

@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-06T20-22-54-745Z-1c15ac",
+  "targetRoute": "/appointments/automations/templates",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:32:43.720Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/SetupWizard.tsx",
+    "components/TemplateCard.tsx",
+    "components/TemplatesPage.tsx",
+    "components/WorkflowEditor.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/AppShell.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/SetupWizard.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/TemplateCard.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/TemplatesPage.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/WorkflowEditor.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/components/ui.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/mock-data.ts",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/page.tsx",
+    "src/kimi-drafts/appointments-automations-templates/2026-09-06T20-22-54-745Z-1c15ac/reference.css"
+  ],
+  "status": "generated"
+}

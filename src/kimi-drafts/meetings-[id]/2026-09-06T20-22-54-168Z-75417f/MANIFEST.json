@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T20-22-54-168Z-75417f",
+  "targetRoute": "/meetings/[id]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:35:16.778Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/MeetingDetailClient.tsx",
+    "components/MeetingSharePanel.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/components/AppShell.tsx",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/components/MeetingDetailClient.tsx",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/components/MeetingSharePanel.tsx",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/components/ui.tsx",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/mock-data.ts",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/page.tsx",
+    "src/kimi-drafts/meetings-[id]/2026-09-06T20-22-54-168Z-75417f/reference.css"
+  ],
+  "status": "generated"
+}

@@ -317,6 +317,31 @@ button { font-family: inherit; }
 .banner-title { font-weight: 700; color: #93370d; }
 .banner-text { color: #b54708; margin-top: 1px; }
 
+.banner-danger { border-color: #f3c1bc; background: var(--danger-soft); }
+.banner-neutral { border-color: var(--border); background: #f8f9fb; }
+
+/* ---------- Full-page states ---------- */
+.state-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 56px 32px;
+  text-align: center;
+  max-width: 520px;
+  margin: 48px auto;
+}
+.state-icon {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  background: #f2f4f7;
+  color: var(--text-secondary);
+  display: grid; place-items: center;
+  margin: 0 auto 14px;
+}
+.state-title { font-size: 17px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+.state-text { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 18px; }
+
 /* ---------- Modal ---------- */
 .modal-backdrop {
   position: fixed; inset: 0;

@@ -28,3 +28,46 @@
 .ref-chip-gray { background: #f2f4f7; color: #475467; }
 .ref-row-hover { transition: background-color .12s ease; cursor: pointer; }
 .ref-row-hover:hover { background: #f9fafb; }
+
+/* Responsive collapse */
+.ref-grid-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+.ref-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; margin-top: 20px; }
+.ref-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; margin-top: 20px; }
+@media (max-width: 1100px) {
+  .ref-grid-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .ref-grid-2, .ref-grid-3 { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 560px) {
+  .ref-grid-stats { grid-template-columns: minmax(0,1fr); }
+}
+
+/* Date picker panel */
+.ref-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 40;
+  width: 268px; background: #fff; border: 1px solid #e8eaf0; border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.06);
+  padding: 14px;
+}
+.ref-day {
+  display: flex; align-items: center; justify-content: center;
+  height: 32px; width: 32px; border-radius: 8px; border: none; background: none;
+  font-size: 12.5px; color: #344054; cursor: pointer;
+}
+.ref-day:hover:not(:disabled) { background: #eef2ff; color: #4f46e5; }
+.ref-day-today { border: 1px solid #c7d2fe; font-weight: 600; }
+.ref-day-active { background: #4f46e5 !important; color: #fff !important; font-weight: 600; }
+.ref-day:disabled { color: #d0d5dd; cursor: default; }
+
+/* Onboarding checklist */
+.ref-progress-track { height: 6px; border-radius: 999px; background: #eef2ff; overflow: hidden; }
+.ref-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6366f1, #4f46e5); transition: width .3s ease; }
+.ref-step-check {
+  display: flex; align-items: center; justify-content: center;
+  height: 22px; width: 22px; border-radius: 999px; flex-shrink: 0;
+}
+
+/* Empty state */
+.ref-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 36px 20px; text-align: center;
+}

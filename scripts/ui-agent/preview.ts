@@ -64,7 +64,10 @@ export function bundleReferencePreview(sessionId: string): string {
   return join(dir, "index.html");
 }
 
-export async function startPreviewServer(sessionId: string, port = 5174): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startPreviewServer(
+  sessionId: string,
+  port = 0,
+): Promise<{ url: string; close: () => Promise<void> }> {
   bundleReferencePreview(sessionId);
   const dir = generatedDirForSession(sessionId);
 
@@ -87,8 +90,17 @@ export async function startPreviewServer(sessionId: string, port = 5174): Promis
     res.end(readFileSync(abs));
   });
 
-  await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
-  const url = `http://127.0.0.1:${port}`;
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+  const url = `http://127.0.0.1:${boundPort}`;
   log("preview server", url);
   return {
     url,

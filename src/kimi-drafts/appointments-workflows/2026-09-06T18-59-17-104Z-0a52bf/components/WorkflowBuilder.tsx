@@ -2,10 +2,10 @@
 import React, { useMemo, useState } from "react";
 import {
   ArrowLeft, Bell, CalendarCheck, CheckCircle2, ChevronDown, ChevronUp, Copy, CreditCard,
-  FlaskConical, GripVertical, Mail, MessageSquare, Phone, Plus, Trash2, Users, Video, XCircle, Zap,
+  FlaskConical, Globe, GripVertical, Mail, MessageSquare, PauseCircle, Phone, Plus, Trash2, Users, Video, XCircle, Zap,
 } from "lucide-react";
 import {
-  APPOINTMENT_TYPES, TRIGGER_OPTIONS, describeTiming, triggerLabel,
+  APPOINTMENT_TYPES, TRIGGER_OPTIONS, conditionLabel, describeTiming, triggerLabel,
   type Channel, type WorkflowRecord, type WorkflowStep,
 } from "../mock-data";
 import { StepConfigModal } from "./StepConfigModal";
@@ -23,6 +23,16 @@ const CHANNEL_ICON: Record<Channel, React.ReactNode> = {
   sms: <MessageSquare className="h-4 w-4" />,
   email: <Mail className="h-4 w-4" />,
   voice: <Phone className="h-4 w-4" />,
+  webhook: <Globe className="h-4 w-4" />,
+  payment_link: <CreditCard className="h-4 w-4" />,
+};
+
+const CHANNEL_STYLE: Record<Channel, string> = {
+  sms: "bg-[#eff4ff] text-[#2547e0]",
+  email: "bg-[#f0fdf9] text-[#067647]",
+  voice: "bg-[#f4f3ff] text-[#5925dc]",
+  webhook: "bg-[#f0f9ff] text-[#026aa2]",
+  payment_link: "bg-[#fffaeb] text-[#b54708]",
 };
 
 function newStep(index: number): WorkflowStep {
@@ -56,6 +66,7 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [nameError, setNameError] = useState("");
 
+  const isPaused = initial?.status === "paused" && !initial.active;
   const dirty = true;
   const channels = useMemo(() => Array.from(new Set(steps.map((s) => s.channel))) as Channel[], [steps]);
   const triggerGroups = useMemo(() => {
@@ -90,7 +101,7 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
     onSaved({
       id: initial?.id || `wf_${Date.now()}`,
       name: name.trim(), trigger, channels, steps, active,
-      status: active ? "active" : "draft",
+      status: active ? "active" : isPaused ? "paused" : "draft",
       sourceType: initial?.sourceType || "custom",
       templateId: initial?.templateId,
       updatedAt: new Date().toISOString(),
@@ -105,7 +116,12 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
     await new Promise((r) => setTimeout(r, 900));
     setTestResult({
       to: "Sarah Johnson · (571) 555-0142",
-      steps: steps.filter((s) => s.enabled).map((s) => `${s.name} — would run ${describeTiming(s.timing).toLowerCase()}`),
+      steps: steps.filter((s) => s.enabled).map((s) => {
+        const cond = (s.conditions || []).length
+          ? ` — only if ${(s.conditions || []).map(conditionLabel).join(" and ").toLowerCase()}`
+          : "";
+        return `${s.name} — would run ${describeTiming(s.timing).toLowerCase()}${cond}`;
+      }),
     });
     setTesting(false);
   }
@@ -123,13 +139,25 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
           <p className="text-[11px] text-[var(--muted-foreground)]">{mode === "create" ? "New workflow" : "Editing"} · {steps.length} {steps.length === 1 ? "step" : "steps"}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <StatusChip tone={active ? "success" : "neutral"} dot>{active ? "Will activate on save" : "Draft"}</StatusChip>
+          <StatusChip tone={active ? "success" : isPaused ? "neutral" : "warning"} dot>
+            {active ? "Will activate on save" : isPaused ? "Paused" : "Draft"}
+          </StatusChip>
           <Button variant="outline" size="sm" onClick={testWorkflow} disabled={testing}>
             <FlaskConical className="h-3.5 w-3.5" /> {testing ? "Running test…" : "Test"}
           </Button>
           <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save workflow"}</Button>
         </div>
       </div>
+
+      {/* Paused banner */}
+      {isPaused && (
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-[#fedf89] bg-[var(--warning-bg)] px-5 py-2.5" role="status">
+          <PauseCircle className="h-4 w-4 shrink-0 text-[var(--warning)]" />
+          <p className="text-[13px] text-[#93370d]">
+            <strong>Paused — this workflow won't run until reactivated.</strong> You can keep editing; turn on “Active after save” to resume it.
+          </p>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Left config column */}
@@ -175,14 +203,21 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
               <p className="mt-1 text-xs leading-relaxed text-[var(--muted-foreground)]">
                 {active
                   ? "This workflow will run for matching appointments. Platform default reminders are skipped where this workflow is the source of truth."
-                  : "Saved as a draft. Nothing runs until you activate it."}
+                  : isPaused
+                    ? "Saving keeps this workflow paused. Turn this on to reactivate it."
+                    : "Saved as a draft. Nothing runs until you activate it."}
               </p>
             </div>
 
             <div className="rounded-lg bg-[#f8fafc] px-3.5 py-3 text-xs leading-relaxed text-[var(--muted-foreground)]">
               <p className="font-semibold text-[#344054]">Channels used</p>
-              <div className="mt-1.5 flex gap-1.5">{channels.map((c) => <ChannelBadge key={c} channel={c} />)}</div>
-              <p className="mt-2">Derived from your steps — add a voice or email step to include that channel.</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">{channels.map((c) => <ChannelBadge key={c} channel={c} />)}</div>
+              <p className="mt-2">Derived from your steps — add a voice, email, webhook, or payment-link step to include that channel.</p>
+            </div>
+
+            <div className="rounded-lg bg-[#f8fafc] px-3.5 py-3 text-xs leading-relaxed text-[var(--muted-foreground)]">
+              <p className="font-semibold text-[#344054]">Unknown replies</p>
+              <p className="mt-1">Replies this workflow doesn't recognize (anything other than YES confirmation) land in Messages as unread so your team can respond.</p>
             </div>
           </div>
         </aside>
@@ -212,16 +247,30 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, toast }: {
                   !s.enabled && "opacity-60")}>
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 cursor-grab text-[#cbd2dc]" aria-hidden="true"><GripVertical className="h-4 w-4" /></div>
-                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                      s.channel === "sms" ? "bg-[#eff4ff] text-[#2547e0]" : s.channel === "email" ? "bg-[#f0fdf9] text-[#067647]" : "bg-[#f4f3ff] text-[#5925dc]")}>
+                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", CHANNEL_STYLE[s.channel])}>
                       {CHANNEL_ICON[s.channel]}
                     </div>
                     <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setEditingStep(i)}>
                       <p className="truncate text-sm font-semibold tracking-tight">{s.name}</p>
                       <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{describeTiming(s.timing)}</p>
-                      {s.messageTemplate
-                        ? <p className="mt-1.5 line-clamp-2 rounded-md bg-[#f8fafc] px-2 py-1.5 text-xs leading-relaxed text-[#475467]">{s.messageTemplate}</p>
-                        : <p className="mt-1.5 text-xs font-medium text-[var(--warning)]">No message template yet — click to configure.</p>}
+                      {(s.conditions || []).length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {(s.conditions || []).map((c) => (
+                            <span key={c.id} className="rounded-md bg-[#f4f3ff] px-1.5 py-0.5 text-[11px] font-medium text-[#5925dc]">{conditionLabel(c)}</span>
+                          ))}
+                        </div>
+                      )}
+                      {s.action === "send_webhook" ? (
+                        <p className="mt-1.5 truncate rounded-md bg-[#f8fafc] px-2 py-1.5 font-mono text-[11px] text-[#475467]">{s.webhook?.url || "No URL configured — click to configure."}</p>
+                      ) : s.action === "create_payment_link" ? (
+                        <p className="mt-1.5 rounded-md bg-[#f8fafc] px-2 py-1.5 text-xs text-[#475467]">
+                          Payment link · {s.paymentLink?.amountSource === "fixed" ? `$${s.paymentLink.amount || "0.00"}` : s.paymentLink?.amountSource === "deposit" ? "booking type deposit" : "outstanding balance"}
+                        </p>
+                      ) : s.messageTemplate ? (
+                        <p className="mt-1.5 line-clamp-2 rounded-md bg-[#f8fafc] px-2 py-1.5 text-xs leading-relaxed text-[#475467]">{s.messageTemplate}</p>
+                      ) : (
+                        <p className="mt-1.5 text-xs font-medium text-[var(--warning)]">No message template yet — click to configure.</p>
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-2.5">

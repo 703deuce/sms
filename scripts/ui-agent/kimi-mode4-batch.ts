@@ -6,7 +6,7 @@
  *
  *   npm run ui:kimi-mode4 -- --status
  *   npm run ui:kimi-mode4 -- --stage golden
- *   npm run ui:kimi-mode4 -- --stage bulk --concurrency 10 --stagger-ms 5000
+ *   npm run ui:kimi-mode4 -- --stage bulk --concurrency 30 --stagger-ms 500
  *   npm run ui:kimi-mode4 -- --complete-pass   (opt-in second Kimi pass — off by default)
  *   npm run ui:kimi-mode4 -- --only appointments-calendar
  *   npm run ui:kimi-mode4 -- --contract-only --target /appointments/calendar
@@ -233,67 +233,83 @@ async function runOneJob(
   skipCompletePass: boolean,
   onSessionStarted: (sessionId: string) => void,
 ): Promise<void> {
-  await updateJob(entry.id, {
-    status: "running",
-    startedAt: new Date().toISOString(),
-    error: undefined,
-  });
+  const maxRateLimitRetries = Number(process.env.KIMI_MODE4_RATE_LIMIT_RETRIES || 4);
 
-  console.log(`\n[Mode4 ${jobIndex + 1}/${total}] ${entry.canonicalPath}`);
-  console.log(`  route: ${entry.route}`);
-  console.log(`  archetype: ${entry.archetype} | stage: ${entry.stage}`);
-  console.log(`  mode: single Kimi pass (no preview, no refinement)`);
+  for (let attempt = 0; attempt <= maxRateLimitRetries; attempt += 1) {
+    await updateJob(entry.id, {
+      status: "running",
+      startedAt: new Date().toISOString(),
+      error: undefined,
+    });
 
-  const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
-
-  try {
-    const sessionDirPath = join(UI_AGENT_DIR, "sessions");
-    writeStandardsPackArtifact(join(sessionDirPath, "..", "mode4", "last-job-standards"), loadStandardsPack());
-    const result = await runKimiCommand(
-      provider,
-      buildKimiOptions(entry, { onSessionStarted }),
-    );
-    if (!skipCompletePass) {
-      const gaps = auditSandboxCompleteness(result.sessionId, entry.route);
-      if (!gaps.complete) {
-        console.log(
-          `  completeness pass (${gaps.gaps.filter((g) => g.severity === "required").length} required gap(s))…`,
-        );
-        await runKimiCommand(
-          provider,
-          buildKimiOptions(entry, {
-            sessionId: result.sessionId,
-            complete: true,
-            maxPasses: 0,
-            onSessionStarted,
-          }),
-        );
-      }
+    console.log(`\n[Mode4 ${jobIndex + 1}/${total}] ${entry.canonicalPath}`);
+    console.log(`  route: ${entry.route}`);
+    console.log(`  archetype: ${entry.archetype} | stage: ${entry.stage}`);
+    console.log(`  mode: single Kimi pass (no preview, no refinement)`);
+    if (attempt > 0) {
+      console.log(`  retry: rate-limit backoff attempt ${attempt}/${maxRateLimitRetries}`);
     }
-    const manifest = assertKimiOutputPersisted(result.sessionId, entry.route);
-    const draftPath = draftDirForSession(result.sessionId, entry.route);
-    await updateJob(entry.id, {
-      status: "complete",
-      sessionId: result.sessionId,
-      draftPath,
-      persistedFiles: manifest.persistedFiles.length,
-      completedAt: new Date().toISOString(),
-      accepted: false,
-      requiredFeaturesPreserved: undefined,
-      backendHooksPreserved: undefined,
-    });
-    log("mode4 complete", `${entry.route} → ${result.sessionId}`);
-    console.log(`✓ ${entry.canonicalPath} → session ${result.sessionId}`);
-    console.log(`  SAVED → ${draftPath.replace(process.cwd() + "/", "")} (${manifest.persistedFiles.length} files)`);
-    console.log(`  Cursor: static review per Page Contract, then integrate to production route.`);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await updateJob(entry.id, {
-      status: "failed",
-      error: message,
-      completedAt: new Date().toISOString(),
-    });
-    console.error(`✗ ${entry.canonicalPath}: ${message}`);
+
+    const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
+
+    try {
+      const sessionDirPath = join(UI_AGENT_DIR, "sessions");
+      writeStandardsPackArtifact(join(sessionDirPath, "..", "mode4", "last-job-standards"), loadStandardsPack());
+      const result = await runKimiCommand(
+        provider,
+        buildKimiOptions(entry, { onSessionStarted }),
+      );
+      if (!skipCompletePass) {
+        const gaps = auditSandboxCompleteness(result.sessionId, entry.route);
+        if (!gaps.complete) {
+          console.log(
+            `  completeness pass (${gaps.gaps.filter((g) => g.severity === "required").length} required gap(s))…`,
+          );
+          await runKimiCommand(
+            provider,
+            buildKimiOptions(entry, {
+              sessionId: result.sessionId,
+              complete: true,
+              maxPasses: 0,
+              onSessionStarted,
+            }),
+          );
+        }
+      }
+      const manifest = assertKimiOutputPersisted(result.sessionId, entry.route);
+      const draftPath = draftDirForSession(result.sessionId, entry.route);
+      await updateJob(entry.id, {
+        status: "complete",
+        sessionId: result.sessionId,
+        draftPath,
+        persistedFiles: manifest.persistedFiles.length,
+        completedAt: new Date().toISOString(),
+        accepted: false,
+        requiredFeaturesPreserved: undefined,
+        backendHooksPreserved: undefined,
+      });
+      log("mode4 complete", `${entry.route} → ${result.sessionId}`);
+      console.log(`✓ ${entry.canonicalPath} → session ${result.sessionId}`);
+      console.log(`  SAVED → ${draftPath.replace(process.cwd() + "/", "")} (${manifest.persistedFiles.length} files)`);
+      console.log(`  Cursor: static review per Page Contract, then integrate to production route.`);
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const isRateLimited = /429|rate limit|too many requests/i.test(message);
+      if (isRateLimited && attempt < maxRateLimitRetries) {
+        const waitSec = Math.min(120, 15 * (attempt + 1));
+        console.warn(`  ⚠ rate limited — backing off ${waitSec}s before retry (${attempt + 1}/${maxRateLimitRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+        continue;
+      }
+      await updateJob(entry.id, {
+        status: "failed",
+        error: message,
+        completedAt: new Date().toISOString(),
+      });
+      console.error(`✗ ${entry.canonicalPath}: ${message}${isRateLimited ? " (rate limit)" : ""}`);
+      return;
+    }
   }
 }
 

@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T20-20-06-892Z-70dd28",
+  "targetRoute": "/contacts",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:36:56.047Z",
+  "generatedFiles": [
+    "components/ContactsList.tsx",
+    "components/CreateContact.tsx",
+    "components/ImportWizard.tsx",
+    "components/Modal.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/components/ContactsList.tsx",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/components/CreateContact.tsx",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/components/ImportWizard.tsx",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/components/Modal.tsx",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/mock-data.ts",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/page.tsx",
+    "src/kimi-drafts/contacts/2026-09-06T20-20-06-892Z-70dd28/reference.css"
+  ],
+  "status": "generated"
+}

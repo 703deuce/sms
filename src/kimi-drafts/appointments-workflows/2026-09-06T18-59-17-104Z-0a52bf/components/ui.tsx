@@ -42,7 +42,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (
     <input ref={ref} className={cn(
-      "flex h-10 w-full rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition-colors placeholder:text-[#98a2b3] focus:border-[var(--primary)] focus:ring-2 focus:ring-[#2547e033] disabled:bg-[#f2f4f7]",
+      "flex h-10 w-full rounded-[10px] border border-[var(--border)] bg-white px-3 text-sm shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition-colors placeholder:text-[#98a2b3] focus:border-[var(--primary)] focus:ring-2 focus:ring-[#2547e033] disabled:bg-[#f2f4f7] aria-[invalid=true]:border-[var(--danger)] aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-[#d92d2033]",
       className)} {...props} />
   ));
 Input.displayName = "Input";
@@ -53,7 +53,7 @@ export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLab
 
 export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn(
-    "flex min-h-24 w-full rounded-[10px] border border-[var(--border)] bg-white px-3 py-2.5 text-sm leading-relaxed shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition-colors placeholder:text-[#98a2b3] focus:border-[var(--primary)] focus:ring-2 focus:ring-[#2547e033]",
+    "flex min-h-24 w-full rounded-[10px] border border-[var(--border)] bg-white px-3 py-2.5 text-sm leading-relaxed shadow-[0_1px_2px_rgba(16,24,40,0.04)] outline-none transition-colors placeholder:text-[#98a2b3] focus:border-[var(--primary)] focus:ring-2 focus:ring-[#2547e033] aria-[invalid=true]:border-[var(--danger)]",
     className)} {...props} />;
 }
 
@@ -99,8 +99,15 @@ export function StatusChip({ tone = "neutral", children, dot }: { tone?: StatusT
 
 /* ---------- Channel badge ---------- */
 export function ChannelBadge({ channel }: { channel: string }) {
-  const map: Record<string, string> = { sms: "bg-[#eff4ff] text-[#2547e0]", email: "bg-[#f0fdf9] text-[#067647]", voice: "bg-[#f4f3ff] text-[#5925dc]" };
-  return <span className={cn("inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide", map[channel] || "bg-[#f2f4f7] text-[#475467]")}>{channel}</span>;
+  const map: Record<string, string> = {
+    sms: "bg-[#eff4ff] text-[#2547e0]",
+    email: "bg-[#f0fdf9] text-[#067647]",
+    voice: "bg-[#f4f3ff] text-[#5925dc]",
+    webhook: "bg-[#f0f9ff] text-[#026aa2]",
+    payment_link: "bg-[#fffaeb] text-[#b54708]",
+  };
+  const label = channel === "payment_link" ? "payment" : channel;
+  return <span className={cn("inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide", map[channel] || "bg-[#f2f4f7] text-[#475467]")}>{label}</span>;
 }
 
 /* ---------- Modal shell ---------- */

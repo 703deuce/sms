@@ -1,0 +1,35 @@
+{
+  "sessionId": "2026-09-06T20-23-16-084Z-fa5c51",
+  "targetRoute": "/integrations/calendars",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:04:29.250Z",
+  "generatedFiles": [
+    "components/CalendarIntegrationsCard.tsx",
+    "components/ConnectProviderCard.tsx",
+    "components/ConnectionRow.tsx",
+    "components/ConnectionSettings.tsx",
+    "components/InboundChannelsCard.tsx",
+    "components/ui/Button.tsx",
+    "components/ui/Tabs.tsx",
+    "components/ui/cn.ts",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/CalendarIntegrationsCard.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ConnectProviderCard.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ConnectionRow.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ConnectionSettings.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/InboundChannelsCard.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ui/Button.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ui/Tabs.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/components/ui/cn.ts",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/mock-data.ts",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/page.tsx",
+    "src/kimi-drafts/integrations-calendars/2026-09-06T20-23-16-084Z-fa5c51/reference.css"
+  ],
+  "status": "generated"
+}

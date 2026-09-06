@@ -5,6 +5,19 @@ export type AppointmentTypeQuestion = {
   required: boolean;
 };
 
+export type FormQuestion = {
+  id: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options: string[];
+};
+
+export type DurationOption = {
+  id: string;
+  minutes: number;
+};
+
 export type AppointmentTypeItem = {
   id: string;
   name: string;
@@ -25,7 +38,9 @@ export type AppointmentTypeItem = {
 export type AppointmentTypeFormState = {
   name: string;
   durationMinutes: number;
+  durationOptions: DurationOption[];
   bufferMinutes: number;
+  bufferAfterMinutes: number;
   description: string;
   location: string;
   locationId: string;
@@ -45,16 +60,37 @@ export type AppointmentTypeFormState = {
   groupBookingEnabled: boolean;
   groupCapacity: number;
   recurringEnabled: boolean;
+  recurringFrequencies: Array<"weekly" | "biweekly" | "monthly">;
   visibility: "public" | "unlisted" | "secret";
   bookingApprovalRequired: boolean;
+  bookingQuestions: FormQuestion[];
+  maxPerTypePerDay?: number;
+  redirectAfterBookingEnabled: boolean;
+  redirectAfterBookingUrl: string;
   namedScheduleId: string;
   ownerTeamId: string;
 };
 
+export const QUESTION_TYPES = [
+  { value: "text", label: "Short text" },
+  { value: "textarea", label: "Long text" },
+  { value: "phone", label: "Phone" },
+  { value: "email", label: "Email" },
+  { value: "number", label: "Number" },
+  { value: "select", label: "Dropdown" },
+  { value: "radio", label: "Single choice" },
+  { value: "multiselect", label: "Multiple choice" },
+  { value: "date", label: "Date" },
+];
+
+export const CHOICE_TYPES = ["select", "radio", "multiselect"];
+
 export const EMPTY_FORM: AppointmentTypeFormState = {
   name: "",
   durationMinutes: 30,
+  durationOptions: [],
   bufferMinutes: 0,
+  bufferAfterMinutes: 0,
   description: "",
   location: "",
   locationId: "",
@@ -72,10 +108,15 @@ export const EMPTY_FORM: AppointmentTypeFormState = {
   paymentProvider: "",
   paymentPriceCents: 0,
   groupBookingEnabled: false,
-  groupCapacity: 1,
+  groupCapacity: 4,
   recurringEnabled: false,
+  recurringFrequencies: ["weekly"],
   visibility: "public",
   bookingApprovalRequired: false,
+  bookingQuestions: [],
+  maxPerTypePerDay: undefined,
+  redirectAfterBookingEnabled: false,
+  redirectAfterBookingUrl: "",
   namedScheduleId: "ns1",
   ownerTeamId: "",
 };
@@ -96,8 +137,8 @@ export const APPOINTMENT_TYPES: AppointmentTypeItem[] = [
     bufferMin: 10,
     slug: "new-patient-exam",
     questions: [
-      { id: "q1", label: "Do you have dental insurance?", type: "Radio", required: true },
-      { id: "q2", label: "Anything we should know before your visit?", type: "Long text", required: false },
+      { id: "q1", label: "Do you have dental insurance?", type: "radio", required: true },
+      { id: "q2", label: "Anything we should know before your visit?", type: "textarea", required: false },
     ],
   },
   {
@@ -130,7 +171,7 @@ export const APPOINTMENT_TYPES: AppointmentTypeItem[] = [
     location: "Video call",
     bufferMin: 0,
     slug: "whitening-consultation",
-    questions: [{ id: "q3", label: "Current whitening products used?", type: "Short text", required: false }],
+    questions: [{ id: "q3", label: "Current whitening products used?", type: "text", required: false }],
   },
   {
     id: "t4",
@@ -146,7 +187,7 @@ export const APPOINTMENT_TYPES: AppointmentTypeItem[] = [
     location: "Main Office",
     bufferMin: 0,
     slug: "emergency-visit",
-    questions: [{ id: "q4", label: "Describe your symptoms", type: "Long text", required: true }],
+    questions: [{ id: "q4", label: "Describe your symptoms", type: "textarea", required: true }],
   },
   {
     id: "t5",

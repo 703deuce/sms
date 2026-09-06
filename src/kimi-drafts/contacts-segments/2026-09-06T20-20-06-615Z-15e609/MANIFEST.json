@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-20-06-615Z-15e609",
+  "targetRoute": "/contacts/segments",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:35:50.749Z",
+  "generatedFiles": [
+    "components/AudienceSubNav.tsx",
+    "components/ConditionRow.tsx",
+    "components/CreateSegment.tsx",
+    "components/Dashboard.tsx",
+    "components/SegmentContacts.tsx",
+    "components/SegmentSavedModal.tsx",
+    "components/SegmentsList.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/AudienceSubNav.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/ConditionRow.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/CreateSegment.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/Dashboard.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/SegmentContacts.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/SegmentSavedModal.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/components/SegmentsList.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/mock-data.ts",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/page.tsx",
+    "src/kimi-drafts/contacts-segments/2026-09-06T20-20-06-615Z-15e609/reference.css"
+  ],
+  "status": "generated"
+}

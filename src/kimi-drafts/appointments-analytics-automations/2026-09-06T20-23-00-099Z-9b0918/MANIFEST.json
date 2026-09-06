@@ -1,0 +1,31 @@
+{
+  "sessionId": "2026-09-06T20-23-00-099Z-9b0918",
+  "targetRoute": "/appointments/analytics/automations",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:33:30.862Z",
+  "generatedFiles": [
+    "components/AnalyticsAutomations.tsx",
+    "components/AnalyticsShell.tsx",
+    "components/MetricCard.tsx",
+    "components/ScheduleReportCard.tsx",
+    "components/States.tsx",
+    "components/WorkflowPerformanceTable.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/AnalyticsAutomations.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/AnalyticsShell.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/MetricCard.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/ScheduleReportCard.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/States.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/components/WorkflowPerformanceTable.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/mock-data.ts",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/page.tsx",
+    "src/kimi-drafts/appointments-analytics-automations/2026-09-06T20-23-00-099Z-9b0918/reference.css"
+  ],
+  "status": "generated"
+}

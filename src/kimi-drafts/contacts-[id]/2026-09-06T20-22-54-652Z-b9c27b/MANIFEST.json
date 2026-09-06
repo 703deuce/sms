@@ -1,0 +1,39 @@
+{
+  "sessionId": "2026-09-06T20-22-54-652Z-b9c27b",
+  "targetRoute": "/contacts/[id]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:50:59.616Z",
+  "generatedFiles": [
+    "components/AppShell.tsx",
+    "components/ClickToCallButton.tsx",
+    "components/ConnectedRecordsPanel.tsx",
+    "components/ContactActivityTimeline.tsx",
+    "components/ContactAppointmentsPanel.tsx",
+    "components/ContactBookingActions.tsx",
+    "components/ContactHeader.tsx",
+    "components/ContactProfileCard.tsx",
+    "components/ContactProfileEdit.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/AppShell.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ClickToCallButton.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ConnectedRecordsPanel.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactActivityTimeline.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactAppointmentsPanel.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactBookingActions.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactHeader.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactProfileCard.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ContactProfileEdit.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/components/ui.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/mock-data.ts",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/page.tsx",
+    "src/kimi-drafts/contacts-[id]/2026-09-06T20-22-54-652Z-b9c27b/reference.css"
+  ],
+  "status": "generated"
+}

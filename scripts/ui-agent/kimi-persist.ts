@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSyn
 import { dirname, join, relative } from "node:path";
 import { KIMI_DRAFTS_DIR, REPO_ROOT } from "./config";
 import { generatedDirForSession, listGeneratedFiles } from "./generated-sandbox";
+import { writeGeneratedFiles } from "./generated-sandbox";
 import { log } from "./logger";
 
 export type KimiPersistManifest = {
@@ -167,4 +168,38 @@ export function promoteExistingSandboxes(targetRouteBySession?: Record<string, s
     count += 1;
   }
   return count;
+}
+
+export type DraftSourceFile = { path: string; content: string };
+
+/** Read all source files from a persisted draft directory. */
+export function readAllDraftSources(draftDir: string): DraftSourceFile[] {
+  const absDraft = draftDir.startsWith(REPO_ROOT) ? draftDir : join(REPO_ROOT, draftDir);
+  if (!existsSync(absDraft)) {
+    throw new Error(`Draft directory not found: ${draftDir}`);
+  }
+
+  const out: DraftSourceFile[] = [];
+  function walk(dir: string, prefix = ""): void {
+    for (const entry of readdirSync(dir)) {
+      const abs = join(dir, entry);
+      const rel = prefix ? `${prefix}/${entry}` : entry;
+      if (statSync(abs).isDirectory()) {
+        walk(abs, rel);
+      } else if (isPersistableSource(rel) || rel === "MANIFEST.json") {
+        out.push({ path: rel, content: readFileSync(abs, "utf8") });
+      }
+    }
+  }
+  walk(absDraft);
+  return out;
+}
+
+/** Copy draft sources into the ephemeral sandbox so revise/completion passes can run. */
+export function seedSandboxFromDraft(sessionId: string, draftDir: string): string[] {
+  const sources = readAllDraftSources(draftDir).filter((f) => f.path !== "MANIFEST.json");
+  if (sources.length === 0) {
+    throw new Error(`No source files in draft: ${draftDir}`);
+  }
+  return writeGeneratedFiles(sessionId, sources);
 }

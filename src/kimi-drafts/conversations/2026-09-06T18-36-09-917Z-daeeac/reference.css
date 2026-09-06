@@ -1,0 +1,56 @@
+.tv-sidebar {
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tv-nav-item {
+  position: relative;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tv-nav-item:hover {
+  background-color: rgba(99, 102, 241, 0.06);
+}
+
+.tv-nav-item.active {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+  font-weight: 500;
+}
+
+.tv-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 9999px;
+  background: #4f46e5;
+}
+
+.tv-icon-btn {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.tv-icon-btn:hover {
+  background-color: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.tv-icon-btn.active {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
+.tv-credits-bar {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.15);
+  overflow: hidden;
+}
+
+.tv-credits-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #6366f1, #4f46e5);
+}

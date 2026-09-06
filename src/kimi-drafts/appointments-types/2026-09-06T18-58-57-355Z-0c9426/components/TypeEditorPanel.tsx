@@ -1,8 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Info, CreditCard, Users, CalendarClock, HelpCircle, Loader2 } from "lucide-react";
-import type { AppointmentTypeFormState } from "../mock-data";
+import {
+  ChevronDown,
+  Info,
+  CreditCard,
+  Users,
+  CalendarClock,
+  HelpCircle,
+  Loader2,
+  Eye,
+  Repeat,
+  Link2,
+} from "lucide-react";
+import QuestionsBuilder from "./QuestionsBuilder";
+import type { AppointmentTypeFormState, DurationOption } from "../mock-data";
 
 type Option = { id: string; name: string };
 
@@ -20,9 +32,17 @@ type Props = {
   onFormChange: <K extends keyof AppointmentTypeFormState>(key: K, value: AppointmentTypeFormState[K]) => void;
   onSave: () => void;
   onCancel: () => void;
+  onDeleteRequest: () => void;
+  onEditSchedule: () => void;
 };
 
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
+
+const VISIBILITY_HELPERS: Record<AppointmentTypeFormState["visibility"], string> = {
+  public: "Listed on your public booking page. Anyone with your page link can book.",
+  unlisted: "Hidden from your booking page. Only people with the direct type link can book.",
+  secret: "Link includes a private key. Share it only with specific customers.",
+};
 
 function Section({
   icon,
@@ -102,15 +122,29 @@ export default function TypeEditorPanel({
   locationOptions,
   connectedPaymentProviders,
   namedScheduleOptions,
-  teamGroupOptions,
   onFormChange,
   onSave,
   onCancel,
+  onDeleteRequest,
+  onEditSchedule,
 }: Props) {
+  const durationChoices = form.durationOptions.map((d) => d.minutes);
+
+  const toggleDurationOption = (minutes: number) => {
+    const exists = durationChoices.includes(minutes);
+    const next: DurationOption[] = exists
+      ? form.durationOptions.filter((d) => d.minutes !== minutes)
+      : [...form.durationOptions, { id: `d${minutes}`, minutes }].sort((a, b) => a.minutes - b.minutes);
+    onFormChange("durationOptions", next);
+    if (!exists && form.durationOptions.length === 0) {
+      onFormChange("durationMinutes", minutes);
+    }
+  };
+
   return (
     <div className="panel animate-in">
       {/* Editor header */}
-      <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-[#ecedf2]">
+      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-[#ecedf2]">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold text-[#1a1d29]">
             {isCreating ? "New booking type" : form.name || "Edit booking type"}
@@ -182,13 +216,63 @@ export default function TypeEditorPanel({
           </div>
           <div>
             <label className="field-label" htmlFor="bt-buffer">
-              Buffer
+              Buffer before
             </label>
             <select
               id="bt-buffer"
               className="field-input"
               value={form.bufferMinutes}
               onChange={(e) => onFormChange("bufferMinutes", Number(e.target.value))}
+            >
+              {[0, 5, 10, 15, 30].map((b) => (
+                <option key={b} value={b}>
+                  {b === 0 ? "None" : `${b} min`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Multiple durations + buffer after */}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-4">
+          <div>
+            <span className="field-label">Duration options customers can choose</span>
+            <div className="flex flex-wrap gap-1.5">
+              {DURATIONS.map((d) => {
+                const on = durationChoices.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={on}
+                    className={`h-7.5 px-2.5 rounded-lg border text-[12px] font-medium transition-colors ${
+                      on
+                        ? "border-[#4f46e5] bg-[#eef0fd] text-[#4f46e5]"
+                        : "border-[#e4e6ee] bg-white text-[#667085] hover:bg-[#f7f8fb]"
+                    }`}
+                    style={{ height: 30 }}
+                    onClick={() => toggleDurationOption(d)}
+                  >
+                    {d} min
+                  </button>
+                );
+              })}
+            </div>
+            <p className="field-hint">
+              {durationChoices.length === 0
+                ? "Customers always book the default duration above."
+                : `Customers pick from ${durationChoices.length} duration${durationChoices.length === 1 ? "" : "s"} on your booking page.`}
+            </p>
+          </div>
+          <div>
+            <label className="field-label" htmlFor="bt-buffer-after">
+              Buffer after
+            </label>
+            <select
+              id="bt-buffer-after"
+              className="field-input"
+              value={form.bufferAfterMinutes}
+              onChange={(e) => onFormChange("bufferAfterMinutes", Number(e.target.value))}
             >
               {[0, 5, 10, 15, 30].map((b) => (
                 <option key={b} value={b}>
@@ -236,19 +320,48 @@ export default function TypeEditorPanel({
             <label className="field-label" htmlFor="bt-schedule">
               Availability schedule
             </label>
+            <div className="flex items-center gap-2">
+              <select
+                id="bt-schedule"
+                className="field-input flex-1"
+                value={form.namedScheduleId}
+                onChange={(e) => onFormChange("namedScheduleId", e.target.value)}
+              >
+                {namedScheduleOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary shrink-0 h-9 px-3 rounded-lg text-[12.5px] font-medium"
+                onClick={onEditSchedule}
+              >
+                Edit hours
+              </button>
+            </div>
+            <p className="field-hint">Using {namedScheduleOptions.find((s) => s.id === form.namedScheduleId)?.name ?? "Standard Hours"} · Mon–Fri 9:00 AM – 5:00 PM ET</p>
+          </div>
+        </div>
+
+        {/* Visibility */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="field-label" htmlFor="bt-visibility">
+              Visibility
+            </label>
             <select
-              id="bt-schedule"
+              id="bt-visibility"
               className="field-input"
-              value={form.namedScheduleId}
-              onChange={(e) => onFormChange("namedScheduleId", e.target.value)}
+              value={form.visibility}
+              onChange={(e) => onFormChange("visibility", e.target.value as AppointmentTypeFormState["visibility"])}
             >
-              {namedScheduleOptions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
+              <option value="public">Public</option>
+              <option value="unlisted">Unlisted</option>
+              <option value="secret">Secret link</option>
             </select>
-            <p className="field-hint">Using Standard Hours · Mon–Fri 9:00 AM – 5:00 PM ET</p>
+            <p className="field-hint">{VISIBILITY_HELPERS[form.visibility]}</p>
           </div>
         </div>
 
@@ -274,10 +387,16 @@ export default function TypeEditorPanel({
                   onChange={(e) => onFormChange("staffAssignment", e.target.value as AppointmentTypeFormState["staffAssignment"])}
                 >
                   <option value="any_eligible">Any eligible staff member</option>
-                  <option value="specific">Specific staff</option>
-                  <option value="round_robin">Round robin</option>
-                  <option value="collective">Collective (all hosts required)</option>
+                  <option value="specific">Specific staff — customer chooses host</option>
+                  <option value="round_robin">Round robin — distribute evenly</option>
+                  <option value="collective">Collective — all hosts required</option>
                 </select>
+                {form.staffAssignment === "round_robin" ? (
+                  <p className="field-hint">Each new booking is assigned to the host with the fewest recent bookings.</p>
+                ) : null}
+                {form.staffAssignment === "collective" ? (
+                  <p className="field-hint">Customers only see times when every selected host is free.</p>
+                ) : null}
               </div>
               {form.staffAssignment !== "any_eligible" ? (
                 <div className="space-y-1.5 animate-in">
@@ -379,6 +498,22 @@ export default function TypeEditorPanel({
                   <option value="not_allowed">Not allowed</option>
                 </select>
               </div>
+              <div>
+                <label className="field-label" htmlFor="bt-maxday">
+                  Max bookings per day (this type)
+                </label>
+                <input
+                  id="bt-maxday"
+                  className="field-input"
+                  inputMode="numeric"
+                  placeholder="No limit"
+                  value={form.maxPerTypePerDay ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, "");
+                    onFormChange("maxPerTypePerDay", raw === "" ? undefined : Number(raw));
+                  }}
+                />
+              </div>
               <div className="sm:col-span-2">
                 <ToggleRow
                   label="Require booking approval"
@@ -387,6 +522,79 @@ export default function TypeEditorPanel({
                   onChange={(v) => onFormChange("bookingApprovalRequired", v)}
                 />
               </div>
+            </div>
+          </Section>
+
+          <Section
+            icon={<Users size={15} />}
+            title="Group & recurring"
+            description="Seat capacity for group sessions and repeat bookings."
+          >
+            <div className="pt-3 space-y-1">
+              <ToggleRow
+                label="Group booking"
+                hint="Multiple customers can book the same time slot."
+                checked={form.groupBookingEnabled}
+                onChange={(v) => onFormChange("groupBookingEnabled", v)}
+              />
+              {form.groupBookingEnabled ? (
+                <div className="pt-2 pb-1 animate-in max-w-[220px]">
+                  <label className="field-label" htmlFor="bt-capacity">
+                    Seats per slot
+                  </label>
+                  <input
+                    id="bt-capacity"
+                    className="field-input"
+                    inputMode="numeric"
+                    value={form.groupCapacity}
+                    onChange={(e) => {
+                      const n = Number(e.target.value.replace(/[^0-9]/g, ""));
+                      onFormChange("groupCapacity", Number.isFinite(n) && n > 0 ? n : 1);
+                    }}
+                  />
+                  <p className="field-hint">Each slot stays open until all seats are taken.</p>
+                </div>
+              ) : null}
+              <hr className="section-divider !my-3" />
+              <ToggleRow
+                label="Recurring bookings"
+                hint="Customers can book a repeating series in one flow."
+                checked={form.recurringEnabled}
+                onChange={(v) => onFormChange("recurringEnabled", v)}
+              />
+              {form.recurringEnabled ? (
+                <div className="pt-2 pb-1 animate-in">
+                  <span className="field-label">Allowed frequencies</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["weekly", "biweekly", "monthly"] as const).map((f) => {
+                      const on = form.recurringFrequencies.includes(f);
+                      return (
+                        <button
+                          key={f}
+                          type="button"
+                          aria-pressed={on}
+                          className={`h-7.5 px-2.5 rounded-lg border text-[12px] font-medium transition-colors ${
+                            on
+                              ? "border-[#4f46e5] bg-[#eef0fd] text-[#4f46e5]"
+                              : "border-[#e4e6ee] bg-white text-[#667085] hover:bg-[#f7f8fb]"
+                          }`}
+                          style={{ height: 30 }}
+                          onClick={() =>
+                            onFormChange(
+                              "recurringFrequencies",
+                              on
+                                ? form.recurringFrequencies.filter((x) => x !== f)
+                                : [...form.recurringFrequencies, f],
+                            )
+                          }
+                        >
+                          {f === "biweekly" ? "Every 2 weeks" : f.charAt(0).toUpperCase() + f.slice(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </Section>
 
@@ -469,13 +677,40 @@ export default function TypeEditorPanel({
             title="Customer questions"
             description="Ask customers for details when they book."
           >
-            <div className="pt-3">
-              <p className="text-[12.5px] text-[#8a8fa3]">
-                Name, phone, and email are always collected. Add custom questions for this service.
-              </p>
-              <button type="button" className="btn-secondary mt-3 h-8.5 px-3.5 rounded-lg text-[13px] font-medium">
-                Add question
-              </button>
+            <QuestionsBuilder
+              questions={form.bookingQuestions}
+              onChange={(qs) => onFormChange("bookingQuestions", qs)}
+            />
+          </Section>
+
+          <Section
+            icon={<Link2 size={15} />}
+            title="After booking"
+            description="Confirmation content and post-booking redirect."
+          >
+            <div className="pt-3 space-y-1">
+              <ToggleRow
+                label="Redirect customers after booking"
+                hint="Send customers to your own page instead of the default confirmation."
+                checked={form.redirectAfterBookingEnabled}
+                onChange={(v) => onFormChange("redirectAfterBookingEnabled", v)}
+              />
+              {form.redirectAfterBookingEnabled ? (
+                <div className="pt-2 pb-1 animate-in">
+                  <label className="field-label" htmlFor="bt-redirect">
+                    Redirect URL
+                  </label>
+                  <input
+                    id="bt-redirect"
+                    className="field-input"
+                    inputMode="url"
+                    placeholder="https://yoursite.com/thank-you"
+                    value={form.redirectAfterBookingUrl}
+                    onChange={(e) => onFormChange("redirectAfterBookingUrl", e.target.value)}
+                  />
+                  <p className="field-hint">Appointment details are appended as query parameters.</p>
+                </div>
+              ) : null}
             </div>
           </Section>
         </div>
@@ -490,6 +725,7 @@ export default function TypeEditorPanel({
             <button
               type="button"
               className="mt-3 h-8.5 px-3.5 rounded-lg border border-[#fecdca] bg-white text-[13px] font-medium text-[#d92d20] hover:bg-[#fffbfa] transition-colors"
+              onClick={onDeleteRequest}
             >
               Delete booking type
             </button>

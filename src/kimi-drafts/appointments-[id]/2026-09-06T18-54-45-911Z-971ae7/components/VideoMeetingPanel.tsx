@@ -1,11 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Video } from "lucide-react";
+import { Copy, Video, VideoOff } from "lucide-react";
 import { Button, Card, StatusBadge } from "./ui";
 import { videoMeeting } from "../mock-data";
 
-export function VideoMeetingPanel({ onCopied }: { onCopied: () => void }) {
+export function VideoMeetingPanel({
+  provisioned = true,
+  onCopied,
+}: {
+  provisioned?: boolean;
+  onCopied: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copyGuestLink() {
@@ -17,6 +23,27 @@ export function VideoMeetingPanel({ onCopied }: { onCopied: () => void }) {
     setCopied(true);
     onCopied();
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  if (!provisioned) {
+    return (
+      <Card
+        title={
+          <>
+            <VideoOff size={15} className="muted" /> Transovo Video
+          </>
+        }
+      >
+        <p className="muted small" style={{ margin: 0, lineHeight: 1.6 }}>
+          No video room is linked to this appointment. Transovo Video isn’t provisioned
+          for this booking type — enable it in the booking type’s settings to automatically
+          create a room for future bookings.
+        </p>
+        <Button size="sm" variant="outline" style={{ marginTop: 12 }} onClick={() => onCopied()}>
+          Set up Transovo Video
+        </Button>
+      </Card>
+    );
   }
 
   return (

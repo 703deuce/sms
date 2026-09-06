@@ -4,11 +4,15 @@
   "referenceNames": [
     "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
   ],
-  "generatedAt": "2026-09-06T19:04:27.364Z",
+  "generatedAt": "2026-09-06T20:05:59.474Z",
   "generatedFiles": [
+    "components/BookingPageModal.tsx",
     "components/BulkEditPanel.tsx",
+    "components/DeleteTypeModal.tsx",
     "components/EmptyState.tsx",
     "components/PreviewPanel.tsx",
+    "components/QuestionsBuilder.tsx",
+    "components/ScheduleModal.tsx",
     "components/StatusPanel.tsx",
     "components/TypeEditorPanel.tsx",
     "components/TypeListPanel.tsx",
@@ -17,9 +21,13 @@
     "reference.css"
   ],
   "persistedFiles": [
+    "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/BookingPageModal.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/BulkEditPanel.tsx",
+    "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/DeleteTypeModal.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/EmptyState.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/PreviewPanel.tsx",
+    "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/QuestionsBuilder.tsx",
+    "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/ScheduleModal.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/StatusPanel.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/TypeEditorPanel.tsx",
     "src/kimi-drafts/appointments-types/2026-09-06T18-58-57-355Z-0c9426/components/TypeListPanel.tsx",

@@ -1,0 +1,29 @@
+{
+  "sessionId": "2026-09-06T21-15-17-615Z-80f2d3",
+  "targetRoute": "/appointments/routing-forms",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:04:10.869Z",
+  "generatedFiles": [
+    "components/FormEditor.tsx",
+    "components/FormListPanel.tsx",
+    "components/PreviewModal.tsx",
+    "components/RoutingFormsClient.tsx",
+    "components/RuleEditor.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/components/FormEditor.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/components/FormListPanel.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/components/PreviewModal.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/components/RoutingFormsClient.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/components/RuleEditor.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/mock-data.ts",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/page.tsx",
+    "src/kimi-drafts/appointments-routing-forms/2026-09-06T21-15-17-615Z-80f2d3/reference.css"
+  ],
+  "status": "generated"
+}

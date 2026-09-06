@@ -1,0 +1,137 @@
+:root {
+  --background: #f7f8fa;
+  --foreground: #101828;
+  --card: #ffffff;
+  --muted: #f2f4f7;
+  --muted-foreground: #667085;
+  --border: #e4e7ec;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-foreground: #ffffff;
+  --ring: #4f46e5;
+}
+
+.kimi-surface {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.kimi-surface .font-display {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.kimi-surface .bg-background { background: var(--background); }
+.kimi-surface .bg-card { background: var(--card); }
+.kimi-surface .bg-muted { background: var(--muted); }
+.kimi-surface .bg-primary { background: var(--primary); }
+.kimi-surface .text-foreground { color: var(--foreground); }
+.kimi-surface .text-muted-foreground { color: var(--muted-foreground); }
+.kimi-surface .text-primary { color: var(--primary); }
+.kimi-surface .text-primary-foreground { color: var(--primary-foreground); }
+.kimi-surface .border-border { border-color: var(--border); }
+.kimi-surface .hover\:bg-primary-hover:hover { background: var(--primary-hover); }
+.kimi-surface .hover\:bg-muted:hover { background: var(--muted); }
+.kimi-surface .focus\:border-primary:focus { border-color: var(--primary); }
+
+.kimi-surface button,
+.kimi-surface input,
+.kimi-surface select,
+.kimi-surface textarea {
+  font-family: inherit;
+}
+
+.kimi-surface button:focus-visible,
+.kimi-surface a:focus-visible,
+.kimi-surface input:focus-visible,
+.kimi-surface select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.kimi-surface .kimi-input {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 0.75rem;
+  font-size: 13px;
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.kimi-surface .kimi-input::placeholder { color: #98a2b3; }
+.kimi-surface .kimi-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+  outline: none;
+}
+
+.kimi-surface .kimi-card {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.kimi-surface .kimi-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 1rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.kimi-surface .kimi-btn-primary:hover { background: var(--primary-hover); }
+.kimi-surface .kimi-btn-primary:active { transform: scale(0.98); }
+.kimi-surface .kimi-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.kimi-surface .kimi-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 1rem;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.kimi-surface .kimi-btn-secondary:hover { background: var(--muted); }
+
+@keyframes kimi-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes kimi-zoom-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.kimi-anim-fade { animation: kimi-fade-in 0.15s ease both; }
+.kimi-anim-zoom { animation: kimi-zoom-in 0.15s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kimi-anim-fade, .kimi-anim-zoom { animation: none; }
+}

@@ -1,0 +1,39 @@
+{
+  "sessionId": "2026-09-06T20-20-06-647Z-899df0",
+  "targetRoute": "/appointments/workflows/[id]/edit",
+  "referenceNames": [
+    "Creating Automated Workflows in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:36:40.884Z",
+  "generatedFiles": [
+    "components/ConditionsBuilder.tsx",
+    "components/ConfirmDialog.tsx",
+    "components/StepCard.tsx",
+    "components/StepConfigPanel.tsx",
+    "components/TestPreviewModal.tsx",
+    "components/TriggerSettings.tsx",
+    "components/WorkflowEditor.tsx",
+    "components/WorkflowHeader.tsx",
+    "components/WorkflowSetupCard.tsx",
+    "components/ui-primitives.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/ConditionsBuilder.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/ConfirmDialog.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/StepCard.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/StepConfigPanel.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/TestPreviewModal.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/TriggerSettings.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/WorkflowEditor.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/WorkflowHeader.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/WorkflowSetupCard.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/components/ui-primitives.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/mock-data.ts",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/page.tsx",
+    "src/kimi-drafts/appointments-workflows-[id]-edit/2026-09-06T20-20-06-647Z-899df0/reference.css"
+  ],
+  "status": "generated"
+}

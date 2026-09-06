@@ -11,7 +11,7 @@ import {
 import type { KimiCredits, KimiNavItem, KimiSidebarUser } from "./types";
 import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 
-/** Kimi session 2026-08-30T22-24-04-122Z-b95821 — production wiring only. */
+/** Kimi sessions 2026-08-30T22-24-04-122Z-b95821 (initial), 2026-09-06T18-36-09-917Z-daeeac (Stage D refresh) — production wiring only. */
 export interface TransovoSidebarProps {
   navItems: KimiNavItem[];
   activeRoute?: string;

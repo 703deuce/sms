@@ -1,0 +1,23 @@
+{
+  "sessionId": "2026-09-06T20-25-59-902Z-7850ef",
+  "targetRoute": "/waitlist/accept/[token]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:45:40.666Z",
+  "generatedFiles": [
+    "components/PublicShell.tsx",
+    "components/PublicWaitlistAcceptClient.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/waitlist-accept-[token]/2026-09-06T20-25-59-902Z-7850ef/components/PublicShell.tsx",
+    "src/kimi-drafts/waitlist-accept-[token]/2026-09-06T20-25-59-902Z-7850ef/components/PublicWaitlistAcceptClient.tsx",
+    "src/kimi-drafts/waitlist-accept-[token]/2026-09-06T20-25-59-902Z-7850ef/mock-data.ts",
+    "src/kimi-drafts/waitlist-accept-[token]/2026-09-06T20-25-59-902Z-7850ef/page.tsx",
+    "src/kimi-drafts/waitlist-accept-[token]/2026-09-06T20-25-59-902Z-7850ef/reference.css"
+  ],
+  "status": "generated"
+}

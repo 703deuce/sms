@@ -1,0 +1,47 @@
+{
+  "sessionId": "2026-09-06T20-25-12-655Z-1064f4",
+  "targetRoute": "/book/[slug]/[serviceId]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:03:09.438Z",
+  "generatedFiles": [
+    "components/AiBookingStep.tsx",
+    "components/BookingQuestionField.tsx",
+    "components/BookingStates.tsx",
+    "components/DateTimeStep.tsx",
+    "components/DoneStep.tsx",
+    "components/InfoStep.tsx",
+    "components/OtpStep.tsx",
+    "components/PaymentStep.tsx",
+    "components/PublicBookingClient.tsx",
+    "components/ServiceStep.tsx",
+    "components/StepIndicator.tsx",
+    "components/WaitlistStep.tsx",
+    "components/ui.tsx",
+    "components/utils.ts",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/AiBookingStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/BookingQuestionField.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/BookingStates.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/DateTimeStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/DoneStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/InfoStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/OtpStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/PaymentStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/PublicBookingClient.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/ServiceStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/StepIndicator.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/WaitlistStep.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/ui.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/components/utils.ts",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/mock-data.ts",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/page.tsx",
+    "src/kimi-drafts/book-[slug]-[serviceId]/2026-09-06T20-25-12-655Z-1064f4/reference.css"
+  ],
+  "status": "generated"
+}

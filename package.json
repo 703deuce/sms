@@ -22,6 +22,7 @@
     "ui:kimi-batch-polish": "tsx scripts/ui-agent/kimi-batch-polish.ts",
     "ui:kimi-screenshot-batch": "tsx scripts/ui-agent/kimi-screenshot-batch.ts",
     "ui:kimi-mode4": "tsx scripts/ui-agent/kimi-mode4-batch.ts",
+    "ui:kimi-mode4-completion": "tsx scripts/ui-agent/kimi-mode4-completion.ts",
     "ui:kimi-mode4-contract": "tsx scripts/ui-agent/mode4-page-contract.ts",
     "ui:kimi-mode4-standards": "tsx scripts/ui-agent/mode4-standards-pack.ts",
     "ui:kimi-mode4-preflight": "tsx scripts/ui-agent/mode4-preflight.ts",

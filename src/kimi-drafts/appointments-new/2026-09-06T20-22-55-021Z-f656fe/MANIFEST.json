@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-06T20-22-55-021Z-f656fe",
+  "targetRoute": "/appointments/new",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:51:08.491Z",
+  "generatedFiles": [
+    "components/appointment-form.tsx",
+    "components/slot-picker.tsx",
+    "components/summary-sidebar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/components/appointment-form.tsx",
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/components/slot-picker.tsx",
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/components/summary-sidebar.tsx",
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/mock-data.ts",
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/page.tsx",
+    "src/kimi-drafts/appointments-new/2026-09-06T20-22-55-021Z-f656fe/reference.css"
+  ],
+  "status": "generated"
+}

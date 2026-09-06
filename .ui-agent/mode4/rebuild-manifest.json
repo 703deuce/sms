@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "updatedAt": "2026-09-06T18:31:50.598Z",
-  "maxConcurrentJobs": 10,
+  "updatedAt": "2026-09-06T20:20:05.303Z",
+  "maxConcurrentJobs": 30,
   "staggerMs": 5000,
   "entries": [
     {

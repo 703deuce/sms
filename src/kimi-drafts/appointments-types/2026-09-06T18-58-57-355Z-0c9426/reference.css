@@ -163,6 +163,45 @@ select.field-input {
   margin: 22px 0;
 }
 
+/* Modal primitives */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(16, 24, 40, 0.45);
+  backdrop-filter: blur(2px);
+}
+.modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: #fff;
+  border: 1px solid #ecedf2;
+  border-radius: 14px;
+  box-shadow:
+    0 20px 48px rgba(16, 24, 40, 0.18),
+    0 4px 12px rgba(16, 24, 40, 0.08);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.modal-card-lg {
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .modal-scrim {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .modal-card {
+    max-width: 100%;
+    border-radius: 14px 14px 0 0;
+    max-height: 92vh;
+  }
+}
+
 @keyframes fadeSlideIn {
   from {
     opacity: 0;

@@ -1,0 +1,25 @@
+{
+  "sessionId": "2026-09-06T20-24-25-976Z-8eea57",
+  "targetRoute": "/settings/calendar",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T21:52:39.170Z",
+  "generatedFiles": [
+    "components/CalendarConnectionsCard.tsx",
+    "components/CalendarSettingsPage.tsx",
+    "components/ConnectionConfigPanel.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/components/CalendarConnectionsCard.tsx",
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/components/CalendarSettingsPage.tsx",
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/components/ConnectionConfigPanel.tsx",
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/mock-data.ts",
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/page.tsx",
+    "src/kimi-drafts/settings-calendar/2026-09-06T20-24-25-976Z-8eea57/reference.css"
+  ],
+  "status": "generated"
+}

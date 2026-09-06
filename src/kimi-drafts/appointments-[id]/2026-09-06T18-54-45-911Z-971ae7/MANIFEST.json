@@ -4,12 +4,13 @@
   "referenceNames": [
     "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
   ],
-  "generatedAt": "2026-09-06T18:59:16.880Z",
+  "generatedAt": "2026-09-06T20:05:33.662Z",
   "generatedFiles": [
     "components/ActivityTimeline.tsx",
     "components/AppShell.tsx",
     "components/AppointmentDetail.tsx",
     "components/AppointmentHeader.tsx",
+    "components/CancelModal.tsx",
     "components/NotetakerPanel.tsx",
     "components/ReminderSchedule.tsx",
     "components/RescheduleModal.tsx",
@@ -24,6 +25,7 @@
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppShell.tsx",
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppointmentDetail.tsx",
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppointmentHeader.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/CancelModal.tsx",
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/NotetakerPanel.tsx",
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/ReminderSchedule.tsx",
     "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/RescheduleModal.tsx",

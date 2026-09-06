@@ -1,0 +1,33 @@
+{
+  "sessionId": "2026-09-06T20-24-22-364Z-12a926",
+  "targetRoute": "/settings/messaging",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T22:02:20.001Z",
+  "generatedFiles": [
+    "components/AwayHoursCard.tsx",
+    "components/ComplianceCard.tsx",
+    "components/ConsentCopyCard.tsx",
+    "components/QuietHoursCard.tsx",
+    "components/RegistrationCard.tsx",
+    "components/SettingsTabs.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/AwayHoursCard.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/ComplianceCard.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/ConsentCopyCard.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/QuietHoursCard.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/RegistrationCard.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/SettingsTabs.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/components/ui.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/mock-data.ts",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/page.tsx",
+    "src/kimi-drafts/settings-messaging/2026-09-06T20-24-22-364Z-12a926/reference.css"
+  ],
+  "status": "generated"
+}
