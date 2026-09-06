@@ -35,7 +35,8 @@
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - Guide #6: `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #7 — Table & Grid Semantics Standards (coming)
+- Guide #7: `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #8 — Privacy, Consent & Compliance UX Standards (coming)
 
 ---
 
@@ -1522,8 +1523,9 @@ Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md             → IA & navigation
 Guide #4  (coming)                                        → Interaction, keyboard & focus
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md    → Forms & validation (this file)
 Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md    → Responsive/reflow/zoom
+Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md     → Tables & grids
 Guide #4 (coming)                                        → Interaction, keyboard & focus
-Guide #7+ (coming)                                       → Table & grid semantics, etc.
+Guide #8+ (coming)                                       → Privacy, consent & compliance UX, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                       → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
@@ -1531,4 +1533,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
 
 ---
 
-*Guide #5: Forms, Input & Validation Standards. Next: Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — Table & Grid Semantics Standards.*
+*Guide #5: Forms, Input & Validation Standards. Next: Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`.*

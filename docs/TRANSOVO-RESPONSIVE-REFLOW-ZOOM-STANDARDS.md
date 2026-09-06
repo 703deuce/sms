@@ -28,7 +28,8 @@ Responsive design is not “make desktop smaller.” The interface must preserve
 - IA principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #7 — Table & Grid Semantics Standards (coming)
+- Guide #7: `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #8 — Privacy, Consent & Compliance UX Standards (coming)
 
 ---
 
@@ -1204,7 +1205,9 @@ Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md             → IA & navigation
 Guide #4  (coming)                                        → Interaction, keyboard & focus
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md    → Forms & validation
 Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md    → Responsive/reflow/zoom (this file)
-Guide #7+ (coming)                                        → Table & grid semantics, etc.
+Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md     → Tables & grids
+Guide #4 (coming)                                        → Interaction, keyboard & focus
+Guide #8+ (coming)                                       → Privacy, consent & compliance UX, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                       → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
@@ -1212,4 +1215,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
 
 ---
 
-*Guide #6: Responsive, Reflow & Zoom Standards. Next: Guide #7 — Table & Grid Semantics Standards (HTML standard, WCAG 2.2, WAI table guidance, WAI-ARIA grid patterns).*
+*Guide #6: Responsive, Reflow & Zoom Standards. Next: Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — Privacy, Consent & Compliance UX Standards.*
