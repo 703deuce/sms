@@ -359,7 +359,10 @@ export async function syncWorkspaceCalendarConnection(
       events =
         provider === "google"
           ? await listGoogleCalendarEvents(token, calendarId, timeMin, timeMax)
-          : await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, conn.id, config);
+          : await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, {
+              connectionId: conn.id,
+              config,
+            });
     } catch (err) {
       console.warn("[calendar] event import failed", connectionId, calendarId, err);
       stats.errors += 1;
@@ -415,7 +418,10 @@ export async function syncCalendarProviderEventById(input: {
   const event =
     input.provider === "google"
       ? await getGoogleCalendarEvent(token, input.calendarId || "primary", input.eventId)
-      : await getMicrosoftCalendarEvent(token, input.eventId);
+      : await getMicrosoftCalendarEvent(token, input.eventId, {
+          connectionId: conn.id,
+          config,
+        });
 
   if (!event) {
     const importedId = formatImportedExternalId(input.provider, input.connectionId, input.eventId);

@@ -484,7 +484,10 @@ export async function getAvailability(
                       ? resolveBlockingCalendarIds(config, cal.provider)
                       : [undefined]
                     ).map((calId) =>
-                      getMicrosoftBusy(token, timeMin, timeMax, calId || undefined),
+                      getMicrosoftBusy(token, timeMin, timeMax, {
+                        calendarId: calId || undefined,
+                        ctx: { connectionId: cal.id, config },
+                      }),
                     ),
                   )
                 ).flat();
@@ -800,9 +803,14 @@ export async function bookAppointment(
                   token,
                   new Date(startsAt.getTime() - bufferMs),
                   new Date(endsAt.getTime() + bufferMs),
-                  resolveWriteCalendarId(config) !== "primary"
-                    ? resolveWriteCalendarId(config)
-                    : undefined,
+                  {
+                    calendarId:
+                      resolveWriteCalendarId(config) !== "primary"
+                        ? resolveWriteCalendarId(config)
+                        : undefined,
+                    ctx: { connectionId: cal.id, config },
+                    smtp: config.email,
+                  },
                 );
           const overlaps = busy.some((b) => {
             const bufferedStart = new Date(b.start.getTime() - bufferMs);
@@ -826,10 +834,17 @@ export async function bookAppointment(
           externalId =
             cal.provider === "google"
               ? await insertGoogleEvent(token, resolveWriteCalendarId(config), event)
-              : await insertMicrosoftEvent(token, {
-                  ...event,
-                  calendarId: resolveWriteCalendarId(config),
-                });
+              : await insertMicrosoftEvent(
+                  token,
+                  {
+                    ...event,
+                    calendarId:
+                      resolveWriteCalendarId(config) !== "primary"
+                        ? resolveWriteCalendarId(config)
+                        : undefined,
+                  },
+                  { connectionId: cal.id, config },
+                );
         } else {
           throw new Error("Calendar access token unavailable");
         }

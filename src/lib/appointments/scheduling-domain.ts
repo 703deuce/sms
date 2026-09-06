@@ -339,11 +339,17 @@ export async function getExternalBusyIntervals(
       try {
         if (calendarIds.length) {
           for (const calId of calendarIds) {
-            const intervals = await getMicrosoftBusy(token, timeMin, timeMax, calId);
+            const intervals = await getMicrosoftBusy(token, timeMin, timeMax, {
+              calendarId: calId,
+              ctx: { connectionId: conn.id, config },
+            });
             busy.push(...intervals);
           }
         } else {
-          const intervals = await getMicrosoftBusy(token, timeMin, timeMax);
+          const intervals = await getMicrosoftBusy(token, timeMin, timeMax, {
+            ctx: { connectionId: conn.id, config },
+            smtp: config.email,
+          });
           busy.push(...intervals);
         }
       } catch (err) {

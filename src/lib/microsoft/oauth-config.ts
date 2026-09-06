@@ -1,5 +1,7 @@
 import "server-only";
 
+import { MICROSOFT_GRAPH_V1 } from "@/lib/microsoft/graph-helpers";
+
 function appUrl() {
   return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
     /\/$/,
@@ -128,7 +130,7 @@ export async function fetchMicrosoftProfile(accessToken: string): Promise<{
   email?: string;
   displayName?: string;
 }> {
-  const res = await fetch("https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName,displayName", {
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me?$select=mail,userPrincipalName,displayName`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return {};

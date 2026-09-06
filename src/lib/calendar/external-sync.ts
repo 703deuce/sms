@@ -109,7 +109,10 @@ export async function syncExternalCalendarOnCancel(
     if (conn.provider === "google") {
       await deleteGoogleEvent(token, resolveWriteCalendarId(config), providerEventId);
     } else {
-      await deleteMicrosoftEvent(token, providerEventId);
+      await deleteMicrosoftEvent(token, providerEventId, {
+        connectionId: conn.id,
+        config,
+      });
     }
     await markPushed(appointment.id, appointment.metadata);
   } catch (err) {
@@ -149,6 +152,9 @@ export async function syncExternalCalendarOnReschedule(
         start: next.startsAt,
         end: next.endsAt,
         timezone,
+      }, {
+        connectionId: conn.id,
+        config,
       });
     }
     await markPushed(appointment.id, appointment.metadata);
