@@ -36,6 +36,7 @@ import {
   MODE4_ART_DIRECTION_VIDEOS,
   formatStandardsForKimi,
   loadStandardsPack,
+  writeStandardsPackArtifact,
 } from "./mode4-standards-pack";
 import type { CliOptions } from "./types";
 
@@ -136,15 +137,29 @@ function artDirectionVideoName(entry: Mode4ManifestEntry): string {
 }
 
 function buildMode4Instruction(entry: Mode4ManifestEntry): string {
-  const standards = formatStandardsForKimi(loadStandardsPack({ maxCharsPerDoc: 25_000 }));
+  // FULL originals — no truncation. Preflight fails if any doc is truncated.
+  const standards = formatStandardsForKimi(loadStandardsPack());
   const contract = buildPageContract({ id: entry.id });
   return [
     KIMI_MODE4_SYSTEM_PREFIX,
     "",
-    "PAGE CONTRACT:",
+    "AUTHORITY ORDER (mandatory):",
+    "1 Product scope/domain + approved page/feature specs",
+    "2 Governance",
+    "3 Foundational guides (HCD, IA, page architecture, visual system)",
+    "4 Formal standards #1–#11",
+    "5 Runtime/backend requirements (Page Contract + existing code)",
+    "6 Golden screens (after Stage E)",
+    "7 Campaign/Inbox art direction",
+    "8 Old UI appearance (functionality evidence only — not visual authority)",
+    "",
+    "CURRENT UI RULE: Existing code preserves approved behavior and backend contracts only.",
+    "Do NOT preserve incorrect placement, inconsistent patterns, obsolete legacy features, or old architecture.",
+    "",
+    "PAGE CONTRACT (supplemental — does NOT replace master specs above):",
     contract,
     "",
-    "GOVERNING STANDARDS (full originals):",
+    "FULL GOVERNING STANDARDS PACK:",
     standards,
     "",
     `TARGET: ${entry.canonicalPath} (${entry.route})`,
@@ -218,6 +233,8 @@ async function runOneJob(
   const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
 
   try {
+    const sessionDirPath = join(UI_AGENT_DIR, "sessions");
+    writeStandardsPackArtifact(join(sessionDirPath, "..", "mode4", "last-job-standards"), loadStandardsPack());
     const result = await runKimiCommand(provider, buildKimiOptions(entry));
     if (!skipCompletePass) {
       const gaps = auditSandboxCompleteness(result.sessionId, entry.route);

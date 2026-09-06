@@ -175,7 +175,7 @@ export function buildPageContract(options: {
   if (options.includeStandards) {
     chunks.push(
       "FULL GOVERNING STANDARDS PACK:",
-      formatStandardsForKimi(loadStandardsPack({ maxCharsPerDoc: 40_000 })),
+      formatStandardsForKimi(loadStandardsPack()),
     );
   }
 
