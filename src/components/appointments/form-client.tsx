@@ -336,6 +336,11 @@ export function AppointmentFormClient() {
             ) : null}
 
             <div className="flex items-center gap-2 pt-1">
+              {!startsAt && !loadingSlots ? (
+                <p className="text-xs text-muted-foreground">
+                  Select an available time above to enable booking.
+                </p>
+              ) : null}
               <Button onClick={submit} disabled={saving || !startsAt} size="lg">
                 {saving ? (
                   <>

@@ -34,8 +34,12 @@ export function normalizeBookingToolArgs(
     args.full_name ||
     args.caller_name ||
     args.inviteeName ||
+    [args.firstName, args.lastName].filter(Boolean).join(" ").trim() ||
     null;
-  if (name) out.name = String(name);
+  if (name) {
+    out.name = String(name);
+    if (!out.full_name) out.full_name = String(name);
+  }
 
   const email = args.email || args.customerEmail || null;
   if (email) out.email = String(email);

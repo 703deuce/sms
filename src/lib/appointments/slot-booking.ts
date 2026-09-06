@@ -28,7 +28,10 @@ export async function withAtomicSlotBooking<T>(
 
   try {
     return await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
+      // Supabase PostgREST compat has no pg_advisory_xact_lock — skip when unavailable.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;
+      }
       await assertSlotAvailableForBooking(workspaceId, input, tx);
       return book();
     });

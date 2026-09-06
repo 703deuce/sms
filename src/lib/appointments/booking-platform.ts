@@ -185,6 +185,7 @@ export async function createPlatformAppointment(
         contactId,
         firstName: input.firstName,
         lastName: input.lastName,
+        name: [input.firstName, input.lastName].filter(Boolean).join(" ").trim() || undefined,
         timezone: platform.timezone,
         skipSms: true,
         source: input.source || "admin",

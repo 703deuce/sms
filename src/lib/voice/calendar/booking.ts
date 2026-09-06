@@ -656,7 +656,10 @@ export async function bookAppointment(
     throw new Error("This appointment type is not currently bookable");
   }
   assertBookingPermission(svcCfg);
-  assertRequiredFields(svcCfg, args);
+  const source = String(args.source || "");
+  if (source !== "admin") {
+    assertRequiredFields(svcCfg, args);
+  }
 
   const durationMinutes = Number(args.durationMinutes || service?.durationMinutes || 30);
   const bufferMinutes = service?.bufferMinutes || 0;
