@@ -38,7 +38,7 @@ export async function resolveAppointmentVoiceCallerId(
   if (!transovoE164) {
     const fallback = await prisma.phoneNumber.findFirst({
       where: { workspaceId, releasedAt: null, status: { not: "Released" } },
-      orderBy: { createdAt: "asc" },
+      orderBy: { purchasedAt: "asc" },
       select: { id: true, e164: true },
     });
     if (fallback?.e164) {
@@ -81,7 +81,7 @@ export async function loadCallerIdSettingsForUi(workspaceId: string) {
   const prisma = getPrisma();
   const numbers = await prisma.phoneNumber.findMany({
     where: { workspaceId, releasedAt: null, status: { not: "Released" } },
-    orderBy: { createdAt: "asc" },
+    orderBy: { purchasedAt: "asc" },
     select: { id: true, e164: true, friendlyName: true },
     take: 10,
   });
