@@ -34,13 +34,13 @@ This is not just translation. **Internationalization is the architecture that ma
 **Related Transovo guides**
 
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 - Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 - Guide #6: `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - Guide #10: `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
 - IA principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Remaining in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -1354,10 +1354,10 @@ Every applicable feature should pass:
 
 ```
 Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md              → WCAG 2.2 AA
+Guide #4  TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md → Interaction, keyboard & focus
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md    → Forms & validation
 Guide #10 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Date/time/timezone/locale
 Guide #11 TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → i18n/l10n (this file)
-Guide #4 (coming)                                        → Interaction, keyboard & focus
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                       → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
@@ -1365,4 +1365,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
 
 ---
 
-*Guide #11: Internationalization & Localization Standards. This completes all 11 standards-based implementation guides; Guide #4 — Interaction, Keyboard & Focus Standards remains pending in the 12-guide series.*
+*Guide #11: Internationalization & Localization Standards. All 12 implementation standards guides in the Transovo series are now complete.*

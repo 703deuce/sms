@@ -596,14 +596,14 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 4. TRANSOVO-ACCESSIBILITY-STANDARDS.md            → Guide #1: WCAG 2.2 AA
 5. TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md    → Guide #2: ISO 9241 HCD
 6. TRANSOVO-IA-NAVIGATION-STANDARDS.md            → Guide #3: IA & navigation
-7. TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md   → Guide #5: Forms & validation
-8. TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md   → Guide #6: Responsive/reflow/zoom
-9. TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md    → Guide #7: Tables & grids
-10. TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Guide #8: Privacy/consent/compliance
-11. TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Guide #9: Security & authentication
-12. TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Guide #10: Date/time/timezone/locale
-13. TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Guide #11: Internationalization & localization
-14. Implementation standards Guide #4 (coming)       → Interaction, keyboard & focus
+7. TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md → Guide #4: Interaction, keyboard & focus
+8. TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md   → Guide #5: Forms & validation
+9. TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md   → Guide #6: Responsive/reflow/zoom
+10. TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md    → Guide #7: Tables & grids
+11. TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Guide #8: Privacy/consent/compliance
+12. TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Guide #9: Security & authentication
+13. TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Guide #10: Date/time/timezone/locale
+14. TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Guide #11: Internationalization & localization
 15. Page-by-page spec                             → Per-screen worksheet
 16. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```

@@ -28,7 +28,8 @@
 
 **Related Transovo guides**
 
-- Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`  
+- Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`  
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
@@ -40,7 +41,6 @@
 - Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
 - Guide #10: `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
 - Guide #11: `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
-- **Remaining in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -769,12 +769,12 @@ For each significant page/flow:
 Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md        → WCAG 2.2 AA
 Guide #2  TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md → ISO 9241 HCD (this file)
 Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md         → IA & navigation
+Guide #4  TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md → Interaction, keyboard & focus
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
 Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md → Responsive/reflow/zoom
 Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md  → Tables & grids
 Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance
 Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
-Guide #4 (coming)                                    → Interaction, keyboard & focus
 Guide #10 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Date/time/timezone/locale
 Guide #11 TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Internationalization & localization
 TRANSOVO-UI-DESIGN-GUIDE.md                           → IA principles

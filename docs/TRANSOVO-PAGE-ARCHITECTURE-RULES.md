@@ -11,6 +11,7 @@
 - **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - **IA & navigation (hard standard):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
+- **Interaction/keyboard/focus (hard standard):** `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 - **Forms & validation (hard standard):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 - **Responsive/reflow/zoom (hard standard):** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - **Tables/grids (hard standard):** `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`

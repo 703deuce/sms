@@ -24,12 +24,12 @@ For Transovo, treat **phishing-resistant authentication, strong session manageme
 **Related Transovo guides**
 
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 - Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 - Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - IA principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Remaining in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -1431,10 +1431,10 @@ Every applicable authentication/security feature should pass:
 
 ```
 Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md              → WCAG 2.2 AA
+Guide #4  TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md → Interaction, keyboard & focus
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md    → Forms & validation
 Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance
 Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & auth (this file)
-Guide #4 (coming)                                        → Interaction, keyboard & focus
 Guide #10 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Date/time/timezone/locale
 Guide #11 TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Internationalization & localization
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
