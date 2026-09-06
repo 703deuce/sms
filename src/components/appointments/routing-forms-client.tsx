@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import type { RoutingForm, RoutingFormRule } from "@/lib/appointments/scheduling-capabilities";
-import { presetCompanySizeOptions, presetIndustryOptions } from "@/lib/appointments/routing-forms";
+import { presetCompanySizeOptions, presetIndustryOptions } from "@/lib/appointments/routing-forms-presets";
 import { Plus, Trash2, ExternalLink } from "lucide-react";
 
 function emptyForm(): RoutingForm {
