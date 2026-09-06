@@ -1,0 +1,37 @@
+{
+  "sessionId": "2026-09-06T18-54-45-911Z-971ae7",
+  "targetRoute": "/appointments/[id]",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T18:59:16.880Z",
+  "generatedFiles": [
+    "components/ActivityTimeline.tsx",
+    "components/AppShell.tsx",
+    "components/AppointmentDetail.tsx",
+    "components/AppointmentHeader.tsx",
+    "components/NotetakerPanel.tsx",
+    "components/ReminderSchedule.tsx",
+    "components/RescheduleModal.tsx",
+    "components/VideoMeetingPanel.tsx",
+    "components/ui.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/ActivityTimeline.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppShell.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppointmentDetail.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/AppointmentHeader.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/NotetakerPanel.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/ReminderSchedule.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/RescheduleModal.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/VideoMeetingPanel.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/components/ui.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/mock-data.ts",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/page.tsx",
+    "src/kimi-drafts/appointments-[id]/2026-09-06T18-54-45-911Z-971ae7/reference.css"
+  ],
+  "status": "generated"
+}

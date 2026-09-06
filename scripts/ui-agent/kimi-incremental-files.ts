@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { assertGeneratedSandboxPath, generatedDirForSession } from "./generated-sandbox";
+import { persistKimiDraftFileIncremental } from "./kimi-persist";
 import { appendProgressLog } from "./progress";
 import { markKimiTiming } from "./kimi-timing";
 import { log } from "./logger";
@@ -26,7 +27,10 @@ export class KimiIncrementalFileWriter {
   private manifest: string[] = [];
   private firstFileMarked = false;
 
-  constructor(private readonly sessionId: string) {
+  constructor(
+    private readonly sessionId: string,
+    private readonly options?: { draftTargetRoute?: string; referenceNames?: string[] },
+  ) {
     mkdirSync(generatedDirForSession(sessionId), { recursive: true });
   }
 
@@ -118,6 +122,19 @@ export class KimiIncrementalFileWriter {
 
     appendProgressLog(this.sessionId, `kimi_file_complete: ${path} (${content.length} bytes)`);
     log("kimi incremental", `wrote ${path} (${content.length} bytes)`);
+
+    if (this.options?.draftTargetRoute) {
+      try {
+        persistKimiDraftFileIncremental({
+          sessionId: this.sessionId,
+          targetRoute: this.options.draftTargetRoute,
+          relativePath: path,
+          referenceNames: this.options.referenceNames,
+        });
+      } catch (err) {
+        log("incremental draft persist failed", err instanceof Error ? err.message : String(err));
+      }
+    }
 
     this.activePath = null;
     this.activeContent = "";

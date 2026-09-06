@@ -47,6 +47,9 @@ export type UiAnalysisInput = {
   leanPrompt?: boolean;
   sessionId?: string;
   phaseLabel?: string;
+  /** Route for incremental copy to src/kimi-drafts/ (durable storage). */
+  draftTargetRoute?: string;
+  referenceNames?: string[];
 };
 
 export type KimiMediaDelivery = {

@@ -1,0 +1,35 @@
+{
+  "sessionId": "2026-09-06T18-52-01-001Z-ba74e3",
+  "targetRoute": "/appointments/calendar",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T18:54:25.646Z",
+  "generatedFiles": [
+    "components/CalendarHeader.tsx",
+    "components/DayAgenda.tsx",
+    "components/DayCalendar.tsx",
+    "components/MiniCalendar.tsx",
+    "components/MonthCalendar.tsx",
+    "components/NextAppointment.tsx",
+    "components/StatCards.tsx",
+    "components/WeekCalendar.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/CalendarHeader.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/DayAgenda.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/DayCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/MiniCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/MonthCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/NextAppointment.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/StatCards.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/components/WeekCalendar.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/mock-data.ts",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/page.tsx",
+    "src/kimi-drafts/appointments-calendar/2026-09-06T18-52-01-001Z-ba74e3/reference.css"
+  ],
+  "status": "generated"
+}

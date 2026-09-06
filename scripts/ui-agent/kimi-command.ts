@@ -281,6 +281,7 @@ export async function runKimiCommand(
       referenceMedia,
       currentMedia,
       instruction: session.instruction,
+      referenceNames: options.referenceVideoNames,
     });
 
     // Persist immediately — refinement/preview failures must not lose generated source.

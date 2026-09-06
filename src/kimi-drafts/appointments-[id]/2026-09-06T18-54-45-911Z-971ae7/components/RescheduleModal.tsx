@@ -1,0 +1,58 @@
+"use client";
+
+import { useState } from "react";
+import { Button, Modal, fmtDay, fmtTime } from "./ui";
+import { rescheduleSlots } from "../mock-data";
+
+export function RescheduleModal({
+  timezone,
+  onClose,
+  onSave,
+}: {
+  timezone: string;
+  onClose: () => void;
+  onSave: (startsAt: string) => void;
+}) {
+  const [selected, setSelected] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <Modal
+      title="Reschedule appointment"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!selected || saving}
+            onClick={() => {
+              setSaving(true);
+              setTimeout(() => onSave(selected), 500);
+            }}
+          >
+            {saving ? "Saving…" : "Save new time"}
+          </Button>
+        </>
+      }
+    >
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Choose a new time. The customer will receive an updated confirmation and reminders will be recalculated.
+        Times shown in Eastern Time.
+      </p>
+      <div className="slot-grid" role="radiogroup" aria-label="Available times">
+        {rescheduleSlots.map((s) => (
+          <button
+            key={s.startsAt}
+            role="radio"
+            aria-checked={selected === s.startsAt}
+            className={`slot${selected === s.startsAt ? " selected" : ""}`}
+            onClick={() => setSelected(s.startsAt)}
+          >
+            <div className="slot-day">{fmtDay(s.startsAt, timezone)}</div>
+            <div className="slot-time">{fmtTime(s.startsAt, timezone)}</div>
+          </button>
+        ))}
+      </div>
+    </Modal>
+  );
+}

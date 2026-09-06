@@ -25,6 +25,7 @@
     "ui:kimi-mode4-contract": "tsx scripts/ui-agent/mode4-page-contract.ts",
     "ui:kimi-mode4-standards": "tsx scripts/ui-agent/mode4-standards-pack.ts",
     "ui:kimi-mode4-preflight": "tsx scripts/ui-agent/mode4-preflight.ts",
+    "ui:kimi-mode4-verify-persist": "tsx scripts/ui-agent/mode4-verify-persist.ts",
     "ui:capture-screenshot-batch": "tsx scripts/ui-agent/capture-screenshot-batch.ts",
     "ui:refs": "tsx scripts/ui-agent/index.ts refs",
     "ui:approve": "tsx scripts/ui-agent/index.ts approve",

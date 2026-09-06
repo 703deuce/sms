@@ -68,6 +68,8 @@ export async function streamKimiChatCompletion(input: {
   label: string;
   timeoutMs?: number;
   useIncrementalFiles?: boolean;
+  draftTargetRoute?: string;
+  referenceNames?: string[];
 }): Promise<KimiStreamResult> {
   const timeoutMs = input.timeoutMs ?? KIMI_CHAT_TIMEOUT_MS;
   const controller = new AbortController();
@@ -83,7 +85,10 @@ export async function streamKimiChatCompletion(input: {
   const seenPaths = new Set<string>();
   const incremental =
     input.sessionId && input.useIncrementalFiles
-      ? new KimiIncrementalFileWriter(input.sessionId)
+      ? new KimiIncrementalFileWriter(input.sessionId, {
+          draftTargetRoute: input.draftTargetRoute,
+          referenceNames: input.referenceNames,
+        })
       : null;
 
   if (input.sessionId) {

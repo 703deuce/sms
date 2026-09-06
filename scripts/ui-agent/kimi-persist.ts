@@ -27,6 +27,8 @@ function isPersistableSource(relativePath: string): boolean {
   return SOURCE_FILE.test(relativePath);
 }
 
+export { isPersistableSource };
+
 export function draftDirForSession(sessionId: string, targetRoute: string): string {
   return join(KIMI_DRAFTS_DIR, routeToFeatureSlug(targetRoute), sessionId);
 }
@@ -86,6 +88,60 @@ export function persistKimiGeneratedSource(input: {
   writeFileSync(join(draftDir, "MANIFEST.json"), JSON.stringify(manifest, null, 2), "utf8");
   assertKimiOutputPersisted(sessionId, targetRoute);
   log("kimi draft manifest", join(draftDir, "MANIFEST.json"));
+  return manifest;
+}
+
+/** Copy one sandbox file to src/kimi-drafts immediately (survives VM crash / .ui-agent loss). */
+export function persistKimiDraftFileIncremental(input: {
+  sessionId: string;
+  targetRoute: string;
+  relativePath: string;
+  referenceNames?: string[];
+}): KimiPersistManifest | null {
+  if (!isPersistableSource(input.relativePath)) {
+    return null;
+  }
+
+  const sandboxDir = generatedDirForSession(input.sessionId);
+  const src = join(sandboxDir, input.relativePath);
+  if (!existsSync(src)) {
+    throw new Error(`KIMI_OUTPUT_NOT_PERSISTED: sandbox missing ${input.relativePath}`);
+  }
+
+  const draftDir = draftDirForSession(input.sessionId, input.targetRoute);
+  mkdirSync(draftDir, { recursive: true });
+  const dest = join(draftDir, input.relativePath);
+  mkdirSync(dirname(dest), { recursive: true });
+  copyFileSync(src, dest);
+  const persistedRel = relative(REPO_ROOT, dest).replace(/\\/g, "/");
+
+  const manifestPath = join(draftDir, "MANIFEST.json");
+  let manifest: KimiPersistManifest;
+  if (existsSync(manifestPath)) {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as KimiPersistManifest;
+  } else {
+    manifest = {
+      sessionId: input.sessionId,
+      targetRoute: input.targetRoute,
+      referenceNames: input.referenceNames ?? [],
+      generatedAt: new Date().toISOString(),
+      generatedFiles: [],
+      persistedFiles: [],
+      status: "generated",
+    };
+  }
+
+  if (!manifest.generatedFiles.includes(input.relativePath)) {
+    manifest.generatedFiles.push(input.relativePath);
+  }
+  if (!manifest.persistedFiles.includes(persistedRel)) {
+    manifest.persistedFiles.push(persistedRel);
+  }
+  manifest.generatedAt = new Date().toISOString();
+  if (input.referenceNames?.length) manifest.referenceNames = input.referenceNames;
+
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+  log("persisted kimi draft (incremental)", input.relativePath);
   return manifest;
 }
 

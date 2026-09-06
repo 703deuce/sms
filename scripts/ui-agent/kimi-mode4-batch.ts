@@ -41,6 +41,7 @@ import {
 } from "./mode4-standards-pack";
 import { MODE4_SCOPE_SUPERSESSION } from "./mode4-scope-supersession";
 import { startMode4BatchMonitor, type Mode4ActiveJob } from "./mode4-batch-monitor";
+import { assertKimiOutputPersisted, draftDirForSession } from "./kimi-persist";
 import type { CliOptions } from "./types";
 
 const MODE4_DIR = join(UI_AGENT_DIR, "mode4");
@@ -53,6 +54,9 @@ export type Mode4JobState = {
   stage: Mode4Stage;
   status: "pending" | "running" | "complete" | "failed" | "skipped" | "blocked";
   sessionId?: string;
+  /** Durable copy under src/kimi-drafts/ (not ephemeral .ui-agent/generated). */
+  draftPath?: string;
+  persistedFiles?: number;
   error?: string;
   startedAt?: string;
   completedAt?: string;
@@ -266,9 +270,13 @@ async function runOneJob(
         );
       }
     }
+    const manifest = assertKimiOutputPersisted(result.sessionId, entry.route);
+    const draftPath = draftDirForSession(result.sessionId, entry.route);
     await updateJob(entry.id, {
       status: "complete",
       sessionId: result.sessionId,
+      draftPath,
+      persistedFiles: manifest.persistedFiles.length,
       completedAt: new Date().toISOString(),
       accepted: false,
       requiredFeaturesPreserved: undefined,
@@ -276,6 +284,7 @@ async function runOneJob(
     });
     log("mode4 complete", `${entry.route} → ${result.sessionId}`);
     console.log(`✓ ${entry.canonicalPath} → session ${result.sessionId}`);
+    console.log(`  SAVED → ${draftPath.replace(process.cwd() + "/", "")} (${manifest.persistedFiles.length} files)`);
     console.log(`  Cursor: static review per Page Contract, then integrate to production route.`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -305,6 +314,7 @@ async function runConcurrentBatch(
     `\nMode 4 batch: ${total} page(s) | concurrency=${concurrency} | stagger=${staggerMs}ms`,
   );
   console.log("Generation-only: full standards prompt + reference video, maxPasses=0 (no preview/refinement)");
+  console.log("Persistence: each file copied to src/kimi-drafts/ during stream + verified on complete");
   if (skipCompletePass) {
     console.log("Completeness pass: OFF (use --complete-pass to enable)");
   }
@@ -379,6 +389,7 @@ function printStatus(state: Mode4BatchState): void {
     console.log(`${mark} [${job.stage}] ${job.canonicalPath}`);
     console.log(`    id: ${job.id} | route: ${job.route}`);
     if (job.sessionId) console.log(`    session: ${job.sessionId}`);
+    if (job.draftPath) console.log(`    draft: ${job.draftPath} (${job.persistedFiles ?? "?"} files)`);
     if (job.error) console.log(`    error: ${job.error}`);
     if (job.reworkReason) console.log(`    rework: ${job.reworkReason}`);
     console.log("");

@@ -196,6 +196,8 @@ export class KimiVisionProvider implements UiVisionProvider {
         label: phaseLabel,
         timeoutMs: KIMI_CHAT_TIMEOUT_MS,
         useIncrementalFiles: input.useIncrementalFiles,
+        draftTargetRoute: input.draftTargetRoute,
+        referenceNames: input.referenceNames,
       });
       rawText = streamed.rawText.trim();
       if (streamed.firstContentMs) {

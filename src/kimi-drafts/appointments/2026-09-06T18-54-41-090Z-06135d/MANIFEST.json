@@ -1,0 +1,27 @@
+{
+  "sessionId": "2026-09-06T18-54-41-090Z-06135d",
+  "targetRoute": "/appointments",
+  "referenceNames": [
+    "Sending Mass Texts in SlickText SlickText Tutorials - SlickText (360p)"
+  ],
+  "generatedAt": "2026-09-06T18:58:57.130Z",
+  "generatedFiles": [
+    "components/AppointmentStatusBadge.tsx",
+    "components/AppointmentsList.tsx",
+    "components/EmptyState.tsx",
+    "components/RowActionsMenu.tsx",
+    "mock-data.ts",
+    "page.tsx",
+    "reference.css"
+  ],
+  "persistedFiles": [
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/components/AppointmentStatusBadge.tsx",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/components/AppointmentsList.tsx",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/components/EmptyState.tsx",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/components/RowActionsMenu.tsx",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/mock-data.ts",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/page.tsx",
+    "src/kimi-drafts/appointments/2026-09-06T18-54-41-090Z-06135d/reference.css"
+  ],
+  "status": "generated"
+}

@@ -53,6 +53,7 @@ export async function buildReferenceImplementation(
     feedback?: string;
     isRevision?: boolean;
     isCompletenessPass?: boolean;
+    referenceNames?: string[];
   },
 ): Promise<ReferenceBuildResult> {
   const isRevision = Boolean(input.isRevision);
@@ -113,6 +114,8 @@ Watch the reference video. Then emit sandbox files incrementally with KIMI_FILE_
     leanPrompt: !isRevision && !isCompletenessPass,
     sessionId: input.sessionId,
     phaseLabel: input.feedback ? "Kimi refinement" : "Kimi initial build",
+    draftTargetRoute: input.target,
+    referenceNames: input.referenceNames,
   });
 
   const incrementalFiles = listGeneratedFiles(input.sessionId).filter(
