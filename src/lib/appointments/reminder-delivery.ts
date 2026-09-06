@@ -356,8 +356,10 @@ export function buildReminderSchedule(input: {
     ];
   }
 
+  const smsAllowed = meta.smsConsent !== false;
+
   const statusFor = (timelineType: string, enabled: boolean) => {
-    if (!enabled) return "disabled";
+    if (!enabled || !smsAllowed) return "disabled";
     if (sent(timelineType)) return "sent";
     if (failed(timelineType)) return "failed";
     if (new Date(input.startsAt).getTime() <= Date.now()) return "skipped";
@@ -379,7 +381,7 @@ export function buildReminderSchedule(input: {
       label: input.config.confirmation.label,
       status: sent(reminderTimelineType("confirmation"))
         ? "sent"
-        : meta.smsConsent && input.config.confirmation.enabled
+        : smsAllowed && input.config.confirmation.enabled
           ? "scheduled"
           : "disabled",
     },

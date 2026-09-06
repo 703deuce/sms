@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { NotetakerPanel } from "@/components/meetings/notetaker-panel";
 import { VideoMeetingPanel } from "@/components/video/video-meeting-panel";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -40,6 +41,7 @@ type AppointmentDetail = {
   endsAt: string | null;
   timezone: string | null;
   status: string;
+  externalId: string | null;
   inviteeName: string | null;
   inviteeEmail: string | null;
   inviteePhone: string | null;
@@ -96,6 +98,14 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   const [acting, setActing] = useState(false);
   const [internalNote, setInternalNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleSlots, setRescheduleSlots] = useState<Array<{ startsAt: string; endsAt: string }>>(
+    [],
+  );
+  const [rescheduleSlot, setRescheduleSlot] = useState("");
+  const [loadingRescheduleSlots, setLoadingRescheduleSlots] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -144,6 +154,53 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
     });
     setActing(false);
     await load();
+  }
+
+  async function openReschedule() {
+    if (!appt?.serviceName) return;
+    setRescheduleOpen(true);
+    setRescheduleError("");
+    setRescheduleSlot("");
+    setLoadingRescheduleSlots(true);
+    try {
+      const res = await fetch(
+        `/api/appointments/availability?serviceName=${encodeURIComponent(appt.serviceName)}&daysAhead=14`,
+      );
+      const json = await res.json();
+      setRescheduleSlots(json.data?.slots || []);
+    } finally {
+      setLoadingRescheduleSlots(false);
+    }
+  }
+
+  async function saveReschedule() {
+    if (!rescheduleSlot) {
+      setRescheduleError("Select a new time slot.");
+      return;
+    }
+    setRescheduling(true);
+    setRescheduleError("");
+    const res = await fetch(`/api/appointments/${appointmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startsAt: rescheduleSlot }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setRescheduling(false);
+    if (!res.ok) {
+      setRescheduleError(json.error || "Could not reschedule");
+      return;
+    }
+    setRescheduleOpen(false);
+    await load();
+  }
+
+  function externalCalendarLabel(externalId: string | null | undefined) {
+    if (!externalId) return null;
+    if (externalId.startsWith("microsoft:")) return `Microsoft · ${externalId.replace("microsoft:", "")}`;
+    if (externalId.startsWith("google:")) return `Google · ${externalId.replace("google:", "")}`;
+    if (externalId.startsWith("calendly:")) return `Calendly · ${externalId.replace("calendly:", "")}`;
+    return externalId;
   }
 
   if (loading) {
@@ -278,6 +335,17 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               variant="outline"
               size="sm"
               disabled={acting}
+              onClick={openReschedule}
+            >
+              <Calendar className="h-4 w-4" />
+              Reschedule
+            </Button>
+          ) : null}
+          {!isCanceled ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={acting}
               className="text-danger hover:bg-danger/5"
               onClick={() => patch({ action: "cancel" })}
             >
@@ -293,6 +361,59 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
           ) : null}
         </div>
       </div>
+
+      {rescheduleOpen ? (
+        <Card className="border-primary/20 p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <CardTitle>Reschedule appointment</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setRescheduleOpen(false)}>
+              Close
+            </Button>
+          </div>
+          <p className="mb-4 text-[13px] text-muted-foreground">
+            Pick a new time. Reminders reset and linked calendar events update in place.
+          </p>
+          {loadingRescheduleSlots ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading available times…
+            </div>
+          ) : rescheduleSlots.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No open slots in the next 14 days.</p>
+          ) : (
+            <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+              {rescheduleSlots.map((slot) => (
+                <button
+                  key={slot.startsAt}
+                  type="button"
+                  onClick={() => setRescheduleSlot(slot.startsAt)}
+                  className={`rounded-lg border px-3 py-2 text-left text-[13px] transition-colors ${
+                    rescheduleSlot === slot.startsAt
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border hover:bg-muted/50"
+                  }`}
+                >
+                  {formatAppointmentDate(slot.startsAt, appt.timezone)}
+                  <span className="block text-muted-foreground">
+                    {formatAppointmentTime(slot.startsAt, appt.timezone)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {rescheduleError ? (
+            <p className="mt-3 text-sm font-medium text-rose-600">{rescheduleError}</p>
+          ) : null}
+          <div className="mt-4 flex gap-2">
+            <Button size="sm" disabled={rescheduling || !rescheduleSlot} onClick={saveReschedule}>
+              {rescheduling ? "Saving…" : "Save new time"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setRescheduleOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {/* Content grid */}
       <div className="grid gap-5 lg:grid-cols-3">
@@ -480,6 +601,22 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               A reminder failed to deliver — check the timeline.
             </p>
           ) : null}
+        </Card>
+
+        <Card className="p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <CardTitle>Calendar sync</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </div>
+          {appt.externalId ? (
+            <p className="text-[13px] font-medium text-foreground">
+              {externalCalendarLabel(appt.externalId)}
+            </p>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">
+              No external calendar event linked yet.
+            </p>
+          )}
         </Card>
 
         <NotetakerPanel appointmentId={appt.id} />

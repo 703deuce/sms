@@ -4,10 +4,11 @@ import {
   isSmsProductPath,
   productOfferPath,
 } from "@/lib/products/paths";
+import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
-import { isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import { isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
 /** Edge-safe product route guards (no DB / server-only imports). */
 
@@ -21,6 +22,10 @@ export function productAccessDeniedRedirect(
   access: ProductAccessFlags,
   options?: { authenticated?: boolean },
 ): string | null {
+  // Appointments V1 is the primary product — do not bounce to /dashboard (SMS entitlement loop).
+  if (isAppointmentsV1Primary() && isAppointmentsProductPath(pathname)) {
+    return null;
+  }
   if (isMctbAppPath(pathname)) {
     return null;
   }

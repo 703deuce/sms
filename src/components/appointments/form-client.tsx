@@ -321,10 +321,10 @@ export function AppointmentFormClient() {
               />
               <span>
                 <span className="block text-[13px] font-medium text-foreground">
-                  Send booking confirmation SMS
+                  Send SMS reminders
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Customer receives a confirmation text once the appointment is created (requires consent).
+                  Booking confirmation plus 24h and 2h reminder texts. Uncheck if the customer declined SMS.
                 </span>
               </span>
             </label>
@@ -410,7 +410,7 @@ export function AppointmentFormClient() {
             </div>
             <div>
               <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                SMS confirmation
+                SMS reminders
               </dt>
               <dd className="mt-0.5">
                 <span

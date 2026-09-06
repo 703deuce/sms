@@ -5,6 +5,7 @@ import {
   cancelPlatformAppointment,
   getAppointment,
   loadAppointmentPlatformConfig,
+  reschedulePlatformAppointment,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
 import { addInternalNote } from "@/lib/appointments/internal-notes";
@@ -39,6 +40,7 @@ export async function PATCH(request: Request, { params }: Params) {
       status?: string;
       action?: string;
       internalNote?: string;
+      startsAt?: string;
     };
 
     if (body.internalNote?.trim()) {
@@ -49,6 +51,25 @@ export async function PATCH(request: Request, { params }: Params) {
       });
       const data = await getAppointment(auth.workspaceId, id);
       return NextResponse.json({ data, note });
+    }
+
+    if (body.startsAt?.trim()) {
+      const updated = await reschedulePlatformAppointment(
+        auth.workspaceId,
+        id,
+        body.startsAt.trim(),
+        "staff",
+      );
+      const data = await getAppointment(auth.workspaceId, id);
+      const config = await loadAppointmentPlatformConfig(auth.workspaceId);
+      const reminderSchedule = buildReminderSchedule({
+        startsAt: data?.startsAt || updated.startsAt.toISOString(),
+        metadata: (data?.metadata || updated.metadata || {}) as object,
+        config: config.reminders,
+      });
+      return NextResponse.json({
+        data: data ? { ...data, reminderSchedule } : { id: updated.id, reminderSchedule },
+      });
     }
 
     if (body.action === "cancel" || body.status === "canceled") {
