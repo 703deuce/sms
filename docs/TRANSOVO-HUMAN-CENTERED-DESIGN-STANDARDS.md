@@ -33,7 +33,8 @@
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
 - Guide #3: `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
+- Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #6 — Responsive, Reflow & Zoom Standards (coming)
 
 ---
 
@@ -762,7 +763,9 @@ For each significant page/flow:
 Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md        → WCAG 2.2 AA
 Guide #2  TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md → ISO 9241 HCD (this file)
 Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md         → IA & navigation
-Guide #4+ (coming)                                    → Interaction, keyboard & focus
+Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
+Guide #4 (coming)                                    → Interaction, keyboard & focus
+Guide #6+ (coming)                                   → Responsive, reflow & zoom, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                           → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                   → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                       → Visual tokens
@@ -770,4 +773,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                       → Visual tokens
 
 ---
 
-*Guide #2: Human-Centered Design & Usability Standards. Next: Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 — Interaction, Keyboard & Focus Standards.*
+*Guide #2: Human-Centered Design & Usability Standards. Next: Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`.*

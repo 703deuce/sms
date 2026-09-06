@@ -42,7 +42,8 @@
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - Guide #2: `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - Guide #3: `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
-- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
+- Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
+- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #6 — Responsive, Reflow & Zoom Standards (coming)
 
 ---
 
@@ -603,11 +604,13 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md       → Visual tokens & components
 TRANSOVO-ACCESSIBILITY-STANDARDS.md        → WCAG 2.2 AA + ARIA (this file) ← hard standard
 TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md → ISO 9241 HCD
 TRANSOVO-IA-NAVIGATION-STANDARDS.md        → IA & navigation
-Guide #4+ (coming)                         → Interaction, keyboard & focus
+TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
+Guide #4 (coming)                            → Interaction, keyboard & focus
+Guide #6+ (coming)                           → Responsive, reflow & zoom, etc.
 ```
 
 **Build accessibility into components at construction time.** Retrofitting after visual completion is not acceptable.
 
 ---
 
-*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 — Interaction, Keyboard & Focus Standards.*
+*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`.*
