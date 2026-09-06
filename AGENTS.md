@@ -165,10 +165,33 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 | Mode | When | Command |
 |------|------|---------|
-| **GENERATION** | New page from reference video | `npm run ui:kimi -- --target /route --video <name>` |
-| **POLISH** | Existing page ~60%+ done — tighten real frontend in place | `npm run ui:kimi -- --mode polish --target /campaigns --walkthrough --capture-current --apply` |
+| **GENERATION (Mode 1)** | New page from reference video → sandbox | `npm run ui:kimi -- --target /route --video <name>` |
+| **POLISH (Mode 2/3)** | Existing page ~60%+ done — tighten real frontend in place | `npm run ui:kimi -- --mode polish --target /campaigns --walkthrough --capture-current --apply` |
+| **MODE 4 — PRODUCTION REBUILD** | Full approved customer-facing UI rebuild | `npm run ui:kimi-mode4` — see orchestration doc |
 
-**Prefer POLISH** when the page already works and structure is acceptable. Do not rebuild good structure from scratch.
+**Mode 4 is the default for the Transovo full UI rebuild.** Do not substitute Mode 3 polish passes for approved inventory pages.
+
+**Read first:** `docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md` · Allowlist: `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md`
+
+### Mode 4 — Cursor orchestration rules (mandatory)
+
+**Cursor orchestrates. Kimi implements UI. Cursor does NOT redesign production pages manually.**
+
+**Cursor must NEVER run for Mode 4 verification:** builds, dev servers, browsers, screenshots, Playwright, Puppeteer, Cypress, Docker builds, memory-heavy tests, visual verification.
+
+**Cursor must:**
+
+1. Load all governing standards (`npm run ui:kimi-mode4-standards` or `mode4-standards-pack.ts`)
+2. Use **only** the approved page inventory — not repo route discovery
+3. Generate a **Page Contract** per page before Kimi (`npm run ui:kimi-mode4-contract -- --id <id>`)
+4. Run foundations serially, then golden screens, then bulk with **≤10 concurrent** jobs (`npm run ui:kimi-mode4 -- --stage bulk --concurrency 10 --stagger-ms 5000`)
+5. Statically verify each result against Page Contract + feature matrix
+6. Integrate Kimi output into **actual production routes** — Kimi version becomes canonical
+7. Record completion in `.ui-agent/mode4/batch-state.json`
+
+**Kimi receives:** full standards originals + Page Contract + Campaign/Inbox art-direction videos (not product architecture).
+
+**Prefer POLISH (Mode 2/3)** only for targeted refinement after Mode 4 — not as a substitute for full rebuild.
 
 ### POLISH workflow (production pages)
 

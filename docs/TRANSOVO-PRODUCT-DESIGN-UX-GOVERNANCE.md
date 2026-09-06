@@ -43,6 +43,7 @@ All product work must inherit the same:
 | Layer | Document |
 |-------|----------|
 | **Governance (this file)** | `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` |
+| **Mode 4 UI rebuild orchestration** | `docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md` · `docs/TRANSOVO-MODE-4-REBUILD-MANIFEST.md` |
 | Product scope / domain | `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · `docs/TRANSOVO-UI-DESIGN-GUIDE.md` |
 | IA & terminology | `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` |
 | HCD principles | `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` |

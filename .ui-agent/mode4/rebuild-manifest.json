@@ -1,0 +1,2057 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-06T18:11:27.371Z",
+  "maxConcurrentJobs": 10,
+  "staggerMs": 5000,
+  "entries": [
+    {
+      "id": "foundation-shell",
+      "route": "__foundation__",
+      "canonicalPath": "Platform → Shared Shell",
+      "archetype": "Foundation",
+      "stage": "foundations",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/app/(app)/layout.tsx",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "sharedConsume": [],
+      "sharedForbidden": [],
+      "notes": "Establish canonical sidebar, header, tokens once. Serial only."
+    },
+    {
+      "id": "home",
+      "route": "/appointments/overview",
+      "canonicalPath": "Home",
+      "archetype": "Dashboard",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/appointments/overview/page.tsx",
+        "src/components/appointments/kimi-ui/overview/page.tsx",
+        "src/components/appointments/overview-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/overview/map-overview.ts",
+        "src/features/appointments/kimi/overview/overview-connected.tsx",
+        "src/features/appointments/kimi/overview/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§6 Overview"
+    },
+    {
+      "id": "appointments-calendar",
+      "route": "/appointments/calendar",
+      "canonicalPath": "Appointments → Calendar",
+      "archetype": "Calendar",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/appointments/calendar/page.tsx",
+        "src/components/appointments/calendar-client.tsx",
+        "src/components/appointments/kimi-ui/calendar/page.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/calendar/calendar-connected.tsx",
+        "src/features/appointments/kimi/calendar/map-calendar.ts",
+        "src/features/appointments/kimi/calendar/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§7 Calendar"
+    },
+    {
+      "id": "appointments-list",
+      "route": "/appointments",
+      "canonicalPath": "Appointments → List",
+      "archetype": "List",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/appointments/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/list-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointments/sms-consent-disclosure.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§8 Appointments list"
+    },
+    {
+      "id": "appointment-detail",
+      "route": "/appointments/[id]",
+      "canonicalPath": "Appointments → Appointment Detail",
+      "archetype": "Detail",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/appointments/[id]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/detail-client.tsx",
+        "src/components/meetings/notetaker-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/video/video-meeting-panel.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointments/sms-consent-disclosure.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/meeting-assistant/platform.ts",
+        "src/lib/meeting-assistant/types.ts",
+        "src/lib/transovo-video/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§11 Appointment detail",
+      "notes": "Use capture-path for a real appointment id when integrating."
+    },
+    {
+      "id": "booking-types",
+      "route": "/appointments/types",
+      "canonicalPath": "Booking → Booking Types",
+      "archetype": "Configuration",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/appointments/types/page.tsx",
+        "src/components/appointments/kimi-ui/appointment-types/page.tsx",
+        "src/components/appointments/types-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/appointment-types/appointment-types-connected.tsx",
+        "src/features/appointments/kimi/appointment-types/map-appointment-types.ts",
+        "src/features/appointments/kimi/appointment-types/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§9 Appointment Types"
+    },
+    {
+      "id": "workflow-builder",
+      "route": "/appointments/workflows",
+      "canonicalPath": "Automations → Workflows",
+      "archetype": "Builder",
+      "stage": "golden",
+      "golden": true,
+      "artDirection": "workflows",
+      "primaryFiles": [
+        "src/app/(app)/appointments/workflows/page.tsx",
+        "src/components/appointments/workflows-client.tsx",
+        "src/components/appointments/workflows-list-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointment-workflows/labels.ts",
+        "src/lib/appointment-workflows/metadata.ts",
+        "src/lib/appointment-workflows/preview.ts",
+        "src/lib/appointment-workflows/templates.ts",
+        "src/lib/appointment-workflows/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "notes": "Include builder canvas, node config modals, list view."
+    },
+    {
+      "id": "appointments-waitlist",
+      "route": "/appointments/waitlist",
+      "canonicalPath": "Appointments → Waitlist",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/waitlist/page.tsx",
+        "src/components/appointments/waitlist-admin-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "appointments-recalls",
+      "route": "/appointments/recalls",
+      "canonicalPath": "Appointments → Recalls",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/recalls/page.tsx",
+        "src/components/appointments/recalls-hub-client.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "appointments-new",
+      "route": "/appointments/new",
+      "canonicalPath": "Appointments → New Appointment",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/new/page.tsx",
+        "src/components/appointments/form-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§10 Create / edit appointment"
+    },
+    {
+      "id": "appointments-setup",
+      "route": "/appointments/setup",
+      "canonicalPath": "Appointments → Get Started",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/setup/page.tsx",
+        "src/components/appointments/kimi-ui/get-started/page.tsx",
+        "src/components/appointments/setup-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/setup/map-setup.ts",
+        "src/features/appointments/kimi/setup/setup-connected.tsx",
+        "src/features/appointments/kimi/setup/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§28 First-run onboarding"
+    },
+    {
+      "id": "booking-pages",
+      "route": "/appointments/booking",
+      "canonicalPath": "Booking → Booking Pages",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/booking/page.tsx",
+        "src/components/appointments/booking-settings-client.tsx",
+        "src/components/appointments/kimi-ui/booking/page.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/booking/booking-connected.tsx",
+        "src/features/appointments/kimi/booking/map-booking.ts",
+        "src/features/appointments/kimi/booking/types.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§12 Booking page management"
+    },
+    {
+      "id": "availability",
+      "route": "/appointments/availability",
+      "canonicalPath": "Booking → Availability",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/availability/page.tsx",
+        "src/components/appointments/availability-client.tsx",
+        "src/components/appointments/calendar-integrations-card.tsx",
+        "src/components/appointments/kimi-ui/availability/page.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/availability/availability-connected.tsx",
+        "src/features/appointments/kimi/availability/map-availability.ts",
+        "src/features/appointments/kimi/availability/types.ts",
+        "src/lib/appointments/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "ai-booking",
+      "route": "/appointments/ai-booking",
+      "canonicalPath": "Booking → AI Booking",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/ai-booking/page.tsx",
+        "src/components/appointments/ai-booking-admin-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "routing-forms",
+      "route": "/appointments/routing-forms",
+      "canonicalPath": "Booking → Routing",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/routing-forms/page.tsx",
+        "src/components/appointments/routing-forms-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointments/routing-forms-presets.ts",
+        "src/lib/appointments/scheduling-capabilities.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "meeting-polls",
+      "route": "/appointments/polls",
+      "canonicalPath": "Booking → Meeting Polls",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/polls/page.tsx",
+        "src/components/appointments/meeting-polls-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "team-pages",
+      "route": "/appointments/team-pages",
+      "canonicalPath": "Booking → Team Booking Pages",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/team-pages/page.tsx",
+        "src/components/appointments/team-pages-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointments/scheduling-capabilities.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "reminder-sequences",
+      "route": "/appointments/reminders",
+      "canonicalPath": "Automations → Reminder Sequences",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/reminders/page.tsx",
+        "src/components/appointments/kimi-ui/reminder-settings/page.tsx",
+        "src/components/appointments/reminders-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/features/appointments/kimi/reminders/map-reminders.ts",
+        "src/features/appointments/kimi/reminders/reminders-connected.tsx",
+        "src/features/appointments/kimi/reminders/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§14 Reminder settings"
+    },
+    {
+      "id": "workflow-new",
+      "route": "/appointments/workflows/new",
+      "canonicalPath": "Automations → New Workflow",
+      "archetype": "Builder",
+      "stage": "bulk",
+      "artDirection": "workflows",
+      "primaryFiles": [
+        "src/app/(app)/appointments/workflows/new/page.tsx",
+        "src/components/appointments/workflows-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointment-workflows/conditions.ts",
+        "src/lib/appointment-workflows/labels.ts",
+        "src/lib/appointment-workflows/metadata.ts",
+        "src/lib/appointment-workflows/preview.ts",
+        "src/lib/appointment-workflows/scheduler.ts",
+        "src/lib/appointment-workflows/templates.ts",
+        "src/lib/appointment-workflows/types.ts",
+        "src/lib/appointments/appointments-service.ts",
+        "src/lib/appointments/settings.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/db.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "workflow-edit",
+      "route": "/appointments/workflows/[id]/edit",
+      "canonicalPath": "Automations → Edit Workflow",
+      "archetype": "Builder",
+      "stage": "bulk",
+      "artDirection": "workflows",
+      "primaryFiles": [
+        "src/app/(app)/appointments/workflows/[id]/edit/page.tsx",
+        "src/components/appointments/workflows-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/api-auth.ts",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointment-workflows/conditions.ts",
+        "src/lib/appointment-workflows/labels.ts",
+        "src/lib/appointment-workflows/metadata.ts",
+        "src/lib/appointment-workflows/preview.ts",
+        "src/lib/appointment-workflows/scheduler.ts",
+        "src/lib/appointment-workflows/service.ts",
+        "src/lib/appointment-workflows/templates.ts",
+        "src/lib/appointment-workflows/types.ts",
+        "src/lib/appointments/appointments-service.ts",
+        "src/lib/appointments/org-permissions.ts",
+        "src/lib/appointments/scheduling-capabilities.ts",
+        "src/lib/appointments/settings.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/auth.ts",
+        "src/lib/db.ts",
+        "src/lib/products/entitlement-errors.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/capabilities.ts",
+        "src/lib/workspace/types.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "workflow-setup",
+      "route": "/appointments/workflows/setup/[templateId]",
+      "canonicalPath": "Automations → Workflow Setup Wizard",
+      "archetype": "Builder",
+      "stage": "bulk",
+      "artDirection": "workflows",
+      "primaryFiles": [
+        "src/app/(app)/appointments/workflows/setup/[templateId]/page.tsx",
+        "src/components/appointments/workflows-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointment-workflows/conditions.ts",
+        "src/lib/appointment-workflows/labels.ts",
+        "src/lib/appointment-workflows/metadata.ts",
+        "src/lib/appointment-workflows/preview.ts",
+        "src/lib/appointment-workflows/scheduler.ts",
+        "src/lib/appointment-workflows/templates.ts",
+        "src/lib/appointment-workflows/types.ts",
+        "src/lib/appointments/appointments-service.ts",
+        "src/lib/appointments/settings.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/db.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "automation-templates",
+      "route": "/appointments/automations/templates",
+      "canonicalPath": "Automations → Templates",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/automations/templates/page.tsx",
+        "src/components/appointments/automations-templates-client.tsx",
+        "src/components/appointments/workflows-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointment-workflows/labels.ts",
+        "src/lib/appointment-workflows/metadata.ts",
+        "src/lib/appointment-workflows/preview.ts",
+        "src/lib/appointment-workflows/templates.ts",
+        "src/lib/appointment-workflows/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "automation-activity",
+      "route": "/appointments/automations/activity",
+      "canonicalPath": "Automations → Activity",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/automations/activity/page.tsx",
+        "src/components/appointments/automations-activity-client.tsx",
+        "src/components/appointments/unknown-replies-panel.tsx",
+        "src/components/appointments/workflow-logs-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "contacts",
+      "route": "/contacts",
+      "canonicalPath": "Contacts",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/page.tsx",
+        "src/components/contacts/kimi-contacts-connected.tsx",
+        "src/components/kimi/contacts-lists/mock-data.ts",
+        "src/components/kimi/contacts/components/ContactsList.tsx",
+        "src/components/kimi/contacts/components/CreateContact.tsx",
+        "src/components/kimi/contacts/components/ImportWizard.tsx",
+        "src/components/kimi/contacts/components/Modal.tsx",
+        "src/components/kimi/contacts/mock-data.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/download-csv.ts",
+        "src/lib/contacts/kimi-contacts-adapter.ts",
+        "src/lib/contacts/kimi-lists-adapter.ts",
+        "src/lib/contacts/parse-csv.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts",
+        "src/styles/kimi/contacts.css"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§17 Contacts"
+    },
+    {
+      "id": "contact-detail",
+      "route": "/contacts/[id]",
+      "canonicalPath": "Contacts → Detail",
+      "archetype": "Detail",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/[id]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/contact-appointments-panel.tsx",
+        "src/components/contacts/click-to-call-button.tsx",
+        "src/components/contacts/connected-records-panel.tsx",
+        "src/components/contacts/contact-activity-timeline.tsx",
+        "src/components/contacts/contact-booking-actions.tsx",
+        "src/components/contacts/contact-profile-edit.tsx",
+        "src/components/contacts/integration-timeline-card.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/status-chip.tsx",
+        "src/components/ui/table.tsx",
+        "src/lib/appointments/types.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "contacts-lists",
+      "route": "/contacts/lists",
+      "canonicalPath": "Contacts → Lists",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/lists/page.tsx",
+        "src/components/contacts/kimi-lists-connected.tsx",
+        "src/components/kimi/contacts-lists/components/ContactsPage.tsx",
+        "src/components/kimi/contacts-lists/components/CreateListPage.tsx",
+        "src/components/kimi/contacts-lists/components/KeywordEditor.tsx",
+        "src/components/kimi/contacts-lists/components/ListsPage.tsx",
+        "src/components/kimi/contacts-lists/components/Sidebar.tsx",
+        "src/components/kimi/contacts-lists/mock-data.ts",
+        "src/components/kimi/contacts/mock-data.ts",
+        "src/lib/contacts/download-csv.ts",
+        "src/lib/contacts/kimi-contacts-adapter.ts",
+        "src/lib/contacts/kimi-lists-adapter.ts",
+        "src/lib/contacts/parse-csv.ts",
+        "src/lib/types.ts",
+        "src/lib/workspace-data.ts",
+        "src/styles/kimi/contacts-lists.css"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "contacts-segments",
+      "route": "/contacts/segments",
+      "canonicalPath": "Contacts → Segments",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/segments/page.tsx",
+        "src/components/contacts/kimi-segments-connected.tsx",
+        "src/components/kimi/contacts-lists/mock-data.ts",
+        "src/components/kimi/contacts-segments/components/AudienceSubNav.tsx",
+        "src/components/kimi/contacts-segments/components/ConditionRow.tsx",
+        "src/components/kimi/contacts-segments/components/CreateSegment.tsx",
+        "src/components/kimi/contacts-segments/components/Dashboard.tsx",
+        "src/components/kimi/contacts-segments/components/SegmentContacts.tsx",
+        "src/components/kimi/contacts-segments/components/SegmentSavedModal.tsx",
+        "src/components/kimi/contacts-segments/components/SegmentsList.tsx",
+        "src/components/kimi/contacts-segments/mock-data.ts",
+        "src/components/kimi/contacts/mock-data.ts",
+        "src/components/kimi/conversations/components/InboxRail.tsx",
+        "src/lib/auth.ts",
+        "src/lib/contacts/download-csv.ts",
+        "src/lib/contacts/kimi-contacts-adapter.ts",
+        "src/lib/contacts/kimi-lists-adapter.ts",
+        "src/lib/contacts/kimi-segment-condition-map.ts",
+        "src/lib/contacts/kimi-segments-adapter.ts",
+        "src/lib/contacts/parse-csv.ts",
+        "src/lib/contacts/segment-query.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/conversation-types.ts",
+        "src/lib/inbox/kimi-inbox-adapter.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/messaging/messaging-settings.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/workspace-data.ts",
+        "src/styles/kimi/contacts-segments.css"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "contacts-fields",
+      "route": "/contacts/fields",
+      "canonicalPath": "Contacts → Custom Fields",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/fields/page.tsx",
+        "src/components/contacts/kimi-fields-connected.tsx",
+        "src/components/kimi/contacts-fields/components/AppShell.tsx",
+        "src/components/kimi/contacts-fields/components/ContactEdit.tsx",
+        "src/components/kimi/contacts-fields/components/ContactsList.tsx",
+        "src/components/kimi/contacts-fields/components/CreateFieldForm.tsx",
+        "src/components/kimi/contacts-fields/components/CustomFieldsList.tsx",
+        "src/components/kimi/contacts-fields/components/Sidebar.tsx",
+        "src/components/kimi/contacts-fields/mock-data.ts",
+        "src/components/kimi/contacts/mock-data.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/custom-fields.ts",
+        "src/lib/contacts/kimi-contacts-adapter.ts",
+        "src/lib/contacts/kimi-fields-adapter.ts",
+        "src/lib/contacts/parse-csv.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/workspace-data.ts",
+        "src/styles/kimi/contacts-fields.css"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "contacts-imports",
+      "route": "/contacts/imports",
+      "canonicalPath": "Contacts → Imports",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "campaign",
+      "primaryFiles": [
+        "src/app/(app)/contacts/imports/page.tsx",
+        "src/components/contacts/kimi-contacts-connected.tsx",
+        "src/components/kimi/contacts-lists/mock-data.ts",
+        "src/components/kimi/contacts/components/ContactsList.tsx",
+        "src/components/kimi/contacts/components/CreateContact.tsx",
+        "src/components/kimi/contacts/components/ImportWizard.tsx",
+        "src/components/kimi/contacts/components/Modal.tsx",
+        "src/components/kimi/contacts/mock-data.ts",
+        "src/lib/auth.ts",
+        "src/lib/contacts/download-csv.ts",
+        "src/lib/contacts/kimi-contacts-adapter.ts",
+        "src/lib/contacts/kimi-lists-adapter.ts",
+        "src/lib/contacts/parse-csv.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "messages-inbox",
+      "route": "/conversations",
+      "canonicalPath": "Messages → Inbox",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "inbox",
+      "primaryFiles": [
+        "src/app/(app)/conversations/page.tsx",
+        "src/components/ai-replies/inbox-ai-assist-panel.tsx",
+        "src/components/inbox/conversations-composer.tsx",
+        "src/components/inbox/conversations-contact-panel.tsx",
+        "src/components/inbox/conversations-inbox-settings-wired.tsx",
+        "src/components/inbox/conversations-thread-area.tsx",
+        "src/components/inbox/inbox-contact-drawer.tsx",
+        "src/components/inbox/inbox-product-filters.tsx",
+        "src/components/inbox/kimi-conversations-connected.tsx",
+        "src/components/kimi/auto-replies/components/InboxSettings.tsx",
+        "src/components/kimi/conversations/components/BulkActionsBar.tsx",
+        "src/components/kimi/conversations/components/ConversationList.tsx",
+        "src/components/kimi/conversations/components/InboxRail.tsx",
+        "src/components/kimi/conversations/components/InboxSettings.tsx",
+        "src/components/kimi/conversations/components/Popover.tsx",
+        "src/components/kimi/conversations/components/SettingsHome.tsx",
+        "src/components/kimi/conversations/components/TagsSettings.tsx",
+        "src/components/kimi/conversations/components/ThreadView.tsx",
+        "src/components/kimi/conversations/mock-data.ts",
+        "src/lib/auth.ts",
+        "src/lib/auto-replies/kimi-messaging-settings-adapter.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/conversation-types.ts",
+        "src/lib/inbox/conversation-url-filters.ts",
+        "src/lib/inbox/inbox-access.ts",
+        "src/lib/inbox/inbox-pagination.ts",
+        "src/lib/inbox/kimi-inbox-adapter.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/inbox/team-presence.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/constants.ts",
+        "src/lib/mass-texting/inbox-filters.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/messaging/messaging-settings.ts",
+        "src/lib/messaging/preferred-sending-number.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/workspace-data.ts",
+        "src/lib/workspace/platform-launch.ts",
+        "src/styles/kimi/conversations.css"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§16 Conversations"
+    },
+    {
+      "id": "messages-saved-replies",
+      "route": "/conversations/saved-replies",
+      "canonicalPath": "Messages → Saved Replies",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "inbox",
+      "primaryFiles": [
+        "src/app/(app)/conversations/saved-replies/page.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/status-chip.tsx",
+        "src/components/ui/table.tsx",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "meetings-upcoming",
+      "route": "/video",
+      "canonicalPath": "Meetings → Upcoming",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/video/page.tsx",
+        "src/components/meetings/notetaker-home-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/api/parse-json-response.ts",
+        "src/lib/meeting-assistant/platform.ts",
+        "src/lib/meeting-assistant/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "meetings-recaps",
+      "route": "/meetings",
+      "canonicalPath": "Meetings → Recaps",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/meetings/page.tsx",
+        "src/components/meetings/meetings-list-client.tsx",
+        "src/components/meetings/new-meeting-menu.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/api/parse-json-response.ts",
+        "src/lib/meeting-assistant/platform.ts",
+        "src/lib/meeting-assistant/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "meeting-detail",
+      "route": "/meetings/[id]",
+      "canonicalPath": "Meetings → Recap Detail",
+      "archetype": "Detail",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/meetings/[id]/page.tsx",
+        "src/components/meetings/meeting-detail-client.tsx",
+        "src/components/meetings/meeting-share-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/meeting-assistant/platform.ts",
+        "src/lib/meeting-assistant/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "payments-transactions",
+      "route": "/payments/transactions",
+      "canonicalPath": "Payments → Transactions",
+      "archetype": "List",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/payments/transactions/page.tsx",
+        "src/components/payments/transactions-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/table.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "analytics-overview",
+      "route": "/appointments/analytics",
+      "canonicalPath": "Analytics → Overview",
+      "archetype": "Dashboard",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/analytics/page.tsx",
+        "src/components/appointments/analytics-client.tsx",
+        "src/components/appointments/analytics-shell.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§21 Analytics"
+    },
+    {
+      "id": "analytics-booking",
+      "route": "/appointments/analytics/booking",
+      "canonicalPath": "Analytics → Booking",
+      "archetype": "Dashboard",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/analytics/booking/page.tsx",
+        "src/components/appointments/analytics-client.tsx",
+        "src/components/appointments/analytics-shell.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "analytics-reminders",
+      "route": "/appointments/analytics/reminders",
+      "canonicalPath": "Analytics → Reminders",
+      "archetype": "Dashboard",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/analytics/reminders/page.tsx",
+        "src/components/appointments/analytics-client.tsx",
+        "src/components/appointments/analytics-shell.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "analytics-automations",
+      "route": "/appointments/analytics/automations",
+      "canonicalPath": "Analytics → Automations",
+      "archetype": "Dashboard",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/analytics/automations/page.tsx",
+        "src/components/appointments/analytics-client.tsx",
+        "src/components/appointments/analytics-shell.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "analytics-reports",
+      "route": "/appointments/analytics/reports",
+      "canonicalPath": "Analytics → Reports",
+      "archetype": "Dashboard",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/appointments/analytics/reports/page.tsx",
+        "src/components/appointments/analytics-client.tsx",
+        "src/components/appointments/analytics-shell.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "integrations-calendars",
+      "route": "/integrations/calendars",
+      "canonicalPath": "Integrations → Calendars",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/integrations/calendars/page.tsx",
+        "src/components/integrations/calendar-integrations-card.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/calendar/constants.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§23 Integrations"
+    },
+    {
+      "id": "integrations-payments",
+      "route": "/integrations/payments",
+      "canonicalPath": "Integrations → Payments",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/integrations/payments/page.tsx",
+        "src/components/settings/merchant-payments-settings-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/merchant-payments/types.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-business",
+      "route": "/settings/business",
+      "canonicalPath": "Settings → Business",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/business/page.tsx",
+        "src/components/settings/business-settings-form.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/metric.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/domain.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§22 Settings"
+    },
+    {
+      "id": "settings-users",
+      "route": "/settings/users",
+      "canonicalPath": "Settings → Team",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/users/page.tsx",
+        "src/components/settings/invite-user-button.tsx",
+        "src/components/settings/pending-invites.tsx",
+        "src/components/settings/team-member-row.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/status-chip.tsx",
+        "src/components/ui/table.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/auth.ts",
+        "src/lib/brand.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/email/brevo.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/team/invites.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-messaging",
+      "route": "/settings/messaging",
+      "canonicalPath": "Settings → Messaging",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/messaging/page.tsx",
+        "src/components/settings/messaging-settings-form.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/auth.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/domain.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/messaging/messaging-settings.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-calendar",
+      "route": "/settings/calendar",
+      "canonicalPath": "Settings → Calendar",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/calendar/page.tsx",
+        "src/components/integrations/calendar-integrations-card.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/calendar/constants.ts",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-meetings",
+      "route": "/settings/ai-notetaker",
+      "canonicalPath": "Settings → Meetings",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/ai-notetaker/page.tsx",
+        "src/components/meetings/notetaker-settings-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/meeting-assistant/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-security",
+      "route": "/settings/security",
+      "canonicalPath": "Settings → Security",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/security/page.tsx",
+        "src/components/settings/security-settings-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/status-chip.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "settings-billing",
+      "route": "/settings/billing",
+      "canonicalPath": "Settings → Billing",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/settings/billing/page.tsx",
+        "src/components/settings/billing-settings-panel.tsx",
+        "src/components/settings/platform-products-panel.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/empty-state.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/lib/products/appointments-settings-tabs.ts",
+        "src/lib/products/feature-entitlements.ts",
+        "src/lib/products/platform-billing-catalog-definitions.ts",
+        "src/lib/products/platform-bundle-pricing.ts",
+        "src/lib/products/types.ts",
+        "src/lib/settings-tabs.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace/platform-launch.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "help-getting-started",
+      "route": "/getting-started",
+      "canonicalPath": "Help → Getting Started",
+      "archetype": "Configuration",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(app)/getting-started/page.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/page-header.tsx",
+        "src/lib/auth.ts",
+        "src/lib/compliance-helpers.ts",
+        "src/lib/contacts/visible-contacts.ts",
+        "src/lib/contacts/workspace-membership.ts",
+        "src/lib/db.ts",
+        "src/lib/domain.ts",
+        "src/lib/inbox/message-preview.ts",
+        "src/lib/mappers.ts",
+        "src/lib/mass-texting/product-source.ts",
+        "src/lib/messaging/compliance/messaging-compliance.ts",
+        "src/lib/messaging/compliance/phone-number-class.ts",
+        "src/lib/supabase/admin.ts",
+        "src/lib/supabase/prisma-compat.ts",
+        "src/lib/types.ts",
+        "src/lib/utils.ts",
+        "src/lib/workspace-data.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "public-booking",
+      "route": "/book/[slug]",
+      "canonicalPath": "Public → Booking Page",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/book/[slug]/[serviceId]/page.tsx",
+        "src/app/(public)/book/[slug]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/booking-question-field.tsx",
+        "src/components/appointments/public-action-client.tsx",
+        "src/components/appointments/public-booking-client.tsx",
+        "src/components/appointments/square-payment-step.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointments/sms-consent-disclosure.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/brand.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§13 Public booking"
+    },
+    {
+      "id": "public-booking-service",
+      "route": "/book/[slug]/[serviceId]",
+      "canonicalPath": "Public → Booking Service Select",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/book/[slug]/[serviceId]/page.tsx",
+        "src/app/(public)/book/[slug]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/booking-question-field.tsx",
+        "src/components/appointments/public-action-client.tsx",
+        "src/components/appointments/public-booking-client.tsx",
+        "src/components/appointments/square-payment-step.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointments/sms-consent-disclosure.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/brand.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "public-embed-booking",
+      "route": "/embed/book/[slug]",
+      "canonicalPath": "Public → Embed Booking",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/embed/book/[slug]/page.tsx",
+        "src/components/appointments/booking-question-field.tsx",
+        "src/components/appointments/public-booking-client.tsx",
+        "src/components/appointments/square-payment-step.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/lib/appointment-voice-reminders/types.ts",
+        "src/lib/appointments/sms-consent-disclosure.ts",
+        "src/lib/appointments/types.ts",
+        "src/lib/brand.ts",
+        "src/lib/supabase/id.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "public-confirm",
+      "route": "/appointments/confirm/[token]",
+      "canonicalPath": "Public → Confirm Appointment",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/appointments/confirm/[token]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/public-action-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/appointments/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ],
+      "v1Section": "§15 Confirm / cancel / reschedule"
+    },
+    {
+      "id": "public-cancel",
+      "route": "/appointments/cancel/[token]",
+      "canonicalPath": "Public → Cancel Appointment",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/appointments/cancel/[token]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/public-action-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/appointments/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "public-reschedule",
+      "route": "/appointments/reschedule/[token]",
+      "canonicalPath": "Public → Reschedule Appointment",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/appointments/reschedule/[token]/page.tsx",
+        "src/components/appointments/appointment-ui.tsx",
+        "src/components/appointments/public-action-client.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/appointments/types.ts",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    },
+    {
+      "id": "public-waitlist-accept",
+      "route": "/waitlist/accept/[token]",
+      "canonicalPath": "Public → Waitlist Accept",
+      "archetype": "Public",
+      "stage": "bulk",
+      "artDirection": "golden",
+      "primaryFiles": [
+        "src/app/(public)/waitlist/accept/[token]/page.tsx",
+        "src/components/appointments/public-waitlist-accept-client.tsx",
+        "src/components/ui/card.tsx",
+        "src/lib/utils.ts"
+      ],
+      "sharedConsume": [
+        "src/components/layout/",
+        "src/components/ui/",
+        "src/styles/"
+      ],
+      "sharedForbidden": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/header.tsx",
+        "src/components/ui/",
+        "src/app/globals.css",
+        "src/app/(app)/product-theme.css"
+      ]
+    }
+  ]
+}

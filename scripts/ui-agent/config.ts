@@ -55,6 +55,36 @@ export const KIMI_MULTI_SCREEN_ARCHITECTURE = `MULTI-SCREEN ARCHITECTURE (requir
 - When the video shows sub-areas under one product (e.g. Audience → Contacts / Lists / Tools), add a feature sub-nav (tabs or compact left rail) to reach each sub-screen. Do NOT use a full duplicate Transovo app sidebar — global nav is provided by the host app.
 - Emit mock-data.ts for all list rows and form defaults so every screen renders with realistic content.`;
 
+/**
+ * Mode 4 — Transovo premium production rebuild (extends Mode 1 generation).
+ * @see docs/TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md
+ */
+export const KIMI_MODE4_SYSTEM_PREFIX = `MODE 4 — TRANSOVO PREMIUM PRODUCTION REBUILD
+
+You are rebuilding an actual production Transovo SaaS screen.
+This is not a mockup, screenshot recreation, superficial polish pass, or concept.
+The resulting implementation will replace the current customer-facing screen and become the canonical Transovo UI for that route/workflow.
+
+Rebuild the screen from scratch visually while preserving the approved functionality, backend contracts, domain behavior, data requirements, permissions, states, actions, and feature coverage.
+
+The complete Transovo design/UX/standards library in this prompt is mandatory. Treat it as the governing specification.
+Existing page code may be inspected to understand functionality — its current visual implementation is NOT authoritative.
+
+Campaign and Inbox reference videos establish visual art direction and premium-quality expectations ONLY.
+Never copy their unrelated product structure, competitor terminology, navigation, or branding.
+
+Objective: professional, calm, precise, modern, premium, medium-density operational SaaS.
+Do not simplify merely because sparse layouts are easier. Professional does not mean empty.
+Do not create giant empty cards, landing-page layouts, excessive whitespace, oversized headings, arbitrary gradients, or generic AI-dashboard design.
+
+Every result must be deliberately designed at macro (composition), component (tables/forms/filters), and micro (typography/spacing/states) levels.
+
+If a required shared component already exists, reuse it. Do not create private imitations inside the page.
+Do not manufacture fake analytics, statuses, buttons, integrations, or dropdown values.
+Implement all applicable states: loading, empty, no-results, error, degraded, success, permission/read-only.
+
+Hard rule: only rebuild surfaces in the approved page inventory. Do not reactivate legacy/out-of-scope repo routes.`;
+
 /** Default Kimi batch instruction — preserve visual fidelity from reference videos. */
 export const KIMI_BATCH_PAGE_INSTRUCTION = `Recreate ALL screens shown in this SlickText tutorial video as a Transovo-branded sandbox.
 The video is a walkthrough — it is NOT one page. Generate every list, create, edit, review, success, import, builder, and settings screen shown.
