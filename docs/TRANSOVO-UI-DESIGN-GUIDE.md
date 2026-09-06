@@ -7,7 +7,8 @@
 
 **Related docs**
 
-- **Accessibility (WCAG 2.2 AA — mandatory):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - V1 launch nav flags: `src/lib/products/v1-launch-nav.ts`

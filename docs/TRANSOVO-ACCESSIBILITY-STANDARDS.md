@@ -39,7 +39,7 @@
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
-- **Next in series:** Guide #2 — Human-Centered Design / Usability (ISO 9241-210, ISO 9241-11)
+- **Next in series:** Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — Information Architecture & Navigation (coming)
 
 ---
 
@@ -605,4 +605,4 @@ Guide #2+ (coming)                    → ISO 9241 usability, etc.
 
 ---
 
-*Guide #1: Accessibility Standards. Next: Guide #2 — Human-Centered Design / Usability Standards (ISO 9241-210, ISO 9241-11).*
+*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — Information Architecture & Navigation Standards.*
