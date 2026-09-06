@@ -20,6 +20,7 @@ import type {
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
 import { getPrisma } from "@/lib/db";
+import type { CalendarConfig } from "@/lib/calendar/providers";
 
 export type SchedulingContext = {
   workspaceId: string;
@@ -299,7 +300,6 @@ export async function getExternalBusyIntervals(
     getGoogleBusy,
     getMicrosoftBusy,
     resolveBlockingCalendarIds,
-    type CalendarConfig,
   } = await import("@/lib/calendar/providers");
 
   const blocking = platform.externalCalendarBlocking;
