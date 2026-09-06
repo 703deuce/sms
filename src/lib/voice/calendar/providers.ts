@@ -1,5 +1,8 @@
 import { getPrisma } from "@/lib/db";
 import {
+  refreshMicrosoftAccessToken,
+} from "@/lib/microsoft/oauth-config";
+import {
   addCalendarDays,
   wallTimeInZoneToUtc,
   zonedDateParts,
@@ -87,27 +90,12 @@ async function refreshGoogle(refreshToken: string) {
 }
 
 async function refreshMicrosoft(refreshToken: string) {
-  const clientId = process.env.MICROSOFT_CALENDAR_CLIENT_ID?.trim();
-  const clientSecret = process.env.MICROSOFT_CALENDAR_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) return null;
-  const res = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-      redirect_uri: `${appUrl()}/api/voice/calendars/oauth/microsoft/callback`,
-      scope: "offline_access Calendars.ReadWrite",
-    }),
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
+  const refreshed = await refreshMicrosoftAccessToken(refreshToken);
+  if (!refreshed?.access_token) return null;
   return {
-    accessToken: json.access_token as string,
-    refreshToken: json.refresh_token as string | undefined,
-    expiresIn: (json.expires_in as number) || 3600,
+    accessToken: refreshed.access_token,
+    refreshToken: refreshed.refresh_token,
+    expiresIn: refreshed.expires_in || 3600,
   };
 }
 
