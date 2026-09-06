@@ -42,6 +42,7 @@ export default function AppointmentIntegrationsPage() {
           <h3 className="text-[14px] font-semibold mb-3">Provider status</h3>
           <ul className="space-y-2 text-[13px]">
             <StatusRow label="Google Calendar OAuth" ok={status.googleCalendarConfigured} />
+            <StatusRow label="Microsoft Outlook OAuth" ok={status.microsoftCalendarConfigured} />
             <StatusRow label="OpenAI (AI booking)" ok={status.openAiConfigured} fallback="Deterministic fallback active" />
             <StatusRow label="Brevo (workflow email)" ok={status.brevoConfigured} fallback="Email actions stub when unconfigured" />
             <StatusRow label="Stripe platform (Connect)" ok={status.stripeConfigured} fallback="Connect unavailable until configured" />

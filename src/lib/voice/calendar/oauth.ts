@@ -44,7 +44,11 @@ export function parseOAuthState(
   return { connectionId, workspaceId, returnTo };
 }
 
-export function getGoogleOAuthStartUrl(connectionId: string, workspaceId: string) {
+export function getGoogleOAuthStartUrl(
+  connectionId: string,
+  workspaceId: string,
+  returnTo?: string,
+) {
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   if (!clientId) throw new Error("GOOGLE_CALENDAR_CLIENT_ID not configured");
   const redirect = `${appUrl()}/api/voice/calendars/oauth/google/callback`;
@@ -55,7 +59,7 @@ export function getGoogleOAuthStartUrl(connectionId: string, workspaceId: string
     scope: "https://www.googleapis.com/auth/calendar",
     access_type: "offline",
     prompt: "consent",
-    state: oauthState(connectionId, workspaceId),
+    state: oauthState(connectionId, workspaceId, returnTo),
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
@@ -151,7 +155,7 @@ export function microsoftOAuthSuccessRedirect(returnTo?: string) {
     url.searchParams.set("oauth", "microsoft_ok");
     return url.toString();
   }
-  return `${base}/voice/calendars?oauth=microsoft_ok`;
+  return `${base}/appointments/integrations?oauth=microsoft_ok`;
 }
 
 export function microsoftOAuthErrorRedirect(error: string, returnTo?: string) {
@@ -163,5 +167,29 @@ export function microsoftOAuthErrorRedirect(error: string, returnTo?: string) {
     url.searchParams.set("oauth_error", error);
     return url.toString();
   }
-  return `${base}/voice/calendars?oauth_error=${encodeURIComponent(error)}`;
+  return `${base}/appointments/integrations?oauth_error=${encodeURIComponent(error)}`;
+}
+
+export function googleOAuthSuccessRedirect(returnTo?: string) {
+  const base = appUrl();
+  const safeReturn =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : null;
+  if (safeReturn) {
+    const url = new URL(safeReturn, base);
+    url.searchParams.set("oauth", "google_ok");
+    return url.toString();
+  }
+  return `${base}/appointments/integrations?oauth=google_ok`;
+}
+
+export function googleOAuthErrorRedirect(error: string, returnTo?: string) {
+  const base = appUrl();
+  const safeReturn =
+    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : null;
+  if (safeReturn) {
+    const url = new URL(safeReturn, base);
+    url.searchParams.set("oauth_error", error);
+    return url.toString();
+  }
+  return `${base}/appointments/integrations?oauth_error=${encodeURIComponent(error)}`;
 }

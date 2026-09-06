@@ -294,7 +294,9 @@ export async function getExternalBusyIntervals(
   if (!platform.externalCalendarBlocking?.enabled) return [];
 
   const { getPrisma } = await import("@/lib/db");
-  const { getValidAccessToken, getGoogleBusy } = await import("@/lib/voice/calendar/providers");
+  const { getValidAccessToken, getGoogleBusy, getMicrosoftBusy } = await import(
+    "@/lib/voice/calendar/providers"
+  );
 
   const connections = await getPrisma().voiceCalendarConnection.findMany({
     where: { workspaceId, provider: { in: ["google", "microsoft"] } },
@@ -312,6 +314,9 @@ export async function getExternalBusyIntervals(
         const intervals = await getGoogleBusy(token, calId, timeMin, timeMax);
         busy.push(...intervals);
       }
+    } else if (conn.provider === "microsoft") {
+      const intervals = await getMicrosoftBusy(token, timeMin, timeMax);
+      busy.push(...intervals);
     }
   }
   return busy;
