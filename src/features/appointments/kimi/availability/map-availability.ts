@@ -38,6 +38,8 @@ export const EMPTY_AVAILABILITY_FORM: AvailabilityFormState = {
   timezone: "America/New_York",
   minimumNotice: 60,
   maximumDays: 14,
+  namedSchedules: [],
+  holidays: [],
   overrideDate: "",
   overrideClosed: false,
   overrideOpen: "10:00",
@@ -58,6 +60,18 @@ export function formStateFromSettings(data: AppointmentPlatformConfig): Availabi
     maxBookingsPerDay: data.bookingLimits?.maxBookingsPerDay,
     maxBookingsPerWeek: data.bookingLimits?.maxBookingsPerWeek,
     maxPerTypePerDay: data.bookingLimits?.maxPerTypePerDay,
+    namedSchedules: (data.namedSchedules || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      timezone: s.timezone,
+      weeklyHours: s.weeklyHours || defaultWeeklyHours(),
+      isDefault: s.isDefault,
+    })),
+    holidays: (data.holidays || []).map((h) => ({
+      date: h.date,
+      name: h.name,
+      closed: h.closed,
+    })),
   };
 }
 
@@ -250,5 +264,7 @@ export function buildSettingsPatch(form: AvailabilityFormState) {
     minimumBookingNoticeMinutes: form.minimumNotice,
     maximumBookingDaysAhead: form.maximumDays,
     bookingLimits,
+    namedSchedules: form.namedSchedules,
+    holidays: form.holidays,
   };
 }

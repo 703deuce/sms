@@ -124,6 +124,42 @@ export function NotetakerSettingsClient() {
           />
           Email me when recap is ready
         </label>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={config.followUpEnabled !== false}
+            onChange={(e) => setConfig({ ...config, followUpEnabled: e.target.checked })}
+          />
+          Generate follow-up drafts after meetings
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Recording retention (days)</Label>
+            <Input
+              type="number"
+              min={1}
+              className="mt-1.5"
+              value={config.recordingRetentionDays ?? 90}
+              onChange={(e) =>
+                setConfig({ ...config, recordingRetentionDays: Number(e.target.value) || 90 })
+              }
+            />
+          </div>
+          <div>
+            <Label>Transcript retention (days)</Label>
+            <Input
+              type="number"
+              min={1}
+              className="mt-1.5"
+              value={config.transcriptRetentionDays ?? 365}
+              onChange={(e) =>
+                setConfig({ ...config, transcriptRetentionDays: Number(e.target.value) || 365 })
+              }
+            />
+          </div>
+        </div>
       </Card>
 
       <Button onClick={() => void save()} disabled={saving}>

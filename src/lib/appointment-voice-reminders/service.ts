@@ -136,10 +136,8 @@ export async function executeAppointmentVoiceReminder(input: ExecuteVoiceReminde
       from: caller.fromE164,
       to,
       client_state: clientState,
-      answering_machine_detection: "detect",
-      answering_machine_detection_config: {
-        total_analysis_time_millis: 3500,
-      },
+      // AMD false-positives can suppress the human prompt; gather DTMF on live answer.
+      answering_machine_detection: "disabled",
     },
   });
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import ReminderSettingsView from "@/components/appointments/kimi-ui/reminder-settings/page";
 import {
   buildRemindersPageModel,
+  patchReminderAdvanced,
   patchReminderEnabled,
   patchReminderTemplate,
   patchReminderChannel,
@@ -189,6 +190,11 @@ export function RemindersConnected() {
         }
       },
       onRetry: load,
+      onAdvancedChange: (stepKey, patch) => {
+        if (!config) return;
+        setConfig(patchReminderAdvanced(config, stepKey, patch));
+        setSaved(false);
+      },
     }),
     [config, load, refreshPreview, testPhone, testStep],
   );

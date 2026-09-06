@@ -109,6 +109,31 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       return NextResponse.json({ data });
     }
 
+    if (action === "send_follow_up") {
+      const session = await getMeetingSession(auth.workspaceId, id);
+      if (!session?.followUpEmailDraft) throw new Error("No follow-up draft to send");
+      const to = body.to ? String(body.to) : undefined;
+      const prisma = (await import("@/lib/db")).getPrisma();
+      let recipient = to;
+      if (!recipient && session.appointmentId) {
+        const appt = await prisma.voiceAppointment.findFirst({
+          where: { id: session.appointmentId, workspaceId: auth.workspaceId },
+          select: { inviteeEmail: true },
+        });
+        recipient = appt?.inviteeEmail || undefined;
+      }
+      if (!recipient) throw new Error("Recipient email required");
+      const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+      await sendTransactionalEmail({
+        workspaceId: auth.workspaceId,
+        to: recipient,
+        subject: String(body.subject || `Follow-up: ${session.title || "Meeting"}`),
+        html: session.followUpEmailDraft.replace(/\n/g, "<br/>"),
+      });
+      const data = await getMeetingSession(auth.workspaceId, id);
+      return NextResponse.json({ data: { ...data, followUpStatus: "sent" } });
+    }
+
     if (action === "retry_processing") {
       await processMeetingSessionArtifacts(id);
       const data = await getMeetingSession(auth.workspaceId, id);

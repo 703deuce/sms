@@ -460,19 +460,130 @@ export type BuildCalendarPageModelInput = {
   miniCalendarMonth: Date;
 };
 
+function mapDayEvents(
+  appointments: CalendarApiAppointment[],
+  dayKey: string,
+): CalendarWeekEvent[] {
+  const dayStart = new Date(dayKey);
+  dayStart.setHours(0, 0, 0, 0);
+  const weekStart = dayStart;
+  return mapWeekEvents(
+    appointments.filter((row) => dateKey(new Date(row.startsAt)) === dayKey),
+    weekStart,
+  ).map((ev) => ({ ...ev, day: 0 }));
+}
+
+function mapMonthDays(
+  monthCursor: Date,
+  appointments: CalendarApiAppointment[],
+): CalendarMonthDay[] {
+  const year = monthCursor.getFullYear();
+  const month = monthCursor.getMonth();
+  const first = new Date(year, month, 1);
+  const startPad = first.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = dateKey(new Date());
+  const cells: CalendarMonthDay[] = [];
+  const prevMonthDays = new Date(year, month, 0).getDate();
+
+  for (let i = startPad - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const d = new Date(year, month - 1, day);
+    cells.push({
+      day,
+      dateKey: dateKey(d),
+      muted: true,
+      today: false,
+      events: [],
+    });
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const key = dateKey(d);
+    const dayEvents = appointments
+      .filter((row) => dateKey(new Date(row.startsAt)) === key)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      .map((row) => {
+        const type = mapEventType(row.serviceName, row.status);
+        const title =
+          row.eventKind === "standalone_video"
+            ? row.serviceName || "Transovo Video"
+            : row.eventKind === "standalone_notetaker"
+              ? row.serviceName || "AI Notetaker"
+              : row.serviceName || "Appointment";
+        const name =
+          row.eventKind === "standalone_video"
+            ? "Video meeting"
+            : row.eventKind === "standalone_notetaker"
+              ? row.inviteeName || "External meeting"
+              : row.inviteeName || "Customer";
+        return {
+          id: row.id,
+          timeLabel: formatAppointmentTime(row.startsAt, row.timezone),
+          title,
+          name,
+          type,
+          status: mapUiStatus(row.status),
+        };
+      });
+    cells.push({
+      day,
+      dateKey: key,
+      muted: false,
+      today: key === todayKey,
+      events: dayEvents,
+    });
+  }
+
+  const trailing = (7 - (cells.length % 7)) % 7;
+  for (let day = 1; day <= trailing; day++) {
+    const d = new Date(year, month + 1, day);
+    cells.push({
+      day,
+      dateKey: dateKey(d),
+      muted: true,
+      today: false,
+      events: [],
+    });
+  }
+
+  return cells;
+}
+
 export function buildCalendarPageModel(input: BuildCalendarPageModelInput): CalendarPageModel {
-  const weekStart = input.view === "week" ? input.cursor : startOfWeek(new Date(input.selectedDayKey));
-  const weekDays = mapWeekDays(weekStart);
+  const weekStart =
+    input.view === "day"
+      ? new Date(input.cursor)
+      : input.view === "week"
+        ? input.cursor
+        : startOfWeek(new Date(input.selectedDayKey));
+  const weekDays =
+    input.view === "day"
+      ? mapWeekDays(weekStart).filter((d) => d.dateKey === dateKey(input.cursor))
+      : input.view === "week"
+        ? mapWeekDays(weekStart)
+        : mapWeekDays(weekStart);
+  const weekEvents =
+    input.view === "day"
+      ? mapDayEvents(input.appointments, dateKey(input.cursor))
+      : mapWeekEvents(input.appointments, weekStart);
+  const monthDays =
+    input.view === "month"
+      ? mapMonthDays(input.cursor, input.appointments)
+      : mapMonthDays(input.miniCalendarMonth, input.appointments);
 
   return {
     view: input.view,
     rangeLabel: formatRangeLabel(input.cursor, input.view),
     stats: mapStats(input.appointments),
-    weekDays,
-    weekEvents: mapWeekEvents(input.appointments, weekStart),
+    weekDays: weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1),
+    weekEvents,
+    monthDays,
     hours: HOURS,
     typeColors: TYPE_COLORS,
-    nowLine: input.view === "week" ? mapNowLine(weekDays) : null,
+    nowLine:
+      input.view === "week" || input.view === "day" ? mapNowLine(weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1)) : null,
     miniCalendar: buildMiniCalendar(input.miniCalendarMonth, input.selectedDayKey, input.appointments),
     agenda: mapAgenda(input.appointments, input.selectedDayKey),
     nextAppointment: mapNextAppointment(input.appointments),

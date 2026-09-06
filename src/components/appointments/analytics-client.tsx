@@ -21,14 +21,25 @@ import { useEffect, useState } from "react";
 type AnalyticsData = {
   rangeDays: number;
   booked: number;
+  completed?: number;
   confirmed: number;
   awaiting: number;
   canceled: number;
   noShow: number;
   rescheduleRequested: number;
   confirmationRate: number;
+  cancellationRate?: number;
+  noShowRate?: number;
+  rescheduleRate?: number;
   remindersSent: number;
   remindersFailed: number;
+  emailOpens?: number;
+  emailClicks?: number;
+  smsResponses?: number;
+  utmConversions?: number;
+  conversionRate?: number;
+  popularTypes?: Array<{ name: string; count: number }>;
+  popularTimes?: Array<{ hour: number; count: number }>;
   series: Array<{ date: string; count: number }>;
 };
 
@@ -66,6 +77,9 @@ export function AppointmentsAnalyticsClient() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  const [scheduleEmail, setScheduleEmail] = useState("");
+  const [scheduling, setScheduling] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -130,6 +144,42 @@ export function AppointmentsAnalyticsClient() {
           icon: Bell,
           tone: "bg-primary/10 text-primary",
         },
+        {
+          label: "Completed",
+          value: formatNumber(data.completed ?? 0),
+          icon: CalendarCheck2,
+          tone: "bg-emerald-50 text-emerald-600",
+        },
+        {
+          label: "Cancel rate",
+          value: `${data.cancellationRate ?? 0}%`,
+          icon: CalendarX2,
+          tone: "bg-rose-50 text-rose-600",
+        },
+        {
+          label: "No-show rate",
+          value: `${data.noShowRate ?? 0}%`,
+          icon: CalendarClock,
+          tone: "bg-orange-50 text-orange-600",
+        },
+        {
+          label: "Reschedule rate",
+          value: `${data.rescheduleRate ?? 0}%`,
+          icon: RefreshCcw,
+          tone: "bg-violet-50 text-violet-600",
+        },
+        {
+          label: "Email opens",
+          value: formatNumber(data.emailOpens ?? 0),
+          icon: Bell,
+          tone: "bg-sky-50 text-sky-600",
+        },
+        {
+          label: "UTM conversions",
+          value: formatNumber(data.utmConversions ?? 0),
+          icon: BarChart3,
+          tone: "bg-primary/10 text-primary",
+        },
       ]
     : [];
 
@@ -149,28 +199,42 @@ export function AppointmentsAnalyticsClient() {
             Operational appointment metrics for the last {range} days.
           </p>
         </div>
-        <div
-          role="tablist"
-          aria-label="Date range"
-          className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-1"
-        >
-          {RANGE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="tab"
-              aria-selected={range === option.value}
-              onClick={() => setRange(option.value)}
-              className={cn(
-                "h-7 rounded-md px-3 text-[13px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                range === option.value
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Date range"
+            className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-1"
+          >
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={range === option.value}
+                onClick={() => setRange(option.value)}
+                className={cn(
+                  "h-7 rounded-md px-3 text-[13px] font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  range === option.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <a
+            href={`/api/appointments/analytics/export?format=csv&range=${range}`}
+            className="inline-flex h-7 items-center rounded-md border border-border bg-card px-3 text-[13px] font-semibold text-foreground hover:bg-muted/50"
+          >
+            Export CSV
+          </a>
+          <a
+            href={`/api/appointments/analytics/export?format=pdf&range=${range}`}
+            className="inline-flex h-7 items-center rounded-md border border-border bg-card px-3 text-[13px] font-semibold text-foreground hover:bg-muted/50"
+          >
+            Export PDF
+          </a>
         </div>
       </div>
 
@@ -281,6 +345,64 @@ export function AppointmentsAnalyticsClient() {
                 ))}
               </div>
             )}
+          </Card>
+
+          {data.popularTypes?.length ? (
+            <Card className="p-5">
+              <CardTitle>Popular appointment types</CardTitle>
+              <ul className="mt-3 space-y-2">
+                {data.popularTypes.slice(0, 8).map((t) => (
+                  <li key={t.name} className="flex justify-between text-sm">
+                    <span>{t.name}</span>
+                    <span className="font-semibold tabular-nums">{t.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {data.popularTimes?.length ? (
+            <Card className="p-5">
+              <CardTitle>Popular booking times</CardTitle>
+              <ul className="mt-3 space-y-2">
+                {data.popularTimes.slice(0, 8).map((t) => (
+                  <li key={t.hour} className="flex justify-between text-sm">
+                    <span>{t.hour === 0 ? "12 AM" : t.hour < 12 ? `${t.hour} AM` : t.hour === 12 ? "12 PM" : `${t.hour - 12} PM`}</span>
+                    <span className="font-semibold tabular-nums">{t.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          <Card className="p-5">
+            <CardTitle>Scheduled email reports</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Receive CSV/PDF summaries on a schedule.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <input
+                type="email"
+                placeholder="reports@yourcompany.com"
+                className="flex-1 min-w-[200px] rounded-md border px-3 py-2 text-sm"
+                value={scheduleEmail}
+                onChange={(e) => setScheduleEmail(e.target.value)}
+              />
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+                disabled={scheduling || !scheduleEmail}
+                onClick={async () => {
+                  setScheduling(true);
+                  await fetch("/api/appointments/analytics/export", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: scheduleEmail, cadence: "weekly", rangeDays: range }),
+                  });
+                  setScheduling(false);
+                }}
+              >
+                {scheduling ? "Scheduling…" : "Schedule weekly"}
+              </button>
+            </div>
           </Card>
         </>
       )}

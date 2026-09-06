@@ -87,12 +87,28 @@ export type CalendarNowLine = {
   label: string;
 };
 
+export type CalendarMonthDay = {
+  day: number;
+  dateKey: string;
+  muted: boolean;
+  today: boolean;
+  events: Array<{
+    id: string;
+    timeLabel: string;
+    title: string;
+    name: string;
+    type: CalendarWeekEvent["type"];
+    status: CalendarWeekEvent["status"];
+  }>;
+};
+
 export type CalendarPageModel = {
   view: CalendarViewMode;
   rangeLabel: string;
   stats: CalendarStatItem[];
   weekDays: CalendarWeekDay[];
   weekEvents: CalendarWeekEvent[];
+  monthDays: CalendarMonthDay[];
   hours: string[];
   typeColors: Record<string, CalendarTypeColor>;
   nowLine: CalendarNowLine | null;

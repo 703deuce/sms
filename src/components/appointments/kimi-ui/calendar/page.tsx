@@ -5,6 +5,8 @@ import "./reference.css";
 import CalendarHeader from "./components/CalendarHeader";
 import StatCards from "./components/StatCards";
 import WeekCalendar from "./components/WeekCalendar";
+import DayCalendar from "./components/DayCalendar";
+import MonthCalendar from "./components/MonthCalendar";
 import MiniCalendar from "./components/MiniCalendar";
 import DayAgenda from "./components/DayAgenda";
 import NextAppointment from "./components/NextAppointment";
@@ -29,16 +31,37 @@ export default function CalendarPage({ model, actions }: Props) {
       />
       <StatCards stats={model.stats} />
       <div className="cal-main">
-        <WeekCalendar
-          weekDays={model.weekDays}
-          weekEvents={model.weekEvents}
-          hours={model.hours}
-          typeColors={model.typeColors}
-          nowLine={model.nowLine}
-          timezoneLabel={model.timezoneLabel}
-          onOpenAppointment={actions.onOpenAppointment}
-          onShowCalendarSettings={actions.onShowCalendarSettings}
-        />
+        {model.view === "day" ? (
+          <DayCalendar
+            weekDays={model.weekDays}
+            weekEvents={model.weekEvents}
+            hours={model.hours}
+            typeColors={model.typeColors}
+            nowLine={model.nowLine}
+            timezoneLabel={model.timezoneLabel}
+            onOpenAppointment={actions.onOpenAppointment}
+            onShowCalendarSettings={actions.onShowCalendarSettings}
+          />
+        ) : model.view === "month" ? (
+          <MonthCalendar
+            monthDays={model.monthDays}
+            typeColors={model.typeColors}
+            onOpenAppointment={actions.onOpenAppointment}
+            onSelectDay={actions.onSelectDay}
+            onShowCalendarSettings={actions.onShowCalendarSettings}
+          />
+        ) : (
+          <WeekCalendar
+            weekDays={model.weekDays}
+            weekEvents={model.weekEvents}
+            hours={model.hours}
+            typeColors={model.typeColors}
+            nowLine={model.nowLine}
+            timezoneLabel={model.timezoneLabel}
+            onOpenAppointment={actions.onOpenAppointment}
+            onShowCalendarSettings={actions.onShowCalendarSettings}
+          />
+        )}
         <aside className="cal-side">
           <MiniCalendar
             monthLabel={model.miniCalendar.monthLabel}

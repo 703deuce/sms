@@ -196,9 +196,23 @@ export function MeetingDetailClient({ meetingId }: { meetingId: string }) {
       <Card className="space-y-3 p-5">
         <h2 className="font-semibold">Follow-up email draft</h2>
         <Textarea value={meeting.followUpEmailDraft || ""} readOnly rows={6} />
-        <Button size="sm" variant="outline" disabled={saving} onClick={() => patch("generate_follow_up")}>
-          Regenerate follow-up
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" disabled={saving} onClick={() => patch("generate_follow_up")}>
+            Regenerate follow-up
+          </Button>
+          {meeting.followUpEmailDraft ? (
+            <Button
+              size="sm"
+              disabled={saving}
+              onClick={() => patch("send_follow_up")}
+            >
+              Send follow-up email
+            </Button>
+          ) : null}
+        </div>
+        {meeting.followUpStatus === "sent" ? (
+          <p className="text-xs text-emerald-700">Follow-up email sent.</p>
+        ) : null}
       </Card>
 
       <Card className="space-y-3 p-5">

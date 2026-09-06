@@ -31,16 +31,32 @@ export async function getAvailability(
   const serviceName = String(input.serviceName || input.service || "Appointment");
   const daysAhead = Number(input.daysAhead || 14);
   const timezone = input.timezone ? String(input.timezone) : undefined;
-  return generateNativeSlots(workspaceId, { serviceName, daysAhead, timezone });
+  const staffId = input.staffId ? String(input.staffId) : undefined;
+  const durationMinutes = input.durationMinutes ? Number(input.durationMinutes) : undefined;
+  const excludeAppointmentId = input.excludeAppointmentId
+    ? String(input.excludeAppointmentId)
+    : undefined;
+  const result = await generateNativeSlots(workspaceId, {
+    serviceName,
+    daysAhead,
+    timezone,
+    staffId,
+    durationMinutes,
+    excludeAppointmentId,
+  });
+  return { slots: result.slots };
 }
 
-export async function listAppointmentTypes(workspaceId: string) {
+export async function listAppointmentTypes(
+  workspaceId: string,
+  opts?: { includeSecret?: boolean; includeUnlisted?: boolean },
+) {
   const prisma = getPrisma();
   const rows = await prisma.voiceService.findMany({
     where: { workspaceId },
-    orderBy: { name: "asc" },
+    orderBy: [{ config: "asc" }, { name: "asc" }],
   });
-  return rows.map((row) => ({
+  const mapped = rows.map((row) => ({
     id: row.id,
     name: row.name,
     durationMinutes: row.durationMinutes,
@@ -49,6 +65,45 @@ export async function listAppointmentTypes(workspaceId: string) {
     config: (row.config || {}) as AppointmentTypeConfig,
     active: (row.config as AppointmentTypeConfig | null)?.enabled !== false,
   }));
+  const sorted = mapped.sort(
+    (a, b) => (a.config.displayOrder ?? 999) - (b.config.displayOrder ?? 999),
+  );
+  if (opts?.includeSecret && opts?.includeUnlisted) return sorted;
+  return sorted.filter((t) => {
+    const vis = t.config.visibility || "public";
+    if (vis === "secret" && !opts?.includeSecret) return false;
+    if (vis === "unlisted" && !opts?.includeUnlisted && !opts?.includeSecret) return false;
+    return true;
+  });
+}
+
+export async function bulkUpdateAppointmentTypes(
+  workspaceId: string,
+  updates: Array<{ id: string; config?: Partial<AppointmentTypeConfig>; displayOrder?: number }>,
+) {
+  const prisma = getPrisma();
+  const results = [];
+  for (const update of updates) {
+    const row = await prisma.voiceService.findFirst({ where: { id: update.id, workspaceId } });
+    if (!row) continue;
+    const config = {
+      ...((row.config || {}) as AppointmentTypeConfig),
+      ...(update.config || {}),
+      ...(update.displayOrder != null ? { displayOrder: update.displayOrder } : {}),
+    };
+    results.push(
+      await prisma.voiceService.update({
+        where: { id: update.id },
+        data: { config: config as object },
+      }),
+    );
+  }
+  return results;
+}
+
+export async function reorderAppointmentTypes(workspaceId: string, orderedIds: string[]) {
+  const updates = orderedIds.map((id, index) => ({ id, displayOrder: index }));
+  return bulkUpdateAppointmentTypes(workspaceId, updates);
 }
 
 export async function upsertAppointmentType(
@@ -143,6 +198,12 @@ export async function createPlatformAppointment(
     locationId?: string;
     locationName?: string;
     attendeeCount?: number;
+    durationMinutes?: number;
+    utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution;
+    singleUseToken?: string;
+    emailOtpVerified?: boolean;
+    extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
+    skipApproval?: boolean;
   },
 ) {
   const prisma = getPrisma();
@@ -153,12 +214,61 @@ export async function createPlatformAppointment(
   });
 
   let serviceName = input.serviceName;
+  let svcCfg: AppointmentTypeConfig = {};
+  let durationMinutes = input.durationMinutes || 30;
   if (input.serviceId) {
     const svc = await prisma.voiceService.findFirst({
       where: { id: input.serviceId, workspaceId },
     });
     if (!svc) throw new Error("Appointment type not found");
     serviceName = svc.name;
+    svcCfg = (svc.config || {}) as AppointmentTypeConfig;
+    if (!input.durationMinutes) durationMinutes = svc.durationMinutes || 30;
+  } else {
+    const svc = await prisma.voiceService.findFirst({
+      where: { workspaceId, name: serviceName },
+    });
+    if (svc) {
+      svcCfg = (svc.config || {}) as AppointmentTypeConfig;
+      if (!input.durationMinutes) durationMinutes = svc.durationMinutes || 30;
+    }
+  }
+
+  if (input.singleUseToken) {
+    const { resolveSingleUseBookingLink, consumeSingleUseBookingLink } = await import(
+      "@/lib/appointments/booking-links"
+    );
+    const resolved = await resolveSingleUseBookingLink(workspaceId, input.singleUseToken);
+    if (!resolved) throw new Error("This booking link is invalid or expired");
+    if (resolved.appointmentTypeId !== input.serviceId) {
+      throw new Error("Booking link does not match this appointment type");
+    }
+    await consumeSingleUseBookingLink(workspaceId, input.singleUseToken);
+  }
+
+  if (svcCfg.bookingApproval?.required && !input.skipApproval && input.source === "public_booking") {
+    if (!input.emailOtpVerified && svcCfg.bookingApproval.notifyStaff) {
+      // OTP may still be required upstream
+    }
+  }
+
+  const startsAtDate = new Date(input.startsAt);
+  const endsAtDate = new Date(startsAtDate.getTime() + durationMinutes * 60_000);
+
+  if (!input.staffId || !input.staffName) {
+    const { loadSchedulingContext, resolveStaffForBooking } = await import(
+      "@/lib/appointments/scheduling-domain"
+    );
+    const schedulingCtx = await loadSchedulingContext(workspaceId, serviceName);
+    const assigned = await resolveStaffForBooking(schedulingCtx, {
+      preferredStaffId: input.staffId,
+      startsAt: startsAtDate,
+      endsAt: endsAtDate,
+      durationMinutes,
+    });
+    if (assigned) {
+      input = { ...input, staffId: assigned.id, staffName: assigned.name };
+    }
   }
 
   const contactId = await resolveOrCreateContact(workspaceId, {
@@ -198,10 +308,56 @@ export async function createPlatformAppointment(
   if (!appointmentId) throw new Error("Booking failed");
 
   const startsAt = new Date(String(result.startsAt || input.startsAt));
-  const resolvedMeetingUrl =
+  let resolvedMeetingUrl =
     extractMeetingUrlFromText(input.locationName) ||
     extractMeetingUrlFromText(input.notes) ||
     undefined;
+
+  const locationKind = input.locationName?.toLowerCase().includes("zoom")
+    ? "zoom"
+    : input.locationName?.toLowerCase().includes("meet")
+      ? "google_meet"
+      : input.locationName?.toLowerCase().includes("teams") ||
+          svcCfg.location?.toLowerCase().includes("teams")
+        ? "microsoft_teams"
+        : input.locationName?.toLowerCase().includes("webex")
+          ? "webex"
+          : undefined;
+
+  if (locationKind === "microsoft_teams") {
+    try {
+      const msConn = await prisma.voiceCalendarConnection.findFirst({
+        where: { workspaceId, provider: "microsoft", status: "connected" },
+      });
+      if (msConn) {
+        const { createTeamsMeetingForAppointment, attachTeamsUrlToAppointment } = await import(
+          "@/lib/calendar/teams-meeting"
+        );
+        const teams = await createTeamsMeetingForAppointment({
+          connectionId: msConn.id,
+          config: (msConn.config || {}) as import("@/lib/calendar/providers").CalendarConfig,
+          subject: `${serviceName} — ${[input.firstName, input.lastName].filter(Boolean).join(" ") || "Guest"}`,
+          startsAt,
+          endsAt: endsAtDate,
+          timezone: platform.timezone,
+          attendees: input.email ? [{ email: input.email, name: input.firstName }] : [],
+        });
+        if (teams?.joinUrl) {
+          resolvedMeetingUrl = teams.joinUrl;
+          await attachTeamsUrlToAppointment(workspaceId, appointmentId, teams.joinUrl);
+        }
+      }
+    } catch (err) {
+      console.warn("[appointments] Teams meeting creation failed", err);
+    }
+  }
+
+  const needsApproval =
+    svcCfg.bookingApproval?.required && input.source === "public_booking" && !input.skipApproval;
+  const initialStatus = needsApproval
+    ? "awaiting_confirmation"
+    : input.status || "awaiting_confirmation";
+
   const metadata = appendTimeline(
     resetAppointmentReminders({
       source: input.source || "admin",
@@ -220,22 +376,17 @@ export async function createPlatformAppointment(
       staffId: input.staffId,
       locationId: input.locationId,
       location: input.locationName,
-      locationKind: input.locationName?.toLowerCase().includes("zoom")
-        ? "zoom"
-        : input.locationName?.toLowerCase().includes("meet")
-          ? "google_meet"
-          : input.locationName?.toLowerCase().includes("teams")
-            ? "microsoft_teams"
-            : input.locationName?.toLowerCase().includes("webex")
-              ? "webex"
-              : undefined,
+      locationKind,
       attendeeCount: input.attendeeCount,
       meetingUrl: resolvedMeetingUrl,
+      utm: input.utm,
+      extraRecipients: input.extraRecipients,
+      emailOtpVerified: input.emailOtpVerified,
+      pendingApproval: needsApproval,
       confirmUrl: publicActionUrl("confirm", confirmToken),
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
       reminderGeneration: 1,
-      bookingAnswers: input.bookingAnswers,
     }),
     { type: "created", label: "Appointment created" },
   );
@@ -243,11 +394,17 @@ export async function createPlatformAppointment(
   await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: {
-      status: input.status || "awaiting_confirmation",
+      status: initialStatus,
       staffName: input.staffName || undefined,
+      endsAt: endsAtDate,
       metadata: metadata as object,
     },
   });
+
+  if (needsApproval) {
+    const { requestBookingApproval } = await import("@/lib/appointments/booking-approval");
+    await requestBookingApproval(workspaceId, appointmentId);
+  }
 
   try {
     const { autoProvisionTransovoVideoForAppointment } = await import(
@@ -264,7 +421,7 @@ export async function createPlatformAppointment(
   const latestMeta = (appointmentRow?.metadata || metadata) as AppointmentMetadata;
   const meetingLink = latestMeta.meetingUrl || latestMeta.joinUrl || null;
 
-  if (!input.skipSms && input.smsConsent && platform.reminders.confirmation.enabled) {
+  if (!input.skipSms && platform.reminders.confirmation.enabled) {
     const { shouldSkipPlatformRemindersForAppointment } = await import(
       "@/lib/appointment-workflows/platform-guard"
     );
@@ -275,8 +432,9 @@ export async function createPlatformAppointment(
     );
 
     if (!skipPlatformConfirmation) {
+      const confirmationStep = platform.reminders.confirmation;
       const body = renderAppointmentTemplate(
-        platform.reminders.confirmation.template,
+        confirmationStep.template,
         appointmentMergeVars({
           firstName: input.firstName,
           businessName: workspace?.displayName || workspace?.name,
@@ -290,8 +448,36 @@ export async function createPlatformAppointment(
         }),
       );
       try {
-        const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
-        await sendAppointmentSms({ workspaceId, to: input.phone, body });
+        if (confirmationStep.channel === "email") {
+          const email = input.email?.trim();
+          if (!email) throw new Error("Customer email required for email confirmation");
+          const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+          const emailResult = await sendTransactionalEmail({
+            to: email,
+            subject: `Appointment confirmed — ${workspace?.displayName || workspace?.name || "Transovo"}`,
+            htmlContent: `<p>${body.replace(/\n/g, "<br/>")}</p>`,
+            textContent: body,
+          });
+          if (emailResult.status === "failed") {
+            throw new Error(emailResult.error || "Email delivery failed");
+          }
+        } else if (confirmationStep.channel === "voice") {
+          const { executeAppointmentVoiceReminder } = await import(
+            "@/lib/appointment-voice-reminders/service"
+          );
+          await executeAppointmentVoiceReminder({
+            workspaceId,
+            appointmentId,
+            toE164: input.phone,
+            inlineTemplate: confirmationStep.template
+              ? { humanScript: confirmationStep.template, voicemailScript: confirmationStep.template }
+              : undefined,
+          });
+        } else if (input.smsConsent) {
+          const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+          await sendAppointmentSms({ workspaceId, to: input.phone, body });
+        }
+
         await prisma.voiceAppointment.update({
           where: { id: appointmentId },
           data: {
@@ -305,7 +491,7 @@ export async function createPlatformAppointment(
           },
         });
       } catch (err) {
-        console.warn("[appointments] confirmation SMS failed", err);
+        console.warn("[appointments] confirmation delivery failed", err);
       }
     }
   }
@@ -331,8 +517,29 @@ export async function createPlatformAppointment(
     joinUrl: meetingLink,
     locationKind: latestMeta.locationKind || null,
     isTransovoVideo: latestMeta.locationKind === "transovo_video" || Boolean(latestMeta.videoMeetingId),
+    pendingApproval: needsApproval,
+    redirectUrl: svcCfg.redirectAfterBooking?.enabled
+      ? buildRedirectAfterBooking(svcCfg.redirectAfterBooking, {
+          appointmentId,
+          utm: input.utm,
+        })
+      : undefined,
+    confirmationResources: svcCfg.confirmationPage,
     ...result,
   };
+}
+
+function buildRedirectAfterBooking(
+  config: import("@/lib/appointments/scheduling-capabilities").BookingRedirectConfig,
+  ctx: { appointmentId: string; utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution },
+): string | undefined {
+  if (!config.url) return undefined;
+  if (!config.includeQueryParams) return config.url;
+  const params = new URLSearchParams({ appointmentId: ctx.appointmentId });
+  if (ctx.utm?.source) params.set("utm_source", ctx.utm.source);
+  if (ctx.utm?.medium) params.set("utm_medium", ctx.utm.medium);
+  if (ctx.utm?.campaign) params.set("utm_campaign", ctx.utm.campaign);
+  return `${config.url}${config.url.includes("?") ? "&" : "?"}${params.toString()}`;
 }
 
 export async function updatePlatformAppointmentStatus(
@@ -399,12 +606,20 @@ export async function cancelPlatformAppointment(
   ) as AppointmentMetadata;
 
   try {
-    const { notifyWaitlistOnSlotAvailable } = await import("@/lib/appointments/waitlist");
+    const { notifyWaitlistOnSlotAvailable, autoFillWaitlistSlot } = await import(
+      "@/lib/appointments/waitlist"
+    );
     if (row.serviceName && row.startsAt > new Date()) {
       await notifyWaitlistOnSlotAvailable({
         workspaceId,
         serviceName: row.serviceName,
         startsAt: row.startsAt,
+      });
+      await autoFillWaitlistSlot({
+        workspaceId,
+        serviceName: row.serviceName,
+        startsAt: row.startsAt,
+        autoBook: true,
       });
     }
   } catch (err) {
@@ -433,6 +648,24 @@ export async function cancelPlatformAppointment(
     await cancelVideoMeetingForAppointment(workspaceId, appointmentId);
   } catch (err) {
     console.warn("[appointments] video meeting cancel failed", err);
+  }
+
+  const metaBefore = (row.metadata || {}) as AppointmentMetadata;
+  if (
+    metaBefore.paymentStatus === "succeeded" &&
+    !metaBefore.refundStatus &&
+    (metaBefore.merchantPaymentId || metaBefore.providerPaymentId)
+  ) {
+    try {
+      const { refundMerchantAppointmentPayment } = await import("@/lib/merchant-payments/service");
+      await refundMerchantAppointmentPayment({
+        workspaceId,
+        appointmentId,
+        reason: "appointment_canceled",
+      });
+    } catch (err) {
+      console.warn("[appointments] auto-refund on cancel failed", err);
+    }
   }
 
   try {

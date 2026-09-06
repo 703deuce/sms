@@ -25,10 +25,17 @@ export async function listConnectionProviderCalendars(workspaceId: string, conne
   const config = (conn.config || {}) as CalendarConfig;
   const token = await getValidAccessToken(conn.id, conn.provider, config);
   if (!token) {
-    await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
-      status: "needs_reauth",
-    });
-    throw new Error("Reconnect required");
+    const refreshKind = config.lastTokenRefreshKind;
+    const transient =
+      refreshKind === "transient" ||
+      refreshKind === "misconfigured" ||
+      refreshKind === "unknown";
+    if (!transient) {
+      await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
+        status: "needs_reauth",
+      });
+    }
+    throw new Error(transient ? "Microsoft token refresh failed temporarily" : "Reconnect required");
   }
 
   const calendars =
@@ -84,8 +91,19 @@ export async function verifyWorkspaceCalendarConnection(
 
   const token = await getValidAccessToken(conn.id, conn.provider, config);
   if (!token) {
-    errors.push("Access token unavailable — reconnect required");
-    await updateWorkspaceCalendarConnection(workspaceId, connectionId, { status: "needs_reauth" });
+    const refreshKind = config.lastTokenRefreshKind;
+    const transient =
+      refreshKind === "transient" ||
+      refreshKind === "misconfigured" ||
+      refreshKind === "unknown";
+    errors.push(
+      transient
+        ? "Access token refresh failed temporarily — will retry automatically"
+        : "Access token unavailable — reconnect required",
+    );
+    if (!transient) {
+      await updateWorkspaceCalendarConnection(workspaceId, connectionId, { status: "needs_reauth" });
+    }
   } else {
     tokenValid = true;
     try {
@@ -144,9 +162,18 @@ export async function verifyWorkspaceCalendarConnection(
 
   let health: CalendarConnectionVerification["health"] = "healthy";
   if (!tokenValid) {
-    health = errors.some((e) => /permission|scope|403/i.test(e))
-      ? "permission_missing"
-      : "needs_reconnect";
+    const refreshKind = config.lastTokenRefreshKind;
+    if (errors.some((e) => /permission|scope|403/i.test(e))) {
+      health = "permission_missing";
+    } else if (
+      refreshKind === "transient" ||
+      refreshKind === "misconfigured" ||
+      refreshKind === "unknown"
+    ) {
+      health = "token_refresh_failed";
+    } else {
+      health = "needs_reconnect";
+    }
   } else if (pushStatus === "failed") {
     health = "webhook_degraded";
   } else if (!ok && config.lastSyncError) {
@@ -205,6 +232,14 @@ export async function patchWorkspaceCalendarConnection(
     syncEnabled?: boolean;
     timezone?: string;
     importRules?: CalendarConfig["importRules"];
+    reminderDefaults?: {
+      smsEnabled?: boolean;
+      emailEnabled?: boolean;
+      voiceEnabled?: boolean;
+      replyDestinationPhone?: string;
+      replyDestinationEmail?: string;
+      attachIcs?: boolean;
+    };
   },
 ) {
   const conn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
@@ -217,6 +252,10 @@ export async function patchWorkspaceCalendarConnection(
   if (input.syncEnabled !== undefined) config.syncEnabled = input.syncEnabled;
   if (input.timezone !== undefined) config.timezone = input.timezone;
   if (input.importRules !== undefined) config.importRules = input.importRules;
+  if (input.reminderDefaults !== undefined) {
+    (config as CalendarConfig & { reminderDefaults?: unknown }).reminderDefaults =
+      input.reminderDefaults;
+  }
 
   const row = await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
     ...(input.name !== undefined ? { name: input.name } : {}),

@@ -21,6 +21,7 @@ import type {
 } from "@/lib/appointments/types";
 import { getPrisma } from "@/lib/db";
 import type { CalendarConfig } from "@/lib/calendar/providers";
+import { countStaffOpenSlots, filterStaffAvailableForSlot } from "@/lib/appointments/staff-availability";
 
 export type SchedulingContext = {
   workspaceId: string;
@@ -73,21 +74,46 @@ export function resolveEligibleStaff(
   return eligible;
 }
 
-/** Round-robin staff assignment — concurrency-safe via DB state. */
+/** Round-robin staff assignment — concurrency-safe via DB state, filtered by slot availability. */
 export async function assignStaffRoundRobin(
   workspaceId: string,
   serviceName: string,
   eligibleStaff: BookableStaffMember[],
+  slotContext?: {
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    durationMinutes: number;
+    bufferBeforeMs: number;
+    bufferAfterMs: number;
+    svcCfg: AppointmentTypeConfig;
+  },
 ): Promise<BookableStaffMember | null> {
   if (!eligibleStaff.length) return null;
+
+  let pool = eligibleStaff;
+  if (slotContext) {
+    const platform = await loadAppointmentPlatformConfig(workspaceId);
+    pool = await filterStaffAvailableForSlot(workspaceId, eligibleStaff, slotContext.startsAt, slotContext.endsAt, {
+      timezone: slotContext.timezone,
+      durationMinutes: slotContext.durationMinutes,
+      bufferBeforeMs: slotContext.bufferBeforeMs,
+      bufferAfterMs: slotContext.bufferAfterMs,
+      platform,
+      svcCfg: slotContext.svcCfg,
+      mode: "any",
+    });
+    if (!pool.length) return null;
+  }
+
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const key = serviceName;
   const state = platform.roundRobinState?.[key] || { counts: {} };
   const counts = state.counts || {};
 
-  let selected = eligibleStaff[0];
+  let selected = pool[0];
   let minCount = counts[selected.id] ?? 0;
-  for (const staff of eligibleStaff) {
+  for (const staff of pool) {
     const c = counts[staff.id] ?? 0;
     if (c < minCount) {
       minCount = c;
@@ -107,31 +133,149 @@ export async function assignStaffRoundRobin(
   return selected;
 }
 
+/** Maximize availability — pick staff member with most open slots in range. */
+export async function assignStaffMaximizeAvailability(
+  workspaceId: string,
+  eligibleStaff: BookableStaffMember[],
+  slotContext: {
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    durationMinutes: number;
+    bufferBeforeMs: number;
+    bufferAfterMs: number;
+    svcCfg: AppointmentTypeConfig;
+  },
+): Promise<BookableStaffMember | null> {
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const available = await filterStaffAvailableForSlot(
+    workspaceId,
+    eligibleStaff,
+    slotContext.startsAt,
+    slotContext.endsAt,
+    {
+      timezone: slotContext.timezone,
+      durationMinutes: slotContext.durationMinutes,
+      bufferBeforeMs: slotContext.bufferBeforeMs,
+      bufferAfterMs: slotContext.bufferAfterMs,
+      platform,
+      svcCfg: slotContext.svcCfg,
+      mode: "any",
+    },
+  );
+  if (!available.length) return null;
+
+  const dayStart = new Date(slotContext.startsAt);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 14);
+  const counts = await countStaffOpenSlots(workspaceId, available, dayStart, dayEnd, {
+    timezone: slotContext.timezone,
+    durationMinutes: slotContext.durationMinutes,
+    platform,
+    svcCfg: slotContext.svcCfg,
+  });
+
+  return available.sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0))[0] || null;
+}
+
 /** Assign staff for a booking based on appointment type configuration. */
 export async function resolveStaffForBooking(
   ctx: SchedulingContext,
-  options: { preferredStaffId?: string; preferredStaffName?: string },
+  options: {
+    preferredStaffId?: string;
+    preferredStaffName?: string;
+    startsAt?: Date;
+    endsAt?: Date;
+    durationMinutes?: number;
+  },
 ): Promise<BookableStaffMember | null> {
   const eligible = resolveEligibleStaff(ctx, options.preferredStaffName);
   if (!eligible.length) return null;
 
   const mode = ctx.staffAssignment;
+  const platform = await loadAppointmentPlatformConfig(ctx.workspaceId);
+  const bufferBeforeMs = (ctx.svcCfg.bufferBeforeMinutes ?? 0) * 60_000;
+  const bufferAfterMs = (ctx.svcCfg.bufferAfterMinutes ?? 0) * 60_000;
+  const durationMinutes = options.durationMinutes ?? 30;
+  const slotContext =
+    options.startsAt && options.endsAt
+      ? {
+          startsAt: options.startsAt,
+          endsAt: options.endsAt,
+          timezone: ctx.svcCfg.timezone || platform.timezone,
+          durationMinutes,
+          bufferBeforeMs,
+          bufferAfterMs,
+          svcCfg: ctx.svcCfg,
+        }
+      : undefined;
 
   if (mode === "customer_chooses" && options.preferredStaffId) {
-    return eligible.find((s) => s.id === options.preferredStaffId) || null;
+    const match = eligible.find((s) => s.id === options.preferredStaffId);
+    if (!match) return null;
+    if (slotContext) {
+      const available = await filterStaffAvailableForSlot(
+        ctx.workspaceId,
+        [match],
+        slotContext.startsAt,
+        slotContext.endsAt,
+        { ...slotContext, platform, mode: "any" },
+      );
+      return available[0] || null;
+    }
+    return match;
   }
 
   if (mode === "specific_staff" && ctx.svcCfg.staffIds?.length) {
     const id = ctx.svcCfg.staffIds[0];
-    return eligible.find((s) => s.id === id) || eligible[0];
+    const match = eligible.find((s) => s.id === id) || eligible[0];
+    if (slotContext) {
+      const available = await filterStaffAvailableForSlot(
+        ctx.workspaceId,
+        [match],
+        slotContext.startsAt,
+        slotContext.endsAt,
+        { ...slotContext, platform, mode: "any" },
+      );
+      return available[0] || null;
+    }
+    return match;
   }
 
   if (mode === "round_robin") {
-    return assignStaffRoundRobin(ctx.workspaceId, ctx.serviceName, eligible);
+    return assignStaffRoundRobin(ctx.workspaceId, ctx.serviceName, eligible, slotContext);
+  }
+
+  if (mode === "maximize_availability" && slotContext) {
+    return assignStaffMaximizeAvailability(ctx.workspaceId, eligible, slotContext);
   }
 
   if (mode === "collective" && ctx.svcCfg.collectiveStaffIds?.length) {
-    return eligible.find((s) => ctx.svcCfg.collectiveStaffIds!.includes(s.id)) || eligible[0];
+    const collective = eligible.filter((s) => ctx.svcCfg.collectiveStaffIds!.includes(s.id));
+    if (!collective.length) return null;
+    if (slotContext) {
+      const available = await filterStaffAvailableForSlot(
+        ctx.workspaceId,
+        collective,
+        slotContext.startsAt,
+        slotContext.endsAt,
+        { ...slotContext, platform, mode: "all" },
+      );
+      return available[0] || null;
+    }
+    return collective[0];
+  }
+
+  if (slotContext) {
+    const available = await filterStaffAvailableForSlot(
+      ctx.workspaceId,
+      eligible,
+      slotContext.startsAt,
+      slotContext.endsAt,
+      { ...slotContext, platform, mode: "any" },
+    );
+    return available[0] || eligible[0];
   }
 
   return eligible[0];
@@ -214,6 +358,21 @@ export async function checkBookingLimits(
     });
     if (count >= limits.maxBookingsPerWeek) {
       return { allowed: false, reason: "Weekly booking limit reached" };
+    }
+  }
+
+  if (limits.maxBookingsPerMonth) {
+    const monthStart = new Date(startsAt.getFullYear(), startsAt.getMonth(), 1);
+    const monthEnd = new Date(startsAt.getFullYear(), startsAt.getMonth() + 1, 1);
+    const count = await prisma.voiceAppointment.count({
+      where: {
+        workspaceId,
+        startsAt: { gte: monthStart, lt: monthEnd },
+        status: { notIn: ["canceled", "cancelled"] },
+      },
+    });
+    if (count >= limits.maxBookingsPerMonth) {
+      return { allowed: false, reason: "Monthly booking limit reached" };
     }
   }
 

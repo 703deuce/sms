@@ -19,6 +19,11 @@ export type ReminderStepConfig = {
   enabled: boolean;
   channel: ReminderChannel;
   minutesBefore?: number;
+  timeOfDay?: import("@/lib/appointments/scheduling-capabilities").ReminderTimeOfDay;
+  skipWeekends?: boolean;
+  skipClosedDays?: boolean;
+  skipOffHours?: boolean;
+  stopOnReply?: boolean;
   template: string;
   label: string;
   /** Voice reminder template when channel is voice */
@@ -73,6 +78,8 @@ export type BookableStaffMember = {
   customerSelectable?: boolean;
   appointmentTypeIds?: string[];
   locationIds?: string[];
+  /** Linked calendar connection for per-staff busy blocking */
+  calendarConnectionId?: string;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
   dateOverrides?: DateOverride[];
   blackoutDates?: string[];
@@ -90,6 +97,7 @@ export type AppointmentLocation = {
 export type BookingLimitConfig = {
   maxBookingsPerDay?: number;
   maxBookingsPerWeek?: number;
+  maxBookingsPerMonth?: number;
   maxPerTypePerDay?: number;
 };
 
@@ -127,7 +135,10 @@ export type RoutingRule = {
   destination: {
     appointmentTypeId?: string;
     staffPoolIds?: string[];
+    staffId?: string;
+    schedulingGroupId?: string;
     locationId?: string;
+    externalUrl?: string;
   };
 };
 
@@ -189,6 +200,14 @@ export type AppointmentPlatformConfig = {
     connectionIds?: string[];
     calendarIds?: string[];
   };
+  namedSchedules?: import("@/lib/appointments/scheduling-capabilities").NamedAvailabilitySchedule[];
+  holidays?: import("@/lib/appointments/scheduling-capabilities").HolidayCalendarEntry[];
+  routingForms?: import("@/lib/appointments/scheduling-capabilities").RoutingForm[];
+  schedulingGroups?: import("@/lib/appointments/scheduling-capabilities").SchedulingGroup[];
+  teamBookingPages?: import("@/lib/appointments/scheduling-capabilities").TeamBookingPage[];
+  organizationPolicy?: import("@/lib/appointments/scheduling-capabilities").OrganizationSchedulingPolicy;
+  singleUseLinks?: import("@/lib/appointments/scheduling-capabilities").SingleUseBookingLink[];
+  meetingPolls?: import("@/lib/appointments/scheduling-capabilities").MeetingPoll[];
   reminders: {
     confirmation: ReminderStepConfig;
     reminder24h: ReminderStepConfig;
@@ -210,6 +229,16 @@ export type AppointmentTypeConfig = {
   bufferBeforeMinutes?: number;
   bufferAfterMinutes?: number;
   timezone?: string;
+  visibility?: import("@/lib/appointments/scheduling-capabilities").EventTypeVisibility;
+  managed?: boolean;
+  displayOrder?: number;
+  durationOptions?: import("@/lib/appointments/scheduling-capabilities").DurationOption[];
+  permissions?: import("@/lib/appointments/scheduling-capabilities").EventTypePermission[];
+  /** Team / scheduling group that owns this event type */
+  ownerTeamId?: string;
+  bookingApproval?: import("@/lib/appointments/scheduling-capabilities").BookingApprovalConfig;
+  redirectAfterBooking?: import("@/lib/appointments/scheduling-capabilities").BookingRedirectConfig;
+  confirmationPage?: import("@/lib/appointments/scheduling-capabilities").ConfirmationPageResources;
   bookingQuestions?: BookingQuestion[];
   staffAssignment?: StaffAssignmentMode;
   staffIds?: string[];
@@ -221,6 +250,8 @@ export type AppointmentTypeConfig = {
   payment?: PaymentRequirement;
   groupBooking?: GroupBookingConfig;
   recurring?: RecurringConfig;
+  /** Reusable named availability schedule */
+  namedScheduleId?: string;
   /** AI Notetaker defaults for this appointment type */
   notetaker?: import("@/lib/meeting-assistant/types").EventTypeNotetakerConfig;
   /** Transovo Video defaults for this appointment type */
@@ -284,6 +315,10 @@ export type AppointmentMetadata = {
   recurringOccurrenceIndex?: number;
   attendeeCount?: number;
   waitlistEntryId?: string;
+  utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution;
+  reminderOverride?: import("@/lib/appointments/scheduling-capabilities").AppointmentReminderOverride;
+  emailTracking?: Record<string, { sentAt?: string; opens?: number; clicks?: number }>;
+  extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
   internalNotes?: Array<{ id: string; at: string; authorId?: string; authorName?: string; body: string }>;
   notes?: string;
   [key: string]: unknown;

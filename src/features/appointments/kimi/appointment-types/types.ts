@@ -78,6 +78,29 @@ export type AppointmentTypeFormState = {
   notetakerSummary?: boolean;
   notetakerActionItems?: boolean;
   notetakerSummaryTemplate?: string;
+  visibility: "public" | "unlisted" | "secret";
+  managed: boolean;
+  displayOrder: number;
+  durationOptions: Array<{ id: string; label: string; minutes: number; active?: boolean }>;
+  bookingApprovalRequired: boolean;
+  redirectAfterBookingEnabled: boolean;
+  redirectAfterBookingUrl: string;
+  redirectIncludeQueryParams: boolean;
+  confirmationHeadline: string;
+  confirmationBodyHtml: string;
+  confirmationCtaLabel: string;
+  confirmationCtaUrl: string;
+  maxBookingsPerMonth?: number;
+  namedScheduleId: string;
+  ownerTeamId: string;
+  permissions: Array<{
+    role: "owner" | "admin" | "scheduler" | "viewer";
+    userId?: string;
+    teamId?: string;
+    canEdit?: boolean;
+    canBook?: boolean;
+    canView?: boolean;
+  }>;
 };
 
 export type AppointmentTypesPageModel = {
@@ -98,6 +121,8 @@ export type AppointmentTypesPageModel = {
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
+  namedScheduleOptions: Array<{ id: string; name: string }>;
+  teamGroupOptions: Array<{ id: string; name: string }>;
 };
 
 export type AppointmentTypesPageActions = {
@@ -118,5 +143,7 @@ export type AppointmentTypesPageActions = {
   onManageAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onReorderTypes: (orderedIds: string[]) => void;
+  onMoveType: (id: string, direction: "up" | "down") => void;
   onRetry: () => void;
 };

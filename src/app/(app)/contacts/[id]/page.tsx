@@ -9,6 +9,8 @@ import type { Contact, Conversation } from "@/lib/types";
 import { loadContactById, loadConversations } from "@/lib/workspace-data";
 import { cn, formatPhone } from "@/lib/utils";
 import { ContactAppointmentsPanel } from "@/components/appointments/contact-appointments-panel";
+import { ContactBookingActions } from "@/components/contacts/contact-booking-actions";
+import { ContactProfileEdit } from "@/components/contacts/contact-profile-edit";
 import { ClickToCallButton } from "@/components/contacts/click-to-call-button";
 import { ContactActivityTimeline } from "@/components/contacts/contact-activity-timeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/connected-records-panel";
@@ -268,6 +270,13 @@ export default async function ContactDetailPage({
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <ContactBookingActions
+              contactId={contact.id}
+              phone={contact.phone}
+              email={contact.email}
+              firstName={contact.firstName}
+              lastName={contact.lastName}
+            />
             <ClickToCallButton phone={contact.phone} />
             {contact.status === "Subscribed" ? (
               <Link href="/send/quick">
@@ -299,6 +308,16 @@ export default async function ContactDetailPage({
               <ProfileField label="Consent date" value={formatDate(contact.consentDate)} />
               <ProfileField label="Last messaged" value={formatDate(contact.lastMessaged)} />
               <ProfileField label="Last reply" value={formatDate(contact.lastReply)} />
+              <ProfileField
+                label="Timezone"
+                value={contact.timezone || "—"}
+              />
+              <ProfileField
+                label="LinkedIn"
+                value={
+                  (contact.customFields as { linkedin?: string } | null)?.linkedin || "—"
+                }
+              />
             </dl>
           </Card>
 
@@ -310,6 +329,12 @@ export default async function ContactDetailPage({
             />
             <div className="mt-4">
               <ContactAppointmentsPanel contactId={contact.id} />
+
+          <ContactProfileEdit
+            contactId={contact.id}
+            timezone={contact.timezone}
+            linkedin={(contact.customFields as { linkedin?: string } | null)?.linkedin}
+          />
             </div>
           </Card>
 

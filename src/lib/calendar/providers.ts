@@ -1,6 +1,12 @@
 import { getPrisma } from "@/lib/db";
 import type { CalendarImportRules } from "@/lib/calendar/eligibility";
-import { refreshMicrosoftAccessToken, extractMicrosoftTenantIdFromToken, extractMicrosoftUserIdFromToken } from "@/lib/microsoft/oauth-config";
+import {
+  refreshMicrosoftAccessToken,
+  extractMicrosoftTenantIdFromToken,
+  extractMicrosoftUserIdFromToken,
+} from "@/lib/microsoft/oauth-config";
+import { withMicrosoftTokenRefreshLock } from "@/lib/microsoft/token-refresh-lock";
+import type { MicrosoftTokenRefreshResult } from "@/lib/microsoft/token-errors";
 import {
   GRAPH_PREFER_OUTLOOK_UTC,
   MICROSOFT_GRAPH_V1,
@@ -42,6 +48,14 @@ export type CalendarConfig = {
   syncLookaheadDays?: number;
   lastSyncError?: string | null;
   importRules?: CalendarImportRules;
+  reminderDefaults?: {
+    smsEnabled?: boolean;
+    emailEnabled?: boolean;
+    voiceEnabled?: boolean;
+    replyDestinationPhone?: string;
+    replyDestinationEmail?: string;
+    attachIcs?: boolean;
+  };
   /** Microsoft Graph subscription id + expiry */
   microsoftSubscription?: { id: string; expiresAt: string; resource?: string };
   /** Google Calendar watch channel */
@@ -75,6 +89,10 @@ export type CalendarConfig = {
   lastVerificationError?: string | null;
   /** Space-delimited scopes returned by Microsoft token endpoint. */
   grantedScopes?: string;
+  /** Sanitized Microsoft token refresh diagnostics (no secrets). */
+  lastTokenRefreshAt?: string;
+  lastTokenRefreshKind?: string;
+  lastTokenRefreshError?: string | null;
 };
 
 export type BusyInterval = { start: Date; end: Date };
@@ -116,6 +134,8 @@ export function resolveBlockingCalendarIds(config: CalendarConfig, provider: str
  * Return a valid access token, refreshing via the stored refresh token when the
  * current one is missing/expired, and persisting the new token on the row.
  */
+const TOKEN_EXPIRY_BUFFER_MS = 5 * 60_000;
+
 async function markCalendarConnectionNeedsReauth(connectionId: string) {
   await getPrisma()
     .voiceCalendarConnection.update({
@@ -125,6 +145,68 @@ async function markCalendarConnectionNeedsReauth(connectionId: string) {
     .catch(() => undefined);
 }
 
+async function markCalendarConnectionConnected(connectionId: string) {
+  await getPrisma()
+    .voiceCalendarConnection.update({
+      where: { id: connectionId },
+      data: { status: "connected" },
+    })
+    .catch(() => undefined);
+}
+
+async function persistTokenRefreshDiagnostics(
+  connectionId: string,
+  config: CalendarConfig,
+  input: {
+    ok: boolean;
+    kind?: string;
+    error?: string | null;
+    scope?: string;
+  },
+) {
+  const patch: CalendarConfig = {
+    ...config,
+    lastTokenRefreshAt: new Date().toISOString(),
+    lastTokenRefreshKind: input.kind || (input.ok ? "success" : "unknown"),
+    lastTokenRefreshError: input.ok ? null : input.error || "refresh_failed",
+    ...(input.scope ? { grantedScopes: input.scope } : {}),
+  };
+  await getPrisma()
+    .voiceCalendarConnection.update({
+      where: { id: connectionId },
+      data: { config: patch as object },
+    })
+    .catch(() => undefined);
+  return patch;
+}
+
+type RefreshSuccess = {
+  ok: true;
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+  scope?: string;
+};
+
+type RefreshFailure = {
+  ok: false;
+  result: MicrosoftTokenRefreshResult & { ok: false };
+};
+
+async function refreshMicrosoftTokens(refreshToken: string): Promise<RefreshSuccess | RefreshFailure> {
+  const refreshed = await refreshMicrosoftAccessToken(refreshToken);
+  if (!refreshed.ok) {
+    return { ok: false, result: refreshed };
+  }
+  return {
+    ok: true,
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    expiresIn: refreshed.expiresIn,
+    scope: refreshed.scope,
+  };
+}
+
 export async function getValidAccessToken(
   connectionId: string,
   provider: string,
@@ -132,60 +214,118 @@ export async function getValidAccessToken(
   options?: { forceRefresh?: boolean },
 ): Promise<string | null> {
   const forceRefresh = options?.forceRefresh ?? false;
-  const notExpired =
-    !forceRefresh && config.expiresAt && config.expiresAt > Date.now() + 60_000;
-  if (config.accessToken && notExpired) return config.accessToken;
-  if (!config.refreshToken) {
-    if (config.accessToken && notExpired) return config.accessToken;
-    return null;
-  }
 
-  try {
+  const resolveTokens = async (activeConfig: CalendarConfig) => {
+    const notExpired =
+      !forceRefresh &&
+      activeConfig.expiresAt &&
+      activeConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+    if (activeConfig.accessToken && notExpired) return activeConfig.accessToken;
+    if (!activeConfig.refreshToken) {
+      const accessStillValid =
+        activeConfig.accessToken &&
+        activeConfig.expiresAt &&
+        activeConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+      if (!accessStillValid) {
+        await markCalendarConnectionNeedsReauth(connectionId);
+      }
+      return accessStillValid ? activeConfig.accessToken : null;
+    }
+
     const refreshed =
       provider === "microsoft"
-        ? await refreshMicrosoft(config.refreshToken)
-        : await refreshGoogle(config.refreshToken);
-    if (!refreshed) {
-      await markCalendarConnectionNeedsReauth(connectionId);
+        ? await refreshMicrosoftTokens(activeConfig.refreshToken)
+        : await refreshGoogle(activeConfig.refreshToken);
+
+    if (!refreshed || refreshed.ok === false) {
+      const failure = refreshed && !refreshed.ok ? refreshed.result : null;
+      const needsReconnect = failure?.needsReconnect ?? true;
+      const nextConfig = await persistTokenRefreshDiagnostics(connectionId, activeConfig, {
+        ok: false,
+        kind: failure?.kind || "unknown",
+        error: failure?.error || failure?.errorDescription || "refresh_failed",
+      });
+      if (needsReconnect) {
+        await markCalendarConnectionNeedsReauth(connectionId);
+      }
       return null;
     }
 
     const microsoftTenantPatch = (() => {
       if (provider !== "microsoft") return {};
       const patches: Partial<CalendarConfig> = {};
-      if (!config.microsoftUserId) {
+      if (!activeConfig.microsoftUserId) {
         patches.microsoftUserId = extractMicrosoftUserIdFromToken(refreshed.accessToken);
       }
-      const tenantId = config.tenantId || extractMicrosoftTenantIdFromToken(refreshed.accessToken);
+      const tenantId =
+        activeConfig.tenantId || extractMicrosoftTenantIdFromToken(refreshed.accessToken);
       if (tenantId) {
         patches.tenantId = tenantId;
-        if (!config.accountType || config.accountType === "unknown") {
+        if (!activeConfig.accountType || activeConfig.accountType === "unknown") {
           patches.accountType = inferMicrosoftAccountType(tenantId);
         }
-      } else if (!config.accountType) {
+      } else if (!activeConfig.accountType) {
         patches.accountType = "unknown";
       }
       return patches;
     })();
 
     const newConfig: CalendarConfig = {
-      ...config,
+      ...activeConfig,
       accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken || config.refreshToken,
+      refreshToken: refreshed.refreshToken || activeConfig.refreshToken,
       expiresAt: Date.now() + refreshed.expiresIn * 1000,
       ...(refreshed.scope ? { grantedScopes: refreshed.scope } : {}),
+      lastTokenRefreshAt: new Date().toISOString(),
+      lastTokenRefreshKind: "success",
+      lastTokenRefreshError: null,
       ...microsoftTenantPatch,
     };
     await getPrisma().voiceCalendarConnection.update({
       where: { id: connectionId },
-      data: { config: newConfig as object },
+      data: { config: newConfig as object, status: "connected" },
     });
     return refreshed.accessToken;
-  } catch (err) {
-    console.warn("[calendar] token refresh failed", connectionId, err);
-    await markCalendarConnectionNeedsReauth(connectionId);
-    return null;
+  };
+
+  if (provider !== "microsoft") {
+    try {
+      return await resolveTokens(config);
+    } catch (err) {
+      console.warn("[calendar] token refresh failed", connectionId, err);
+      await markCalendarConnectionNeedsReauth(connectionId);
+      return null;
+    }
   }
+
+  return withMicrosoftTokenRefreshLock(connectionId, async () => {
+    try {
+      const row = await getPrisma().voiceCalendarConnection.findUnique({
+        where: { id: connectionId },
+        select: { config: true, status: true },
+      });
+      const freshConfig = { ...config, ...((row?.config || {}) as CalendarConfig) };
+      const notExpired =
+        !forceRefresh &&
+        freshConfig.expiresAt &&
+        freshConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
+      if (freshConfig.accessToken && notExpired) {
+        if (row?.status === "needs_reauth") {
+          await markCalendarConnectionConnected(connectionId);
+        }
+        return freshConfig.accessToken;
+      }
+      return await resolveTokens(freshConfig);
+    } catch (err) {
+      console.warn("[calendar] microsoft token refresh failed", connectionId, err);
+      await persistTokenRefreshDiagnostics(connectionId, config, {
+        ok: false,
+        kind: "unknown",
+        error: err instanceof Error ? err.message : "refresh_failed",
+      });
+      return null;
+    }
+  });
 }
 
 /** Microsoft Graph fetch with automatic 401 → refresh → retry once. */
@@ -287,7 +427,7 @@ export async function collectMicrosoftGraphCollection<T>(
   return { items, deltaLink };
 }
 
-async function refreshGoogle(refreshToken: string) {
+async function refreshGoogle(refreshToken: string): Promise<RefreshSuccess | null> {
   const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return null;
@@ -304,20 +444,10 @@ async function refreshGoogle(refreshToken: string) {
   if (!res.ok) return null;
   const json = await res.json();
   return {
+    ok: true,
     accessToken: json.access_token as string,
     refreshToken: json.refresh_token as string | undefined,
     expiresIn: (json.expires_in as number) || 3600,
-  };
-}
-
-async function refreshMicrosoft(refreshToken: string) {
-  const refreshed = await refreshMicrosoftAccessToken(refreshToken);
-  if (!refreshed?.access_token) return null;
-  return {
-    accessToken: refreshed.access_token,
-    refreshToken: refreshed.refresh_token,
-    expiresIn: refreshed.expires_in || 3600,
-    scope: refreshed.scope,
   };
 }
 

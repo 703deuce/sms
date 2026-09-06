@@ -15,6 +15,13 @@ export type ReminderItem = {
   segments: number;
   enabled: boolean;
   voiceReminderTemplateId?: string;
+  timeOfDayAt?: string;
+  timeOfDayDaysBefore?: number;
+  skipWeekends?: boolean;
+  skipOffHours?: boolean;
+  skipClosedDays?: boolean;
+  stopOnReply?: boolean;
+  attachIcs?: boolean;
 };
 
 export type ReminderTestOption = {
@@ -39,4 +46,15 @@ export type RemindersPageActions = {
   onTestStepChange: (stepKey: ReminderStepKey) => void;
   onSendTest: () => void;
   onRetry: () => void;
+  onAdvancedChange: (
+    stepKey: ReminderStepKey,
+    patch: Partial<{
+      timeOfDayAt: string;
+      timeOfDayDaysBefore: number;
+      skipWeekends: boolean;
+      skipOffHours: boolean;
+      stopOnReply: boolean;
+      attachIcs: boolean;
+    }>,
+  ) => void;
 };

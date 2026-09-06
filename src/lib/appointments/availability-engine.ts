@@ -1,11 +1,12 @@
 /**
  * Native Appointments availability — weekly hours, date overrides, booking rules.
  * Single source of truth for public booking, admin booking, and slot validation.
+ * Supports group capacity, collective scheduling, and per-staff availability.
  */
 import "server-only";
 
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
-import type { AppointmentTypeConfig } from "@/lib/appointments/types";
+import type { AppointmentTypeConfig, StaffAssignmentMode } from "@/lib/appointments/types";
 import {
   dateKeyFromParts,
   dayKeyInTimezone,
@@ -16,6 +17,11 @@ import {
   type WeeklyHours,
 } from "@/lib/appointments/availability-engine-policy";
 import { parseBookingHours } from "@/lib/solutions/appointment-receptionist/notice-utils";
+import {
+  filterStaffAvailableForSlot,
+  resolveStaffWeeklyHours,
+  windowsForStaffDay,
+} from "@/lib/appointments/staff-availability";
 
 export type { AvailabilitySlot, DateOverride, WeeklyHours };
 export {
@@ -58,16 +64,32 @@ export async function generateNativeSlots(
     daysAhead?: number;
     timezone?: string;
     maxSlots?: number;
+    staffId?: string;
+    durationMinutes?: number;
+    excludeAppointmentId?: string;
   },
-): Promise<{ slots: AvailabilitySlot[] }> {
+): Promise<{ slots: AvailabilitySlot[]; staffBySlot?: Record<string, string> }> {
   const { addCalendarDays, wallTimeInZoneToUtc, zonedDateParts } = await import(
     "@/lib/voice/calendar/timezone-slots"
   );
   const { getPrisma } = await import("@/lib/db");
+  const { loadSchedulingContext, resolveEligibleStaff } = await import(
+    "@/lib/appointments/scheduling-domain"
+  );
 
   const ctx = await loadAvailabilityContext(workspaceId, input.serviceName);
   const { platform, service, svcCfg } = ctx;
   if (!service || svcCfg.enabled === false) return { slots: [] };
+
+  const schedulingCtx = await loadSchedulingContext(workspaceId, input.serviceName);
+  const staffAssignment = svcCfg.staffAssignment || "any_eligible";
+  let eligibleStaff = resolveEligibleStaff(schedulingCtx);
+  if (staffAssignment === "collective" && svcCfg.collectiveStaffIds?.length) {
+    eligibleStaff = eligibleStaff.filter((s) => svcCfg.collectiveStaffIds!.includes(s.id));
+  }
+  if (input.staffId) {
+    eligibleStaff = eligibleStaff.filter((s) => s.id === input.staffId);
+  }
 
   const tz = input.timezone || ctx.timezone;
   const weeklyHours = resolveWeeklyHours(platform);
@@ -78,13 +100,14 @@ export async function generateNativeSlots(
     ctx.maximumDaysAhead,
   );
   const maxSlots = input.maxSlots ?? 200;
-  const durationMinutes = ctx.durationMinutes;
+  const durationMinutes = input.durationMinutes ?? ctx.durationMinutes;
   const bufferBefore = ctx.bufferBeforeMinutes * 60_000;
   const bufferAfter = ctx.bufferAfterMinutes * 60_000;
   const noticeMs = ctx.minimumNoticeMinutes * 60_000;
   const now = new Date();
   const prisma = getPrisma();
   const slots: AvailabilitySlot[] = [];
+  const staffBySlot: Record<string, string> = {};
 
   const rangeStart = zonedDateParts(now, tz);
   const rangeEndDay = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, days);
@@ -104,6 +127,12 @@ export async function generateNativeSlots(
     return externalBusy.some((b) => bufferedStart < b.end && bufferedEnd > b.start);
   }
 
+  const needsStaffCheck =
+    eligibleStaff.length > 0 &&
+    ["round_robin", "collective", "maximize_availability", "customer_chooses", "specific_staff"].includes(
+      staffAssignment,
+    );
+
   for (let d = 0; d < days; d += 1) {
     const day = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, d);
     const dateKey = dateKeyFromParts(day.year, day.month, day.day);
@@ -115,6 +144,7 @@ export async function generateNativeSlots(
     if (bookingHours?.weekdaysOnly && (dayName === "saturday" || dayName === "sunday")) {
       continue;
     }
+
     let windows =
       override?.windows ||
       weeklyHours[dayName] ||
@@ -161,22 +191,91 @@ export async function generateNativeSlots(
 
         if (start.getTime() < now.getTime() + noticeMs) continue;
 
-        const conflict = await prisma.voiceAppointment.findFirst({
-          where: {
+        const capacity = svcCfg.groupBooking?.enabled
+          ? svcCfg.groupBooking.capacity || 1
+          : 1;
+
+        if (capacity > 1) {
+          const { checkGroupCapacity } = await import("@/lib/appointments/scheduling-domain");
+          const group = await checkGroupCapacity(
             workspaceId,
-            startsAt: { lte: new Date(end.getTime() + bufferAfter) },
-            endsAt: { gte: new Date(start.getTime() - bufferBefore) },
-            status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-          },
-        });
-        if (conflict) continue;
+            input.serviceName,
+            start,
+            capacity,
+            input.excludeAppointmentId,
+          );
+          if (!group.available) continue;
+        } else if (!needsStaffCheck) {
+          const conflict = await prisma.voiceAppointment.findFirst({
+            where: {
+              workspaceId,
+              id: input.excludeAppointmentId ? { not: input.excludeAppointmentId } : undefined,
+              startsAt: { lte: new Date(end.getTime() + bufferAfter) },
+              endsAt: { gte: new Date(start.getTime() - bufferBefore) },
+              status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+            },
+          });
+          if (conflict) continue;
+        }
+
         if (overlapsExternalBusy(start, end)) continue;
 
+        if (needsStaffCheck && eligibleStaff.length) {
+          const mode = staffAssignment === "collective" ? "all" : "any";
+          const availableStaff = await filterStaffAvailableForSlot(
+            workspaceId,
+            eligibleStaff,
+            start,
+            end,
+            {
+              timezone: tz,
+              durationMinutes,
+              bufferBeforeMs: bufferBefore,
+              bufferAfterMs: bufferAfter,
+              platform,
+              svcCfg,
+              mode,
+              excludeAppointmentId: input.excludeAppointmentId,
+            },
+          );
+          if (!availableStaff.length) continue;
+          staffBySlot[start.toISOString()] = availableStaff[0]!.id;
+        }
+
         slots.push({ startsAt: start.toISOString(), endsAt: end.toISOString() });
-        if (slots.length >= maxSlots) return { slots };
+        if (slots.length >= maxSlots) return { slots, staffBySlot };
       }
     }
   }
 
-  return { slots };
+  return { slots, staffBySlot };
+}
+
+/** Explain which staff members are available at a specific slot. */
+export async function getAvailableStaffForSlot(
+  workspaceId: string,
+  serviceName: string,
+  startsAt: string,
+  durationMinutes?: number,
+): Promise<string[]> {
+  const ctx = await loadAvailabilityContext(workspaceId, serviceName);
+  const { loadSchedulingContext, resolveEligibleStaff } = await import(
+    "@/lib/appointments/scheduling-domain"
+  );
+  const schedulingCtx = await loadSchedulingContext(workspaceId, serviceName);
+  const eligible = resolveEligibleStaff(schedulingCtx);
+  const start = new Date(startsAt);
+  const duration = durationMinutes ?? ctx.durationMinutes;
+  const end = new Date(start.getTime() + duration * 60_000);
+  const mode = schedulingCtx.staffAssignment === "collective" ? "all" : "any";
+  const available = await filterStaffAvailableForSlot(workspaceId, eligible, start, end, {
+    timezone: ctx.timezone,
+    durationMinutes: duration,
+    bufferBeforeMs: ctx.bufferBeforeMinutes * 60_000,
+    bufferAfterMs: ctx.bufferAfterMinutes * 60_000,
+    platform: ctx.platform,
+    svcCfg: ctx.svcCfg,
+    mode,
+  });
+  return available.map((s) => s.id);
 }

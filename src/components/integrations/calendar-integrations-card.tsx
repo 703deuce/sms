@@ -23,6 +23,16 @@ type CalendarConnection = {
       requireExternalAttendees?: boolean;
       requireAttendeeEmail?: boolean;
       skipAllDay?: boolean;
+      titleIncludePatterns?: string[];
+      titleExcludePatterns?: string[];
+    };
+    reminderDefaults?: {
+      smsEnabled?: boolean;
+      emailEnabled?: boolean;
+      voiceEnabled?: boolean;
+      replyDestinationPhone?: string;
+      replyDestinationEmail?: string;
+      attachIcs?: boolean;
     };
     lastVerifiedAt?: string;
     lastVerificationOk?: boolean;
@@ -369,6 +379,30 @@ function ConnectionRow({
   const [skipAllDay, setSkipAllDay] = useState(
     connection.config?.importRules?.skipAllDay !== false,
   );
+  const [includeKeywords, setIncludeKeywords] = useState(
+    (connection.config?.importRules?.titleIncludePatterns || []).join(", "),
+  );
+  const [excludeKeywords, setExcludeKeywords] = useState(
+    (connection.config?.importRules?.titleExcludePatterns || []).join(", "),
+  );
+  const [smsReminders, setSmsReminders] = useState(
+    connection.config?.reminderDefaults?.smsEnabled !== false,
+  );
+  const [emailReminders, setEmailReminders] = useState(
+    connection.config?.reminderDefaults?.emailEnabled !== false,
+  );
+  const [voiceReminders, setVoiceReminders] = useState(
+    connection.config?.reminderDefaults?.voiceEnabled !== false,
+  );
+  const [replyPhone, setReplyPhone] = useState(
+    connection.config?.reminderDefaults?.replyDestinationPhone || "",
+  );
+  const [replyEmail, setReplyEmail] = useState(
+    connection.config?.reminderDefaults?.replyDestinationEmail || "",
+  );
+  const [attachIcs, setAttachIcs] = useState(
+    Boolean(connection.config?.reminderDefaults?.attachIcs),
+  );
 
   const connected = connection.status === "connected";
   const verificationFailed = connection.config?.lastVerificationOk === false;
@@ -412,6 +446,22 @@ function ConnectionRow({
           requireExternalAttendees,
           requireAttendeeEmail,
           skipAllDay,
+          titleIncludePatterns: includeKeywords
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          titleExcludePatterns: excludeKeywords
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        },
+        reminderDefaults: {
+          smsEnabled: smsReminders,
+          emailEnabled: emailReminders,
+          voiceEnabled: voiceReminders,
+          replyDestinationPhone: replyPhone || undefined,
+          replyDestinationEmail: replyEmail || undefined,
+          attachIcs,
         },
       }),
     });
@@ -588,6 +638,24 @@ function ConnectionRow({
                     />
                     Require attendee email (needed for email reminders)
                   </label>
+                  <div>
+                    <p className="text-[11px] font-medium text-[#6b6f82] mb-1">Import only if title contains</p>
+                    <input
+                      className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+                      placeholder="consultation, new patient (comma-separated)"
+                      value={includeKeywords}
+                      onChange={(e) => setIncludeKeywords(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-[#6b6f82] mb-1">Skip if title contains</p>
+                    <input
+                      className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+                      placeholder="lunch, focus, personal (comma-separated)"
+                      value={excludeKeywords}
+                      onChange={(e) => setExcludeKeywords(e.target.value)}
+                    />
+                  </div>
                   <p className="text-[11px] text-[#8a8fa3]">
                     Transovo matches attendee email to existing contacts and uses their phone for
                     SMS when available. Email-only imports can still receive email reminders.
@@ -596,6 +664,38 @@ function ConnectionRow({
               ) : null}
             </>
           ) : null}
+
+          <div className="rounded-lg border border-[#ecedf2] bg-white p-3 space-y-2">
+            <p className="text-[11px] font-semibold text-[#6b6f82]">Per-calendar reminder defaults</p>
+            <label className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" checked={smsReminders} onChange={(e) => setSmsReminders(e.target.checked)} />
+              SMS reminders enabled
+            </label>
+            <label className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" checked={emailReminders} onChange={(e) => setEmailReminders(e.target.checked)} />
+              Email reminders enabled
+            </label>
+            <label className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" checked={voiceReminders} onChange={(e) => setVoiceReminders(e.target.checked)} />
+              Voice reminders enabled
+            </label>
+            <label className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" checked={attachIcs} onChange={(e) => setAttachIcs(e.target.checked)} />
+              Attach ICS calendar file to reminder emails
+            </label>
+            <input
+              className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+              placeholder="Reply-to phone (optional)"
+              value={replyPhone}
+              onChange={(e) => setReplyPhone(e.target.value)}
+            />
+            <input
+              className="w-full rounded border border-[#ecedf2] px-2 py-1.5 text-[12px]"
+              placeholder="Reply-to email (optional)"
+              value={replyEmail}
+              onChange={(e) => setReplyEmail(e.target.value)}
+            />
+          </div>
 
           {importIds.length > 0 ? (
             <label className="flex items-center gap-2 text-[12px]">

@@ -56,6 +56,14 @@ export type AvailabilityFormState = {
   maxBookingsPerDay?: number;
   maxBookingsPerWeek?: number;
   maxPerTypePerDay?: number;
+  namedSchedules: Array<{
+    id: string;
+    name: string;
+    timezone?: string;
+    weeklyHours: Record<string, TimeWindow[]>;
+    isDefault?: boolean;
+  }>;
+  holidays: Array<{ date: string; name: string; closed?: boolean }>;
   overrideDate: string;
   overrideClosed: boolean;
   overrideOpen: string;

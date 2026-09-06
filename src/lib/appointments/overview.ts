@@ -37,6 +37,11 @@ export async function loadAppointmentsOverview(workspaceId: string) {
     awaitingConfirmation: today.filter((a) =>
       ["awaiting_confirmation", "scheduled"].includes(normalized(a.status)),
     ).length,
+    pendingApproval: today.filter(
+      (a) =>
+        (a.metadata as { pendingApproval?: boolean })?.pendingApproval === true &&
+        !inactiveStatuses.has(normalized(a.status)),
+    ).length,
     rescheduleRequested: today.filter((a) => normalized(a.status) === "reschedule_requested")
       .length,
     unreadConversations: await prisma.conversation.count({
@@ -45,7 +50,19 @@ export async function loadAppointmentsOverview(workspaceId: string) {
     reminderFailed,
   };
 
+  const pendingApproval = upcoming.filter(
+    (a) =>
+      (a.metadata as { pendingApproval?: boolean })?.pendingApproval === true &&
+      !inactiveStatuses.has(normalized(a.status)),
+  );
+
   const needsAttention = [
+    ...pendingApproval.slice(0, 5).map((a) => ({
+      id: a.id,
+      kind: "pending_approval" as const,
+      label: `${a.inviteeName || "Customer"} — ${a.serviceName || "Appointment"} (approval required)`,
+      href: `/appointments/${a.id}`,
+    })),
     ...upcoming
       .filter((a) => ["awaiting_confirmation", "scheduled"].includes(normalized(a.status)))
       .slice(0, 5)

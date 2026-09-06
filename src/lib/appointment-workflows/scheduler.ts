@@ -1,4 +1,5 @@
 import type { WorkflowRelativeTiming, WorkflowStepTiming } from "./types";
+import { wallTimeInZoneToUtc, zonedDateParts } from "@/lib/voice/calendar/timezone-slots";
 
 const UNIT_MS: Record<string, number> = {
   minutes: 60_000,
@@ -17,6 +18,21 @@ export function resolveStepScheduledTime(input: {
 
   if (input.timing.kind === "immediate") {
     return now;
+  }
+
+  if (input.timing.kind === "time_of_day") {
+    const tz = input.timing.timezone || "UTC";
+    const anchor =
+      input.timing.anchor === "appointment_end"
+        ? input.appointmentEndsAt || input.appointmentStartsAt
+        : input.timing.anchor === "booking_created"
+          ? input.bookingCreatedAt
+          : input.appointmentStartsAt;
+    const fireAnchor = new Date(anchor);
+    fireAnchor.setDate(fireAnchor.getDate() - input.timing.daysBefore);
+    const [hh, mm] = input.timing.at.split(":").map(Number);
+    const parts = zonedDateParts(fireAnchor, tz);
+    return wallTimeInZoneToUtc(tz, parts.year, parts.month, parts.day, hh || 9, mm || 0);
   }
 
   const { anchor, amount, unit, direction } = input.timing;

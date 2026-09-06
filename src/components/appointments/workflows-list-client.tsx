@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { PREBUILT_WORKFLOW_TEMPLATES } from "@/lib/appointment-workflows/templates";
 import type { AppointmentWorkflowRecord } from "@/lib/appointment-workflows/types";
 import { triggerLabel } from "@/lib/appointment-workflows/labels";
-import { Plus, Workflow } from "lucide-react";
+import { WorkflowLogsPanel } from "@/components/appointments/workflow-logs-panel";
+import { UnknownRepliesPanel } from "@/components/appointments/unknown-replies-panel";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -154,6 +155,8 @@ export function WorkflowsListClient() {
           </div>
         )}
       </section>
+      <UnknownRepliesPanel />
+      <WorkflowLogsPanel />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { Plus, ExternalLink } from "lucide-react";
 import TypeListPanel from "./components/TypeListPanel";
 import TypeEditorPanel from "./components/TypeEditorPanel";
+import TypeBulkEditPanel from "@/components/appointments/type-bulk-edit-panel";
 import PreviewPanel from "./components/PreviewPanel";
 import StatusPanel from "./components/StatusPanel";
 import type {
@@ -61,6 +62,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               showInactive={model.showInactive}
               onToggleInactive={actions.onToggleShowInactive}
               onSearchChange={actions.onSearchChange}
+              onMoveType={actions.onMoveType}
             />
           </div>
           <div className="flex-1 min-w-0">
@@ -72,6 +74,8 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               staffOptions={model.staffOptions}
               locationOptions={model.locationOptions}
               connectedPaymentProviders={model.connectedPaymentProviders}
+              namedScheduleOptions={model.namedScheduleOptions}
+              teamGroupOptions={model.teamGroupOptions}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}
@@ -95,6 +99,10 @@ export default function AppointmentTypesView({ model, actions }: Props) {
             </div>
           ) : null}
         </div>
+        <TypeBulkEditPanel
+          types={model.types.map((t) => ({ id: t.id, name: t.name }))}
+          onApplied={actions.onRetry}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { BookingQuestionField } from "@/components/appointments/booking-question-field";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,10 +29,22 @@ import {
 import { SquarePaymentStep } from "@/components/appointments/square-payment-step";
 import { appointmentSmsConsentDisclosure } from "@/lib/appointments/sms-consent-disclosure";
 
+type DurationOption = { id: string; label: string; minutes: number; active?: boolean };
+
+type ConfirmationResources = {
+  headline?: string;
+  bodyHtml?: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  attachmentUrls?: string[];
+};
+
 type BookingType = {
   id: string;
   name: string;
   durationMinutes: number;
+  durationOptions?: DurationOption[];
+  confirmationPage?: ConfirmationResources;
   config?: {
     description?: string;
     location?: string;
@@ -43,6 +56,8 @@ type BookingType = {
     payment?: PaymentRequirement;
     groupBooking?: GroupBookingConfig;
     recurring?: RecurringConfig;
+    durationOptions?: DurationOption[];
+    confirmationPage?: ConfirmationResources;
   };
 };
 
@@ -116,9 +131,17 @@ function formatPrice(payment?: PaymentRequirement) {
 export function PublicBookingClient({
   slug,
   initialServiceId,
+  embed,
+  preselectTypeId,
+  theme,
+  singleUseToken,
 }: {
   slug: string;
   initialServiceId?: string;
+  embed?: boolean;
+  preselectTypeId?: string;
+  theme?: "light" | "dark" | "auto";
+  singleUseToken?: string;
 }) {
   const [step, setStep] = useState<Step>("service");
   const [workspaceName, setWorkspaceName] = useState("");
@@ -174,6 +197,75 @@ export function PublicBookingClient({
   const [waitlistTimeStart, setWaitlistTimeStart] = useState("09:00");
   const [waitlistTimeEnd, setWaitlistTimeEnd] = useState("17:00");
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [utm, setUtm] = useState<Record<string, string>>({});
+  const [urlSingleUseToken, setUrlSingleUseToken] = useState("");
+  const [confirmationResources, setConfirmationResources] = useState<ConfirmationResources | null>(null);
+  const [extraRecipients, setExtraRecipients] = useState<
+    Array<{ name: string; email: string; phone: string }>
+  >([]);
+
+  const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
+
+  const activeDurationOptions = useMemo(() => {
+    const opts =
+      selectedType?.durationOptions ||
+      selectedType?.config?.durationOptions ||
+      [];
+    const active = opts.filter((o) => o.active !== false && o.minutes > 0);
+    if (active.length) return active;
+    if (selectedType) {
+      return [
+        {
+          id: "default",
+          label: `${selectedType.durationMinutes} min`,
+          minutes: selectedType.durationMinutes,
+        },
+      ];
+    }
+    return [];
+  }, [selectedType]);
+
+  const effectiveDurationMinutes =
+    selectedDuration || activeDurationOptions[0]?.minutes || selectedType?.durationMinutes || 30;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const singleUse = params.get("singleUse");
+    if (singleUse) setUrlSingleUseToken(singleUse);
+    const captured: Record<string, string> = {};
+    for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) {
+      const v = params.get(key);
+      if (v) captured[key.replace("utm_", "")] = v;
+    }
+    if (Object.keys(captured).length) setUtm(captured);
+    const cookie = document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`transovo_invitee_`));
+    if (cookie) {
+      try {
+        const raw = cookie.split("=")[1];
+        const parsed = JSON.parse(atob(raw.replace(/-/g, "+").replace(/_/g, "/")));
+        if (parsed.firstName) setFirstName(parsed.firstName);
+        if (parsed.lastName) setLastName(parsed.lastName);
+        if (parsed.phone) setPhone(parsed.phone);
+        if (parsed.email) setEmail(parsed.email);
+      } catch {
+        // ignore malformed cookie
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (theme === "dark") document.documentElement.classList.add("dark");
+    else if (theme === "light") document.documentElement.classList.remove("dark");
+  }, [theme]);
 
   useEffect(() => {
     fetch(`/api/public/book/${encodeURIComponent(slug)}`)
@@ -196,8 +288,10 @@ export function PublicBookingClient({
         setTypes(list);
         setStaffOptions(json.data.staff || []);
         setLocationOptions(json.data.locations || []);
-        if (initialServiceId) {
-          const match = list.find((t: BookingType) => t.id === initialServiceId);
+        if (initialServiceId || preselectTypeId) {
+          const match = list.find(
+            (t: BookingType) => t.id === (preselectTypeId || initialServiceId),
+          );
           if (match) {
             setSelectedType(match);
             setStep("datetime");
@@ -207,7 +301,47 @@ export function PublicBookingClient({
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [slug, initialServiceId]);
+  }, [slug, initialServiceId, preselectTypeId]);
+
+  async function sendOtp() {
+    if (!email.trim()) {
+      setError("Enter your email to receive a verification code.");
+      return;
+    }
+    setSubmitting(true);
+    const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}/otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(json.error || "Could not send verification code");
+      return;
+    }
+    setOtpSent(true);
+    setError("");
+  }
+
+  async function verifyOtp() {
+    if (!otpCode.trim()) return;
+    setSubmitting(true);
+    const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}/otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify", email, code: otpCode }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(json.error || "Invalid code");
+      return;
+    }
+    setOtpVerified(true);
+    setChallengeRequired(false);
+    setError("");
+  }
 
   const activeQuestions = useMemo(
     () =>
@@ -298,13 +432,20 @@ export function PublicBookingClient({
   }
 
   async function pickType(type: BookingType) {
-    setSelectedType(type);
+    const normalized: BookingType = {
+      ...type,
+      durationOptions: type.durationOptions || type.config?.durationOptions,
+      confirmationPage: type.confirmationPage || type.config?.confirmationPage,
+    };
+    setSelectedType(normalized);
     setStartsAt("");
     setBookingAnswers({});
     setSelectedStaffId("");
     setSelectedLocationId("");
     setRecurringMode("once");
     setAttendeeCount(1);
+    const opts = (normalized.durationOptions || []).filter((o) => o.active !== false && o.minutes > 0);
+    setSelectedDuration(opts[0]?.minutes ?? normalized.durationMinutes);
     setStep("datetime");
     setLoadingSlots(true);
     setError("");
@@ -316,6 +457,7 @@ export function PublicBookingClient({
         serviceId: type.id,
         serviceName: type.name,
         daysAhead: 14,
+        durationMinutes: opts[0]?.minutes ?? type.durationMinutes,
       }),
     });
     const json = await res.json();
@@ -399,7 +541,20 @@ export function PublicBookingClient({
       staffId: selectedStaffId || undefined,
       locationId: selectedLocationId || undefined,
       attendeeCount: groupEnabled ? attendeeCount : undefined,
+      durationMinutes: effectiveDurationMinutes,
+      utm: Object.keys(utm).length ? utm : undefined,
+      emailOtpVerified: otpVerified || undefined,
+      singleUseToken: effectiveSingleUseToken,
     };
+    if (extraRecipients.length) {
+      payload.extraRecipients = extraRecipients
+        .map((r) => ({
+          name: r.name.trim() || undefined,
+          email: r.email.trim() || undefined,
+          phone: r.phone.trim() || undefined,
+        }))
+        .filter((r) => r.email || r.phone);
+    }
     if (recurringMode !== "once" && recurringEnabled) {
       payload.recurring = {
         frequency: recurringMode,
@@ -414,7 +569,7 @@ export function PublicBookingClient({
     const json = await res.json().catch(() => ({}));
     if (res.status === 428 && json.challengeRequired) {
       setChallengeRequired(true);
-      setError("Please confirm you are a real person to continue.");
+      setError("Email verification is required to complete your booking.");
       setSubmitting(false);
       return;
     }
@@ -440,8 +595,25 @@ export function PublicBookingClient({
     }
     setBookingMeetingLink(json.data?.meetingLink || json.data?.joinUrl || null);
     setBookingIsTransovoVideo(Boolean(json.data?.isTransovoVideo));
+    if (json.data?.redirectUrl) setRedirectUrl(json.data.redirectUrl);
+    setConfirmationResources(
+      json.data?.confirmationResources ||
+        selectedType?.confirmationPage ||
+        selectedType?.config?.confirmationPage ||
+        null,
+    );
+    if (json.data?.returningInviteeCookie) {
+      const c = json.data.returningInviteeCookie as { key: string; value: string };
+      const maxAge = 365 * 24 * 60 * 60;
+      document.cookie = `${c.key}=${c.value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+    }
     setStep("done");
     setSubmitting(false);
+    if (json.data?.redirectUrl) {
+      setTimeout(() => {
+        window.location.href = json.data.redirectUrl as string;
+      }, 2500);
+    }
   }
 
   if (loading) {
@@ -480,7 +652,12 @@ export function PublicBookingClient({
     : "";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 via-muted/20 to-card px-4 py-10 sm:py-14">
+    <div
+      className={cn(
+        "min-h-screen bg-gradient-to-b from-muted/50 via-muted/20 to-card px-4 py-10 sm:py-14",
+        embed && "min-h-0 bg-background py-4",
+      )}
+    >
       <div className="mx-auto max-w-lg">
         <div className="mb-8 text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Book online</p>
@@ -618,6 +795,32 @@ export function PublicBookingClient({
               <ArrowLeft className="h-3.5 w-3.5" /> Change service
             </button>
             <h2 className="font-display text-base font-semibold">{selectedType?.name}</h2>
+
+            {activeDurationOptions.length > 1 ? (
+              <div className="mt-4">
+                <Label>Duration</Label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {activeDurationOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-[13px]",
+                        effectiveDurationMinutes === opt.minutes
+                          ? "border-primary bg-primary/5"
+                          : "border-border",
+                      )}
+                      onClick={() => {
+                        setSelectedDuration(opt.minutes);
+                        if (selectedType) void pickType(selectedType);
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {showStaffPicker ? (
               <div className="mt-4">
@@ -787,6 +990,61 @@ export function PublicBookingClient({
               <div><Label>Mobile phone *</Label><Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
               <div className="sr-only" aria-hidden><Input tabIndex={-1} value={honeypot} onChange={(e) => setHoneypot(e.target.value)} /></div>
               <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <Label>Additional guests</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setExtraRecipients((prev) => [...prev, { name: "", email: "", phone: "" }])
+                    }
+                  >
+                    Add guest
+                  </Button>
+                </div>
+                {extraRecipients.length ? (
+                  <div className="space-y-2">
+                    {extraRecipients.map((guest, i) => (
+                      <div key={i} className="grid grid-cols-3 gap-2">
+                        <Input
+                          placeholder="Name"
+                          value={guest.name}
+                          onChange={(e) => {
+                            const next = [...extraRecipients];
+                            next[i] = { ...guest, name: e.target.value };
+                            setExtraRecipients(next);
+                          }}
+                        />
+                        <Input
+                          placeholder="Email"
+                          type="email"
+                          value={guest.email}
+                          onChange={(e) => {
+                            const next = [...extraRecipients];
+                            next[i] = { ...guest, email: e.target.value };
+                            setExtraRecipients(next);
+                          }}
+                        />
+                        <Input
+                          placeholder="Phone"
+                          value={guest.phone}
+                          onChange={(e) => {
+                            const next = [...extraRecipients];
+                            next[i] = { ...guest, phone: e.target.value };
+                            setExtraRecipients(next);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">
+                    Optional — send reminders to additional attendees.
+                  </p>
+                )}
+              </div>
               {activeQuestions.map((q) => (
                 <BookingQuestionField key={q.id} question={q} value={bookingAnswers[q.id] || ""} onChange={(v) => setBookingAnswers((prev) => ({ ...prev, [q.id]: v }))} />
               ))}
@@ -803,10 +1061,30 @@ export function PublicBookingClient({
                 <a href={privacyUrl} className="font-semibold text-primary">Privacy</a>
               </p>
               {challengeRequired ? (
-                <label className="flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-3 text-[13px]">
-                  <input type="checkbox" checked={humanVerification} onChange={(e) => setHumanVerification(e.target.checked)} />
-                  <ShieldCheck className="h-4 w-4" /> I confirm I am a real person
-                </label>
+                <div className="space-y-2 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-3 text-[13px]">
+                  <div className="flex items-center gap-2 font-medium text-amber-900">
+                    <ShieldCheck className="h-4 w-4" /> Email verification required
+                  </div>
+                  {!otpSent ? (
+                    <Button type="button" size="sm" variant="outline" disabled={submitting || !email} onClick={sendOtp}>
+                      Send verification code
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="6-digit code"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                      />
+                      <Button type="button" size="sm" disabled={submitting} onClick={verifyOtp}>
+                        Verify
+                      </Button>
+                    </div>
+                  )}
+                  {otpVerified ? (
+                    <p className="text-xs text-emerald-700">Email verified — you can complete booking.</p>
+                  ) : null}
+                </div>
               ) : null}
               {bookingConflicts.length > 0 ? (
                 <div className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
@@ -854,13 +1132,49 @@ export function PublicBookingClient({
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
               <Check className="h-6 w-6" />
             </div>
-            <h2 className="font-display text-xl font-semibold">You&apos;re booked!</h2>
-            <p className="mt-2 text-sm font-medium">{selectedType?.name}</p>
-            <p className="mt-1 text-[13px] text-muted-foreground">{selectedWhen}</p>
+            <h2 className="font-display text-xl font-semibold">
+              {confirmationResources?.headline || "You're booked!"}
+            </h2>
+            {confirmationResources?.bodyHtml ? (
+              <div
+                className="mt-3 text-sm text-muted-foreground prose prose-sm max-w-none mx-auto"
+                dangerouslySetInnerHTML={{ __html: confirmationResources.bodyHtml }}
+              />
+            ) : (
+              <>
+                <p className="mt-2 text-sm font-medium">{selectedType?.name}</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">{selectedWhen}</p>
+              </>
+            )}
             {paymentLabel ? (
               <p className="mt-2 text-[12px] text-muted-foreground">
                 {selectedType?.config?.payment?.mode === "deposit" ? "Deposit paid" : "Payment received"}
               </p>
+            ) : null}
+            {confirmationResources?.ctaLabel && confirmationResources?.ctaUrl ? (
+              <div className="mx-auto mt-6 max-w-sm">
+                <Button asChild size="lg" className="w-full">
+                  <a href={confirmationResources.ctaUrl} target="_blank" rel="noreferrer">
+                    {confirmationResources.ctaLabel}
+                  </a>
+                </Button>
+              </div>
+            ) : null}
+            {confirmationResources?.attachmentUrls?.length ? (
+              <div className="mx-auto mt-4 max-w-sm space-y-2 text-left">
+                <p className="text-[12px] font-semibold text-muted-foreground">Resources</p>
+                {confirmationResources.attachmentUrls.map((url) => (
+                  <a
+                    key={url}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-[13px] text-primary hover:underline"
+                  >
+                    {url}
+                  </a>
+                ))}
+              </div>
             ) : null}
             {bookingMeetingLink ? (
               <div className="mx-auto mt-6 max-w-sm space-y-3">

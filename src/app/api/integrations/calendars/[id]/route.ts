@@ -42,6 +42,14 @@ export async function PATCH(request: Request, context: RouteContext) {
         titleExcludePatterns?: string[];
         skipAllDay?: boolean;
       };
+      reminderDefaults?: {
+        smsEnabled?: boolean;
+        emailEnabled?: boolean;
+        voiceEnabled?: boolean;
+        replyDestinationPhone?: string;
+        replyDestinationEmail?: string;
+        attachIcs?: boolean;
+      };
     };
     const row = await patchWorkspaceCalendarConnection(auth.workspaceId, id, body);
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

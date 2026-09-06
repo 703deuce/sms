@@ -63,6 +63,9 @@ async function playHumanPrompt(
 ) {
   const template = meta.templateSnapshot;
   const validDigits = validDigitsFromOptions(template.keypadOptions);
+  const promptText =
+    template.humanScript?.trim() ||
+    "Hello. This is your appointment reminder. Please make your selection now.";
   const clientState = encodeAppointmentVoiceClientState({
     kind: "appointment_voice_reminder",
     voiceCallId,
@@ -81,7 +84,7 @@ async function playHumanPrompt(
   } else {
     await gatherUsingSpeakRaw({
       callControlId,
-      text: template.humanScript,
+      text: promptText,
       validDigits,
       timeoutMs: 12000,
       clientStateBase64: clientState,

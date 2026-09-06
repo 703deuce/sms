@@ -203,12 +203,16 @@ function mapAttention(items: OverviewApiData["needsAttention"]): OverviewAttenti
     icon:
       item.kind === "reminder_failed"
         ? "bell"
+        : item.kind === "pending_approval"
+          ? "shield"
         : item.kind === "reschedule_requested"
           ? "shield"
           : "check-square",
     tint:
       item.kind === "reminder_failed"
         ? "red"
+        : item.kind === "pending_approval"
+          ? "amber"
         : item.kind === "reschedule_requested"
           ? "amber"
           : "purple",
@@ -216,6 +220,8 @@ function mapAttention(items: OverviewApiData["needsAttention"]): OverviewAttenti
     sub:
       item.kind === "reminder_failed"
         ? "Reminders couldn't be delivered"
+        : item.kind === "pending_approval"
+          ? "Booking requires staff approval"
         : item.kind === "reschedule_requested"
           ? "Customer requested a new time"
           : "Needs your review",

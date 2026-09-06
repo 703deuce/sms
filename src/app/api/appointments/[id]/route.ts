@@ -8,7 +8,11 @@ import {
   reschedulePlatformAppointment,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
+import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import { addInternalNote } from "@/lib/appointments/internal-notes";
+import { getPrisma } from "@/lib/db";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
+import { suppressAppointmentReminders, resetAppointmentReminders } from "@/lib/appointments/reminder-state";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,6 +28,8 @@ export async function GET(_request: Request, { params }: Params) {
       startsAt: data.startsAt,
       metadata: data.metadata,
       config: config.reminders,
+      timezone: data.timezone || config.timezone,
+      weeklyHours: resolveWeeklyHours(config),
     });
     return NextResponse.json({ data: { ...data, reminderSchedule } });
   } catch (err) {
@@ -41,7 +47,39 @@ export async function PATCH(request: Request, { params }: Params) {
       action?: string;
       internalNote?: string;
       startsAt?: string;
+      suppressReminders?: boolean;
+      extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
     };
+
+    if (body.suppressReminders !== undefined || body.extraRecipients !== undefined) {
+      const prisma = getPrisma();
+      const row = await prisma.voiceAppointment.findFirst({
+        where: { id, workspaceId: auth.workspaceId },
+      });
+      if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      let meta = (row.metadata || {}) as AppointmentMetadata;
+      if (body.suppressReminders !== undefined) {
+        meta = body.suppressReminders
+          ? suppressAppointmentReminders(meta)
+          : resetAppointmentReminders(meta);
+        meta = {
+          ...meta,
+          reminderOverride: {
+            ...(meta.reminderOverride || {}),
+            suppressed: body.suppressReminders,
+          },
+        };
+      }
+      if (body.extraRecipients !== undefined) {
+        meta = { ...meta, extraRecipients: body.extraRecipients };
+      }
+      await prisma.voiceAppointment.update({
+        where: { id: row.id },
+        data: { metadata: meta as object, updatedAt: new Date() },
+      });
+      const data = await getAppointment(auth.workspaceId, id);
+      return NextResponse.json({ data });
+    }
 
     if (body.internalNote?.trim()) {
       const note = await addInternalNote(auth.workspaceId, id, {

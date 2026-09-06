@@ -2,8 +2,8 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { handleUnifiedAiBooking } from "@/lib/appointments/ai-booking-orchestrator";
 import { mergeConversationState } from "./conversation-state";
-import { handleAppointmentAIRequest } from "./service";
 import type { AppointmentAiResult } from "./schema";
 
 const APPOINTMENT_SIGNAL =
@@ -46,15 +46,14 @@ export async function tryHandleInboundAppointmentAi(input: {
     select: { customFields: true },
   });
 
-  const result = await handleAppointmentAIRequest({
+  const result = await handleUnifiedAiBooking({
     workspaceId: input.workspaceId,
+    channel: "sms",
     message: input.message,
-    channel: input.conversationId ? "conversation" : "sms",
-    customerId: input.contactId,
+    contactId: input.contactId,
     conversationId: input.conversationId,
-    conversationHistory: input.conversationHistory,
-    contactCustomFields: contact?.customFields,
     requestId: input.providerMessageId,
+    conversationHistory: input.conversationHistory,
   });
 
   const statePatch = result.data?.conversationState;
@@ -87,14 +86,13 @@ export async function handleConversationAppointmentMessage(input: {
     select: { customFields: true },
   });
 
-  const result = await handleAppointmentAIRequest({
+  const result = await handleUnifiedAiBooking({
     workspaceId: input.workspaceId,
+    channel: "sms",
     message: input.message,
-    channel: "conversation",
-    customerId: input.contactId,
+    contactId: input.contactId,
     conversationId: input.conversationId,
     conversationHistory: input.conversationHistory,
-    contactCustomFields: contact?.customFields,
   });
 
   const statePatch = result.data?.conversationState;

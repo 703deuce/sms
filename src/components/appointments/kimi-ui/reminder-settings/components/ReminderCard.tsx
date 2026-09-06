@@ -21,12 +21,20 @@ export default function ReminderCard({
   onTemplateChange,
   onChannelChange,
   onReset,
+  onAdvancedChange,
 }: {
   reminder: ReminderItem;
   onToggle: () => void;
   onTemplateChange: (value: string) => void;
   onChannelChange: (channel: ReminderChannel) => void;
   onReset: () => void;
+  onAdvancedChange?: (patch: Partial<{
+    timeOfDayAt: string;
+    timeOfDayDaysBefore: number;
+    skipWeekends: boolean;
+    skipOffHours: boolean;
+    stopOnReply: boolean;
+  }>) => void;
 }) {
   const Icon = iconMap[reminder.icon];
   const segmentCount =
@@ -82,23 +90,61 @@ export default function ReminderCard({
             <div className="mb-3">
               <label className="text-[12px] font-medium text-foreground">Channel</label>
               <select
-                value={reminder.channel === 'email' ? 'sms' : reminder.channel}
+                value={reminder.channel}
                 onChange={(e) => onChannelChange(e.target.value as ReminderChannel)}
                 className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-3 text-[12.5px]"
               >
                 <option value="sms">SMS</option>
+                <option value="email">Email</option>
                 <option value="voice">Voice call</option>
               </select>
               {reminder.channel === 'voice' ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Uses your Voice Reminders templates and keypad options.
                 </p>
+              ) : reminder.channel === 'email' ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Includes ICS calendar attachment and open/click tracking.
+                </p>
               ) : (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Sent from the Transovo platform number. Email reminders coming soon.
+                  Sent from the Transovo platform number. International numbers supported.
                 </p>
               )}
             </div>
+            {reminder.stepKey !== 'confirmation' && onAdvancedChange ? (
+              <div className="mb-3 rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+                <p className="text-[12px] font-medium">Advanced timing</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="time"
+                    className="h-8 rounded border px-2 text-[12px]"
+                    value={reminder.timeOfDayAt || ""}
+                    onChange={(e) => onAdvancedChange({ timeOfDayAt: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Days before"
+                    className="h-8 rounded border px-2 text-[12px]"
+                    value={reminder.timeOfDayDaysBefore ?? ""}
+                    onChange={(e) => onAdvancedChange({ timeOfDayDaysBefore: Number(e.target.value) })}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-[11px]">
+                  <input type="checkbox" checked={reminder.skipWeekends} onChange={(e) => onAdvancedChange({ skipWeekends: e.target.checked })} />
+                  Skip weekends
+                </label>
+                <label className="flex items-center gap-2 text-[11px]">
+                  <input type="checkbox" checked={reminder.skipOffHours} onChange={(e) => onAdvancedChange({ skipOffHours: e.target.checked })} />
+                  Skip off-hours
+                </label>
+                <label className="flex items-center gap-2 text-[11px]">
+                  <input type="checkbox" checked={reminder.stopOnReply} onChange={(e) => onAdvancedChange({ stopOnReply: e.target.checked })} />
+                  Stop sequence after customer replies
+                </label>
+              </div>
+            ) : null}
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-[12px] font-medium text-foreground">
                 {reminder.channel === 'voice' ? 'Call script' : 'Message template'}

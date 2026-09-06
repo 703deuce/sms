@@ -91,6 +91,7 @@ export default function ReminderSettingsView({
             onTemplateChange={(value) => actions.onTemplateChange(r.stepKey, value)}
             onChannelChange={(channel) => actions.onChannelChange(r.stepKey, channel)}
             onReset={() => actions.onResetTemplate(r.stepKey)}
+            onAdvancedChange={(patch) => actions.onAdvancedChange(r.stepKey, patch)}
           />
         ))}
       </div>

@@ -93,6 +93,21 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   notetakerSummary: true,
   notetakerActionItems: true,
   notetakerSummaryTemplate: "general",
+  visibility: "public",
+  managed: false,
+  displayOrder: 0,
+  durationOptions: [],
+  bookingApprovalRequired: false,
+  redirectAfterBookingEnabled: false,
+  redirectAfterBookingUrl: "",
+  redirectIncludeQueryParams: true,
+  confirmationHeadline: "",
+  confirmationBodyHtml: "",
+  confirmationCtaLabel: "",
+  confirmationCtaUrl: "",
+  namedScheduleId: "",
+  ownerTeamId: "",
+  permissions: [],
 };
 
 function parsePrice(priceDisplay?: string): { price: number | null; free: boolean } {
@@ -208,6 +223,27 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     notetakerSummary: cfg.notetaker?.summaryEnabled ?? true,
     notetakerActionItems: cfg.notetaker?.actionItemsEnabled ?? true,
     notetakerSummaryTemplate: cfg.notetaker?.summaryTemplate ?? "general",
+    visibility: cfg.visibility || "public",
+    managed: cfg.managed || false,
+    displayOrder: cfg.displayOrder ?? 0,
+    durationOptions: (cfg.durationOptions || []).map((o) => ({
+      id: o.id,
+      label: o.label,
+      minutes: o.minutes,
+      active: o.active !== false,
+    })),
+    bookingApprovalRequired: cfg.bookingApproval?.required || false,
+    redirectAfterBookingEnabled: cfg.redirectAfterBooking?.enabled || false,
+    redirectAfterBookingUrl: cfg.redirectAfterBooking?.url || "",
+    redirectIncludeQueryParams: cfg.redirectAfterBooking?.includeQueryParams !== false,
+    confirmationHeadline: cfg.confirmationPage?.headline || "",
+    confirmationBodyHtml: cfg.confirmationPage?.bodyHtml || "",
+    confirmationCtaLabel: cfg.confirmationPage?.ctaLabel || "",
+    confirmationCtaUrl: cfg.confirmationPage?.ctaUrl || "",
+    maxBookingsPerMonth: cfg.bookingLimits?.maxBookingsPerMonth,
+    namedScheduleId: cfg.namedScheduleId || "",
+    ownerTeamId: cfg.ownerTeamId || "",
+    permissions: (cfg.permissions || []).map((p) => ({ ...p })),
   };
 }
 
@@ -279,11 +315,38 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
       ? { enabled: true, allowedFrequencies: form.recurringFrequencies, maxOccurrences: 12 }
       : { enabled: false },
     bookingLimits:
-      form.maxBookingsPerDay || form.maxBookingsPerWeek || form.maxPerTypePerDay
+      form.maxBookingsPerDay || form.maxBookingsPerWeek || form.maxPerTypePerDay || form.maxBookingsPerMonth
         ? {
             maxBookingsPerDay: form.maxBookingsPerDay,
             maxBookingsPerWeek: form.maxBookingsPerWeek,
             maxPerTypePerDay: form.maxPerTypePerDay,
+            maxBookingsPerMonth: form.maxBookingsPerMonth,
+          }
+        : undefined,
+    visibility: form.visibility,
+    managed: form.managed,
+    displayOrder: form.displayOrder,
+    namedScheduleId: form.namedScheduleId || undefined,
+    ownerTeamId: form.ownerTeamId || undefined,
+    permissions: form.permissions.length ? form.permissions : undefined,
+    durationOptions: form.durationOptions.length
+      ? form.durationOptions.filter((o) => o.label && o.minutes > 0)
+      : undefined,
+    bookingApproval: form.bookingApprovalRequired ? { required: true, notifyStaff: true } : undefined,
+    redirectAfterBooking: form.redirectAfterBookingEnabled
+      ? {
+          enabled: true,
+          url: form.redirectAfterBookingUrl,
+          includeQueryParams: form.redirectIncludeQueryParams,
+        }
+      : undefined,
+    confirmationPage:
+      form.confirmationHeadline || form.confirmationBodyHtml
+        ? {
+            headline: form.confirmationHeadline,
+            bodyHtml: form.confirmationBodyHtml,
+            ctaLabel: form.confirmationCtaLabel,
+            ctaUrl: form.confirmationCtaUrl,
           }
         : undefined,
     transovoVideo:

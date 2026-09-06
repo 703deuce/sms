@@ -112,10 +112,12 @@ export async function GET(_request: Request, { params }: Params) {
     }
     const types = (await listAppointmentTypes(workspace.id))
       .filter((t: { active: boolean }) => t.active)
-      .map((t: { id: string; name: string; durationMinutes: number; config: unknown }) => ({
+      .map((t: { id: string; name: string; durationMinutes: number; config: AppointmentTypeConfig }) => ({
         id: t.id,
         name: t.name,
         durationMinutes: t.durationMinutes,
+        durationOptions: t.config?.durationOptions,
+        confirmationPage: t.config?.confirmationPage,
         config: t.config,
       }));
     const staff = (config.staff || [])
@@ -248,13 +250,13 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
-    const schedulingCtx = await loadSchedulingContext(workspace.id, resolvedServiceName);
-    const assignedStaff = await resolveStaffForBooking(schedulingCtx, {
-      preferredStaffId: staffId,
-      preferredStaffName: body.staffName ? String(body.staffName) : undefined,
-    });
-    if (assignedStaff) {
-      staffId = assignedStaff.id;
+    const schedulingCtxEarly = await loadSchedulingContext(workspace.id, resolvedServiceName);
+    if (body.staffId || body.staffName) {
+      const preStaff = await resolveStaffForBooking(schedulingCtxEarly, {
+        preferredStaffId: staffId,
+        preferredStaffName: body.staffName ? String(body.staffName) : undefined,
+      });
+      if (preStaff) staffId = preStaff.id;
     }
 
     if (locationId) {
@@ -266,6 +268,15 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const attendeeCount = body.attendeeCount ? Number(body.attendeeCount) : undefined;
+    const extraRecipients = Array.isArray(body.extraRecipients)
+      ? (body.extraRecipients as Array<{ email?: string; phone?: string; name?: string }>)
+          .map((r) => ({
+            email: r.email ? String(r.email).trim() : undefined,
+            phone: r.phone ? String(r.phone).trim() : undefined,
+            name: r.name ? String(r.name).trim() : undefined,
+          }))
+          .filter((r) => r.email || r.phone)
+      : undefined;
     const recurring = body.recurring as
       | { frequency?: string; occurrences?: number }
       | undefined;
@@ -313,6 +324,18 @@ export async function POST(request: Request, { params }: Params) {
         signals: risk.signals,
         action: "challenge",
       });
+      const emailOtpVerified = body.emailOtpVerified === true;
+      const typeRequiresOtp = resolvedType?.config.bookingApproval?.required;
+      if (!emailOtpVerified && (typeRequiresOtp || body.email)) {
+        return NextResponse.json(
+          {
+            error: "Additional verification is required to complete your booking.",
+            challengeRequired: true,
+            otpRequired: true,
+          },
+          { status: 428 },
+        );
+      }
       return NextResponse.json(
         {
           error: "Additional verification is required to complete your booking.",
@@ -321,6 +344,53 @@ export async function POST(request: Request, { params }: Params) {
         { status: 428 },
       );
     }
+
+    const utm =
+      body.utm && typeof body.utm === "object"
+        ? (body.utm as {
+            source?: string;
+            medium?: string;
+            campaign?: string;
+            term?: string;
+            content?: string;
+          })
+        : undefined;
+    const utmAttribution = utm
+      ? {
+          source: utm.source,
+          medium: utm.medium,
+          campaign: utm.campaign,
+          term: utm.term,
+          content: utm.content,
+          capturedAt: new Date().toISOString(),
+        }
+      : undefined;
+
+    const durationMinutes = body.durationMinutes
+      ? Number(body.durationMinutes)
+      : undefined;
+    const serviceDuration =
+      resolvedType?.id
+        ? (
+            await getPrisma().voiceService.findFirst({
+              where: { id: resolvedType.id, workspaceId: workspace.id },
+              select: { durationMinutes: true },
+            })
+          )?.durationMinutes
+        : undefined;
+    const effectiveDuration = durationMinutes || serviceDuration || 30;
+    const startsAtDate = new Date(startsAt);
+    const endsAtDate = new Date(startsAtDate.getTime() + effectiveDuration * 60_000);
+
+    const schedulingCtx = await loadSchedulingContext(workspace.id, resolvedServiceName);
+    const assignedStaff = await resolveStaffForBooking(schedulingCtx, {
+      preferredStaffId: staffId,
+      preferredStaffName: body.staffName ? String(body.staffName) : undefined,
+      startsAt: startsAtDate,
+      endsAt: endsAtDate,
+      durationMinutes: effectiveDuration,
+    });
+    if (assignedStaff) staffId = assignedStaff.id;
 
     const payment = resolvedType?.config.payment;
     const bookInput = {
@@ -342,6 +412,11 @@ export async function POST(request: Request, { params }: Params) {
       locationId,
       locationName,
       attendeeCount,
+      durationMinutes: effectiveDuration || undefined,
+      utm: utmAttribution,
+      emailOtpVerified: body.emailOtpVerified === true,
+      singleUseToken: body.singleUseToken ? String(body.singleUseToken) : undefined,
+      extraRecipients,
     };
 
     if (
@@ -430,8 +505,16 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
+    const { storeReturningInviteeCookieData } = await import("@/lib/appointments/booking-links");
+    const returningCookie = await storeReturningInviteeCookieData(workspace.id, {
+      email: body.email ? String(body.email) : undefined,
+      phone,
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
+    });
+
     return NextResponse.json(
-      { data: { ...result, appointmentId, ...paymentInfo } },
+      { data: { ...result, appointmentId, ...paymentInfo, returningInviteeCookie: returningCookie } },
       { status: 201 },
     );
   } catch (err) {

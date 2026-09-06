@@ -129,32 +129,89 @@ export async function exchangeMicrosoftAuthorizationCode(code: string): Promise<
 
 export async function refreshMicrosoftAccessToken(
   refreshToken: string,
-): Promise<MicrosoftTokenResponse | null> {
+): Promise<import("./token-errors").MicrosoftTokenRefreshResult> {
+  const { classifyMicrosoftOAuthError, microsoftTokenFailureNeedsReconnect, parseMicrosoftTokenErrorBody } =
+    await import("./token-errors");
+
   const clientId = getMicrosoftClientId();
   const clientSecret = getMicrosoftClientSecret();
-  if (!clientId || !clientSecret) return null;
+  if (!clientId || !clientSecret) {
+    return {
+      ok: false,
+      kind: "misconfigured",
+      httpStatus: 0,
+      error: "missing_client_credentials",
+      needsReconnect: false,
+    };
+  }
 
-  const res = await fetch(getMicrosoftTokenUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-      scope: getMicrosoftOAuthScopes(),
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(getMicrosoftTokenUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+        scope: getMicrosoftOAuthScopes(),
+      }),
+    });
+  } catch (err) {
+    console.warn("[microsoft-oauth] refresh network error", err);
+    return {
+      ok: false,
+      kind: "transient",
+      httpStatus: 0,
+      error: "network_error",
+      errorDescription: err instanceof Error ? err.message : String(err),
+      needsReconnect: false,
+    };
+  }
+
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    const parsed = parseMicrosoftTokenErrorBody(body);
+    const kind = classifyMicrosoftOAuthError({
+      httpStatus: res.status,
+      error: parsed.error,
+      errorDescription: parsed.errorDescription,
+    });
     console.warn(
       "[microsoft-oauth] refresh failed",
       res.status,
-      body.slice(0, 500) || res.statusText,
+      parsed.error || "",
+      (parsed.errorDescription || "").slice(0, 200),
     );
-    return null;
+    return {
+      ok: false,
+      kind,
+      httpStatus: res.status,
+      error: parsed.error,
+      errorDescription: parsed.errorDescription,
+      needsReconnect: microsoftTokenFailureNeedsReconnect(kind),
+    };
   }
-  return (await res.json()) as MicrosoftTokenResponse;
+
+  const json = (await res.json()) as MicrosoftTokenResponse;
+  if (!json.access_token) {
+    return {
+      ok: false,
+      kind: "unknown",
+      httpStatus: res.status,
+      error: "missing_access_token",
+      needsReconnect: false,
+    };
+  }
+
+  return {
+    ok: true,
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token,
+    expiresIn: json.expires_in || 3600,
+    scope: json.scope,
+  };
 }
 
 export async function fetchMicrosoftProfile(accessToken: string): Promise<{

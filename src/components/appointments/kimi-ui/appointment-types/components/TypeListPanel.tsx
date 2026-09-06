@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, MoreHorizontal, CalendarDays } from "lucide-react";
+import { Search, MoreHorizontal, CalendarDays, ChevronUp, ChevronDown } from "lucide-react";
 import type { AppointmentTypeItem } from "@/features/appointments/kimi/appointment-types/types";
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   showInactive: boolean;
   onToggleInactive: () => void;
   onSearchChange: (query: string) => void;
+  onMoveType?: (id: string, direction: "up" | "down") => void;
 }
 
 export default function TypeListPanel({
@@ -23,6 +24,7 @@ export default function TypeListPanel({
   showInactive,
   onToggleInactive,
   onSearchChange,
+  onMoveType,
 }: Props) {
   return (
     <div className="card flex flex-col w-[300px] shrink-0 overflow-hidden">
@@ -47,17 +49,40 @@ export default function TypeListPanel({
         {types.length === 0 ? (
           <p className="px-3 py-6 text-center text-[12.5px] text-[#8a8fa3]">No appointment types match.</p>
         ) : (
-          types.map((t) => {
+          types.map((t, index) => {
             const selected = t.id === selectedId;
             return (
-              <button
+              <div
                 key={t.id}
-                type="button"
-                onClick={() => onSelect(t.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
+                className={`flex items-center gap-1 rounded-xl ${
                   selected ? "bg-[#f0efff] ring-1 ring-[#dcd9ff]" : "hover:bg-[#f7f8fb]"
                 }`}
               >
+                {onMoveType ? (
+                  <div className="flex flex-col pl-1">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      className="p-0.5 text-[#a0a3b5] disabled:opacity-30"
+                      onClick={() => onMoveType(t.id, "up")}
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === types.length - 1}
+                      className="p-0.5 text-[#a0a3b5] disabled:opacity-30"
+                      onClick={() => onMoveType(t.id, "down")}
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onSelect(t.id)}
+                  className="flex flex-1 items-center gap-3 px-2 py-2.5 text-left"
+                >
                 <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${t.bg} ${t.color}`}>
                   <CalendarDays size={16} />
                 </span>
@@ -70,8 +95,9 @@ export default function TypeListPanel({
                 <span className={t.active ? "badge-active" : "badge-inactive"}>
                   {t.active ? "Active" : "Inactive"}
                 </span>
-                <MoreHorizontal size={16} className="text-[#a0a3b5] shrink-0" />
-              </button>
+                <MoreHorizontal size={16} className="text-[#a0a3b5] shrink-0 mr-2" />
+                </button>
+              </div>
             );
           })
         )}

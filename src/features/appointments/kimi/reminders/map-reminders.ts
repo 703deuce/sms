@@ -74,6 +74,13 @@ function mapReminderItem(
     characters,
     segments: segments || 1,
     enabled: step.enabled,
+    timeOfDayAt: step.timeOfDay?.at,
+    timeOfDayDaysBefore: step.timeOfDay?.daysBefore,
+    skipWeekends: step.skipWeekends,
+    skipOffHours: step.skipOffHours,
+    skipClosedDays: step.skipClosedDays,
+    stopOnReply: step.stopOnReply,
+    attachIcs: step.channel === "email",
   };
 }
 
@@ -137,6 +144,38 @@ export function patchReminderChannel(
       ...config.reminders,
       [stepKey]: { ...config.reminders[stepKey], channel },
     },
+  };
+}
+
+export function patchReminderAdvanced(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepKey,
+  patch: Partial<{
+    timeOfDayAt: string;
+    timeOfDayDaysBefore: number;
+    skipWeekends: boolean;
+    skipOffHours: boolean;
+    stopOnReply: boolean;
+    attachIcs: boolean;
+  }>,
+): RemindersApiConfig {
+  const step = config.reminders[stepKey];
+  const next = { ...step };
+  if (patch.timeOfDayAt !== undefined) {
+    next.timeOfDay = {
+      at: patch.timeOfDayAt,
+      daysBefore: patch.timeOfDayDaysBefore ?? step.timeOfDay?.daysBefore ?? 0,
+    };
+  }
+  if (patch.timeOfDayDaysBefore !== undefined && next.timeOfDay) {
+    next.timeOfDay = { ...next.timeOfDay, daysBefore: patch.timeOfDayDaysBefore };
+  }
+  if (patch.skipWeekends !== undefined) next.skipWeekends = patch.skipWeekends;
+  if (patch.skipOffHours !== undefined) next.skipOffHours = patch.skipOffHours;
+  if (patch.stopOnReply !== undefined) next.stopOnReply = patch.stopOnReply;
+  return {
+    ...config,
+    reminders: { ...config.reminders, [stepKey]: next },
   };
 }
 

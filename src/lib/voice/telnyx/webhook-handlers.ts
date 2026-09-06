@@ -23,6 +23,22 @@ function decodeClientState(raw?: string): Record<string, unknown> {
   }
 }
 
+function isAppointmentVoiceReminderEvent(
+  clientState: Record<string, unknown>,
+  eventType: string,
+): boolean {
+  if (clientState.kind !== "appointment_voice_reminder") return false;
+  return (
+    eventType === "call.answered" ||
+    eventType === "call.gather.ended" ||
+    eventType === "call.dtmf.received" ||
+    eventType === "call.speak.ended" ||
+    eventType === "call.playback.ended" ||
+    eventType === "call.hangup" ||
+    (eventType.includes("machine") && eventType.includes("detection"))
+  );
+}
+
 export async function handleTelnyxVoiceWebhook(request: Request) {
   const verified = await readTelnyxWebhook(request);
   if (!verified.ok) return verified.response;
@@ -90,6 +106,20 @@ export async function handleTelnyxVoiceWebhook(request: Request) {
 
   // Forwarded PSTN legs often drop in 1–2s unless we answer immediately — do not queue.
   if (eventType === "call.initiated") {
+    const result = await processVoiceWebhookEvent({
+      providerEventId,
+      eventType,
+      workspaceId,
+      callId,
+      humanCallId,
+      isHuman,
+      eventPayload,
+    });
+    return { ...result, eventType, providerEventId, processed: "sync" as const };
+  }
+
+  // Appointment voice reminders must play TTS promptly after answer — process synchronously.
+  if (isAppointmentVoiceReminderEvent(clientState, eventType)) {
     const result = await processVoiceWebhookEvent({
       providerEventId,
       eventType,

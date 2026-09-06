@@ -651,6 +651,34 @@ export async function processInboundMessage(input: {
 
   // Canonical appointment AI for natural-language SMS (after STOP/HELP/YES/C/X).
   try {
+    const pendingAppt = await prisma.voiceAppointment.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+      },
+      orderBy: { startsAt: "asc" },
+    });
+    if (pendingAppt && body && !/^(yes|c|x|stop|help)$/i.test(body.trim())) {
+      const { stopRemindersAfterCustomerReply } = await import("@/lib/appointments/reminder-engine");
+      const { emitUnknownReplyTrigger } = await import("@/lib/appointments/workflow-scanners");
+      const platform = await (
+        await import("@/lib/appointments/settings")
+      ).loadAppointmentPlatformConfig(input.workspaceId);
+      const stopOnReply =
+        platform.reminders.reminder24h.stopOnReply ||
+        platform.reminders.reminder2h.stopOnReply ||
+        platform.reminders.confirmation.stopOnReply;
+      if (stopOnReply) {
+        await stopRemindersAfterCustomerReply(input.workspaceId, pendingAppt.id, body);
+      }
+      await emitUnknownReplyTrigger(input.workspaceId, pendingAppt.id, body);
+    }
+  } catch {
+    /* non-fatal */
+  }
+
+  try {
     const appointmentAi = await (
       await import("@/lib/appointments/ai-scheduling/channel-adapters")
     ).tryHandleInboundAppointmentAi({

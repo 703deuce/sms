@@ -31,7 +31,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type ReminderStep = { key: string; label: string; status: string };
+type ReminderStep = { key: string; label: string; status: string; scheduledFor?: string; channel?: string };
 
 type AppointmentDetail = {
   id: string;
@@ -55,6 +55,10 @@ type AppointmentDetail = {
     internalNotes?: Array<{ id: string; at: string; authorName?: string; body: string }>;
     paymentStatus?: string;
     paymentAmountCents?: number;
+    pendingApproval?: boolean;
+    reminderOverride?: { suppressed?: boolean };
+    extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
+    remindersSuppressed?: boolean;
     recurringSeriesId?: string;
     recurringOccurrenceIndex?: number;
     location?: string;
@@ -106,6 +110,87 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   const [loadingRescheduleSlots, setLoadingRescheduleSlots] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
   const [rescheduleError, setRescheduleError] = useState("");
+  const [reminderTimeline, setReminderTimeline] = useState<Array<{ stepKey: string; label: string; scheduledFor?: string; status: string }>>([]);
+  const [slotDiagnostic, setSlotDiagnostic] = useState<string | null>(null);
+  const [extraRecipientEmail, setExtraRecipientEmail] = useState("");
+  const [extraRecipientPhone, setExtraRecipientPhone] = useState("");
+  const [extraRecipientName, setExtraRecipientName] = useState("");
+
+  async function loadReminderTimeline() {
+    const res = await fetch(`/api/appointments/${appointmentId}/reminder-timeline`);
+    if (!res.ok) return;
+    const json = await res.json();
+    setReminderTimeline(json.data?.future || []);
+  }
+
+  async function loadSlotDiagnostic() {
+    if (!appt?.serviceName || !appt.startsAt) return;
+    const res = await fetch(
+      `/api/appointments/diagnostics/slots?serviceName=${encodeURIComponent(appt.serviceName)}&startsAt=${encodeURIComponent(appt.startsAt)}&explain=true`,
+    );
+    if (!res.ok) return;
+    const json = await res.json();
+    setSlotDiagnostic(json.data?.explanation || null);
+  }
+
+  async function approveBooking() {
+    setActing(true);
+    await fetch("/api/appointments/booking/approval", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId, action: "approve" }),
+    });
+    setActing(false);
+    await load();
+  }
+
+  async function rejectBooking() {
+    setActing(true);
+    await fetch("/api/appointments/booking/approval", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId, action: "reject" }),
+    });
+    setActing(false);
+    await load();
+  }
+
+  async function saveReminderOverrides(body: Record<string, unknown>) {
+    setActing(true);
+    await fetch(`/api/appointments/${appointmentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setActing(false);
+    await load();
+    await loadReminderTimeline();
+  }
+
+  async function addExtraRecipient() {
+    if (!extraRecipientEmail.trim() && !extraRecipientPhone.trim()) return;
+    const existing = appt?.metadata.extraRecipients || [];
+    await saveReminderOverrides({
+      extraRecipients: [
+        ...existing,
+        {
+          email: extraRecipientEmail.trim() || undefined,
+          phone: extraRecipientPhone.trim() || undefined,
+          name: extraRecipientName.trim() || undefined,
+        },
+      ],
+    });
+    setExtraRecipientEmail("");
+    setExtraRecipientPhone("");
+    setExtraRecipientName("");
+  }
+
+  async function removeExtraRecipient(index: number) {
+    const existing = appt?.metadata.extraRecipients || [];
+    await saveReminderOverrides({
+      extraRecipients: existing.filter((_, i) => i !== index),
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -117,6 +202,7 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
 
   useEffect(() => {
     load();
+    loadReminderTimeline();
   }, [appointmentId]);
 
   const [refunding, setRefunding] = useState(false);
@@ -236,6 +322,10 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
   const internalNotes = appt.metadata.internalNotes || [];
   const name = appt.inviteeName || "Customer";
   const isCanceled = ["canceled", "cancelled"].includes(appt.status.toLowerCase());
+  const needsApproval =
+    appt.metadata.pendingApproval === true || appt.status === "awaiting_confirmation";
+  const remindersSuppressed =
+    appt.metadata.remindersSuppressed || appt.metadata.reminderOverride?.suppressed;
   const messageHref = appt.contact?.id
     ? `/conversations?contactId=${encodeURIComponent(appt.contact.id)}`
     : appt.inviteePhone
@@ -309,7 +399,17 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               </Button>
             </Link>
           ) : null}
-          {appt.status !== "confirmed" && !isCanceled ? (
+          {needsApproval && !isCanceled ? (
+            <>
+              <Button size="sm" disabled={acting} onClick={approveBooking}>
+                Approve booking
+              </Button>
+              <Button size="sm" variant="outline" disabled={acting} onClick={rejectBooking}>
+                Reject
+              </Button>
+            </>
+          ) : null}
+          {appt.status !== "confirmed" && !isCanceled && !needsApproval ? (
             <Button
               variant="outline"
               size="sm"
@@ -317,6 +417,16 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               onClick={() => patch({ status: "confirmed" })}
             >
               Mark confirmed
+            </Button>
+          ) : null}
+          {appt.status !== "completed" && !isCanceled ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={acting}
+              onClick={() => patch({ status: "no_show" })}
+            >
+              Mark no-show
             </Button>
           ) : null}
           {appt.status !== "completed" && !isCanceled ? (
@@ -569,12 +679,25 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
           </div>
           {appt.reminderSchedule?.length ? (
             <ul className="space-y-2">
-              {appt.reminderSchedule.map((step) => (
+              {(reminderTimeline.length ? reminderTimeline : appt.reminderSchedule).map((step) => (
                 <li
-                  key={step.key}
+                  key={(step as { stepKey?: string; key: string }).stepKey || step.key}
                   className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5"
                 >
-                  <span className="text-[13px] font-medium text-foreground">{step.label}</span>
+                  <div className="min-w-0">
+                    <span className="text-[13px] font-medium text-foreground">{step.label}</span>
+                    {step.scheduledFor ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {new Date(step.scheduledFor).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        {step.channel ? ` · ${step.channel}` : ""}
+                      </p>
+                    ) : null}
+                  </div>
                   <span
                     className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
                       reminderToneMap[step.status] ||
@@ -600,6 +723,59 @@ export function AppointmentDetailClient({ appointmentId }: { appointmentId: stri
               <XCircle className="h-3.5 w-3.5" />
               A reminder failed to deliver — check the timeline.
             </p>
+          ) : null}
+          <div className="mt-4 space-y-3 border-t border-border/70 pt-4">
+            <p className="text-[12px] font-semibold text-muted-foreground">Reminder controls</p>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={Boolean(remindersSuppressed)}
+                onChange={(e) =>
+                  saveReminderOverrides({
+                    suppressReminders: e.target.checked,
+                  })
+                }
+              />
+              Suppress all reminders for this appointment
+            </label>
+            {(appt.metadata.extraRecipients || []).length > 0 ? (
+              <ul className="space-y-1 text-[13px]">
+                {appt.metadata.extraRecipients!.map((r, i) => (
+                  <li key={`${r.email || r.phone}-${i}`} className="flex items-center justify-between gap-2">
+                    <span>{r.name || r.email || r.phone}</span>
+                    <Button size="sm" variant="ghost" onClick={() => removeExtraRecipient(i)}>
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-3">
+              <Input
+                placeholder="Name"
+                value={extraRecipientName}
+                onChange={(e) => setExtraRecipientName(e.target.value)}
+              />
+              <Input
+                placeholder="Email"
+                value={extraRecipientEmail}
+                onChange={(e) => setExtraRecipientEmail(e.target.value)}
+              />
+              <Input
+                placeholder="Phone"
+                value={extraRecipientPhone}
+                onChange={(e) => setExtraRecipientPhone(e.target.value)}
+              />
+            </div>
+            <Button size="sm" variant="outline" disabled={acting} onClick={addExtraRecipient}>
+              Add reminder recipient
+            </Button>
+          </div>
+          <Button size="sm" variant="ghost" className="mt-3" onClick={loadSlotDiagnostic}>
+            Slot availability diagnostics
+          </Button>
+          {slotDiagnostic ? (
+            <p className="mt-2 text-[12px] text-muted-foreground rounded-lg bg-muted/40 px-3 py-2">{slotDiagnostic}</p>
           ) : null}
         </Card>
 

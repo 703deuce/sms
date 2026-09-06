@@ -6,6 +6,7 @@ import {
 } from "@/lib/appointment-workflows/service";
 import type { CreateAppointmentWorkflowInput } from "@/lib/appointment-workflows/service";
 import { PREBUILT_WORKFLOW_TEMPLATES } from "@/lib/appointment-workflows/templates";
+import { requireAppointmentPermission } from "@/lib/appointments/org-permissions";
 
 export async function GET() {
   try {
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
+    await requireAppointmentPermission(auth.workspaceId, auth.session.userId, "appointments.workflows.manage");
     const body = (await request.json()) as CreateAppointmentWorkflowInput;
     const data = await createAppointmentWorkflow(auth.workspaceId, body);
     return NextResponse.json({ data }, { status: 201 });

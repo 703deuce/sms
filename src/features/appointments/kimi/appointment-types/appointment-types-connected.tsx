@@ -72,15 +72,22 @@ export function AppointmentTypesConnected() {
   const [connectedPaymentProviders, setConnectedPaymentProviders] = useState<
     Array<{ provider: "stripe" | "square"; label: string }>
   >([]);
+  const [namedScheduleOptions, setNamedScheduleOptions] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [teamGroupOptions, setTeamGroupOptions] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes, paymentsRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes, groupsRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
         fetch("/api/merchant-payments/status"),
+        fetch("/api/appointments/team-pages?kind=groups"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -89,6 +96,20 @@ export function AppointmentTypesConnected() {
       setApiTypes(rows);
       setWorkspaceSlug(settingsJson.workspace?.slug || "");
       setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled));
+      setNamedScheduleOptions(
+        ((settingsJson.data?.namedSchedules || []) as Array<{ id: string; name: string }>).map(
+          (s) => ({ id: s.id, name: s.name }),
+        ),
+      );
+      if (groupsRes.ok) {
+        const groupsJson = await groupsRes.json();
+        setTeamGroupOptions(
+          ((groupsJson.data || []) as Array<{ id: string; name: string }>).map((g) => ({
+            id: g.id,
+            name: g.name,
+          })),
+        );
+      }
       const staff = (settingsJson.data?.staff || []) as Array<{ id: string; name: string; active?: boolean }>;
       const locations = (settingsJson.data?.locations || []) as Array<{ id: string; name: string; active?: boolean }>;
       setStaffOptions(staff.filter((s) => s.active !== false && s.name).map((s) => ({ id: s.id, name: s.name })));
@@ -128,12 +149,43 @@ export function AppointmentTypesConnected() {
 
   const visibleTypes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return types.filter((type) => {
+    const filtered = types.filter((type) => {
       if (!showInactive && !type.active) return false;
       if (!q) return true;
       return type.name.toLowerCase().includes(q);
     });
-  }, [searchQuery, showInactive, types]);
+    return filtered.sort((a, b) => {
+      const aOrder = apiTypes.find((t) => t.id === a.id)?.config?.displayOrder ?? 999;
+      const bOrder = apiTypes.find((t) => t.id === b.id)?.config?.displayOrder ?? 999;
+      return aOrder - bOrder;
+    });
+  }, [searchQuery, showInactive, types, apiTypes]);
+
+  const reorderTypes = useCallback(
+    async (orderedIds: string[]) => {
+      await fetch("/api/appointments/types/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reorder", orderedIds }),
+      });
+      await load();
+    },
+    [load],
+  );
+
+  const moveType = useCallback(
+    (id: string, direction: "up" | "down") => {
+      const ids = visibleTypes.map((t) => t.id);
+      const idx = ids.indexOf(id);
+      if (idx < 0) return;
+      const swap = direction === "up" ? idx - 1 : idx + 1;
+      if (swap < 0 || swap >= ids.length) return;
+      const next = [...ids];
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      void reorderTypes(next);
+    },
+    [reorderTypes, visibleTypes],
+  );
 
   const selected = useMemo(
     () => types.find((type) => type.id === selectedId) ?? null,
@@ -304,6 +356,8 @@ export function AppointmentTypesConnected() {
       staffOptions,
       locationOptions,
       connectedPaymentProviders,
+      namedScheduleOptions,
+      teamGroupOptions,
     };
   }, [
     bookingBaseUrl,
@@ -319,6 +373,8 @@ export function AppointmentTypesConnected() {
     showInactive,
     staffOptions,
     connectedPaymentProviders,
+    namedScheduleOptions,
+    teamGroupOptions,
     types,
     visibleTypes,
     workspaceSlug,
@@ -345,9 +401,11 @@ export function AppointmentTypesConnected() {
       onManageAvailability: () => router.push("/appointments/availability"),
       onManageStaff: () => router.push("/appointments/staff"),
       onManageLocations: () => router.push("/appointments/locations"),
+      onReorderTypes: reorderTypes,
+      onMoveType: moveType,
       onRetry: load,
     }),
-    [bookingBaseUrl, copyLink, load, resetEditor, router, save, selectType, startCreate, toggleActive, updateForm],
+    [bookingBaseUrl, copyLink, load, moveType, resetEditor, router, save, selectType, startCreate, toggleActive, updateForm, reorderTypes],
   );
 
   if (loading) return <TypesLoading />;

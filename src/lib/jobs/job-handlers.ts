@@ -819,7 +819,56 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       const { scanAppointmentsCompleted } = await import(
         "@/lib/integrations/framework/appointment-reminders"
       );
+      const { scanAndCompletePastAppointments } = await import(
+        "@/lib/appointments/workflow-scanners"
+      );
+      await scanAndCompletePastAppointments();
       return scanAppointmentsCompleted();
+    }
+    case "appointment_workflow_time_scan": {
+      const { scanAppointmentWorkflowTimeTriggers } = await import(
+        "@/lib/appointments/workflow-scanners"
+      );
+      return scanAppointmentWorkflowTimeTriggers();
+    }
+    case "appointment_workflow_time_trigger": {
+      const { processAppointmentWorkflowTimeTrigger } = await import(
+        "@/lib/appointments/workflow-scanners"
+      );
+      return processAppointmentWorkflowTimeTrigger({
+        workspaceId: String(payload.workspaceId || ""),
+        appointmentId: String(payload.appointmentId || ""),
+        trigger: payload.trigger as "before_appointment" | "after_appointment",
+        minutesBefore: payload.minutesBefore as number | undefined,
+      });
+    }
+    case "appointment_no_show_scan": {
+      const { scanAppointmentNoShows } = await import("@/lib/appointments/workflow-scanners");
+      return scanAppointmentNoShows();
+    }
+    case "appointments_scheduled_report": {
+      const { loadExtendedAppointmentsAnalytics, buildAppointmentPdfReport } = await import(
+        "@/lib/appointments/analytics-reports"
+      );
+      const { sendTransactionalEmail } = await import("@/lib/email/brevo");
+      const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
+      const workspaceId = String(payload.workspaceId || "");
+      const reportId = String(payload.reportId || "");
+      const platform = await loadAppointmentPlatformConfig(workspaceId);
+      const schedules =
+        (platform as { scheduledReports?: Array<{ id: string; email: string; rangeDays?: number }> })
+          .scheduledReports || [];
+      const schedule = schedules.find((s) => s.id === reportId);
+      if (!schedule) return { ok: false };
+      const pdf = await buildAppointmentPdfReport(workspaceId, schedule.rangeDays || 30);
+      const analytics = await loadExtendedAppointmentsAnalytics(workspaceId, 30);
+      await sendTransactionalEmail({
+        to: schedule.email,
+        subject: "Transovo appointments report",
+        htmlContent: `<pre>${JSON.stringify(analytics, null, 2)}</pre>`,
+        textContent: pdf.toString("utf8"),
+      });
+      return { ok: true };
     }
     case "appointments_platform_reminder_scan": {
       const { scanPlatformAppointmentReminders } = await import(
@@ -1126,6 +1175,20 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-completed:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "appointment_workflow_time_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appt-wf-time:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "appointment_no_show_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appt-no-show:${minuteKey}`,
   });
 
   await enqueueJob({

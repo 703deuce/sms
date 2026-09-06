@@ -77,9 +77,24 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       icon: GitBranch,
     },
     {
+      label: "Routing forms",
+      href: "/appointments/routing-forms",
+      icon: GitBranch,
+    },
+    {
+      label: "Team pages",
+      href: "/appointments/team-pages",
+      icon: Users,
+    },
+    {
       label: "Integrations",
       href: "/appointments/integrations",
       icon: Link2,
+    },
+    {
+      label: "Recall campaigns",
+      href: "/appointments/recall-campaigns",
+      icon: Bell,
     },
     {
       label: "Reminder Settings",
@@ -111,6 +126,26 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Booking",
       href: "/appointments/booking",
       icon: Globe,
+    },
+    {
+      label: "AI booking",
+      href: "/appointments/ai-booking",
+      icon: Sparkles,
+    },
+    {
+      label: "Waitlist",
+      href: "/appointments/waitlist",
+      icon: ClipboardList,
+    },
+    {
+      label: "Meeting polls",
+      href: "/appointments/polls",
+      icon: Calendar,
+    },
+    {
+      label: "Enterprise",
+      href: "/appointments/enterprise",
+      icon: Users,
     },
     {
       label: "Get Started",
@@ -185,8 +220,13 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/staff")) return "Team";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
-  if (pathname.startsWith("/appointments/routing")) return "Routing";
+  if (pathname.startsWith("/appointments/routing-forms")) return "Routing forms";
+  if (pathname.startsWith("/appointments/team-pages")) return "Team pages";
+  if (pathname.startsWith("/appointments/waitlist")) return "Waitlist";
+  if (pathname.startsWith("/appointments/polls")) return "Meeting polls";
+  if (pathname.startsWith("/appointments/enterprise")) return "Enterprise";
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
+  if (pathname.startsWith("/appointments/recall-campaigns")) return "Recall campaigns";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/voice-reminders")) return "Voice Reminders";
   if (pathname.startsWith("/video")) return "AI Notetaker";
@@ -195,6 +235,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/workflows")) return "Workflows";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
   if (pathname.startsWith("/appointments/booking")) return "Booking";
+  if (pathname.startsWith("/appointments/ai-booking")) return "AI booking";
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";
   if (pathname.startsWith("/appointments/new")) return "New Appointment";
   if (pathname.match(/\/appointments\/[^/]+$/)) return "Appointment";

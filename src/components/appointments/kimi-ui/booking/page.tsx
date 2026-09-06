@@ -7,6 +7,7 @@ import BusinessInfoCard from "./components/BusinessInfoCard";
 import SmsConsentCard from "./components/SmsConsentCard";
 import AiProtectionCard from "./components/AiProtectionCard";
 import LivePreview from "./components/LivePreview";
+import { BookingAdvancedPanel } from "@/components/appointments/booking-advanced-panel";
 import type { BookingPageActions, BookingPageModel } from "@/features/appointments/kimi/booking/types";
 import "./reference.css";
 
@@ -61,6 +62,7 @@ export default function BookingView({ model, actions, saving = false, saved = fa
             suspiciousBookings={model.suspiciousBookings}
             onModeChange={actions.onProtectionModeChange}
           />
+          <BookingAdvancedPanel workspaceSlug={model.workspaceSlug} />
         </div>
         <div className="booking-right">
           <div className="booking-preview-sticky">

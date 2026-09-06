@@ -2,6 +2,7 @@
 
 import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
+import TypePublishingSections from "./TypePublishingSections";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
 import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
@@ -14,6 +15,8 @@ interface Props {
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
+  namedScheduleOptions?: Array<{ id: string; name: string }>;
+  teamGroupOptions?: Array<{ id: string; name: string }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -34,6 +37,8 @@ export default function TypeEditorPanel({
   staffOptions,
   locationOptions,
   connectedPaymentProviders,
+  namedScheduleOptions,
+  teamGroupOptions,
   onFormChange,
   onSave,
   onCancel,
@@ -253,6 +258,13 @@ export default function TypeEditorPanel({
             </button>
           </div>
         </section>
+
+        <TypePublishingSections
+          form={form}
+          namedScheduleOptions={namedScheduleOptions}
+          teamGroupOptions={teamGroupOptions}
+          onFormChange={onFormChange}
+        />
 
         <TypeAdvancedSections
           form={form}

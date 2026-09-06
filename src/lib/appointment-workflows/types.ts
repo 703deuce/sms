@@ -45,7 +45,15 @@ export type WorkflowRelativeTiming = {
 
 export type WorkflowImmediateTiming = { kind: "immediate" };
 
-export type WorkflowStepTiming = WorkflowRelativeTiming | WorkflowImmediateTiming;
+export type WorkflowTimeOfDayTiming = {
+  kind: "time_of_day";
+  anchor: RelativeTimeAnchor;
+  at: string;
+  daysBefore: number;
+  timezone?: string;
+};
+
+export type WorkflowStepTiming = WorkflowRelativeTiming | WorkflowImmediateTiming | WorkflowTimeOfDayTiming;
 
 export type WorkflowConditionOperator =
   | "equals"

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { loadAppointmentsAnalytics } from "@/lib/appointments";
+import { loadExtendedAppointmentsAnalytics } from "@/lib/appointments/analytics-reports";
 
 export async function GET(request: Request) {
   try {
@@ -8,8 +8,11 @@ export async function GET(request: Request) {
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const rangeRaw = Number(searchParams.get("range") || 7);
-    const rangeDays = rangeRaw === 30 ? 30 : 7;
-    const data = await loadAppointmentsAnalytics(auth.workspaceId, rangeDays);
+    const rangeDays = rangeRaw === 90 ? 90 : rangeRaw === 30 ? 30 : 7;
+    const data = await loadExtendedAppointmentsAnalytics(
+      auth.workspaceId,
+      rangeDays as 7 | 30 | 90,
+    );
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);

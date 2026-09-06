@@ -11,7 +11,7 @@ import {
   type AppointmentWorkflowTrigger,
   type WorkflowConditionGroup,
 } from "./types";
-import { getPrebuiltTemplate } from "./templates";
+import { getOrganizationPolicy, isManagedAutomation } from "@/lib/appointments/org-permissions";
 
 function parseConditionGroup(raw: unknown): WorkflowConditionGroup | null {
   if (!raw || typeof raw !== "object") return null;
@@ -106,6 +106,15 @@ export async function createAppointmentWorkflow(
   workspaceId: string,
   input: CreateAppointmentWorkflowInput,
 ): Promise<AppointmentWorkflowRecord> {
+  const orgPolicy = await getOrganizationPolicy(workspaceId);
+  const sourceType = input.sourceType || (input.templateId ? "template" : "custom");
+  if (
+    orgPolicy.managedAutomationsOnly &&
+    !isManagedAutomation({ sourceType, templateId: input.templateId }, orgPolicy)
+  ) {
+    throw new Error("Organization policy allows only managed (template) automations");
+  }
+
   const template = input.templateId ? getPrebuiltTemplate(input.templateId) : null;
   const steps = input.steps?.length
     ? input.steps
@@ -144,6 +153,16 @@ export async function updateAppointmentWorkflow(
 ): Promise<AppointmentWorkflowRecord> {
   const existing = await getAppointmentWorkflow(workspaceId, id);
   if (!existing) throw new Error("Workflow not found");
+
+  const orgPolicy = await getOrganizationPolicy(workspaceId);
+  const nextSourceType = input.sourceType ?? existing.sourceType;
+  const nextTemplateId = input.templateId ?? existing.templateId;
+  if (
+    orgPolicy.managedAutomationsOnly &&
+    !isManagedAutomation({ sourceType: nextSourceType, templateId: nextTemplateId }, orgPolicy)
+  ) {
+    throw new Error("Organization policy allows only managed (template) automations");
+  }
 
   const steps = input.steps ?? existing.steps;
   if (!steps.length) throw new Error("At least one workflow step is required");
