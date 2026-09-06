@@ -34,7 +34,8 @@ That distinction matters a lot for Transovo.
 - IA principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #8 — Privacy, Consent & Compliance UX Standards (coming)
+- Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #9 — Security & Authentication UX Standards (coming)
 
 ---
 

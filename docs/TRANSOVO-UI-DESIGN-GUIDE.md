@@ -13,6 +13,7 @@
 - **Forms & validation (hard standard):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 - **Responsive/reflow/zoom (hard standard):** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - **Tables/grids (hard standard):** `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
+- **Privacy/consent/compliance (hard standard):** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - V1 launch nav flags: `src/lib/products/v1-launch-nav.ts`
@@ -446,4 +447,4 @@ Stop and redesign if:
 
 ---
 
-*This document is the authoritative UI ruleset for Transovo. Hard implementation standards: Guide #1 `TRANSOVO-ACCESSIBILITY-STANDARDS.md` · Guide #2 `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 `TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 `TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 `TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 `TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*
+*This document is the authoritative UI ruleset for Transovo. Hard implementation standards: Guide #1 `TRANSOVO-ACCESSIBILITY-STANDARDS.md` · Guide #2 `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 `TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 `TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 `TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 `TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 `TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*

@@ -14,6 +14,7 @@
 - **Forms & validation (hard standard):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 - **Responsive/reflow/zoom (hard standard):** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - **Tables/grids (hard standard):** `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
+- **Privacy/consent/compliance (hard standard):** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Appointments nav implementation: `src/lib/products/appointments-nav.ts`
