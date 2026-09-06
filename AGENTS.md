@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · **UI design rules (IA/heuristics):** `docs/TRANSOVO-UI-DESIGN-GUIDE.md` · **Page architecture rules (every screen):** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` · Nav flags: `src/lib/products/v1-launch-nav.ts`
+**UI rebuild directive:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · **UI design rules (IA/heuristics):** `docs/TRANSOVO-UI-DESIGN-GUIDE.md` · **Page architecture rules (every screen):** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` · **Visual design system (tokens, type, color):** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md` · Nav flags: `src/lib/products/v1-launch-nav.ts`
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
