@@ -601,9 +601,10 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 9. TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md    → Guide #7: Tables & grids
 10. TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Guide #8: Privacy/consent/compliance
 11. TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Guide #9: Security & authentication
-12. Implementation standards Guides #4, #10–12       → Interaction, date/time, etc. (coming)
-13. Page-by-page spec                             → Per-screen worksheet
-14. Implementation in Kimi / components           → Must satisfy all applicable guides
+12. TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Guide #10: Date/time/timezone/locale
+13. Implementation standards Guides #4, #11–12       → Interaction, i18n/l10n, etc. (coming)
+14. Page-by-page spec                             → Per-screen worksheet
+15. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```
 
 ---

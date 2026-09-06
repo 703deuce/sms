@@ -43,7 +43,8 @@ For Cursor, this guide establishes the **safe architecture and UX rules**. Speci
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #10 — Date, Time, Timezone & Locale Standards (coming)
+- Guide #10: `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #11 — Internationalization & Localization Standards (coming)
 
 ---
 
@@ -1452,7 +1453,8 @@ Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md      → Tables & grids
 Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance (this file)
 Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
 Guide #4 (coming)                                        → Interaction, keyboard & focus
-Guide #10+ (coming)                                      → Date/time/timezone/locale, etc.
+Guide #10 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Date/time/timezone/locale
+Guide #11+ (coming)                                      → Internationalization & localization, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                       → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
@@ -1460,4 +1462,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
 
 ---
 
-*Guide #8: Privacy, Consent & Compliance UX Standards. Next: Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 — Date, Time, Timezone & Locale Standards.*
+*Guide #8: Privacy, Consent & Compliance UX Standards. Next: Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 — `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`.*
