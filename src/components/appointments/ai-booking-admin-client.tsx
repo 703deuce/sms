@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 
-type Channel = "voice" | "sms" | "email";
+type Channel = "sms" | "email";
 
 export function AiBookingAdminClient() {
   const [channel, setChannel] = useState<Channel>("email");
@@ -54,7 +54,7 @@ export function AiBookingAdminClient() {
       <div>
         <h1 className="font-display text-2xl font-semibold">AI booking console</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Test the unified booking orchestrator across voice, SMS, and email channels.
+          Test the unified booking orchestrator for SMS and email. Outbound voice uses Telnyx press-1 reminders.
         </p>
       </div>
 
@@ -70,7 +70,6 @@ export function AiBookingAdminClient() {
             >
               <option value="email">Email</option>
               <option value="sms">SMS</option>
-              <option value="voice">Voice</option>
             </select>
           </div>
           <div>

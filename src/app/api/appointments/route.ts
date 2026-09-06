@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   createPlatformAppointment,
   listAppointments,
+  listAppointmentTypes,
 } from "@/lib/appointments";
+import { assertEventTypeAccess } from "@/lib/appointments/org-permissions";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.read");
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || undefined;
@@ -28,9 +31,22 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.book");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Record<string, unknown>;
+    if (body.serviceId) {
+      const types = await listAppointmentTypes(auth.workspaceId, { includeSecret: true, includeUnlisted: true });
+      const type = types.find((t) => t.id === String(body.serviceId));
+      if (type?.config) {
+        await assertEventTypeAccess(
+          auth.workspaceId,
+          auth.session.userId,
+          auth.session.email,
+          type.config,
+          "book",
+        );
+      }
+    }
     const result = await createPlatformAppointment(auth.workspaceId, {
       serviceId: body.serviceId ? String(body.serviceId) : undefined,
       serviceName: String(body.serviceName || ""),

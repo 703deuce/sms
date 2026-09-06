@@ -1,27 +1,12 @@
 import { NextResponse } from "next/server";
 import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
+import { extractSamlEmail, verifySamlResponse } from "@/lib/auth/saml-verify";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { getUserProductAccess } from "@/lib/products/entitlements";
 import { getPrisma } from "@/lib/db";
 import { publicRedirectUrl } from "@/lib/integrations/framework/app-url";
-
-function extractSamlEmail(samlResponse: string): string | null {
-  try {
-    const decoded = Buffer.from(samlResponse, "base64").toString("utf8");
-    const nameId =
-      decoded.match(/<saml:NameID[^>]*>([^<]+)<\/saml:NameID>/i)?.[1] ||
-      decoded.match(/<NameID[^>]*>([^<]+)<\/NameID>/i)?.[1];
-    if (nameId?.includes("@")) return nameId.trim();
-    const emailAttr =
-      decoded.match(/Name="(?:email|Email|mail)"[^>]*>[\s\S]*?<saml:AttributeValue[^>]*>([^<]+)</i)?.[1] ||
-      decoded.match(/Name="(?:email|Email|mail)"[^>]*>[\s\S]*?<AttributeValue[^>]*>([^<]+)</i)?.[1];
-    return emailAttr?.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -32,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const platform = await loadAppointmentPlatformConfig(workspaceId);
-    const saml = (platform as { samlSso?: { enabled?: boolean } }).samlSso;
+    const saml = (platform as { samlSso?: { enabled?: boolean; certificate?: string } }).samlSso;
     if (!saml?.enabled) {
       return NextResponse.json({ error: "SAML not enabled" }, { status: 404 });
     }
@@ -43,7 +28,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "SAMLResponse required" }, { status: 400 });
     }
 
-    const email = extractSamlEmail(samlResponse);
+    const verified = verifySamlResponse(samlResponse, saml.certificate || "");
+    if (!verified.ok) {
+      return NextResponse.json({ error: verified.error || "Invalid SAML response" }, { status: 401 });
+    }
+
+    const email = extractSamlEmail(verified.xml);
     if (!email) {
       return NextResponse.json({ error: "Could not extract user email from SAML assertion" }, { status: 400 });
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   appointmentsToCsv,
   buildAppointmentPdfReport,
@@ -9,7 +10,7 @@ import { getPrisma } from "@/lib/db";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.analytics.read");
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "csv";
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.analytics.read");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as {
       email?: string;

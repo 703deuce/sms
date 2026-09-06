@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   deleteAppointmentWorkflow,
   duplicateAppointmentWorkflow,
@@ -12,7 +13,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.read");
     if ("error" in auth) return auth.error;
     const { id } = await params;
     const data = await getAppointmentWorkflow(auth.workspaceId, id);
@@ -25,7 +26,7 @@ export async function GET(_request: Request, { params }: Params) {
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.workflows.manage");
     if ("error" in auth) return auth.error;
     const { id } = await params;
     const body = (await request.json()) as UpdateAppointmentWorkflowInput & { action?: string };
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_request: Request, { params }: Params) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.workflows.manage");
     if ("error" in auth) return auth.error;
     const { id } = await params;
     await deleteAppointmentWorkflow(auth.workspaceId, id);

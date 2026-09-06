@@ -1,21 +1,9 @@
 /**
- * Voice runtime bridge to unified AI booking orchestrator.
- * Call from LiveKit/frontdesk tools instead of parallel booking stacks.
+ * @deprecated Appointments outbound voice uses Telnyx press-1 reminders only (see appointment-voice-reminders).
+ * This bridge is retained for SMS/email AI booking tests only.
  */
 import "server-only";
 
-import { handleVoiceAiBooking } from "@/lib/appointments/ai-booking-orchestrator";
-
-export async function processVoiceBookingTranscript(input: {
-  workspaceId: string;
-  phone: string;
-  transcript: string;
-  contactId?: string | null;
-}) {
-  return handleVoiceAiBooking(
-    input.workspaceId,
-    input.phone,
-    input.transcript,
-    input.contactId,
-  );
+export async function processVoiceBookingTranscript(): Promise<never> {
+  throw new Error("Voice AI booking is not supported. Use Telnyx appointment voice reminders.");
 }

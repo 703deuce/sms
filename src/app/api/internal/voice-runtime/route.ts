@@ -20,8 +20,7 @@ type VoiceRuntimeAction =
   | "business_answer"
   | "send_sms"
   | "emit_event"
-  | "record_call_telemetry"
-  | "ai_booking_transcript";
+  | "record_call_telemetry";
 
 function logInternalVoice(
   event: string,
@@ -223,17 +222,6 @@ export async function POST(request: Request) {
           "@/lib/voice/python-runtime-bridge/record-call-telemetry-for-python"
         );
         result = await recordCallTelemetryForPython(payload as never);
-        break;
-      }
-
-      case "ai_booking_transcript": {
-        const { processVoiceBookingTranscript } = await import("@/lib/voice/ai-booking-bridge");
-        result = await processVoiceBookingTranscript({
-          workspaceId: String(payload.workspaceId || ""),
-          phone: String(payload.phone || ""),
-          transcript: String(payload.transcript || ""),
-          contactId: payload.contactId ? String(payload.contactId) : null,
-        });
         break;
       }
 

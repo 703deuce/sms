@@ -2,23 +2,30 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   listAppointmentTypes,
-  loadAppointmentPlatformConfig,
-  saveAppointmentPlatformConfig,
   upsertAppointmentType,
 } from "@/lib/appointments";
 import type { AppointmentTypeConfig } from "@/lib/appointments/types";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   getOrganizationPolicy,
   isManagedEventType,
-  requireAppointmentPermission,
+  filterEventTypesForUser,
+  assertEventTypeAccess,
 } from "@/lib/appointments/org-permissions";
 
 export async function GET() {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.read");
     if ("error" in auth) return auth.error;
-    const data = await listAppointmentTypes(auth.workspaceId);
-    return NextResponse.json({ data });
+    const data = await listAppointmentTypes(auth.workspaceId, { includeSecret: true, includeUnlisted: true });
+    const filtered = await filterEventTypesForUser(
+      auth.workspaceId,
+      auth.session.userId,
+      auth.session.email,
+      data,
+      "view",
+    );
+    return NextResponse.json({ data: filtered });
   } catch (err) {
     return jsonError(err, 500);
   }
@@ -26,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.types.manage");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as {
       name?: string;
@@ -38,7 +45,6 @@ export async function POST(request: Request) {
     if (!body.name?.trim()) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
-    await requireAppointmentPermission(auth.workspaceId, auth.session.userId, "appointments.types.manage");
     const orgPolicy = await getOrganizationPolicy(auth.workspaceId);
     if (body.config && !isManagedEventType(body.config, orgPolicy)) {
       return NextResponse.json(

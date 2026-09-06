@@ -2,17 +2,18 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { upsertAppointmentType } from "@/lib/appointments";
 import type { AppointmentTypeConfig } from "@/lib/appointments/types";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   getOrganizationPolicy,
   isManagedEventType,
-  requireAppointmentPermission,
+  assertEventTypeAccess,
 } from "@/lib/appointments/org-permissions";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.types.manage");
     if ("error" in auth) return auth.error;
     const { id } = await params;
     const body = (await request.json()) as {
@@ -22,7 +23,9 @@ export async function PATCH(request: Request, { params }: Params) {
       calendarId?: string | null;
       config?: AppointmentTypeConfig;
     };
-    await requireAppointmentPermission(auth.workspaceId, auth.session.userId, "appointments.types.manage");
+    if (body.config) {
+      await assertEventTypeAccess(auth.workspaceId, auth.session.userId, auth.session.email, body.config, "edit");
+    }
     const orgPolicy = await getOrganizationPolicy(auth.workspaceId);
     if (body.config && !isManagedEventType(body.config, orgPolicy)) {
       return NextResponse.json(

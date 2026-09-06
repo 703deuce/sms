@@ -1,5 +1,5 @@
 /**
- * Unified AI booking orchestration — single entry for voice, SMS, and email channels.
+ * Unified AI booking orchestration — SMS and email channels.
  * All channels delegate to the same deterministic resolver + availability + booking engine.
  */
 import "server-only";
@@ -7,7 +7,7 @@ import "server-only";
 import { handleAppointmentAIRequest } from "@/lib/appointments/ai-scheduling/service";
 import type { AppointmentAiChannel, AppointmentAiResult } from "@/lib/appointments/ai-scheduling/schema";
 
-export type UnifiedBookingChannel = "voice" | "sms" | "email";
+export type UnifiedBookingChannel = "sms" | "email";
 
 export type UnifiedBookingInput = {
   workspaceId: string;
@@ -26,13 +26,11 @@ export async function handleUnifiedAiBooking(
   input: UnifiedBookingInput,
 ): Promise<AppointmentAiResult> {
   const channel: AppointmentAiChannel =
-    input.channel === "voice"
-      ? "voice"
-      : input.channel === "email"
-        ? "email"
-        : input.conversationId
-          ? "conversation"
-          : "sms";
+    input.channel === "email"
+      ? "email"
+      : input.conversationId
+        ? "conversation"
+        : "sms";
 
   return handleAppointmentAIRequest({
     workspaceId: input.workspaceId,
@@ -62,19 +60,8 @@ export async function handleSmsAiBooking(
   });
 }
 
-export async function handleVoiceAiBooking(
-  workspaceId: string,
-  phone: string,
-  transcript: string,
-  contactId?: string | null,
-) {
-  return handleUnifiedAiBooking({
-    workspaceId,
-    channel: "voice",
-    message: transcript,
-    phone,
-    contactId,
-  });
+export async function handleVoiceAiBooking(): Promise<never> {
+  throw new Error("Voice AI booking is not supported. Use Telnyx appointment voice reminders.");
 }
 
 export async function handleEmailAiBooking(

@@ -140,6 +140,15 @@ export function EnterpriseSchedulingClient() {
         </label>
         <div><Label>Entity ID</Label><Input value={data.samlSso?.entityId || ""} onChange={(e) => setData({ ...data, samlSso: { ...data.samlSso, entityId: e.target.value } })} /></div>
         <div><Label>SSO URL</Label><Input value={data.samlSso?.ssoUrl || ""} onChange={(e) => setData({ ...data, samlSso: { ...data.samlSso, ssoUrl: e.target.value } })} /></div>
+        <div>
+          <Label>IdP certificate (PEM)</Label>
+          <textarea
+            className="mt-1.5 w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+            value={data.samlSso?.certificate || ""}
+            onChange={(e) => setData({ ...data, samlSso: { ...data.samlSso, certificate: e.target.value } })}
+            placeholder="-----BEGIN CERTIFICATE-----"
+          />
+        </div>
         <Button size="sm" onClick={saveSaml} disabled={saving}>Save SAML</Button>
       </Card>
 

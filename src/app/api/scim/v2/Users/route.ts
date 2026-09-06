@@ -4,28 +4,36 @@ import { loadAppointmentPlatformConfig, saveAppointmentPlatformConfig } from "@/
 import { listGranularRoles } from "@/lib/appointments/org-permissions";
 
 type ScimUser = {
-  schemas: string[];
-  userName: string;
+  schemas?: string[];
+  userName?: string;
   name?: { givenName?: string; familyName?: string };
   emails?: Array<{ value: string; primary?: boolean }>;
   active?: boolean;
 };
 
+async function authorizeScim(request: Request) {
+  const authHeader = request.headers.get("authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  const { searchParams } = new URL(request.url);
+  const workspaceId = searchParams.get("workspaceId");
+  if (!workspaceId) return { error: NextResponse.json({ error: "workspaceId required" }, { status: 400 }) };
+
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const scim = (platform as { scimProvisioning?: { enabled?: boolean; bearerToken?: string } }).scimProvisioning;
+  if (!scim?.enabled || !scim.bearerToken || token !== scim.bearerToken) {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+  return { workspaceId, platform };
+}
+
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const auth = await authorizeScim(request);
+    if ("error" in auth) return auth.error;
+
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get("workspaceId");
-    if (!workspaceId) return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
-
-    const platform = await loadAppointmentPlatformConfig(workspaceId);
-    const scim = (platform as { scimProvisioning?: { enabled?: boolean; bearerToken?: string } }).scimProvisioning;
-    if (!scim?.enabled || !scim.bearerToken || token !== scim.bearerToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const assignments = (platform as { userRoleAssignments?: Record<string, string> }).userRoleAssignments || {};
+    const workspaceId = searchParams.get("workspaceId")!;
+    const assignments = (auth.platform as { userRoleAssignments?: Record<string, string> }).userRoleAssignments || {};
     const resources = Object.entries(assignments).map(([userId, roleId]) => ({
       id: userId,
       userName: userId,
@@ -47,34 +55,29 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get("workspaceId");
-    if (!workspaceId) return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
+    const auth = await authorizeScim(request);
+    if ("error" in auth) return auth.error;
 
-    const platform = await loadAppointmentPlatformConfig(workspaceId);
-    const scim = (platform as {
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get("workspaceId")!;
+    const scim = (auth.platform as {
       scimProvisioning?: { enabled?: boolean; bearerToken?: string; defaultRoleId?: string };
     }).scimProvisioning;
-    if (!scim?.enabled || !scim.bearerToken || token !== scim.bearerToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = (await request.json()) as ScimUser;
     const userName = body.userName || body.emails?.[0]?.value;
     if (!userName) return NextResponse.json({ error: "userName required" }, { status: 400 });
 
-    const assignments = (platform as { userRoleAssignments?: Record<string, string> }).userRoleAssignments || {};
-    const roleId = scim.defaultRoleId || "scheduler";
-    assignments[userName] = roleId;
+    const assignments = (auth.platform as { userRoleAssignments?: Record<string, string> }).userRoleAssignments || {};
+    const roleId = scim?.defaultRoleId || "scheduler";
+    assignments[userName.toLowerCase()] = roleId;
     await saveAppointmentPlatformConfig(workspaceId, { userRoleAssignments: assignments } as object);
 
     const roles = await listGranularRoles(workspaceId);
     return NextResponse.json(
       {
-        id: userName,
-        userName,
+        id: userName.toLowerCase(),
+        userName: userName.toLowerCase(),
         active: body.active !== false,
         roleId,
         roleName: roles.find((r) => r.id === roleId)?.name,

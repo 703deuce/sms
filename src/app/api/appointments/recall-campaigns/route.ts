@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   deleteRecallCampaign,
   listRecallCampaigns,
@@ -10,7 +11,7 @@ import {
 
 export async function GET() {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.settings.manage");
     if ("error" in auth) return auth.error;
     const data = await listRecallCampaigns(auth.workspaceId);
     return NextResponse.json({ data });
@@ -21,7 +22,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.settings.manage");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as { action?: string; campaign?: object; campaignId?: string };
     if (body.action === "run" && body.campaignId) {
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.settings.manage");
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

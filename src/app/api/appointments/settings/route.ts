@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import { getPrisma } from "@/lib/db";
 import {
   loadAppointmentPlatformConfig,
@@ -10,7 +11,7 @@ import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 
 export async function GET() {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.read");
     if ("error" in auth) return auth.error;
     const [data, workspace] = await Promise.all([
       loadAppointmentPlatformConfig(auth.workspaceId),
@@ -37,7 +38,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.settings.manage");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as Partial<AppointmentPlatformConfig>;
     const data = await saveAppointmentPlatformConfig(auth.workspaceId, body);

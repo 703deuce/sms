@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireSession, jsonError } from "@/lib/api-auth";
+import { jsonError } from "@/lib/api-auth";
+import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import { loadExtendedAppointmentsAnalytics } from "@/lib/appointments/analytics-reports";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireSession();
+    const auth = await requireAppointmentsAccess("appointments.analytics.read");
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
     const rangeRaw = Number(searchParams.get("range") || 7);

@@ -77,11 +77,11 @@ export const DEFAULT_KEYPAD_OPTIONS: VoiceKeypadOption[] = [
   { digit: "1", action: "confirm", label: "Confirm appointment" },
   { digit: "2", action: "reschedule", label: "Reschedule" },
   { digit: "3", action: "cancel", label: "Cancel appointment" },
-  { digit: "0", action: "transfer", label: "Speak with us" },
+  { digit: "4", action: "transfer", label: "Speak with us" },
 ];
 
 export const DEFAULT_HUMAN_SCRIPT =
-  "Hi {{first_name}}, this is {{business_name}} reminding you about your {{service}} appointment on {{appointment_date}} at {{appointment_time}}. Press 1 to confirm. Press 2 to reschedule. Press 3 to cancel. Or press 0 to speak with us.";
+  "Hi {{first_name}}, this is {{business_name}} reminding you about your {{service}} appointment on {{appointment_date}} at {{appointment_time}}. Press 1 to confirm. Press 2 to reschedule. Press 3 to cancel. Or press 4 to speak with us.";
 
 export const DEFAULT_VOICEMAIL_SCRIPT =
   "Hi {{first_name}}, this is {{business_name}} reminding you about your {{service}} appointment on {{appointment_date}} at {{appointment_time}}. Please contact us if you need to make any changes.";

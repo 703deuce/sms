@@ -97,6 +97,11 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       icon: Bell,
     },
     {
+      label: "No-show recovery",
+      href: "/appointments/no-show-recovery",
+      icon: Bell,
+    },
+    {
       label: "Reminder Settings",
       href: "/appointments/reminders",
       icon: Bell,
@@ -227,6 +232,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/enterprise")) return "Enterprise";
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/recall-campaigns")) return "Recall campaigns";
+  if (pathname.startsWith("/appointments/no-show-recovery")) return "No-show recovery";
   if (pathname.startsWith("/appointments/reminders")) return "Reminder Settings";
   if (pathname.startsWith("/appointments/voice-reminders")) return "Voice Reminders";
   if (pathname.startsWith("/video")) return "AI Notetaker";

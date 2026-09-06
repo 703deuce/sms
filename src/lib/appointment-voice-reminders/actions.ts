@@ -256,5 +256,5 @@ export function findKeypadOption(
 }
 
 export function validDigitsFromOptions(options: VoiceKeypadOption[]): string {
-  return options.map((o) => o.digit).filter(Boolean).join("") || "1230";
+  return options.map((o) => o.digit).filter(Boolean).join("") || "1234";
 }
