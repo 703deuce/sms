@@ -8,6 +8,7 @@ export async function GET(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const connectionId = new URL(request.url).searchParams.get("connectionId") || "";
+    const returnTo = new URL(request.url).searchParams.get("returnTo") || undefined;
     if (!connectionId) {
       return NextResponse.json({ error: "connectionId required" }, { status: 400 });
     }
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
       where: { id: connectionId, workspaceId: auth.workspaceId },
     });
     if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const url = getMicrosoftOAuthStartUrl(connectionId, auth.workspaceId);
+    const url = getMicrosoftOAuthStartUrl(connectionId, auth.workspaceId, returnTo);
     return NextResponse.redirect(url);
   } catch (err) {
     return jsonError(err, 400);
