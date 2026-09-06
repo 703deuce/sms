@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · **IA:** `docs/TRANSOVO-UI-DESIGN-GUIDE.md` · **Page architecture:** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` · **Visual design:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md` · **Accessibility (Guide #1):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md` · **HCD/Usability (Guide #2):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · **IA/Navigation (Guide #3):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · **Forms/Validation (Guide #5):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Nav: `src/lib/products/v1-launch-nav.ts`
+**UI rebuild directive:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · **IA:** `docs/TRANSOVO-UI-DESIGN-GUIDE.md` · **Page architecture:** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` · **Visual design:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md` · **Accessibility (Guide #1):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md` · **HCD/Usability (Guide #2):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · **IA/Navigation (Guide #3):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · **Forms/Validation (Guide #5):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · **Responsive/Reflow (Guide #6):** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Nav: `src/lib/products/v1-launch-nav.ts`
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 

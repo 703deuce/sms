@@ -597,7 +597,8 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 5. TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md    → Guide #2: ISO 9241 HCD
 6. TRANSOVO-IA-NAVIGATION-STANDARDS.md            → Guide #3: IA & navigation
 7. TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md   → Guide #5: Forms & validation
-8. Implementation standards Guides #4, #6–12      → Interaction, responsive, etc. (coming)
+8. TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md   → Guide #6: Responsive/reflow/zoom
+9. Implementation standards Guides #4, #7–12       → Interaction, tables, etc. (coming)
 9. Page-by-page spec                              → Per-screen worksheet
 10. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```

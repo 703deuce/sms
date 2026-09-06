@@ -50,8 +50,8 @@ What **is** standardized are the underlying requirements around:
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - Nav implementation: `src/lib/products/appointments-nav.ts`
-- Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #6 — Responsive, Reflow & Zoom Standards (coming)
+- Guide #6: `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #7 — Table & Grid Semantics Standards (coming)
 
 ---
 
@@ -1325,8 +1325,9 @@ Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md           → WCAG 2.2 AA
 Guide #2  TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md  → ISO 9241 HCD
 Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md         → IA & navigation (this file)
 Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
+Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md → Responsive/reflow/zoom
 Guide #4 (coming)                                      → Interaction, keyboard & focus
-Guide #6+ (coming)                                     → Responsive, reflow & zoom, etc.
+Guide #7+ (coming)                                     → Table & grid semantics, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                             → IA principles & domain definitions
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                     → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                         → Visual tokens
@@ -1335,4 +1336,4 @@ src/lib/products/appointments-nav.ts                    → Canonical nav implem
 
 ---
 
-*Guide #3: Information Architecture & Navigation Standards. Next: Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — Responsive, Reflow & Zoom Standards.*
+*Guide #3: Information Architecture & Navigation Standards. Next: Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`.*
