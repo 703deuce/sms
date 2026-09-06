@@ -31,6 +31,7 @@ Cursor should follow native HTML first and use APG patterns when implementing cu
 
 **Related Transovo guides**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - Guide #2: `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - Guide #3: `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`

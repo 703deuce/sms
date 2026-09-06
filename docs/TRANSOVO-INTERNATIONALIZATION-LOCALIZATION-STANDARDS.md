@@ -33,6 +33,7 @@ This is not just translation. **Internationalization is the architecture that ma
 
 **Related Transovo guides**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 - Guide #5: `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`

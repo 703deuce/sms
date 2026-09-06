@@ -28,6 +28,7 @@
 
 **Related Transovo guides**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`  
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  

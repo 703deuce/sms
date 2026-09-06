@@ -33,6 +33,7 @@ For Cursor, this guide establishes the **safe architecture and UX rules**. Speci
 
 **Related Transovo guides**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - Guide #4: `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 - Guide #2: `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`

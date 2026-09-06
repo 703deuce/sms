@@ -7,6 +7,7 @@
 
 **Related docs**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - **IA & navigation (hard standard):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
@@ -451,4 +452,4 @@ Stop and redesign if:
 
 ---
 
-*This document is the authoritative UI ruleset for Transovo. Hard implementation standards: Guide #1 `TRANSOVO-ACCESSIBILITY-STANDARDS.md` · Guide #2 `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 `TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 `TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md` · Guide #5 `TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 `TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 `TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 `TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 `TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 `TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` · Guide #11 `TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*
+*This document is the authoritative UI ruleset for Transovo. **Read `TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` first** for authority order and conflict resolution. Hard implementation standards: Guide #1 `TRANSOVO-ACCESSIBILITY-STANDARDS.md` · Guide #2 `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 `TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 `TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md` · Guide #5 `TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 `TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 `TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 `TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 `TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 `TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` · Guide #11 `TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*

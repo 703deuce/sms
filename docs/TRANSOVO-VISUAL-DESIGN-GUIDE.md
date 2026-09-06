@@ -6,6 +6,7 @@
 
 **Prerequisites (read in order):**
 
+0. `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` — authority order, conflict resolution, system rules  
 1. `docs/TRANSOVO-UI-DESIGN-GUIDE.md` — what goes where (IA, heuristics)  
 2. `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` — how every page is structured  
 3. **This document** — how everything looks, feels, scales, aligns, and behaves  
@@ -590,6 +591,7 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 ## Doc stack (full UI pipeline)
 
 ```
+0. TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md       → Authority & conflict resolution (read first)
 1. TRANSOVO-UI-DESIGN-GUIDE.md                    → IA, mental models, heuristics
 2. TRANSOVO-PAGE-ARCHITECTURE-RULES.md            → Page structure and behavior
 3. TRANSOVO-VISUAL-DESIGN-GUIDE.md                → Look, feel, tokens, components

@@ -4,6 +4,8 @@
 **Audience:** Cursor agents and engineers  
 **Principle:** Audit and reuse before building. **Do not delete** mass-SMS infrastructure — hide from launch nav.
 
+**Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
+
 Related: `src/lib/products/v1-launch-nav.ts` (nav flags) · Appendix A (reuse map)
 
 ---

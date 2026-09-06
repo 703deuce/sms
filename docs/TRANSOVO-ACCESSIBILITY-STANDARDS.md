@@ -36,6 +36,7 @@
 
 **Related Transovo guides**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  

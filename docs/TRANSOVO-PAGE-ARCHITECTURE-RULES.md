@@ -4,10 +4,11 @@
 **Audience:** Engineers, designers, and Cursor agents (including Kimi) building Transovo UI  
 **Layer:** Page structure and behavioral grammar — **after** information architecture, **before** pixel-level design  
 
-**Prerequisite:** Read `docs/TRANSOVO-UI-DESIGN-GUIDE.md` first (mental models, IA, heuristics). This document defines **how every page is built** so 40 attractive screens do not each behave differently.
+**Prerequisite:** Read `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` first, then `docs/TRANSOVO-UI-DESIGN-GUIDE.md` (mental models, IA, heuristics). This document defines **how every page is built** so 40 attractive screens do not each behave differently.
 
 **Related docs**
 
+- **Governance (read first):** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md`
 - **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 - **IA & navigation (hard standard):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
