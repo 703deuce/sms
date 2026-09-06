@@ -490,8 +490,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const effectiveConcurrency =
-    stageFilter === "golden" ? Math.min(2, concurrency) : Math.min(concurrency, runnable.length);
+  const effectiveConcurrency = Math.min(concurrency, runnable.length);
 
   await runConcurrentBatch(runnable, effectiveConcurrency, staggerMs, skipCompletePass);
   printStatus(loadState());
