@@ -366,11 +366,10 @@ export async function processInboundMessage(input: {
       where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
     });
     if (apptContact) {
-      const {
-        findUpcomingAppointmentForContact,
-        confirmAppointment,
-        cancelAppointment,
-      } = await import("@/lib/voice/calendar/booking");
+      const { findUpcomingAppointmentForContact, confirmAppointment } = await import(
+        "@/lib/voice/calendar/booking"
+      );
+      const { cancelPlatformAppointment } = await import("@/lib/appointments/booking-platform");
       const appt = await findUpcomingAppointmentForContact(input.workspaceId, apptContact.id);
       if (appt) {
         await recordInboundReceipt({
@@ -392,7 +391,7 @@ export async function processInboundMessage(input: {
             replyText: `Your appointment on ${whenLabel} is confirmed. Reply X to cancel.`,
           };
         }
-        await cancelAppointment(input.workspaceId, appt.id);
+        await cancelPlatformAppointment(input.workspaceId, appt.id, "customer");
         return {
           kind: "message",
           replyText: `Your appointment on ${whenLabel} has been cancelled.`,

@@ -124,7 +124,7 @@ export const solutionCategories: SolutionCategory[] = [
         uses: [
           { label: "Phone", href: "/phone" },
           { label: "AI Voice agents", href: "/voice/agents" },
-          { label: "Calendars", href: "/voice/calendars" },
+          { label: "Calendars", href: "/integrations/calendars" },
           { label: "Appointments", href: "/integrations/native/appointments" },
         ],
         cta: {

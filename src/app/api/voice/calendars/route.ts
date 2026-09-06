@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
-import { getAvailability, bookAppointment } from "@/lib/voice/calendar/booking";
+import {
+  createWorkspaceCalendarConnection,
+  getWorkspaceCalendarConnection,
+  listWorkspaceCalendarConnections,
+} from "@/lib/calendar/connections";
 
+/** @deprecated Use /api/integrations/calendars — voice only consumes workspace calendar connections. */
 export async function GET() {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const rows = await getPrisma().voiceCalendarConnection.findMany({
-      where: { workspaceId: auth.workspaceId },
-    });
+    const rows = await listWorkspaceCalendarConnections(auth.workspaceId);
     return NextResponse.json({ data: rows });
   } catch (err) {
     return jsonError(err, 500);
   }
 }
 
+/** @deprecated Use /api/integrations/calendars */
 export async function POST(request: Request) {
   try {
     const auth = await requireSession();
@@ -25,24 +28,7 @@ export async function POST(request: Request) {
       provider?: string;
       config?: Record<string, unknown>;
     };
-    const provider = body.provider || "internal";
-    // Only OAuth calendars and Transovo internal are connectable here.
-    // Calendly/Acuity/Cal.com need a real integration connection — do not fake "connected".
-    const status =
-      provider === "google" || provider === "microsoft"
-        ? "pending_oauth"
-        : provider === "internal"
-          ? "connected"
-          : "pending";
-    const row = await getPrisma().voiceCalendarConnection.create({
-      data: {
-        workspaceId: auth.workspaceId,
-        name: body.name || "Calendar",
-        provider,
-        config: body.config || {},
-        status,
-      },
-    });
+    const row = await createWorkspaceCalendarConnection(auth.workspaceId, body);
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);

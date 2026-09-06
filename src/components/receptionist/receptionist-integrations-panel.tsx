@@ -66,7 +66,7 @@ export function ReceptionistIntegrationsPanel({
   const refresh = useCallback(async () => {
     try {
       const [calRes, intRes] = await Promise.all([
-        fetch("/api/voice/calendars"),
+        fetch("/api/integrations/calendars"),
         fetch("/api/integrations/connections"),
       ]);
       const calJson = await calRes.json();
@@ -139,7 +139,7 @@ export function ReceptionistIntegrationsPanel({
       if (!connectionId) {
         const label =
           CALENDAR_PROVIDERS.find((c) => c.id === providerId)?.label || "Calendar";
-        const res = await fetch("/api/voice/calendars", {
+        const res = await fetch("/api/integrations/calendars", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ name: label, provider }),
@@ -150,7 +150,7 @@ export function ReceptionistIntegrationsPanel({
       }
 
       if (provider === "google" || provider === "microsoft") {
-        window.location.href = `/api/voice/calendars/oauth/${provider}?connectionId=${connectionId}`;
+        window.location.href = `/api/integrations/calendars/oauth/${provider}?connectionId=${connectionId}&returnTo=${encodeURIComponent(agentId ? `/voice/agents/${agentId}/capabilities` : "/integrations/calendars")}`;
         return;
       }
 

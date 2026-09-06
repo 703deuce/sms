@@ -17,6 +17,7 @@ import { IntegrationsDirectory } from "./integrations-directory";
 
 const integrationTabs = [
   { label: "Directory", href: "/integrations" },
+  { label: "Calendars", href: "/integrations/calendars" },
   { label: "Connect apps", href: "/integrations/native" },
   { label: "CRM", href: "/integrations/crm" },
   { label: "API", href: "/integrations/api" },

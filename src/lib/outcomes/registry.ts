@@ -741,7 +741,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Calendars",
         kind: "settings",
         navRole: "manage",
-        launchHref: "/voice/calendars",
+        launchHref: "/integrations/calendars",
         bullets: [
           "Calendar connections",
           "Staff calendars",
@@ -756,7 +756,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Appointment Types",
         kind: "settings",
         navRole: "manage",
-        launchHref: "/voice/calendars",
+        launchHref: "/integrations/calendars",
         bullets: [
           "Name",
           "Duration",
@@ -773,7 +773,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Booking Rules",
         kind: "settings",
         navRole: "manage",
-        launchHref: "/voice/calendars",
+        launchHref: "/integrations/calendars",
         bullets: [
           "Booking hours",
           "Minimum notice",
@@ -2159,7 +2159,7 @@ export const outcomeSolutions: OutcomeSolutionDef[] = [
         label: "Calendar",
         kind: "settings",
         navRole: "manage",
-        launchHref: "/voice/calendars",
+        launchHref: "/integrations/calendars",
       },
       {
         slug: "schedule",

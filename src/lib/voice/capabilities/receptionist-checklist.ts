@@ -288,7 +288,7 @@ export const RECEPTIONIST_CAPABILITIES: AgentCapability[] = [
     label: "Calendar connection",
     tier: "required_booking",
     status: "wizard_wired",
-    notes: "Appointments step + /api/voice/calendars; activation blocks without live Google/Microsoft/internal",
+    notes: "Appointments step + /api/integrations/calendars; activation blocks without live Google/Microsoft/internal",
     defaultFor: ["appointment_receptionist"],
   },
   {

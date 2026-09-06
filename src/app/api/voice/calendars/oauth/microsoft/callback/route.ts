@@ -3,8 +3,9 @@ import {
   completeMicrosoftOAuth,
   microsoftOAuthErrorRedirect,
   microsoftOAuthSuccessRedirect,
-} from "@/lib/voice/calendar/oauth";
+} from "@/lib/calendar/oauth";
 
+/** @deprecated Microsoft OAuth completes at /api/integrations/microsoft/callback */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -12,9 +13,7 @@ export async function GET(request: Request) {
   const error = url.searchParams.get("error");
 
   if (error || !code || !state) {
-    return NextResponse.redirect(
-      microsoftOAuthErrorRedirect(error || "missing_code"),
-    );
+    return NextResponse.redirect(microsoftOAuthErrorRedirect(error || "missing_code"));
   }
 
   try {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
-import { getMicrosoftOAuthStartUrl } from "@/lib/voice/calendar/oauth";
+import { getMicrosoftOAuthStartUrl } from "@/lib/calendar/oauth";
 
 export async function GET(request: Request) {
   try {

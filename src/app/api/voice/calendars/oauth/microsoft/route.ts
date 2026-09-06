@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
-import { getMicrosoftOAuthStartUrl } from "@/lib/voice/calendar/oauth";
+import { getWorkspaceCalendarConnection } from "@/lib/calendar/connections";
+import { getMicrosoftOAuthStartUrl } from "@/lib/calendar/oauth";
 
+/** @deprecated Use /api/integrations/calendars/oauth/microsoft */
 export async function GET(request: Request) {
   try {
     const auth = await requireSession();
@@ -12,9 +13,7 @@ export async function GET(request: Request) {
     if (!connectionId) {
       return NextResponse.json({ error: "connectionId required" }, { status: 400 });
     }
-    const conn = await getPrisma().voiceCalendarConnection.findFirst({
-      where: { id: connectionId, workspaceId: auth.workspaceId },
-    });
+    const conn = await getWorkspaceCalendarConnection(auth.workspaceId, connectionId);
     if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const url = getMicrosoftOAuthStartUrl(connectionId, auth.workspaceId, returnTo);
     return NextResponse.redirect(url);

@@ -294,29 +294,61 @@ export async function getExternalBusyIntervals(
   if (!platform.externalCalendarBlocking?.enabled) return [];
 
   const { getPrisma } = await import("@/lib/db");
-  const { getValidAccessToken, getGoogleBusy, getMicrosoftBusy } = await import(
-    "@/lib/voice/calendar/providers"
-  );
+  const {
+    getValidAccessToken,
+    getGoogleBusy,
+    getMicrosoftBusy,
+    resolveBlockingCalendarIds,
+    type CalendarConfig,
+  } = await import("@/lib/calendar/providers");
+
+  const blocking = platform.externalCalendarBlocking;
+  const selectedConnectionIds = blocking.connectionIds?.length
+    ? blocking.connectionIds
+    : blocking.calendarIds?.length
+      ? blocking.calendarIds
+      : null;
 
   const connections = await getPrisma().voiceCalendarConnection.findMany({
-    where: { workspaceId, provider: { in: ["google", "microsoft"] } },
+    where: {
+      workspaceId,
+      provider: { in: ["google", "microsoft"] },
+      status: "connected",
+      ...(selectedConnectionIds ? { id: { in: selectedConnectionIds } } : {}),
+    },
   });
 
   const busy: Array<{ start: Date; end: Date }> = [];
   for (const conn of connections) {
-    const config = (conn.config || {}) as { accessToken?: string; refreshToken?: string; calendarId?: string };
+    const config = (conn.config || {}) as CalendarConfig;
     const token = await getValidAccessToken(conn.id, conn.provider, config);
     if (!token) continue;
 
-    const calendarIds = platform.externalCalendarBlocking.calendarIds || [config.calendarId || "primary"];
     if (conn.provider === "google") {
+      const calendarIds = resolveBlockingCalendarIds(config, conn.provider);
       for (const calId of calendarIds) {
-        const intervals = await getGoogleBusy(token, calId, timeMin, timeMax);
-        busy.push(...intervals);
+        try {
+          const intervals = await getGoogleBusy(token, calId, timeMin, timeMax);
+          busy.push(...intervals);
+        } catch (err) {
+          console.warn("[calendar] google busy lookup failed", conn.id, calId, err);
+        }
       }
     } else if (conn.provider === "microsoft") {
-      const intervals = await getMicrosoftBusy(token, timeMin, timeMax);
-      busy.push(...intervals);
+      const calendarIds = resolveBlockingCalendarIds(config, conn.provider);
+      try {
+        if (calendarIds.length) {
+          for (const calId of calendarIds) {
+            const intervals = await getMicrosoftBusy(token, timeMin, timeMax, calId);
+            busy.push(...intervals);
+          }
+        } else {
+          const intervals = await getMicrosoftBusy(token, timeMin, timeMax);
+          busy.push(...intervals);
+        }
+      } catch (err) {
+        console.warn("[calendar] microsoft busy lookup failed", conn.id, err);
+      }
     }
   }
   return busy;

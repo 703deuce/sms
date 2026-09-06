@@ -3,7 +3,7 @@ import {
   completeMicrosoftOAuth,
   microsoftOAuthErrorRedirect,
   microsoftOAuthSuccessRedirect,
-} from "@/lib/voice/calendar/oauth";
+} from "@/lib/calendar/oauth";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -19,6 +19,12 @@ export async function GET(request: Request) {
 
   try {
     const parsed = await completeMicrosoftOAuth(code, state);
+    try {
+      const { verifyWorkspaceCalendarConnection } = await import("@/lib/calendar/connection-settings");
+      await verifyWorkspaceCalendarConnection(parsed.workspaceId, parsed.connectionId);
+    } catch (verifyErr) {
+      console.warn("[calendar] microsoft post-oauth verify failed", verifyErr);
+    }
     return NextResponse.redirect(microsoftOAuthSuccessRedirect(parsed.returnTo));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "oauth_failed";

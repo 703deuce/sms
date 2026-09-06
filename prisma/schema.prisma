@@ -2771,6 +2771,7 @@ model VoiceAppointment {
   call        VoiceCall? @relation(fields: [callId], references: [id], onDelete: SetNull)
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, externalId])
   @@index([workspaceId, startsAt])
   @@map("voice_appointments")
 }

@@ -13,6 +13,8 @@ import {
   hasOAuthTokens,
   insertGoogleEvent,
   insertMicrosoftEvent,
+  resolveBlockingCalendarIds,
+  resolveWriteCalendarId,
   type CalendarConfig,
 } from "./providers";
 import {
@@ -469,8 +471,23 @@ export async function getAvailability(
             new Date(timeMin.getTime() + scanDays * 86_400_000);
           const busy =
             cal.provider === "google"
-              ? await getGoogleBusy(token, config.calendarId || "primary", timeMin, timeMax)
-              : await getMicrosoftBusy(token, timeMin, timeMax);
+              ? (
+                  await Promise.all(
+                    resolveBlockingCalendarIds(config, cal.provider).map((calId) =>
+                      getGoogleBusy(token, calId, timeMin, timeMax),
+                    ),
+                  )
+                ).flat()
+              : (
+                  await Promise.all(
+                    (resolveBlockingCalendarIds(config, cal.provider).length
+                      ? resolveBlockingCalendarIds(config, cal.provider)
+                      : [undefined]
+                    ).map((calId) =>
+                      getMicrosoftBusy(token, timeMin, timeMax, calId || undefined),
+                    ),
+                  )
+                ).flat();
           const hours = parseBookingHours(svcCfg.bookingHours || undefined);
           // Anchor free-slot generation on the requested window start (not "now"),
           // so "next Monday 8am" does not scan only tonight.
@@ -767,16 +784,25 @@ export async function bookAppointment(
         if (token) {
           const busy =
             cal.provider === "google"
-              ? await getGoogleBusy(
-                  token,
-                  config.calendarId || "primary",
-                  new Date(startsAt.getTime() - bufferMs),
-                  new Date(endsAt.getTime() + bufferMs),
-                )
+              ? (
+                  await Promise.all(
+                    resolveBlockingCalendarIds(config, cal.provider).map((calId) =>
+                      getGoogleBusy(
+                        token,
+                        calId,
+                        new Date(startsAt.getTime() - bufferMs),
+                        new Date(endsAt.getTime() + bufferMs),
+                      ),
+                    ),
+                  )
+                ).flat()
               : await getMicrosoftBusy(
                   token,
                   new Date(startsAt.getTime() - bufferMs),
                   new Date(endsAt.getTime() + bufferMs),
+                  resolveWriteCalendarId(config) !== "primary"
+                    ? resolveWriteCalendarId(config)
+                    : undefined,
                 );
           const overlaps = busy.some((b) => {
             const bufferedStart = new Date(b.start.getTime() - bufferMs);
@@ -799,8 +825,11 @@ export async function bookAppointment(
           };
           externalId =
             cal.provider === "google"
-              ? await insertGoogleEvent(token, config.calendarId || "primary", event)
-              : await insertMicrosoftEvent(token, event);
+              ? await insertGoogleEvent(token, resolveWriteCalendarId(config), event)
+              : await insertMicrosoftEvent(token, {
+                  ...event,
+                  calendarId: resolveWriteCalendarId(config),
+                });
         } else {
           throw new Error("Calendar access token unavailable");
         }
@@ -827,7 +856,13 @@ export async function bookAppointment(
       timezone,
       status: "confirmed",
       externalId,
-      metadata: { ...args, location } as object,
+      metadata: {
+        ...args,
+        location,
+        source: "transovo",
+        connectionId: cal?.id || calendarId || null,
+        lastPushedAt: externalId ? new Date().toISOString() : undefined,
+      } as object,
     },
   });
 
@@ -1106,8 +1141,22 @@ export async function cancelAppointment(workspaceId: string, appointmentId: stri
     where: { id: appointmentId, workspaceId },
   });
   if (!appt) throw new Error("Appointment not found");
+
+  try {
+    const { syncExternalCalendarOnCancel } = await import("@/lib/calendar/external-sync");
+    await syncExternalCalendarOnCancel(workspaceId, appt);
+  } catch (err) {
+    console.warn("[calendar] cancel external sync failed", appointmentId, err);
+  }
+
+  const { suppressAppointmentReminders } = await import("@/lib/appointments/reminder-state");
   return prisma.voiceAppointment.update({
     where: { id: appt.id },
-    data: { status: "cancelled" },
+    data: {
+      status: "canceled",
+      metadata: suppressAppointmentReminders({
+        ...(appt.metadata || {}) as Record<string, unknown>,
+      }) as object,
+    },
   });
 }

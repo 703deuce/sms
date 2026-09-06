@@ -849,6 +849,25 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         kind: payload.kind as "initial" | "incremental" | "manual" | "webhook" | undefined,
       });
     }
+    case "calendar_connection_sync": {
+      const { syncWorkspaceCalendarConnection } = await import("@/lib/calendar/import-sync");
+      return syncWorkspaceCalendarConnection(
+        String(payload.workspaceId || ""),
+        String(payload.connectionId || ""),
+        { incremental: Boolean(payload.incremental) },
+      );
+    }
+    case "calendar_connections_reconcile": {
+      const { reconcileWorkspaceCalendarConnections } = await import("@/lib/calendar/reconcile");
+      return reconcileWorkspaceCalendarConnections({
+        workspaceId: payload.workspaceId ? String(payload.workspaceId) : undefined,
+        limit: typeof payload.limit === "number" ? payload.limit : undefined,
+      });
+    }
+    case "calendar_subscription_renew": {
+      const { renewExpiringCalendarSubscriptions } = await import("@/lib/calendar/webhooks");
+      return renewExpiringCalendarSubscriptions();
+    }
     case "integration_webhook_process": {
       const { processIntegrationWebhookJob } = await import("@/lib/integrations/framework/sync");
       return processIntegrationWebhookJob({
@@ -1114,6 +1133,20 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-platform-reminders:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "calendar_connections_reconcile",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `calendar-reconcile:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "calendar_subscription_renew",
+    queueName: "maintenance",
+    payload: { hourKey: minuteKey.slice(0, 13) },
+    idempotencyKey: `calendar-sub-renew:${minuteKey.slice(0, 13)}`,
   });
 
   // Scheduled receptionist activation (wizard activationMode=schedule).

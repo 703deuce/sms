@@ -14,7 +14,6 @@ export const voiceAgentsSection: VoiceSection = {
     { label: "AI platform", href: "/voice/ai-platform" },
     { label: "Knowledge", href: "/voice/knowledge" },
     { label: "Tools", href: "/voice/tools" },
-    { label: "Calendars", href: "/voice/calendars" },
     { label: "Testing", href: "/voice/testing" },
   ],
 };
@@ -53,7 +52,6 @@ const sectionMatchers: Array<{ match: (pathname: string) => boolean; section: Vo
       p === "/voice/ai-platform" ||
       p === "/voice/knowledge" ||
       p === "/voice/tools" ||
-      p === "/voice/calendars" ||
       p === "/voice/testing",
     section: voiceAgentsSection,
   },

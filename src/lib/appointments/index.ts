@@ -42,3 +42,9 @@ export {
   loadAppointmentsAnalytics,
   loadUpcomingAppointmentsByContactIds,
 } from "./analytics";
+export {
+  findWorkspaceAppointmentByExternalId,
+  getWorkspaceAppointment,
+  upsertWorkspaceAppointmentByExternalId,
+  type WorkspaceAppointmentRecord,
+} from "./domain";

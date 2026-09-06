@@ -85,6 +85,22 @@ export async function generateNativeSlots(
   const slots: AvailabilitySlot[] = [];
 
   const rangeStart = zonedDateParts(now, tz);
+  const rangeEndDay = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, days);
+  const rangeEnd = wallTimeInZoneToUtc(tz, rangeEndDay.year, rangeEndDay.month, rangeEndDay.day, 23, 59);
+
+  let externalBusy: Array<{ start: Date; end: Date }> = [];
+  try {
+    const { getExternalBusyIntervals } = await import("@/lib/appointments/scheduling-domain");
+    externalBusy = await getExternalBusyIntervals(workspaceId, now, rangeEnd);
+  } catch (err) {
+    console.warn("[appointments] external busy lookup failed", err);
+  }
+
+  function overlapsExternalBusy(start: Date, end: Date) {
+    const bufferedStart = new Date(start.getTime() - bufferBefore);
+    const bufferedEnd = new Date(end.getTime() + bufferAfter);
+    return externalBusy.some((b) => bufferedStart < b.end && bufferedEnd > b.start);
+  }
 
   for (let d = 0; d < days; d += 1) {
     const day = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, d);
@@ -126,6 +142,7 @@ export async function generateNativeSlots(
           },
         });
         if (conflict) continue;
+        if (overlapsExternalBusy(start, end)) continue;
 
         slots.push({ startsAt: start.toISOString(), endsAt: end.toISOString() });
         if (slots.length >= maxSlots) return { slots };

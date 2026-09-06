@@ -53,7 +53,7 @@ export function AppointmentsStep({
     void (async () => {
       try {
         const [calRes, intRes] = await Promise.all([
-          fetch("/api/voice/calendars"),
+          fetch("/api/integrations/calendars"),
           fetch("/api/integrations/connections"),
         ]);
         const json = await calRes.json();
@@ -138,7 +138,7 @@ export function AppointmentsStep({
       const existing = calendars.find((c) => c.provider === provider);
       let connectionId = existing?.id;
       if (!connectionId) {
-        const res = await fetch("/api/voice/calendars", {
+        const res = await fetch("/api/integrations/calendars", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -151,12 +151,12 @@ export function AppointmentsStep({
         connectionId = json.data.id as string;
       }
       if (provider === "google" || provider === "microsoft") {
-        window.location.href = `/api/voice/calendars/oauth/${provider}?connectionId=${connectionId}`;
+        window.location.href = `/api/integrations/calendars/oauth/${provider}?connectionId=${connectionId}&returnTo=${encodeURIComponent("/integrations/calendars")}`;
         return;
       }
 
       // Refresh local list so status reflects what the API actually created.
-      const listRes = await fetch("/api/voice/calendars");
+      const listRes = await fetch("/api/integrations/calendars");
       const listJson = await listRes.json().catch(() => ({ data: [] }));
       const rows = (listJson.data || []) as Array<{
         id: string;

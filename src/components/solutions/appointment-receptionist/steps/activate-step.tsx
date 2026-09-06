@@ -44,7 +44,7 @@ export function ActivateStep({
     void (async () => {
       try {
         const [calRes, intRes] = await Promise.all([
-          fetch("/api/voice/calendars"),
+          fetch("/api/integrations/calendars"),
           fetch("/api/integrations/connections"),
         ]);
         const calJson = await calRes.json().catch(() => ({ data: [] }));

@@ -124,6 +124,8 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/voice/recordings/") && pathname.endsWith("/stream")) return true;
   // Calendar OAuth callbacks (provider redirects without session)
   if (pathname.startsWith("/api/voice/calendars/oauth/") && pathname.includes("/callback")) return true;
+  if (pathname.startsWith("/api/integrations/calendars/oauth/") && pathname.includes("/callback")) return true;
+  if (pathname.startsWith("/api/integrations/calendars/webhooks/")) return true;
   if (pathname === "/api/integrations/microsoft/callback") return true;
   // Local visual QA for Appointment Receptionist wizard (no product nav link)
   if (pathname === "/dev/appointment-wizard" || pathname.startsWith("/dev/appointment-wizard/")) {

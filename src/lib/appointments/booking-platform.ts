@@ -517,6 +517,17 @@ export async function reschedulePlatformAppointment(
   });
 
   try {
+    const { syncExternalCalendarOnReschedule } = await import("@/lib/calendar/external-sync");
+    await syncExternalCalendarOnReschedule(workspaceId, row, {
+      startsAt: start,
+      endsAt: end,
+      summary: row.serviceName || undefined,
+    });
+  } catch (err) {
+    console.warn("[appointments] external calendar reschedule sync failed", err);
+  }
+
+  try {
     const { onAppointmentRescheduled } = await import("@/lib/appointment-workflows/triggers");
     await onAppointmentRescheduled(workspaceId, appointmentId);
   } catch (err) {
