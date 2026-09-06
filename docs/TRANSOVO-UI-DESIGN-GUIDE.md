@@ -7,6 +7,7 @@
 
 **Related docs**
 
+- **Page architecture rules (required for every page):** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Appointments product IA (card sort): see conversation / `src/lib/products/appointments-nav.ts`
 - V1 launch nav flags: `src/lib/products/v1-launch-nav.ts`
 - V1 UI rebuild directive: `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md`
