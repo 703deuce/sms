@@ -7,9 +7,9 @@
 
 **Related docs**
 
-- **Visual design system (tokens, type, color, components):** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Page architecture rules (every screen):** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
-- IA / navigation principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md` (read first for mental models)
+- **Accessibility (WCAG 2.2 AA — mandatory):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
+- Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - V1 launch nav flags: `src/lib/products/v1-launch-nav.ts`
 - V1 UI rebuild directive: `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md`
 

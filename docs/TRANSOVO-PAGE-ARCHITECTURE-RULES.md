@@ -8,8 +8,9 @@
 
 **Related docs**
 
-- **Visual design system:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- IA / navigation principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
+- **Accessibility (WCAG 2.2 AA — mandatory):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
+- IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Appointments nav implementation: `src/lib/products/appointments-nav.ts`
 - V1 UI rebuild: `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md`
 
