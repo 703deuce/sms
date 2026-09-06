@@ -7,8 +7,8 @@ import {
 } from "@/lib/calendar/connections";
 import {
   getGoogleCalendars,
-  getMicrosoftCalendars,
   getValidAccessToken,
+  listMicrosoftCalendarsForConnection,
   type CalendarConfig,
 } from "@/lib/calendar/providers";
 
@@ -33,7 +33,7 @@ export async function listConnectionProviderCalendars(workspaceId: string, conne
   const calendars =
     conn.provider === "google"
       ? await getGoogleCalendars(token)
-      : await getMicrosoftCalendars(token);
+      : await listMicrosoftCalendarsForConnection(conn.id, config);
 
   return calendars;
 }
@@ -82,11 +82,16 @@ export async function verifyWorkspaceCalendarConnection(
       const calendars =
         conn.provider === "google"
           ? await getGoogleCalendars(token)
-          : await getMicrosoftCalendars(token);
+          : await listMicrosoftCalendarsForConnection(conn.id, config);
       calendarCount = calendars.length;
       if (!calendarCount) errors.push("Provider returned no calendars");
     } catch (err) {
-      errors.push(err instanceof Error ? err.message : "Could not list provider calendars");
+      const msg = err instanceof Error ? err.message : "Could not list provider calendars";
+      errors.push(msg);
+      if (/\b401\b/.test(msg)) {
+        tokenValid = false;
+        await updateWorkspaceCalendarConnection(workspaceId, connectionId, { status: "needs_reauth" });
+      }
     }
   }
 
@@ -118,6 +123,7 @@ export async function verifyWorkspaceCalendarConnection(
 
   await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
     ...(ok && conn.status === "needs_reauth" ? { status: "connected" } : {}),
+    ...(!ok && errors.some((e) => /\b401\b/.test(e)) ? { status: "needs_reauth" } : {}),
     config: {
       ...config,
       lastVerifiedAt: verifiedAt,

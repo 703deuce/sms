@@ -36,6 +36,8 @@ export {
   getMicrosoftBusy,
   getMicrosoftCalendars,
   getValidAccessToken,
+  listMicrosoftCalendarsForConnection,
+  microsoftGraphFetch,
   hasOAuthTokens,
   insertGoogleEvent,
   insertMicrosoftEvent,

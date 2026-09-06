@@ -6,10 +6,16 @@ import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
 import { enqueueCalendarConnectionSync, syncCalendarProviderEventById } from "@/lib/calendar/import-sync";
 import {
   getValidAccessToken,
+  microsoftGraphFetch,
   resolveImportCalendarIds,
   resolveWriteCalendarId,
   type CalendarConfig,
 } from "@/lib/calendar/providers";
+import {
+  MICROSOFT_GRAPH_V1,
+  OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE,
+  outlookEventSubscriptionExpiration,
+} from "@/lib/microsoft/graph-helpers";
 import { getPrisma } from "@/lib/db";
 
 function appUrl() {
@@ -53,20 +59,50 @@ export async function ensureMicrosoftCalendarSubscription(workspaceId: string, c
     return existing;
   }
 
-  const expiration = new Date(Date.now() + (4230 - 5) * 60_000);
+  const expirationDateTime = outlookEventSubscriptionExpiration();
   const clientState = signCalendarWebhookState(connectionId, workspaceId);
-  const res = await fetch("https://graph.microsoft.com/v1.0/subscriptions", {
+
+  if (existing?.id) {
+    const renewRes = await microsoftGraphFetch(
+      connectionId,
+      config,
+      `${MICROSOFT_GRAPH_V1}/subscriptions/${encodeURIComponent(existing.id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expirationDateTime }),
+      },
+    );
+    if (renewRes.ok) {
+      const renewed = await renewRes.json();
+      const subscription = {
+        id: String(renewed.id || existing.id),
+        expiresAt: String(renewed.expirationDateTime || expirationDateTime),
+        resource: String(renewed.resource || existing.resource || OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE),
+      };
+      await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
+        config: { ...config, microsoftSubscription: subscription },
+      });
+      return subscription;
+    }
+    if (renewRes.status !== 404) {
+      const err = await renewRes.text();
+      console.warn("[calendar] microsoft subscription renew failed", connectionId, err);
+    }
+  }
+
+  const res = await microsoftGraphFetch(connectionId, config, `${MICROSOFT_GRAPH_V1}/subscriptions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       changeType: "created,updated,deleted",
       notificationUrl: `${appUrl()}/api/integrations/calendars/webhooks/microsoft`,
-      resource: "/me/events",
-      expirationDateTime: expiration.toISOString(),
+      resource: OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE,
+      expirationDateTime,
       clientState,
+      latestSupportedTlsVersion: "v1_2",
     }),
   });
 
@@ -80,7 +116,7 @@ export async function ensureMicrosoftCalendarSubscription(workspaceId: string, c
   const subscription = {
     id: String(json.id),
     expiresAt: String(json.expirationDateTime),
-    resource: String(json.resource || "/me/events"),
+    resource: String(json.resource || OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE),
   };
 
   await updateWorkspaceCalendarConnection(workspaceId, connectionId, {

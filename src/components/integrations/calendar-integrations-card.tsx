@@ -371,7 +371,8 @@ function ConnectionRow({
   );
 
   const connected = connection.status === "connected";
-  const needsReauth = connection.status === "needs_reauth";
+  const verificationFailed = connection.config?.lastVerificationOk === false;
+  const needsReauth = connection.status === "needs_reauth" || verificationFailed;
 
   async function loadProviderCalendars() {
     setLoadingCalendars(true);
@@ -482,6 +483,9 @@ function ConnectionRow({
               <Link2 className="h-3.5 w-3.5" /> Connected
             </span>
           )}
+          {verificationFailed && connection.status === "connected" ? (
+            <span className="text-amber-700 text-[12px]">Needs attention</span>
+          ) : null}
           <Button size="sm" variant="ghost" onClick={onToggle}>
             <Settings2 className="h-4 w-4" />
           </Button>
@@ -629,7 +633,7 @@ function ConnectionRow({
           ) : null}
 
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button size="sm" onClick={() => void saveConnectionSettings()} disabled={saving || !connected}>
+            <Button size="sm" onClick={() => void saveConnectionSettings()} disabled={saving || (!connected && !verificationFailed)}>
               {saving ? "Saving…" : "Save connection"}
             </Button>
             {connection.provider === "microsoft" ? (
@@ -637,7 +641,7 @@ function ConnectionRow({
                 size="sm"
                 variant="outline"
                 onClick={() => void verifyConnection()}
-                disabled={verifying || !connected}
+                disabled={verifying || (!connected && !verificationFailed)}
               >
                 {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify Microsoft"}
               </Button>
@@ -646,7 +650,7 @@ function ConnectionRow({
               size="sm"
               variant="outline"
               onClick={() => void syncNow()}
-              disabled={syncing || !connected || !importIds.length}
+              disabled={syncing || (!connected && !verificationFailed) || !importIds.length}
             >
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
               Sync now

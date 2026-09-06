@@ -359,7 +359,7 @@ export async function syncWorkspaceCalendarConnection(
       events =
         provider === "google"
           ? await listGoogleCalendarEvents(token, calendarId, timeMin, timeMax)
-          : await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId);
+          : await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, conn.id, config);
     } catch (err) {
       console.warn("[calendar] event import failed", connectionId, calendarId, err);
       stats.errors += 1;

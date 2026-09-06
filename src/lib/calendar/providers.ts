@@ -2,6 +2,12 @@ import { getPrisma } from "@/lib/db";
 import type { CalendarImportRules } from "@/lib/calendar/eligibility";
 import { refreshMicrosoftAccessToken } from "@/lib/microsoft/oauth-config";
 import {
+  MICROSOFT_GRAPH_V1,
+  microsoftCalendarViewUrl,
+  parseMicrosoftGraphDateTime,
+  toMicrosoftDateTimeTimeZone,
+} from "@/lib/microsoft/graph-helpers";
+import {
   addCalendarDays,
   wallTimeInZoneToUtc,
   zonedDateParts,
@@ -36,6 +42,8 @@ export type CalendarConfig = {
   lastVerifiedAt?: string;
   lastVerificationOk?: boolean;
   lastVerificationError?: string | null;
+  /** Space-delimited scopes returned by Microsoft token endpoint. */
+  grantedScopes?: string;
 };
 
 export type BusyInterval = { start: Date; end: Date };
@@ -61,27 +69,46 @@ export function resolveBlockingCalendarIds(config: CalendarConfig, provider: str
  * Return a valid access token, refreshing via the stored refresh token when the
  * current one is missing/expired, and persisting the new token on the row.
  */
+async function markCalendarConnectionNeedsReauth(connectionId: string) {
+  await getPrisma()
+    .voiceCalendarConnection.update({
+      where: { id: connectionId },
+      data: { status: "needs_reauth" },
+    })
+    .catch(() => undefined);
+}
+
 export async function getValidAccessToken(
   connectionId: string,
   provider: string,
   config: CalendarConfig,
+  options?: { forceRefresh?: boolean },
 ): Promise<string | null> {
-  const notExpired = config.expiresAt && config.expiresAt > Date.now() + 60_000;
+  const forceRefresh = options?.forceRefresh ?? false;
+  const notExpired =
+    !forceRefresh && config.expiresAt && config.expiresAt > Date.now() + 60_000;
   if (config.accessToken && notExpired) return config.accessToken;
-  if (!config.refreshToken) return config.accessToken || null;
+  if (!config.refreshToken) {
+    if (config.accessToken && notExpired) return config.accessToken;
+    return null;
+  }
 
   try {
     const refreshed =
       provider === "microsoft"
         ? await refreshMicrosoft(config.refreshToken)
         : await refreshGoogle(config.refreshToken);
-    if (!refreshed) return config.accessToken || null;
+    if (!refreshed) {
+      await markCalendarConnectionNeedsReauth(connectionId);
+      return null;
+    }
 
     const newConfig: CalendarConfig = {
       ...config,
       accessToken: refreshed.accessToken,
       refreshToken: refreshed.refreshToken || config.refreshToken,
       expiresAt: Date.now() + refreshed.expiresIn * 1000,
+      ...(refreshed.scope ? { grantedScopes: refreshed.scope } : {}),
     };
     await getPrisma().voiceCalendarConnection.update({
       where: { id: connectionId },
@@ -90,12 +117,46 @@ export async function getValidAccessToken(
     return refreshed.accessToken;
   } catch (err) {
     console.warn("[calendar] token refresh failed", connectionId, err);
-    await getPrisma().voiceCalendarConnection.update({
-      where: { id: connectionId },
-      data: { status: "needs_reauth" },
-    }).catch(() => undefined);
-    return config.accessToken || null;
+    await markCalendarConnectionNeedsReauth(connectionId);
+    return null;
   }
+}
+
+/** Microsoft Graph fetch with automatic 401 → refresh → retry once. */
+export async function microsoftGraphFetch(
+  connectionId: string,
+  config: CalendarConfig,
+  input: string | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  let token = await getValidAccessToken(connectionId, "microsoft", config);
+  if (!token) throw new Error("Microsoft access token unavailable");
+
+  const url = typeof input === "string" ? input : input.toString();
+  const withAuth = (accessToken: string) =>
+    fetch(url, {
+      ...init,
+      headers: {
+        ...init?.headers,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+  let res = await withAuth(token);
+  if (res.status !== 401) return res;
+
+  token = await getValidAccessToken(connectionId, "microsoft", config, { forceRefresh: true });
+  if (!token) {
+    await markCalendarConnectionNeedsReauth(connectionId);
+    throw new Error("Microsoft calendar re-authentication required");
+  }
+
+  res = await withAuth(token);
+  if (res.status === 401) {
+    await markCalendarConnectionNeedsReauth(connectionId);
+    throw new Error("Microsoft calendars 401");
+  }
+  return res;
 }
 
 async function refreshGoogle(refreshToken: string) {
@@ -128,6 +189,7 @@ async function refreshMicrosoft(refreshToken: string) {
     accessToken: refreshed.access_token,
     refreshToken: refreshed.refresh_token,
     expiresIn: refreshed.expires_in || 3600,
+    scope: refreshed.scope,
   };
 }
 
@@ -152,8 +214,26 @@ export async function getMicrosoftCalendars(accessToken: string): Promise<Provid
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error(`Microsoft calendars ${res.status}`);
-  const json = await res.json();
-  const items = (json.value || []) as Array<{ id: string; name?: string; isDefaultCalendar?: boolean }>;
+  return parseMicrosoftCalendarList(await res.json());
+}
+
+export async function listMicrosoftCalendarsForConnection(
+  connectionId: string,
+  config: CalendarConfig,
+): Promise<ProviderCalendar[]> {
+  const res = await microsoftGraphFetch(
+    connectionId,
+    config,
+    `${MICROSOFT_GRAPH_V1}/me/calendars?$select=id,name,isDefaultCalendar`,
+  );
+  if (!res.ok) throw new Error(`Microsoft calendars ${res.status}`);
+  return parseMicrosoftCalendarList(await res.json());
+}
+
+function parseMicrosoftCalendarList(json: {
+  value?: Array<{ id: string; name?: string; isDefaultCalendar?: boolean }>;
+}) {
+  const items = json.value || [];
   return items.map((item) => ({
     id: item.id,
     name: item.name || item.id,
@@ -192,34 +272,105 @@ export async function getMicrosoftBusy(
   accessToken: string,
   timeMin: Date,
   timeMax: Date,
-  calendarId?: string,
+  opts?: {
+    calendarId?: string;
+    connectionId?: string;
+    config?: CalendarConfig;
+    smtp?: string;
+  },
 ): Promise<BusyInterval[]> {
-  const base = calendarId
-    ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView`
-    : "https://graph.microsoft.com/v1.0/me/calendarView";
-  const url = new URL(base);
+  const smtp = opts?.smtp || opts?.config?.email;
+  if (opts?.connectionId && opts?.config && smtp) {
+    return getMicrosoftBusyViaGetSchedule(opts.connectionId, opts.config, timeMin, timeMax, smtp);
+  }
+  return getMicrosoftBusyViaCalendarView(
+    accessToken,
+    timeMin,
+    timeMax,
+    opts?.calendarId,
+    opts?.connectionId,
+    opts?.config,
+  );
+}
+
+/** Free/busy via calendar: getSchedule (documented availability API). */
+async function getMicrosoftBusyViaGetSchedule(
+  connectionId: string,
+  config: CalendarConfig,
+  timeMin: Date,
+  timeMax: Date,
+  smtp: string,
+): Promise<BusyInterval[]> {
+  const res = await microsoftGraphFetch(connectionId, config, `${MICROSOFT_GRAPH_V1}/me/calendar/getSchedule`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: 'outlook.timezone="UTC"',
+    },
+    body: JSON.stringify({
+      schedules: [smtp],
+      startTime: toMicrosoftDateTimeTimeZone(timeMin, "UTC"),
+      endTime: toMicrosoftDateTimeTimeZone(timeMax, "UTC"),
+      availabilityViewInterval: 30,
+    }),
+  });
+  if (!res.ok) throw new Error(`Microsoft getSchedule ${res.status}`);
+  const json = await res.json();
+  const schedules = (json.value || []) as Array<{
+    scheduleItems?: Array<{
+      status?: string;
+      start?: { dateTime: string; timeZone?: string };
+      end?: { dateTime: string; timeZone?: string };
+    }>;
+  }>;
+  const busyStatuses = new Set(["busy", "tentative", "oof"]);
+  const items = schedules.flatMap((s) => s.scheduleItems || []);
+  return items
+    .filter((item) => item.status && busyStatuses.has(item.status))
+    .map((item) => ({
+      start: parseMicrosoftGraphDateTime(item.start?.dateTime || "", item.start?.timeZone || "UTC"),
+      end: parseMicrosoftGraphDateTime(item.end?.dateTime || "", item.end?.timeZone || "UTC"),
+    }));
+}
+
+async function getMicrosoftBusyViaCalendarView(
+  accessToken: string,
+  timeMin: Date,
+  timeMax: Date,
+  calendarId?: string,
+  connectionId?: string,
+  config?: CalendarConfig,
+): Promise<BusyInterval[]> {
+  const url = new URL(microsoftCalendarViewUrl(calendarId));
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set("$select", "start,end,showAs");
   url.searchParams.set("$top", "250");
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Prefer: 'outlook.timezone="UTC"',
-    },
-  });
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Prefer: 'outlook.timezone="UTC"',
+  };
+
+  const res =
+    connectionId && config
+      ? await microsoftGraphFetch(connectionId, config, url.toString(), {
+          headers: { Prefer: 'outlook.timezone="UTC"' },
+        })
+      : await fetch(url.toString(), { headers });
+
   if (!res.ok) throw new Error(`Microsoft calendarView ${res.status}`);
   const json = await res.json();
   const events = (json.value || []) as Array<{
-    start: { dateTime: string };
-    end: { dateTime: string };
+    start: { dateTime: string; timeZone?: string };
+    end: { dateTime: string; timeZone?: string };
     showAs?: string;
   }>;
   return events
     .filter((e) => e.showAs !== "free")
     .map((e) => ({
-      start: new Date(`${e.start.dateTime}Z`.replace(/Z+$/, "Z")),
-      end: new Date(`${e.end.dateTime}Z`.replace(/Z+$/, "Z")),
+      start: parseMicrosoftGraphDateTime(e.start.dateTime, e.start.timeZone || "UTC"),
+      end: parseMicrosoftGraphDateTime(e.end.dateTime, e.end.timeZone || "UTC"),
     }));
 }
 
@@ -351,7 +502,7 @@ export async function getMicrosoftCalendarEvent(
   accessToken: string,
   eventId: string,
 ): Promise<ProviderCalendarEvent | null> {
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`, {
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me/events/${encodeURIComponent(eventId)}`, {
     headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC"' },
   });
   if (res.status === 404) return null;
@@ -362,8 +513,8 @@ export async function getMicrosoftCalendarEvent(
     id: item.id,
     summary: item.subject || "Calendar event",
     description: item.bodyPreview,
-    start: new Date(`${item.start.dateTime}Z`.replace(/Z+$/, "Z")),
-    end: new Date(`${item.end.dateTime}Z`.replace(/Z+$/, "Z")),
+    start: parseMicrosoftGraphDateTime(item.start.dateTime, item.start?.timeZone || "UTC"),
+    end: parseMicrosoftGraphDateTime(item.end.dateTime, item.end?.timeZone || "UTC"),
     timezone: item.start?.timeZone,
     status: item.isCancelled ? "cancelled" : "confirmed",
     attendees: (item.attendees || []).map((a: { emailAddress?: { address?: string; name?: string }; status?: { response?: string } }) => ({
@@ -383,11 +534,10 @@ export async function listMicrosoftCalendarEvents(
   timeMin: Date,
   timeMax: Date,
   calendarId?: string,
+  connectionId?: string,
+  config?: CalendarConfig,
 ): Promise<ProviderCalendarEvent[]> {
-  const base = calendarId
-    ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarId)}/calendarView`
-    : "https://graph.microsoft.com/v1.0/me/calendarView";
-  const url = new URL(base);
+  const url = new URL(microsoftCalendarViewUrl(calendarId));
   url.searchParams.set("startDateTime", timeMin.toISOString());
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set(
@@ -396,12 +546,16 @@ export async function listMicrosoftCalendarEvents(
   );
   url.searchParams.set("$top", "250");
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Prefer: 'outlook.timezone="UTC"',
-    },
-  });
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Prefer: 'outlook.timezone="UTC"',
+  };
+  const res =
+    connectionId && config
+      ? await microsoftGraphFetch(connectionId, config, url.toString(), {
+          headers: { Prefer: 'outlook.timezone="UTC"' },
+        })
+      : await fetch(url.toString(), { headers });
   if (!res.ok) throw new Error(`Microsoft events.list ${res.status}`);
   const json = await res.json();
   const items = (json.value || []) as Array<{
@@ -424,8 +578,8 @@ export async function listMicrosoftCalendarEvents(
       id: item.id,
       summary: item.subject || "Calendar event",
       description: item.bodyPreview,
-      start: new Date(`${item.start.dateTime}Z`.replace(/Z+$/, "Z")),
-      end: new Date(`${item.end.dateTime}Z`.replace(/Z+$/, "Z")),
+      start: parseMicrosoftGraphDateTime(item.start.dateTime, item.start.timeZone || "UTC"),
+      end: parseMicrosoftGraphDateTime(item.end.dateTime, item.end.timeZone || "UTC"),
       timezone: item.start.timeZone,
       status: item.isCancelled ? "cancelled" : "confirmed",
       attendees: (item.attendees || []).map((a) => ({
@@ -534,8 +688,8 @@ export async function insertMicrosoftEvent(
   },
 ): Promise<string | null> {
   const url = event.calendarId
-    ? `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(event.calendarId)}/events`
-    : "https://graph.microsoft.com/v1.0/me/events";
+    ? `${MICROSOFT_GRAPH_V1}/me/calendars/${encodeURIComponent(event.calendarId)}/events`
+    : `${MICROSOFT_GRAPH_V1}/me/events`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -545,8 +699,8 @@ export async function insertMicrosoftEvent(
     body: JSON.stringify({
       subject: event.summary,
       body: { contentType: "text", content: event.description || "" },
-      start: { dateTime: event.start.toISOString(), timeZone: event.timezone || "UTC" },
-      end: { dateTime: event.end.toISOString(), timeZone: event.timezone || "UTC" },
+      start: toMicrosoftDateTimeTimeZone(event.start, event.timezone || "UTC"),
+      end: toMicrosoftDateTimeTimeZone(event.end, event.timezone || "UTC"),
     }),
   });
   if (!res.ok) throw new Error(`Microsoft events.insert ${res.status}`);
@@ -565,12 +719,12 @@ export async function updateMicrosoftEvent(
     body.body = { contentType: "text", content: event.description };
   }
   if (event.start) {
-    body.start = { dateTime: event.start.toISOString(), timeZone: event.timezone || "UTC" };
+    body.start = toMicrosoftDateTimeTimeZone(event.start, event.timezone || "UTC");
   }
   if (event.end) {
-    body.end = { dateTime: event.end.toISOString(), timeZone: event.timezone || "UTC" };
+    body.end = toMicrosoftDateTimeTimeZone(event.end, event.timezone || "UTC");
   }
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`, {
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me/events/${encodeURIComponent(eventId)}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -582,7 +736,7 @@ export async function updateMicrosoftEvent(
 }
 
 export async function deleteMicrosoftEvent(accessToken: string, eventId: string): Promise<void> {
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(eventId)}`, {
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me/events/${encodeURIComponent(eventId)}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${accessToken}` },
   });

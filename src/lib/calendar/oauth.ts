@@ -8,6 +8,7 @@ import {
   getMicrosoftRedirectUri,
 } from "@/lib/microsoft/oauth-config";
 import { createHmac, randomBytes } from "crypto";
+import type { CalendarConfig } from "@/lib/calendar/providers";
 
 import {
   CALENDAR_INTEGRATIONS_PATH,
@@ -96,6 +97,7 @@ export function getMicrosoftOAuthStartUrl(
     client_id: clientId,
     redirect_uri: redirect,
     response_type: "code",
+    response_mode: "query",
     scope: getMicrosoftOAuthScopes(),
     state: oauthState(connectionId, workspaceId, returnTo),
     prompt: "consent",
@@ -150,24 +152,37 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   const parsed = parseOAuthState(state);
   if (!parsed) throw new Error("Invalid OAuth state");
 
+  const existing = await getPrisma().voiceCalendarConnection.findUnique({
+    where: { id: parsed.connectionId },
+  });
+  const priorConfig = (existing?.config || {}) as CalendarConfig;
+  const firstConnect = !priorConfig.accessToken && !priorConfig.refreshToken;
+
   const tokens = await exchangeMicrosoftAuthorizationCode(code);
   const profile = await fetchMicrosoftProfile(tokens.access_token);
   const label = profile.displayName || profile.email || "Microsoft Outlook";
+
+  const config: CalendarConfig = {
+    ...priorConfig,
+    provider: "microsoft",
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token || priorConfig.refreshToken,
+    expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
+    grantedScopes: tokens.scope || priorConfig.grantedScopes,
+    email: profile.email || priorConfig.email,
+    displayName: profile.displayName || priorConfig.displayName,
+    lastVerifiedAt: undefined,
+    lastVerificationOk: undefined,
+    lastVerificationError: null,
+    ...(firstConnect ? { syncEnabled: false } : {}),
+  };
 
   await getPrisma().voiceCalendarConnection.update({
     where: { id: parsed.connectionId },
     data: {
       status: "connected",
       name: label,
-      config: {
-        provider: "microsoft",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
-        email: profile.email,
-        displayName: profile.displayName,
-        syncEnabled: false,
-      },
+      config: config as object,
     },
   });
   return parsed;

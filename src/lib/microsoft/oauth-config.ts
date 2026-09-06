@@ -35,7 +35,9 @@ export function getMicrosoftRedirectUri(): string {
 }
 
 export function getMicrosoftOAuthScopes(): string {
-  return "offline_access Calendars.ReadWrite User.Read";
+  // Graph permission names are PascalCase; offline_access is required for refresh tokens.
+  // @see https://learn.microsoft.com/en-us/graph/auth-v2-user
+  return "User.Read Calendars.ReadWrite offline_access";
 }
 
 export function getMicrosoftAuthorizeUrl(): string {
@@ -107,11 +109,18 @@ export async function refreshMicrosoftAccessToken(
       client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
-      redirect_uri: getMicrosoftRedirectUri(),
       scope: getMicrosoftOAuthScopes(),
     }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.warn(
+      "[microsoft-oauth] refresh failed",
+      res.status,
+      body.slice(0, 500) || res.statusText,
+    );
+    return null;
+  }
   return (await res.json()) as MicrosoftTokenResponse;
 }
 
