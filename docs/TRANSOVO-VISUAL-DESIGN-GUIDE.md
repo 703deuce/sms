@@ -598,8 +598,8 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 6. TRANSOVO-IA-NAVIGATION-STANDARDS.md            → Guide #3: IA & navigation
 7. TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md   → Guide #5: Forms & validation
 8. Implementation standards Guides #4, #6–12      → Interaction, responsive, etc. (coming)
-8. Page-by-page spec                              → Per-screen worksheet
-9. Implementation in Kimi / components            → Must satisfy all applicable guides
+9. Page-by-page spec                              → Per-screen worksheet
+10. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```
 
 ---
