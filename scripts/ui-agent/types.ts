@@ -249,4 +249,6 @@ export type CliOptions = {
   maxPasses: number;
   kimiModel?: string;
   reasoningEffort?: "low" | "high" | "max";
+  /** Called as soon as the Kimi session id is allocated (for live batch monitoring). */
+  onSessionStarted?: (sessionId: string) => void;
 };

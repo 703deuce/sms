@@ -7,6 +7,7 @@
  *   npm run ui:kimi-mode4 -- --status
  *   npm run ui:kimi-mode4 -- --stage golden
  *   npm run ui:kimi-mode4 -- --stage bulk --concurrency 10 --stagger-ms 5000
+ *   npm run ui:kimi-mode4 -- --complete-pass   (opt-in second Kimi pass — off by default)
  *   npm run ui:kimi-mode4 -- --only appointments-calendar
  *   npm run ui:kimi-mode4 -- --contract-only --target /appointments/calendar
  *   npm run ui:kimi-mode4 -- --sync-manifest
@@ -39,6 +40,7 @@ import {
   writeStandardsPackArtifact,
 } from "./mode4-standards-pack";
 import { MODE4_SCOPE_SUPERSESSION } from "./mode4-scope-supersession";
+import { startMode4BatchMonitor, type Mode4ActiveJob } from "./mode4-batch-monitor";
 import type { CliOptions } from "./types";
 
 const MODE4_DIR = join(UI_AGENT_DIR, "mode4");
@@ -183,7 +185,10 @@ function buildMode4Instruction(entry: Mode4ManifestEntry): string {
   ].join("\n");
 }
 
-function buildKimiOptions(entry: Mode4ManifestEntry, overrides: Partial<CliOptions> = {}): CliOptions {
+function buildKimiOptions(
+  entry: Mode4ManifestEntry,
+  overrides: Partial<CliOptions> = {},
+): CliOptions {
   const videoName = artDirectionVideoName(entry);
   return {
     target: entry.route,
@@ -210,7 +215,7 @@ function buildKimiOptions(entry: Mode4ManifestEntry, overrides: Partial<CliOptio
     walkthrough: false,
     baseUrl: process.env.UI_AGENT_BASE_URL?.trim() || process.env.BASE_URL?.trim() || "http://localhost:3000",
     viewports: ["desktop"],
-    maxPasses: 1,
+    maxPasses: 0,
     reasoningEffort: "low",
     instruction: buildMode4Instruction(entry),
     ...overrides,
@@ -222,6 +227,7 @@ async function runOneJob(
   jobIndex: number,
   total: number,
   skipCompletePass: boolean,
+  onSessionStarted: (sessionId: string) => void,
 ): Promise<void> {
   await updateJob(entry.id, {
     status: "running",
@@ -232,13 +238,17 @@ async function runOneJob(
   console.log(`\n[Mode4 ${jobIndex + 1}/${total}] ${entry.canonicalPath}`);
   console.log(`  route: ${entry.route}`);
   console.log(`  archetype: ${entry.archetype} | stage: ${entry.stage}`);
+  console.log(`  mode: single Kimi pass (no preview, no refinement)`);
 
   const provider = await KimiVisionProvider.createValidated({ reasoningEffort: "low" });
 
   try {
     const sessionDirPath = join(UI_AGENT_DIR, "sessions");
     writeStandardsPackArtifact(join(sessionDirPath, "..", "mode4", "last-job-standards"), loadStandardsPack());
-    const result = await runKimiCommand(provider, buildKimiOptions(entry));
+    const result = await runKimiCommand(
+      provider,
+      buildKimiOptions(entry, { onSessionStarted }),
+    );
     if (!skipCompletePass) {
       const gaps = auditSandboxCompleteness(result.sessionId, entry.route);
       if (!gaps.complete) {
@@ -251,6 +261,7 @@ async function runOneJob(
             sessionId: result.sessionId,
             complete: true,
             maxPasses: 0,
+            onSessionStarted,
           }),
         );
       }
@@ -288,9 +299,19 @@ async function runConcurrentBatch(
   let active = 0;
   let done = 0;
   const total = entries.length;
+  const activeJobs = new Map<string, Mode4ActiveJob>();
 
   console.log(
-    `\nMode 4 batch: ${total} page(s) | concurrency=${concurrency} | stagger=${staggerMs}ms\n`,
+    `\nMode 4 batch: ${total} page(s) | concurrency=${concurrency} | stagger=${staggerMs}ms`,
+  );
+  console.log("Generation-only: full standards prompt + reference video, maxPasses=0 (no preview/refinement)");
+  if (skipCompletePass) {
+    console.log("Completeness pass: OFF (use --complete-pass to enable)");
+  }
+
+  const monitor = startMode4BatchMonitor(
+    () => Array.from(activeJobs.values()),
+    () => ({ done, total }),
   );
 
   await new Promise<void>((resolve) => {
@@ -298,14 +319,28 @@ async function runConcurrentBatch(
       while (active < concurrency && launchCursor < total) {
         const entry = entries[launchCursor++];
         active++;
+        activeJobs.set(entry.id, {
+          entryId: entry.id,
+          canonicalPath: entry.canonicalPath,
+          route: entry.route,
+          startedAt: Date.now(),
+        });
 
         const launch = async (): Promise<void> => {
           const wait = Math.max(0, nextLaunchAt - Date.now());
           if (wait > 0) await sleep(wait);
           nextLaunchAt = Date.now() + staggerMs;
+          const onSessionStarted = (sessionId: string): void => {
+            const job = activeJobs.get(entry.id);
+            if (job) job.sessionId = sessionId;
+            void updateJob(entry.id, { sessionId });
+            console.log(`  → session ${sessionId}`);
+            console.log(`    tail -f .ui-agent/sessions/${sessionId}/progress.log`);
+          };
           try {
-            await runOneJob(entry, launchCursor - 1, total, skipCompletePass);
+            await runOneJob(entry, launchCursor - 1, total, skipCompletePass, onSessionStarted);
           } finally {
+            activeJobs.delete(entry.id);
             active--;
             done++;
             if (done >= total && active === 0) resolve();
@@ -318,6 +353,8 @@ async function runConcurrentBatch(
     };
     pump();
   });
+
+  monitor.stop();
 }
 
 function printStatus(state: Mode4BatchState): void {
@@ -401,7 +438,8 @@ async function main(): Promise<void> {
   const stageFilter = parseArg(args, "--stage") as Mode4Stage | undefined;
   const foundation = manifest.entries.find((e) => e.stage === "foundations");
   const force = args.includes("--force");
-  const skipCompletePass = args.includes("--no-complete-pass");
+  const completePass = args.includes("--complete-pass");
+  const skipCompletePass = !completePass;
   const concurrency = Math.max(
     1,
     Number(parseArg(args, "--concurrency") || manifest.maxConcurrentJobs || 10),

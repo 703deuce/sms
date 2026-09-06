@@ -240,6 +240,7 @@ export async function runKimiCommand(
   };
   session.generatedDir = generatedDirForSession(session.id);
   saveSession(session);
+  options.onSessionStarted?.(session.id);
 
   initProgress(session.id, `Starting Kimi session for ${session.target}`);
   startKimiTiming(session.id);
@@ -291,11 +292,15 @@ export async function runKimiCommand(
     });
     assertKimiOutputPersisted(session.id, session.target);
 
-    try {
-      await screenshotGeneratedReference(session.id);
-      markKimiTiming(session.id, "previewRenderedMs");
-    } catch (err) {
-      log("preview screenshot skipped", err instanceof Error ? err.message : String(err));
+    if (options.maxPasses > 0) {
+      try {
+        await screenshotGeneratedReference(session.id);
+        markKimiTiming(session.id, "previewRenderedMs");
+      } catch (err) {
+        log("preview screenshot skipped", err instanceof Error ? err.message : String(err));
+      }
+    } else {
+      log("preview skipped", "maxPasses=0 — generation-only pass (no preview server)");
     }
 
     let passes = 0;
