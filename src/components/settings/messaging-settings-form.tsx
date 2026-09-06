@@ -9,7 +9,7 @@ import type { MessagingRegistration } from "@/lib/domain";
 import type { MessagingRuntimeSettings } from "@/lib/messaging/messaging-settings";
 import { defaultBusinessHours } from "@/lib/messaging/messaging-settings";
 import { useEffect, useState } from "react";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { getSettingsTabs } from "@/lib/settings-tabs";
 
 type Props = {
   registration: MessagingRegistration | null;
@@ -126,7 +126,7 @@ export function MessagingSettingsForm({ registration }: Props) {
         }
       />
 
-      <Tabs items={settingsTabs} />
+      <Tabs items={getSettingsTabs()} />
 
       {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
 

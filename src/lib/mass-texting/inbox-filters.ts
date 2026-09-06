@@ -1,6 +1,13 @@
 import type { MassTextConversationProductSource } from "@/lib/mass-texting/constants";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 
+export type AppointmentMessageFilter =
+  | "sms"
+  | "email"
+  | "needs_reply"
+  | "ai_booking"
+  | "unknown_replies";
+
 export type InboxListFilters = {
   product?: MassTextConversationProductSource | "all";
   phoneNumberId?: string;
@@ -8,6 +15,7 @@ export type InboxListFilters = {
   contactId?: string;
   unread?: boolean;
   filter?: string;
+  appointmentMessageFilter?: AppointmentMessageFilter;
   assigneeId?: string | null;
   status?: "OPEN" | "PENDING" | "CLOSED" | "SNOOZED" | "SPAM";
   tag?: string;
@@ -80,6 +88,23 @@ export function buildConversationWhere(
   if (legacy === "mine" && userId) where.assigneeId = userId;
   if (filters.assigneeId) where.assigneeId = filters.assigneeId;
   if (filters.tag) where.tags = { has: filters.tag };
+
+  if (filters.appointmentMessageFilter === "sms") {
+    where.OR = [{ phoneNumberId: { not: null } }, { fromE164: { not: null } }];
+  }
+  if (filters.appointmentMessageFilter === "email") {
+    where.tags = { has: "email" };
+  }
+  if (filters.appointmentMessageFilter === "needs_reply") {
+    where.status = "OPEN";
+    where.unread = true;
+  }
+  if (filters.appointmentMessageFilter === "ai_booking") {
+    where.tags = { has: "ai-booking" };
+  }
+  if (filters.appointmentMessageFilter === "unknown_replies") {
+    where.tags = { has: "unknown-reply" };
+  }
 
   if (filters.q) {
     const q = filters.q.trim();

@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 
-const BASE_CHIPS: Array<
+const LEGACY_CHIPS: Array<
   | { label: string; product: string | null; filter?: never; unread?: never }
   | { label: string; filter: string; product?: never; unread?: never }
   | { label: string; unread: true; product?: never; filter?: never }
@@ -16,7 +16,18 @@ const BASE_CHIPS: Array<
   { label: "Unread", unread: true },
 ];
 
-const APPOINTMENTS_CHIP = { label: "Appointments", filter: "appointments" } as const;
+const APPOINTMENTS_CHIPS: Array<
+  | { label: string; filter: string; unread?: never }
+  | { label: string; unread: true; filter?: never }
+> = [
+  { label: "All", filter: "all" },
+  { label: "SMS", filter: "sms" },
+  { label: "Email", filter: "email" },
+  { label: "Needs reply", filter: "needs_reply" },
+  { label: "AI booking", filter: "ai_booking" },
+  { label: "Unknown replies", filter: "unknown_replies" },
+  { label: "Unread", unread: true },
+];
 
 export function InboxProductFilters({ basePath = "/conversations" }: { basePath?: string }) {
   const pathname = usePathname();
@@ -26,9 +37,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
   const activeFilter = searchParams.get("filter");
   const unread = searchParams.get("unread");
 
-  const chips = isAppointmentsV1Primary()
-    ? [BASE_CHIPS[0], APPOINTMENTS_CHIP, ...BASE_CHIPS.slice(1)]
-    : BASE_CHIPS;
+  const chips = isAppointmentsV1Primary() ? APPOINTMENTS_CHIPS : LEGACY_CHIPS;
 
   const hasActiveFilter = Boolean(activeProduct || activeFilter || unread);
 
@@ -43,7 +52,11 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
     if (next.filter === null || next.filter === undefined) {
       params.delete("filter");
     } else if (next.filter) {
-      params.set("filter", next.filter);
+      if (next.filter === "all") {
+        params.delete("filter");
+      } else {
+        params.set("filter", next.filter);
+      }
       params.delete("product");
     }
     if (next.unread) params.set("unread", "1");
@@ -60,7 +73,9 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
         const active = isUnreadChip
           ? unread === "1" || unread === "true"
           : isFilterChip
-            ? activeFilter === chip.filter
+            ? chip.filter === "all"
+              ? !activeFilter && !activeProduct && !unread
+              : activeFilter === chip.filter
             : chip.product
               ? activeProduct === chip.product
               : !activeProduct && !activeFilter && !unread;
@@ -74,7 +89,7 @@ export function InboxProductFilters({ basePath = "/conversations" }: { basePath?
                 isUnreadChip
                   ? { unread: !active }
                   : isFilterChip
-                    ? { filter: active ? null : chip.filter, unread: false }
+                    ? { filter: chip.filter, unread: false }
                     : { product: "product" in chip ? chip.product : null, filter: null, unread: false },
               )
             }

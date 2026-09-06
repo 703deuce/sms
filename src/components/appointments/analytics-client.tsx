@@ -16,7 +16,8 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { AppointmentsAnalyticsSection } from "@/lib/products/appointments-settings-tabs";
 
 type AnalyticsData = {
   rangeDays: number;
@@ -72,7 +73,11 @@ function MetricSkeleton() {
   );
 }
 
-export function AppointmentsAnalyticsClient() {
+export function AppointmentsAnalyticsClient({
+  section = "overview",
+}: {
+  section?: AppointmentsAnalyticsSection;
+}) {
   const [range, setRange] = useState<7 | 30>(7);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,6 +188,74 @@ export function AppointmentsAnalyticsClient() {
       ]
     : [];
 
+  const sectionTitles: Record<AppointmentsAnalyticsSection, { title: string; description: string }> = {
+    overview: {
+      title: "Overview",
+      description: "High-level appointment operation performance.",
+    },
+    booking: {
+      title: "Booking",
+      description: "Booking volume, conversion, and popular booking patterns.",
+    },
+    reminders: {
+      title: "Reminders",
+      description: "Reminder delivery and customer response metrics.",
+    },
+    automations: {
+      title: "Automations",
+      description: "Workflow execution outcomes and automation performance.",
+    },
+    reports: {
+      title: "Reports",
+      description: "Exports and scheduled emailed reports.",
+    },
+  };
+
+  const visibleCards = useMemo(() => {
+    const bookingLabels = new Set([
+      "Booked",
+      "Completed",
+      "Confirmation rate",
+      "Cancel rate",
+      "No-show rate",
+      "Reschedule rate",
+      "UTM conversions",
+    ]);
+    const reminderLabels = new Set([
+      "Reminders sent",
+      "Email opens",
+    ]);
+    const overviewLabels = new Set([
+      "Booked",
+      "Confirmed",
+      "Awaiting",
+      "Canceled",
+      "No-shows",
+      "Reschedule requests",
+      "Confirmation rate",
+      "Completed",
+    ]);
+
+    if (section === "booking") {
+      return cards.filter((card) => bookingLabels.has(card.label));
+    }
+    if (section === "reminders") {
+      return cards.filter((card) => reminderLabels.has(card.label));
+    }
+    if (section === "automations") {
+      return cards.filter((card) => card.label === "UTM conversions");
+    }
+    if (section === "reports") {
+      return [];
+    }
+    return cards.filter((card) => overviewLabels.has(card.label));
+  }, [cards, section]);
+
+  const showSeries = section === "overview" || section === "booking";
+  const showPopular = section === "booking";
+  const showReports = section === "reports" || section === "overview";
+  const showReminderAlert = section === "overview" || section === "reminders";
+  const heading = sectionTitles[section];
   const maxCount = data ? Math.max(1, ...data.series.map((row) => row.count)) : 1;
   const totalBookedInSeries = data
     ? data.series.reduce((sum, row) => sum + row.count, 0)
@@ -193,10 +266,10 @@ export function AppointmentsAnalyticsClient() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Analytics
+            {heading.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Operational appointment metrics for the last {range} days.
+            {heading.description} Last {range} days.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -256,7 +329,7 @@ export function AppointmentsAnalyticsClient() {
         />
       ) : (
         <>
-          {data.remindersFailed > 0 ? (
+          {showReminderAlert && data.remindersFailed > 0 ? (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
                 <AlertTriangle className="h-4 w-4" />
@@ -280,8 +353,9 @@ export function AppointmentsAnalyticsClient() {
             </div>
           ) : null}
 
+          {visibleCards.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {cards.map((card) => (
+            {visibleCards.map((card) => (
               <Card key={card.label} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -304,7 +378,24 @@ export function AppointmentsAnalyticsClient() {
               </Card>
             ))}
           </div>
+          ) : null}
 
+          {section === "automations" ? (
+            <Card className="p-5">
+              <CardTitle>Workflow activity</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review execution logs and unknown customer replies.
+              </p>
+              <Link
+                href="/appointments/automations/activity"
+                className="mt-3 inline-flex text-[13px] font-semibold text-primary hover:underline"
+              >
+                Open automation activity
+              </Link>
+            </Card>
+          ) : null}
+
+          {showSeries ? (
           <Card className="p-5">
             <div className="flex items-baseline justify-between gap-3">
               <div>
@@ -346,8 +437,9 @@ export function AppointmentsAnalyticsClient() {
               </div>
             )}
           </Card>
+          ) : null}
 
-          {data.popularTypes?.length ? (
+          {showPopular && data.popularTypes?.length ? (
             <Card className="p-5">
               <CardTitle>Popular appointment types</CardTitle>
               <ul className="mt-3 space-y-2">
@@ -361,7 +453,7 @@ export function AppointmentsAnalyticsClient() {
             </Card>
           ) : null}
 
-          {data.popularTimes?.length ? (
+          {showPopular && data.popularTimes?.length ? (
             <Card className="p-5">
               <CardTitle>Popular booking times</CardTitle>
               <ul className="mt-3 space-y-2">
@@ -375,6 +467,7 @@ export function AppointmentsAnalyticsClient() {
             </Card>
           ) : null}
 
+          {showReports ? (
           <Card className="p-5">
             <CardTitle>Scheduled email reports</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">Receive CSV/PDF summaries on a schedule.</p>
@@ -404,6 +497,7 @@ export function AppointmentsAnalyticsClient() {
               </button>
             </div>
           </Card>
+          ) : null}
         </>
       )}
     </div>

@@ -8,7 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs } from "@/components/ui/tabs";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { getSettingsTabs } from "@/lib/settings-tabs";
 
 type SessionRow = {
   id: string;
@@ -160,7 +160,7 @@ export function SecuritySettingsPanel() {
         }
       />
 
-      <Tabs items={settingsTabs} />
+      <Tabs items={getSettingsTabs()} />
 
       {showPasswordForm ? (
         <Card className="mb-4">

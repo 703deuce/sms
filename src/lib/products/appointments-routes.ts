@@ -2,11 +2,11 @@
 export const APPOINTMENTS_APP_ROUTE_PREFIXES = [
   "/appointments",
   "/meetings",
+  "/video",
+  "/payments",
   "/conversations",
   "/contacts",
   "/analytics",
-  "/numbers",
-  "/compliance",
   "/integrations",
   "/settings",
   "/help",
@@ -32,6 +32,7 @@ export const APPOINTMENTS_STATIC_SEGMENTS = new Set([
   "staff",
   "locations",
   "routing",
+  "routing-forms",
   "integrations",
   "reminders",
   "voice-reminders",
@@ -41,7 +42,48 @@ export const APPOINTMENTS_STATIC_SEGMENTS = new Set([
   "setup",
   "analytics",
   "new",
+  "waitlist",
+  "polls",
+  "recalls",
+  "recall-campaigns",
+  "no-show-recovery",
+  "team-pages",
+  "enterprise",
+  "ai-booking",
+  "automations",
 ]);
+
+/** Route prefixes grouped by appointments-platform work domain (for nav active state). */
+export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
+  appointments: [
+    "/appointments/calendar",
+    "/appointments/waitlist",
+    "/appointments/recalls",
+    "/appointments/recall-campaigns",
+    "/appointments/no-show-recovery",
+  ],
+  booking: [
+    "/appointments/types",
+    "/appointments/booking",
+    "/appointments/team-pages",
+    "/appointments/availability",
+    "/appointments/ai-booking",
+    "/appointments/routing-forms",
+    "/appointments/routing",
+    "/appointments/polls",
+  ],
+  automations: [
+    "/appointments/reminders",
+    "/appointments/voice-reminders",
+    "/appointments/workflows",
+    "/appointments/automations",
+  ],
+  meetings: ["/video", "/meetings"],
+  payments: ["/payments"],
+  analytics: ["/appointments/analytics"],
+  integrations: ["/integrations/calendars", "/integrations/payments"],
+  settings: ["/settings"],
+};
 
 /** Nav active check: /appointments list + detail IDs only — not /appointments/calendar etc. */
 export function isAppointmentsScheduledNavActive(pathname: string): boolean {
@@ -58,4 +100,13 @@ export function isAppointmentsNavItemActive(href: string, pathname: string): boo
   if (pathname === href) return true;
   if (href === "/appointments/overview" && pathname === "/appointments") return false;
   return pathname.startsWith(`${href}/`);
+}
+
+export function pathnameMatchesAppointmentsDomain(
+  domain: keyof typeof APPOINTMENTS_DOMAIN_PREFIXES,
+  pathname: string,
+): boolean {
+  const prefixes = APPOINTMENTS_DOMAIN_PREFIXES[domain];
+  if (domain === "appointments" && isAppointmentsScheduledNavActive(pathname)) return true;
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }

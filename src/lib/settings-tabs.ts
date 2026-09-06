@@ -1,5 +1,8 @@
 /** Shared settings subnav — keep every settings surface in sync. */
-export const settingsTabs = [
+import { appointmentsSettingsTabs } from "@/lib/products/appointments-settings-tabs";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
+
+export const legacySettingsTabs = [
   { label: "Business", href: "/settings/business" },
   { label: "Integrations", href: "/settings/integrations" },
   { label: "Messaging", href: "/settings/messaging" },
@@ -14,6 +17,13 @@ export const settingsTabs = [
   { label: "Branding", href: "/settings/branding" },
   { label: "Data", href: "/settings/data" },
 ];
+
+/** @deprecated import getSettingsTabs() for product-aware settings navigation */
+export const settingsTabs = legacySettingsTabs;
+
+export function getSettingsTabs() {
+  return isAppointmentsV1Primary() ? appointmentsSettingsTabs : legacySettingsTabs;
+}
 
 /** Personal numbers workspace — billing, usage breakdown, account essentials. */
 export const personalSettingsTabs = [

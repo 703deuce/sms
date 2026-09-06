@@ -14,8 +14,8 @@ import {
   AudioLines,
   BookOpen,
   Calendar,
-  ClipboardList,
-  LayoutDashboard,
+  Globe,
+  Home,
   Megaphone,
   MessageSquare,
   Moon,
@@ -81,7 +81,7 @@ export function MobileNav({
 
   const appointmentsItems = buildAppointmentsMobileNav().map((item, i) => ({
     ...item,
-    icon: [LayoutDashboard, Calendar, ClipboardList, MessageSquare, Users][i] ?? LayoutDashboard,
+    icon: [Home, Calendar, Globe, MessageSquare, Users][i] ?? Home,
   }));
 
   const items = realtorMode

@@ -1,9 +1,5 @@
-import { AppointmentsAnalyticsClient } from "@/components/appointments/analytics-client";
+import { AppointmentsAnalyticsShell } from "@/components/appointments/analytics-shell";
 
 export default function AppointmentsAnalyticsPage() {
-  return (
-    <div className="mx-auto w-full max-w-6xl p-6">
-      <AppointmentsAnalyticsClient />
-    </div>
-  );
+  return <AppointmentsAnalyticsShell section="overview" />;
 }

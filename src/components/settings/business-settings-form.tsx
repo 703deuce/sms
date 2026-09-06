@@ -9,7 +9,7 @@ import type { MessagingRegistration } from "@/lib/domain";
 import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, Clock3, Shield } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { getSettingsTabs } from "@/lib/settings-tabs";
 
 type Props = {
   workspaceName: string;
@@ -134,7 +134,7 @@ export function BusinessSettingsForm({
         }
       />
 
-      <Tabs items={settingsTabs} />
+      <Tabs items={getSettingsTabs()} />
 
       {error ? (
         <div className="flex items-start gap-2.5 rounded-[10px] border border-rose-200/80 bg-rose-50/80 px-3.5 py-3">

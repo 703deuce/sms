@@ -8,7 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { loadTeamMembers, requireWorkspaceContext } from "@/lib/workspace-data";
 import { loadPendingInvites } from "@/lib/team/invites";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { getSettingsTabs } from "@/lib/settings-tabs";
 
 export default async function SettingsUsersPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -25,7 +25,7 @@ export default async function SettingsUsersPage() {
         actions={<InviteUserButton />}
       />
 
-      <Tabs items={settingsTabs} />
+      <Tabs items={getSettingsTabs()} />
 
       <Card>
         <div className="mb-4 flex items-center justify-between">

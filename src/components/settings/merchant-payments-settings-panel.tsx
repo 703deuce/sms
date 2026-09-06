@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
-import { settingsTabs } from "@/lib/settings-tabs";
+import { getSettingsTabs } from "@/lib/settings-tabs";
+import { appointmentsIntegrationsTabs } from "@/lib/products/appointments-settings-tabs";
 import type { MerchantConnectionView } from "@/lib/merchant-payments/types";
 import { CreditCard, ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -101,7 +102,11 @@ function ProviderCard({
   );
 }
 
-export function MerchantPaymentsSettingsPanel() {
+export function MerchantPaymentsSettingsPanel({
+  variant = "settings",
+}: {
+  variant?: "settings" | "integrations";
+}) {
   const searchParams = useSearchParams();
   const [connections, setConnections] = useState<MerchantConnectionView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,11 +164,15 @@ export function MerchantPaymentsSettingsPanel() {
   const stripe = connections.find((c) => c.provider === "STRIPE");
   const square = connections.find((c) => c.provider === "SQUARE");
 
+  const tabItems = variant === "integrations" ? appointmentsIntegrationsTabs : getSettingsTabs();
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <Tabs tabs={settingsTabs} />
+      <Tabs items={tabItems} />
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Payments</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          {variant === "integrations" ? "Payment integrations" : "Payments"}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Connect Stripe or Square so customers can pay deposits or full appointment amounts during booking.
           These are merchant payments to your business — separate from Transovo subscription billing.

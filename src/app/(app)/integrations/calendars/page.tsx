@@ -2,10 +2,12 @@
 
 import { CalendarIntegrationsCard } from "@/components/integrations/calendar-integrations-card";
 import { Tabs } from "@/components/ui/tabs";
+import { appointmentsIntegrationsTabs } from "@/lib/products/appointments-settings-tabs";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { Calendar } from "lucide-react";
 import Link from "next/link";
 
-const integrationTabs = [
+const legacyIntegrationTabs = [
   { label: "Directory", href: "/integrations" },
   { label: "Calendars", href: "/integrations/calendars" },
   { label: "Connect apps", href: "/integrations/native" },
@@ -16,6 +18,8 @@ const integrationTabs = [
 ];
 
 export default function CalendarIntegrationsPage() {
+  const tabs = isAppointmentsV1Primary() ? appointmentsIntegrationsTabs : legacyIntegrationTabs;
+
   return (
     <div className="space-y-5">
       <div>
@@ -25,17 +29,16 @@ export default function CalendarIntegrationsPage() {
         </div>
         <p className="mt-1 text-[13px] text-[#8a8fa3]">
           Connect Google and Microsoft calendars at the workspace level. These connections power
-          Transovo scheduling, availability, reminders, and workflows — not just voice.
+          Transovo scheduling, availability, reminders, and workflows.
         </p>
         <p className="mt-2 text-[12px] text-[#8a8fa3]">
-          Appointments and AI products consume these connections.{" "}
           <Link href="/appointments/calendar" className="font-medium text-primary hover:underline">
-            Open Transovo calendar →
+            Open calendar →
           </Link>
         </p>
       </div>
 
-      <Tabs items={integrationTabs} />
+      <Tabs items={tabs} />
 
       <div className="max-w-2xl">
         <CalendarIntegrationsCard />

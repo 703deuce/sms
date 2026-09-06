@@ -1,5 +1,5 @@
 import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
-import type { InboxListFilters } from "@/lib/mass-texting/inbox-filters";
+import type { AppointmentMessageFilter } from "@/lib/mass-texting/inbox-filters";
 
 export function inboxFiltersFromUrlParams(
   params: Record<string, string | string[] | undefined>,
@@ -27,6 +27,17 @@ export function inboxFiltersFromUrlParams(
   if (filter === "archived" || filter === "closed") filters.filter = "archived";
   if (filter === "open") filters.status = "OPEN";
   if (filter === "pending") filters.status = "PENDING";
+
+  const appointmentMessageFilters: AppointmentMessageFilter[] = [
+    "sms",
+    "email",
+    "needs_reply",
+    "ai_booking",
+    "unknown_replies",
+  ];
+  if (filter && appointmentMessageFilters.includes(filter as AppointmentMessageFilter)) {
+    filters.appointmentMessageFilter = filter as AppointmentMessageFilter;
+  }
 
   const statusParam = typeof params.status === "string" ? params.status.toLowerCase() : undefined;
   if (statusParam === "open") filters.status = "OPEN";
