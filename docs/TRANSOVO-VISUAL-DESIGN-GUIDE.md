@@ -590,13 +590,14 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 ## Doc stack (full UI pipeline)
 
 ```
-1. TRANSOVO-UI-DESIGN-GUIDE.md           → IA, mental models, heuristics
-2. TRANSOVO-PAGE-ARCHITECTURE-RULES.md   → Page structure and behavior
-3. TRANSOVO-VISUAL-DESIGN-GUIDE.md       → Look, feel, tokens, components
-4. TRANSOVO-ACCESSIBILITY-STANDARDS.md   → WCAG 2.2 AA + WAI-ARIA (mandatory)
-5. Implementation standards Guides #2–12  → Usability, etc. (coming)
-6. Page-by-page spec                     → Per-screen worksheet
-7. Implementation in Kimi / components   → Must satisfy all applicable guides
+1. TRANSOVO-UI-DESIGN-GUIDE.md                    → IA, mental models, heuristics
+2. TRANSOVO-PAGE-ARCHITECTURE-RULES.md            → Page structure and behavior
+3. TRANSOVO-VISUAL-DESIGN-GUIDE.md                → Look, feel, tokens, components
+4. TRANSOVO-ACCESSIBILITY-STANDARDS.md            → Guide #1: WCAG 2.2 AA
+5. TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md    → Guide #2: ISO 9241 HCD
+6. Implementation standards Guides #3–12          → IA & navigation, etc. (coming)
+7. Page-by-page spec                              → Per-screen worksheet
+8. Implementation in Kimi / components            → Must satisfy all applicable guides
 ```
 
 ---
