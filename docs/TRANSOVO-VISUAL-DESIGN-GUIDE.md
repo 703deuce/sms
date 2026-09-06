@@ -600,9 +600,10 @@ Brand through logo, accent, typography—not gradients and motifs on every opera
 8. TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md   → Guide #6: Responsive/reflow/zoom
 9. TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md    → Guide #7: Tables & grids
 10. TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Guide #8: Privacy/consent/compliance
-11. Implementation standards Guides #4, #9–12       → Interaction, security, etc. (coming)
-11. Page-by-page spec                             → Per-screen worksheet
-12. Implementation in Kimi / components           → Must satisfy all applicable guides
+11. TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Guide #9: Security & authentication
+12. Implementation standards Guides #4, #10–12       → Interaction, date/time, etc. (coming)
+13. Page-by-page spec                             → Per-screen worksheet
+14. Implementation in Kimi / components           → Must satisfy all applicable guides
 ```
 
 ---

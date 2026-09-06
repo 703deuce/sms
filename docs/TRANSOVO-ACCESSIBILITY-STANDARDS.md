@@ -46,7 +46,8 @@
 - Guide #6: `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - Guide #7: `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
 - Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
-- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #9 — Security & Authentication UX Standards (coming)
+- Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
+- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #10 — Date, Time, Timezone & Locale Standards (coming)
 
 ---
 
@@ -611,12 +612,13 @@ TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
 TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md → Responsive/reflow/zoom
 TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md  → Tables & grids
 TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance
+TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
 Guide #4 (coming)                            → Interaction, keyboard & focus
-Guide #9+ (coming)                           → Security & authentication UX, etc.
+Guide #10+ (coming)                          → Date/time/timezone/locale, etc.
 ```
 
 **Build accessibility into components at construction time.** Retrofitting after visual completion is not acceptable.
 
 ---
 
-*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`.*
+*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`.*

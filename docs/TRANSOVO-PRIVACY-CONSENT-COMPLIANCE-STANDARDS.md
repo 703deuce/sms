@@ -42,7 +42,8 @@ For Cursor, this guide establishes the **safe architecture and UX rules**. Speci
 - IA principles: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #9 — Security & Authentication UX Standards (coming)
+- Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #10 — Date, Time, Timezone & Locale Standards (coming)
 
 ---
 
@@ -1449,7 +1450,9 @@ Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md    → Forms & validation
 Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md    → Responsive/reflow/zoom
 Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md      → Tables & grids
 Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance (this file)
-Guide #9+ (coming)                                        → Security & authentication UX, etc.
+Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
+Guide #4 (coming)                                        → Interaction, keyboard & focus
+Guide #10+ (coming)                                      → Date/time/timezone/locale, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                               → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                       → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
@@ -1457,4 +1460,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                           → Visual tokens
 
 ---
 
-*Guide #8: Privacy, Consent & Compliance UX Standards. Next: Guide #9 — Security & Authentication UX Standards (NIST Digital Identity Guidelines, NIST cybersecurity guidance, FIDO/WebAuthn).*
+*Guide #8: Privacy, Consent & Compliance UX Standards. Next: Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 — Date, Time, Timezone & Locale Standards.*

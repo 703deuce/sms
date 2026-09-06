@@ -53,7 +53,8 @@ What **is** standardized are the underlying requirements around:
 - Guide #6: `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 - Guide #7: `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
 - Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #9 — Security & Authentication UX Standards (coming)
+- Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #10 — Date, Time, Timezone & Locale Standards (coming)
 
 ---
 
@@ -1330,8 +1331,9 @@ Guide #5  TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md → Forms & validation
 Guide #6  TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md → Responsive/reflow/zoom
 Guide #7  TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md  → Tables & grids
 Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance
+Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
 Guide #4 (coming)                                      → Interaction, keyboard & focus
-Guide #9+ (coming)                                     → Security & authentication UX, etc.
+Guide #10+ (coming)                                    → Date/time/timezone/locale, etc.
 TRANSOVO-UI-DESIGN-GUIDE.md                             → IA principles & domain definitions
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                     → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                         → Visual tokens
@@ -1340,4 +1342,4 @@ src/lib/products/appointments-nav.ts                    → Canonical nav implem
 
 ---
 
-*Guide #3: Information Architecture & Navigation Standards. Next: Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`.*
+*Guide #3: Information Architecture & Navigation Standards. Next: Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`.*
