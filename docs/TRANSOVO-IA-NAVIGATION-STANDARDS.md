@@ -55,7 +55,8 @@ What **is** standardized are the underlying requirements around:
 - Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
 - Guide #10: `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
-- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #11 — Internationalization & Localization Standards (coming)
+- Guide #11: `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
+- **Remaining in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -1335,7 +1336,7 @@ Guide #8  TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/c
 Guide #9  TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
 Guide #4 (coming)                                      → Interaction, keyboard & focus
 Guide #10 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md → Date/time/timezone/locale
-Guide #11+ (coming)                                      → Internationalization & localization, etc.
+Guide #11 TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Internationalization & localization
 TRANSOVO-UI-DESIGN-GUIDE.md                             → IA principles & domain definitions
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                     → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                         → Visual tokens

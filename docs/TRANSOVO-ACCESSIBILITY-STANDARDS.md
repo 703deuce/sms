@@ -48,7 +48,8 @@
 - Guide #8: `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - Guide #9: `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
 - Guide #10: `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
-- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming) · Guide #11 — Internationalization & Localization Standards (coming)
+- Guide #11: `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
+- **Remaining in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -615,12 +616,12 @@ TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md  → Tables & grids
 TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md → Privacy/consent/compliance
 TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md   → Security & authentication
 TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md   → Date/time/timezone/locale
+TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md → Internationalization & localization
 Guide #4 (coming)                            → Interaction, keyboard & focus
-Guide #11+ (coming)                          → Internationalization & localization, etc.
 ```
 
 **Build accessibility into components at construction time.** Retrofitting after visual completion is not acceptable.
 
 ---
 
-*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 — `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`.*
+*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #5 — `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · Guide #6 — `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · Guide #7 — `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · Guide #8 — `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · Guide #9 — `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · Guide #10 — `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` · Guide #11 — `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`.*

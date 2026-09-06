@@ -17,6 +17,7 @@
 - **Privacy/consent/compliance (hard standard):** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 - **Security/authentication (hard standard):** `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
 - **Date/time/timezone/locale (hard standard):** `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
+- **Internationalization/localization (hard standard):** `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Appointments nav implementation: `src/lib/products/appointments-nav.ts`
