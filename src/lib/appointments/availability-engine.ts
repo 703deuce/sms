@@ -15,6 +15,7 @@ import {
   type DateOverride,
   type WeeklyHours,
 } from "@/lib/appointments/availability-engine-policy";
+import { parseBookingHours } from "@/lib/solutions/appointment-receptionist/notice-utils";
 
 export type { AvailabilitySlot, DateOverride, WeeklyHours };
 export {
@@ -70,6 +71,7 @@ export async function generateNativeSlots(
 
   const tz = input.timezone || ctx.timezone;
   const weeklyHours = resolveWeeklyHours(platform);
+  const bookingHours = parseBookingHours(svcCfg.bookingHours || undefined);
   const overrides = platform.dateOverrides || [];
   const days = Math.min(
     Math.max(1, input.daysAhead ?? ctx.maximumDaysAhead),
@@ -110,11 +112,37 @@ export async function generateNativeSlots(
 
     const noon = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, 12, 0);
     const dayName = dayKeyInTimezone(noon.toISOString(), tz);
-    const windows =
+    if (bookingHours?.weekdaysOnly && (dayName === "saturday" || dayName === "sunday")) {
+      continue;
+    }
+    let windows =
       override?.windows ||
       weeklyHours[dayName] ||
       weeklyHours[dayName.toLowerCase()] ||
       [];
+
+    if (bookingHours) {
+      const bookingOpen = `${String(bookingHours.startHour).padStart(2, "0")}:00`;
+      const bookingClose = `${String(bookingHours.endHour).padStart(2, "0")}:00`;
+      windows = windows
+        .map((window) => {
+          const openMin = parseHm(window.open);
+          const closeMin = parseHm(window.close);
+          const bookOpenMin = parseHm(bookingOpen);
+          const bookCloseMin = parseHm(bookingClose);
+          if (openMin == null || closeMin == null || bookOpenMin == null || bookCloseMin == null) {
+            return window;
+          }
+          const nextOpen = Math.max(openMin, bookOpenMin);
+          const nextClose = Math.min(closeMin, bookCloseMin);
+          if (nextClose <= nextOpen) return null;
+          const fmt = (mins: number) =>
+            `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+          return { open: fmt(nextOpen), close: fmt(nextClose) };
+        })
+        .filter(Boolean) as Array<{ open: string; close: string }>;
+      if (!windows.length) continue;
+    }
 
     for (const window of windows) {
       const openMin = parseHm(window.open);

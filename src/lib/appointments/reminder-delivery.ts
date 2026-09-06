@@ -67,8 +67,8 @@ async function sendReminderSms(input: {
   metadata: AppointmentMetadata;
 }) {
   const prisma = getPrisma();
-  const { sendQuickSms } = await import("@/lib/sms/send-quick");
-  await sendQuickSms({ workspaceId: input.workspaceId, to: input.phone, body: input.body });
+  const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+  await sendAppointmentSms({ workspaceId: input.workspaceId, to: input.phone, body: input.body });
   const nextMeta = markReminderSentInMeta(
     appendTimeline(input.metadata, { type: input.timelineType, label: input.label }),
     input.timelineType,
@@ -329,8 +329,8 @@ export async function sendTestReminderSms(
     platform,
     workspaceName: workspace?.displayName || workspace?.name || "Business",
   })}`;
-  const { sendQuickSms } = await import("@/lib/sms/send-quick");
-  await sendQuickSms({ workspaceId, to: input.phone, body });
+  const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+  await sendAppointmentSms({ workspaceId, to: input.phone, body });
   return { body };
 }
 

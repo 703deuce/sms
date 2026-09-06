@@ -290,8 +290,8 @@ export async function createPlatformAppointment(
         }),
       );
       try {
-        const { sendQuickSms } = await import("@/lib/sms/send-quick");
-        await sendQuickSms({ workspaceId, to: input.phone, body });
+        const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+        await sendAppointmentSms({ workspaceId, to: input.phone, body });
         await prisma.voiceAppointment.update({
           where: { id: appointmentId },
           data: {

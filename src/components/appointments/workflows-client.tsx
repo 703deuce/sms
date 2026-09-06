@@ -130,6 +130,46 @@ const TIMING_PRESETS: Array<{ label: string; timing: WorkflowStepTiming }> = [
     },
   },
   {
+    label: "1 minute after booking",
+    timing: {
+      kind: "relative",
+      anchor: "booking_created",
+      amount: 1,
+      unit: "minutes",
+      direction: "after",
+    },
+  },
+  {
+    label: "3 minutes after booking",
+    timing: {
+      kind: "relative",
+      anchor: "booking_created",
+      amount: 3,
+      unit: "minutes",
+      direction: "after",
+    },
+  },
+  {
+    label: "5 minutes after booking",
+    timing: {
+      kind: "relative",
+      anchor: "booking_created",
+      amount: 5,
+      unit: "minutes",
+      direction: "after",
+    },
+  },
+  {
+    label: "10 minutes after booking",
+    timing: {
+      kind: "relative",
+      anchor: "booking_created",
+      amount: 10,
+      unit: "minutes",
+      direction: "after",
+    },
+  },
+  {
     label: "2 hours after appointment end",
     timing: {
       kind: "relative",
@@ -617,6 +657,24 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
               </>
             ) : null}
 
+            {step.action === "update_status" ? (
+              <div>
+                <Label>Target status</Label>
+                <Select
+                  value={step.targetStatus || "confirmed"}
+                  onChange={(e) => updateStep(index, { targetStatus: e.target.value })}
+                  className="mt-1.5"
+                >
+                  <option value="scheduled">Scheduled</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="awaiting_confirmation">Awaiting confirmation</option>
+                  <option value="completed">Completed</option>
+                  <option value="no_show">No-show</option>
+                  <option value="canceled">Canceled</option>
+                </Select>
+              </div>
+            ) : null}
+
             {(step.action === "send_sms_staff" || step.action === "send_email_staff") && staff.length > 0 ? (
               <div>
                 <Label>Staff recipient</Label>
@@ -684,7 +742,11 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
               </div>
             ) : null}
 
-            {step.action !== "make_voice_call" && step.action !== "send_webhook" ? (
+            {step.action !== "make_voice_call" &&
+            step.action !== "send_webhook" &&
+            step.action !== "update_status" &&
+            step.action !== "mark_confirmed" &&
+            step.action !== "stop_workflow" ? (
             <div>
               <Label>Message template</Label>
               <Textarea

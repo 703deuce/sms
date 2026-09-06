@@ -1,14 +1,9 @@
-import { useState } from 'react';
 import {
   CalendarDays,
   Clock,
   MessageSquare,
   RotateCcw,
-  MoreVertical,
   Info,
-  Pencil,
-  Copy,
-  Trash2,
 } from 'lucide-react';
 import type { ReminderItem } from '@/features/appointments/kimi/reminders/types';
 import type { ReminderChannel } from '@/lib/appointments/types';
@@ -33,7 +28,6 @@ export default function ReminderCard({
   onChannelChange: (channel: ReminderChannel) => void;
   onReset: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const Icon = iconMap[reminder.icon];
   const segmentCount =
     reminder.template.length > 160
@@ -80,37 +74,6 @@ export default function ReminderCard({
             <span className="text-[12.5px] font-medium text-foreground">
               {reminder.enabled ? 'Enabled' : 'Disabled'}
             </span>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-accent"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-border bg-card p-1 shadow-lg">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] text-foreground hover:bg-accent"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Edit timing
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] text-foreground hover:bg-accent"
-                  >
-                    <Copy className="h-3.5 w-3.5" /> Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -119,19 +82,22 @@ export default function ReminderCard({
             <div className="mb-3">
               <label className="text-[12px] font-medium text-foreground">Channel</label>
               <select
-                value={reminder.channel}
+                value={reminder.channel === 'email' ? 'sms' : reminder.channel}
                 onChange={(e) => onChannelChange(e.target.value as ReminderChannel)}
                 className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-3 text-[12.5px]"
               >
                 <option value="sms">SMS</option>
-                <option value="email">Email</option>
                 <option value="voice">Voice call</option>
               </select>
               {reminder.channel === 'voice' ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Uses your Voice Reminders templates and keypad options.
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Sent from the Transovo platform number. Email reminders coming soon.
+                </p>
+              )}
             </div>
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-[12px] font-medium text-foreground">
@@ -163,7 +129,7 @@ export default function ReminderCard({
               ) : reminder.channel === 'voice' ? (
                 <span>Spoken on answer · voicemail script uses same template</span>
               ) : (
-                <span>Sent via email when email channel is configured</span>
+                <span>SMS and voice are supported today</span>
               )}
             </div>
           </div>

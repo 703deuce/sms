@@ -67,6 +67,7 @@ export const WORKFLOW_ACTION_OPTIONS: Array<{ value: WorkflowStepAction; label: 
   { value: "make_voice_call", label: "Make voice call" },
   { value: "send_webhook", label: "Send webhook" },
   { value: "mark_confirmed", label: "Mark confirmed" },
+  { value: "update_status", label: "Update appointment status" },
   { value: "stop_workflow", label: "Stop workflow" },
 ];
 

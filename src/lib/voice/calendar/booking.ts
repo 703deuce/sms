@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { createId } from "@/lib/supabase/id";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   parseBookingHours,
@@ -487,6 +488,7 @@ export async function getAvailability(
                       getMicrosoftBusy(token, timeMin, timeMax, {
                         calendarId: calId || undefined,
                         ctx: { connectionId: cal.id, config },
+                        smtp: config.email,
                       }),
                     ),
                   )
@@ -779,6 +781,7 @@ export async function bookAppointment(
   const timezone = String(args.timezone || svcCfg.timezone || "America/New_York");
 
   let externalId: string | null = null;
+  const appointmentId = createId();
   const calendarId =
     (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
@@ -836,11 +839,16 @@ export async function bookAppointment(
           };
           externalId =
             cal.provider === "google"
-              ? await insertGoogleEvent(token, resolveWriteCalendarId(config), event)
+              ? await insertGoogleEvent(token, resolveWriteCalendarId(config), {
+                  ...event,
+                  transovoAppointmentId: appointmentId,
+                })
               : await insertMicrosoftEvent(
                   token,
                   {
                     ...event,
+                    transovoAppointmentId: appointmentId,
+                    transactionId: appointmentId,
                     calendarId:
                       resolveWriteCalendarId(config) !== "primary"
                         ? resolveWriteCalendarId(config)
@@ -864,6 +872,7 @@ export async function bookAppointment(
 
   const appointment = await prisma.voiceAppointment.create({
     data: {
+      id: appointmentId,
       workspaceId,
       callId,
       contactId,

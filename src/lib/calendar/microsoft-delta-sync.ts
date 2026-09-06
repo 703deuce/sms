@@ -29,6 +29,7 @@ type MicrosoftDeltaGraphEvent = {
   type?: string;
   recurrence?: unknown;
   originalStart?: { dateTime?: string; date?: string; timeZone?: string };
+  transactionId?: string;
   attendees?: Array<{ emailAddress?: { address?: string; name?: string }; status?: { response?: string } }>;
   organizer?: { emailAddress?: { address?: string } };
   "@removed"?: { reason?: string };
@@ -138,7 +139,7 @@ export async function syncMicrosoftCalendarDelta(input: {
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set(
     "$select",
-    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart",
+    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId",
   );
   url.searchParams.set("$top", "250");
 

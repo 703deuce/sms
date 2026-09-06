@@ -701,7 +701,7 @@ export async function listMicrosoftCalendarEvents(
   url.searchParams.set("endDateTime", timeMax.toISOString());
   url.searchParams.set(
     "$select",
-    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart",
+    "id,subject,bodyPreview,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId",
   );
   url.searchParams.set("$top", "250");
 
@@ -749,10 +749,12 @@ export function mapMicrosoftGraphEvent(item: {
   type?: string;
   recurrence?: unknown;
   originalStart?: { dateTime?: string; date?: string; timeZone?: string };
+  transactionId?: string;
   attendees?: Array<{ emailAddress?: { address?: string; name?: string }; status?: { response?: string } }>;
   organizer?: { emailAddress?: { address?: string } };
   "@removed"?: { reason?: string };
 }): ProviderCalendarEvent {
+  const transovoOriginated = Boolean(item.transactionId);
   return {
     id: item.id,
     summary: item.subject || "Calendar event",
@@ -769,7 +771,7 @@ export function mapMicrosoftGraphEvent(item: {
     organizerEmail: item.organizer?.emailAddress?.address,
     updatedAt: item.lastModifiedDateTime ? new Date(item.lastModifiedDateTime) : undefined,
     isAllDay: Boolean(item.isAllDay),
-    transovoOriginated: false,
+    transovoOriginated,
     seriesMasterId: item.seriesMasterId,
     type: item.type,
     recurrence: item.recurrence,

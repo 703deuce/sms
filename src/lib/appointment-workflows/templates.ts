@@ -428,6 +428,68 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
       },
     ],
   },
+  {
+    id: "rapid_flow_test",
+    name: "Rapid Flow Test (minutes)",
+    description:
+      "For certification: immediate + 1/3/5 minute steps after booking to verify multi-step workflows.",
+    category: "reminders",
+    channels: ["sms"],
+    trigger: "appointment_booked",
+    defaultSteps: [
+      {
+        id: "step_immediate",
+        name: "Step 1 — immediate",
+        timing: { kind: "immediate" },
+        action: "send_sms_customer",
+        channel: "sms",
+        messageTemplate:
+          "[WF-1] Hi {{first_name}}, your {{service}} is booked for {{appointment_date}} at {{appointment_time}}.",
+      },
+      {
+        id: "step_1min",
+        name: "Step 2 — 1 min after booking",
+        timing: {
+          kind: "relative",
+          anchor: "booking_created",
+          amount: 1,
+          unit: "minutes",
+          direction: "after",
+        },
+        action: "send_sms_customer",
+        channel: "sms",
+        messageTemplate: "[WF-2] Quick check-in — your appointment is still on for {{appointment_time}}.",
+      },
+      {
+        id: "step_3min",
+        name: "Step 3 — 3 min after booking",
+        timing: {
+          kind: "relative",
+          anchor: "booking_created",
+          amount: 3,
+          unit: "minutes",
+          direction: "after",
+        },
+        action: "send_sms_customer",
+        channel: "sms",
+        messageTemplate: "[WF-3] Reminder: {{service}} with {{business_name}} on {{appointment_date}}.",
+      },
+      {
+        id: "step_5min",
+        name: "Step 4 — 5 min after booking",
+        timing: {
+          kind: "relative",
+          anchor: "booking_created",
+          amount: 5,
+          unit: "minutes",
+          direction: "after",
+        },
+        action: "send_sms_customer",
+        channel: "sms",
+        messageTemplate: "[WF-4] Final test ping — reply STOP to opt out.",
+      },
+    ],
+  },
 ];
 
 export function getPrebuiltTemplate(id: string): PrebuiltWorkflowTemplate | null {

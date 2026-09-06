@@ -223,6 +223,17 @@ export async function patchWorkspaceCalendarConnection(
     config: config as Record<string, unknown>,
   });
 
+  const prevConfig = (conn.config || {}) as CalendarConfig;
+  const hadImport = Boolean(prevConfig.importCalendarIds?.length);
+  const hasImport = Boolean(config.importCalendarIds?.length);
+  const syncEnabled = config.syncEnabled !== false;
+  const importNewlyEnabled =
+    syncEnabled &&
+    hasImport &&
+    (input.importCalendarIds !== undefined ||
+      input.syncEnabled === true ||
+      (!hadImport && hasImport));
+
   if (
     row &&
     (input.importCalendarIds !== undefined ||
@@ -237,6 +248,13 @@ export async function patchWorkspaceCalendarConnection(
         console.warn("[calendar] verify after patch failed", connectionId, err);
       });
     }
+  }
+
+  if (row && importNewlyEnabled) {
+    const { enqueueCalendarConnectionSync } = await import("@/lib/calendar/import-sync");
+    await enqueueCalendarConnectionSync(workspaceId, connectionId, false).catch((err) => {
+      console.warn("[calendar] auto-sync after import enable failed", connectionId, err);
+    });
   }
 
   return row;

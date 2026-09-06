@@ -464,7 +464,7 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
   }
 
   try {
-    await executeWorkflowStepAction({
+    const result = await executeWorkflowStepAction({
       step,
       stepExecId: stepExec.id,
       workflowId: stepExec.workflowId,
@@ -475,7 +475,11 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
     });
     await prisma.appointmentWorkflowStepExecution.update({
       where: { id: stepExec.id },
-      data: { state: "sent", executedAt: new Date() },
+      data: {
+        state: "sent",
+        executedAt: new Date(),
+        ...(result?.providerMessageId ? { providerMessageId: result.providerMessageId } : {}),
+      },
     });
   } catch (err) {
     await prisma.appointmentWorkflowStepExecution.update({
@@ -496,7 +500,7 @@ async function executeWorkflowStepAction(input: {
   appointmentId: string;
   appointmentCtx: AppointmentConditionContext;
   meta: AppointmentMetadata;
-}) {
+}): Promise<{ providerMessageId?: string } | void> {
   const prisma = getPrisma();
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const workspace = await prisma.workspace.findUnique({
@@ -549,8 +553,13 @@ async function executeWorkflowStepAction(input: {
     case "send_payment_link": {
       if (!phone) throw new Error("No customer phone");
       if (input.meta.smsConsent === false) throw new Error("SMS consent not granted");
-      const { sendQuickSms } = await import("@/lib/sms/send-quick");
-      await sendQuickSms({ workspaceId: input.workspaceId, to: phone, body });
+      const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+      const smsResult = await sendAppointmentSms({
+        workspaceId: input.workspaceId,
+        to: phone,
+        body,
+        idempotencyKey: `appt-wf:${input.stepExecId}`,
+      });
       const timelineType = `workflow_${input.step.id}_sent`;
       const nextMeta = appendTimeline(input.meta, {
         type: timelineType,
@@ -560,7 +569,12 @@ async function executeWorkflowStepAction(input: {
         where: { id: input.appointmentId },
         data: { metadata: nextMeta as object },
       });
-      break;
+      return {
+        providerMessageId:
+          smsResult && typeof smsResult === "object" && "messageId" in smsResult
+            ? String((smsResult as { messageId?: string }).messageId || "")
+            : undefined,
+      };
     }
     case "send_email_customer": {
       const email = input.appointmentCtx.contactEmail || input.meta.inviteeEmail;
@@ -600,8 +614,19 @@ async function executeWorkflowStepAction(input: {
 
       if (input.step.action === "send_sms_staff") {
         if (!staffPhone) throw new Error("No staff phone configured — set business phone in appointment settings");
-        const { sendQuickSms } = await import("@/lib/sms/send-quick");
-        await sendQuickSms({ workspaceId: input.workspaceId, to: staffPhone, body });
+        const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+        const smsResult = await sendAppointmentSms({
+          workspaceId: input.workspaceId,
+          to: staffPhone,
+          body,
+          idempotencyKey: `appt-wf-staff:${input.stepExecId}`,
+        });
+        return {
+          providerMessageId:
+            smsResult && typeof smsResult === "object" && "messageId" in smsResult
+              ? String((smsResult as { messageId?: string }).messageId || "")
+              : undefined,
+        };
       } else {
         const email = staffEmail || input.meta.staffEmail as string | undefined;
         if (!email) {
@@ -628,6 +653,23 @@ async function executeWorkflowStepAction(input: {
           metadata: appendTimeline(input.meta, {
             type: "workflow_confirmed",
             label: "Marked confirmed by workflow",
+          }) as object,
+        },
+      });
+      break;
+    }
+    case "update_status": {
+      const rawStatus = input.step.targetStatus?.trim();
+      if (!rawStatus) throw new Error("targetStatus is required for update_status");
+      const nextStatus = normalizeAppointmentStatus(rawStatus);
+      await prisma.voiceAppointment.update({
+        where: { id: input.appointmentId },
+        data: {
+          status: nextStatus,
+          metadata: appendTimeline(input.meta, {
+            type: "workflow_status_updated",
+            label: `Status set to ${nextStatus}`,
+            detail: input.step.name,
           }) as object,
         },
       });
@@ -706,8 +748,19 @@ async function executeWorkflowStepAction(input: {
     }
     default:
       if (channel === "sms" && phone && input.meta.smsConsent !== false && body) {
-        const { sendQuickSms } = await import("@/lib/sms/send-quick");
-        await sendQuickSms({ workspaceId: input.workspaceId, to: phone, body });
+        const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
+        const smsResult = await sendAppointmentSms({
+          workspaceId: input.workspaceId,
+          to: phone,
+          body,
+          idempotencyKey: `appt-wf:${input.stepExecId}`,
+        });
+        return {
+          providerMessageId:
+            smsResult && typeof smsResult === "object" && "messageId" in smsResult
+              ? String((smsResult as { messageId?: string }).messageId || "")
+              : undefined,
+        };
       }
   }
 }

@@ -128,6 +128,8 @@ export type AppointmentWorkflowStep = {
   webhookSecret?: string;
   /** Saved voice reminder template for make_voice_call */
   voiceReminderTemplateId?: string;
+  /** Target appointment status for update_status action */
+  targetStatus?: string;
   enabled?: boolean;
 };
 
@@ -173,6 +175,7 @@ export const PREBUILT_WORKFLOW_TEMPLATE_IDS = [
   "no_show_recovery",
   "re_engagement",
   "payment_follow_up",
+  "rapid_flow_test",
 ] as const;
 
 export type PrebuiltWorkflowTemplateId = (typeof PREBUILT_WORKFLOW_TEMPLATE_IDS)[number];
@@ -201,6 +204,7 @@ export function parseWorkflowSteps(raw: unknown): AppointmentWorkflowStep[] {
         webhookSecret: typeof o.webhookSecret === "string" ? o.webhookSecret : undefined,
         voiceReminderTemplateId:
           typeof o.voiceReminderTemplateId === "string" ? o.voiceReminderTemplateId : undefined,
+        targetStatus: typeof o.targetStatus === "string" ? o.targetStatus : undefined,
         enabled: o.enabled !== false,
       };
     })

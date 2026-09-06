@@ -87,9 +87,9 @@ export async function processWaitlistNotification(payload: {
   const phone = entry.phone;
   if (!phone) return;
 
-  const { sendQuickSms } = await import("@/lib/sms/send-quick");
+  const { sendAppointmentSms } = await import("@/lib/appointments/sms-sender");
   const when = new Date(payload.startsAt).toLocaleString();
-  await sendQuickSms({
+  await sendAppointmentSms({
     workspaceId: entry.workspaceId,
     to: phone,
     body: `A slot opened up for ${payload.serviceName} on ${when}. Book now before it's taken!`,
