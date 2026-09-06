@@ -10,6 +10,7 @@
 
 - **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
+- **IA & navigation (hard standard):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`
 - Appointments nav implementation: `src/lib/products/appointments-nav.ts`

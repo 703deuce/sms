@@ -32,7 +32,8 @@
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
-- **Next:** Guide #3 — Information Architecture & Navigation Standards
+- Guide #3: `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
+- **Next:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -760,7 +761,8 @@ For each significant page/flow:
 ```
 Guide #1  TRANSOVO-ACCESSIBILITY-STANDARDS.md        → WCAG 2.2 AA
 Guide #2  TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md → ISO 9241 HCD (this file)
-Guide #3+ (coming)                                    → IA & navigation, etc.
+Guide #3  TRANSOVO-IA-NAVIGATION-STANDARDS.md         → IA & navigation
+Guide #4+ (coming)                                    → Interaction, keyboard & focus
 TRANSOVO-UI-DESIGN-GUIDE.md                           → IA principles
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md                   → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md                       → Visual tokens
@@ -768,4 +770,4 @@ TRANSOVO-VISUAL-DESIGN-GUIDE.md                       → Visual tokens
 
 ---
 
-*Guide #2: Human-Centered Design & Usability Standards. Next: Guide #3 — Information Architecture & Navigation Standards.*
+*Guide #2: Human-Centered Design & Usability Standards. Next: Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 — Interaction, Keyboard & Focus Standards.*

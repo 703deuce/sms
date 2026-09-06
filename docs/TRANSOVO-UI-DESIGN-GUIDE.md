@@ -9,6 +9,7 @@
 
 - **Accessibility (WCAG 2.2 AA):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 - **Human-centered design (ISO 9241):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
+- **IA & navigation (hard standard):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
 - Page architecture: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`
 - V1 launch nav flags: `src/lib/products/v1-launch-nav.ts`
@@ -442,4 +443,4 @@ Stop and redesign if:
 
 ---
 
-*This document is the authoritative UI ruleset for Transovo. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*
+*This document is the authoritative UI ruleset for Transovo. Hard implementation standards: Guide #1 `TRANSOVO-ACCESSIBILITY-STANDARDS.md` · Guide #2 `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 `TRANSOVO-IA-NAVIGATION-STANDARDS.md`. When in doubt, prefer user mental models, mutual exclusivity, recognition over recall, and consistent shell behavior.*

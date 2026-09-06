@@ -39,7 +39,10 @@
 - IA: `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 - Page structure: `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 - Visual design: `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
-- **Next in series:** Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — Information Architecture & Navigation (coming)
+- Guide #1: `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+- Guide #2: `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
+- Guide #3: `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
+- **Next in series:** Guide #4 — Interaction, Keyboard & Focus Standards (coming)
 
 ---
 
@@ -597,12 +600,14 @@ A page or feature is **not complete** until all applicable items pass:
 TRANSOVO-UI-DESIGN-GUIDE.md           → IA
 TRANSOVO-PAGE-ARCHITECTURE-RULES.md   → Page structure
 TRANSOVO-VISUAL-DESIGN-GUIDE.md       → Visual tokens & components
-TRANSOVO-ACCESSIBILITY-STANDARDS.md   → WCAG 2.2 AA + ARIA (this file) ← hard standard
-Guide #2+ (coming)                    → ISO 9241 usability, etc.
+TRANSOVO-ACCESSIBILITY-STANDARDS.md        → WCAG 2.2 AA + ARIA (this file) ← hard standard
+TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md → ISO 9241 HCD
+TRANSOVO-IA-NAVIGATION-STANDARDS.md        → IA & navigation
+Guide #4+ (coming)                         → Interaction, keyboard & focus
 ```
 
 **Build accessibility into components at construction time.** Retrofitting after visual completion is not acceptable.
 
 ---
 
-*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — Information Architecture & Navigation Standards.*
+*Guide #1: Accessibility Standards. Next: Guide #2 — `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · Guide #3 — `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · Guide #4 — Interaction, Keyboard & Focus Standards.*
