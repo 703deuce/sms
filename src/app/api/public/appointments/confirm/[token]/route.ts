@@ -15,10 +15,17 @@ export async function POST(_request: Request, { params }: Params) {
     if (!row || (row.metadata as { confirmToken?: string })?.confirmToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
-    const updated = await updatePlatformAppointmentStatus(row.workspaceId, row.id, "confirmed", {
-      type: "confirmed",
-      label: "Customer confirmed appointment",
-    });
+    const updated = await updatePlatformAppointmentStatus(
+      row.workspaceId,
+      row.id,
+      "confirmed",
+      {
+        type: "confirmed",
+        label: "Customer confirmed appointment",
+      },
+      "customer",
+      { confirmationSource: "web" },
+    );
     return NextResponse.json({ data: { id: updated.id, status: updated.status } });
   } catch (err) {
     return jsonError(err, 400);
