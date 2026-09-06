@@ -1,6 +1,6 @@
 import "server-only";
 
-import { MICROSOFT_GRAPH_V1 } from "@/lib/microsoft/graph-helpers";
+import { MICROSOFT_GRAPH_V1, inferMicrosoftAccountType } from "@/lib/microsoft/graph-helpers";
 
 function appUrl() {
   return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
@@ -38,8 +38,9 @@ export function getMicrosoftRedirectUri(): string {
 
 export function getMicrosoftOAuthScopes(): string {
   // Graph permission names are PascalCase; offline_access is required for refresh tokens.
+  // openid/profile/email support identity; User.Read + Calendars.ReadWrite for calendar access.
   // @see https://learn.microsoft.com/en-us/graph/auth-v2-user
-  return "User.Read Calendars.ReadWrite offline_access";
+  return "openid profile email offline_access User.Read Calendars.ReadWrite";
 }
 
 export function getMicrosoftAuthorizeUrl(): string {
@@ -67,7 +68,37 @@ export type MicrosoftTokenResponse = {
   expires_in?: number;
   scope?: string;
   token_type?: string;
+  id_token?: string;
 };
+
+/** Extract tenant id (tid) from a Microsoft JWT without signature verification. */
+export function extractMicrosoftTenantIdFromToken(accessToken: string): string | undefined {
+  try {
+    const parts = accessToken.split(".");
+    if (parts.length < 2) return undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      tid?: string;
+    };
+    return payload.tid;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Extract Microsoft object id (oid/sub) from a JWT without signature verification. */
+export function extractMicrosoftUserIdFromToken(accessToken: string): string | undefined {
+  try {
+    const parts = accessToken.split(".");
+    if (parts.length < 2) return undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      oid?: string;
+      sub?: string;
+    };
+    return payload.oid || payload.sub;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function exchangeMicrosoftAuthorizationCode(code: string): Promise<MicrosoftTokenResponse> {
   const { clientId, clientSecret } = assertMicrosoftOAuthConfigured();
@@ -129,12 +160,25 @@ export async function refreshMicrosoftAccessToken(
 export async function fetchMicrosoftProfile(accessToken: string): Promise<{
   email?: string;
   displayName?: string;
+  microsoftUserId?: string;
+  tenantId?: string;
+  accountType?: "personal" | "organizational" | "unknown";
 }> {
-  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me?$select=mail,userPrincipalName,displayName`, {
+  const tenantId = extractMicrosoftTenantIdFromToken(accessToken);
+  const accountType = inferMicrosoftAccountType(tenantId);
+
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me?$select=id,mail,userPrincipalName,displayName`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return {};
+  if (!res.ok) {
+    return {
+      microsoftUserId: extractMicrosoftUserIdFromToken(accessToken),
+      ...(tenantId ? { tenantId } : {}),
+      accountType,
+    };
+  }
   const json = (await res.json()) as {
+    id?: string;
     mail?: string;
     userPrincipalName?: string;
     displayName?: string;
@@ -142,5 +186,18 @@ export async function fetchMicrosoftProfile(accessToken: string): Promise<{
   return {
     email: json.mail || json.userPrincipalName,
     displayName: json.displayName,
+    microsoftUserId: json.id || extractMicrosoftUserIdFromToken(accessToken),
+    ...(tenantId ? { tenantId } : {}),
+    accountType,
   };
+}
+
+/** Fetch the connected user's Outlook mailbox timezone (provider metadata only). */
+export async function fetchMicrosoftMailboxTimezone(accessToken: string): Promise<string | undefined> {
+  const res = await fetch(`${MICROSOFT_GRAPH_V1}/me/mailboxSettings?$select=timeZone`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return undefined;
+  const json = (await res.json()) as { timeZone?: string };
+  return json.timeZone?.trim() || undefined;
 }

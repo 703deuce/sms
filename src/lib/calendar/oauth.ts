@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import {
   assertMicrosoftOAuthConfigured,
   exchangeMicrosoftAuthorizationCode,
+  fetchMicrosoftMailboxTimezone,
   fetchMicrosoftProfile,
   getMicrosoftAuthorizeUrl,
   getMicrosoftOAuthScopes,
@@ -160,6 +161,7 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
 
   const tokens = await exchangeMicrosoftAuthorizationCode(code);
   const profile = await fetchMicrosoftProfile(tokens.access_token);
+  const mailboxTimezone = await fetchMicrosoftMailboxTimezone(tokens.access_token).catch(() => undefined);
   const label = profile.displayName || profile.email || "Microsoft Outlook";
 
   const config: CalendarConfig = {
@@ -171,9 +173,14 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
     grantedScopes: tokens.scope || priorConfig.grantedScopes,
     email: profile.email || priorConfig.email,
     displayName: profile.displayName || priorConfig.displayName,
+    microsoftUserId: profile.microsoftUserId || priorConfig.microsoftUserId,
+    ...(profile.tenantId ? { tenantId: profile.tenantId } : {}),
+    accountType: profile.accountType || priorConfig.accountType || "unknown",
+    ...(mailboxTimezone ? { mailboxTimezone } : {}),
     lastVerifiedAt: undefined,
     lastVerificationOk: undefined,
     lastVerificationError: null,
+    lastGraphError: null,
     ...(firstConnect ? { syncEnabled: false } : {}),
   };
 

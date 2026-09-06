@@ -2,12 +2,14 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import {
+  cancelOrDeleteMicrosoftEvent,
   deleteGoogleEvent,
-  deleteMicrosoftEvent,
+  getMicrosoftCalendarEvent,
   getValidAccessToken,
   resolveWriteCalendarId,
   updateGoogleEvent,
   updateMicrosoftEvent,
+  resolveMicrosoftProviderTimezone,
   type CalendarConfig,
 } from "@/lib/calendar/providers";
 import {
@@ -109,10 +111,20 @@ export async function syncExternalCalendarOnCancel(
     if (conn.provider === "google") {
       await deleteGoogleEvent(token, resolveWriteCalendarId(config), providerEventId);
     } else {
-      await deleteMicrosoftEvent(token, providerEventId, {
-        connectionId: conn.id,
-        config,
-      });
+      const ctx = { connectionId: conn.id, config };
+      let hasAttendees = false;
+      try {
+        const event = await getMicrosoftCalendarEvent(token, providerEventId, ctx);
+        hasAttendees = (event?.attendees?.length || 0) > 0;
+      } catch {
+        // Fall back to delete when event details are unavailable.
+      }
+      await cancelOrDeleteMicrosoftEvent(
+        token,
+        providerEventId,
+        { hasAttendees, comment: "Canceled in Transovo" },
+        ctx,
+      );
     }
     await markPushed(appointment.id, appointment.metadata);
   } catch (err) {
@@ -137,21 +149,22 @@ export async function syncExternalCalendarOnReschedule(
   const token = await getValidAccessToken(conn.id, conn.provider, config);
   if (!token) return;
 
-  const timezone = config.timezone || "UTC";
+  const googleTimezone = config.timezone || "UTC";
+  const microsoftTimezone = resolveMicrosoftProviderTimezone(config);
   try {
     if (conn.provider === "google") {
       await updateGoogleEvent(token, resolveWriteCalendarId(config), providerEventId, {
         summary: next.summary,
         start: next.startsAt,
         end: next.endsAt,
-        timezone,
+        timezone: googleTimezone,
       });
     } else {
       await updateMicrosoftEvent(token, providerEventId, {
         summary: next.summary,
         start: next.startsAt,
         end: next.endsAt,
-        timezone,
+        timezone: microsoftTimezone,
       }, {
         connectionId: conn.id,
         config,

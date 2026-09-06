@@ -29,6 +29,8 @@ export {
 
 export {
   computeFreeSlots,
+  cancelMicrosoftEvent,
+  cancelOrDeleteMicrosoftEvent,
   deleteGoogleEvent,
   deleteMicrosoftEvent,
   getGoogleBusy,
@@ -40,6 +42,8 @@ export {
   collectMicrosoftGraphCollection,
   listMicrosoftCalendarsForConnection,
   microsoftGraphFetch,
+  refreshMicrosoftMailboxTimezone,
+  resolveMicrosoftProviderTimezone,
   type MicrosoftGraphContext,
   hasOAuthTokens,
   insertGoogleEvent,
@@ -60,6 +64,7 @@ export {
 export {
   formatImportedExternalId,
   isTransovoBookedExternalId,
+  isTransovoOriginatedAppointment,
   parseImportedExternalId,
   resolveProviderEventId,
   shouldSyncToNativeCalendar,
@@ -70,3 +75,5 @@ export {
   syncWorkspaceCalendarConnection,
   type CalendarSyncStats,
 } from "./import-sync";
+
+export { syncMicrosoftCalendarDelta, type MicrosoftDeltaSyncResult } from "./microsoft-delta-sync";

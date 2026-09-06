@@ -48,3 +48,9 @@ export function isTransovoBookedExternalId(externalId: string | null): boolean {
 export function shouldSyncToNativeCalendar(externalId: string | null): boolean {
   return isTransovoBookedExternalId(externalId);
 }
+
+/** Whether an appointment was created by Transovo (not calendar import). */
+export function isTransovoOriginatedAppointment(metadata: unknown): boolean {
+  const meta = (metadata || {}) as { source?: string };
+  return meta.source === "transovo";
+}

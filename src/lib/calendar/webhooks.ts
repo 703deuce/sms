@@ -3,7 +3,7 @@ import "server-only";
 import { createHmac, randomBytes } from "crypto";
 import { updateWorkspaceCalendarConnection } from "@/lib/calendar/connections";
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
-import { enqueueCalendarConnectionSync, syncCalendarProviderEventById } from "@/lib/calendar/import-sync";
+import { enqueueCalendarConnectionSync } from "@/lib/calendar/import-sync";
 import {
   getValidAccessToken,
   microsoftGraphFetch,
@@ -20,6 +20,14 @@ import { getPrisma } from "@/lib/db";
 
 function appUrl() {
   return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+export function getMicrosoftCalendarWebhookUrl() {
+  return `${appUrl()}/api/integrations/calendars/webhooks/microsoft`;
+}
+
+export function getMicrosoftCalendarLifecycleWebhookUrl() {
+  return `${appUrl()}/api/integrations/calendars/webhooks/microsoft/lifecycle`;
 }
 
 function webhookSecret() {
@@ -98,7 +106,8 @@ export async function ensureMicrosoftCalendarSubscription(workspaceId: string, c
     },
     body: JSON.stringify({
       changeType: "created,updated,deleted",
-      notificationUrl: `${appUrl()}/api/integrations/calendars/webhooks/microsoft`,
+      notificationUrl: getMicrosoftCalendarWebhookUrl(),
+      lifecycleNotificationUrl: getMicrosoftCalendarLifecycleWebhookUrl(),
       resource: OUTLOOK_EVENTS_SUBSCRIPTION_RESOURCE,
       expirationDateTime,
       clientState,
@@ -205,16 +214,6 @@ export async function registerCalendarPushNotifications(workspaceId: string, con
   }
 }
 
-function parseMicrosoftWebhookEventId(note: {
-  resource?: string;
-  resourceData?: { id?: string };
-}): string | null {
-  if (note.resourceData?.id) return note.resourceData.id;
-  const resource = note.resource || "";
-  const match = resource.match(/\/events\/([^/?]+)/i);
-  return match?.[1] || null;
-}
-
 export async function handleMicrosoftCalendarWebhook(notifications: Array<{
   subscriptionId?: string;
   clientState?: string;
@@ -242,16 +241,86 @@ export async function handleMicrosoftCalendarWebhook(notifications: Array<{
       continue;
     }
 
-    if (providerEventId) {
-      await syncCalendarProviderEventById({
-        workspaceId: parsed.workspaceId,
-        connectionId: parsed.connectionId,
-        provider: "microsoft",
-        eventId: providerEventId,
+    await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+  }
+}
+
+function parseMicrosoftWebhookEventId(note: {
+  resource?: string;
+  resourceData?: { id?: string };
+}): string | null {
+  if (note.resourceData?.id) return note.resourceData.id;
+  const resource = note.resource || "";
+  const match = resource.match(/\/events\/([^/?]+)/i);
+  return match?.[1] || null;
+}
+
+/** Handle Microsoft lifecycle notifications (reauthorizationRequired, subscriptionRemoved, missed). */
+export async function handleMicrosoftCalendarLifecycleWebhook(notifications: Array<{
+  subscriptionId?: string;
+  clientState?: string;
+  lifecycleEvent?: string;
+}>) {
+  for (const note of notifications) {
+    const parsed = note.clientState ? parseCalendarWebhookState(note.clientState) : null;
+    if (!parsed) continue;
+
+    const conn = await getPrisma().voiceCalendarConnection.findFirst({
+      where: { id: parsed.connectionId, workspaceId: parsed.workspaceId, provider: "microsoft" },
+    });
+    if (!conn) continue;
+
+    const lifecycle = note.lifecycleEvent || "";
+    const idempotencyKey = `ms-cal-lifecycle:${note.subscriptionId || "sub"}:${lifecycle}`;
+    try {
+      await recordWebhookOnce("microsoft", idempotencyKey, parsed.workspaceId, note);
+    } catch {
+      continue;
+    }
+
+    if (lifecycle === "reauthorizationRequired") {
+      await ensureMicrosoftCalendarSubscription(parsed.workspaceId, parsed.connectionId);
+      continue;
+    }
+
+    if (lifecycle === "subscriptionRemoved") {
+      const config = (conn.config || {}) as CalendarConfig;
+      await updateWorkspaceCalendarConnection(parsed.workspaceId, parsed.connectionId, {
+        config: { ...config, microsoftSubscription: undefined },
       });
-    } else {
+      await ensureMicrosoftCalendarSubscription(parsed.workspaceId, parsed.connectionId);
+      await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
+      continue;
+    }
+
+    if (lifecycle === "missed") {
       await enqueueCalendarConnectionSync(parsed.workspaceId, parsed.connectionId, true);
     }
+  }
+}
+
+export async function deleteMicrosoftCalendarSubscription(
+  workspaceId: string,
+  connectionId: string,
+): Promise<void> {
+  const conn = await getPrisma().voiceCalendarConnection.findFirst({
+    where: { id: connectionId, workspaceId, provider: "microsoft" },
+  });
+  if (!conn) return;
+
+  const config = (conn.config || {}) as CalendarConfig;
+  const subscriptionId = config.microsoftSubscription?.id;
+  if (!subscriptionId) return;
+
+  try {
+    await microsoftGraphFetch(
+      connectionId,
+      config,
+      `${MICROSOFT_GRAPH_V1}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { method: "DELETE" },
+    );
+  } catch (err) {
+    console.warn("[calendar] microsoft subscription delete failed", connectionId, err);
   }
 }
 

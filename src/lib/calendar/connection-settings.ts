@@ -9,11 +9,12 @@ import {
   getGoogleCalendars,
   getValidAccessToken,
   listMicrosoftCalendarsForConnection,
+  refreshMicrosoftMailboxTimezone,
   type CalendarConfig,
 } from "@/lib/calendar/providers";
 
 import { shouldImportFromConnection } from "@/lib/calendar/eligibility";
-import { registerCalendarPushNotifications, ensureMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
+import { registerCalendarPushNotifications, ensureMicrosoftCalendarSubscription, deleteMicrosoftCalendarSubscription } from "@/lib/calendar/webhooks";
 
 export async function listConnectionProviderCalendars(workspaceId: string, connectionId: string) {
   const conn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
@@ -45,12 +46,21 @@ export type CalendarConnectionVerification = {
   calendarCount: number;
   syncEnabled: boolean;
   importConfigured: boolean;
+  accountType?: "personal" | "organizational" | "unknown";
+  mailboxTimezone?: string | null;
   push: {
-    status: "not_configured" | "active" | "missing" | "failed";
+    status: "not_configured" | "active" | "missing" | "failed" | "degraded";
     expiresAt?: string | null;
     error?: string;
   };
+  health: "healthy" | "needs_reconnect" | "token_refresh_failed" | "webhook_degraded" | "sync_failed" | "permission_missing";
   errors: string[];
+  graphDiagnostics?: {
+    httpStatus?: number;
+    graphCode?: string;
+    graphMessage?: string;
+    requestId?: string;
+  };
   verifiedAt: string;
 };
 
@@ -93,6 +103,17 @@ export async function verifyWorkspaceCalendarConnection(
         await updateWorkspaceCalendarConnection(workspaceId, connectionId, { status: "needs_reauth" });
       }
     }
+
+    if (conn.provider === "microsoft" && tokenValid) {
+      try {
+        const mailboxTimezone = await refreshMicrosoftMailboxTimezone(conn.id, config);
+        if (mailboxTimezone) {
+          config.mailboxTimezone = mailboxTimezone;
+        }
+      } catch {
+        // non-fatal
+      }
+    }
   }
 
   const importConfigured = Boolean(config.importCalendarIds?.length);
@@ -121,9 +142,22 @@ export async function verifyWorkspaceCalendarConnection(
   const verifiedAt = new Date().toISOString();
   const ok = tokenValid && calendarCount > 0 && errors.length === 0;
 
+  let health: CalendarConnectionVerification["health"] = "healthy";
+  if (!tokenValid) {
+    health = errors.some((e) => /permission|scope|403/i.test(e))
+      ? "permission_missing"
+      : "needs_reconnect";
+  } else if (pushStatus === "failed") {
+    health = "webhook_degraded";
+  } else if (!ok && config.lastSyncError) {
+    health = "sync_failed";
+  }
+
   await updateWorkspaceCalendarConnection(workspaceId, connectionId, {
     ...(ok && conn.status === "needs_reauth" ? { status: "connected" } : {}),
-    ...(!ok && errors.some((e) => /\b401\b/.test(e)) ? { status: "needs_reauth" } : {}),
+    ...(!ok && (health === "needs_reconnect" || health === "permission_missing")
+      ? { status: "needs_reauth" }
+      : {}),
     config: {
       ...config,
       lastVerifiedAt: verifiedAt,
@@ -139,12 +173,23 @@ export async function verifyWorkspaceCalendarConnection(
     calendarCount,
     syncEnabled,
     importConfigured,
+    accountType: config.accountType,
+    mailboxTimezone: config.mailboxTimezone || null,
     push: {
       status: pushStatus,
       expiresAt: pushExpiresAt,
       error: pushError,
     },
+    health,
     errors,
+    graphDiagnostics: config.lastGraphError
+      ? {
+          httpStatus: config.lastGraphError.httpStatus,
+          graphCode: config.lastGraphError.graphCode,
+          graphMessage: config.lastGraphError.graphMessage,
+          requestId: config.lastGraphError.requestId,
+        }
+      : undefined,
     verifiedAt,
   };
 }
@@ -200,6 +245,11 @@ export async function patchWorkspaceCalendarConnection(
 export async function disconnectWorkspaceCalendarConnection(workspaceId: string, connectionId: string) {
   const conn = await getWorkspaceCalendarConnection(workspaceId, connectionId);
   if (!conn) return false;
+
+  if (conn.provider === "microsoft") {
+    await deleteMicrosoftCalendarSubscription(workspaceId, connectionId).catch(() => undefined);
+  }
+
   await deleteWorkspaceCalendarConnection(workspaceId, connectionId);
   return true;
 }

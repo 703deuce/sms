@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   if (validationToken) {
     return new NextResponse(validationToken, {
       status: 200,
-      headers: { "Content-Type": "text/plain" },
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
   return NextResponse.json({ ok: true });
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (validationToken) {
     return new NextResponse(validationToken, {
       status: 200,
-      headers: { "Content-Type": "text/plain" },
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
 

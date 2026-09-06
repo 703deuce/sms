@@ -10,6 +10,7 @@ import {
 import {
   formatImportedExternalId,
   isTransovoBookedExternalId,
+  isTransovoOriginatedAppointment,
   parseImportedExternalId,
 } from "@/lib/calendar/external-id";
 import {
@@ -22,6 +23,7 @@ import {
   type CalendarConfig,
   type ProviderCalendarEvent,
 } from "@/lib/calendar/providers";
+import { syncMicrosoftCalendarDelta } from "@/lib/calendar/microsoft-delta-sync";
 import {
   findWorkspaceAppointmentByExternalId,
   upsertWorkspaceAppointmentByExternalId,
@@ -66,7 +68,42 @@ async function findExistingAppointment(
   const transovoBooked = await findWorkspaceAppointmentByExternalId(workspaceId, event.id);
   if (transovoBooked) return transovoBooked;
 
+  const prisma = getPrisma();
+  const byProviderMapping = await prisma.voiceAppointment.findFirst({
+    where: {
+      workspaceId,
+      externalId: event.id,
+      metadata: { path: ["source"], equals: "transovo" },
+    },
+  });
+  if (byProviderMapping) return byProviderMapping;
+
+  const byMetadataEventId = await prisma.voiceAppointment.findFirst({
+    where: {
+      workspaceId,
+      AND: [
+        { metadata: { path: ["connectionId"], equals: connectionId } },
+        { metadata: { path: ["providerEventId"], equals: event.id } },
+      ],
+    },
+  });
+  if (byMetadataEventId) return byMetadataEventId;
+
   return null;
+}
+
+function isTransovoOwnedProviderEvent(
+  appointment: { externalId: string | null; metadata: unknown },
+  providerEventId: string,
+): boolean {
+  if (isTransovoBookedExternalId(appointment.externalId) && appointment.externalId === providerEventId) {
+    return true;
+  }
+  if (isTransovoOriginatedAppointment(appointment.metadata)) {
+    const meta = (appointment.metadata || {}) as { providerEventId?: string };
+    return meta.providerEventId === providerEventId || appointment.externalId === providerEventId;
+  }
+  return false;
 }
 
 async function syncTransovoBookedFromExternal(
@@ -141,12 +178,18 @@ export async function processCalendarProviderEvent(input: {
 }): Promise<{ result: ProcessEventResult; reason?: string }> {
   const { workspaceId, connectionId, provider, event, config } = input;
   const rules = mergeImportRules(config);
-  const eligibility = isEventEligibleForReminderImport(event, rules, config.email);
   const existing = await findExistingAppointment(workspaceId, provider, connectionId, event);
 
+  const transovoOwned = Boolean(existing && isTransovoOwnedProviderEvent(existing, event.id));
+  const eventForProcessing: ProviderCalendarEvent = transovoOwned
+    ? { ...event, transovoOriginated: true }
+    : event;
+
+  const eligibility = isEventEligibleForReminderImport(eventForProcessing, rules, config.email);
+
   if (existing) {
-    if (isTransovoBookedExternalId(existing.externalId)) {
-      const updated = await syncTransovoBookedFromExternal(existing, event);
+    if (isTransovoOwnedProviderEvent(existing, event.id)) {
+      const updated = await syncTransovoBookedFromExternal(existing, eventForProcessing);
       if (updated) return { result: event.status === "cancelled" ? "canceled" : "updated" };
       return { result: "skipped", reason: "transovo_no_change" };
     }
@@ -199,6 +242,10 @@ export async function processCalendarProviderEvent(input: {
 
   if (event.status === "cancelled") {
     return { result: "skipped", reason: "cancelled_unknown" };
+  }
+
+  if (transovoOwned || eventForProcessing.transovoOriginated) {
+    return { result: "skipped", reason: "transovo_originated" };
   }
 
   if (!eligibility.eligible) {
@@ -304,6 +351,10 @@ function buildImportMetadata(
     organizerEmail: event.organizerEmail,
     externalUpdatedAt: event.updatedAt?.toISOString(),
     lastExternalSyncAt: new Date().toISOString(),
+    seriesMasterId: event.seriesMasterId,
+    recurrenceType: event.type,
+    recurrence: event.recurrence,
+    originalStart: event.originalStart?.toISOString(),
     description: event.description,
   } as object;
 }
@@ -355,18 +406,56 @@ export async function syncWorkspaceCalendarConnection(
 
   for (const calendarId of calendarIds) {
     let events: ProviderCalendarEvent[] = [];
+    let removedEventIds: string[] = [];
     try {
-      events =
-        provider === "google"
-          ? await listGoogleCalendarEvents(token, calendarId, timeMin, timeMax)
-          : await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, {
-              connectionId: conn.id,
-              config,
-            });
+      if (provider === "google") {
+        events = await listGoogleCalendarEvents(token, calendarId, timeMin, timeMax);
+      } else {
+        try {
+          const delta = await syncMicrosoftCalendarDelta({
+            workspaceId,
+            connectionId,
+            calendarId,
+            config,
+            timeMin,
+            timeMax,
+            forceFull: !options?.incremental,
+          });
+          events = delta.events;
+          removedEventIds = delta.removedEventIds;
+        } catch (deltaErr) {
+          console.warn("[calendar] microsoft delta sync failed, falling back to calendarView", connectionId, deltaErr);
+          events = await listMicrosoftCalendarEvents(token, timeMin, timeMax, calendarId, {
+            connectionId: conn.id,
+            config,
+          });
+        }
+      }
     } catch (err) {
       console.warn("[calendar] event import failed", connectionId, calendarId, err);
       stats.errors += 1;
       continue;
+    }
+
+    for (const removedId of removedEventIds) {
+      try {
+        const importedId = formatImportedExternalId(provider, connectionId, removedId);
+        const existing = await findWorkspaceAppointmentByExternalId(workspaceId, importedId);
+        if (existing) {
+          await getPrisma().voiceAppointment.update({
+            where: { id: existing.id },
+            data: { status: "canceled" },
+          });
+          await applyImportedAppointmentLifecycle(existing.id, "canceled", existing, {
+            startsAt: existing.startsAt,
+            endsAt: existing.endsAt,
+          });
+          stats.canceled += 1;
+        }
+      } catch (err) {
+        console.warn("[calendar] delta removal reconcile failed", connectionId, removedId, err);
+        stats.errors += 1;
+      }
     }
 
     for (const event of events) {

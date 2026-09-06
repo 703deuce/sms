@@ -876,6 +876,7 @@ export async function bookAppointment(
         location,
         source: "transovo",
         connectionId: cal?.id || calendarId || null,
+        providerEventId: externalId || undefined,
         lastPushedAt: externalId ? new Date().toISOString() : undefined,
       } as object,
     },

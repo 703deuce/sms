@@ -3,6 +3,40 @@ import "server-only";
 /** Microsoft Graph v1.0 base URL. */
 export const MICROSOFT_GRAPH_V1 = "https://graph.microsoft.com/v1.0";
 
+/**
+ * Tenant id for personal Microsoft accounts (Outlook.com / Hotmail).
+ * Delegated getSchedule is not supported for this tenant.
+ * @see https://learn.microsoft.com/en-us/graph/api/calendar-getschedule
+ */
+export const MICROSOFT_PERSONAL_ACCOUNT_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+export type MicrosoftAccountType = "personal" | "organizational" | "unknown";
+
+/**
+ * Infer account type from a known Microsoft tenant id.
+ * Returns unknown when tenant metadata is missing — never assume personal.
+ */
+export function inferMicrosoftAccountType(tenantId?: string | null): MicrosoftAccountType {
+  if (!tenantId) return "unknown";
+  if (tenantId.toLowerCase() === MICROSOFT_PERSONAL_ACCOUNT_TENANT_ID) return "personal";
+  return "organizational";
+}
+
+/** Resolve stored + inferred account type for capability decisions. */
+export function resolveMicrosoftAccountType(input?: {
+  accountType?: MicrosoftAccountType | null;
+  tenantId?: string | null;
+}): MicrosoftAccountType {
+  if (input?.accountType && input.accountType !== "unknown") return input.accountType;
+  if (input?.tenantId) return inferMicrosoftAccountType(input.tenantId);
+  return input?.accountType || "unknown";
+}
+
+/** Whether delegated POST /me/calendar/getSchedule is supported for this connection. */
+export function canUseMicrosoftGetSchedule(accountType?: MicrosoftAccountType | null): boolean {
+  return accountType === "organizational";
+}
+
 /** Standard Prefer header for UTC event times in Graph calendar responses. */
 export const GRAPH_PREFER_OUTLOOK_UTC = 'outlook.timezone="UTC"';
 
@@ -87,4 +121,45 @@ export function microsoftCalendarViewUrl(calendarId?: string): string {
 export type MicrosoftGraphCollectionPage<T> = {
   value?: T[];
   "@odata.nextLink"?: string;
+  "@odata.deltaLink"?: string;
 };
+
+/** Normalized Microsoft Graph error for diagnostics (never includes tokens). */
+export type MicrosoftGraphError = {
+  provider: "microsoft";
+  httpStatus: number;
+  graphCode?: string;
+  graphMessage?: string;
+  requestId?: string;
+};
+
+/** Parse a failed Graph response into a sanitized error shape. */
+export async function parseMicrosoftGraphError(res: Response): Promise<MicrosoftGraphError> {
+  const requestId = res.headers.get("request-id") || res.headers.get("client-request-id") || undefined;
+  let graphCode: string | undefined;
+  let graphMessage: string | undefined;
+  try {
+    const json = (await res.clone().json()) as {
+      error?: { code?: string; message?: string };
+    };
+    graphCode = json.error?.code;
+    graphMessage = json.error?.message;
+  } catch {
+    graphMessage = await res.text().catch(() => res.statusText);
+  }
+  return {
+    provider: "microsoft",
+    httpStatus: res.status,
+    graphCode,
+    graphMessage,
+    requestId,
+  };
+}
+
+/** Build a calendarView delta URL for incremental event sync. */
+export function microsoftCalendarViewDeltaUrl(calendarId?: string): string {
+  if (calendarId) {
+    return `${MICROSOFT_GRAPH_V1}/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta`;
+  }
+  return `${MICROSOFT_GRAPH_V1}/me/calendar/calendarView/delta`;
+}
