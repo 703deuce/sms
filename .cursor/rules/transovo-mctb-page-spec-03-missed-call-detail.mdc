@@ -1,0 +1,62 @@
+---
+description: MANDATORY — MCTB Missed Call Detail build spec (/mctb/missed-calls/[id]). Object detail authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 03: MISSED CALL DETAIL
+
+**Route:** `/mctb/missed-calls/[id]`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–02 + `transovo-mctb-page-build-specs.mdc`  
+**Visual baseline:** Finished Appointment detail page screenshots
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** Missed Call Detail (`/mctb/missed-calls/[id]`, legacy `/voice/missed-calls/[id]`).
+
+## Primary job
+
+Authoritative record of **one** missed-call recovery event — complete lifecycle story + correct next action. Not Conversations inbox, Consent Log, Voicemail inbox, or Setup editor.
+
+## Page structure
+
+1. ← Missed Calls (restore list context)
+2. H1: caller name or phone + missed metadata
+3. One primary status + one dominant action (state-dependent)
+4. Lifecycle summary: Call → Consent → Compliance text → Recovery text → Reply
+5. Sections: Call details | Consent | Text-back | Conversation | Voicemail | Request form | Link activity
+6. Recovery timeline (`<ol>`, authoritative events)
+7. Diagnostics (collapsed, no secrets)
+
+## Press-1 vs existing consent
+
+- **Press-1:** separate compliance confirmation + recovery message states/content
+- **Existing consent:** no Press-1 prompt/audio; factual mode language
+- Never collapse two outbound messages into one generic "First text"
+
+## Header actions (real only)
+
+Open conversation | Call customer | View consent record | Fix setup (if actionable) — no Resend, override opt-out, force consent, fake retry
+
+## Terminology
+
+Caller | Business line | Text-back sender — Suppressed ≠ Failed; Delivered ≠ Sent
+
+## States required
+
+Loading (skeleton) | Not found | Unauthorized | Error + Retry | Partial degradation | Needs attention banner | Healthy quiet (Recovered)
+
+## Prohibited
+
+- Duplicate thread editor, consent dump, full voicemail player fork
+- Frontend-inferred timeline from timestamps
+- Fabricated failure reasons; legal guarantee copy
+- Merging repeat calls into one record
+
+## Definition of done
+
+See full spec §71 checklist before marking detail route complete.
+
+## Next in series
+
+**04 — Conversations** (`/mctb/conversations`) — pending build spec.

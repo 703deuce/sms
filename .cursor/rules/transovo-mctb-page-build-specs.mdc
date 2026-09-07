@@ -29,7 +29,8 @@ alwaysApply: true
 |-------|------|------|
 | `/mctb` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md` | `transovo-mctb-page-spec-01-overview.mdc` |
 | `/mctb/missed-calls` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md` | `transovo-mctb-page-spec-02-missed-calls.mdc` |
-| `/mctb/missed-calls/:id` | *(pending — spec 03)* | — |
+| `/mctb/missed-calls/:id` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md` | `transovo-mctb-page-spec-03-missed-call-detail.mdc` |
+| `/mctb/conversations` | *(pending — spec 04)* | — |
 
 ## Hard requirements (all pages)
 

@@ -734,4 +734,8 @@ Cursor may mark `/mctb` complete only when:
 
 Once Overview is complete, the next screen in the page-by-page package is:
 
-**02 — Missed Calls List** (`/mctb/missed-calls`) — table columns, filters, row hierarchy, recovery-state terminology, row/detail behavior, responsive transformation, return-context behavior, and the precise difference between the list and Missed Call Detail.
+**02 — Missed Calls List** (`/mctb/missed-calls`) — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md`.
+
+**03 — Missed Call Detail** (`/mctb/missed-calls/:id`) — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md`.
+
+**04 — Conversations** (`/mctb/conversations`) — pending build spec.

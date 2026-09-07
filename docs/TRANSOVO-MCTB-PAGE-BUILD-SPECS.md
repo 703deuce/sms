@@ -26,8 +26,9 @@
 |---|------|-------|------|-------------|
 | 01 | Overview | `/mctb` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md) | `transovo-mctb-page-spec-01-overview.mdc` |
 | 02 | Missed Calls List | `/mctb/missed-calls` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md) | `transovo-mctb-page-spec-02-missed-calls.mdc` |
-| 03 | Missed Call Detail | `/mctb/missed-calls/:id` | *(pending)* | — |
-| 04+ | *Additional pages TBD* | | | |
+| 03 | Missed Call Detail | `/mctb/missed-calls/:id` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md) | `transovo-mctb-page-spec-03-missed-call-detail.mdc` |
+| 04 | Conversations | `/mctb/conversations` | *(pending)* | — |
+| 05+ | *Additional pages TBD* | | | |
 
 When implementing a route, read the governing MCTB docs **and** the page-specific build spec for that route before writing code.
 
