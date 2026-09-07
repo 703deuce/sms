@@ -6,7 +6,7 @@ import { warmMctbInboundRoutingProfileForWorkspace } from "../src/lib/mctb/texml
 import { peekMctbInboundRoutingProfileByE164 } from "../src/lib/mctb/texml-ingress/routing-profile";
 
 const WS = process.env.WORKSPACE_ID || "ws_1";
-const ACTIVE_E164 = process.env.PHONE_E164 || "+15717491060";
+const ACTIVE_E164 = process.env.PHONE_E164 || "+18663464256";
 
 async function main() {
   await warmMctbInboundRoutingProfileForWorkspace(WS);
