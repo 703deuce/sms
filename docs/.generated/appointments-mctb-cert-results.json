@@ -1,6 +1,250 @@
 {
   "batches": [
     {
+      "batchId": "APT-CORE-01",
+      "index": 0,
+      "command": "npm run test:appointments-v1",
+      "matrixIds": [
+        "APT-ENG-001",
+        "APT-ENG-002",
+        "APT-ENG-003",
+        "APT-ENG-004",
+        "APT-ENG-005",
+        "APT-NAV-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 1113,
+      "finishedAt": "2026-09-07T21:22:00.814Z"
+    },
+    {
+      "batchId": "APT-AI-01",
+      "index": 1,
+      "command": "npx tsx scripts/test-appointment-ai-hardening.ts",
+      "matrixIds": [
+        "AI-APT-001",
+        "AI-APT-002",
+        "AI-APT-003"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 458,
+      "finishedAt": "2026-09-07T21:22:01.273Z"
+    },
+    {
+      "batchId": "APT-AI-02",
+      "index": 2,
+      "command": "npx tsx scripts/test-appointment-booking-agent-layer.ts",
+      "matrixIds": [
+        "AI-APT-004"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 483,
+      "finishedAt": "2026-09-07T21:22:01.756Z"
+    },
+    {
+      "batchId": "APT-WF-01",
+      "index": 3,
+      "command": "npx tsx scripts/test-appointment-workflows-hardening.ts",
+      "matrixIds": [
+        "APT-AUT-001",
+        "APT-AUT-002"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 438,
+      "finishedAt": "2026-09-07T21:22:02.194Z"
+    },
+    {
+      "batchId": "APT-WF-02",
+      "index": 4,
+      "command": "npx tsx scripts/test-appointment-workflows-scheduling.ts",
+      "matrixIds": [
+        "APT-AUT-003"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 332,
+      "finishedAt": "2026-09-07T21:22:02.526Z"
+    },
+    {
+      "batchId": "APT-WF-03",
+      "index": 5,
+      "status": "BLOCKED",
+      "reason": "Requires TEST_PHONE E.164 — live workflow SMS (MANUAL)",
+      "finishedAt": "2026-09-07T21:22:02.526Z"
+    },
+    {
+      "batchId": "APT-VR-01",
+      "index": 6,
+      "command": "npx tsx scripts/test-appointment-voice-reminders.ts",
+      "matrixIds": [
+        "APT-AUT-005"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 322,
+      "finishedAt": "2026-09-07T21:22:02.848Z"
+    },
+    {
+      "batchId": "APT-PAY-01",
+      "index": 7,
+      "command": "npx tsx scripts/test-merchant-payments.ts",
+      "matrixIds": [
+        "APT-INT-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 325,
+      "finishedAt": "2026-09-07T21:22:03.173Z"
+    },
+    {
+      "batchId": "APT-MTG-01",
+      "index": 8,
+      "command": "npx tsx scripts/test-voice-notetaker-wiring.ts",
+      "matrixIds": [
+        "AI-MTG-001",
+        "AI-MTG-002"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 322,
+      "finishedAt": "2026-09-07T21:22:03.496Z"
+    },
+    {
+      "batchId": "APT-MTG-02",
+      "index": 9,
+      "command": "npx tsx scripts/test-transovo-video-wiring.ts",
+      "matrixIds": [
+        "AI-MTG-003"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 313,
+      "finishedAt": "2026-09-07T21:22:03.809Z"
+    },
+    {
+      "batchId": "APT-PUB-01",
+      "index": 10,
+      "command": "npx tsx scripts/test-book-idempotency.ts",
+      "matrixIds": [
+        "APT-PUB-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 376,
+      "finishedAt": "2026-09-07T21:22:04.185Z"
+    },
+    {
+      "batchId": "MCTB-HO-01",
+      "index": 11,
+      "command": "npx tsx scripts/test-mctb-handoff.ts",
+      "matrixIds": [
+        "MCTB-HO-001",
+        "MCTB-HO-002",
+        "MCTB-HO-003",
+        "MCTB-HO-004"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 323,
+      "finishedAt": "2026-09-07T21:22:04.508Z"
+    },
+    {
+      "batchId": "MCTB-RT-01",
+      "index": 12,
+      "command": "npx tsx scripts/test-mctb-final-pipeline-contract.ts",
+      "matrixIds": [
+        "MCTB-RT-001",
+        "MCTB-RT-002"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 322,
+      "finishedAt": "2026-09-07T21:22:04.830Z"
+    },
+    {
+      "batchId": "MCTB-RT-02",
+      "index": 13,
+      "command": "npx tsx scripts/test-mctb-consent-modes.ts",
+      "matrixIds": [
+        "MCTB-RT-003",
+        "MCTB-RT-004"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 320,
+      "finishedAt": "2026-09-07T21:22:05.152Z"
+    },
+    {
+      "batchId": "MCTB-RT-03",
+      "index": 14,
+      "command": "npx tsx scripts/test-mctb-schedule-pause.ts",
+      "matrixIds": [
+        "MCTB-RT-005"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 393,
+      "finishedAt": "2026-09-07T21:22:05.545Z"
+    },
+    {
+      "batchId": "MCTB-RT-04",
+      "index": 15,
+      "command": "npx tsx scripts/test-mctb-consent-log.ts",
+      "matrixIds": [
+        "MCTB-RT-006"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 314,
+      "finishedAt": "2026-09-07T21:22:05.860Z"
+    },
+    {
+      "batchId": "MCTB-RT-05",
+      "index": 16,
+      "command": "npx tsx scripts/test-missed-call-text-back-architecture.ts",
+      "matrixIds": [
+        "MCTB-RT-007"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 764,
+      "finishedAt": "2026-09-07T21:22:06.625Z"
+    },
+    {
+      "batchId": "AI-JOHN-01",
+      "index": 17,
+      "command": "npm run test:john-preprod",
+      "matrixIds": [
+        "AI-MCTB-001",
+        "AI-MCTB-002",
+        "AI-MCTB-003"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 16743,
+      "finishedAt": "2026-09-07T21:22:23.368Z"
+    },
+    {
       "batchId": "AI-TRX-01",
       "index": 18,
       "command": "npm run test:ai-transcription",
@@ -11,9 +255,26 @@
       "status": "FAIL",
       "exitCode": 1,
       "timedOut": false,
-      "durationMs": 303,
-      "finishedAt": "2026-09-07T21:19:28.757Z"
+      "durationMs": 315,
+      "finishedAt": "2026-09-07T21:22:23.684Z"
+    },
+    {
+      "batchId": "MCTB-VM-01",
+      "index": 19,
+      "command": "npx tsx scripts/test-mctb-voicemail-entitlements.ts",
+      "matrixIds": [
+        "MCTB-VM-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 326,
+      "finishedAt": "2026-09-07T21:22:24.010Z"
     }
   ],
-  "updatedAt": "2026-09-07T21:19:28.757Z"
+  "status": "COMPLETE_WITH_FAILURES",
+  "passCount": 16,
+  "failCount": 3,
+  "blockedCount": 1,
+  "updatedAt": "2026-09-07T21:22:24.011Z"
 }

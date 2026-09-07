@@ -10,7 +10,7 @@
  * Run:
  *   npx tsx scripts/run-appointments-mctb-cert-staged.ts
  *   npx tsx scripts/run-appointments-mctb-cert-staged.ts --from 5
- *   npx tsx scripts/run-appointments-mctb-cert-staged.ts --list
+ *   npx tsx scripts/run-appointments-mctb-cert-staged.ts --fresh --continue-on-fail
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -178,14 +178,18 @@ function parseArgs() {
   const args = process.argv.slice(2);
   let from = 0;
   let listOnly = false;
+  let continueOnFail = false;
+  let fresh = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--from" && args[i + 1]) {
       from = Number(args[i + 1]);
       i++;
     }
     if (args[i] === "--list") listOnly = true;
+    if (args[i] === "--continue-on-fail") continueOnFail = true;
+    if (args[i] === "--fresh") fresh = true;
   }
-  return { from, listOnly };
+  return { from, listOnly, continueOnFail, fresh };
 }
 
 function ensureDir() {
@@ -218,7 +222,7 @@ function runBatch(batch: Batch): { ok: boolean; exitCode: number | null; timedOu
 }
 
 function main() {
-  const { from, listOnly } = parseArgs();
+  const { from, listOnly, continueOnFail, fresh } = parseArgs();
   ensureDir();
 
   if (listOnly) {
@@ -228,11 +232,18 @@ function main() {
     return;
   }
 
+  if (fresh && existsSync(CHECKPOINT)) {
+    writeFileSync(CHECKPOINT, JSON.stringify({ lastCompletedIndex: -1 }, null, 2));
+  }
+
   const checkpoint = loadCheckpoint();
-  const startIndex = Math.max(from, checkpoint.lastCompletedIndex + 1);
+  const startIndex = fresh ? from : Math.max(from, checkpoint.lastCompletedIndex + 1);
   const allResults: Array<Record<string, unknown>> = [];
 
   console.log(`Starting staged cert from batch index ${startIndex} (${BATCHES.length} total)`);
+  if (continueOnFail) console.log("Mode: continue-on-fail (all batches will run)");
+
+  let failCount = 0;
 
   for (let i = startIndex; i < BATCHES.length; i++) {
     const batch = BATCHES[i];
@@ -271,14 +282,55 @@ function main() {
     writeFileSync(RESULTS, JSON.stringify({ batches: allResults, updatedAt: new Date().toISOString() }, null, 2));
 
     if (!outcome.ok) {
-      console.error(`\nBatch ${batch.id} FAILED — stopping staged run (fix and resume with --from ${i})`);
-      process.exit(1);
+      failCount++;
+      if (!continueOnFail) {
+        console.error(`\nBatch ${batch.id} FAILED — stopping staged run (fix and resume with --from ${i})`);
+        process.exit(1);
+      }
+      console.error(`\nBatch ${batch.id} FAILED (${outcome.durationMs}ms) — continuing`);
+      continue;
     }
     console.log(`Batch ${batch.id} PASS (${outcome.durationMs}ms)`);
   }
 
+  const passCount = allResults.filter((r) => r.status === "PASS").length;
+  const blockedCount = allResults.filter((r) => r.status === "BLOCKED").length;
+
+  console.log("\n========================================");
+  console.log("STAGED CERT SUMMARY");
+  console.log("========================================");
+  for (const r of allResults) {
+    const id = r.batchId as string;
+    const status = r.status as string;
+    const ms = r.durationMs != null ? ` (${r.durationMs}ms)` : "";
+    const reason = r.reason ? ` — ${r.reason}` : "";
+    console.log(`${status.padEnd(7)} ${id}${ms}${reason}`);
+  }
+  console.log("----------------------------------------");
+  console.log(`PASS: ${passCount}  FAIL: ${failCount}  BLOCKED: ${blockedCount}  TOTAL: ${allResults.length}`);
+
+  const finalStatus = failCount === 0 ? "COMPLETE" : "COMPLETE_WITH_FAILURES";
+  writeFileSync(
+    RESULTS,
+    JSON.stringify(
+      {
+        batches: allResults,
+        status: finalStatus,
+        passCount,
+        failCount,
+        blockedCount,
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+  );
+
+  if (failCount > 0) {
+    console.log("\nCompleted with failures.");
+    process.exit(1);
+  }
   console.log("\nAll staged batches completed.");
-  writeFileSync(RESULTS, JSON.stringify({ batches: allResults, status: "COMPLETE", updatedAt: new Date().toISOString() }, null, 2));
 }
 
 main();

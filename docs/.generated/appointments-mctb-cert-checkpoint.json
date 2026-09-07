@@ -1,17 +1,16 @@
 {
-  "lastCompletedIndex": 18,
+  "lastCompletedIndex": 19,
   "latest": {
-    "batchId": "AI-TRX-01",
-    "index": 18,
-    "command": "npm run test:ai-transcription",
+    "batchId": "MCTB-VM-01",
+    "index": 19,
+    "command": "npx tsx scripts/test-mctb-voicemail-entitlements.ts",
     "matrixIds": [
-      "AI-VM-001",
-      "AI-VM-002"
+      "MCTB-VM-001"
     ],
-    "status": "FAIL",
-    "exitCode": 1,
+    "status": "PASS",
+    "exitCode": 0,
     "timedOut": false,
-    "durationMs": 303,
-    "finishedAt": "2026-09-07T21:19:28.757Z"
+    "durationMs": 326,
+    "finishedAt": "2026-09-07T21:22:24.010Z"
   }
 }
