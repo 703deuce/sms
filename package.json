@@ -111,6 +111,7 @@
     "test:inbound-sms-workspace-routing": "tsx scripts/test-inbound-sms-workspace-routing.ts",
     "test:appointments-v1": "tsx scripts/test-availability-engine.ts && tsx scripts/test-booking-protection.ts && tsx scripts/test-appointments-reminder-state.ts && tsx scripts/test-appointments-double-booking.ts && tsx scripts/test-appointments-tenant-isolation.ts && tsx scripts/test-appointments-nav.ts",
     "inventory:appointments-mctb": "tsx scripts/generate-appointments-mctb-inventory.ts",
+    "cert:matrix:appointments-mctb": "tsx scripts/generate-appointments-mctb-cert-matrix.ts && tsx scripts/generate-settings-coverage-proof.ts && tsx scripts/generate-route-api-classification.ts",
     "cert:appointments-mctb-staged": "tsx scripts/run-appointments-mctb-cert-staged.ts",
     "ui:appointments-v1-revamp": "tsx scripts/appointments-v1-kimi-revamp.ts",
     "test:v1-api-products": "tsx scripts/test-v1-api-products.ts",

@@ -550,13 +550,29 @@ Checkpoints include: call received, greeting played, press-1, consent recorded, 
 
 ---
 
-## Maintenance
+## Certification authority
 
-Regenerate route counts:
+**This document is the authoritative feature inventory for product certification** (2026-09-07).
+
+Derived artifacts:
+- Matrix: `docs/certification/APPOINTMENTS-MCTB-CERTIFICATION-MATRIX.md`
+- Settings proof: `docs/certification/APPOINTMENTS-MCTB-SETTINGS-COVERAGE.md`
+- Route/API classification: `docs/certification/APPOINTMENTS-MCTB-ROUTE-API-CLASSIFICATION.md`
+- Results: `docs/certification/APPOINTMENTS_MCTB_CERTIFICATION_RESULTS.md`
+
 ```bash
 npm run inventory:appointments-mctb
+npm run cert:matrix:appointments-mctb    # regenerate matrix from inventory
+npm run cert:appointments-mctb-staged      # crash-safe automated pipeline
 ```
 
+### Known gaps (certification flags)
+
+| ID | Issue |
+|----|-------|
+| **MCTB-DEFECT-SETUP-LINKS** | `requestFormEnabled`, `defaultLinkUrl`, `requestFormFieldsJson` exist in runtime/DB but **no** `/mctb/setup/links` page |
+| **MCTB-LEGACY-SCHED-001** | Legacy `businessHoursOnly` / schedule fields remain in data model — test backward compatibility only; **Business Hours UI must not reappear** as canonical MCTB nav |
+
 Related docs:
-- `docs/APPOINTMENTS-MCTB-SOURCE-DRIVEN-INVENTORY.md` — workflow/action maps for certification
+- `docs/APPOINTMENTS-MCTB-SOURCE-DRIVEN-INVENTORY.md` — workflow/action maps (superseded for cert authority by this doc + matrix)
 - `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md` — MCTB route manifest authority

@@ -1,0 +1,661 @@
+{
+  "lastCompletedIndex": 30,
+  "batches": [
+    {
+      "batchId": "STATIC-01",
+      "phase": "1-static",
+      "index": 0,
+      "command": "npx tsx scripts/generate-appointments-mctb-cert-matrix.ts",
+      "matrixIds": [
+        "MATRIX-GEN"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 327,
+      "finishedAt": "2026-09-07T21:46:09.014Z"
+    },
+    {
+      "batchId": "STATIC-02",
+      "phase": "1-static",
+      "index": 1,
+      "command": "npx tsx scripts/generate-settings-coverage-proof.ts",
+      "matrixIds": [
+        "SETTINGS-PROOF"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 322,
+      "finishedAt": "2026-09-07T21:46:09.338Z"
+    },
+    {
+      "batchId": "STATIC-03",
+      "phase": "1-static",
+      "index": 2,
+      "command": "npx tsx scripts/generate-route-api-classification.ts",
+      "matrixIds": [
+        "ROUTE-CLASS"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 327,
+      "finishedAt": "2026-09-07T21:46:09.666Z"
+    },
+    {
+      "batchId": "STATIC-04",
+      "phase": "1-static",
+      "index": 3,
+      "command": "npx tsx scripts/generate-appointments-mctb-inventory.ts",
+      "matrixIds": [
+        "ROUTE-INVENTORY"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 354,
+      "finishedAt": "2026-09-07T21:46:10.021Z"
+    },
+    {
+      "batchId": "TSC-01",
+      "phase": "2-typecheck",
+      "index": 4,
+      "command": "npx tsc --noEmit",
+      "matrixIds": [
+        "TYPECHECK"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 44620,
+      "finishedAt": "2026-09-07T21:46:54.642Z"
+    },
+    {
+      "batchId": "APT-ENG-01",
+      "phase": "3-appointments-unit",
+      "index": 5,
+      "command": "npx tsx scripts/test-availability-engine.ts && npx tsx scripts/test-booking-protection.ts && npx tsx scripts/test-appointments-reminder-state.ts",
+      "matrixIds": [
+        "APT-ENG-001",
+        "APT-ENG-002",
+        "APT-ENG-003"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 964,
+      "finishedAt": "2026-09-07T21:46:55.608Z"
+    },
+    {
+      "batchId": "APT-ENG-02",
+      "phase": "3-appointments-unit",
+      "index": 6,
+      "command": "npx tsx scripts/test-appointments-double-booking.ts && npx tsx scripts/test-appointments-tenant-isolation.ts && npx tsx scripts/test-appointments-nav.ts",
+      "matrixIds": [
+        "APT-ENG-004",
+        "APT-ENG-005",
+        "APT-NAV-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 1017,
+      "finishedAt": "2026-09-07T21:46:56.627Z"
+    },
+    {
+      "batchId": "APT-AI-01",
+      "phase": "4-appointments-api",
+      "index": 7,
+      "command": "npx tsx scripts/test-appointment-ai-hardening.ts",
+      "matrixIds": [
+        "AP-AI-BOOKING-*",
+        "AP-OWNER-AMY-*",
+        "AP-WRITE-VERIFIER-*"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 445,
+      "finishedAt": "2026-09-07T21:46:57.073Z"
+    },
+    {
+      "batchId": "APT-AI-02",
+      "phase": "4-appointments-api",
+      "index": 8,
+      "command": "npx tsx scripts/test-appointment-booking-agent-layer.ts",
+      "matrixIds": [
+        "X-PRODUCT-*"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 522,
+      "finishedAt": "2026-09-07T21:46:57.596Z"
+    },
+    {
+      "batchId": "APT-WF-01",
+      "phase": "4-appointments-api",
+      "index": 9,
+      "command": "npx tsx scripts/test-appointment-workflows-hardening.ts",
+      "matrixIds": [
+        "AP-WORKFLOWS-*"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 436,
+      "finishedAt": "2026-09-07T21:46:58.033Z"
+    },
+    {
+      "batchId": "APT-WF-02",
+      "phase": "4-appointments-api",
+      "index": 10,
+      "command": "npx tsx scripts/test-appointment-workflows-scheduling.ts",
+      "matrixIds": [
+        "AP-WORKFLOWS-scheduling"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 323,
+      "finishedAt": "2026-09-07T21:46:58.357Z"
+    },
+    {
+      "batchId": "APT-WF-03",
+      "phase": "4-appointments-api",
+      "index": 11,
+      "command": "npx tsx scripts/test-appointment-workflow-minutes.ts",
+      "status": "BLOCKED — PSTN",
+      "reason": "Requires TEST_PHONE E.164 for live workflow SMS",
+      "finishedAt": "2026-09-07T21:46:58.358Z"
+    },
+    {
+      "batchId": "APT-VR-01",
+      "phase": "4-appointments-api",
+      "index": 12,
+      "command": "npx tsx scripts/test-appointment-voice-reminders.ts",
+      "matrixIds": [
+        "AP-VOICE-REMINDERS-*"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 314,
+      "finishedAt": "2026-09-07T21:46:58.673Z"
+    },
+    {
+      "batchId": "APT-PAY-01",
+      "phase": "4-appointments-api",
+      "index": 13,
+      "command": "npx tsx scripts/test-merchant-payments.ts",
+      "matrixIds": [
+        "APT-INT-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 316,
+      "finishedAt": "2026-09-07T21:46:58.990Z"
+    },
+    {
+      "batchId": "APT-PUB-01",
+      "phase": "4-appointments-api",
+      "index": 14,
+      "command": "npx tsx scripts/test-book-idempotency.ts",
+      "matrixIds": [
+        "APT-PUB-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 366,
+      "finishedAt": "2026-09-07T21:46:59.358Z"
+    },
+    {
+      "batchId": "APT-MTG-01",
+      "phase": "4-appointments-api",
+      "index": 15,
+      "command": "npx tsx scripts/test-voice-notetaker-wiring.ts",
+      "matrixIds": [
+        "AP-NOTETAKER-*"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 310,
+      "finishedAt": "2026-09-07T21:46:59.669Z"
+    },
+    {
+      "batchId": "APT-MTG-02",
+      "phase": "4-appointments-api",
+      "index": 16,
+      "command": "npx tsx scripts/test-transovo-video-wiring.ts",
+      "matrixIds": [
+        "AP-NATIVE-VIDEO-*"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 310,
+      "finishedAt": "2026-09-07T21:46:59.980Z"
+    },
+    {
+      "batchId": "MCTB-FILTER-01",
+      "phase": "5-mctb-unit",
+      "index": 17,
+      "command": "npx tsx scripts/test-mctb-missed-calls-filters.ts",
+      "matrixIds": [
+        "MCTB-OP-010"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 316,
+      "finishedAt": "2026-09-07T21:47:00.297Z"
+    },
+    {
+      "batchId": "MCTB-INBOX-01",
+      "phase": "5-mctb-unit",
+      "index": 18,
+      "command": "npx tsx scripts/test-mctb-inbox-product-filter.ts",
+      "matrixIds": [
+        "MCTB-OP-020"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 322,
+      "finishedAt": "2026-09-07T21:47:00.620Z"
+    },
+    {
+      "batchId": "MCTB-VM-01",
+      "phase": "5-mctb-unit",
+      "index": 19,
+      "command": "npx tsx scripts/test-mctb-voicemail-entitlements.ts",
+      "matrixIds": [
+        "MCTB-VM-001"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 309,
+      "finishedAt": "2026-09-07T21:47:00.930Z"
+    },
+    {
+      "batchId": "MCTB-TFV-01",
+      "phase": "5-mctb-unit",
+      "index": 20,
+      "command": "npx tsx scripts/test-mctb-tfv-gates.ts",
+      "matrixIds": [
+        "MCTB-RT-007"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 758,
+      "finishedAt": "2026-09-07T21:47:01.689Z"
+    },
+    {
+      "batchId": "MCTB-HO-01",
+      "phase": "6-mctb-api",
+      "index": 21,
+      "command": "npx tsx scripts/test-mctb-handoff.ts",
+      "matrixIds": [
+        "MCTB-HO-MODE-*",
+        "MCTB-HO-FIELD-*"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 313,
+      "finishedAt": "2026-09-07T21:47:02.004Z"
+    },
+    {
+      "batchId": "MCTB-RT-01",
+      "phase": "6-mctb-api",
+      "index": 22,
+      "command": "npx tsx scripts/test-mctb-final-pipeline-contract.ts",
+      "matrixIds": [
+        "MCTB-RT-001",
+        "MCTB-RT-002"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 315,
+      "finishedAt": "2026-09-07T21:47:02.320Z"
+    },
+    {
+      "batchId": "MCTB-RT-02",
+      "phase": "6-mctb-api",
+      "index": 23,
+      "command": "npx tsx scripts/test-mctb-consent-modes.ts",
+      "matrixIds": [
+        "MCTB-SET-003"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 314,
+      "finishedAt": "2026-09-07T21:47:02.635Z"
+    },
+    {
+      "batchId": "MCTB-RT-03",
+      "phase": "6-mctb-api",
+      "index": 24,
+      "command": "npx tsx scripts/test-mctb-schedule-pause.ts",
+      "matrixIds": [
+        "MCTB-LEGACY-SCHED-001",
+        "MCTB-SET-005"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 377,
+      "finishedAt": "2026-09-07T21:47:03.013Z"
+    },
+    {
+      "batchId": "MCTB-RT-04",
+      "phase": "6-mctb-api",
+      "index": 25,
+      "command": "npx tsx scripts/test-mctb-consent-log.ts",
+      "matrixIds": [
+        "MCTB-RT-006"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 315,
+      "finishedAt": "2026-09-07T21:47:03.329Z"
+    },
+    {
+      "batchId": "MCTB-RT-05",
+      "phase": "6-mctb-api",
+      "index": 26,
+      "command": "npx tsx scripts/test-missed-call-text-back-architecture.ts",
+      "matrixIds": [
+        "MCTB-RT-003"
+      ],
+      "status": "PASS",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 608,
+      "finishedAt": "2026-09-07T21:47:03.939Z"
+    },
+    {
+      "batchId": "MCTB-RT-06",
+      "phase": "6-mctb-api",
+      "index": 27,
+      "command": "npx tsx scripts/test-mctb-engine-matrix.ts",
+      "matrixIds": [
+        "MCTB-RT-engine"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 438,
+      "finishedAt": "2026-09-07T21:47:04.377Z"
+    },
+    {
+      "batchId": "AI-JOHN-01",
+      "phase": "7-cross-ai",
+      "index": 28,
+      "command": "npm run test:john-preprod",
+      "matrixIds": [
+        "AI-MCTB-001",
+        "AI-MCTB-002",
+        "AI-MCTB-003"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 4828,
+      "finishedAt": "2026-09-07T21:47:09.206Z"
+    },
+    {
+      "batchId": "AI-TRX-01",
+      "phase": "7-cross-ai",
+      "index": 29,
+      "command": "npm run test:ai-transcription",
+      "matrixIds": [
+        "AI-VM-001",
+        "AI-VM-002"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 299,
+      "finishedAt": "2026-09-07T21:47:09.506Z"
+    },
+    {
+      "batchId": "DEFECT-01",
+      "phase": "1-static",
+      "index": 30,
+      "command": "true",
+      "status": "FAIL",
+      "reason": "DEFECT — MISSING UI: /mctb/setup/links",
+      "finishedAt": "2026-09-07T21:47:09.507Z"
+    }
+  ],
+  "caseResults": {
+    "MATRIX-GEN": {
+      "status": "PASS",
+      "batchId": "STATIC-01",
+      "at": "2026-09-07T21:46:09.014Z"
+    },
+    "SETTINGS-PROOF": {
+      "status": "PASS",
+      "batchId": "STATIC-02",
+      "at": "2026-09-07T21:46:09.338Z"
+    },
+    "ROUTE-CLASS": {
+      "status": "PASS",
+      "batchId": "STATIC-03",
+      "at": "2026-09-07T21:46:09.666Z"
+    },
+    "ROUTE-INVENTORY": {
+      "status": "PASS",
+      "batchId": "STATIC-04",
+      "at": "2026-09-07T21:46:10.021Z"
+    },
+    "TYPECHECK": {
+      "status": "PASS",
+      "batchId": "TSC-01",
+      "at": "2026-09-07T21:46:54.642Z"
+    },
+    "APT-ENG-001": {
+      "status": "PASS",
+      "batchId": "APT-ENG-01",
+      "at": "2026-09-07T21:46:55.608Z"
+    },
+    "APT-ENG-002": {
+      "status": "PASS",
+      "batchId": "APT-ENG-01",
+      "at": "2026-09-07T21:46:55.608Z"
+    },
+    "APT-ENG-003": {
+      "status": "PASS",
+      "batchId": "APT-ENG-01",
+      "at": "2026-09-07T21:46:55.608Z"
+    },
+    "APT-ENG-004": {
+      "status": "PASS",
+      "batchId": "APT-ENG-02",
+      "at": "2026-09-07T21:46:56.627Z"
+    },
+    "APT-ENG-005": {
+      "status": "PASS",
+      "batchId": "APT-ENG-02",
+      "at": "2026-09-07T21:46:56.627Z"
+    },
+    "APT-NAV-001": {
+      "status": "PASS",
+      "batchId": "APT-ENG-02",
+      "at": "2026-09-07T21:46:56.627Z"
+    },
+    "AP-AI-BOOKING-*": {
+      "status": "FAIL",
+      "batchId": "APT-AI-01",
+      "at": "2026-09-07T21:46:57.073Z"
+    },
+    "AP-OWNER-AMY-*": {
+      "status": "FAIL",
+      "batchId": "APT-AI-01",
+      "at": "2026-09-07T21:46:57.073Z"
+    },
+    "AP-WRITE-VERIFIER-*": {
+      "status": "FAIL",
+      "batchId": "APT-AI-01",
+      "at": "2026-09-07T21:46:57.073Z"
+    },
+    "X-PRODUCT-*": {
+      "status": "FAIL",
+      "batchId": "APT-AI-02",
+      "at": "2026-09-07T21:46:57.596Z"
+    },
+    "AP-WORKFLOWS-*": {
+      "status": "PASS",
+      "batchId": "APT-WF-01",
+      "at": "2026-09-07T21:46:58.033Z"
+    },
+    "AP-WORKFLOWS-scheduling": {
+      "status": "PASS",
+      "batchId": "APT-WF-02",
+      "at": "2026-09-07T21:46:58.357Z"
+    },
+    "AP-WORKFLOWS-minutes": {
+      "status": "BLOCKED — PSTN",
+      "batchId": "APT-WF-03",
+      "at": "2026-09-07T21:46:58.358Z",
+      "reason": "Requires TEST_PHONE E.164 for live workflow SMS"
+    },
+    "AP-VOICE-REMINDERS-*": {
+      "status": "PASS",
+      "batchId": "APT-VR-01",
+      "at": "2026-09-07T21:46:58.673Z"
+    },
+    "APT-INT-001": {
+      "status": "PASS",
+      "batchId": "APT-PAY-01",
+      "at": "2026-09-07T21:46:58.990Z"
+    },
+    "APT-PUB-001": {
+      "status": "PASS",
+      "batchId": "APT-PUB-01",
+      "at": "2026-09-07T21:46:59.358Z"
+    },
+    "AP-NOTETAKER-*": {
+      "status": "PASS",
+      "batchId": "APT-MTG-01",
+      "at": "2026-09-07T21:46:59.669Z"
+    },
+    "AP-NATIVE-VIDEO-*": {
+      "status": "PASS",
+      "batchId": "APT-MTG-02",
+      "at": "2026-09-07T21:46:59.980Z"
+    },
+    "MCTB-OP-010": {
+      "status": "PASS",
+      "batchId": "MCTB-FILTER-01",
+      "at": "2026-09-07T21:47:00.297Z"
+    },
+    "MCTB-OP-020": {
+      "status": "PASS",
+      "batchId": "MCTB-INBOX-01",
+      "at": "2026-09-07T21:47:00.620Z"
+    },
+    "MCTB-VM-001": {
+      "status": "PASS",
+      "batchId": "MCTB-VM-01",
+      "at": "2026-09-07T21:47:00.930Z"
+    },
+    "MCTB-RT-007": {
+      "status": "FAIL",
+      "batchId": "MCTB-TFV-01",
+      "at": "2026-09-07T21:47:01.689Z"
+    },
+    "MCTB-HO-MODE-*": {
+      "status": "PASS",
+      "batchId": "MCTB-HO-01",
+      "at": "2026-09-07T21:47:02.004Z"
+    },
+    "MCTB-HO-FIELD-*": {
+      "status": "PASS",
+      "batchId": "MCTB-HO-01",
+      "at": "2026-09-07T21:47:02.004Z"
+    },
+    "MCTB-RT-001": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-01",
+      "at": "2026-09-07T21:47:02.320Z"
+    },
+    "MCTB-RT-002": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-01",
+      "at": "2026-09-07T21:47:02.320Z"
+    },
+    "MCTB-SET-003": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-02",
+      "at": "2026-09-07T21:47:02.635Z"
+    },
+    "MCTB-LEGACY-SCHED-001": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-03",
+      "at": "2026-09-07T21:47:03.013Z"
+    },
+    "MCTB-SET-005": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-03",
+      "at": "2026-09-07T21:47:03.013Z"
+    },
+    "MCTB-RT-006": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-04",
+      "at": "2026-09-07T21:47:03.329Z"
+    },
+    "MCTB-RT-003": {
+      "status": "PASS",
+      "batchId": "MCTB-RT-05",
+      "at": "2026-09-07T21:47:03.939Z"
+    },
+    "MCTB-RT-engine": {
+      "status": "FAIL",
+      "batchId": "MCTB-RT-06",
+      "at": "2026-09-07T21:47:04.377Z"
+    },
+    "AI-MCTB-001": {
+      "status": "FAIL",
+      "batchId": "AI-JOHN-01",
+      "at": "2026-09-07T21:47:09.206Z"
+    },
+    "AI-MCTB-002": {
+      "status": "FAIL",
+      "batchId": "AI-JOHN-01",
+      "at": "2026-09-07T21:47:09.206Z"
+    },
+    "AI-MCTB-003": {
+      "status": "FAIL",
+      "batchId": "AI-JOHN-01",
+      "at": "2026-09-07T21:47:09.206Z"
+    },
+    "AI-VM-001": {
+      "status": "FAIL",
+      "batchId": "AI-TRX-01",
+      "at": "2026-09-07T21:47:09.506Z"
+    },
+    "AI-VM-002": {
+      "status": "FAIL",
+      "batchId": "AI-TRX-01",
+      "at": "2026-09-07T21:47:09.506Z"
+    },
+    "MCTB-DEFECT-SETUP-LINKS": {
+      "status": "FAIL",
+      "batchId": "DEFECT-01",
+      "at": "2026-09-07T21:47:09.507Z",
+      "reason": "DEFECT — MISSING UI: /mctb/setup/links"
+    }
+  },
+  "updatedAt": "2026-09-07T21:47:09.507Z"
+}

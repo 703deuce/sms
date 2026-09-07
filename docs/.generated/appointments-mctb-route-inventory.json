@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T21:33:15.209Z",
+  "generatedAt": "2026-09-07T21:46:10.007Z",
   "counts": {
     "appointmentsPages": 53,
     "appointmentsApis": 64,
@@ -1591,6 +1591,7 @@
     "assign:mctb-571-admin",
     "audit:livekit-booking-steps",
     "cert:appointments-mctb-staged",
+    "cert:matrix:appointments-mctb",
     "inventory:appointments-mctb",
     "replay:mctb-consent-texml",
     "setup:frontdesk-booking-agent",
