@@ -9,6 +9,7 @@ import {
   MCTB_CONSENT_MODE_VERIFIED,
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
@@ -119,7 +120,7 @@ function fmtPhone(e164: string) {
   return e164;
 }
 
-export function MctbSetupView() {
+export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = {}) {
   const [data, setData] = useState<SetupData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -240,6 +241,12 @@ export function MctbSetupView() {
     void load();
     void loadExclusions();
   }, [load, loadExclusions]);
+
+  useEffect(() => {
+    if (!focusSectionId || loading) return;
+    const el = document.getElementById(focusSectionId);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusSectionId, loading]);
 
   useEffect(() => {
     if (!setupTest?.started || setupTest.verified) return;
@@ -493,7 +500,7 @@ export function MctbSetupView() {
             >
               {bootstrapping ? "Setting up…" : "Set up admin test account"}
             </Button>
-            <Link href="/voice/try-it">
+            <Link href={MCTB_ROUTES.setupTest}>
               <Button variant="outline">Open Try It</Button>
             </Link>
           </div>
@@ -576,7 +583,7 @@ export function MctbSetupView() {
                 </p>
               </div>
             ) : null}
-            <Link href="/voice/numbers" className="text-[13px] font-semibold text-primary hover:underline">
+            <Link href={MCTB_ROUTES.numbers} className="text-[13px] font-semibold text-primary hover:underline">
               Manage numbers →
             </Link>
           </Card>
@@ -600,7 +607,7 @@ export function MctbSetupView() {
                 <p className="mt-2 text-[12px] text-muted-foreground">
                   Call your business line from another phone after forwarding — do not dial this
                   number directly for production tests (use{" "}
-                  <Link href="/voice/try-it" className="font-semibold text-primary hover:underline">
+                  <Link href={MCTB_ROUTES.setupTest} className="font-semibold text-primary hover:underline">
                     Try It
                   </Link>{" "}
                   for a no-forwarding demo).
@@ -817,7 +824,7 @@ export function MctbSetupView() {
           <Card id="hours" className="scroll-mt-24 space-y-4 p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-[15px] font-semibold text-[#111827]">Schedule</h2>
-              <Link href="/voice/schedule" className="text-[13px] font-semibold text-primary hover:underline">
+              <Link href={MCTB_ROUTES.setupRecovery} className="text-[13px] font-semibold text-primary hover:underline">
                 Open Schedule page →
               </Link>
             </div>
@@ -1020,10 +1027,10 @@ export function MctbSetupView() {
               >
                 Test My Setup
               </Button>
-              <Link href="/voice/missed-calls">
+              <Link href={MCTB_ROUTES.missedCalls}>
                 <Button variant="outline">View missed call log</Button>
               </Link>
-              <Link href="/voice/consent-log">
+              <Link href={MCTB_ROUTES.complianceConsent}>
                 <Button variant="outline">View consent log</Button>
               </Link>
               <Link href="/conversations">
@@ -1066,7 +1073,7 @@ export function MctbSetupView() {
             <Button variant="outline" disabled={saving} onClick={() => save(false)}>
               {data?.schedule?.paused ? "Save changes (draft)" : "Save draft"}
             </Button>
-            <Link href="/voice/schedule" className="text-[13px] text-primary hover:underline">
+            <Link href={MCTB_ROUTES.setupRecovery} className="text-[13px] text-primary hover:underline">
               Pause or schedule text-backs →
             </Link>
           </div>
