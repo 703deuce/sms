@@ -12,6 +12,7 @@ import {
   isServerConnectionError,
   TestEnvironmentUnavailableError,
 } from "./server-guard";
+import { BROWSER_CERT_CONFIG } from "./browser-cert.config";
 
 for (const file of [".env.local", ".env"]) {
   const p = join(process.cwd(), file);
@@ -67,11 +68,10 @@ export const RESULTS_MD = join(CERT_DIR, "APPOINTMENTS_MCTB_BROWSER_CERT_RESULTS
 export const ARTIFACTS_DIR =
   process.env.BROWSER_CERT_ARTIFACTS_DIR || join(process.cwd(), "artifacts/browser-cert");
 
-export const NAV_TIMEOUT = Number(process.env.BROWSER_CERT_NAV_TIMEOUT_MS || 30_000);
-export const ACTION_TIMEOUT = Number(process.env.BROWSER_CERT_ACTION_TIMEOUT_MS || 20_000);
-export const FLOW_TIMEOUT = Number(process.env.BROWSER_CERT_FLOW_TIMEOUT_MS || 90_000);
-export const ROUTE_PAUSE_MS = Number(process.env.BROWSER_CERT_ROUTE_PAUSE_MS || 1500);
-export const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
+export const NAV_TIMEOUT = BROWSER_CERT_CONFIG.navTimeoutMs;
+export const ACTION_TIMEOUT = BROWSER_CERT_CONFIG.actionTimeoutMs;
+export const FLOW_TIMEOUT = BROWSER_CERT_CONFIG.flowTimeoutMs;
+export const ROUTE_PAUSE_MS = 1500;
 
 export const ERROR_PATTERNS = [
   /Application error/i,
@@ -221,7 +221,7 @@ export async function authenticate(baseUrl: string): Promise<{
     process.env.DEV_AUTH_BYPASS?.trim()?.toLowerCase() === "true";
 
   if (useDevBypass) {
-    const email = process.env.DEV_AUTH_BYPASS_EMAIL || process.env.CERT_BROWSER_EMAIL || "";
+    const email = process.env.DEV_AUTH_BYPASS_EMAIL || BROWSER_CERT_CONFIG.certEmail;
     const bypass = await api.get(
       `/api/auth/dev-bypass?next=/appointments/overview&email=${encodeURIComponent(email)}`,
       { maxRedirects: 0 },
@@ -234,15 +234,18 @@ export async function authenticate(baseUrl: string): Promise<{
     }
   }
 
-  const email =
-    process.env.CERT_BROWSER_EMAIL ||
-    `appt-mctb-browser-${Date.now().toString(36)}@transovo.test`;
-  const password = process.env.CERT_BROWSER_PASSWORD || `BrowserCert_${Date.now().toString(36)}!`;
+  const stableEmail = BROWSER_CERT_CONFIG.certEmail;
+  const stablePassword = process.env.CERT_BROWSER_PASSWORD?.trim();
+  if (!stablePassword) {
+    await api.dispose();
+    return {
+      ok: false,
+      storageState: await api.storageState(),
+      email: stableEmail,
+    };
+  }
 
-  const stableEmail = process.env.CERT_BROWSER_EMAIL || "appt-mctb-browser@transovo.test";
-  const stablePassword = process.env.CERT_BROWSER_PASSWORD || "ApptMctbBrowserCert_v1!";
-
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const login = await api.post("/api/auth/login", {
       data: { email: stableEmail, password: stablePassword, next: "/appointments/overview" },
     });
@@ -252,25 +255,12 @@ export async function authenticate(baseUrl: string): Promise<{
       await api.dispose();
       return { ok: true, storageState, email: stableEmail };
     }
-    if (attempt < 2) await new Promise((r) => setTimeout(r, 3000));
+    if (attempt < 1) await new Promise((r) => setTimeout(r, 3000));
   }
 
-  const signup = await api.post("/api/auth/smoke-signup", {
-    headers: { "x-smoke-bootstrap": BOOTSTRAP },
-    data: {
-      email,
-      password,
-      name: "Browser Cert Tester",
-      businessName: "Browser Cert Co",
-      cloneCalendly: false,
-      grantMassTexting: false,
-    },
-  });
-  const body = await signup.json().catch(() => ({}));
-  const ok = signup.ok() && body.ok;
-  const storageState = await api.storageState();
+  const emptyState = { cookies: [] as [], origins: [] as [] };
   await api.dispose();
-  return { ok, storageState, email: body.email || email };
+  return { ok: false, storageState: emptyState, email: stableEmail };
 }
 
 export async function visitRoute(
@@ -378,18 +368,21 @@ export async function runCertCase(
 
 /** Preflight only — verify env, provenance, and deployed health without launching Chromium. */
 export async function browserCertPreflight(): Promise<{ ok: boolean; message: string }> {
-  const { resolveCertBaseUrl, verifyDeployProvenance, waitForDeployedApp } = await import(
+  const { resolveCertBaseUrl, verifyDeployProvenance, fetchPreviewHealth } = await import(
     "./server-guard"
   );
   try {
     const baseUrl = resolveCertBaseUrl();
-    const provenance = verifyDeployProvenance();
-    if (!waitForDeployedApp(baseUrl, 30_000)) {
-      return { ok: false, message: `Deployed app not reachable at ${baseUrl}` };
+    const health = fetchPreviewHealth(baseUrl);
+    const provenance = verifyDeployProvenance(baseUrl);
+    if (!health.ok) {
+      return { ok: false, message: `Preview not reachable at ${baseUrl}/api/health` };
     }
     return {
       ok: true,
-      message: `OK — ${baseUrl} · git ${provenance.gitCommitSha.slice(0, 7)} · deploy ${provenance.deployCommitSha.slice(0, 7)}`,
+      message:
+        `OK — ${baseUrl} · local ${provenance.gitCommitSha.slice(0, 7)} · ` +
+        `deployed ${provenance.deployCommitSha.slice(0, 7)} (matched via /api/health)`,
     };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };

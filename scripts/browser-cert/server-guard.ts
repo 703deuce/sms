@@ -1,8 +1,9 @@
 /**
  * Preview/staging server health for browser certification.
- * Hard rule: never start local next dev — cert hits BROWSER_CERT_BASE_URL only.
+ * Hard rule: never start local next dev — cert hits previewBaseUrl from config only.
  */
 import { spawnSync } from "node:child_process";
+import { BROWSER_CERT_CONFIG } from "./browser-cert.config";
 
 export class TestEnvironmentUnavailableError extends Error {
   readonly status = "BLOCKED — TEST ENVIRONMENT UNAVAILABLE" as const;
@@ -24,6 +25,12 @@ export type ServerGuardOptions = {
   consecutiveFailureLimit: number;
 };
 
+export type PreviewHealth = {
+  ok: boolean;
+  commitSha: string | null;
+  httpStatus: number;
+};
+
 export class ServerGuard {
   private consecutiveFailures = 0;
   private readonly baseUrl: string;
@@ -39,27 +46,8 @@ export class ServerGuard {
     return this.aborted;
   }
 
-  /** Lightweight health: /api/health then /. */
   ping(): boolean {
-    for (const path of ["/api/health", "/"]) {
-      const r = spawnSync(
-        "curl",
-        [
-          "-s",
-          "-o",
-          "/dev/null",
-          "-w",
-          "%{http_code}",
-          "--max-time",
-          "10",
-          `${this.baseUrl}${path}`,
-        ],
-        { encoding: "utf8" },
-      );
-      const code = r.stdout?.trim();
-      if (code && code !== "000" && Number(code) < 500) return true;
-    }
-    return false;
+    return fetchPreviewHealth(this.baseUrl).ok;
   }
 
   assertHealthy(label = "batch") {
@@ -68,7 +56,7 @@ export class ServerGuard {
     }
     if (!this.ping()) {
       throw new TestEnvironmentUnavailableError(
-        `Deployed application unreachable before ${label} (${this.baseUrl}). Aborting batch — not recording product FAILs.`,
+        `Deployed application unreachable before ${label} (${this.baseUrl}). Aborting — not recording product FAILs.`,
       );
     }
   }
@@ -103,17 +91,14 @@ export function getServerGuard(): ServerGuard | null {
 }
 
 export function resolveCertBaseUrl(): string {
-  const raw = process.env.BROWSER_CERT_BASE_URL?.trim();
-  if (!raw) {
-    throw new Error(
-      "BROWSER_CERT_BASE_URL is required. Browser certification must run against a deployed preview/staging URL — local next dev is not allowed.",
-    );
-  }
-  const baseUrl = raw.replace(/\/$/, "");
+  const baseUrl = BROWSER_CERT_CONFIG.previewBaseUrl.replace(/\/$/, "");
   if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl)) {
     throw new Error(
-      `BROWSER_CERT_BASE_URL must not be localhost (${baseUrl}). Use a Coolify preview/staging deployment.`,
+      `browser-cert.config.ts previewBaseUrl must not be localhost (${baseUrl}). Set your Coolify preview/staging URL.`,
     );
+  }
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    throw new Error(`browser-cert.config.ts previewBaseUrl is invalid: ${baseUrl}`);
   }
   return baseUrl;
 }
@@ -123,44 +108,83 @@ export function readGitCommitSha(): string {
   return r.stdout?.trim() || "unknown";
 }
 
-export function verifyDeployProvenance(): {
+function commitsMatch(a: string, b: string): boolean {
+  const normalize = (s: string) => s.trim().toLowerCase();
+  const na = normalize(a);
+  const nb = normalize(b);
+  return na === nb || na.startsWith(nb) || nb.startsWith(na);
+}
+
+/** GET /api/health on preview — expects commitSha from deployed build. */
+export function fetchPreviewHealth(baseUrl: string): PreviewHealth {
+  const root = baseUrl.replace(/\/$/, "");
+  const r = spawnSync("curl", ["-s", "-w", "\n%{http_code}", "--max-time", "15", `${root}/api/health`], {
+    encoding: "utf8",
+  });
+  const raw = r.stdout?.trim() || "";
+  const lines = raw.split("\n");
+  const httpStatus = Number(lines.at(-1) || "0");
+  const bodyText = lines.slice(0, -1).join("\n");
+  if (!bodyText || httpStatus >= 500 || httpStatus === 0) {
+    return { ok: false, commitSha: null, httpStatus };
+  }
+  try {
+    const body = JSON.parse(bodyText) as {
+      ok?: boolean;
+      commitSha?: string;
+      gitCommitSha?: string;
+      deploySha?: string;
+    };
+    const commitSha =
+      body.commitSha?.trim() ||
+      body.gitCommitSha?.trim() ||
+      body.deploySha?.trim() ||
+      null;
+    const ok = body.ok === true && httpStatus < 500;
+    return { ok, commitSha, httpStatus };
+  } catch {
+    return { ok: false, commitSha: null, httpStatus };
+  }
+}
+
+export function verifyDeployProvenance(baseUrl?: string): {
   gitCommitSha: string;
   deployCommitSha: string;
   provenanceOk: boolean;
 } {
+  const previewUrl = baseUrl || resolveCertBaseUrl();
   const gitCommitSha = readGitCommitSha();
-  const deployCommitSha =
-    process.env.BROWSER_CERT_DEPLOY_SHA?.trim() ||
-    process.env.COOLIFY_DEPLOY_SHA?.trim() ||
-    "";
+  const health = fetchPreviewHealth(previewUrl);
 
-  if (!deployCommitSha) {
+  if (!health.ok) {
     throw new Error(
-      "BROWSER_CERT_DEPLOY_SHA is required. Set it to the exact Git commit SHA deployed at BROWSER_CERT_BASE_URL.",
+      `Preview health check failed at ${previewUrl}/api/health (HTTP ${health.httpStatus}). Is the staging deployment up?`,
     );
   }
 
-  const normalize = (s: string) => s.trim().toLowerCase();
-  const provenanceOk =
-    normalize(gitCommitSha) === normalize(deployCommitSha) ||
-    normalize(gitCommitSha).startsWith(normalize(deployCommitSha)) ||
-    normalize(deployCommitSha).startsWith(normalize(gitCommitSha));
-
-  if (!provenanceOk) {
+  if (!health.commitSha) {
     throw new Error(
-      `Deploy provenance mismatch: certifying git ${gitCommitSha} but BROWSER_CERT_DEPLOY_SHA=${deployCommitSha}. ` +
-        "Do not certify one commit against a deployment from another.",
+      `Preview /api/health at ${previewUrl} did not return commitSha. ` +
+        "Ensure Coolify sets SOURCE_COMMIT (or GIT_COMMIT) at build/deploy so /api/health can report the deployed revision.",
+    );
+  }
+
+  const deployCommitSha = health.commitSha;
+  if (!commitsMatch(gitCommitSha, deployCommitSha)) {
+    throw new Error(
+      `Deploy provenance mismatch: local git HEAD is ${gitCommitSha} but preview reports ${deployCommitSha}. ` +
+        "Deploy the current commit to staging before running browser certification.",
     );
   }
 
   return { gitCommitSha, deployCommitSha, provenanceOk: true };
 }
 
-export function waitForDeployedApp(baseUrl: string, maxMs = 120_000): boolean {
-  const guard = new ServerGuard({ baseUrl, consecutiveFailureLimit: 2 });
+export function waitForDeployedApp(baseUrl: string, maxMs = BROWSER_CERT_CONFIG.serverHealthMaxWaitMs): boolean {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
-    if (guard.ping()) return true;
+    const health = fetchPreviewHealth(baseUrl);
+    if (health.ok) return true;
     spawnSync("sleep", ["3"]);
   }
   return false;

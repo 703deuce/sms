@@ -20,8 +20,9 @@ import {
   TestEnvironmentUnavailableError,
 } from "./server-guard";
 import type { BrowserFlow } from "./flows";
+import { BROWSER_CERT_CONFIG } from "./browser-cert.config";
 
-export const DISPOSABLE_PAUSE_MS = Number(process.env.BROWSER_CERT_DISPOSABLE_PAUSE_MS || 4000);
+export const DISPOSABLE_PAUSE_MS = BROWSER_CERT_CONFIG.disposablePauseMs;
 
 export class BrowserPhaseStoppedError extends Error {
   readonly status = "BLOCKED — BROWSER PHASE STOPPED" as const;
@@ -124,9 +125,9 @@ export async function runDisposableFlow(opts: DisposableRunOptions): Promise<voi
       recordResult(state, flow.batchId, flow.id, "FAIL", detail);
       saveState(state);
 
-      if (state.consecutiveBrowserCrashes >= 2) {
+      if (state.consecutiveBrowserCrashes >= BROWSER_CERT_CONFIG.consecutiveBrowserCrashLimit) {
         state.browserPhaseBlocked = true;
-        state.browserPhaseBlockedReason = `2 consecutive browser crashes — last flow ${flow.id}`;
+        state.browserPhaseBlockedReason = `${BROWSER_CERT_CONFIG.consecutiveBrowserCrashLimit} consecutive browser crashes — last flow ${flow.id}`;
         saveState(state);
         throw new BrowserPhaseStoppedError(state.browserPhaseBlockedReason);
       }

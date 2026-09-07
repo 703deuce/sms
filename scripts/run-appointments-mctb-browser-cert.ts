@@ -5,13 +5,15 @@
  * HARD RULE: preview/staging URL only — never local next dev.
  *
  * Usage:
- *   BROWSER_CERT_BASE_URL=https://preview.example.com \
- *   BROWSER_CERT_DEPLOY_SHA=$(git rev-parse HEAD) \
- *   npm run cert:appointments-mctb-browser -- --only BATCH-01
+ *   CERT_BROWSER_PASSWORD=... npm run cert:appointments-mctb-browser -- --only BATCH-01
+ *
+ * Preview URL and timeouts: scripts/browser-cert/browser-cert.config.ts
+ * Deploy SHA: auto-read from preview /api/health vs local git HEAD
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { ALL_FLOWS, BATCHES, resolveFlows } from "./browser-cert/flows";
+import { BROWSER_CERT_CONFIG } from "./browser-cert/browser-cert.config";
 import { writeProvenance } from "./browser-cert/provenance";
 import {
   BrowserPhaseStoppedError,
@@ -91,7 +93,7 @@ async function runDisposableCert() {
   let provenance: ReturnType<typeof verifyDeployProvenance>;
   try {
     baseUrl = resolveCertBaseUrl();
-    provenance = verifyDeployProvenance();
+    provenance = verifyDeployProvenance(baseUrl);
   } catch (err) {
     console.error(err instanceof Error ? err.message : err);
     process.exit(1);
@@ -118,7 +120,10 @@ async function runDisposableCert() {
     process.exit(1);
   }
 
-  const guard = new ServerGuard({ baseUrl, consecutiveFailureLimit: 2 });
+  const guard = new ServerGuard({
+    baseUrl,
+    consecutiveFailureLimit: BROWSER_CERT_CONFIG.consecutiveServerFailureLimit,
+  });
   setServerGuard(guard);
 
   let state: BrowserCertState = fresh
@@ -166,7 +171,9 @@ async function runDisposableCert() {
 
   const auth = await authenticate(baseUrl);
   if (!auth.ok) {
-    console.error("Authentication failed — configure CERT_BROWSER_EMAIL/PASSWORD on preview");
+    console.error(
+      "Authentication failed — set CERT_BROWSER_PASSWORD (secret) for the cert account on preview",
+    );
     process.exit(1);
   }
   console.log(`Authenticated as ${auth.email}`);
