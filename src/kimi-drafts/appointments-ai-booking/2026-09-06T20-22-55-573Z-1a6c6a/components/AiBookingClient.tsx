@@ -235,11 +235,28 @@ export function AiBookingClient() {
             {history.length > 0 || loading ? (
               <div className="convo" ref={convoRef} aria-live="polite">
                 {history.map((m, i) => (
-                  <div key={i} className={`bubble ${m.role === "user" ? "bubble-user" : "bubble-ai"}`}>
-                    {m.content}
-                    <div className="bubble-meta">
-                      {m.role === "user" ? "You" : "AI Booking assistant"} · {m.at}
+                  <div key={i}>
+                    <div className={`bubble ${m.role === "user" ? "bubble-user" : "bubble-ai"}`}>
+                      {m.content}
+                      <div className="bubble-meta">
+                        {m.role === "user" ? "You" : "AI Booking assistant"} · {m.at}
+                      </div>
                     </div>
+                    {m.role === "assistant" && m.result?.slotOptions?.length ? (
+                      <div className="prompt-chips" style={{ marginTop: 8, marginBottom: 4 }}>
+                        {m.result.slotOptions.map((slot) => (
+                          <button
+                            key={slot.iso}
+                            type="button"
+                            className="prompt-chip"
+                            onClick={() => send(`Book ${slot.label}`)}
+                            disabled={loading}
+                          >
+                            {slot.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 {loading ? (
@@ -390,7 +407,7 @@ export function AiBookingClient() {
           </section>
 
           <section className="surface card-pad">
-            <div style={{ display: "flex", gap: 11px }}>
+            <div style={{ display: "flex", gap: "11px" }}>
               <div className="cap-icon" style={{ background: "var(--success-bg)", color: "var(--success)" }}>
                 <ShieldCheck size={15} />
               </div>
@@ -402,7 +419,7 @@ export function AiBookingClient() {
                 </p>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 11px, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: "11px", marginTop: 12 }}>
               <div className="cap-icon">
                 <Clock3 size={15} />
               </div>
@@ -414,7 +431,7 @@ export function AiBookingClient() {
                 </p>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 11px, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: "11px", marginTop: 12 }}>
               <div className="cap-icon">
                 <Zap size={15} />
               </div>

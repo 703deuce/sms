@@ -6,27 +6,36 @@ import { RecallStatsRow } from "./RecallStatsRow";
 import { RecallFeatureCard } from "./RecallFeatureCard";
 import { RecallActivityList } from "./RecallActivityList";
 import { RecallActivityModal } from "./RecallActivityModal";
-import { RECALL_ACTIVITY, type RecallActivity } from "../mock-data";
+import type { RecallActivity, RecallStat } from "../types";
 
-type LoadState = "normal" | "loading" | "error";
-
-export function RecallsHub() {
-  const [state, setState] = useState<LoadState>("normal");
+export function RecallsHub({
+  stats,
+  activity,
+  recallCampaignsMeta,
+  noShowRecoveryMeta,
+  loading = false,
+  refreshError = false,
+  onRefresh,
+}: {
+  stats: RecallStat[];
+  activity: RecallActivity[];
+  recallCampaignsMeta: string;
+  noShowRecoveryMeta: string;
+  loading?: boolean;
+  refreshError?: boolean;
+  onRefresh: () => void;
+}) {
+  const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<RecallActivity | null>(null);
 
-  // Sandbox simulation: first refresh errors to demonstrate the error state,
-  // second refresh succeeds.
-  function refresh() {
-    setState("loading");
-    window.setTimeout(() => {
-      setState((prev) => (prev === "loading" ? (window.__tvRecallRefreshedOnce ? "normal" : "error") : prev));
-      if (!window.__tvRecallRefreshedOnce) {
-        window.__tvRecallRefreshedOnce = true;
-      }
-    }, 700);
+  async function refresh() {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
   }
 
-  const hasActivity = RECALL_ACTIVITY.length > 0;
+  const busy = loading || refreshing;
+  const hasActivity = activity.length > 0;
 
   return (
     <div className="tv-page">
@@ -44,7 +53,7 @@ export function RecallsHub() {
         </a>
       </header>
 
-      <RecallStatsRow />
+      <RecallStatsRow stats={stats} />
 
       <h2 className="tv-section-title">Recall tools</h2>
       <div className="tv-cards">
@@ -52,7 +61,7 @@ export function RecallsHub() {
           icon={Bell}
           title="Recall campaigns"
           description="Target customers with no future appointment by last visit or appointment type. Send an SMS reminder inviting them to book again."
-          meta="2 active campaigns · 128 eligible customers"
+          meta={recallCampaignsMeta || "Set up recall campaigns"}
           cta="Open recall campaigns"
           href="/appointments/recall-campaigns"
         />
@@ -60,7 +69,7 @@ export function RecallsHub() {
           icon={RefreshCcw}
           title="No-show recovery"
           description="Automatically follow up after missed appointments and invite customers to rebook. Follow-ups stop when the customer replies or rebooks."
-          meta="Enabled · 11 follow-ups sent this month"
+          meta={noShowRecoveryMeta || "Configure no-show recovery"}
           cta="Open no-show recovery"
           href="/appointments/no-show-recovery"
         />
@@ -72,28 +81,30 @@ export function RecallsHub() {
           type="button"
           className="tv-btn"
           onClick={refresh}
-          disabled={state === "loading"}
+          disabled={busy}
           aria-label="Refresh recall activity"
         >
-          <RotateCw size={14} className={state === "loading" ? "animate-spin" : undefined} />
-          {state === "loading" ? "Refreshing…" : "Refresh"}
+          <RotateCw size={14} className={busy ? "animate-spin" : undefined} />
+          {busy ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 
-      {state === "error" ? (
+      {refreshError ? (
         <div className="tv-table-wrap tv-state-block" role="alert">
           <p className="tv-state-icon" aria-hidden="true">
             <AlertTriangle size={20} style={{ color: "var(--tv-warning)" }} />
           </p>
-          <p className="tv-state-title">Recall activity couldn’t be refreshed</p>
+          <p className="tv-state-title">Recall activity couldn&apos;t be refreshed</p>
           <p className="tv-subtitle" style={{ margin: "6px auto 14px", maxWidth: "46ch" }}>
-            The most recent activity is still shown below. Try refreshing again.
+            {hasActivity
+              ? "The most recent activity is still shown below. Try refreshing again."
+              : "Something went wrong while loading recall activity. Try again."}
           </p>
           <button type="button" className="tv-btn tv-btn-primary" onClick={refresh}>
             Retry
           </button>
         </div>
-      ) : state === "loading" && !hasActivity ? (
+      ) : busy && !hasActivity ? (
         <div className="tv-table-wrap" aria-busy="true" aria-label="Loading recall activity">
           {[0, 1, 2, 3].map((i) => (
             <div className="tv-skel-row" key={i}>
@@ -104,14 +115,14 @@ export function RecallsHub() {
           ))}
         </div>
       ) : hasActivity ? (
-        <div aria-busy={state === "loading"}>
-          <RecallActivityList items={RECALL_ACTIVITY} onSelect={setSelected} />
+        <div aria-busy={busy}>
+          <RecallActivityList items={activity} onSelect={setSelected} />
         </div>
       ) : (
         <div className="tv-table-wrap tv-state-block">
           <p className="tv-state-title">No recall activity yet</p>
           <p className="tv-subtitle" style={{ margin: "6px auto 14px", maxWidth: "46ch" }}>
-            When recall campaigns or no-show follow-ups are sent, they’ll appear here so you can track
+            When recall campaigns or no-show follow-ups are sent, they&apos;ll appear here so you can track
             outreach and rebookings in one place.
           </p>
           <a className="tv-btn tv-btn-primary" href="/appointments/recall-campaigns">
@@ -121,9 +132,9 @@ export function RecallsHub() {
         </div>
       )}
 
-      {state === "error" && hasActivity ? (
+      {refreshError && hasActivity ? (
         <div style={{ marginTop: 12, opacity: 0.75 }}>
-          <RecallActivityList items={RECALL_ACTIVITY} onSelect={setSelected} />
+          <RecallActivityList items={activity} onSelect={setSelected} />
         </div>
       ) : null}
 

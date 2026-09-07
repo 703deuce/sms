@@ -37,6 +37,8 @@ export interface MockOrchestratorResult {
   actions: Array<{ kind: string; detail: string }>;
   slotsChecked: number;
   timezone: string;
+  /** Quick-reply slot options surfaced in the test console */
+  slotOptions?: Array<{ label: string; iso: string; bookingTypeId?: string }>;
 }
 
 export function mockOrchestratorReply(message: string, channel: Channel): MockOrchestratorResult {
@@ -54,6 +56,10 @@ export function mockOrchestratorReply(message: string, channel: Channel): MockOr
       ],
       slotsChecked: 14,
       timezone: "America/New_York",
+      slotOptions: [
+        { label: "Tue, Sep 16 · 10:30 AM", iso: "2026-09-16T10:30:00-04:00" },
+        { label: "Wed, Sep 17 · 1:00 PM", iso: "2026-09-17T13:00:00-04:00" },
+      ],
     };
   }
   if (lower.includes("available") || lower.includes("availability") || lower.includes("friday") || lower.includes("morning")) {
@@ -66,6 +72,11 @@ export function mockOrchestratorReply(message: string, channel: Channel): MockOr
       actions: [{ kind: "availability.check", detail: "3 open slots across 2 booking types" }],
       slotsChecked: 22,
       timezone: "America/New_York",
+      slotOptions: [
+        { label: "Fri, Sep 12 · 9:00 AM", iso: "2026-09-12T09:00:00-04:00", bookingTypeId: "bt_1" },
+        { label: "Fri, Sep 12 · 11:30 AM", iso: "2026-09-12T11:30:00-04:00", bookingTypeId: "bt_2" },
+        { label: "Mon, Sep 15 · 8:30 AM", iso: "2026-09-15T08:30:00-04:00", bookingTypeId: "bt_1" },
+      ],
     };
   }
   return {
@@ -80,6 +91,9 @@ export function mockOrchestratorReply(message: string, channel: Channel): MockOr
     ],
     slotsChecked: 9,
     timezone: "America/New_York",
+    slotOptions: [
+      { label: "Tue, Sep 16 · 1:00 PM", iso: "2026-09-16T13:00:00-04:00", bookingTypeId: "bt_1" },
+    ],
   };
 }
 

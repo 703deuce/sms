@@ -2,7 +2,7 @@
 
 import { Check } from "lucide-react";
 
-export type FlowStep = "service" | "datetime" | "info" | "payment" | "done" | "ai" | "waitlist";
+export type FlowStep = "service" | "datetime" | "info" | "payment" | "done" | "ai" | "waitlist" | "challenge";
 
 const STEPS: Array<{ key: string; label: string }> = [
   { key: "service", label: "Service" },
@@ -11,7 +11,7 @@ const STEPS: Array<{ key: string; label: string }> = [
 ];
 
 export function StepIndicator({ step }: { step: FlowStep }) {
-  if (step === "ai" || step === "waitlist") return null;
+  if (step === "ai" || step === "waitlist" || step === "challenge") return null;
   const activeIndex = step === "done" ? STEPS.length : STEPS.findIndex((s) => s.key === step);
   const clamped = activeIndex < 0 ? STEPS.length - 1 : activeIndex;
 

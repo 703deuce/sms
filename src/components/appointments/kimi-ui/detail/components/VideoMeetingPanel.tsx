@@ -103,7 +103,7 @@ export function VideoMeetingPanel({
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {meeting.meetingUrl ? (
-          <Button size="sm" asChild={false} onClick={() => window.open(meeting.meetingUrl, "_blank")}>
+          <Button size="sm" onClick={() => window.open(meeting.meetingUrl, "_blank")}>
             <Video size={13} /> Join as host
           </Button>
         ) : null}

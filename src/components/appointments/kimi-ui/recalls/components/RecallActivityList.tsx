@@ -1,5 +1,5 @@
 import { Bell, ChevronRight, RefreshCcw } from "lucide-react";
-import type { RecallActivity } from "../mock-data";
+import type { RecallActivity } from "../types";
 
 const STATUS_CHIP: Record<RecallActivity["status"], string> = {
   Rebooked: "tv-chip tv-chip-success",

@@ -6,7 +6,9 @@ import AppShell from "./components/AppShell";
 import SettingsTabs from "./components/SettingsTabs";
 import BusinessProfileCard from "./components/BusinessProfileCard";
 import MessagingRegistrationCard from "./components/MessagingRegistrationCard";
-import { mockWorkspace, mockRegistration } from "./mock-data";
+import BookingEnabledCard from "./components/BookingEnabledCard";
+import PublicLegalCard from "./components/PublicLegalCard";
+import { mockWorkspace, mockRegistration, DEFAULT_SMS_CONSENT_TEXT } from "./mock-data";
 import { Building2, AlertCircle, CheckCircle2 } from "lucide-react";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -20,6 +22,11 @@ export default function SettingsBusinessPage() {
   );
   const [websiteUrl, setWebsiteUrl] = useState(mockRegistration.websiteUrl);
   const [timezone, setTimezone] = useState("America/New_York");
+  const [bookingEnabled, setBookingEnabled] = useState(true);
+  const [termsUrl, setTermsUrl] = useState("https://brightlinedental.com/terms");
+  const [privacyUrl, setPrivacyUrl] = useState("https://brightlinedental.com/privacy");
+  const [consentText, setConsentText] = useState(DEFAULT_SMS_CONSENT_TEXT);
+  const [consentVersion, setConsentVersion] = useState("2026-01");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState("");
 
@@ -90,6 +97,7 @@ export default function SettingsBusinessPage() {
 
         <form id="business-settings-form" onSubmit={save} className="settings-grid">
           <div className="settings-main">
+            <BookingEnabledCard enabled={bookingEnabled} onToggle={setBookingEnabled} />
             <BusinessProfileCard
               workspaceName={workspaceName}
               setWorkspaceName={setWorkspaceName}
@@ -103,6 +111,16 @@ export default function SettingsBusinessPage() {
               setWebsiteUrl={setWebsiteUrl}
               timezone={timezone}
               setTimezone={setTimezone}
+            />
+            <PublicLegalCard
+              termsUrl={termsUrl}
+              setTermsUrl={setTermsUrl}
+              privacyUrl={privacyUrl}
+              setPrivacyUrl={setPrivacyUrl}
+              consentText={consentText}
+              setConsentText={setConsentText}
+              consentVersion={consentVersion}
+              setConsentVersion={setConsentVersion}
             />
           </div>
           <div className="settings-side">

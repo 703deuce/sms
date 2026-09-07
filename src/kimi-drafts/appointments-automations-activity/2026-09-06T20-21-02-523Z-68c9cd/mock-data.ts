@@ -10,6 +10,7 @@ export type WorkflowLog = {
   executedAt: string | null;
   error: string | null;
   createdAt: string;
+  messagePreview?: string | null;
 };
 
 export type UnknownReply = {
@@ -44,6 +45,7 @@ export const workflowLogs: WorkflowLog[] = [
     executedAt: hours(2),
     error: null,
     createdAt: hours(2),
+    messagePreview: "Hi Sarah — reminder: your appointment is tomorrow at 2:00 PM. Reply YES to confirm or C to cancel.",
   },
   {
     id: "log_02",

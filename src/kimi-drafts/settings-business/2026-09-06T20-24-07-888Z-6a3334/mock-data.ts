@@ -49,6 +49,9 @@ export const sidebarNav = [
   { label: "Settings", icon: "gear", href: "/settings/business" },
 ];
 
+export const DEFAULT_SMS_CONSENT_TEXT =
+  "By checking this box, I agree to receive appointment-related text messages from Brightline Dental Studio at the mobile number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out at any time.";
+
 export const timezones = [
   "America/New_York",
   "America/Chicago",

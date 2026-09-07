@@ -274,8 +274,8 @@ export default function AnalyticsShell() {
                 <p className="conv-label">Delivery rate</p>
                 <p className="conv-value">
                   {data.remindersSent > 0
-                    `${((1 - data.remindersFailed / data.remindersSent) * 100).toFixed(1)}%`
-                    "—"}
+                    ? `${((1 - data.remindersFailed / data.remindersSent) * 100).toFixed(1)}%`
+                    : "—"}
                 </p>
                 <p className="conv-hint">Sent minus failures</p>
               </div>

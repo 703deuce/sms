@@ -75,7 +75,7 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
           <span className="info-label">Platform</span>
           <span className="info-value">
             {session?.meetingPlatform
-              ? meetingPlatformLabel(session.meetingPlatform as "zoom" | "google_meet" | "teams" | "other")
+              ? meetingPlatformLabel(session.meetingPlatform as import("@/lib/meeting-assistant/types").MeetingPlatform)
               : "External"}
           </span>
         </div>
@@ -91,7 +91,7 @@ export function NotetakerPanel({ appointmentId }: { appointmentId: string }) {
       </div>
       {meetingUrl ? (
         <div style={{ marginTop: 12 }}>
-          <Button size="sm" variant="outline" asChild={false} onClick={() => window.open(meetingUrl, "_blank")}>
+          <Button size="sm" variant="outline" onClick={() => window.open(meetingUrl, "_blank")}>
             <ExternalLink size={13} /> Open meeting link
           </Button>
         </div>

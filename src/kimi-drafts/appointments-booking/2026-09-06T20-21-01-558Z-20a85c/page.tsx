@@ -16,6 +16,7 @@ import BusinessInfoCard from "./components/BusinessInfoCard";
 import SmsConsentCard from "./components/SmsConsentCard";
 import AiProtectionCard from "./components/AiProtectionCard";
 import AdvancedPanel from "./components/AdvancedPanel";
+import ShareEmbedCard from "./components/ShareEmbedCard";
 import LivePreview from "./components/LivePreview";
 
 export default function BookingPage() {
@@ -141,6 +142,7 @@ export default function BookingPage() {
             onModeChange={handleProtectionMode}
           />
           <AdvancedPanel />
+          <ShareEmbedCard />
         </div>
 
         <div className="booking-right">

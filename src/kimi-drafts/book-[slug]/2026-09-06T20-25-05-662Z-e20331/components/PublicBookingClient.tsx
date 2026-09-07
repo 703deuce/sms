@@ -11,13 +11,22 @@ import { AiBookingStep } from "./AiBookingStep";
 import { WaitlistStep } from "./WaitlistStep";
 import { PaymentStep } from "./PaymentStep";
 import { OtpStep } from "./OtpStep";
+import { ReturningVisitorBanner } from "./ReturningVisitorBanner";
+import { FraudChallengeStep } from "./FraudChallengeStep";
+import { BookingDisabledState } from "./BookingDisabledState";
 
 export function PublicBookingClient({
   initialServiceId,
   preselectTypeId,
+  bookingDisabled = false,
+  returningVisitor,
+  requireChallenge = false,
 }: {
   initialServiceId?: string;
   preselectTypeId?: string;
+  bookingDisabled?: boolean;
+  returningVisitor?: { firstName: string; lastName: string; phone: string; email: string } | null;
+  requireChallenge?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -31,7 +40,14 @@ export function PublicBookingClient({
   const [submitError, setSubmitError] = useState("");
   const [needsOtp, setNeedsOtp] = useState(false);
   const [paidAmount, setPaidAmount] = useState<string | undefined>();
-  const [customer, setCustomer] = useState({ firstName: "", lastName: "", phone: "", email: "" });
+  const [customer, setCustomer] = useState({
+    firstName: returningVisitor?.firstName ?? "",
+    lastName: returningVisitor?.lastName ?? "",
+    phone: returningVisitor?.phone ?? "",
+    email: returningVisitor?.email ?? "",
+  });
+  const [showReturningBanner, setShowReturningBanner] = useState(!!returningVisitor);
+  const [challengePassed, setChallengePassed] = useState(!requireChallenge);
 
   // GET /api/public/book/{slug}
   useEffect(() => {
@@ -46,6 +62,10 @@ export function PublicBookingClient({
   }, [initialServiceId, preselectTypeId]);
 
   function pickType(t: BookingType) {
+    if (requireChallenge && !challengePassed) {
+      setStep("challenge");
+      return;
+    }
     setSelectedType(t);
     setStep("datetime");
   }
@@ -84,6 +104,10 @@ export function PublicBookingClient({
     setSubmitError("");
   }
 
+  if (bookingDisabled) {
+    return <BookingDisabledState />;
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -107,7 +131,37 @@ export function PublicBookingClient({
 
   return (
     <div>
+      {showReturningBanner && returningVisitor ? (
+        <ReturningVisitorBanner
+          name={returningVisitor.firstName}
+          onClear={() => {
+            setShowReturningBanner(false);
+            setCustomer({ firstName: "", lastName: "", phone: "", email: "" });
+          }}
+        />
+      ) : null}
+
       <StepIndicator step={step} />
+
+      {step === "challenge" ? (
+        <FraudChallengeStep
+          onBack={() => setStep("service")}
+          onVerified={() => {
+            setChallengePassed(true);
+            setStep("service");
+          }}
+        />
+      ) : null}
+
+      {step === "service" && requireChallenge && !challengePassed ? (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+          Booking protection is enabled.{" "}
+          <button type="button" className="font-semibold underline" onClick={() => setStep("challenge")}>
+            Complete verification
+          </button>{" "}
+          to continue.
+        </div>
+      ) : null}
 
       {step === "service" ? (
         <ServiceStep types={bookingTypes} onPick={pickType} onAi={() => setStep("ai")} onWaitlist={() => setStep("waitlist")} />
