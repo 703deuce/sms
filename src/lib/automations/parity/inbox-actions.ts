@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import type { AutomationCanvasNode, AutomationDefinition } from "../types";
 import { mergeExecutionMetadata } from "../metadata";
 import { outcomeResult } from "./resolve-outcome";
@@ -214,7 +214,7 @@ export async function runUntagInboxConversation(
     return outcomeResult(def, node.id, "tag_wasnt_present");
   }
 
-  const next = (conversation.tags || []).filter((t) => !toRemove.includes(t));
+  const next = (conversation.tags || []).filter((t: DbRow) => !toRemove.includes(t));
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: { tags: next },

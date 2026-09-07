@@ -242,6 +242,7 @@ export type AppointmentTypeConfig = {
   bookingQuestions?: BookingQuestion[];
   staffAssignment?: StaffAssignmentMode;
   staffIds?: string[];
+  groupCapacity?: number;
   collectiveStaffIds?: string[];
   locationIds?: string[];
   bookingLimits?: BookingLimitConfig;
@@ -266,7 +267,7 @@ export type AppointmentTimelineEvent = {
 };
 
 export type AppointmentMetadata = {
-  source?: "admin" | "public_booking" | "calendly" | "voice";
+  source?: "admin" | "public_booking" | "calendly" | "voice" | "waitlist";
   inviteeName?: string;
   inviteeEmail?: string;
   inviteePhone?: string;

@@ -56,7 +56,7 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ ok: true, deactivated: true });
     }
 
-    if (!assignments[id] && body.active !== false) {
+    if (!assignments[id] && (body.active ?? true)) {
       assignments[id] = body.roleId || "scheduler";
     } else if (body.roleId) {
       assignments[id] = body.roleId;

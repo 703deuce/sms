@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { mergeTemplate } from "@/lib/messaging/template";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 
@@ -110,7 +110,7 @@ export async function listAppointments(
     take: input?.take || 200,
   });
 
-  const contactIds = [...new Set(rows.map((r) => r.contactId).filter(Boolean))] as string[];
+  const contactIds = [...new Set(rows.map((r: DbRow) => r.contactId).filter(Boolean))] as string[];
   const contacts =
     contactIds.length > 0
       ? await prisma.contact.findMany({
@@ -118,10 +118,15 @@ export async function listAppointments(
           select: { id: true, firstName: true, lastName: true, phone: true, email: true },
         })
       : [];
-  const contactById = new Map(contacts.map((c) => [c.id, c]));
+  const contactById = new Map<string, DbRow>(contacts.map((c: DbRow) => [c.id, c]));
 
-  let mapped = rows.map((row) =>
-    mapAppointmentRow({ ...row, contact: row.contactId ? contactById.get(row.contactId) || null : null }),
+  let mapped: AppointmentView[] = rows.map((row: DbRow) =>
+    mapAppointmentRow({
+      ...(row as Parameters<typeof mapAppointmentRow>[0]),
+      contact: row.contactId
+        ? (contactById.get(row.contactId) as AppointmentView["contact"]) || null
+        : null,
+    }),
   );
   if (input?.q?.trim()) {
     const q = input.q.trim().toLowerCase();
@@ -160,8 +165,11 @@ export function renderAppointmentTemplate(
 
 export function appointmentMergeVars(input: {
   firstName?: string | null;
+  lastName?: string | null;
   businessName?: string | null;
   service?: string | null;
+  staffName?: string | null;
+  location?: string | null;
   startsAt: Date;
   timezone?: string | null;
   confirmLink?: string | null;
@@ -186,8 +194,11 @@ export function appointmentMergeVars(input: {
   });
   return {
     first_name: input.firstName || "there",
+    last_name: input.lastName || "",
     business_name: input.businessName || "our team",
     service: input.service || "appointment",
+    staff_name: input.staffName || "Team",
+    location: input.location || "",
     appointment_date: dateFmt.format(input.startsAt),
     appointment_time: timeFmt.format(input.startsAt),
     confirm_link: input.confirmLink || "",

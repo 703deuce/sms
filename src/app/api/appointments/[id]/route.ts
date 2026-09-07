@@ -103,7 +103,7 @@ export async function PATCH(request: Request, { params }: Params) {
       const config = await loadAppointmentPlatformConfig(auth.workspaceId);
       const reminderSchedule = buildReminderSchedule({
         startsAt: data?.startsAt || updated.startsAt.toISOString(),
-        metadata: (data?.metadata || updated.metadata || {}) as object,
+        metadata: (data?.metadata || updated.metadata || {}) as AppointmentMetadata,
         config: config.reminders,
       });
       return NextResponse.json({

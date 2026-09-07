@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { listAppointments } from "@/lib/appointments/appointments-service";
 
 export async function loadAppointmentsOverview(workspaceId: string) {
@@ -26,23 +26,23 @@ export async function loadAppointmentsOverview(workspaceId: string) {
   const inactiveStatuses = new Set(["canceled", "cancelled", "completed", "no_show"]);
   // Count in memory — PostgREST compat does not support metadata JSON path filters.
   const reminderFailed = today.filter(
-    (a) =>
+    (a: DbRow) =>
       !inactiveStatuses.has(normalized(a.status)) &&
       normalized(a.reminderStatus || "") === "failed",
   ).length;
 
   const counts = {
     todayTotal: today.length,
-    confirmed: today.filter((a) => normalized(a.status) === "confirmed").length,
-    awaitingConfirmation: today.filter((a) =>
+    confirmed: today.filter((a: DbRow) => normalized(a.status) === "confirmed").length,
+    awaitingConfirmation: today.filter((a: DbRow) =>
       ["awaiting_confirmation", "scheduled"].includes(normalized(a.status)),
     ).length,
     pendingApproval: today.filter(
-      (a) =>
+      (a: DbRow) =>
         (a.metadata as { pendingApproval?: boolean })?.pendingApproval === true &&
         !inactiveStatuses.has(normalized(a.status)),
     ).length,
-    rescheduleRequested: today.filter((a) => normalized(a.status) === "reschedule_requested")
+    rescheduleRequested: today.filter((a: DbRow) => normalized(a.status) === "reschedule_requested")
       .length,
     unreadConversations: await prisma.conversation.count({
       where: { workspaceId, unread: true },
@@ -51,31 +51,31 @@ export async function loadAppointmentsOverview(workspaceId: string) {
   };
 
   const pendingApproval = upcoming.filter(
-    (a) =>
+    (a: DbRow) =>
       (a.metadata as { pendingApproval?: boolean })?.pendingApproval === true &&
       !inactiveStatuses.has(normalized(a.status)),
   );
 
   const needsAttention = [
-    ...pendingApproval.slice(0, 5).map((a) => ({
+    ...pendingApproval.slice(0, 5).map((a: DbRow) => ({
       id: a.id,
       kind: "pending_approval" as const,
       label: `${a.inviteeName || "Customer"} — ${a.serviceName || "Appointment"} (approval required)`,
       href: `/appointments/${a.id}`,
     })),
     ...upcoming
-      .filter((a) => ["awaiting_confirmation", "scheduled"].includes(normalized(a.status)))
+      .filter((a: DbRow) => ["awaiting_confirmation", "scheduled"].includes(normalized(a.status)))
       .slice(0, 5)
-      .map((a) => ({
+      .map((a: DbRow) => ({
         id: a.id,
         kind: "awaiting_confirmation" as const,
         label: `${a.inviteeName || "Customer"} — ${a.serviceName || "Appointment"}`,
         href: `/appointments/${a.id}`,
       })),
     ...upcoming
-      .filter((a) => normalized(a.status) === "reschedule_requested")
+      .filter((a: DbRow) => normalized(a.status) === "reschedule_requested")
       .slice(0, 5)
-      .map((a) => ({
+      .map((a: DbRow) => ({
         id: a.id,
         kind: "reschedule_requested" as const,
         label: `${a.inviteeName || "Customer"} requested reschedule`,
@@ -106,11 +106,11 @@ export async function loadAppointmentsOverview(workspaceId: string) {
   return {
     counts,
     todayAppointments: today.sort(
-      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+      (a: DbRow, b: DbRow) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
     ),
     upcomingAppointments: upcoming.slice(0, 8),
     needsAttention,
-    recentConversations: recentConversations.map((c) => ({
+    recentConversations: recentConversations.map((c: DbRow) => ({
       id: c.id,
       name:
         `${c.contact?.firstName || ""} ${c.contact?.lastName || ""}`.trim() ||

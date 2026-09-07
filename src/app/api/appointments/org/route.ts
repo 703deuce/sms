@@ -28,7 +28,11 @@ export async function POST(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    const body = (await request.json()) as { action?: string; config?: Record<string, unknown> };
+    const body = (await request.json()) as {
+      action?: string;
+      config?: Record<string, unknown>;
+      assignments?: Record<string, string>;
+    };
     if (body.action === "saml") {
       const saved = await configureSamlSso(auth.workspaceId, body.config as Parameters<typeof configureSamlSso>[1]);
       return NextResponse.json({ data: saved });

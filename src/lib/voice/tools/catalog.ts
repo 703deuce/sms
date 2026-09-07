@@ -12,6 +12,7 @@ export type ToolCategory =
   | "call_control"
   | "communications"
   | "crm"
+  | "data"
   | "knowledge"
   | "scheduling"
   | "agent_routing"
@@ -42,6 +43,7 @@ export const TOOL_CATEGORY_LABELS: Record<ToolCategory, string> = {
   call_control: "Call Control",
   communications: "Communications",
   crm: "CRM",
+  data: "Data",
   knowledge: "Knowledge and Data",
   scheduling: "Scheduling",
   agent_routing: "Agent Routing",
@@ -52,6 +54,7 @@ export const TOOL_CATEGORY_ORDER: ToolCategory[] = [
   "call_control",
   "communications",
   "crm",
+  "data",
   "knowledge",
   "scheduling",
   "agent_routing",

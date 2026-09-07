@@ -12,7 +12,7 @@ export function RunScanModal({
 }) {
   const [phase, setPhase] = useState<"confirm" | "scanning" | "done">("confirm");
   const closeRef = useRef<HTMLButtonElement>(null);
-  const found = 2;
+  const [foundCount] = useState(0);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -60,7 +60,7 @@ export function RunScanModal({
               <div className="nsr-scan-result"><CheckCircle2 size={22} /></div>
               <div className="nsr-scan-title">Scan complete</div>
               <div className="nsr-scan-sub">
-                {found} appointment{found === 1 ? "" : "s"} marked as no-show. Recovery follow-ups will go out on the configured schedule.
+                {foundCount} appointment{foundCount === 1 ? "" : "s"} marked as no-show. Recovery follow-ups will go out on the configured schedule.
               </div>
             </div>
           )}
@@ -74,7 +74,7 @@ export function RunScanModal({
             </>
           )}
           {phase === "done" && (
-            <button className="nsr-btn nsr-btn-primary" onClick={() => onComplete(found)}>Done</button>
+            <button className="nsr-btn nsr-btn-primary" onClick={() => onComplete(foundCount)}>Done</button>
           )}
         </div>
       </div>

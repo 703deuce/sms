@@ -35,6 +35,9 @@ export type WorkflowPreviewResult = {
 function timingLabel(step: AppointmentWorkflowStep): string {
   const timing = step.timing;
   if (timing.kind === "immediate") return "Immediately";
+  if (timing.kind !== "relative") {
+    return timing.kind === "time_of_day" ? `At ${timing.at} on day offset ${timing.daysBefore}` : "Scheduled";
+  }
   const anchor =
     timing.anchor === "appointment_end"
       ? "appointment end"

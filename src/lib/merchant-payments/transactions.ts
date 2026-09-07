@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 
 export type MerchantPaymentTransactionView = {
   id: string;
@@ -27,7 +27,7 @@ export async function listMerchantPaymentTransactions(
     take: limit,
   });
 
-  return rows.map((row) => ({
+  return rows.map((row: DbRow) => ({
     id: row.id,
     appointmentId: row.appointmentId,
     provider: row.provider,

@@ -35,7 +35,7 @@ export default function ContactsListsFlow() {
     setTimeout(() => setToast(null), 2600);
   };
 
-  const saveList = (name: string, description: string) => {
+  const saveList = async (name: string, description: string) => {
     setLists([{ id: String(Date.now()), name, description, created: "Sep 10th, 2024 @ 8:46 am", contacts: 0 }, ...lists]);
     setPage("lists");
     showToast("List created.");
@@ -46,8 +46,14 @@ export default function ContactsListsFlow() {
     showToast("Contacts successfully added.");
   };
 
-  const saveKeyword = (listId: string | null) => {
-    setKeywords(keywords.map((k) => (k.id === "k5" ? { ...k, connectedLists: listId ? 1 : 0 } : k)));
+  const saveKeyword = (_payload: {
+    listId: string | null;
+    keyword: string;
+    description: string;
+    autoResponse: string;
+    status: "Active" | "Inactive";
+  }) => {
+    setKeywords(keywords.map((k) => (k.id === "k5" ? { ...k, connectedLists: _payload.listId ? 1 : 0 } : k)));
     setPage("tools");
     showToast("Keyword saved.");
   };

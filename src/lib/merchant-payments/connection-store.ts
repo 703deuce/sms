@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { decryptIntegrationSecret, encryptIntegrationSecret } from "@/lib/integrations/framework/secrets";
 import type {
@@ -69,7 +69,9 @@ export async function listMerchantConnections(workspaceId: string): Promise<Merc
     where: { workspaceId },
   });
   const providers: MerchantPaymentProvider[] = ["STRIPE", "SQUARE"];
-  const byProvider = new Map(rows.map((r) => [r.provider, r as ConnectionRecord]));
+  const byProvider = new Map<string, ConnectionRecord>(
+    rows.map((r: DbRow) => [String(r.provider), r as ConnectionRecord]),
+  );
   return providers.map((provider) => {
     const row = byProvider.get(provider);
     if (!row) {

@@ -43,7 +43,10 @@ export async function loadAppointmentPlatformConfig(
       },
     },
     voiceReminders: stored.voiceReminders
-      ? { ...(stored.voiceReminders as AppointmentPlatformConfig["voiceReminders"]) }
+      ? ({
+          ...(DEFAULT_PLATFORM_CONFIG.voiceReminders || {}),
+          ...(stored.voiceReminders as AppointmentPlatformConfig["voiceReminders"]),
+        } as AppointmentPlatformConfig["voiceReminders"])
       : undefined,
   };
 }

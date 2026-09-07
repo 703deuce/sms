@@ -9,7 +9,7 @@ import { CreatePollModal } from "./CreatePollModal";
 import { PollDetailDrawer } from "./PollDetailDrawer";
 import { ConfirmTimeModal, DeletePollModal } from "./ConfirmActionModal";
 
-type LoadState = "loading" | "ready" | "error";
+type LoadState = "loading" | "ready" | "error" | "empty";
 type Filter = "all" | PollStatus;
 
 const LOCAL_NAV = [

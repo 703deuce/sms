@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const auth = await requireAppointmentsAccess("appointments.book");
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as {
-      channel?: "sms" | "email";
+      channel?: "sms" | "email" | "voice";
       message?: string;
       contactId?: string;
       phone?: string;

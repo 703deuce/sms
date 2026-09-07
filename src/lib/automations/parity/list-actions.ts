@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import type { AutomationCanvasNode, AutomationDefinition } from "../types";
 import { outcomeResult } from "./resolve-outcome";
 
@@ -109,7 +109,7 @@ export async function isContactOnLists(
     where: { workspaceId, id: { in: listIds } },
     select: { id: true },
   });
-  const validIds = validLists.map((l) => l.id);
+  const validIds = validLists.map((l: DbRow) => l.id);
   if (!validIds.length) return false;
   const memberships = await prisma.contactListMember.findMany({
     where: {
@@ -118,8 +118,8 @@ export async function isContactOnLists(
     },
     select: { listId: true },
   });
-  const on = new Set(memberships.map((m) => m.listId));
-  if (matchMode === "all") return validIds.every((id) => on.has(id));
-  if (matchMode === "none") return validIds.every((id) => !on.has(id));
-  return validIds.some((id) => on.has(id));
+  const on = new Set(memberships.map((m: DbRow) => m.listId));
+  if (matchMode === "all") return validIds.every((id: DbRow) => on.has(id));
+  if (matchMode === "none") return validIds.every((id: DbRow) => !on.has(id));
+  return validIds.some((id: DbRow) => on.has(id));
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseMctbOnboardingState } from "@/lib/mctb/onboarding/state";
@@ -123,7 +123,7 @@ async function resolveWorkspaceByMemberPhoneForward(
   if (!users.length) return null;
 
   const memberships = await prisma.membership.findMany({
-    where: { userId: { in: users.map((u) => u.id) } },
+    where: { userId: { in: users.map((u: DbRow) => u.id) } },
     select: { workspaceId: true },
   });
 

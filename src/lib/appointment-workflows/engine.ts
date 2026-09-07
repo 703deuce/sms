@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import {
   appointmentMergeVars,
@@ -25,7 +25,8 @@ import {
   resolveAppointmentBookingLink,
   resolveAppointmentPaymentLink,
 } from "./payment-link";
-import { deliverAppointmentWorkflowWebhook, webhookHostForLog } from "./webhook-delivery";
+import { deliverAppointmentWorkflowWebhook } from "./webhook-delivery";
+import { webhookHostForLog } from "./webhook-log";
 import { resolveStepScheduledTime, stepIdempotencyKey } from "./scheduler";
 import { listActiveWorkflowsForTrigger } from "./service";
 import type {
@@ -95,7 +96,7 @@ async function buildTypeNameToId(workspaceId: string): Promise<Map<string, strin
     where: { workspaceId },
     select: { id: true, name: true },
   });
-  return new Map(rows.map((r) => [r.name, r.id]));
+  return new Map(rows.map((r: DbRow) => [r.name, r.id]));
 }
 
 export async function dispatchAppointmentWorkflowTrigger(event: WorkflowTriggerEvent) {
@@ -245,8 +246,8 @@ export async function cancelPaymentFollowUpSteps(workspaceId: string, appointmen
     if (!paidStepIds.size) continue;
 
     const pendingIds = exec.stepExecutions
-      .filter((s) => s.state === "scheduled" && paidStepIds.has(s.stepId))
-      .map((s) => s.id);
+      .filter((s: DbRow) => s.state === "scheduled" && paidStepIds.has(s.stepId))
+      .map((s: DbRow) => s.id);
 
     if (pendingIds.length) {
       await prisma.appointmentWorkflowStepExecution.updateMany({
@@ -280,8 +281,8 @@ export async function cancelConfirmationChasingSteps(
     if (!chasingStepIds.size) continue;
 
     const pendingIds = exec.stepExecutions
-      .filter((s) => s.state === "scheduled" && chasingStepIds.has(s.stepId))
-      .map((s) => s.id);
+      .filter((s: DbRow) => s.state === "scheduled" && chasingStepIds.has(s.stepId))
+      .map((s: DbRow) => s.id);
 
     if (pendingIds.length) {
       await prisma.appointmentWorkflowStepExecution.updateMany({
@@ -314,8 +315,8 @@ export async function invalidateWorkflowExecutionsForAppointment(
     });
 
     const pendingIds = exec.stepExecutions
-      .filter((s) => s.state === "scheduled")
-      .map((s) => s.id);
+      .filter((s: DbRow) => s.state === "scheduled")
+      .map((s: DbRow) => s.id);
 
     if (pendingIds.length) {
       await prisma.appointmentWorkflowStepExecution.updateMany({
@@ -479,6 +480,14 @@ export async function processAppointmentWorkflowStep(input: { stepExecutionId: s
         state: "sent",
         executedAt: new Date(),
         ...(result?.providerMessageId ? { providerMessageId: result.providerMessageId } : {}),
+        ...(result?.messagePreview
+          ? {
+              payload: {
+                ...((stepExec.payload || {}) as object),
+                messagePreview: result.messagePreview,
+              } as object,
+            }
+          : {}),
       },
     });
   } catch (err) {
@@ -500,7 +509,7 @@ async function executeWorkflowStepAction(input: {
   appointmentId: string;
   appointmentCtx: AppointmentConditionContext;
   meta: AppointmentMetadata;
-}): Promise<{ providerMessageId?: string } | void> {
+}): Promise<{ providerMessageId?: string; messagePreview?: string } | void> {
   const prisma = getPrisma();
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
   const workspace = await prisma.workspace.findUnique({
@@ -574,6 +583,7 @@ async function executeWorkflowStepAction(input: {
           smsResult && typeof smsResult === "object" && "messageId" in smsResult
             ? String((smsResult as { messageId?: string }).messageId || "")
             : undefined,
+        messagePreview: body.slice(0, 280),
       };
     }
     case "send_email_customer": {
@@ -626,6 +636,7 @@ async function executeWorkflowStepAction(input: {
             smsResult && typeof smsResult === "object" && "messageId" in smsResult
               ? String((smsResult as { messageId?: string }).messageId || "")
               : undefined,
+          messagePreview: body.slice(0, 280),
         };
       } else {
         const email = staffEmail || input.meta.staffEmail as string | undefined;
@@ -760,6 +771,7 @@ async function executeWorkflowStepAction(input: {
             smsResult && typeof smsResult === "object" && "messageId" in smsResult
               ? String((smsResult as { messageId?: string }).messageId || "")
               : undefined,
+          messagePreview: body.slice(0, 280),
         };
       }
   }

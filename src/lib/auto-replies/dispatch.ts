@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mergeMessageVars } from "@/lib/automations/actions";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import {
   getMessagingRuntimeSettings,
   isInQuietHours,
@@ -167,13 +167,13 @@ export async function loadAutoReplyRecentSends(
   const contacts = await getPrisma().contact.findMany({
     where: {
       workspaceId,
-      phone: { in: messages.map((m) => m.to) },
+      phone: { in: messages.map((m: DbRow) => m.to) },
     },
     select: { id: true, phone: true, firstName: true, lastName: true },
   });
-  const byPhone = new Map(contacts.map((c) => [c.phone, c]));
+  const byPhone = new Map<string, DbRow>(contacts.map((c: DbRow) => [c.phone, c]));
 
-  return messages.map((m) => {
+  return messages.map((m: DbRow) => {
     const contact = byPhone.get(m.to);
     return {
       id: m.id,
@@ -192,6 +192,6 @@ export async function getAutoReplyWithActivity(workspaceId: string, id: string) 
   if (!row) return null;
   const recentSends = await loadAutoReplyRecentSends(workspaceId, id);
   const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
-  const delivery = summarizeDeliveryStatuses(recentSends.map((s) => s.status));
+  const delivery = summarizeDeliveryStatuses(recentSends.map((s: DbRow) => s.status));
   return { ...row, recentSends, delivery };
 }

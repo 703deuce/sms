@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 
 /** Keep only visible contact IDs that belong to the workspace. */
@@ -15,7 +15,7 @@ export async function filterWorkspaceContactIds(
     },
     select: { id: true },
   });
-  return rows.map((r) => r.id);
+  return rows.map((r: DbRow) => r.id);
 }
 
 /** Count list members excluding automation/system contacts. */
@@ -31,7 +31,7 @@ export async function countVisibleListMembers(
   return getPrisma().contact.count({
     where: {
       ...visibleContactWhere(workspaceId),
-      id: { in: members.map((m) => m.contactId) },
+      id: { in: members.map((m: DbRow) => m.contactId) },
     },
   });
 }
@@ -49,7 +49,7 @@ export async function countVisibleListMembersBulk(
     where: { listId: { in: listIds } },
     select: { listId: true, contactId: true },
   });
-  const contactIds = [...new Set(members.map((m) => m.contactId))];
+  const contactIds = [...new Set(members.map((m: DbRow) => m.contactId))];
   const visibleIds = contactIds.length
     ? new Set(
         (
@@ -57,7 +57,7 @@ export async function countVisibleListMembersBulk(
             where: { ...visibleContactWhere(workspaceId), id: { in: contactIds } },
             select: { id: true },
           })
-        ).map((c) => c.id),
+        ).map((c: DbRow) => c.id),
       )
     : new Set<string>();
 
@@ -79,7 +79,7 @@ export async function resolveVisibleContactFilter(
       where: { listId: opts.listId },
       select: { contactId: true },
     });
-    const ids = members.map((m) => m.contactId);
+    const ids = members.map((m: DbRow) => m.contactId);
     return { ...base, id: { in: ids.length ? ids : ["__none__"] } };
   }
   if (opts?.tagId) {
@@ -87,7 +87,7 @@ export async function resolveVisibleContactFilter(
       where: { tagId: opts.tagId },
       select: { contactId: true },
     });
-    const ids = members.map((m) => m.contactId);
+    const ids = members.map((m: DbRow) => m.contactId);
     return { ...base, id: { in: ids.length ? ids : ["__none__"] } };
   }
   return base;
@@ -104,5 +104,5 @@ export async function filterWorkspaceListIds(
     where: { workspaceId, id: { in: unique } },
     select: { id: true },
   });
-  return rows.map((r) => r.id);
+  return rows.map((r: DbRow) => r.id);
 }

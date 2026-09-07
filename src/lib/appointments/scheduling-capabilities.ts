@@ -218,6 +218,7 @@ export type RoutingForm = {
   id: string;
   name: string;
   slug: string;
+  headline?: string;
   fields: RoutingFormField[];
   rules: RoutingFormRule[];
   fallbackDestination?: RoutingFormRule["destination"];

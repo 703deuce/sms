@@ -33,10 +33,12 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
 export function TemplateCard({
   template,
   installed,
+  readOnly,
   onSetup,
 }: {
   template: WorkflowTemplate;
   installed?: boolean;
+  readOnly?: boolean;
   onSetup: () => void;
 }) {
   const Icon = TEMPLATE_ICONS[template.id] || Zap;
@@ -73,6 +75,7 @@ export function TemplateCard({
         <button
           className={`tv-btn tv-btn-sm ${installed ? "tv-btn-outline" : "tv-btn-primary"}`}
           onClick={onSetup}
+          disabled={readOnly}
         >
           {installed ? "Edit workflow" : "Set up"}
         </button>

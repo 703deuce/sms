@@ -7,7 +7,7 @@ import {
 } from "@/lib/contacts/segment-query";
 import { isAutomationContact } from "@/lib/contacts/visible-contacts";
 import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { getDripCampaign, listActiveDripCampaigns } from "./service";
@@ -68,7 +68,7 @@ async function contactInExclusionSegment(
       id: contact.id,
       status: contact.status,
       customFields: contact.customFields,
-      tagNames: contact.tagMembers.map((t) => t.tag.name),
+      tagNames: contact.tagMembers.map((t: DbRow) => t.tag.name),
       source: contact.consentSource,
     },
     parseSegmentConditions(segment.conditions),
@@ -363,14 +363,14 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
     }),
   ]);
 
-  const contactIds = enrollments.map((e) => e.contactId);
+  const contactIds = enrollments.map((e: DbRow) => e.contactId);
   const contacts = await prisma.contact.findMany({
     where: { workspaceId, id: { in: contactIds } },
     select: { id: true, phone: true, firstName: true, lastName: true },
   });
-  const byId = new Map(contacts.map((c) => [c.id, c]));
+  const byId = new Map<string, DbRow>(contacts.map((c: DbRow) => [c.id, c]));
 
-  const recipients: DripEnrollmentRecord[] = enrollments.map((e) => {
+  const recipients: DripEnrollmentRecord[] = enrollments.map((e: DbRow) => {
     const c = byId.get(e.contactId);
     return {
       id: e.id,
@@ -426,7 +426,7 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
   const chartReplies = chartLabels.map((d) => activityByDay.get(d)?.replies || 0);
 
   const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
-  const delivery = summarizeDeliveryStatuses(dripMessages.map((m) => m.status));
+  const delivery = summarizeDeliveryStatuses(dripMessages.map((m: DbRow) => m.status));
 
   return {
     campaign,
@@ -444,7 +444,7 @@ export async function loadDripCampaignDetail(workspaceId: string, id: string) {
       failedCount: delivery.failed,
     },
     delivery,
-    recentDeliveries: dripMessages.slice(0, 50).map((m) => ({
+    recentDeliveries: dripMessages.slice(0, 50).map((m: DbRow) => ({
       id: m.id,
       to: m.to,
       status: m.status,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { listAppointments } from "@/lib/appointments";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { meetingPlatformLabel } from "@/lib/meeting-assistant/platform";
 import type { MeetingPlatform } from "@/lib/meeting-assistant/types";
 import { publicVideoMeetingUrl } from "@/lib/transovo-video/meeting-url";
@@ -31,7 +31,7 @@ export async function listWorkspaceCalendarEvents(
     to: input.to,
   });
 
-  const appointmentRows: CalendarApiAppointment[] = appointments.map((row) => ({
+  const appointmentRows: CalendarApiAppointment[] = appointments.map((row: DbRow) => ({
     id: row.id,
     eventKind: "appointment",
     inviteeName: row.inviteeName,
@@ -74,7 +74,7 @@ export async function listWorkspaceCalendarEvents(
     }),
   ]);
 
-  const videoRows: CalendarApiAppointment[] = standaloneVideo.map((meeting) => ({
+  const videoRows: CalendarApiAppointment[] = standaloneVideo.map((meeting: DbRow) => ({
     id: `video:${meeting.id}`,
     eventKind: "standalone_video",
     inviteeName: "Transovo Video",
@@ -92,7 +92,7 @@ export async function listWorkspaceCalendarEvents(
     },
   }));
 
-  const notetakerRows: CalendarApiAppointment[] = standaloneSessions.map((session) => ({
+  const notetakerRows: CalendarApiAppointment[] = standaloneSessions.map((session: DbRow) => ({
     id: `meeting:${session.id}`,
     eventKind: "standalone_notetaker",
     inviteeName: meetingPlatformLabel(session.meetingPlatform as MeetingPlatform),

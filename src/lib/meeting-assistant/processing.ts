@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { openAiChatCompletion } from "@/lib/ai/openai";
 import { appendTimeline } from "@/lib/appointments/settings";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
@@ -331,7 +331,7 @@ export async function processMeetingSessionArtifacts(sessionId: string) {
         where: { meetingSessionId: sessionId },
         orderBy: { sequence: "asc" },
       });
-      transcriptText = segments.map((s) => `${s.speakerName || "Speaker"}: ${s.text}`).join("\n");
+      transcriptText = segments.map((s: DbRow) => `${s.speakerName || "Speaker"}: ${s.text}`).join("\n");
     }
   } else if (session.providerSessionId && process.env.TELNYX_API_KEY) {
     if (session.transcriptEnabled) {
@@ -431,7 +431,7 @@ export async function askMeetingQuestion(
   if (!session) throw new Error("Meeting not found");
   const context = [
     session.summaryText ? `Summary:\n${session.summaryText}` : "",
-    session.transcriptSegments.map((s) => `${s.speakerName || "Speaker"}: ${s.text}`).join("\n"),
+    session.transcriptSegments.map((s: DbRow) => `${s.speakerName || "Speaker"}: ${s.text}`).join("\n"),
   ]
     .filter(Boolean)
     .join("\n\n")

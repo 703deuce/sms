@@ -45,6 +45,7 @@ export namespace Prisma {
 
   export type MessagingRegistrationUpdateInput = Record<string, any>;
   export type MessagingRegistrationUpdateManyMutationInput = Record<string, any>;
+  export type SegmentUpdateInput = Record<string, unknown>;
 }
 
 export type MessagingRegistration = {

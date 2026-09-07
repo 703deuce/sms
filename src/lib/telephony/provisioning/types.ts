@@ -1,4 +1,4 @@
-export type VoiceRoutingMode = "telnyx_assistant" | "livekit_sip";
+export type VoiceRoutingMode = "telnyx_assistant" | "livekit_sip" | "mctb_texml";
 
 export type ProvisionState =
   | "pending"

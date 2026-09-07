@@ -45,6 +45,7 @@ export async function notifyMeetingRecapReady(
     await sendTransactionalEmail({
       to: recipientEmail,
       subject: `Meeting recap ready: ${session.title || "Your meeting"}`,
+      htmlContent: `<p>Your meeting recap is ready.</p><p><a href="${baseUrl}/meetings/${meetingSessionId}">View recap</a></p>`,
       text: `Your meeting recap is ready.\n\nView recap: ${baseUrl}/meetings/${meetingSessionId}`,
     });
   } catch (err) {

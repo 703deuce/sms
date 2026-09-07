@@ -17,8 +17,8 @@ export async function GET() {
   const status = await getMctbConsentPromptStatus(workspaceId);
   traceMctbDebug("consent-prompt", "get_complete", {
     workspaceId,
-    published: status.published,
-    hasAudio: Boolean(status.audioUrl),
+    published: status.isPublished,
+    hasAudio: Boolean(status.playbackUrl),
   });
   return NextResponse.json({ data: status });
 }

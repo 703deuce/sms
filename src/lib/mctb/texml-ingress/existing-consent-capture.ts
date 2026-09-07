@@ -47,7 +47,7 @@ export async function scheduleMctbTexmlExistingConsentCapture(
     jobType: "mctb_texml_existing_consent_capture",
     queueName: "voice-calls",
     workspaceId: input.workspaceId,
-    payload: input as unknown as Record<string, unknown>,
+    payload: input as unknown as import("@/lib/domain").Prisma.InputJsonValue,
     idempotencyKey: `mctb-texml-capture:${input.workspaceId}:${callSid}`,
     priority: 20,
     maxAttempts: 8,

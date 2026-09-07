@@ -123,7 +123,7 @@ export async function getConnectedProvidersForBooking(workspaceId: string): Prom
 
 export function buildPaymentRequirementFromTypeConfig(
   config: PaymentRequirement,
-): PaymentRequirement & { provider: MerchantPaymentProvider | null } {
+): Omit<PaymentRequirement, "provider"> & { provider: MerchantPaymentProvider | null } {
   const amounts = config.mode !== "none" ? calculatePaymentAmounts(config) : null;
   return {
     ...config,

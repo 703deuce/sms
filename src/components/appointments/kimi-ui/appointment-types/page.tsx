@@ -3,7 +3,7 @@
 import { Plus, ExternalLink } from "lucide-react";
 import TypeListPanel from "./components/TypeListPanel";
 import TypeEditorPanel from "./components/TypeEditorPanel";
-import TypeBulkEditPanel from "@/components/appointments/type-bulk-edit-panel";
+import { TypeBulkEditPanel } from "@/components/appointments/type-bulk-edit-panel";
 import PreviewPanel from "./components/PreviewPanel";
 import StatusPanel from "./components/StatusPanel";
 import type {

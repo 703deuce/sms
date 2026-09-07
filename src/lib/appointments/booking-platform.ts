@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   appointmentMergeVars,
@@ -56,7 +56,7 @@ export async function listAppointmentTypes(
     where: { workspaceId },
     orderBy: [{ config: "asc" }, { name: "asc" }],
   });
-  const mapped = rows.map((row) => ({
+  const mapped = rows.map((row: DbRow) => ({
     id: row.id,
     name: row.name,
     durationMinutes: row.durationMinutes,
@@ -66,10 +66,10 @@ export async function listAppointmentTypes(
     active: (row.config as AppointmentTypeConfig | null)?.enabled !== false,
   }));
   const sorted = mapped.sort(
-    (a, b) => (a.config.displayOrder ?? 999) - (b.config.displayOrder ?? 999),
+    (a: DbRow, b: DbRow) => (a.config.displayOrder ?? 999) - (b.config.displayOrder ?? 999),
   );
   if (opts?.includeSecret && opts?.includeUnlisted) return sorted;
-  return sorted.filter((t) => {
+  return sorted.filter((t: DbRow) => {
     const vis = t.config.visibility || "public";
     if (vis === "secret" && !opts?.includeSecret) return false;
     if (vis === "unlisted" && !opts?.includeUnlisted && !opts?.includeSecret) return false;
@@ -190,7 +190,7 @@ export async function createPlatformAppointment(
     notes?: string;
     bookingAnswers?: Record<string, string>;
     smsConsent?: boolean;
-    source?: "admin" | "public_booking";
+    source?: "admin" | "public_booking" | "waitlist";
     status?: string;
     skipSms?: boolean;
     staffId?: string;
@@ -511,7 +511,7 @@ export async function createPlatformAppointment(
   }
 
   return {
-    appointmentId,
+    ...result,
     contactId,
     meetingLink,
     joinUrl: meetingLink,
@@ -525,7 +525,6 @@ export async function createPlatformAppointment(
         })
       : undefined,
     confirmationResources: svcCfg.confirmationPage,
-    ...result,
   };
 }
 

@@ -1,3 +1,5 @@
+import type { ReminderChannel } from "@/lib/appointments/types";
+
 export type ReminderStepKey = "confirmation" | "reminder24h" | "reminder2h";
 
 export type ReminderItem = {

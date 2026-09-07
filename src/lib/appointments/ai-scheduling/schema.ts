@@ -136,7 +136,7 @@ export type ResolverOutcome = {
   mutationExecuted: boolean;
 };
 
-export type AppointmentAiChannel = "public_booking" | "sms" | "conversation";
+export type AppointmentAiChannel = "public_booking" | "sms" | "email" | "conversation";
 
 export type AppointmentAiResultType =
   | "MESSAGE"

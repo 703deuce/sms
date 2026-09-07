@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import type { AutomationCanvasNode } from "../types";
 import type { ExecutionFacts } from "../metadata";
 import { isContactOnLists } from "./list-actions";
@@ -91,7 +91,7 @@ export async function evaluateParityCondition(
       where: { id: ctx.executionId },
       include: { steps: true },
     });
-    const step = exec?.steps.find((s) => s.nodeId === nodeId);
+    const step = exec?.steps.find((s: DbRow) => s.nodeId === nodeId);
     const output = (step?.output || {}) as Record<string, unknown>;
     const messageId = typeof output.messageId === "string" ? output.messageId : null;
     if (!messageId) return ctx.facts.link_clicked ? "yes" : "no";

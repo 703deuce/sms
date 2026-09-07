@@ -41,6 +41,8 @@
     "prisma/seed.ts",
     "scripts",
     "voice-runtime",
-    ".next/dev"
+    ".next/dev",
+    "src/kimi-drafts/**",
+    "src/features/**/fixtures/**"
   ]
 }

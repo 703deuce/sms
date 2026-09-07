@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { loadAppointmentPlatformConfig, saveAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { createAppointmentWorkflow, listAppointmentWorkflows } from "@/lib/appointment-workflows/service";
 import { getPrebuiltTemplate } from "@/lib/appointment-workflows/templates";
@@ -52,7 +52,7 @@ export async function getNoShowRecoveryStats(workspaceId: string) {
       },
     }),
   ]);
-  const recentNoShows = recentRows.map((row) => {
+  const recentNoShows = recentRows.map((row: DbRow) => {
     const meta = (row.metadata || {}) as { inviteeName?: string };
     return {
       id: row.id,
@@ -95,7 +95,7 @@ export async function ensureNoShowRecoveryWorkflow(workspaceId: string) {
     templateId: template.id,
     active: true,
     trigger: template.trigger,
-    channels: template.defaultChannels,
+    channels: template.channels,
     conditions: template.defaultConditions,
     steps: template.defaultSteps,
   });

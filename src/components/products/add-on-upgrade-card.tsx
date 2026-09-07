@@ -55,6 +55,16 @@ const FEATURE_COPY: Record<
     description: "Verify phone numbers and clean CSV lists with carrier and line-type lookup.",
     upgradeParam: "verify",
   },
+  transovo_video: {
+    title: "Transovo Video",
+    description: "Host branded video meetings linked to appointments and team scheduling.",
+    upgradeParam: "transovo_video",
+  },
+  ai_notetaker: {
+    title: "AI Notetaker",
+    description: "Capture meeting notes, action items, and recaps from your calls.",
+    upgradeParam: "ai_notetaker",
+  },
 };
 
 export function AddOnUpgradeCard({

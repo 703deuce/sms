@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { generateListGrowthPublicSlug } from "@/lib/growth/tap-to-join";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 
@@ -20,7 +20,7 @@ export async function GET() {
       where: { workspaceId: auth.workspaceId },
       orderBy: { createdAt: "desc" },
     });
-    const data = rows.map((qr) => ({
+    const data = rows.map((qr: DbRow) => ({
       ...qr,
       trackedUrl: qr.publicSlug ? `${base}/q/${qr.publicSlug}` : qr.targetUrl,
       qrImageUrl: buildQrImageUrl(qr.publicSlug ? `${base}/q/${qr.publicSlug}` : qr.targetUrl),

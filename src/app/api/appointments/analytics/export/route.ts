@@ -6,7 +6,7 @@ import {
   buildAppointmentPdfReport,
   loadExtendedAppointmentsAnalytics,
 } from "@/lib/appointments/analytics-reports";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 
 export async function GET(request: Request) {
   try {
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
     if (format === "pdf") {
       const pdf = await buildAppointmentPdfReport(auth.workspaceId, rangeDays);
-      return new NextResponse(pdf, {
+      return new NextResponse(new Uint8Array(pdf), {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="appointments-report-${rangeDays}d.pdf"`,
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     }
 
     const csv = appointmentsToCsv(
-      rows.map((r) => ({
+      rows.map((r: DbRow) => ({
         id: r.id,
         serviceName: r.serviceName,
         startsAt: r.startsAt,

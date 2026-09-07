@@ -163,7 +163,7 @@
     "test:home-service-dispatcher-integration": "tsx scripts/test-home-service-dispatcher-integration.ts",
     "activate:home-service-dispatcher": "tsx scripts/activate-home-service-dispatcher.mjs",
     "test:workflow-runtime-compiler": "tsx scripts/test-workflow-runtime-compiler.ts",
-    "test:workflow-runtime-authority": "tsx scripts/test-workflow-runtime-authority.ts",
+    "test:workflow-runtime-authority": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-workflow-runtime-authority.ts",
     "test:runtime-truth-guards": "tsx scripts/test-runtime-truth-guards.ts",
     "simulate:amy-conversation": "tsx scripts/amy-text-conversation-simulator.ts",
     "simulate:amy-e2e": "tsx scripts/amy-text-conversation-simulator.ts -- --e2e",

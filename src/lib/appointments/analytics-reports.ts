@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { loadAppointmentsAnalytics } from "@/lib/appointments/analytics";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
@@ -23,16 +23,16 @@ export async function loadExtendedAppointmentsAnalytics(
   });
 
   const base = await loadAppointmentsAnalytics(workspaceId, rangeDays <= 30 ? (rangeDays as 7 | 30) : 30);
-  const completed = rows.filter((r) => r.status.toLowerCase() === "completed").length;
+  const completed = rows.filter((r: DbRow) => r.status.toLowerCase() === "completed").length;
   const booked = rows.length;
-  const canceled = rows.filter((r) => ["canceled", "cancelled"].includes(r.status.toLowerCase())).length;
-  const noShow = rows.filter((r) => r.status.toLowerCase() === "no_show").length;
-  const rescheduled = rows.filter((r) =>
+  const canceled = rows.filter((r: DbRow) => ["canceled", "cancelled"].includes(r.status.toLowerCase())).length;
+  const noShow = rows.filter((r: DbRow) => r.status.toLowerCase() === "no_show").length;
+  const rescheduled = rows.filter((r: DbRow) =>
     ((r.metadata || {}) as { timeline?: Array<{ type: string }> }).timeline?.some((t) =>
       t.type.includes("reschedule"),
     ),
   ).length;
-  const confirmed = rows.filter((r) => r.status.toLowerCase() === "confirmed").length;
+  const confirmed = rows.filter((r: DbRow) => r.status.toLowerCase() === "confirmed").length;
 
   const byType = new Map<string, number>();
   const byHour = new Map<number, number>();
@@ -64,7 +64,7 @@ export async function loadExtendedAppointmentsAnalytics(
     .sort((a, b) => b[1] - a[1])
     .map(([hour, count]) => ({ hour, count }));
 
-  const utmConversions = rows.filter((r) => {
+  const utmConversions = rows.filter((r: DbRow) => {
     const utm = ((r.metadata || {}) as { utm?: { source?: string } }).utm;
     return Boolean(utm?.source);
   }).length;

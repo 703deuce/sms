@@ -5,8 +5,11 @@ export type SendEmailInput = {
   to: string;
   subject: string;
   htmlContent: string;
+  html?: string;
   textContent?: string;
+  text?: string;
   replyTo?: string;
+  workspaceId?: string;
   attachments?: Array<{ name: string; content: string }>;
 };
 

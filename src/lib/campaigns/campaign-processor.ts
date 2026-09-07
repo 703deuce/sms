@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { processSequenceWaits } from "./sequence-runner";
 import { activateDueScheduledCampaigns } from "@/lib/messaging/dispatch/activate-scheduled-campaigns";
@@ -38,7 +38,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
         where: { id: { in: campaignIds } },
       })
     : [];
-  const campaignById = new Map(campaigns.map((c) => [c.id, c]));
+  const campaignById = new Map<string, DbRow>(campaigns.map((c: DbRow) => [c.id, c]));
 
   let enqueued = 0;
   let skippedAlreadyQueued = 0;
@@ -78,7 +78,7 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
     if (campaign.dailySendLimit != null) {
       let sentToday = sentTodayByCampaign.get(campaign.id);
       if (sentToday == null) {
-        sentToday = await prisma.campaignMessage.count({
+        const count = await prisma.campaignMessage.count({
           where: {
             campaignId: campaign.id,
             OR: [
@@ -87,7 +87,8 @@ export async function enqueueDueCampaignMessages(workspaceId?: string) {
             ],
           },
         });
-        sentTodayByCampaign.set(campaign.id, Number(sentToday ?? 0));
+        sentToday = Number(count ?? 0);
+        sentTodayByCampaign.set(campaign.id, sentToday);
       }
       if (sentToday >= campaign.dailySendLimit) {
         const tomorrow = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);

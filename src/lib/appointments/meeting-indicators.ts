@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { publicVideoMeetingUrl } from "@/lib/transovo-video/meeting-url";
 
 export type AppointmentMeetingIndicator = {
@@ -43,8 +43,8 @@ export async function getAppointmentMeetingIndicators(
     }),
   ]);
 
-  const metaById = new Map(
-    appointments.map((row) => [row.id, (row.metadata || {}) as Record<string, unknown>]),
+  const metaById = new Map<string, Record<string, unknown>>(
+    appointments.map((row: DbRow) => [String(row.id), (row.metadata || {}) as Record<string, unknown>]),
   );
 
   const out: Record<string, AppointmentMeetingIndicator> = {};

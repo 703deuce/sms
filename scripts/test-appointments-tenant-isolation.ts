@@ -27,8 +27,8 @@ function testAppointmentRoutesRequireSession() {
     const src = readFileSync(file, "utf8");
     assert.match(
       src,
-      /requireSession/,
-      `${file} must use requireSession for workspace scoping`,
+      /requireAppointmentsAccess|requireSession/,
+      `${file} must use requireAppointmentsAccess or requireSession for workspace scoping`,
     );
     assert.doesNotMatch(
       src,

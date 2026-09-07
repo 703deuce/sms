@@ -52,6 +52,9 @@ async function withTransientPostgrestRetry<T>(run: () => Promise<T>): Promise<T>
 type Row = Record<string, any>;
 type Args = Record<string, any>;
 
+/** Row returned by compat findMany/findFirst — indexable for dynamic columns. */
+export type DbRow = Record<string, any>;
+
 /** Prisma client model name → Postgres table (matches schema.sql / @@map). */
 const MODEL_TO_TABLE: Record<string, string> = {
   user: "User",

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { workflowMatchesAppointmentType } from "./conditions";
 import { listActiveWorkflowsForTrigger } from "./service";
 
@@ -9,7 +9,7 @@ async function buildTypeNameToId(workspaceId: string): Promise<Map<string, strin
     where: { workspaceId },
     select: { id: true, name: true },
   });
-  return new Map(rows.map((r) => [r.name, r.id]));
+  return new Map(rows.map((r: DbRow) => [r.name, r.id]));
 }
 
 /**
@@ -29,8 +29,8 @@ export async function shouldSkipPlatformRemindersForAppointment(
   return workflows.some((workflow) =>
     workflowMatchesAppointmentType(
       workflow.appointmentTypeScope,
-      serviceId,
-      serviceName,
+      serviceId ?? null,
+      serviceName ?? null,
       typeMap,
     ),
   );

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { listAppointmentTypes } from "@/lib/appointments/booking-platform";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
@@ -58,7 +58,7 @@ export async function assembleAppointmentAiContext(input: {
 }): Promise<AppointmentAiContext> {
   const now = input.now || new Date();
   const platform = await loadAppointmentPlatformConfig(input.workspaceId);
-  const types = (await listAppointmentTypes(input.workspaceId)).filter((t) => t.active);
+  const types = (await listAppointmentTypes(input.workspaceId)).filter((t: DbRow) => t.active);
   const staff = (platform.staff || [])
     .filter((s) => s.active !== false)
     .map((s) => ({ id: s.id, name: s.name }));
@@ -82,7 +82,7 @@ export async function assembleAppointmentAiContext(input: {
       take: 5,
       select: { id: true, serviceName: true, startsAt: true, status: true },
     });
-    customerAppointments = rows.map((r) => ({
+    customerAppointments = rows.map((r: DbRow) => ({
       id: r.id,
       serviceName: r.serviceName || "Appointment",
       startsAt: r.startsAt.toISOString(),
@@ -103,10 +103,10 @@ export async function assembleAppointmentAiContext(input: {
 
   const recentTurns = (input.conversationHistory || []).slice(-6);
 
-  const appointmentTypeIds = new Set(types.map((t) => t.id));
-  const staffIds = new Set(staff.map((s) => s.id));
-  const locationIds = new Set(locations.map((l) => l.id));
-  const appointmentIds = new Set(customerAppointments.map((a) => a.id));
+  const appointmentTypeIds = new Set<string>(types.map((t: DbRow) => String(t.id)));
+  const staffIds = new Set<string>(staff.map((s: DbRow) => String(s.id)));
+  const locationIds = new Set<string>(locations.map((l: DbRow) => String(l.id)));
+  const appointmentIds = new Set<string>(customerAppointments.map((a: DbRow) => String(a.id)));
 
   return {
     requestId: input.requestId,
@@ -120,7 +120,7 @@ export async function assembleAppointmentAiContext(input: {
     conversationId: input.conversationId,
     conversationState,
     recentTurns,
-    appointmentTypes: types.map((t) => ({ id: t.id, name: t.name, active: t.active })),
+    appointmentTypes: types.map((t: DbRow) => ({ id: t.id, name: t.name, active: t.active })),
     staff,
     locations,
     customerAppointments,

@@ -9,7 +9,7 @@ export function cn(...parts: Array<string | false | null | undefined>) {
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "sm" | "md" | "lg" | "icon";
 
-const variantStyles: Record<Variant, React.CSSProperties> = {};
+const variantStyles: Partial<Record<Variant, React.CSSProperties>> = {};
 const variantClasses: Record<Variant, string> = {
   primary: "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover",
   secondary: "bg-muted text-foreground hover:bg-border/70",

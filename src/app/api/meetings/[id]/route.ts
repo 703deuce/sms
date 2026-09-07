@@ -128,7 +128,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
         workspaceId: auth.workspaceId,
         to: recipient,
         subject: String(body.subject || `Follow-up: ${session.title || "Meeting"}`),
-        html: session.followUpEmailDraft.replace(/\n/g, "<br/>"),
+        htmlContent: session.followUpEmailDraft.replace(/\n/g, "<br/>"),
       });
       const data = await getMeetingSession(auth.workspaceId, id);
       return NextResponse.json({ data: { ...data, followUpStatus: "sent" } });

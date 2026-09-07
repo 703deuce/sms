@@ -165,6 +165,7 @@ export type AutomationFlow = {
   createdFrom?: string | null;
   /** Owning agent display name when this is an agent workflow. */
   ownedBy?: string | null;
+  description?: string | null;
 };
 
 export type DashboardMetrics = {

@@ -9,9 +9,9 @@ import ImportWizard from "./components/ImportWizard";
 import { ImportStartedModal } from "./components/Modal";
 type View = "list" | "create" | "import";
 
-export type ContactsInitialView = View["name"];
+export type ContactsInitialView = View;
 
-export default function ContactsFlow({ initialView = "contacts" }: { initialView?: ContactsInitialView }) {
+export default function ContactsFlow({ initialView = "list" }: { initialView?: ContactsInitialView }) {
   const [view, setView] = useState<View>("list");
   const [savedToast, setSavedToast] = useState(false);
   const [importModal, setImportModal] = useState(false);

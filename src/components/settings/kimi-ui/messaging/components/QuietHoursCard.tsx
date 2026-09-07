@@ -4,6 +4,11 @@ import type { MessagingRuntimeView } from "../types";
 
 type Runtime = MessagingRuntimeView;
 
+function keywordList(value: string | string[] | null | undefined): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
 type Props = {
   runtime: Runtime | null;
   loading: boolean;
@@ -88,19 +93,19 @@ export function QuietHoursCard({ runtime: rt, loading, timezones, onChange }: Pr
         <div className="ref-field" style={{ marginBottom: 10 }}>
           <div className="ref-label" style={{ marginBottom: 2 }}>Opt-out keywords</div>
           <div className="ref-pills">
-            {rt.optOutKeywords.map((k) => <span key={k} className="ref-pill">{k}</span>)}
+            {keywordList(rt.optOutKeywords).map((k) => <span key={k} className="ref-pill">{k}</span>)}
           </div>
         </div>
         <div className="ref-field" style={{ marginBottom: 10 }}>
           <div className="ref-label" style={{ marginBottom: 2 }}>Opt-in keywords</div>
           <div className="ref-pills">
-            {rt.optInKeywords.map((k) => <span key={k} className="ref-pill">{k}</span>)}
+            {keywordList(rt.optInKeywords).map((k) => <span key={k} className="ref-pill">{k}</span>)}
           </div>
         </div>
         <div className="ref-field" style={{ marginBottom: 0 }}>
           <div className="ref-label" style={{ marginBottom: 2 }}>Help keywords</div>
           <div className="ref-pills">
-            {rt.helpKeywords.map((k) => <span key={k} className="ref-pill">{k}</span>)}
+            {keywordList(rt.helpKeywords).map((k) => <span key={k} className="ref-pill">{k}</span>)}
           </div>
         </div>
         <p className="ref-hint">

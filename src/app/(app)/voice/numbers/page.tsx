@@ -71,7 +71,7 @@ export default async function VoiceNumbersPage() {
                   <td className="px-3 py-2">
                     <div className="space-y-1">
                       <p>{n.friendlyName || "—"}</p>
-                      {n.source === "linked" ? (
+                      {n.sourceLabel ? (
                         <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
                           {n.sourceLabel || "Assigned to your workspace"}
                         </span>

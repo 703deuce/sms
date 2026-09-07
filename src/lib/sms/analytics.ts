@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { countVisibleListMembersBulk } from "@/lib/contacts/workspace-membership";
 
 export type SmsAnalyticsRange = {
@@ -235,7 +235,7 @@ async function loadAudienceAnalytics(
   const sourceTotal = [...sourceBuckets.values()].reduce((s, n) => s + n, 0);
   const listCounts = await countVisibleListMembersBulk(
     workspaceId,
-    lists.map((l) => l.id),
+    lists.map((l: DbRow) => l.id),
   );
 
   return {
@@ -274,7 +274,7 @@ async function loadPeriodData(workspaceId: string, range: SmsAnalyticsRange) {
   });
 
   const campaignIdsFromMessages = [
-    ...new Set(messages.map((m) => m.campaignId).filter(Boolean)),
+    ...new Set(messages.map((m: DbRow) => m.campaignId).filter(Boolean)),
   ] as string[];
 
   const campaignWhere = campaignIdsFromMessages.length
@@ -358,7 +358,7 @@ export async function loadSmsAnalytics(
     await loadPeriodData(workspaceId, range);
 
   const campaignAgg = campaigns.reduce(
-    (acc, c) => ({
+    (acc: DbRow, c: DbRow) => ({
       sent: acc.sent + (c.sent || 0),
       delivered: acc.delivered + (c.delivered || 0),
       failed: acc.failed,
@@ -370,7 +370,7 @@ export async function loadSmsAnalytics(
   );
 
   const uniqueClickIds = new Set(
-    clicks.map((c) => c.contactId || c.trackingToken).filter(Boolean),
+    clicks.map((c: DbRow) => c.contactId || c.trackingToken).filter(Boolean),
   );
 
   const kpis = buildKpis({
@@ -382,7 +382,7 @@ export async function loadSmsAnalytics(
   const compareAgg =
     compareCampaigns.length > 0
       ? compareCampaigns.reduce(
-          (acc, c) => ({
+          (acc: DbRow, c: DbRow) => ({
             sent: acc.sent + (c.sent || 0),
             delivered: acc.delivered + (c.delivered || 0),
             failed: 0,
@@ -454,7 +454,7 @@ export async function loadSmsAnalytics(
     .map(([category, count]) => ({ category, label: category, count }))
     .sort((a, b) => b.count - a.count);
 
-  const campaignRows: SmsCampaignPerformanceRow[] = campaigns.map((c) => ({
+  const campaignRows: SmsCampaignPerformanceRow[] = campaigns.map((c: DbRow) => ({
     id: c.id,
     name: c.name,
     sentAt: (c.scheduledAt || c.createdAt)?.toISOString() ?? null,

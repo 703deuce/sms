@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { MOCK_BACKUP_CODES, MOCK_MANUAL_SECRET } from "../types";
 import { Button, Card, CardHeader, InlineAlert, Input, Label, StatusChip } from "./ui";
 
 type Mode = "idle" | "setup" | "disable";
@@ -27,6 +26,8 @@ export function TwoFactorCard({
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [codesSaved, setCodesSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [manualSecret, setManualSecret] = useState<string | null>(null);
 
   async function startSetup() {
     setBusy(true);
@@ -36,11 +37,13 @@ export function TwoFactorCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "setup_2fa" }),
-      }).catch(() => null);
-      if (res && !res.ok) {
-        const j = await res.json().catch(() => ({}));
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
         throw new Error((j as { error?: string }).error || "Failed to start setup");
       }
+      setQrDataUrl((j as { data?: { qrDataUrl?: string } }).data?.qrDataUrl || null);
+      setManualSecret((j as { data?: { secret?: string } }).data?.secret || null);
       setMode("setup");
       setCode("");
     } catch (e) {
@@ -61,17 +64,19 @@ export function TwoFactorCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "enable_2fa", code }),
-      }).catch(() => null);
-      if (res && !res.ok) {
-        const j = await res.json().catch(() => ({}));
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
         throw new Error((j as { error?: string }).error || "Invalid code");
       }
-      const codes = MOCK_BACKUP_CODES;
+      const codes = (j as { data?: { backupCodes?: string[] } }).data?.backupCodes || [];
       setBackupCodes(codes);
       setCodesSaved(false);
       setCopied(false);
       setMode("idle");
       setCode("");
+      setQrDataUrl(null);
+      setManualSecret(null);
       onEnabled(codes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid code");
@@ -167,25 +172,16 @@ export function TwoFactorCard({
             <div className="tv-form-grid">
               <div className="tv-2fa-setup">
                 <div className="tv-qr" aria-label="QR code for authenticator app" role="img">
-                  {/* Simulated QR pattern (sandbox) */}
-                  <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden>
-                    <rect width="120" height="120" fill="#fff" />
-                    {Array.from({ length: 12 }).map((_, r) =>
-                      Array.from({ length: 12 }).map((_, c) =>
-                        (r * 7 + c * 13 + r * c) % 3 === 0 ? (
-                          <rect key={`${r}-${c}`} x={6 + c * 9} y={6 + r * 9} width="7" height="7" fill="#0f172a" />
-                        ) : null,
-                      ),
-                    )}
-                    <rect x="6" y="6" width="27" height="27" fill="none" stroke="#0f172a" strokeWidth="5" />
-                    <rect x="87" y="6" width="27" height="27" fill="none" stroke="#0f172a" strokeWidth="5" />
-                    <rect x="6" y="87" width="27" height="27" fill="none" stroke="#0f172a" strokeWidth="5" />
-                  </svg>
+                  {qrDataUrl ? (
+                    <img src={qrDataUrl} alt="Authenticator QR code" width={132} height={132} />
+                  ) : (
+                    <div className="tv-muted" style={{ padding: 24 }}>Preparing QR code…</div>
+                  )}
                 </div>
                 <div className="tv-2fa-setup-copy">
                   <p className="tv-step-title">1 · Scan with your authenticator app</p>
                   <p className="tv-muted">Can't scan? Enter this key manually:</p>
-                  <code className="tv-secret">{MOCK_MANUAL_SECRET}</code>
+                  <code className="tv-secret">{manualSecret || "—"}</code>
                 </div>
               </div>
               <div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { assignContactToLists, resolveOrCreateListIdsByName } from "@/lib/contacts/list-assignment";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
 type ImportRow = {
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         where: { workspaceId: auth.workspaceId, id: { in: targetListIds } },
         select: { id: true },
       });
-      targetListIds = valid.map((l) => l.id);
+      targetListIds = valid.map((l: DbRow) => l.id);
     }
 
     const listNameCache = new Map<string, string>();

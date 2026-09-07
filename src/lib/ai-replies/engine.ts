@@ -1,7 +1,7 @@
 import "server-only";
 
 import { openAiChatCompletion } from "@/lib/ai/openai";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import {
   contactMatchesSegment,
   parseSegmentConditions,
@@ -131,7 +131,7 @@ async function contactInSegment(
       id: contact.id,
       status: contact.status,
       customFields: contact.customFields,
-      tagNames: contact.tagMembers.map((t) => t.tag.name),
+      tagNames: contact.tagMembers.map((t: DbRow) => t.tag.name),
       source: contact.consentSource,
     },
     parseSegmentConditions(segment.conditions),
@@ -388,7 +388,7 @@ export async function processAiReplyRespond(payload: {
     take: 20,
   });
 
-  const history = messages.map((m) => ({
+  const history = messages.map((m: DbRow) => ({
     role: (m.direction === "inbound" ? "user" : "assistant") as "user" | "assistant",
     content: m.body,
   }));
@@ -508,15 +508,15 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
     take: 50,
   });
 
-  const contactIds = [...new Set(sessions.map((s) => s.contactId))];
+  const contactIds = [...new Set(sessions.map((s: DbRow) => s.contactId))];
   const contacts = await prisma.contact.findMany({
     where: { workspaceId, id: { in: contactIds } },
     select: { id: true, phone: true, firstName: true, lastName: true },
   });
-  const byId = new Map(contacts.map((c) => [c.id, c]));
+  const byId = new Map<string, DbRow>(contacts.map((c: DbRow) => [c.id, c]));
 
   const activityByDay = new Map<string, number>();
-  for (const log of logs.filter((l) => l.direction === "outbound")) {
+  for (const log of logs.filter((l: DbRow) => l.direction === "outbound")) {
     const key = log.createdAt.toISOString().slice(0, 10);
     activityByDay.set(key, (activityByDay.get(key) || 0) + 1);
   }
@@ -524,8 +524,8 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
   const chartValues = chartLabels.map((d) => activityByDay.get(d) || 0);
 
   const topics = new Map<string, number>();
-  for (const log of logs.filter((l) => l.direction === "inbound")) {
-    const words = log.body.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
+  for (const log of logs.filter((l: DbRow) => l.direction === "inbound")) {
+    const words = log.body.toLowerCase().split(/\W+/).filter((w: DbRow) => w.length > 4);
     for (const w of words.slice(0, 3)) topics.set(w, (topics.get(w) || 0) + 1);
   }
   const topQueries = [...topics.entries()]
@@ -538,14 +538,14 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       ? ((campaign.contactsEngaged - campaign.handoffs) / campaign.contactsEngaged) * 100
       : 0;
 
-  const sessionIds = sessions.map((s) => s.id);
+  const sessionIds = sessions.map((s: DbRow) => s.id);
   const aiMessages = await prisma.message.findMany({
     where: {
       workspaceId,
       idempotencyKey: { startsWith: "ai-reply-send:" },
       ...(sessionIds.length
         ? {
-            OR: sessionIds.map((sessionId) => ({
+            OR: sessionIds.map((sessionId: DbRow) => ({
               idempotencyKey: { startsWith: `ai-reply-send:${sessionId}:` },
             })),
           }
@@ -556,7 +556,7 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
     select: { id: true, to: true, status: true, createdAt: true, idempotencyKey: true },
   });
   const { summarizeDeliveryStatuses } = await import("@/lib/automate/delivery-stats");
-  const delivery = summarizeDeliveryStatuses(aiMessages.map((m) => m.status));
+  const delivery = summarizeDeliveryStatuses(aiMessages.map((m: DbRow) => m.status));
 
   return {
     campaign,
@@ -564,7 +564,7 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       totalReplies: campaign.messagesSent,
       contactsEngaged: campaign.contactsEngaged,
       conversions: campaign.conversions,
-      leadsCaptured: sessions.filter((s) => s.leadCaptured).length,
+      leadsCaptured: sessions.filter((s: DbRow) => s.leadCaptured).length,
       resolutionRate,
       handoffs: campaign.handoffs,
       deliveryRate: delivery.deliveryRate,
@@ -572,7 +572,7 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       failedCount: delivery.failed,
     },
     delivery,
-    recentDeliveries: aiMessages.slice(0, 50).map((m) => ({
+    recentDeliveries: aiMessages.slice(0, 50).map((m: DbRow) => ({
       id: m.id,
       to: m.to,
       status: m.status,
@@ -590,7 +590,7 @@ export async function loadAiReplyDetail(workspaceId: string, id: string) {
       negative: 10,
     },
     topQueries,
-    sessions: sessions.map((s) => {
+    sessions: sessions.map((s: DbRow) => {
       const c = byId.get(s.contactId);
       return {
         id: s.id,
@@ -624,7 +624,7 @@ export async function generateInboxSuggestions(
     orderBy: { createdAt: "desc" },
     take: 5,
   });
-  const latestInbound = messages.find((m) => m.direction === "inbound")?.body || "";
+  const latestInbound = messages.find((m: DbRow) => m.direction === "inbound")?.body || "";
 
   const suggestions: string[] = [];
   if (latestInbound) {

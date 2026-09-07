@@ -147,6 +147,7 @@ export function CampaignQueueView() {
       return;
     }
 
+    const id = campaignId;
     let cancelled = false;
 
     async function bootstrap() {
@@ -154,8 +155,8 @@ export function CampaignQueueView() {
       setError("");
       try {
         const [campaign, launchReview] = await Promise.all([
-          fetchCampaignById(campaignId),
-          fetchLaunchReview(campaignId),
+          fetchCampaignById(id),
+          fetchLaunchReview(id),
         ]);
         if (cancelled) return;
 
@@ -170,7 +171,7 @@ export function CampaignQueueView() {
           setArmed(true);
         }
 
-        if (isCampaignLaunchPending(campaignId) && status === "DRAFT") {
+        if (isCampaignLaunchPending(id) && status === "DRAFT") {
           setSeconds(0);
           setArmed(true);
         }

@@ -190,7 +190,7 @@ export function MockupListToolbar({
   searchValue: string;
   onSearchChange: (value: string) => void;
   filterSlot?: ReactNode;
-  createSlot: ReactNode;
+  createSlot?: ReactNode;
 }) {
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

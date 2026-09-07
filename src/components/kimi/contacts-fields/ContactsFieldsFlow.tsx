@@ -52,6 +52,7 @@ export default function ContactsFieldsFlow() {
         <CustomFieldsList
           fields={fields}
           onCreate={() => setView("createField")}
+          onEdit={() => setView("createField")}
           onDelete={(id) => setFields((p) => p.filter((f) => f.id !== id))}
         />
       )}

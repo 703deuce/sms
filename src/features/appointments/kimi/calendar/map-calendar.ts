@@ -2,6 +2,7 @@ import { formatAppointmentTime } from "@/components/appointments/appointment-ui"
 import type {
   CalendarAgendaItem,
   CalendarMiniDay,
+  CalendarMonthDay,
   CalendarNextAppointment,
   CalendarNowLine,
   CalendarPageModel,

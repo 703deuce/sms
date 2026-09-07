@@ -83,7 +83,7 @@ export async function ensureDefaultTelnyxMctbAndSmsProvision(input: {
   const taggedSettings = mergePhoneCapabilitySettings(
     mergeSettings(phone.settingsJson, {
       ...telnyxLocalA2pSettings({
-        role: mctbRole === "platform_demo" ? "platform_demo" : "customer_production",
+        role: "customer_production",
       }),
       routingOwner: priorSettings.routingOwner || MCTB_TEXML_ROUTING_OWNER,
       mctbRole,

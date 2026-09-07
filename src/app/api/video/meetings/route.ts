@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { DbRow } from "@/lib/db";
 import { jsonEntitlementError, requireSession } from "@/lib/api-auth";
 import { assertTransovoVideoEntitlement } from "@/lib/transovo-video/entitlements";
 import { listVideoMeetings, provisionStandaloneVideoMeeting } from "@/lib/transovo-video/service";
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const meetings = await listVideoMeetings(auth.workspaceId, filter || "all");
     return NextResponse.json({
       data: {
-        meetings: meetings.map((m) => ({
+        meetings: meetings.map((m: DbRow) => ({
           ...m,
           meetingUrl: publicVideoMeetingUrl(m.publicMeetingToken),
           hostJoinUrl: `/video/rooms/${m.id}/host`,

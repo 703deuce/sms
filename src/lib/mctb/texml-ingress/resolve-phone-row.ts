@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { readPhoneCapabilities } from "@/lib/numbers/phone-capabilities";
 import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
@@ -105,9 +105,9 @@ export async function resolveBestMctbIngressPhoneRow(
   if (candidates.length === 1) return candidates[0]!;
 
   const scored = await Promise.all(
-    candidates.map(async (phone) => ({
+    candidates.map(async (phone: DbRow) => ({
       phone,
-      score: await scoreIngressPhoneRow(phone),
+      score: await scoreIngressPhoneRow(phone as PhoneRow),
       routingMode: telephonyRoutingMode(phone.settingsJson),
     })),
   );

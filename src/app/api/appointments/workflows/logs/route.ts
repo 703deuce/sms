@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 function mapLogStatus(state: string): string {
@@ -47,8 +47,8 @@ export async function GET(request: Request) {
     const appointmentIds = [
       ...new Set(
         rows
-          .map((r) => r.execution?.appointmentId)
-          .filter((id): id is string => Boolean(id)),
+          .map((r: DbRow) => r.execution?.appointmentId)
+          .filter((id: string | undefined): id is string => typeof id === "string" && Boolean(id)),
       ),
     ];
     const appointments = appointmentIds.length
@@ -58,14 +58,14 @@ export async function GET(request: Request) {
         })
       : [];
     const contactNameByAppointment = new Map(
-      appointments.map((a) => {
+      appointments.map((a: DbRow) => {
         const meta = (a.metadata || {}) as AppointmentMetadata;
         return [a.id, meta.inviteeName || null];
       }),
     );
 
     return NextResponse.json({
-      data: rows.map((r) => {
+      data: rows.map((r: DbRow) => {
         const payload = (r.payload || {}) as {
           stepName?: string;
           messagePreview?: string;

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomBytes } from "crypto";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import type { ReminderStepExtended, SingleUseBookingLink } from "@/lib/appointments/scheduling-capabilities";
 
 export function createSingleUseBookingToken(): string {
@@ -63,11 +63,11 @@ export async function consumeSingleUseBookingLink(workspaceId: string, token: st
     "@/lib/appointments/settings"
   );
   const platform = await loadAppointmentPlatformConfig(workspaceId);
-  const links = (platform as { singleUseBookingLink?: SingleUseBookingLink[] }).singleUseLinks || [];
-  const updated = links.map((l) =>
+  const links = (platform as { singleUseBookingLink?: SingleUseBookingLink[] }).singleUseBookingLink || [];
+  const updated = links.map((l: DbRow) =>
     l.token === token ? { ...l, usedCount: l.usedCount + 1 } : l,
   );
-  await saveAppointmentPlatformConfig(workspaceId, { singleUseLinks: updated } as object);
+  await saveAppointmentPlatformConfig(workspaceId, { singleUseBookingLink: updated } as object);
 }
 
 export function embedBookingUrl(slug: string, opts?: { typeId?: string; theme?: string }) {

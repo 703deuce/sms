@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { PREBUILT_WORKFLOW_TEMPLATES } from "../src/lib/appointment-workflows/templates";
 import { PREBUILT_WORKFLOW_TEMPLATE_IDS } from "../src/lib/appointment-workflows/types";
 import { evaluateConditionGroup, shouldAllowStatusForWorkflow, workflowMatchesAppointmentType } from "../src/lib/appointment-workflows/conditions";
-import { webhookHostForLog } from "../src/lib/appointment-workflows/webhook-delivery";
+import { webhookHostForLog } from "../src/lib/appointment-workflows/webhook-log";
 import { isPaymentOutstanding } from "../src/lib/appointment-workflows/payment-link";
 import { resolveStepScheduledTime, stepIdempotencyKey } from "../src/lib/appointment-workflows/scheduler";
 import { parseWorkflowSteps } from "../src/lib/appointment-workflows/types";

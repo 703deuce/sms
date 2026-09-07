@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { formatMessagePreview } from "@/lib/inbox/message-preview";
 import {
   decodeInboxCursor,
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
         distinct: ["contactId"],
         take: 500,
       });
-      const contactIds = apptRows.map((r) => r.contactId).filter(Boolean) as string[];
+      const contactIds = apptRows.map((r: DbRow) => r.contactId).filter(Boolean) as string[];
       baseWhere = { AND: [baseWhere, { contactId: { in: contactIds.length ? contactIds : ["__none__"] } }] };
     }
 
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     const campaignNames = new Map(campaigns.map((c: (typeof campaigns)[number]) => [c.id, c.name]));
 
     const contactIds = [
-      ...new Set(page.map((c) => c.contactId).filter(Boolean)),
+      ...new Set(page.map((c: DbRow) => c.contactId).filter(Boolean)),
     ] as string[];
     const appointmentByContact = await loadUpcomingAppointmentsByContactIds(
       auth.workspaceId,

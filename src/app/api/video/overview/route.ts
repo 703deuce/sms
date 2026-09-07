@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { DbRow } from "@/lib/db";
 import { jsonEntitlementError, requireSession } from "@/lib/api-auth";
 import { hasAiNotetakerEntitlement } from "@/lib/meeting-assistant/entitlements";
 import { listMeetingSessions } from "@/lib/meeting-assistant/service";
@@ -31,7 +32,7 @@ export async function GET() {
           transovoVideo: videoEntitled,
           aiNotetaker: notetakerEntitled,
         },
-        upcomingVideoMeetings: videoMeetings.map((m) => ({
+        upcomingVideoMeetings: videoMeetings.map((m: DbRow) => ({
           id: m.id,
           title: m.title,
           status: m.status,
@@ -41,7 +42,7 @@ export async function GET() {
           hostJoinUrl: `/video/rooms/${m.id}/host`,
           appointmentId: m.appointmentId,
         })),
-        upcomingSessions: sessions.slice(0, 8).map((s) => ({
+        upcomingSessions: sessions.slice(0, 8).map((s: DbRow) => ({
           id: s.id,
           title: s.title,
           status: s.status,
@@ -54,9 +55,9 @@ export async function GET() {
           recordingStatus: s.recordingStatus,
         })),
         recentRecaps: recentSessions
-          .filter((s) => s.status === "completed" || s.summaryStatus === "ready")
+          .filter((s: DbRow) => s.status === "completed" || s.summaryStatus === "ready")
           .slice(0, 6)
-          .map((s) => ({
+          .map((s: DbRow) => ({
             id: s.id,
             title: s.title,
             scheduledStartAt: s.scheduledStartAt?.toISOString() || null,

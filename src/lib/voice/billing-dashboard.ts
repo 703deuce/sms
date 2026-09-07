@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { getBillingSummary, getUpcomingBillEstimate } from "@/lib/settings/billing";
 import { loadVoiceAnalytics } from "@/lib/voice/analytics";
 
@@ -139,7 +139,7 @@ export async function loadVoiceBillingDashboard(
   const spendLimitCents =
     typeof settings.spendLimitCents === "number" ? settings.spendLimitCents : null;
 
-  const agentNames = new Map(agents.map((a) => [a.id, a.name]));
+  const agentNames = new Map<string, string>(agents.map((a: DbRow) => [String(a.id), String(a.name || "Unnamed agent")]));
 
   const categoryTotals = new Map<string, { costCents: number; quantity: number; unit: string }>();
   for (const row of usageRecords) {
@@ -202,7 +202,7 @@ export async function loadVoiceBillingDashboard(
     }))
     .sort((a, b) => b.costCents - a.costCents);
 
-  const activeNumbers = phoneNumbers.filter((n) =>
+  const activeNumbers = phoneNumbers.filter((n: DbRow) =>
     /active|in[-_]?use|assigned/i.test(n.status || "active"),
   );
   const phoneNumberCount = activeNumbers.length || phoneNumbers.length;
@@ -282,7 +282,7 @@ export async function loadVoiceBillingDashboard(
     usageMeters,
     categoryBreakdown,
     agentBreakdown,
-    recentUsage: usageRecords.map((r) => ({
+    recentUsage: usageRecords.map((r: DbRow) => ({
       id: r.id,
       category: categoryLabels[r.category] || r.category,
       quantity: r.quantity,

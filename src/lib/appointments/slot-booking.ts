@@ -3,7 +3,7 @@
  */
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
 import { SlotTakenError } from "@/lib/appointments/slot-errors";
 import { createHash } from "crypto";
@@ -27,7 +27,7 @@ export async function withAtomicSlotBooking<T>(
   const lock = advisoryLockId(workspaceId, input.serviceName, input.startsAt);
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: DbRow) => {
       // Supabase PostgREST compat has no pg_advisory_xact_lock — skip when unavailable.
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lock})`;

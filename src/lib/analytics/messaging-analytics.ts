@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { failureCategoryLabel, type FailureCategory } from "@/lib/messaging/delivery-errors";
 
 type CampaignAggRow = {
@@ -180,7 +180,7 @@ export async function loadMessagingAnalytics(
   });
 
   const campaignIdsFromMessages = [
-    ...new Set(messages.map((m) => m.campaignId).filter(Boolean)),
+    ...new Set(messages.map((m: DbRow) => m.campaignId).filter(Boolean)),
   ] as string[];
 
   const campaignWhere = campaignIdsFromMessages.length

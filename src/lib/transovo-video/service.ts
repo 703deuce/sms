@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { appendTimeline } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, AppointmentTypeConfig } from "@/lib/appointments/types";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
@@ -634,7 +634,7 @@ export async function requestVideoJoin(input: {
       OR: [
         input.userId ? { userId: input.userId } : undefined,
         input.email ? { email: input.email.toLowerCase() } : undefined,
-      ].filter(Boolean) as Array<Record<string, string>>,
+      ].filter(Boolean) as Array<{ userId?: string; email?: string }>,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -799,7 +799,7 @@ export async function admitVideoParticipant(input: {
     email: input.hostEmail,
   });
 
-  const participant = meeting.participants.find((p) => p.id === input.participantId);
+  const participant = meeting.participants.find((p: DbRow) => p.id === input.participantId);
   if (!participant) throw new Error("Participant not found");
 
   return prisma.videoParticipant.update({
@@ -903,7 +903,7 @@ export async function moderateVideoParticipant(input: {
     email: input.hostEmail,
   });
 
-  const target = meeting.participants.find((p) => p.id === input.participantId);
+  const target = meeting.participants.find((p: DbRow) => p.id === input.participantId);
   if (!target?.providerParticipantId) throw new Error("Participant not connected");
 
   const sessionId = await resolveActiveSessionId(meeting);
@@ -1017,7 +1017,7 @@ export async function shouldProvisionTransovoVideo(input: {
   locationName?: string;
   locationKind?: string;
   eventTypeConfig?: AppointmentTypeConfig | null;
-}): boolean {
+}): Promise<boolean> {
   if (isTransovoVideoLocation({ kind: input.locationKind, name: input.locationName })) {
     return true;
   }

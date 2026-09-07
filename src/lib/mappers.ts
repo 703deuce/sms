@@ -350,6 +350,7 @@ export function mapAutomation(a: {
     advancedCustomized: Boolean(a.advancedCustomized),
     createdFrom,
     ownedBy,
+    description: a.description ?? null,
   };
 }
 

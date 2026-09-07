@@ -195,7 +195,7 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   return parsed;
 }
 
-function safeReturnRedirect(returnTo?: string, oauthKey: string, error?: string) {
+function safeReturnRedirect(oauthKey: string, returnTo?: string, error?: string) {
   const base = appUrl();
   const safeReturn =
     returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : null;
@@ -210,17 +210,17 @@ function safeReturnRedirect(returnTo?: string, oauthKey: string, error?: string)
 }
 
 export function microsoftOAuthSuccessRedirect(returnTo?: string) {
-  return safeReturnRedirect(returnTo, "microsoft_ok");
+  return safeReturnRedirect("microsoft_ok", returnTo);
 }
 
 export function microsoftOAuthErrorRedirect(error: string, returnTo?: string) {
-  return safeReturnRedirect(returnTo, "", error);
+  return safeReturnRedirect("", returnTo, error);
 }
 
 export function googleOAuthSuccessRedirect(returnTo?: string) {
-  return safeReturnRedirect(returnTo, "google_ok");
+  return safeReturnRedirect("google_ok", returnTo);
 }
 
 export function googleOAuthErrorRedirect(error: string, returnTo?: string) {
-  return safeReturnRedirect(returnTo, "", error);
+  return safeReturnRedirect("", returnTo, error);
 }

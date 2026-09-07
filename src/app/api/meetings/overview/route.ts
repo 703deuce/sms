@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { DbRow } from "@/lib/db";
 import { jsonEntitlementError, requireSession } from "@/lib/api-auth";
 import { hasAiNotetakerEntitlement } from "@/lib/meeting-assistant/entitlements";
 import { listMeetingSessions } from "@/lib/meeting-assistant/service";
@@ -27,7 +28,7 @@ export async function GET() {
     return NextResponse.json({
       data: {
         entitlements: { aiNotetaker: true },
-        upcomingSessions: upcomingSessions.slice(0, 8).map((s) => ({
+        upcomingSessions: upcomingSessions.slice(0, 8).map((s: DbRow) => ({
           id: s.id,
           title: s.title,
           status: s.status,
@@ -36,9 +37,9 @@ export async function GET() {
           scheduledStartAt: s.scheduledStartAt?.toISOString() || null,
         })),
         recentRecaps: recentSessions
-          .filter((s) => s.status === "completed" || s.summaryStatus === "ready")
+          .filter((s: DbRow) => s.status === "completed" || s.summaryStatus === "ready")
           .slice(0, 6)
-          .map((s) => ({
+          .map((s: DbRow) => ({
             id: s.id,
             title: s.title,
             scheduledStartAt: s.scheduledStartAt?.toISOString() || null,

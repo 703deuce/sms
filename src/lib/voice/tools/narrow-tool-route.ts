@@ -61,14 +61,14 @@ export async function handleNarrowVoiceToolRequest(
     String(body.call_control_id || "");
 
   if (conversationId || callControlId) {
-    const ensured = await ensureVoiceCallForToolWebhook({
-      workspaceId,
-      agentId: agentId || undefined,
-      conversationId: conversationId || undefined,
-      callControlId: callControlId || undefined,
-      fromE164: resolveInboundAni(request, body) || undefined,
-    }).catch(() => null);
-    callId = ensured?.callId;
+    callId =
+      (await ensureVoiceCallForToolWebhook({
+        workspaceId,
+        agentId: agentId || "",
+        conversationId: conversationId || undefined,
+        callControlId: callControlId || undefined,
+        fromE164: resolveInboundAni(request, body) || undefined,
+      }).catch(() => null)) ?? undefined;
   }
 
   const guard = await assertWorkflowToolAllowed({

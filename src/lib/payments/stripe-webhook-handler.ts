@@ -80,11 +80,11 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     "@/lib/appointments/payment-checkout"
   );
   if (isAppointmentCheckoutMetadata(metadata)) {
-    return handleAppointmentCheckoutCompleted(session);
+    return handleAppointmentCheckoutCompleted(session as Parameters<typeof handleAppointmentCheckoutCompleted>[0]);
   }
   // Legacy appointment metadata without transaction_type
   if (metadata.appointmentId && metadata.paymentMode) {
-    return handleAppointmentCheckoutCompleted(session);
+    return handleAppointmentCheckoutCompleted(session as Parameters<typeof handleAppointmentCheckoutCompleted>[0]);
   }
   return { subsystem: "none" as const, skipped: true };
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 
 export type AppointmentsAnalyticsRange = 7 | 30;
 
@@ -21,14 +21,14 @@ export async function loadAppointmentsAnalytics(
   });
 
   const booked = rows.length;
-  const confirmed = rows.filter((r) => normalize(r.status) === "confirmed").length;
-  const canceled = rows.filter((r) => normalize(r.status) === "canceled").length;
-  const noShow = rows.filter((r) => normalize(r.status) === "no_show").length;
-  const awaiting = rows.filter((r) =>
+  const confirmed = rows.filter((r: DbRow) => normalize(r.status) === "confirmed").length;
+  const canceled = rows.filter((r: DbRow) => normalize(r.status) === "canceled").length;
+  const noShow = rows.filter((r: DbRow) => normalize(r.status) === "no_show").length;
+  const awaiting = rows.filter((r: DbRow) =>
     ["awaiting_confirmation", "scheduled"].includes(normalize(r.status)),
   ).length;
   const rescheduleRequested = rows.filter(
-    (r) => normalize(r.status) === "reschedule_requested",
+    (r: DbRow) => normalize(r.status) === "reschedule_requested",
   ).length;
 
   let remindersSent = 0;

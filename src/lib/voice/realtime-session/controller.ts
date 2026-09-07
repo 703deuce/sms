@@ -193,7 +193,7 @@ export async function executeRealtimeSessionTurn(
   tracker.mark("session_loaded");
 
   const serviceName = pickServiceName(extracted, input.serviceName, session.serviceName);
-  const state = session.currentState;
+  let state = session.currentState;
 
   session = await updateSessionAfterRuntimeChange(session, {
     lastUserUtterance: utterance || null,
@@ -212,6 +212,7 @@ export async function executeRealtimeSessionTurn(
       .map((f) => f.label)
       .filter(Boolean),
   });
+  const utteranceClassName = utteranceClass.class;
 
   const routingStart = Date.now();
 
@@ -381,7 +382,7 @@ export async function executeRealtimeSessionTurn(
     session.missingFieldIds.length > 0
   ) {
     const activeField = session.activeField || session.missingFieldIds[0];
-    if (activeField && utterance && utteranceClass.class !== "capability_question") {
+    if (activeField && utterance && utteranceClassName !== "capability_question") {
       tracker.setRouting(Date.now() - routingStart);
       const dbStart = Date.now();
       const recorded = await recordCurrentField({

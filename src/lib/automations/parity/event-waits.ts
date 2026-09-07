@@ -14,7 +14,7 @@ import { outcomeResult } from "./resolve-outcome";
 import { fieldTypeForContactField } from "../block-registry";
 
 export type EventWaitState = {
-  eventWaitActive: true;
+  eventWaitActive: boolean;
   eventWaitType: string;
   eventWaitNodeId: string;
   eventWaitDeadline: number;

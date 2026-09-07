@@ -11,6 +11,7 @@ import {
   type AppointmentWorkflowTrigger,
   type WorkflowConditionGroup,
 } from "./types";
+import { getPrebuiltTemplate } from "./templates";
 import { getOrganizationPolicy, isManagedAutomation } from "@/lib/appointments/org-permissions";
 
 function parseConditionGroup(raw: unknown): WorkflowConditionGroup | null {

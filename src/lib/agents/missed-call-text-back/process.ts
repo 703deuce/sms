@@ -179,7 +179,7 @@ export async function processMissedInboundCall(input: ProcessMissedCallInput) {
       layer: "process",
       step: "eligibility_failed",
       outcome: "suppressed",
-      reason: suppressionReason,
+      reason: suppressionReason ?? undefined,
       traceId,
       missedCallEventId: event.id,
       workspaceId: input.workspaceId,

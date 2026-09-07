@@ -11,6 +11,12 @@ import {
 import type { KimiCredits, KimiNavItem, KimiSidebarUser } from "./types";
 import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 
+function hasPositiveBadge(badge: string | number | undefined): boolean {
+  if (badge == null) return false;
+  if (typeof badge === "number") return badge > 0;
+  return badge.trim().length > 0;
+}
+
 /** Kimi sessions 2026-08-30T22-24-04-122Z-b95821 (initial), 2026-09-06T18-36-09-917Z-daeeac (Stage D refresh) — production wiring only. */
 export interface TransovoSidebarProps {
   navItems: KimiNavItem[];
@@ -70,7 +76,7 @@ function ExpandedNavRow({
       >
         <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
-        {item.badge != null && item.badge > 0 && (
+        {item.badge != null && Number(item.badge) > 0 && (
           <span className="transovo-badge">{item.badge}</span>
         )}
         <ChevronDown
@@ -90,7 +96,7 @@ function ExpandedNavRow({
     >
       <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
       <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
-      {item.badge != null && item.badge > 0 && (
+      {hasPositiveBadge(item.badge) && (
         <span className="transovo-badge">{item.badge}</span>
       )}
     </Link>
@@ -107,7 +113,7 @@ function CollapsedNavButton({ item, active }: { item: KimiNavItem; active: boole
       className="transovo-nav-item relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
     >
       <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-      {item.badge != null && item.badge > 0 && (
+      {hasPositiveBadge(item.badge) && (
         <span className="transovo-badge-dot">{item.badge}</span>
       )}
     </Link>

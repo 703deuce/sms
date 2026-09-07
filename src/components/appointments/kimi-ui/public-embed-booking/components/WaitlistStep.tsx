@@ -11,23 +11,32 @@ export default function WaitlistStep({
   update,
   onBack,
   onJoined,
+  onJoin,
+  submitting = false,
+  error,
 }: {
   type: BookingType;
   state: BookingState;
   update: (patch: Partial<BookingState>) => void;
   onBack: () => void;
   onJoined: () => void;
+  onJoin?: () => Promise<boolean>;
+  submitting?: boolean;
+  error?: string | null;
 }) {
-  const [submitting, setSubmitting] = useState(false);
+  const [localBusy, setLocalBusy] = useState(false);
+  const busy = submitting || localBusy;
   const invalid = !state.firstName.trim() || !state.phone.trim();
 
-  function join() {
-    setSubmitting(true);
-    // Sandbox: simulate /api/public/book/[slug]/waitlist
-    setTimeout(() => {
-      setSubmitting(false);
-      onJoined();
-    }, 800);
+  async function join() {
+    if (onJoin) {
+      setLocalBusy(true);
+      const ok = await onJoin();
+      setLocalBusy(false);
+      if (ok) onJoined();
+      return;
+    }
+    onJoined();
   }
 
   return (
@@ -42,6 +51,12 @@ export default function WaitlistStep({
         There's no charge to join the waitlist. You'll only be booked if you confirm an
         offered time.
       </div>
+
+      {error ? (
+        <p className="eb-sub" style={{ color: "var(--destructive)", marginTop: 12 }} role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <div className="eb-form-grid">
         <div className="eb-field">
@@ -80,16 +95,16 @@ export default function WaitlistStep({
       </div>
 
       <div className="eb-actions">
-        <button type="button" className="eb-btn eb-btn--ghost" onClick={onBack} disabled={submitting}>
+        <button type="button" className="eb-btn eb-btn--ghost" onClick={onBack} disabled={busy}>
           <ArrowLeft size={15} aria-hidden /> Back
         </button>
         <button
           type="button"
           className="eb-btn eb-btn--primary"
-          disabled={submitting || invalid}
-          onClick={join}
+          disabled={busy || invalid}
+          onClick={() => void join()}
         >
-          {submitting ? "Joining…" : "Join waitlist"}
+          {busy ? "Joining…" : "Join waitlist"}
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { buildClickToTextHref } from "@/lib/growth/click-to-text";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
@@ -102,8 +102,8 @@ export async function hydrateTapToJoinRows(
         })
       : [];
 
-  const kwById = new Map(keywords.map((k) => [k.id, k]));
-  const phoneById = new Map(phones.map((p) => [p.id, p]));
+  const kwById = new Map<string, DbRow>(keywords.map((k: DbRow) => [k.id, k]));
+  const phoneById = new Map<string, DbRow>(phones.map((p: DbRow) => [p.id, p]));
 
   return rows.map((row) => {
     const kw = row.keywordId ? kwById.get(row.keywordId) : undefined;
@@ -188,6 +188,8 @@ export async function createTapToJoinLink(
     });
     phoneNumberId = pn?.id ?? null;
   }
+
+  if (!phoneE164) throw new Error("No SMS sending number configured");
 
   const body = keyword.keyword.trim().toUpperCase();
   const href = buildTapToJoinSmsHref(phoneE164, body);

@@ -219,7 +219,7 @@ export async function processCalendarProviderEvent(input: {
         endsAt: event.end,
         timezone: event.timezone || null,
         status,
-        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId),
+        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
       },
       update: {
         contactId: contact.contactId,
@@ -228,7 +228,7 @@ export async function processCalendarProviderEvent(input: {
         endsAt: event.end,
         timezone: event.timezone || null,
         status,
-        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId),
+        metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
       },
     });
 
@@ -267,7 +267,7 @@ export async function processCalendarProviderEvent(input: {
       endsAt: event.end,
       timezone: event.timezone || null,
       status: "confirmed",
-      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId),
+      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
     },
     update: {
       contactId: contact.contactId,
@@ -276,7 +276,7 @@ export async function processCalendarProviderEvent(input: {
       endsAt: event.end,
       timezone: event.timezone || null,
       status: "confirmed",
-      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId),
+      metadata: buildImportMetadata(event, provider, connectionId, contact, input.calendarId) as Record<string, unknown>,
     },
   });
 

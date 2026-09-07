@@ -52,7 +52,7 @@ export async function GET(_request: Request, { params }: Params) {
       eventId: id,
       status: event.status,
       callerE164: event.callerE164,
-      timelineSteps: timeline.length,
+      timelineSteps: timeline.steps.length,
     });
 
     return NextResponse.json({

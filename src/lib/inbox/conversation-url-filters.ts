@@ -1,5 +1,6 @@
 import type { FilterSel } from "@/components/kimi/conversations/components/InboxRail";
 import type { AppointmentMessageFilter } from "@/lib/mass-texting/inbox-filters";
+import type { InboxListFilters } from "@/lib/mass-texting/inbox-filters";
 
 export function inboxFiltersFromUrlParams(
   params: Record<string, string | string[] | undefined>,

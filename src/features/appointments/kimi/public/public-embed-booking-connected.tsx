@@ -191,9 +191,17 @@ export function PublicEmbedBookingConnected(props: PublicBookingFlowOptions) {
               if (patch.firstName !== undefined) flow.setFirstName(patch.firstName);
               if (patch.phone !== undefined) flow.setPhone(patch.phone);
               if (patch.email !== undefined) flow.setEmail(patch.email);
+              if (patch.notes !== undefined) flow.setNotes(patch.notes);
             }}
             onBack={() => flow.setStep("datetime")}
             onJoined={() => flow.setStep("done")}
+            submitting={flow.submitting}
+            error={flow.error}
+            onJoin={async () => {
+              if (!flow.smsConsent) flow.setSmsConsent(true);
+              const ok = await flow.joinWaitlist();
+              return ok;
+            }}
           />
         ) : null}
 

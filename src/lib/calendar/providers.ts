@@ -220,7 +220,7 @@ export async function getValidAccessToken(
       !forceRefresh &&
       activeConfig.expiresAt &&
       activeConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
-    if (activeConfig.accessToken && notExpired) return activeConfig.accessToken;
+    if (activeConfig.accessToken && notExpired) return activeConfig.accessToken ?? null;
     if (!activeConfig.refreshToken) {
       const accessStillValid =
         activeConfig.accessToken &&
@@ -229,7 +229,7 @@ export async function getValidAccessToken(
       if (!accessStillValid) {
         await markCalendarConnectionNeedsReauth(connectionId);
       }
-      return accessStillValid ? activeConfig.accessToken : null;
+      return accessStillValid ? (activeConfig.accessToken ?? null) : null;
     }
 
     const refreshed =

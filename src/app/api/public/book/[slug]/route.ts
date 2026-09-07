@@ -17,7 +17,7 @@ import {
 } from "@/lib/appointments/scheduling-domain";
 import { SlotTakenError } from "@/lib/appointments/slot-booking";
 import type { AppointmentTypeConfig, PaymentRequirement } from "@/lib/appointments/types";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -50,11 +50,11 @@ async function resolveTypeConfig(
 ): Promise<{ id: string; name: string; config: AppointmentTypeConfig } | null> {
   const types = await listAppointmentTypes(workspaceId);
   if (serviceId) {
-    const match = types.find((t) => t.id === serviceId);
+    const match = types.find((t: DbRow) => t.id === serviceId);
     if (match) return { id: match.id, name: match.name, config: match.config || {} };
   }
   if (serviceName) {
-    const match = types.find((t) => t.name === serviceName);
+    const match = types.find((t: DbRow) => t.name === serviceName);
     if (match) return { id: match.id, name: match.name, config: match.config || {} };
   }
   return null;

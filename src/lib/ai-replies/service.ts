@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import {
   DEFAULT_AI_ADVANCED,
   parseAdvancedConfig,
@@ -100,7 +100,7 @@ export async function listAiReplies(workspaceId: string): Promise<AiReplyRecord[
     where: { workspaceId },
     orderBy: { updatedAt: "desc" },
   });
-  return Promise.all(rows.map((r) => hydratePhone(mapRow(r))));
+  return Promise.all(rows.map((r: DbRow) => hydratePhone(mapRow(r as Parameters<typeof mapRow>[0]))));
 }
 
 export async function getAiReply(workspaceId: string, id: string): Promise<AiReplyRecord | null> {

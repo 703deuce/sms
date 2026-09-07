@@ -4,7 +4,7 @@ import { filterWorkspaceListIds } from "@/lib/contacts/workspace-membership";
 import { assignContactToLists } from "@/lib/contacts/list-assignment";
 import { assertCanSubscribeContact } from "@/lib/contacts/subscribe-guard";
 import { isAutomationContact } from "@/lib/contacts/visible-contacts";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { loadContactById } from "@/lib/workspace-data";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 
@@ -118,7 +118,7 @@ export async function PATCH(
         where: { contactId: id },
         include: { tag: true },
       });
-      const priorTagIds = new Set(priorTags.map((t) => t.tagId));
+      const priorTagIds = new Set(priorTags.map((t: DbRow) => t.tagId));
 
       await getPrisma().contactTag.deleteMany({ where: { contactId: id } });
       const addedTagIds: string[] = [];
@@ -166,7 +166,7 @@ export async function PATCH(
         where: { contactId: id },
         select: { listId: true },
       });
-      const priorListIds = new Set(priorLists.map((l) => l.listId));
+      const priorListIds = new Set(priorLists.map((l: DbRow) => l.listId));
 
       await getPrisma().contactListMember.deleteMany({ where: { contactId: id } });
       const addedListIds: string[] = [];

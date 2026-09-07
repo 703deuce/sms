@@ -109,7 +109,7 @@ export function ContactBookingActions({ contactId, phone, email }: Props) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
       {bookingUrl ? (
-        <Button variant="outline" asChild={undefined}>
+        <Button variant="outline">
           <a
             href={bookingUrl}
             target="_blank"

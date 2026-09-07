@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { resolveSegmentContactIds } from "@/lib/contacts/segment-query";
 import { visibleContactWhere } from "@/lib/contacts/visible-contacts";
 
@@ -41,16 +41,26 @@ export async function POST(request: Request) {
       },
     });
 
-    const rowById = new Map(
-      rows.map((c: {
-        id: string;
-        phone: string | null;
-        firstName: string | null;
-        lastName: string | null;
-        email: string | null;
-        status: string;
-        customFields: unknown;
-      }) => [c.id, c]),
+    type SegmentContactRow = {
+      id: string;
+      phone: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+      status: string;
+      customFields: unknown;
+    };
+
+    const rowById = new Map<string, SegmentContactRow>(
+      rows.map((c: DbRow) => ({
+        id: String(c.id),
+        phone: (c.phone as string | null) ?? null,
+        firstName: (c.firstName as string | null) ?? null,
+        lastName: (c.lastName as string | null) ?? null,
+        email: (c.email as string | null) ?? null,
+        status: String(c.status ?? ""),
+        customFields: c.customFields,
+      })).map((c: SegmentContactRow) => [c.id, c]),
     );
 
     const contacts = slice

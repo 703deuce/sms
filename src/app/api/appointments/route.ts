@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { DbRow } from "@/lib/db";
 import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     if (body.serviceId) {
       const types = await listAppointmentTypes(auth.workspaceId, { includeSecret: true, includeUnlisted: true });
-      const type = types.find((t) => t.id === String(body.serviceId));
+      const type = types.find((t: DbRow) => t.id === String(body.serviceId));
       if (type?.config) {
         await assertEventTypeAccess(
           auth.workspaceId,

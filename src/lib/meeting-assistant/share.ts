@@ -1,7 +1,7 @@
 import "server-only";
 
 import bcrypt from "bcryptjs";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { resolveMeetingRecordingAccess } from "@/lib/storage/meeting-recordings";
 
 export type PublicRecapShareView = {
@@ -133,7 +133,7 @@ export async function getPublicRecapShare(
     view.summaryText = session.summaryText;
   }
   if (share.includeActionItems) {
-    view.actionItems = session.actionItems.map((item) => ({
+    view.actionItems = session.actionItems.map((item: DbRow) => ({
       id: item.id,
       description: item.description,
       assigneeText: item.assigneeText,
@@ -141,7 +141,7 @@ export async function getPublicRecapShare(
     }));
   }
   if (share.includeTranscript) {
-    view.transcriptSegments = session.transcriptSegments.map((seg) => ({
+    view.transcriptSegments = session.transcriptSegments.map((seg: DbRow) => ({
       id: seg.id,
       speakerName: seg.speakerName,
       text: seg.text,

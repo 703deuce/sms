@@ -2,6 +2,9 @@ import "server-only";
 
 import { createHmac } from "node:crypto";
 import { assertSafeWebhookUrl } from "@/lib/voice/url-safety";
+import { webhookHostForLog } from "./webhook-log";
+
+export { webhookHostForLog };
 
 const WEBHOOK_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 8_192;
@@ -67,10 +70,3 @@ export async function deliverAppointmentWorkflowWebhook(input: {
   }
 }
 
-export function webhookHostForLog(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "invalid-url";
-  }
-}

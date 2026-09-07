@@ -93,7 +93,7 @@ export async function getTryItStatus(workspaceId: string): Promise<TryItStatus> 
 
   return {
     demoNumberE164: demo.demoNumberE164,
-    demoNumberDisplay: demo.demoNumberDisplay,
+    demoNumberDisplay: demo.demoNumberDisplay || demo.demoNumberE164,
     consentMode,
     sessionActive: Boolean(
       session &&

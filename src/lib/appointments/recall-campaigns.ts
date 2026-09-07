@@ -98,7 +98,7 @@ export async function runRecallCampaign(workspaceId: string, campaignId: string)
         workspaceId,
         to: contact.email,
         subject: campaign.subject || "Book your next appointment",
-        html: body.replace(/\n/g, "<br/>"),
+        htmlContent: body.replace(/\n/g, "<br/>"),
       });
       sent += 1;
     } else if (contact.phone) {

@@ -9,7 +9,7 @@ const SAFE_FALLBACK =
 
 export async function composeAppointmentResponse(
   outcome: ResolverOutcome,
-  options?: { channel?: "sms" | "public_booking" | "conversation"; useLlm?: boolean },
+  options?: { channel?: "sms" | "email" | "public_booking" | "conversation"; useLlm?: boolean },
 ): Promise<string> {
   if (!options?.useLlm) {
     return deterministicCompose(outcome);

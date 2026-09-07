@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { DbRow } from "@/lib/db";
 import { jsonError } from "@/lib/api-auth";
 import { listAppointmentTypes, loadAppointmentPlatformConfig, resolveWorkspaceBySlug } from "@/lib/appointments";
 import { resolveTeamPageBySlug, listSchedulingGroups } from "@/lib/appointments/team-scheduling";
@@ -21,7 +22,7 @@ export async function GET(_request: Request, { params }: Params) {
     const allTypes = await listAppointmentTypes(workspace.id);
     const groups = await listSchedulingGroups(workspace.id);
     const types = filterTypesForTeamPage(
-      allTypes.filter((t) => t.active),
+      allTypes.filter((t: DbRow) => t.active),
       teamPage,
       groups,
     );

@@ -10,7 +10,7 @@ export interface KimiNavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  badge?: number;
+  badge?: string | number;
   children?: KimiNavChild[];
   sectionLabel?: string;
   areaLabel?: string;

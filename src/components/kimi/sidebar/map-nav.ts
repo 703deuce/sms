@@ -15,7 +15,7 @@ export function mapProductionNavToKimi(items: NavItem[]): KimiNavItem[] {
     }
     return {
       label: item.label,
-      href: item.href,
+      href: item.href ?? "#",
       icon: item.icon,
       badge: item.badge,
       children: children.length ? children : undefined,

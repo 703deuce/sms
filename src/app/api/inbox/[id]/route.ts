@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { getPrisma } from "@/lib/db";
+import { getPrisma, type DbRow } from "@/lib/db";
 import { mapConversation } from "@/lib/mappers";
 import type { Conversation } from "@/lib/types";
 import { sendQuickSms } from "@/lib/sms/send-quick";
@@ -243,7 +243,7 @@ export async function PATCH(
           tagDefs.filter((t: { untagOnClose?: boolean; name: string }) => t.untagOnClose).map((t) => t.name),
         );
         if (untagNames.size) {
-          tags = tags.filter((t) => !untagNames.has(t));
+          tags = tags.filter((t: string) => !untagNames.has(t));
         }
       }
 
