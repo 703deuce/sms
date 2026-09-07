@@ -117,6 +117,7 @@ export default function BookingPage() {
           <PublicBookingCard
             enabled={enabled}
             url={bookingUrl}
+            workspaceSlug={workspace.slug}
             copied={copied}
             saving={saving}
             onToggle={handleToggle}

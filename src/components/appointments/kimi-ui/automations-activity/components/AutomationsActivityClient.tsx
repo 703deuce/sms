@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { WorkflowLogsPanel } from "./WorkflowLogsPanel";
 import { UnknownRepliesPanel } from "./UnknownRepliesPanel";
+import { LogDetailDrawer } from "./LogDetailDrawer";
 import type { UnknownReply, WorkflowLog } from "../mock-data";
 
 export function AutomationsActivityClient() {
@@ -14,6 +15,7 @@ export function AutomationsActivityClient() {
   const [logsError, setLogsError] = useState(false);
   const [repliesError, setRepliesError] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedLog, setSelectedLog] = useState<WorkflowLog | null>(null);
 
   const loadLogs = useCallback(async () => {
     setLoadingLogs(true);
@@ -125,6 +127,7 @@ export function AutomationsActivityClient() {
             loading={loadingLogs}
             error={logsError}
             onRetry={loadLogs}
+            onSelectLog={setSelectedLog}
           />
           <UnknownRepliesPanel
             items={replies}
@@ -141,6 +144,8 @@ export function AutomationsActivityClient() {
           {toast}
         </div>
       )}
+
+      <LogDetailDrawer log={selectedLog} onClose={() => setSelectedLog(null)} />
     </div>
   );
 }

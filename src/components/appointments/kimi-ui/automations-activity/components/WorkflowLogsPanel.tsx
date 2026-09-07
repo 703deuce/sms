@@ -21,6 +21,7 @@ type Props = {
   loading: boolean;
   error: boolean;
   onRetry: () => void;
+  onSelectLog?: (log: WorkflowLog) => void;
 };
 
 type StatusFilter = "all" | WorkflowLog["status"];
@@ -68,7 +69,7 @@ const statusFilters: { key: StatusFilter; label: string }[] = [
   { key: "skipped", label: "Skipped" },
 ];
 
-export function WorkflowLogsPanel({ logs, loading, error, onRetry }: Props) {
+export function WorkflowLogsPanel({ logs, loading, error, onRetry, onSelectLog }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [channel, setChannel] = useState<ChannelFilter>("all");
@@ -276,7 +277,18 @@ export function WorkflowLogsPanel({ logs, loading, error, onRetry }: Props) {
                   const meta = statusMeta[log.status];
                   const hasIssue = log.status === "failed" || log.status === "suppressed";
                   return (
-                    <tr key={log.id} className="tv-row">
+                    <tr
+                      key={log.id}
+                      className="tv-row tv-row-clickable"
+                      onClick={() => onSelectLog?.(log)}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onSelectLog?.(log);
+                        }
+                      }}
+                    >
                       <td className="tv-td">
                         <p className="font-medium" style={{ color: "var(--tv-text)" }}>
                           {log.workflowName}

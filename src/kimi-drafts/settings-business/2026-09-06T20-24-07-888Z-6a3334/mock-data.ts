@@ -52,6 +52,25 @@ export const sidebarNav = [
 export const DEFAULT_SMS_CONSENT_TEXT =
   "By checking this box, I agree to receive appointment-related text messages from Brightline Dental Studio at the mobile number provided. Message frequency varies. Message and data rates may apply. Reply STOP to opt out at any time.";
 
+export const suspiciousBookings = [
+  {
+    id: "sb_1",
+    at: "Sep 5, 2:14 PM",
+    serviceName: "New Patient Exam",
+    riskLevel: "HIGH" as const,
+    action: "block" as const,
+    signals: ["disposable email", "velocity limit"],
+  },
+  {
+    id: "sb_2",
+    at: "Sep 4, 9:42 AM",
+    serviceName: "Consultation",
+    riskLevel: "MEDIUM" as const,
+    action: "challenge" as const,
+    signals: ["suspicious notes"],
+  },
+];
+
 export const timezones = [
   "America/New_York",
   "America/Chicago",

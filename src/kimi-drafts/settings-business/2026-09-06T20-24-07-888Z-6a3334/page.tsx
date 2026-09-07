@@ -8,7 +8,8 @@ import BusinessProfileCard from "./components/BusinessProfileCard";
 import MessagingRegistrationCard from "./components/MessagingRegistrationCard";
 import BookingEnabledCard from "./components/BookingEnabledCard";
 import PublicLegalCard from "./components/PublicLegalCard";
-import { mockWorkspace, mockRegistration, DEFAULT_SMS_CONSENT_TEXT } from "./mock-data";
+import SuspiciousBookingsCard from "./components/SuspiciousBookingsCard";
+import { mockWorkspace, mockRegistration, DEFAULT_SMS_CONSENT_TEXT, suspiciousBookings } from "./mock-data";
 import { Building2, AlertCircle, CheckCircle2 } from "lucide-react";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -122,6 +123,7 @@ export default function SettingsBusinessPage() {
               consentVersion={consentVersion}
               setConsentVersion={setConsentVersion}
             />
+            <SuspiciousBookingsCard rows={suspiciousBookings} />
           </div>
           <div className="settings-side">
             <MessagingRegistrationCard

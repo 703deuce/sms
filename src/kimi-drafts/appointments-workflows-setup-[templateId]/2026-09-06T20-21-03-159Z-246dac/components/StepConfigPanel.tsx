@@ -131,6 +131,42 @@ export default function StepConfigPanel({
           </select>
         </div>
 
+        {step.action === "send_payment_link" ? (
+          <div>
+            <Label>Payment amount (USD)</Label>
+            <input
+              className={inputCls}
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="150.00"
+              value={step.paymentAmountCents ? (step.paymentAmountCents / 100).toFixed(2) : ""}
+              onChange={(e) =>
+                onChange({ paymentAmountCents: Math.round(parseFloat(e.target.value || "0") * 100) })
+              }
+            />
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              Customer receives a secure payment link via SMS. Amount is locked at send time.
+            </p>
+          </div>
+        ) : null}
+
+        {step.action === "send_webhook" ? (
+          <div>
+            <Label>Webhook URL</Label>
+            <input
+              className={inputCls}
+              type="url"
+              placeholder="https://hooks.example.com/appointments"
+              value={step.webhookUrl || ""}
+              onChange={(e) => onChange({ webhookUrl: e.target.value })}
+            />
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              Transovo POSTs appointment context when this step runs. Payload preview available in Test.
+            </p>
+          </div>
+        ) : null}
+
         <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
           <input
             type="checkbox"

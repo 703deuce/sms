@@ -1,3 +1,10 @@
+export type RoutingFormSummary = {
+  id: string;
+  name: string;
+  views: number;
+  routed: number;
+};
+
 export type AnalyticsData = {
   rangeDays: number;
   booked: number;
@@ -21,6 +28,7 @@ export type AnalyticsData = {
   popularTypes: Array<{ name: string; count: number }>;
   popularTimes: Array<{ hour: number; count: number }>;
   series: Array<{ date: string; count: number }>;
+  routingForms: RoutingFormSummary[];
 };
 
 function buildSeries(days: number, base: number[]): Array<{ date: string; count: number }> {
@@ -74,6 +82,10 @@ export const analytics7: AnalyticsData = {
     { hour: 16, count: 9 },
   ],
   series: buildSeries(7, [14, 22, 19, 26, 31, 18, 18]),
+  routingForms: [
+    { id: "rf_1", name: "New patient intake", views: 48, routed: 31 },
+    { id: "rf_2", name: "Enterprise demo request", views: 12, routed: 7 },
+  ],
 };
 
 export const analytics30: AnalyticsData = {
@@ -117,6 +129,10 @@ export const analytics30: AnalyticsData = {
   series: buildSeries(30, [
     12, 18, 22, 19, 26, 14, 9, 21, 24, 28, 17, 23, 31, 12, 16, 25, 29, 20, 27, 33, 15, 11, 22, 26, 30, 18, 24, 28, 13, 20,
   ]),
+  routingForms: [
+    { id: "rf_1", name: "New patient intake", views: 184, routed: 121 },
+    { id: "rf_2", name: "Enterprise demo request", views: 37, routed: 21 },
+  ],
 };
 
 export function getAnalytics(range: 7 | 30): AnalyticsData {

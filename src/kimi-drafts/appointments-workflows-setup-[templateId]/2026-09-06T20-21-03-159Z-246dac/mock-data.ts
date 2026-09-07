@@ -18,6 +18,8 @@ export type WorkflowStep = {
   enabled: boolean;
   stopIfConfirmed?: boolean;
   voiceReminderTemplateId?: string;
+  paymentAmountCents?: number;
+  webhookUrl?: string;
 };
 
 export type WorkflowTemplate = {
@@ -74,6 +76,7 @@ export const ACTION_OPTIONS = [
   { value: "send_sms_staff", label: "Send SMS to staff", channel: "sms" as const },
   { value: "request_confirmation", label: "Request confirmation", channel: "sms" as const },
   { value: "send_payment_link", label: "Send payment link", channel: "sms" as const },
+  { value: "send_webhook", label: "Call outbound webhook", channel: "sms" as const },
   { value: "send_review_request", label: "Send review request", channel: "sms" as const },
   { value: "send_reschedule_link", label: "Send reschedule link", channel: "sms" as const },
 ];

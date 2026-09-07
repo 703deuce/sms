@@ -9,7 +9,7 @@ import { PREBUILT_TEMPLATES } from "./mock-data";
 type View = { kind: "picker" } | { kind: "setup"; templateId: string } | { kind: "done"; name: string };
 
 export default function ReferencePage() {
-  const [view, setView] = useState<View>({ kind: "setup", templateId: "standard-reminders" });
+  const [view, setView] = useState<View>({ kind: "picker" });
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">

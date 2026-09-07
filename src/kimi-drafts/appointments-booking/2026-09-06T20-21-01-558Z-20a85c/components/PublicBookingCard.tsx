@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import { Globe, Copy, Check, ExternalLink } from "lucide-react";
+import { Globe, Copy, Check, ExternalLink, BellRing } from "lucide-react";
 
 type Props = {
   enabled: boolean;
   url: string;
+  workspaceSlug: string;
   copied: boolean;
   saving: boolean;
   onToggle: (enabled: boolean) => void;
@@ -16,6 +17,7 @@ type Props = {
 export default function PublicBookingCard({
   enabled,
   url,
+  workspaceSlug,
   copied,
   saving,
   onToggle,
@@ -84,6 +86,19 @@ export default function PublicBookingCard({
           will see that online booking is unavailable.
         </p>
       )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+        <a
+          href={`/book/${workspaceSlug}/reminders`}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-[12px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+        >
+          <BellRing size={13} />
+          Preview reminder schedule
+        </a>
+        <span className="text-[11.5px] text-gray-500">
+          See what customers receive before and after they book.
+        </span>
+      </div>
     </section>
   );
 }

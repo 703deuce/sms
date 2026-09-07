@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-09-07T00:30:00.000Z",
-  "description": "Mode 4 completion passes finished by Cursor (no Kimi credits). All 10 pending surfaces gap-filled to ~80-90% blueprint completeness in kimi-drafts.",
+  "updatedAt": "2026-09-07T04:30:00.000Z",
+  "description": "Mode 4 completion passes finished by Cursor (no Kimi credits). All 10 pending surfaces gap-filled to ~80-90% blueprint completeness.",
   "summary": {
     "bulkCompletionDone": 52,
     "bulkCompletionTotal": 52,
@@ -8,7 +8,8 @@
     "totalCompletionDone": 58,
     "totalCompletionTarget": 58,
     "pendingCount": 0,
-    "cursorCompletionDone": 10
+    "cursorCompletionDone": 10,
+    "blockedCount": 0
   },
   "completedByCursor": [
     "booking-pages",
@@ -23,10 +24,51 @@
     "public-booking"
   ],
   "pending": [],
+  "cursorGapFills": {
+    "booking-pages": [
+      "Preview reminder schedule link on PublicBookingCard (/book/{slug}/reminders)"
+    ],
+    "ai-booking": [
+      "InboundChannelsCard — SMS + email webhook channel status panel"
+    ],
+    "workflow-setup": [
+      "Default view is template picker (not hardcoded setup)",
+      "send_webhook action + payment amount / webhook URL fields in StepConfigPanel"
+    ],
+    "automation-activity": [
+      "LogDetailDrawer on row click (draft + production kimi-ui sync)"
+    ],
+    "analytics-overview": [
+      "RoutingFormsPanel — views, routed, conversion by form on overview tab"
+    ],
+    "analytics-booking": [
+      "Assessed complete — multi-state shell, KPI grid, conversion strip, outcome rates"
+    ],
+    "settings-business": [
+      "SuspiciousBookingsCard — AI booking protection log table"
+    ],
+    "settings-billing": [
+      "Assessed complete — plan, usage, payment method, invoices, state switcher"
+    ],
+    "help-getting-started": [
+      "Assessed complete — checklist, setup tracks, resource links"
+    ],
+    "public-booking": [
+      "Assessed complete — multi-step flow, fraud challenge, OTP, payment, waitlist, preview modes"
+    ]
+  },
+  "patternReferences": [
+    "appointments-routing-forms FormEditor analytics header",
+    "integrations-calendars InboundChannelsCard",
+    "appointments-booking settings cards",
+    "automations-activity tv-drawer family",
+    "analytics popular-panel bar list",
+    "workflow-setup StepConfigPanel action fields"
+  ],
   "notes": [
     "Completed 2026-09-07 by Cursor-only UI completion pass (no Kimi API).",
     "Golden screens (6) still need independent Blueprint re-audit.",
     "Runtime validation not performed in this pass.",
-    "See consolidated report in agent session output."
+    "Production automations-activity synced with draft drawer; other edits primarily in kimi-drafts."
   ]
 }

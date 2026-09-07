@@ -30,6 +30,7 @@ import { MetricCard, MetricSkeletonGrid, type MetricDef } from "./metric-card";
 import { BookingsChart } from "./bookings-chart";
 import { PopularTimes, PopularTypes } from "./popular-panel";
 import { ScheduleReportCard } from "./schedule-report-card";
+import { RoutingFormsPanel } from "./routing-forms-panel";
 
 const RANGE_OPTIONS: Array<{ value: 7 | 30; label: string }> = [
   { value: 7, label: "7 days" },
@@ -268,7 +269,9 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                   <PopularTimes times={data.popularTimes ?? []} />
                 </div>
 
-                {section === "reminders" ? (
+                {section === "overview" ? (
+                  <RoutingFormsPanel forms={data.routingForms ?? []} />
+                ) : section === "reminders" ? (
                   <Card className="p-5">
                     <CardTitle>Delivery health</CardTitle>
                     <p className="mt-0.5 text-xs text-muted-foreground">
