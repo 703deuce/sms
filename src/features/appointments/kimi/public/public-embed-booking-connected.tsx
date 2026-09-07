@@ -208,11 +208,20 @@ export function PublicEmbedBookingConnected(props: PublicBookingFlowOptions) {
         {loadState === "ready" && step === "ai" ? (
           <AiBookingStep
             types={flow.types.map(mapType)}
+            selectedType={selectedType}
+            workspaceName={ws?.name}
+            timezone={ws?.timezone}
+            messages={flow.aiHistory}
+            input={flow.aiInput}
+            onInputChange={flow.setAiInput}
+            onSend={() => flow.sendAiMessage()}
+            loading={flow.aiLoading}
+            error={flow.error}
+            slots={flow.aiSlots}
             onSelectSlot={(type, slot) => {
               const match = flow.types.find((t) => t.id === type.id);
               if (match) flow.setSelectedType(match);
-              flow.setStartsAt(slot.startsAt);
-              flow.setStep("info");
+              flow.selectAiSlot(slot);
             }}
             onManual={() => flow.setStep("service")}
           />

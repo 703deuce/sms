@@ -20,10 +20,17 @@ function walk(dir: string): string[] {
   return files;
 }
 
+const PUBLIC_UNAUTHENTICATED_ROUTES = [
+  /reminders\/track\//,
+];
+
 function testAppointmentRoutesRequireSession() {
   const routes = walk(API_ROOT);
   assert.ok(routes.length >= 5, "expected appointment API routes");
   for (const file of routes) {
+    if (PUBLIC_UNAUTHENTICATED_ROUTES.some((re) => re.test(file))) {
+      continue;
+    }
     const src = readFileSync(file, "utf8");
     assert.match(
       src,

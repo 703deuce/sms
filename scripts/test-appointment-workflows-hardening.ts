@@ -25,14 +25,14 @@ const baseCtx = {
 };
 
 function testAllTemplatesExist() {
-  assert.equal(PREBUILT_WORKFLOW_TEMPLATES.length, 10);
+  assert.equal(PREBUILT_WORKFLOW_TEMPLATES.length, PREBUILT_WORKFLOW_TEMPLATE_IDS.length);
   for (const id of PREBUILT_WORKFLOW_TEMPLATE_IDS) {
     const template = PREBUILT_WORKFLOW_TEMPLATES.find((t) => t.id === id);
     assert.ok(template, `missing template ${id}`);
     assert.ok(template!.defaultSteps.length > 0, `${id} has no steps`);
     assert.ok(template!.trigger, `${id} missing trigger`);
   }
-  console.log("templates: all 10 executable definitions present");
+  console.log(`templates: all ${PREBUILT_WORKFLOW_TEMPLATE_IDS.length} executable definitions present`);
 }
 
 function testTemplateStepShapes() {

@@ -1,68 +1,55 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ArrowLeft, Send, Sparkles } from "lucide-react";
 import { formatSlotDate, formatSlotTime, type BookingType, type Slot } from "../mock-data";
 
-type Msg = { role: "ai" | "user"; text: string };
+type AiMessage = { role: "user" | "assistant"; content: string };
 
-const SUGGESTED: Array<{ label: string; typeIdx: number; daysAhead: number; time: string }> = [
-  { label: "Initial Consultation", typeIdx: 0, daysAhead: 2, time: "10:00" },
-  { label: "Follow-Up Session", typeIdx: 1, daysAhead: 4, time: "14:00" },
-  { label: "Deep Tissue Massage — 60 min", typeIdx: 2, daysAhead: 6, time: "15:30" },
-];
+const GREETING =
+  "Hi! I can help you book in seconds. Tell me what you're looking for — for example, “a consultation next week” — and I'll find real openings from the live schedule.";
 
 export default function AiBookingStep({
   types,
+  selectedType,
+  workspaceName,
+  timezone,
+  messages,
+  input,
+  onInputChange,
+  onSend,
+  loading,
+  error,
+  slots,
   onSelectSlot,
   onManual,
 }: {
   types: BookingType[];
+  selectedType?: BookingType | null;
+  workspaceName?: string;
+  timezone?: string;
+  messages: AiMessage[];
+  input: string;
+  onInputChange: (value: string) => void;
+  onSend: () => void | Promise<void>;
+  loading: boolean;
+  error?: string;
+  slots: Slot[];
   onSelectSlot: (type: BookingType, slot: Slot) => void;
   onManual: () => void;
 }) {
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      role: "ai",
-      text: "Hi! I can help you book in seconds. Tell me what you're looking for — for example, “a consultation next week” — or pick a service below.",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const displayMessages = messages.length > 0 ? messages : [{ role: "assistant" as const, content: GREETING }];
   const threadRef = useRef<HTMLDivElement>(null);
+  const slotType = selectedType || types[0];
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [displayMessages, loading, slots]);
 
-  function send(text?: string) {
-    const content = (text ?? input).trim();
+  async function send() {
+    const content = input.trim();
     if (!content || loading) return;
-    setInput("");
-    setMessages((m) => [...m, { role: "user", text: content }]);
-    setLoading(true);
-    // Sandbox: simulate /api/public/book/[slug]/ai
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "ai",
-          text: "Great — here are the soonest openings I found. Pick a service below and I'll hold the first available time for you to confirm with your details.",
-        },
-      ]);
-      setLoading(false);
-    }, 900);
-  }
-
-  function pickSuggestion(s: (typeof SUGGESTED)[number]) {
-    const type = types[s.typeIdx];
-    if (!type) return;
-    const start = new Date();
-    start.setDate(start.getDate() + s.daysAhead);
-    const [h, m] = s.time.split(":").map(Number);
-    start.setHours(h, m, 0, 0);
-    const end = new Date(start.getTime() + type.durationMinutes * 60000);
-    onSelectSlot(type, { startsAt: start.toISOString(), endsAt: end.toISOString() });
+    await onSend();
   }
 
   return (
@@ -75,51 +62,52 @@ export default function AiBookingStep({
 
       <div className="eb-ai">
         <div className="eb-ai__thread" ref={threadRef} aria-live="polite">
-          {messages.map((m, i) => (
-            <div key={i} className={`eb-msg eb-msg--${m.role}`}>
-              {m.text}
+          {displayMessages.map((m, i) => (
+            <div key={i} className={`eb-msg eb-msg--${m.role === "user" ? "user" : "ai"}`}>
+              {m.content}
             </div>
           ))}
-          {loading ? <div className="eb-msg eb-msg--ai">…</div> : null}
-          {messages.length > 1 ? (
+
+          {slots.length > 0 && slotType ? (
             <div className="eb-ai__chips">
-              {SUGGESTED.map((s) => {
-                const d = new Date();
-                d.setDate(d.getDate() + s.daysAhead);
-                const [h, m] = s.time.split(":").map(Number);
-                d.setHours(h, m);
-                return (
-                  <button
-                    key={s.label}
-                    type="button"
-                    className="eb-ai__chip"
-                    onClick={() => pickSuggestion(s)}
-                  >
-                    {s.label} ·{" "}
-                    {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}{" "}
-                    {s.time === "10:00" ? "10:00 AM" : s.time === "14:00" ? "2:00 PM" : "3:30 PM"}
-                  </button>
-                );
-              })}
+              {slots.map((slot) => (
+                <button
+                  key={slot.startsAt}
+                  type="button"
+                  className="eb-ai__chip"
+                  onClick={() => onSelectSlot(slotType, slot)}
+                >
+                  {formatSlotDate(slot.startsAt)} · {formatSlotTime(slot.startsAt)}
+                </button>
+              ))}
             </div>
           ) : null}
+
+          {loading ? <div className="eb-msg eb-msg--ai">…</div> : null}
         </div>
+
+        {error ? (
+          <p className="eb-sub" style={{ color: "var(--destructive)", marginTop: 8 }} role="alert">
+            {error}
+          </p>
+        ) : null}
 
         <div className="eb-ai__input">
           <input
             className="eb-input"
             placeholder="e.g. Massage Friday afternoon"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") send();
+              if (e.key === "Enter") void send();
             }}
             aria-label="Message AI booking assistant"
+            disabled={loading}
           />
           <button
             type="button"
             className="eb-btn eb-btn--primary"
-            onClick={() => send()}
+            onClick={() => void send()}
             disabled={loading || !input.trim()}
             aria-label="Send message"
           >
@@ -127,6 +115,12 @@ export default function AiBookingStep({
           </button>
         </div>
       </div>
+
+      {workspaceName ? (
+        <p className="eb-sub" style={{ marginTop: 12, fontSize: 11 }}>
+          Availability is always confirmed by {workspaceName}'s live schedule before anything is booked.
+        </p>
+      ) : null}
 
       <div className="eb-actions">
         <button type="button" className="eb-btn eb-btn--ghost" onClick={onManual}>

@@ -131,6 +131,13 @@ export function inferFieldsFromUtterance(input: {
     return out;
   }
 
+  // When the runtime is actively collecting a field, bind free-form replies to it
+  // instead of misclassifying them as names/addresses.
+  if (activeId && missingIds.has(activeId)) {
+    out[activeId] = utterance;
+    return out;
+  }
+
   if (missingIds.has(SYSTEM_FIELD_IDS.name) && looksLikePersonName(utterance)) {
     out[SYSTEM_FIELD_IDS.name] = utterance;
     return out;

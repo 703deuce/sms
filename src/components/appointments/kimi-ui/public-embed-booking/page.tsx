@@ -68,6 +68,9 @@ export default function ReferencePage() {
   const [state, setState] = useState<BookingState>(initialState);
   const [submitted, setSubmitted] = useState(false);
   const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   // Sandbox load lifecycle: simulate GET /api/public/book/[slug]
   const [loadState, setLoadState] = useState<LoadState>("loading");
 
@@ -235,6 +238,29 @@ export default function ReferencePage() {
         {loadState === "ready" && step === "ai" && (
           <AiBookingStep
             types={bookingData.types}
+            selectedType={state.type}
+            workspaceName={bookingData.workspaceName}
+            messages={aiMessages}
+            input={aiInput}
+            onInputChange={setAiInput}
+            onSend={async () => {
+              const text = aiInput.trim();
+              if (!text || aiLoading) return;
+              setAiInput("");
+              setAiMessages((m) => [...m, { role: "user", content: text }]);
+              setAiLoading(true);
+              await new Promise((r) => setTimeout(r, 900));
+              setAiMessages((m) => [
+                ...m,
+                {
+                  role: "assistant",
+                  content: "Design preview only — production embed uses the live AI scheduling API.",
+                },
+              ]);
+              setAiLoading(false);
+            }}
+            loading={aiLoading}
+            slots={[]}
             onSelectSlot={(type, slot) => {
               update({ type, slot, durationMinutes: null });
               setStep("info");

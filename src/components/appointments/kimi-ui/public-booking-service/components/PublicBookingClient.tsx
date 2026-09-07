@@ -37,6 +37,9 @@ export function PublicBookingClient({
   const [paid, setPaid] = useState(false);
   const [bookedPhone, setBookedPhone] = useState("");
   const [otpVerified, setOtpVerified] = useState(false);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -199,6 +202,28 @@ export function PublicBookingClient({
           {step === "ai" ? (
             <AiBookingStep
               timezone={workspace.timezone}
+              workspaceName={workspace.name}
+              messages={aiMessages}
+              input={aiInput}
+              onInputChange={setAiInput}
+              onSend={async () => {
+                const text = aiInput.trim();
+                if (!text || aiLoading) return;
+                setAiInput("");
+                setAiMessages((m) => [...m, { role: "user", content: text }]);
+                setAiLoading(true);
+                await new Promise((r) => setTimeout(r, 900));
+                setAiMessages((m) => [
+                  ...m,
+                  {
+                    role: "assistant",
+                    content: "Design preview only — production booking uses the live AI scheduling API.",
+                  },
+                ]);
+                setAiLoading(false);
+              }}
+              loading={aiLoading}
+              slots={[]}
               onSelectSlot={selectAiSlot}
               onBack={() => setStep("datetime")}
             />

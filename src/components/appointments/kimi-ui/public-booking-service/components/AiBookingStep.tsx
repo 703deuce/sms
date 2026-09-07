@@ -1,58 +1,50 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { Slot } from "../mock-data";
-import { aiSeedMessages } from "../mock-data";
 import { Button, Input } from "./ui";
 import { cn, formatSlotTime } from "./utils";
 import { ArrowLeft, Send, Sparkles } from "lucide-react";
 
-type Message = { role: "assistant" | "user"; content: string; slots?: Slot[] };
+type AiMessage = { role: "user" | "assistant"; content: string };
 
-const cannedReplies: Message[] = [
-  {
-    role: "assistant",
-    content:
-      "Got it — mornings are popular this week. The earliest I can offer is Tuesday at 9:30 AM. Want that one, or should I check afternoons?",
-    slots: aiSeedMessages[2].slots,
-  },
-  {
-    role: "assistant",
-    content:
-      "No problem. I've widened the search to next week — there are more options on Monday and Tuesday. Tap any time to select it.",
-    slots: aiSeedMessages[2].slots,
-  },
-];
+const GREETING =
+  "Hi! Tell me what you're looking for — for example, “a cleaning next week in the morning” — and I'll find real openings from the live schedule.";
 
 export function AiBookingStep({
   timezone,
+  workspaceName,
+  messages,
+  input,
+  onInputChange,
+  onSend,
+  loading,
+  error,
+  slots,
   onSelectSlot,
   onBack,
 }: {
   timezone: string;
+  workspaceName?: string;
+  messages: AiMessage[];
+  input: string;
+  onInputChange: (value: string) => void;
+  onSend: () => void | Promise<void>;
+  loading: boolean;
+  error?: string;
+  slots: Slot[];
   onSelectSlot: (slot: Slot) => void;
   onBack: () => void;
 }) {
-  const [messages, setMessages] = useState<Message[]>(aiSeedMessages);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState("");
-  const replyIndex = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const displayMessages = messages.length > 0 ? messages : [{ role: "assistant" as const, content: GREETING }];
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [displayMessages, loading, slots]);
 
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setInput("");
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    const reply = cannedReplies[replyIndex.current % cannedReplies.length];
-    replyIndex.current += 1;
-    setMessages((prev) => [...prev, reply]);
-    setLoading(false);
+    await onSend();
   }
 
   return (
@@ -71,12 +63,14 @@ export function AiBookingStep({
         </span>
         <div>
           <p className="text-sm font-semibold text-foreground">Scheduling assistant</p>
-          <p className="text-[11px] text-muted-foreground">Intelligent scheduling assistant</p>
+          <p className="text-[11px] text-muted-foreground">
+            {workspaceName ? `Powered by ${workspaceName}'s live availability` : "Intelligent scheduling assistant"}
+          </p>
         </div>
       </div>
 
       <div ref={scrollRef} className="chat-scroll flex-1 space-y-3 overflow-y-auto py-4" aria-live="polite">
-        {messages.map((m, i) => (
+        {displayMessages.map((m, i) => (
           <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
             <div
               className={cn(
@@ -87,32 +81,31 @@ export function AiBookingStep({
               )}
             >
               {m.content}
-              {m.slots ? (
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {m.slots.map((slot) => (
-                    <button
-                      key={slot.startsAt}
-                      type="button"
-                      onClick={() => {
-                        setSelected(slot.startsAt);
-                        onSelectSlot(slot);
-                      }}
-                      className={cn(
-                        "rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transition-all",
-                        selected === slot.startsAt
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-foreground hover:border-primary hover:text-primary",
-                      )}
-                    >
-                      {new Date(slot.startsAt).toLocaleDateString(undefined, { weekday: "short" })}{" "}
-                      {formatSlotTime(slot.startsAt, timezone)}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </div>
         ))}
+
+        {slots.length > 0 ? (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5 text-[13px] text-foreground">
+              <p className="mb-2 font-semibold">Available times</p>
+              <div className="flex flex-wrap gap-1.5">
+                {slots.map((slot) => (
+                  <button
+                    key={slot.startsAt}
+                    type="button"
+                    onClick={() => onSelectSlot(slot)}
+                    className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-foreground transition-all hover:border-primary hover:text-primary"
+                  >
+                    {new Date(slot.startsAt).toLocaleDateString(undefined, { weekday: "short" })}{" "}
+                    {formatSlotTime(slot.startsAt, timezone)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {loading ? (
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-3 text-[13px] text-muted-foreground">
@@ -126,16 +119,21 @@ export function AiBookingStep({
         ) : null}
       </div>
 
+      {error ? (
+        <p className="px-1 text-[12px] text-destructive" role="alert">{error}</p>
+      ) : null}
+
       <div className="flex items-center gap-2 border-t border-border pt-3">
         <Input
           className="mt-0"
           placeholder="e.g. Cleaning next week, mornings only"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void send()}
           aria-label="Message the scheduling assistant"
+          disabled={loading}
         />
-        <Button size="md" onClick={send} disabled={loading || !input.trim()} aria-label="Send message">
+        <Button size="md" onClick={() => void send()} disabled={loading || !input.trim()} aria-label="Send message">
           {loading ? "…" : <Send className="h-4 w-4" />}
         </Button>
       </div>

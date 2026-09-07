@@ -178,6 +178,14 @@ export function PublicBookingServiceFlowInner({
           {flow.step === "ai" ? (
             <AiBookingStep
               timezone={ws.timezone}
+              workspaceName={ws.name}
+              messages={flow.aiHistory}
+              input={flow.aiInput}
+              onInputChange={flow.setAiInput}
+              onSend={() => flow.sendAiMessage()}
+              loading={flow.aiLoading}
+              error={flow.error}
+              slots={flow.aiSlots}
               onSelectSlot={(slot) => flow.selectAiSlot(slot)}
               onBack={() => flow.setStep("datetime")}
             />
