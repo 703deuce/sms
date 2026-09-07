@@ -1,0 +1,31 @@
+---
+description: MANDATORY Guide #6 — TRANSOVO Responsive, Reflow & Zoom
+globs:
+  - "src/**/*.tsx"
+  - "src/**/*.css"
+  - "src/styles/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Responsive, Reflow & Zoom Standards (Guide #6)
+
+**Source of truth:** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
+
+## Hard requirement
+
+All UI **MUST** work across breakpoints, reflow, and zoom levels defined in the guide. Read before layout work.
+
+## Non-negotiables
+
+- **Mobile and desktop** share the same authoritative business state — not divergent features.
+- Content **reflows** at 320px width — no horizontal scroll for primary tasks.
+- **200% zoom** must not break primary workflows.
+- Touch targets and spacing adapt per breakpoint rules in the full doc.
+- Tables on narrow viewports: responsive pattern from Guide #7 — not clipped overflow.
+- Sidebars collapse predictably; primary actions remain reachable.
+- Do not hide critical actions only on mobile without equivalent access.
+
+## Verification
+
+Test narrow viewport and zoom before declaring responsive work complete.

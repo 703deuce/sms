@@ -1,9 +1,11 @@
 ---
-description: V1 launch UI rebuild — Appointments + MCTB. Hide mass SMS from nav; reuse before building; never delete preserved routes.
+description: V1 launch scope — Appointments + MCTB nav/reuse. UX standards are in transovo-*.mdc rules.
 alwaysApply: true
 ---
 
 # V1 Appointments + MCTB UI Rebuild
+
+**UX/DESIGN HARD RULES:** `.cursor/rules/transovo-ux-governance.mdc` and all `transovo-*.mdc` standards — **mandatory** for any UI work. Not optional guides.
 
 **Read first:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` (full spec + reuse map)
 

@@ -1,0 +1,32 @@
+---
+description: MANDATORY Guide #4 — TRANSOVO Interaction, Keyboard & Focus
+globs:
+  - "src/**/*.tsx"
+  - "src/components/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Interaction, Keyboard & Focus Standards (Guide #4)
+
+**Source of truth:** `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
+
+## Hard requirement
+
+All interactive UI **MUST** follow this guide. Read the **complete** document (sections A–DZ) for any surface with buttons, menus, modals, tables, or builders.
+
+## Non-negotiables
+
+- **Keyboard-first** operability for all primary workflows.
+- **Visible focus** — never `outline: none` without replacement.
+- **Logical tab order** matches visual order; no focus traps except modals.
+- **Escape** closes overlays; **Enter** activates primary action where appropriate.
+- Dropdowns, comboboxes, date pickers: follow WAI-ARIA patterns in the guide.
+- **Skip links** and landmark regions where applicable.
+- Drag-and-drop must have **keyboard alternative** when used.
+- Loading buttons show **in-progress** state; prevent double-submit.
+- Human handoff flows retain **context** (Guide DV in full doc).
+
+## On conflict
+
+Accessibility (Guide #1) and this guide reinforce each other — satisfy both.

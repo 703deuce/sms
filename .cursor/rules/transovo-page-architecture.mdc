@@ -1,0 +1,31 @@
+---
+description: MANDATORY — TRANSOVO Page Architecture Rules (layout, archetypes, worksheets)
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Page Architecture Rules
+
+**Source of truth:** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
+**Authority:** Level 4 — page structure and layout.
+
+## Hard requirement
+
+Before designing or implementing any page layout, you **MUST** read the full document and match an approved **page archetype** (list, detail, settings, builder, wizard, dashboard, etc.).
+
+## Non-negotiables
+
+- Complete the **page design worksheet** mentally before pixels — title, primary action, data region, filters, states.
+- **Page header** placement, primary CTA hierarchy, and local nav follow archetype rules.
+- Handle **loading, empty, error, partial, and success** states on every data surface.
+- Do not invent new page anatomy per route — use shared patterns.
+- Configuration pages: group related settings; separate dangerous actions.
+- Wizards: one primary path forward; preserve progress; clear step labels.
+
+## On conflict
+
+Governance > IA > HCD > this guide > visual design > existing code.

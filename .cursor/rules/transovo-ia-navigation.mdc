@@ -1,0 +1,32 @@
+---
+description: MANDATORY Guide #3 — TRANSOVO IA & Navigation Standards
+globs:
+  - "src/**/*.tsx"
+  - "src/lib/products/**"
+  - "src/lib/nav.ts"
+  - "src/app/**"
+  - "src/components/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO IA & Navigation Standards (Guide #3)
+
+**Source of truth:** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
+
+## Hard requirement
+
+Any nav, routing, labeling, or feature placement change **MUST** comply with this guide. Read the full document first.
+
+## Non-negotiables
+
+- **One canonical home** per feature — no duplicate permanent nav entries.
+- Use **canonical terminology** — same object, same name everywhere.
+- Top-level IA follows approved structure (Home, Appointments, Booking, Contacts, Messages, Automations, Meetings, Payments, Analytics, Integrations, Settings).
+- **Local navigation** belongs inside the feature — not new top-level items for convenience.
+- Breadcrumbs and back links preserve **context**, not duplicate IA.
+- Nav changes go through `src/lib/products/` patterns — no scattered hardcoded conditionals.
+- Mobile nav must expose the same authoritative destinations — not a divergent product.
+
+## On conflict
+
+Governance and product scope beat local convenience.

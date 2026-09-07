@@ -1,0 +1,31 @@
+---
+description: MANDATORY Guide #8 — TRANSOVO Privacy, Consent & Compliance UX
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Privacy, Consent & Compliance UX Standards (Guide #8)
+
+**Source of truth:** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
+
+## Hard requirement
+
+Any UI involving consent, opt-in/out, SMS permissions, data collection, or compliance messaging **MUST** read and follow this guide in full.
+
+## Non-negotiables
+
+- **Purpose-specific, channel-specific** consent — not one generic checkbox for everything.
+- **Never infer consent** from silence, preselected boxes, or broad Terms acceptance alone.
+- **Affirmative action required** where law/carrier policy requires it.
+- **STOP/START/HELP** and opt-out flows must be discoverable and honored in UI copy.
+- **A2P approval ≠ recipient consent** — never conflate in UI messaging.
+- Consent UI must match **what was submitted to carriers/providers**.
+- Preserve consent **provenance, scope, timestamp, version** in UX that displays audit/history.
+- Privacy settings actually **control runtime behavior**.
+
+## On conflict
+
+This guide wins for consent/compliance UX over general form patterns.

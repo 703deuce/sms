@@ -1,0 +1,31 @@
+---
+description: MANDATORY Guide #7 — TRANSOVO Table & Grid Semantics
+globs:
+  - "src/**/*.tsx"
+  - "src/components/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Table & Grid Semantics Standards (Guide #7)
+
+**Source of truth:** `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md`
+
+## Hard requirement
+
+Any table, data grid, or list-with-columns **MUST** follow this guide. Read before implementing data surfaces.
+
+## Non-negotiables
+
+- Use **semantic `<table>`** for tabular data — not div grids pretending to be tables without a11y.
+- **Column headers** with correct `scope`; sortable columns announce state.
+- **Row actions** are keyboard reachable; don't rely on hover-only menus.
+- **Empty state** inside table region — not a blank tbody.
+- **Loading skeleton** matches column structure.
+- **Selection** (checkbox columns) follows guide patterns — select-all, indeterminate state.
+- Pagination/sorting/filtering state is **visible and persistent** where applicable.
+- Responsive: approved collapse/stack pattern — data not lost on mobile.
+
+## On conflict
+
+Accessibility (Guide #1) and interaction (Guide #4) apply simultaneously.

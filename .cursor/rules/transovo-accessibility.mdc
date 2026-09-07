@@ -1,0 +1,34 @@
+---
+description: MANDATORY Guide #1 — TRANSOVO Accessibility (WCAG 2.2 AA)
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Accessibility Standards (Guide #1)
+
+**Source of truth:** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
+
+## Hard requirement
+
+All customer-facing UI **MUST** meet **WCAG 2.2 Level AA**. Read the full guide before shipping any UI change.
+
+## Non-negotiables
+
+- Correct **semantic HTML** and ARIA only where native semantics are insufficient.
+- **Keyboard operable** — no mouse-only critical paths.
+- **Visible focus** indicators; logical focus order.
+- **Color is never the sole information carrier** — pair with text/icon/pattern.
+- Images/icons have appropriate **alt text** or `aria-hidden` when decorative.
+- Form fields have **programmatic labels**; errors linked to fields.
+- Modals/drawers: focus trap, escape to close, return focus on dismiss.
+- Tables: correct headers/scope; not layout tables for data.
+- Motion: respect `prefers-reduced-motion`.
+- Touch targets meet minimum size guidelines in the full doc.
+
+## Verification
+
+Re-read the guide's completion checklist before marking UI work done.

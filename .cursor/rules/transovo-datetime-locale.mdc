@@ -1,0 +1,32 @@
+---
+description: MANDATORY Guide #10 — TRANSOVO Date, Time, Timezone & Locale
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+  - "src/lib/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Date, Time, Timezone & Locale Standards (Guide #10)
+
+**Source of truth:** `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md`
+
+## Hard requirement
+
+Any display or input of dates, times, schedules, or timezones **MUST** follow this guide. Read before calendar, scheduling, or timestamp UI.
+
+## Non-negotiables
+
+- Store/transmit **canonical instant + timezone** — don't lose timezone at boundaries.
+- Display in **user/workspace timezone** with explicit timezone when ambiguous.
+- **12h vs 24h** follows locale/workspace settings — not hardcoded US-only.
+- Relative times ("2 hours ago") include absolute on hover/detail where guide requires.
+- Date pickers respect **locale week start** and format.
+- Scheduling UI shows **whose timezone** applies (business vs user).
+- No off-by-one day bugs from UTC/local confusion — follow canonical temporal architecture.
+- Daylight saving transitions handled per guide.
+
+## On conflict
+
+i18n guide (Guide #11) complements this for format strings.

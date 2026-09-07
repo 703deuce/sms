@@ -1,0 +1,31 @@
+---
+description: MANDATORY Guide #2 — TRANSOVO Human-Centered Design (ISO 9241)
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Human-Centered Design Standards (Guide #2)
+
+**Source of truth:** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
+
+## Hard requirement
+
+Before changing workflows or page flows, you **MUST** read this guide and validate the experience against user goals — not just visual polish.
+
+## Non-negotiables
+
+- Ask: **What is the user's goal?** before choosing components.
+- Minimize **cognitive load** — progressive disclosure over walls of controls.
+- User retains **control** — reversible actions, clear consequences.
+- **Error prevention and recovery** — validate early, explain fixes plainly.
+- **Consistent mental models** across Appointments, Booking, Contacts, Messages, Settings.
+- Do not add steps that exist only because old code had them.
+- Empty and error states guide the **next productive action**.
+
+## On conflict
+
+Product scope and IA win; HCD wins over visual shortcuts.

@@ -1,0 +1,30 @@
+---
+description: MANDATORY Guide #11 — TRANSOVO Internationalization & Localization
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Internationalization & Localization Standards (Guide #11)
+
+**Source of truth:** `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
+
+## Hard requirement
+
+All user-facing strings and locale-sensitive formatting **MUST** follow this guide. Read before adding copy or format logic.
+
+## Non-negotiables
+
+- **No hardcoded user-facing strings** in components without i18n architecture path defined in guide.
+- **Pluralization, gender, context** handled correctly — not string concatenation hacks.
+- Numbers, currency, dates use **locale-aware formatting**.
+- Layout must tolerate **text expansion** (German, etc.) — no fixed-width truncation of labels.
+- RTL readiness per guide where applicable.
+- Don't embed English-only error messages from APIs without translation layer plan.
+- Locale/timezone preferences persist and affect display consistently.
+
+## On conflict
+
+Date/time guide (Guide #10) for temporal specifics; governance for product scope.

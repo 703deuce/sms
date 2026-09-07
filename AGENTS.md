@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive:** `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` (read first — authority & conflict resolution) · `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` · **IA:** `docs/TRANSOVO-UI-DESIGN-GUIDE.md` · **Page architecture:** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` · **Visual design:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md` · **Accessibility (Guide #1):** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md` · **HCD/Usability (Guide #2):** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` · **IA/Navigation (Guide #3):** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` · **Interaction/Keyboard/Focus (Guide #4):** `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md` · **Forms/Validation (Guide #5):** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` · **Responsive/Reflow (Guide #6):** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` · **Tables/Grids (Guide #7):** `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` · **Privacy/Compliance (Guide #8):** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` · **Security/Auth (Guide #9):** `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` · **Date/Time/Timezone/Locale (Guide #10):** `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` · **i18n/l10n (Guide #11):** `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md` · Nav: `src/lib/products/v1-launch-nav.ts`
+**UI rebuild directive (MANDATORY Cursor rules — not optional docs):** `.cursor/rules/transovo-ux-governance.mdc` + all `.cursor/rules/transovo-*.mdc` (15 standards). Full text lives in `docs/TRANSOVO-*.md` — agents **must read and comply** before any UI change. Kimi orchestration docs are excluded from this ruleset.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
@@ -157,7 +157,7 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 ## Visual UI Agent / Kimi UI Sub-Agent
 
-**Mandatory:** Kimi-generated UI must conform to `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` and all applicable Transovo standards guides. Cursor must verify Kimi output against governance before integration — do not ship presentation that violates IA, page architecture, visual system, accessibility, interaction, or other governing rules.
+**Mandatory:** Kimi-generated UI and **all Cursor UI work** must conform to `.cursor/rules/transovo-ux-governance.mdc` and applicable `.cursor/rules/transovo-*.mdc` rules — backed by full `docs/TRANSOVO-*.md` standards. These are **hard requirements**, not optional guides. Cursor must verify output against governance before integration.
 
 **Orchestration:** USER → CURSOR → repo-local Kimi tool → generated UI → CURSOR integrates.
 

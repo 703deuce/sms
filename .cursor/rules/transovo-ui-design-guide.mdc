@@ -1,0 +1,38 @@
+---
+description: MANDATORY — TRANSOVO UI Design Guide (domain, terminology, 30 UX rules)
+globs:
+  - "src/**/*.tsx"
+  - "src/**/*.css"
+  - "src/styles/**"
+  - "src/components/**"
+  - "src/app/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO UI Design Guide
+
+**Source of truth:** `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
+**Authority:** Level 1 — domain definitions, terminology, product experience principles.
+
+## Hard requirement
+
+Before creating or editing any customer-facing UI, you **MUST** read the full guide and comply. This is not optional reference material.
+
+## Non-negotiables
+
+- Use **one application shell** — do not reinvent chrome per page.
+- Use **canonical Transovo terminology** — no duplicate names for the same object.
+- Every feature has **one canonical nav home**; contextual links OK, duplicate architecture not OK.
+- Prefer **recognition over recall**; expose status and next actions clearly.
+- **Mutually exclusive** choices use radio/select patterns, not ambiguous toggles.
+- Operational pages show **real data states** — never placeholder-only success UI.
+- Settings that appear in UI must **map to runtime behavior**.
+
+## When this applies
+
+All routes under `src/app/`, `src/components/`, `src/kimi-ui/`, and shared presentation layers.
+
+## On conflict
+
+`docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` wins. Read it first.

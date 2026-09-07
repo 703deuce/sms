@@ -1,0 +1,31 @@
+---
+description: MANDATORY — TRANSOVO Visual Design Guide (tokens, typography, color, density)
+globs:
+  - "src/**/*.tsx"
+  - "src/**/*.css"
+  - "src/styles/**"
+  - "src/kimi-ui/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Visual Design Guide
+
+**Source of truth:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
+**Authority:** Level 5 — visual design system.
+
+## Hard requirement
+
+All UI must use the **Transovo design system** — tokens, typography scale, spacing, semantic colors, radii, shadows, density. Read the full guide before styling.
+
+## Non-negotiables
+
+- **No arbitrary** font sizes, padding, colors, radii, or shadows on individual pages.
+- Consume **shared tokens** (`src/styles/kimi/`, design-system components).
+- **Button hierarchy** is consistent: primary / secondary / destructive / ghost.
+- **Status colors** are semantic — not decoration-only.
+- Kimi surfaces must **not** redesign independently — design within the system.
+- Light mode is primary; dark behavior follows guide if enabled.
+
+## On conflict
+
+Governance and page architecture win over visual preference. Full doc wins over this summary.

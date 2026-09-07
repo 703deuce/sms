@@ -1,0 +1,30 @@
+---
+description: MANDATORY Guide #9 — TRANSOVO Security & Authentication UX
+globs:
+  - "src/**/*.tsx"
+  - "src/app/**"
+  - "src/components/**"
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO Security & Authentication UX Standards (Guide #9)
+
+**Source of truth:** `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md`
+
+## Hard requirement
+
+Auth flows, session UI, permission gates, and sensitive actions **MUST** follow this guide. Read before touching login, settings security, or role-based UI.
+
+## Non-negotiables
+
+- **Server enforces authorization** — UI hiding is not security.
+- Sensitive actions require **appropriate confirmation** and audit trail where specified.
+- Session expiry, re-auth, and lockout UX follow guide — no cryptic errors.
+- **Never expose** secrets, tokens, or internal IDs in UI copy unnecessarily.
+- Permission-denied states explain **what's missing**, not generic "Error".
+- 2FA/MFA flows preserve context; recovery paths are documented in guide.
+- Admin/impersonation flows (if any) follow elevated-auth patterns in full doc.
+
+## On conflict
+
+Security UX requirements beat convenience shortcuts.
