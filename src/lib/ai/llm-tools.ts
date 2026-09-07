@@ -3,7 +3,7 @@
  * Uses the same provider chain as llm.ts.
  */
 
-import { providers, type LlmProvider } from "@/lib/ai/llm-providers";
+import { providers, type LlmProvider, chatCompletionBodyExtras } from "@/lib/ai/llm-providers";
 
 export type LlmToolDefinition = {
   type: "function";
@@ -60,8 +60,10 @@ export async function llmChatWithTools(
         },
         body: JSON.stringify({
           model: p.model,
-          temperature: options?.temperature ?? 0.2,
-          max_tokens: options?.maxTokens ?? 2500,
+          ...chatCompletionBodyExtras(p.id, p.model, {
+            temperature: options?.temperature ?? 0.2,
+            maxTokens: options?.maxTokens ?? 2500,
+          }),
           messages,
           tools: tools.length ? tools : undefined,
           tool_choice: tools.length ? options?.toolChoice || "auto" : undefined,

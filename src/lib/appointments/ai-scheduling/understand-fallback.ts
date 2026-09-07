@@ -26,7 +26,13 @@ function detectIntent(text: string): UnderstandingResult["intent"] {
   }
   if (/\bconfirm\b|\b(yes|y)\b.*\b(confirm|appointment)\b/.test(lower)) return "CONFIRM";
   if (/\bwaitlist\b|\bwait list\b/.test(lower)) return "JOIN_WAITLIST";
-  if (/\b(book|schedule)\b/.test(lower) && /\b(at|for|on)\b/.test(lower)) return "BOOK";
+  if (/\b(book|schedule)\b/.test(lower)) {
+    const hasAnchor =
+      /\b(at|for|on)\b/.test(lower) ||
+      /\d{1,2}:\d{2}/.test(lower) ||
+      /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/.test(lower);
+    if (hasAnchor) return "BOOK";
+  }
   if (/\bavailable\b|\bavailability\b|\bdo you have\b|\banything\b|\bopen\b/.test(lower)) {
     return "FIND_AVAILABILITY";
   }

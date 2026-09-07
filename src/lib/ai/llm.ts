@@ -7,7 +7,7 @@
  *   3. OpenAI-compatible base URL (LLM_API_KEY + LLM_BASE_URL + LLM_MODEL)
  */
 
-import { hasLlmConfigured, primaryLlmModelLabel, providers } from "@/lib/ai/llm-providers";
+import { hasLlmConfigured, primaryLlmModelLabel, providers, chatCompletionBodyExtras } from "@/lib/ai/llm-providers";
 
 export type LlmChatResult = {
   content: string;
@@ -36,8 +36,10 @@ export async function llmChatCompletion(
         },
         body: JSON.stringify({
           model: p.model,
-          temperature: options?.temperature ?? 0.3,
-          max_tokens: options?.maxTokens ?? 2000,
+          ...chatCompletionBodyExtras(p.id, p.model, {
+            temperature: options?.temperature ?? 0.3,
+            maxTokens: options?.maxTokens ?? 2000,
+          }),
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },

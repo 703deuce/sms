@@ -569,7 +569,7 @@ import { getRuntimeModelConfig } from "../src/lib/agents/appointment-booking/int
 import { wrapToolOutput, toolBlocked } from "../src/lib/agents/appointment-booking/intelligence/tool-result";
 
 const ownerCfg = getRuntimeModelConfig("owner_amy");
-assert("owner amy defaults to deepseek", ownerCfg.provider === "deepseek");
+assert("owner amy defaults to openai gpt-5-nano", ownerCfg.provider === "openai" && ownerCfg.model === "gpt-5-nano");
 assert("owner amy model configured", Boolean(ownerCfg.model));
 assert("tool result wraps completed", wrapToolOutput({ ok: true }).status === "completed");
 assert("tool result wraps blocked", toolBlocked("x", "y").status === "blocked");
