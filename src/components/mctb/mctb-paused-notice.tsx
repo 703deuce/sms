@@ -1,3 +1,4 @@
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 
 export type MctbPausedNoticeKind = "manual" | "timed" | null;
@@ -21,7 +22,7 @@ function pauseTimingLine(
     }
   }
   if (pauseKind === "manual") {
-    return "Text-backs stay paused until you resume from Schedule.";
+    return "Text-backs stay paused until you resume from Recovery controls.";
   }
   return null;
 }
@@ -47,8 +48,8 @@ export function MctbPausedNotice({
           {timing ? <> {timing}</> : null}
         </p>
         <p className="mt-2">
-          <Link href="/voice/schedule" className="font-semibold text-violet-900 underline">
-            Resume on Schedule →
+          <Link href={MCTB_ROUTES.setupRecovery} className="font-semibold text-violet-900 underline">
+            Open Recovery controls →
           </Link>
         </p>
       </div>
@@ -65,8 +66,8 @@ export function MctbPausedNotice({
         You can still edit setup here; changes are saved but text-backs will not send until you
         resume.
         {timing ? <> {timing}</> : null}{" "}
-        <Link href="/voice/schedule" className="font-semibold text-violet-900 underline">
-          Open Schedule →
+        <Link href={MCTB_ROUTES.setupRecovery} className="font-semibold text-violet-900 underline">
+          Open Recovery controls →
         </Link>
       </p>
     </div>

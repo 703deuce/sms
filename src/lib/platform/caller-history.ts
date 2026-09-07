@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export type CallerHistoryEntry = {
   id: string;
@@ -67,7 +68,7 @@ export async function loadCallerHistory(
       kind: "missed_call",
       label: m.smsSentAt ? `Missed call · text sent` : `Missed call · ${m.status}`,
       at: m.detectedAt.toISOString(),
-      href: `/voice/missed-calls/${m.id}`,
+      href: MCTB_ROUTES.missedCallDetail(m.id),
     });
   }
   for (const c of callbacks) {
@@ -85,7 +86,7 @@ export async function loadCallerHistory(
       kind: "voicemail",
       label: v.transcriptText ? `Voicemail · ${v.transcriptText.slice(0, 40)}…` : "Voicemail",
       at: v.createdAt.toISOString(),
-      href: "/voice/voicemail",
+      href: MCTB_ROUTES.voicemail,
     });
   }
   for (const l of linkClicks) {

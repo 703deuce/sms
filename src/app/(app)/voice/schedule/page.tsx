@@ -1,5 +1,6 @@
-import { MctbScheduleView } from "@/components/mctb/schedule-view";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export default function VoiceSchedulePage() {
-  return <MctbScheduleView />;
+  redirect(MCTB_ROUTES.setupRecovery);
 }

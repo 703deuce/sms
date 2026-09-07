@@ -2,17 +2,56 @@ import { getPrisma } from "@/lib/db";
 
 export type MctbAnalyticsRange = "7d" | "30d" | "90d";
 
+export type MctbAnalyticsTrendPoint = { date: string; count: number };
+
 function rangeStart(range: MctbAnalyticsRange): Date {
   const d = new Date();
   if (range === "7d") d.setDate(d.getDate() - 7);
   else if (range === "30d") d.setDate(d.getDate() - 30);
   else d.setDate(d.getDate() - 90);
+  d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function rangeDays(range: MctbAnalyticsRange): number {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  return 90;
+}
+
+function dateKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function buildDailyBuckets(since: Date, days: number): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(since);
+  for (let i = 0; i < days; i++) {
+    keys.push(dateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
+function seriesFromEvents(
+  keys: string[],
+  rows: Array<{ detectedAt: Date; bucket: "missed" | "text" | "reply" }>,
+): MctbAnalyticsTrendPoint[] {
+  const counts = new Map(keys.map((k) => [k, 0]));
+  for (const row of rows) {
+    const k = dateKey(row.detectedAt);
+    if (!counts.has(k)) continue;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  return keys.map((date) => ({ date, count: counts.get(date) || 0 }));
 }
 
 export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalyticsRange = "30d") {
   const prisma = getPrisma();
   const since = rangeStart(range);
+  const days = rangeDays(range);
+  const dayKeys = buildDailyBuckets(since, days);
+
   const events = await prisma.missedCallEvent.findMany({
     where: { workspaceId, detectedAt: { gte: since } },
     select: {
@@ -71,6 +110,20 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     return acc;
   }, {});
 
+  const missedTrendRows = rows.map((e) => ({
+    detectedAt: e.detectedAt,
+    bucket: "missed" as const,
+  }));
+  const textTrendRows = rows
+    .filter((e) => e.smsSentAt || e.status === "SENT" || e.status === "CUSTOMER_REPLIED")
+    .map((e) => ({
+      detectedAt: e.smsSentAt || e.detectedAt,
+      bucket: "text" as const,
+    }));
+  const replyTrendRows = rows
+    .filter((e) => e.status === "CUSTOMER_REPLIED")
+    .map((e) => ({ detectedAt: e.detectedAt, bucket: "reply" as const }));
+
   return {
     range,
     since: since.toISOString(),
@@ -91,5 +144,10 @@ export async function loadMctbAnalytics(workspaceId: string, range: MctbAnalytic
     optOuts,
     deliveryFailures,
     suppressionByReason,
+    trends: {
+      missedCalls: seriesFromEvents(dayKeys, missedTrendRows),
+      recoveryTexts: seriesFromEvents(dayKeys, textTrendRows),
+      replies: seriesFromEvents(dayKeys, replyTrendRows),
+    },
   };
 }

@@ -1,53 +1,77 @@
 /**
- * Product shell + AI After Hours nav structure.
+ * Product shell + V1 Appointments + MCTB navigation structure.
  * Run: npx tsx scripts/test-product-shell.ts
  */
 import assert from "node:assert/strict";
 import {
   aiAfterHoursShellHome,
-  isExplicitAiAfterHoursShellPath,
+  appointmentsProductShellHome,
+  isExplicitAppointmentsShellPath,
   isExplicitMctbShellPath,
   isExplicitMassSmsShellPath,
   productShellLabel,
   resolveProductShellFromPath,
   shouldShowProductSwitcher,
+  visibleProductShells,
 } from "../src/lib/products/product-shell";
 import { buildAiAfterHoursNav } from "../src/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "../src/lib/products/sms-platform-nav";
+import { buildMctbV1Nav } from "../src/lib/products/mctb-nav";
 import { isAiAfterHoursEntitled, AI_AFTER_HOURS_DISPLAY_NAME } from "../src/lib/products/ai-after-hours";
 
+assert.equal(productShellLabel("appointments"), "Appointments");
 assert.equal(productShellLabel("mass_sms"), "SMS");
 assert.equal(productShellLabel("mctb"), "Missed Call Text Back");
 assert.equal(productShellLabel("ai_after_hours"), AI_AFTER_HOURS_DISPLAY_NAME);
 
-assert.equal(resolveProductShellFromPath("/dashboard"), "mass_sms");
+assert.equal(resolveProductShellFromPath("/appointments/overview"), "appointments");
+assert.equal(resolveProductShellFromPath("/appointments/calendar"), "appointments");
 assert.equal(resolveProductShellFromPath("/voice/missed-calls"), "mctb");
+assert.equal(resolveProductShellFromPath("/mctb"), "mctb");
+assert.equal(resolveProductShellFromPath("/mctb/missed-calls"), "mctb");
 assert.equal(resolveProductShellFromPath("/voice/agents"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/voice/overview"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/settings"), null);
+assert.equal(resolveProductShellFromPath("/conversations"), null);
 
-assert.ok(isExplicitMassSmsShellPath("/conversations"));
 assert.ok(isExplicitMctbShellPath("/voice/setup"));
-assert.ok(isExplicitAiAfterHoursShellPath("/voice/calls"));
-assert.ok(!isExplicitMctbShellPath("/voice/agents"));
+assert.ok(isExplicitAppointmentsShellPath("/appointments/types"));
+assert.ok(!isExplicitMassSmsShellPath("/conversations"));
 
+assert.equal(appointmentsProductShellHome(), "/appointments/overview");
 assert.equal(aiAfterHoursShellHome(), "/voice/overview");
 
+const v1Shells = visibleProductShells({
+  hasMassSms: true,
+  hasMctb: true,
+  hasAiAfterHours: true,
+});
+assert.deepEqual(v1Shells, ["appointments", "mctb"]);
+
 assert.ok(
-  !shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
+  shouldShowProductSwitcher({ hasMassSms: true, hasMctb: true, hasAiAfterHours: false }),
 );
 assert.ok(
-  !shouldShowProductSwitcher({ hasMassSms: true, hasMctb: false, hasAiAfterHours: true }),
+  !shouldShowProductSwitcher({ hasMassSms: false, hasMctb: false, hasAiAfterHours: false }),
 );
+
+const mctbNav = buildMctbV1Nav();
+const mctbLabels = mctbNav.map((i) => i.label);
+assert.ok(mctbLabels.includes("Home"));
+assert.ok(mctbLabels.includes("Missed Calls"));
+assert.ok(mctbLabels.includes("Conversations"));
+assert.ok(mctbLabels.includes("Voicemail"));
+assert.ok(mctbLabels.includes("Analytics"));
+assert.ok(mctbLabels.includes("Setup"));
+assert.ok(mctbLabels.includes("Numbers"));
+assert.ok(!mctbLabels.includes("Settings"));
+assert.ok(!mctbLabels.includes("Campaigns"));
+assert.ok(!mctbLabels.includes("Calendar"));
 
 const aiNav = buildAiAfterHoursNav({ primaryVoiceAgentId: "agent_1" });
 const aiLabels = aiNav.map((i) => i.label);
 assert.ok(aiLabels.includes("Overview"));
 assert.ok(aiLabels.includes("AI Agent"));
-assert.ok(aiLabels.includes("Calls"));
-assert.ok(aiLabels.includes("Knowledge"));
-assert.ok(aiLabels.includes("Call Handling"));
-assert.ok(aiLabels.includes("Numbers"));
 assert.ok(!aiLabels.includes("Missed Calls"));
 
 const smsNav = buildSmsPlatformNav();

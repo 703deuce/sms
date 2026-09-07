@@ -1,6 +1,7 @@
 "use client";
 
 import { PersonalGreetingControls } from "@/components/personal/personal-greeting-controls";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -82,10 +83,10 @@ export function MctbVoicemailSetupSection({ phoneNumberId }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="ref-card space-y-4 p-5">
       <p className="text-[13px] text-muted-foreground">
         When callers reach voicemail on your missed-call path, messages appear in{" "}
-        <Link href="/voice/voicemail" className="font-semibold text-primary hover:underline">
+        <Link href={MCTB_ROUTES.voicemail} className="font-semibold text-primary hover:underline">
           Visual Voicemail
         </Link>
         . Use the Trigger section to also send a text-back when voicemail is left.

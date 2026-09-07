@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type {
   NeedsAttentionItem,
   NeedsAttentionKind,
@@ -167,7 +168,7 @@ export async function loadNeedsAttentionItems(
         id: vm.id,
         label: vm.isRead ? "Voicemail" : "New voicemail",
         at: vm.createdAt.toISOString(),
-        href: "/voice/voicemail",
+        href: MCTB_ROUTES.voicemail,
       },
       at: vm.createdAt.toISOString(),
     });
@@ -188,7 +189,7 @@ export async function loadNeedsAttentionItems(
         id: m.id,
         label: isReply ? "SMS reply" : "Missed call",
         at: m.detectedAt.toISOString(),
-        href: `/voice/missed-calls/${m.id}`,
+        href: MCTB_ROUTES.missedCallDetail(m.id),
       },
       at: m.detectedAt.toISOString(),
     });

@@ -1,12 +1,11 @@
-import { MctbMissedCallDetailView } from "@/components/mctb/missed-call-detail-view";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
-type Props = { params: Promise<{ id: string }> };
-
-export default async function MctbMissedCallDetailPage({ params }: Props) {
+export default async function VoiceMissedCallDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <MctbMissedCallDetailView eventId={id} />
-    </div>
-  );
+  redirect(MCTB_ROUTES.missedCallDetail(id));
 }

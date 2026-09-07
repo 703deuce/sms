@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export type PlatformActivityItem = {
   id: string;
@@ -108,7 +109,7 @@ export async function loadPlatformActivityFeed(
       type: "mctb",
       label,
       at: e.detectedAt.toISOString(),
-      href: `/voice/missed-calls/${e.id}`,
+      href: MCTB_ROUTES.missedCallDetail(e.id),
     });
   }
 
@@ -154,7 +155,7 @@ export async function loadPlatformActivityFeed(
       type: "link_click",
       label: `Link clicked${lc.phone ? ` by ${lc.phone}` : ""}`,
       at: lc.createdAt.toISOString(),
-      href: lc.missedCallEventId ? `/voice/missed-calls/${lc.missedCallEventId}` : undefined,
+      href: lc.missedCallEventId ? MCTB_ROUTES.missedCallDetail(lc.missedCallEventId) : undefined,
       meta: { destinationUrl: lc.destinationUrl },
     });
   }
@@ -165,7 +166,7 @@ export async function loadPlatformActivityFeed(
       type: "form_submission",
       label: "Lead capture form submitted",
       at: fs.submittedAt.toISOString(),
-      href: fs.missedCallEventId ? `/voice/missed-calls/${fs.missedCallEventId}` : "/voice/setup",
+      href: fs.missedCallEventId ? MCTB_ROUTES.missedCallDetail(fs.missedCallEventId) : MCTB_ROUTES.setup,
     });
   }
 
@@ -175,7 +176,7 @@ export async function loadPlatformActivityFeed(
       type: "consent",
       label: `Press-${ce.affirmativeInput || "1"} SMS consent${ce.callerNumber ? ` — ${ce.callerNumber}` : ""}`,
       at: ce.consentedAt.toISOString(),
-      href: "/voice/missed-calls",
+      href: MCTB_ROUTES.missedCalls,
       meta: { method: ce.method, callSessionId: ce.callSessionId },
     });
   }

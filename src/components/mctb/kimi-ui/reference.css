@@ -1,0 +1,44 @@
+/* MCTB layout composition only — visual tokens from Appointments Kimi UI */
+@import "../../appointments/kimi-ui/overview/reference.css";
+
+.mctb-page {
+  position: relative;
+  min-height: 100%;
+  background:
+    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(79, 70, 229, 0.07), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(14, 165, 233, 0.05), transparent 50%),
+    linear-gradient(180deg, #f8f9fc 0%, #f4f6fa 100%);
+}
+
+.mctb-page::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: radial-gradient(circle at 1px 1px, rgba(79, 70, 229, 0.06) 1px, transparent 0);
+  background-size: 28px 28px;
+}
+
+.mctb-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mctb-page-inner {
+  margin-inline: auto;
+  max-width: 72rem;
+  padding: 1.5rem 1.75rem 2.5rem;
+}
+
+.mctb-master-detail {
+  display: grid;
+  gap: 1rem;
+  min-height: 28rem;
+}
+
+@media (min-width: 1024px) {
+  .mctb-master-detail {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+}

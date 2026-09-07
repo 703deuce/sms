@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/db";
 import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
 import { isActiveEntitlement } from "@/lib/products/types";
 import { getRoutingAnalyticsSummary } from "@/lib/smart-routing/ai/analytics";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export async function GET() {
   try {
@@ -61,7 +62,7 @@ export async function GET() {
       cards.push({
         product: "mctb",
         title: "Missed Call Text Back",
-        href: "/voice/missed-calls",
+        href: MCTB_ROUTES.missedCalls,
         metrics: [
           { label: "Missed today", value: missedToday },
           { label: "Texts sent today", value: sentToday },
@@ -96,7 +97,7 @@ export async function GET() {
       cards.push({
         product: "visual_voicemail",
         title: "Visual Voicemail",
-        href: "/voice/voicemail",
+        href: MCTB_ROUTES.voicemail,
         metrics: [{ label: "Unread", value: voicemailsUnread }],
       });
     }

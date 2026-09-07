@@ -11,6 +11,7 @@ import {
   type MctbScheduleMode,
   type MctbWeeklySchedule,
 } from "@/lib/mctb/schedule-shared";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
@@ -379,7 +380,7 @@ export function MctbScheduleView() {
 
       <p className="text-sm text-muted-foreground">
         Consent prompts, first message, and recovery rules live in{" "}
-        <Link href="/voice/setup" className="text-primary hover:underline">Text Back Setup</Link>.
+        <Link href={MCTB_ROUTES.setup} className="text-primary hover:underline">Text Back Setup</Link>.
       </p>
     </div>
   );

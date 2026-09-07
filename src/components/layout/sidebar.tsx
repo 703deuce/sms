@@ -13,6 +13,8 @@ import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
+import { buildMctbV1Nav } from "@/lib/products/mctb-nav";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { productLogoHome } from "@/lib/products/context";
 import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
@@ -173,7 +175,11 @@ function bestExpandedKey(
       score = Math.max(score, base);
     }
 
-    if (item.label === "Configure" && item.href === "/voice/setup" && pathname.startsWith("/voice/setup")) {
+    if (
+      item.label === "Configure" &&
+      item.href === MCTB_ROUTES.setup &&
+      pathname.startsWith(MCTB_ROUTES.setup)
+    ) {
       score = Math.max(score, 60_000);
     }
     if (
@@ -183,13 +189,22 @@ function bestExpandedKey(
     ) {
       score = Math.max(score, 60_000);
     }
-    if (item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls")) {
+    if (
+      item.label === "Missed Calls" &&
+      (pathname.startsWith(MCTB_ROUTES.missedCalls) || pathname.startsWith("/voice/missed-calls"))
+    ) {
       score = Math.max(score, 60_000);
     }
-    if (item.label === "Consent log" && pathname.startsWith("/voice/consent-log")) {
+    if (
+      item.label === "Consent log" &&
+      (pathname.startsWith(MCTB_ROUTES.complianceConsent) || pathname.startsWith("/voice/consent-log"))
+    ) {
       score = Math.max(score, 60_000);
     }
-    if (item.label === "Try It" && pathname.startsWith("/voice/try-it")) {
+    if (
+      item.label === "Try It" &&
+      (pathname.startsWith(MCTB_ROUTES.setupTest) || pathname.startsWith("/voice/try-it"))
+    ) {
       score = Math.max(score, 60_000);
     }
     if (item.label === "Compliance" && pathname.startsWith("/compliance")) {
@@ -346,6 +361,14 @@ export function Sidebar({
       });
     }
 
+    if (multiProduct && productShell === "appointments") {
+      return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
+    }
+
+    if (multiProduct && productShell === "mctb") {
+      return buildMctbV1Nav({ inboxBadge });
+    }
+
     if (isAppointmentsV1Primary()) {
       return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
     }
@@ -425,7 +448,12 @@ export function Sidebar({
     router.refresh();
   }
 
-  const homeHref = isAppointmentsV1Primary()
+  const homeHref =
+    multiProduct && productShell === "appointments"
+      ? appointmentsShellHome()
+      : multiProduct && productShell === "mctb"
+        ? mctbShellHome()
+        : isAppointmentsV1Primary()
     ? appointmentsShellHome()
     : realtorMode
     ? "/realtor/dashboard"
@@ -464,6 +492,18 @@ export function Sidebar({
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
+        productSwitcher={
+          multiProduct ? (
+            <ProductShellSwitcher
+              hasMctb={hasMctb}
+              hasMassSms={hasMassSms}
+              hasAiAfterHours={hasAiAfterHours}
+              collapsed={collapsed}
+              onNavigate={onClose}
+              className="px-0 pb-0"
+            />
+          ) : undefined
+        }
         credits={{
           label: "Message Credits",
           remaining:
@@ -582,15 +622,18 @@ export function Sidebar({
           const childActive = sectionHasActiveChild(item.children, pathname, search);
           const tryItOwned =
             (item.label === "Try It" || item.label === "Try Missed Call Text Back") &&
-            pathname.startsWith("/voice/try-it");
+            (pathname.startsWith(MCTB_ROUTES.setupTest) || pathname.startsWith("/voice/try-it"));
           const mctbConfigureOwned =
-            item.href === "/voice/setup" && pathname.startsWith("/voice/setup");
+            item.href === MCTB_ROUTES.setup && pathname.startsWith(MCTB_ROUTES.setup);
           const srSetupOwned =
             item.href === "/smart-routing/setup" && pathname.startsWith("/smart-routing/setup");
           const missedCallsOwned =
-            item.label === "Missed Calls" && pathname.startsWith("/voice/missed-calls");
+            item.label === "Missed Calls" &&
+            (pathname.startsWith(MCTB_ROUTES.missedCalls) || pathname.startsWith("/voice/missed-calls"));
           const consentLogOwned =
-            item.label === "Consent log" && pathname.startsWith("/voice/consent-log");
+            item.label === "Consent log" &&
+            (pathname.startsWith(MCTB_ROUTES.complianceConsent) ||
+              pathname.startsWith("/voice/consent-log"));
           const complianceOwned =
             item.label === "Messaging Compliance" && pathname.startsWith("/compliance");
           const expandKey = itemExpandKey(item);

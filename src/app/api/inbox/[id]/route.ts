@@ -53,6 +53,14 @@ export async function GET(
     }
 
     let appointmentContext: Conversation["appointmentContext"];
+    let missedCallDetectedAt: string | null = null;
+    if (row.missedCallEventId) {
+      const mc = await getPrisma().missedCallEvent.findFirst({
+        where: { id: row.missedCallEventId, workspaceId: auth.workspaceId },
+        select: { detectedAt: true },
+      });
+      missedCallDetectedAt = mc?.detectedAt ? mc.detectedAt.toISOString() : null;
+    }
     if (row.contactId) {
       const { loadUpcomingAppointmentsByContactIds } = await import("@/lib/appointments/analytics");
       const map = await loadUpcomingAppointmentsByContactIds(auth.workspaceId, [row.contactId]);
@@ -78,6 +86,7 @@ export async function GET(
         campaignName: await loadCampaignName(auth.workspaceId, row.campaignId),
         repeatCaller,
         appointmentContext,
+        missedCallDetectedAt,
       }),
     });
   } catch (err) {

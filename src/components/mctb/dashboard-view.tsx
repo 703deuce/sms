@@ -4,6 +4,7 @@ import type { DashboardDateRange } from "@/lib/outcomes/operational-dashboard-ty
 import { DashboardNeedsAttentionPanel } from "@/components/mctb/dashboard-needs-attention-panel";
 import { cn } from "@/lib/utils";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
   AlertTriangle,
   ArrowRight,
@@ -151,7 +152,7 @@ export function MctbDashboardView({
             </p>
           </div>
           <Link
-            href="/voice/setup"
+            href={MCTB_ROUTES.setup}
             className="inline-flex h-9 items-center gap-1 rounded-lg bg-[#6366f1] px-4 text-[13px] font-semibold text-white"
           >
             <SlidersHorizontal className="h-4 w-4" />
@@ -165,25 +166,25 @@ export function MctbDashboardView({
           label="Missed today"
           value={missed?.missedToday ?? 0}
           icon={PhoneMissed}
-          href="/voice/missed-calls"
+          href={MCTB_ROUTES.missedCalls}
         />
         <StatCard
           label="Texts sent today"
           value={missed?.sentToday ?? 0}
           icon={Send}
-          href="/voice/missed-calls"
+          href={MCTB_ROUTES.missedCalls}
         />
         <StatCard
           label="Replies today"
           value={missed?.repliedToday ?? 0}
           icon={MessageSquare}
-          href="/conversations"
+          href="/conversations?product=mctb"
         />
         <StatCard
           label="Link clicks (30d)"
           value={summary?.summary.linkClicks30d ?? 0}
           icon={ArrowRight}
-          href="/voice/analytics"
+          href={MCTB_ROUTES.analytics}
         />
       </div>
 

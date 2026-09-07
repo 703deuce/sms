@@ -154,7 +154,12 @@ export default function ConversationList({
                 <div style={{
                   fontSize: 12.5, marginTop: 2.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.45,
                   color: c.unread ? "var(--tv-text)" : "var(--tv-muted)", fontWeight: c.unread ? 600 : 400,
-                }}>{c.preview}</div>
+                }}>
+                  {c.productSource === "mctb" && c.missedCallEventId ? (
+                    <span style={{ color: "#4338ca", fontWeight: 600, marginRight: 4 }}>Missed call ·</span>
+                  ) : null}
+                  {c.preview}
+                </div>
               </div>
               {c.unread && <span className="tv-unread-dot" />}
             </div>

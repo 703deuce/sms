@@ -2,6 +2,7 @@
 
 import {
   aiAfterHoursShellHome,
+  appointmentsProductShellHome,
   defaultProductShell,
   mctbShellHome,
   massSmsShellHome,
@@ -10,11 +11,13 @@ import {
   readStoredProductShell,
   resolveProductShellFromPath,
   shellHomePath,
+  visibleProductShells,
   writeStoredProductShell,
   type ProductShell,
 } from "@/lib/products/product-shell";
 import { cn } from "@/lib/utils";
 import {
+  Calendar,
   Check,
   ChevronDown,
   LayoutGrid,
@@ -68,31 +71,30 @@ export function useProductShell(
   return { shell: fromPath ?? shell, setShell };
 }
 
-const SHELL_OPTIONS: {
-  shell: ProductShell;
-  icon: typeof Megaphone;
-  description: string;
-  visible: (input: { hasMctb: boolean; hasMassSms: boolean; hasAiAfterHours: boolean }) => boolean;
-}[] = [
+const SHELL_META: Record<
+  ProductShell,
   {
-    shell: "mass_sms",
+    icon: typeof Calendar;
+    description: string;
+  }
+> = {
+  appointments: {
+    icon: Calendar,
+    description: "Calendar, booking, reminders, and customer scheduling",
+  },
+  mass_sms: {
     icon: Megaphone,
     description: "Campaigns, conversations, contacts, and playbooks",
-    visible: (input) => input.hasMassSms,
   },
-  {
-    shell: "mctb",
+  mctb: {
     icon: PhoneMissed,
-    description: "Missed calls, voicemail, consent, and text-back setup",
-    visible: (input) => input.hasMctb,
+    description: "Missed calls, voicemail, conversations, and text-back setup",
   },
-  {
-    shell: "ai_after_hours",
+  ai_after_hours: {
     icon: Moon,
     description: "After-hours AI agent, calls, knowledge, and call handling",
-    visible: (input) => input.hasAiAfterHours,
   },
-];
+};
 
 export function ProductShellSwitcher({
   hasMctb,
@@ -105,13 +107,11 @@ export function ProductShellSwitcher({
   const router = useRouter();
   const entitlement = { hasMctb, hasMassSms, hasAiAfterHours };
   const { shell, setShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
-  const showSwitcher =
-    [hasMctb, hasMassSms, hasAiAfterHours].filter(Boolean).length >= 2;
+  const visibleShells = visibleProductShells(entitlement);
+  const showSwitcher = visibleShells.length >= 2;
   const [open, setOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  const visibleOptions = SHELL_OPTIONS.filter((option) => option.visible(entitlement));
 
   useEffect(() => {
     if (!showSwitcher) return;
@@ -155,6 +155,8 @@ export function ProductShellSwitcher({
     router.push(shellHomePath(next));
   }
 
+  const activeMeta = SHELL_META[shell];
+
   return (
     <div ref={rootRef} className={cn("relative shrink-0 px-2 pb-2", className)}>
       <button
@@ -169,7 +171,11 @@ export function ProductShellSwitcher({
         title={collapsed ? "Switch product" : undefined}
       >
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <LayoutGrid className="h-4 w-4" />
+          {activeMeta ? (
+            <activeMeta.icon className="h-4 w-4" />
+          ) : (
+            <LayoutGrid className="h-4 w-4" />
+          )}
         </span>
         {!collapsed ? (
           <>
@@ -199,7 +205,7 @@ export function ProductShellSwitcher({
         >
           <div className="border-b border-border px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Choose product
+              Switch product
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Currently active:{" "}
@@ -207,7 +213,8 @@ export function ProductShellSwitcher({
             </p>
           </div>
           <div className="p-1.5">
-            {visibleOptions.map(({ shell: optionShell, icon: Icon, description }) => {
+            {visibleShells.map((optionShell) => {
+              const { icon: Icon, description } = SHELL_META[optionShell];
               const active = shell === optionShell;
               return (
                 <button
@@ -253,8 +260,8 @@ export function ProductShellSwitcher({
             <div>
               <p className="text-[13px] font-semibold text-foreground">Multiple products</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                Use Switch product to move between SMS, Missed Call Text Back, and AI After Hours.
-                Each product shows its own menu in the same workspace.
+                Use Switch product to move between Appointments and Missed Call Text Back. Each
+                product shows its own menu in the same workspace.
               </p>
             </div>
             <button
@@ -308,5 +315,9 @@ export function ProductShellActiveLabel({
   );
 }
 
-// Re-export home helpers for legacy imports
-export { massSmsShellHome, mctbShellHome, aiAfterHoursShellHome };
+export {
+  appointmentsProductShellHome,
+  massSmsShellHome,
+  mctbShellHome,
+  aiAfterHoursShellHome,
+};

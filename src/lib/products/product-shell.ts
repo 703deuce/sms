@@ -1,13 +1,14 @@
 /**
- * Transovo product shells — SMS, Missed Call Text Back, and AI After Hours.
- * Top switcher swaps shell context; ambiguous routes follow the last selected shell.
+ * Transovo product shells — separate product contexts within one application shell.
+ * V1 launch: Appointments + Missed Call Text Back (SMS marketing is infrastructure, not a nav product).
  */
-import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { appointmentsShellHome } from "@/lib/products/appointments-routes";
+import { isSmsOnlyAppNav, isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
-export type ProductShell = "mass_sms" | "mctb" | "ai_after_hours";
+export type ProductShell = "appointments" | "mass_sms" | "mctb" | "ai_after_hours";
 
 export const PRODUCT_SHELL_STORAGE_KEY = "transovo.activeProductShell";
-export const PRODUCT_SWITCHER_ONBOARDING_KEY = "transovo.productSwitcherOnboarding.v2";
+export const PRODUCT_SWITCHER_ONBOARDING_KEY = "transovo.productSwitcherOnboarding.v3";
 
 const MCTB_PATH_PREFIXES = [
   "/voice/missed-calls",
@@ -16,9 +17,12 @@ const MCTB_PATH_PREFIXES = [
   "/voice/try-it",
   "/voice/schedule",
   "/voice/voicemail",
-  "/smart-routing",
-  "/call-forwarding",
+  "/voice/analytics",
+  "/voice/numbers",
+  "/voice/reports",
   "/onboarding/mctb",
+  "/analytics/mctb",
+  "/mctb",
 ] as const;
 
 const AI_AFTER_HOURS_PATH_PREFIXES = [
@@ -27,7 +31,6 @@ const AI_AFTER_HOURS_PATH_PREFIXES = [
   "/voice/calls",
   "/voice/knowledge",
   "/voice/inbound-routing",
-  "/voice/setup",
   "/voice/receptionist",
 ] as const;
 
@@ -42,7 +45,16 @@ const MASS_SMS_PATH_PREFIXES = [
   "/ai-replies",
   "/grow",
   "/reports",
-  "/dashboard",
+] as const;
+
+/** Appointments-only paths — shared routes like /settings resolve via stored shell. */
+const APPOINTMENTS_PATH_PREFIXES = [
+  "/appointments",
+  "/meetings",
+  "/video",
+  "/payments",
+  "/integrations/calendars",
+  "/integrations/payments",
 ] as const;
 
 export function massSmsShellHome(): string {
@@ -50,16 +62,21 @@ export function massSmsShellHome(): string {
 }
 
 export function mctbShellHome(): string {
-  // INTERIM until Spec 01 Overview ships — then change to "/mctb" (see docs/MCTB-FRONTEND-REBUILD-KICKOFF.md)
-  return "/voice/missed-calls";
+  return "/mctb";
 }
 
 export function aiAfterHoursShellHome(): string {
   return "/voice/overview";
 }
 
+export function appointmentsProductShellHome(): string {
+  return appointmentsShellHome();
+}
+
 export function productShellLabel(shell: ProductShell): string {
   switch (shell) {
+    case "appointments":
+      return "Appointments";
     case "mass_sms":
       return "SMS";
     case "mctb":
@@ -73,6 +90,8 @@ export function productShellLabel(shell: ProductShell): string {
 
 export function productShellShortLabel(shell: ProductShell): string {
   switch (shell) {
+    case "appointments":
+      return "Appointments";
     case "mass_sms":
       return "SMS";
     case "mctb":
@@ -90,6 +109,12 @@ export function isExplicitMctbShellPath(pathname: string): boolean {
   );
 }
 
+export function isExplicitAppointmentsShellPath(pathname: string): boolean {
+  return APPOINTMENTS_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export function isExplicitAiAfterHoursShellPath(pathname: string): boolean {
   return AI_AFTER_HOURS_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -97,15 +122,6 @@ export function isExplicitAiAfterHoursShellPath(pathname: string): boolean {
 }
 
 export function isExplicitMassSmsShellPath(pathname: string): boolean {
-  if (pathname === "/conversations" || pathname.startsWith("/conversations/")) {
-    return true;
-  }
-  if (pathname === "/contacts" || pathname.startsWith("/contacts/")) {
-    return true;
-  }
-  if (pathname === "/analytics" || pathname.startsWith("/analytics/")) {
-    return true;
-  }
   return MASS_SMS_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
@@ -114,6 +130,7 @@ export function isExplicitMassSmsShellPath(pathname: string): boolean {
 /** Path implies a shell, or null when shared/ambiguous (settings, compliance, etc.). */
 export function resolveProductShellFromPath(pathname: string): ProductShell | null {
   if (isExplicitMctbShellPath(pathname)) return "mctb";
+  if (isExplicitAppointmentsShellPath(pathname)) return "appointments";
   if (isExplicitAiAfterHoursShellPath(pathname)) return "ai_after_hours";
   if (isExplicitMassSmsShellPath(pathname)) return "mass_sms";
   return null;
@@ -123,9 +140,14 @@ export function readStoredProductShell(): ProductShell | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(PRODUCT_SHELL_STORAGE_KEY);
-    if (raw === "mass_sms" || raw === "mctb" || raw === "ai_after_hours") return raw;
-    // Migrate legacy two-shell storage keys
-    if (raw === "mass_sms" || raw === "mctb") return raw;
+    if (
+      raw === "appointments" ||
+      raw === "mass_sms" ||
+      raw === "mctb" ||
+      raw === "ai_after_hours"
+    ) {
+      return raw;
+    }
   } catch {
     // ignore
   }
@@ -146,14 +168,17 @@ export function defaultProductShell(input: {
   hasMassSms: boolean;
   hasAiAfterHours?: boolean;
 }): ProductShell {
+  if (isAppointmentsV1Primary()) return "appointments";
   if (input.hasMassSms) return "mass_sms";
   if (input.hasAiAfterHours) return "ai_after_hours";
   if (input.hasMctb) return "mctb";
-  return "mass_sms";
+  return "appointments";
 }
 
 export function shellHomePath(shell: ProductShell): string {
   switch (shell) {
+    case "appointments":
+      return appointmentsProductShellHome();
     case "mass_sms":
       return massSmsShellHome();
     case "mctb":
@@ -161,7 +186,7 @@ export function shellHomePath(shell: ProductShell): string {
     case "ai_after_hours":
       return aiAfterHoursShellHome();
     default:
-      return massSmsShellHome();
+      return appointmentsProductShellHome();
   }
 }
 
@@ -170,7 +195,26 @@ export function countEntitledProductShells(input: {
   hasMassSms: boolean;
   hasAiAfterHours: boolean;
 }): number {
-  return [input.hasMassSms, input.hasMctb, input.hasAiAfterHours].filter(Boolean).length;
+  return visibleProductShells(input).length;
+}
+
+/** Product shells shown in the switcher for the current launch configuration. */
+export function visibleProductShells(input: {
+  hasMctb: boolean;
+  hasMassSms: boolean;
+  hasAiAfterHours: boolean;
+}): ProductShell[] {
+  if (isAppointmentsV1Primary()) {
+    const shells: ProductShell[] = ["appointments"];
+    if (input.hasMctb) shells.push("mctb");
+    return shells;
+  }
+
+  const shells: ProductShell[] = [];
+  if (input.hasMassSms && !isSmsStandaloneHidden()) shells.push("mass_sms");
+  if (input.hasMctb) shells.push("mctb");
+  if (input.hasAiAfterHours) shells.push("ai_after_hours");
+  return shells;
 }
 
 export function shouldShowProductSwitcher(input: {
@@ -179,5 +223,5 @@ export function shouldShowProductSwitcher(input: {
   hasAiAfterHours: boolean;
 }): boolean {
   if (isSmsOnlyAppNav()) return false;
-  return countEntitledProductShells(input) >= 2;
+  return visibleProductShells(input).length >= 2;
 }

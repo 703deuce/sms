@@ -71,6 +71,7 @@ export async function GET(request: Request) {
         contact: true,
         assignee: { select: { id: true, name: true, email: true } },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        missedCallEvent: { select: { detectedAt: true } },
       },
     });
 
@@ -133,6 +134,10 @@ export async function GET(request: Request) {
             : "",
           updatedAt: c.updatedAt,
           tags: c.tags || [],
+          missedCallEventId: c.missedCallEventId ?? null,
+          missedCallDetectedAt: c.missedCallEvent?.detectedAt
+            ? c.missedCallEvent.detectedAt.toISOString()
+            : null,
           appointmentContext: appt
             ? {
                 id: appt.id,

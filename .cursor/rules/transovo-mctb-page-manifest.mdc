@@ -43,7 +43,9 @@ Paths: `src/app/**/mctb/**`, `src/app/**/voice/**`, `src/components/mctb/**`, `s
 
 **Operational:** `/mctb`, `/mctb/missed-calls[/:id]`, `/mctb/conversations[/:id]`, `/mctb/voicemail[/:id]`, `/mctb/analytics`
 
-**Configuration:** `/mctb/setup[/phone|messaging|consent|schedule|voicemail|exclusions|test]`
+**Configuration:** `/mctb/setup[/phone|missed-call-rules|text-back|consent|recovery|voicemail|exclusions|test]`
+
+**Superseded (redirect only — do not build):** `/mctb/setup/business-hours`, `/mctb/setup/follow-up`, `/mctb/setup/schedule` → `/mctb/setup/recovery`
 
 **Compliance:** `/mctb/compliance[/consent]`
 
@@ -57,7 +59,10 @@ Paths: `src/app/**/mctb/**`, `src/app/**/voice/**`, `src/components/mctb/**`, `s
 |--------|--------|
 | `/voice/missed-calls` | `/mctb/missed-calls` |
 | `/voice/setup` | `/mctb/setup` |
-| `/voice/schedule` | `/mctb/setup/schedule` |
+| `/voice/schedule` | `/mctb/setup/recovery` |
+| `/mctb/setup/business-hours` | `/mctb/setup/recovery` |
+| `/mctb/setup/follow-up` | `/mctb/setup/recovery` |
+| `/mctb/setup/schedule` | `/mctb/setup/recovery` |
 | `/voice/try-it` | `/mctb/setup/test` |
 | `/voice/consent-log` | `/mctb/compliance/consent` |
 | `/voice/analytics` | `/mctb/analytics` |

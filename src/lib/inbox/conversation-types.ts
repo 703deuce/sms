@@ -61,4 +61,6 @@ export type Conversation = {
     startsAt: string;
     label: string;
   } | null;
+  missedCallEventId?: string | null;
+  missedCallDetectedAt?: string | null;
 };

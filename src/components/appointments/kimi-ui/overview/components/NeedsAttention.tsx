@@ -1,7 +1,8 @@
-import { ArrowRight, BellRing, ShieldAlert, CheckSquare, ChevronRight } from 'lucide-react';
-import type { OverviewAttentionItem } from '@/features/appointments/kimi/overview/types';
+import { ArrowRight, BellRing, ShieldAlert, CheckSquare, ChevronRight } from "lucide-react";
+import type { OverviewAttentionItem } from "@/features/appointments/kimi/overview/types";
+import { RefDecoSection } from "../../shared/ref-deco-patterns";
 
-const icons = { bell: BellRing, shield: ShieldAlert, 'check-square': CheckSquare };
+const icons = { bell: BellRing, shield: ShieldAlert, "check-square": CheckSquare };
 
 type Props = {
   items: OverviewAttentionItem[];
@@ -11,8 +12,7 @@ type Props = {
 
 export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props) {
   return (
-    <div className="ref-card p-5 flex flex-col">
-      <h3 className="text-[15px] font-bold text-gray-900 mb-3">Needs attention</h3>
+    <RefDecoSection title="Needs attention" tint="amber" accent="amber" bodyClassName="flex flex-col">
       {items.length === 0 ? (
         <p className="py-8 text-center text-[13px] text-gray-500">Nothing needs attention right now.</p>
       ) : (
@@ -24,22 +24,28 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
                 key={a.id}
                 type="button"
                 onClick={() => onOpenItem(a.href)}
-                className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3.5 text-left hover:border-indigo-200 hover:shadow-sm transition"
+                className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3.5 text-left transition hover:border-indigo-200 hover:shadow-sm"
               >
-                <div className={`icon-tile tile-${a.tint}`} style={{ width: 36, height: 36, borderRadius: 10 }}><Icon size={17} /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-gray-900">{a.title}</div>
-                  <div className="text-[12px] text-gray-500 truncate">{a.sub}</div>
+                <div className={`icon-tile tile-${a.tint}`} style={{ width: 36, height: 36, borderRadius: 10 }}>
+                  <Icon size={17} aria-hidden />
                 </div>
-                <ChevronRight size={16} className="text-gray-300" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-gray-900">{a.title}</div>
+                  <div className="truncate text-[12px] text-gray-500">{a.sub}</div>
+                </div>
+                <ChevronRight size={16} className="text-gray-300" aria-hidden />
               </button>
             );
           })}
         </div>
       )}
-      <button type="button" onClick={onReviewAll} className="flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 mt-3">
-        Review all issues <ArrowRight size={14} />
+      <button
+        type="button"
+        onClick={onReviewAll}
+        className="mt-3 flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700"
+      >
+        Review all issues <ArrowRight size={14} aria-hidden />
       </button>
-    </div>
+    </RefDecoSection>
   );
 }
