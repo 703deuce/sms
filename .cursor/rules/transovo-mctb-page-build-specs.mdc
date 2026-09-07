@@ -38,7 +38,7 @@ alwaysApply: true
 | `/mctb/analytics` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md` | `transovo-mctb-page-spec-06-analytics.mdc` |
 | `/mctb/setup` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md` | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/start` | *(spec 07 — guided wizard)* | `transovo-mctb-page-spec-07-setup.mdc` |
-| `/mctb/setup/phone` | *(spec 07 overview; spec 08 editor detail pending)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/phone` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md` | `transovo-mctb-page-spec-08-phone-forwarding.mdc` |
 | `/mctb/setup/missed-call-rules` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/text-back` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/consent` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |

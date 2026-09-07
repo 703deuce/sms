@@ -1,0 +1,68 @@
+---
+description: MANDATORY — MCTB Phone & Forwarding (/mctb/setup/phone). Wizard Step 1 + direct editor.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 08: PHONE & FORWARDING
+
+**Route:** `/mctb/setup/phone` | **Wizard:** Setup Step 1 (spec 07)  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–07
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Phone & Forwarding (`/mctb/setup/phone`, wizard phone step, legacy `/voice/setup` forwarding).
+
+## Primary job
+
+Connect customer's **existing public business line** to MCTB via **conditional carrier forwarding** to hidden **toll-free Transovo ingress** — then **verify with real evidence**.
+
+Not: SMS sender config, consent, PBX, Smart Routing, SIP troubleshooting, replacing business number.
+
+## Three number roles (LOCKED — never conflate)
+
+| Role | What |
+|------|------|
+| **Business line** | Customer's public number customers call |
+| **Forwarding destination** | Hidden toll-free ingress (workspace-assigned, not hardcoded) |
+| **Text-back sender** | SMS sender — separate; link only, do not configure here |
+
+## Flows
+
+**Wizard Step 1:** Business line → carrier → setup method → instructions → I've turned it on → verification → Verified → Continue
+
+**Post-setup editor:** Direct access, no wizard progress — status, instructions, re-verify, troubleshoot
+
+## Carrier guides
+
+- **One canonical source** (forwarding-guides dataset) — wizard, editor, diagnostics share it
+- Preserve existing Smith.ai-based approved content; **never fabricate codes**
+- Two presentation modes: **Walk me through it** | **Show me the instructions**
+- Missing carrier: show destination + generic conditional-forwarding language + verification (no fake steps)
+
+## Verification (LOCKED)
+
+- "I've turned it on" ≠ Verified
+- Test: call **public business line** from another phone, let ring unanswered
+- Server-authoritative evidence — not `testPassed=true` from client
+- Checkpoints: call reached, workspace/line matched, caller ID preserved (where supported)
+- Partial failures stay specific; retry does not wipe config
+- Server-side session survives mobile backgrounding
+
+## Architecture
+
+- **Toll-free ingress** — do not reopen local DID / SIP / PRACK experiments
+- Pause MCTB ≠ disable carrier forwarding
+- Changing business line or carrier invalidates applicable verification
+
+## Prohibited
+
+Hardcoded forwarding numbers, mock verification, fake progress %, calling hidden ingress for production test, duplicate guide implementations, telephony jargon in normal UI
+
+## Definition of done
+
+See full spec §101 checklist.
+
+## Next in series
+
+**09 — Missed-call Rules** — pending build spec.
