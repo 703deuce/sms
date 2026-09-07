@@ -13,6 +13,7 @@ import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
+import { buildMctbV1Nav } from "@/lib/products/mctb-nav";
 import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { productLogoHome } from "@/lib/products/context";
 import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
@@ -346,6 +347,14 @@ export function Sidebar({
       });
     }
 
+    if (multiProduct && productShell === "appointments") {
+      return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
+    }
+
+    if (multiProduct && productShell === "mctb") {
+      return buildMctbV1Nav({ inboxBadge });
+    }
+
     if (isAppointmentsV1Primary()) {
       return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
     }
@@ -425,7 +434,12 @@ export function Sidebar({
     router.refresh();
   }
 
-  const homeHref = isAppointmentsV1Primary()
+  const homeHref =
+    multiProduct && productShell === "appointments"
+      ? appointmentsShellHome()
+      : multiProduct && productShell === "mctb"
+        ? mctbShellHome()
+        : isAppointmentsV1Primary()
     ? appointmentsShellHome()
     : realtorMode
     ? "/realtor/dashboard"
@@ -464,6 +478,18 @@ export function Sidebar({
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
+        productSwitcher={
+          multiProduct ? (
+            <ProductShellSwitcher
+              hasMctb={hasMctb}
+              hasMassSms={hasMassSms}
+              hasAiAfterHours={hasAiAfterHours}
+              collapsed={collapsed}
+              onNavigate={onClose}
+              className="px-0 pb-0"
+            />
+          ) : undefined
+        }
         credits={{
           label: "Message Credits",
           remaining:

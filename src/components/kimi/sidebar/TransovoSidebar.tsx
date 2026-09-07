@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronsLeft,
@@ -27,6 +27,8 @@ export interface TransovoSidebarProps {
   user: KimiSidebarUser;
   upgradeHref?: string;
   homeHref?: string;
+  /** Rendered between Transovo identity and product-local navigation. */
+  productSwitcher?: ReactNode;
 }
 
 function Logo({ collapsed, homeHref }: { collapsed: boolean; homeHref: string }) {
@@ -137,6 +139,7 @@ export function TransovoSidebar({
   user,
   upgradeHref = "/settings/billing",
   homeHref = "/dashboard",
+  productSwitcher,
 }: TransovoSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
@@ -165,6 +168,10 @@ export function TransovoSidebar({
       style={{ width: collapsed ? 56 : 224 }}
     >
       <Logo collapsed={collapsed} homeHref={homeHref} />
+
+      {productSwitcher ? (
+        <div className={collapsed ? "px-1" : "px-0"}>{productSwitcher}</div>
+      ) : null}
 
       <nav
         className={`transovo-scroll flex-1 overflow-y-auto py-2 ${

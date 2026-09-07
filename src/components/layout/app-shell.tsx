@@ -13,6 +13,7 @@ import { getNumbersPageTitle } from "@/lib/products/numbers-nav";
 import { getAiAfterHoursPageTitle } from "@/lib/products/ai-after-hours-nav";
 import { getVoicePageTitle } from "@/lib/products/voice-nav";
 import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
+import { getMctbPageTitle } from "@/lib/products/mctb-nav";
 import { getAppointmentsPageTitle } from "@/lib/products/appointments-nav";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
@@ -174,17 +175,23 @@ export function AppShell({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
+  const appointmentsContextActive =
+    multiProduct ? productShell === "appointments" : isAppointmentsV1Primary();
+  const mctbContextActive = multiProduct && productShell === "mctb";
   const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
   const appointmentsTitle =
-    isAppointmentsV1Primary() && isAppointmentsProductPath(pathname)
+    appointmentsContextActive && isAppointmentsProductPath(pathname)
       ? getAppointmentsPageTitle(pathname)
       : "";
+  const mctbTitle = mctbContextActive ? getMctbPageTitle(pathname) || getVoicePageTitle(pathname) : "";
   const title = hideChromeTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
       : appointmentsTitle
         ? appointmentsTitle
+        : mctbTitle
+          ? mctbTitle
         : smsPlatformTitle
           ? smsPlatformTitle
           : currentProduct === "numbers"

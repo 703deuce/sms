@@ -2,6 +2,7 @@
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
 import { buildAppointmentsMobileNav } from "@/lib/products/appointments-nav";
+import { buildMctbV1MobileNav } from "@/lib/products/mctb-nav";
 import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
@@ -24,6 +25,7 @@ import {
   PhoneCall,
   PhoneMissed,
   Users,
+  SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -85,9 +87,18 @@ export function MobileNav({
     icon: [Home, Calendar, Globe, MessageSquare, Users][i] ?? Home,
   }));
 
+  const mctbItems = buildMctbV1MobileNav().map((item, i) => ({
+    ...item,
+    icon: [Home, PhoneMissed, MessageSquare, SlidersHorizontal][i] ?? Home,
+  }));
+
   const items = realtorMode
     ? buildRealtorMobileNav()
-    : isAppointmentsV1Primary()
+    : multiProduct && productShell === "appointments"
+      ? appointmentsItems
+      : multiProduct && productShell === "mctb"
+        ? mctbItems
+        : isAppointmentsV1Primary()
       ? appointmentsItems
       : currentProduct === "numbers"
       ? numbersItems
@@ -116,10 +127,13 @@ export function MobileNav({
         >
           {items.map((item) => {
             const Icon = item.icon;
-            const active = isAppointmentsNavItemActive(item.href, pathname);
+            const active =
+              productShell === "mctb" || (!multiProduct && !isAppointmentsV1Primary())
+                ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+                : isAppointmentsNavItemActive(item.href, pathname);
             return (
               <Link
-                key={item.href}
+                key={`${item.label}-${item.href}`}
                 href={item.href}
                 className={cn(
                   "flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-medium",
