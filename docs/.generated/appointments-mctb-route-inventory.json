@@ -1,0 +1,1621 @@
+{
+  "generatedAt": "2026-09-07T21:16:47.535Z",
+  "counts": {
+    "appointmentsPages": 53,
+    "appointmentsApis": 64,
+    "mctbPages": 58,
+    "mctbApis": 83,
+    "publicRoutes": 4
+  },
+  "routes": {
+    "appointments": [
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments",
+        "file": "src/app/(app)/appointments/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments",
+        "file": "src/app/api/appointments/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/:id",
+        "file": "src/app/(app)/appointments/[id]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/:id",
+        "file": "src/app/api/appointments/[id]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/:id/meetings",
+        "file": "src/app/api/appointments/[id]/meetings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/:id/reminder-timeline",
+        "file": "src/app/api/appointments/[id]/reminder-timeline/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/:id/video",
+        "file": "src/app/api/appointments/[id]/video/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/:id/video/host",
+        "file": "src/app/(app)/appointments/[id]/video/host/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/:id/video/join",
+        "file": "src/app/api/appointments/[id]/video/join/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/ai-booking",
+        "file": "src/app/(app)/appointments/ai-booking/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/ai-booking",
+        "file": "src/app/api/appointments/ai-booking/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/ai-booking/channels",
+        "file": "src/app/api/appointments/ai-booking/channels/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/analytics",
+        "file": "src/app/(app)/appointments/analytics/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/analytics",
+        "file": "src/app/api/appointments/analytics/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/analytics/automations",
+        "file": "src/app/(app)/appointments/analytics/automations/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/analytics/booking",
+        "file": "src/app/(app)/appointments/analytics/booking/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/analytics/export",
+        "file": "src/app/api/appointments/analytics/export/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/analytics/reminders",
+        "file": "src/app/(app)/appointments/analytics/reminders/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/analytics/reports",
+        "file": "src/app/(app)/appointments/analytics/reports/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/automations/activity",
+        "file": "src/app/(app)/appointments/automations/activity/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/automations/templates",
+        "file": "src/app/(app)/appointments/automations/templates/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/availability",
+        "file": "src/app/(app)/appointments/availability/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/availability",
+        "file": "src/app/api/appointments/availability/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/booking",
+        "file": "src/app/(app)/appointments/booking/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/booking-links",
+        "file": "src/app/api/appointments/booking-links/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/booking/approval",
+        "file": "src/app/api/appointments/booking/approval/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/calendar",
+        "file": "src/app/(app)/appointments/calendar/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/cancel/:token",
+        "file": "src/app/(public)/appointments/cancel/[token]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/confirm/:token",
+        "file": "src/app/(public)/appointments/confirm/[token]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/diagnostics/slots",
+        "file": "src/app/api/appointments/diagnostics/slots/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/enterprise",
+        "file": "src/app/(app)/appointments/enterprise/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/integrations",
+        "file": "src/app/(app)/appointments/integrations/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/integrations/status",
+        "file": "src/app/api/appointments/integrations/status/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/locations",
+        "file": "src/app/(app)/appointments/locations/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/meeting-indicators",
+        "file": "src/app/api/appointments/meeting-indicators/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/meeting-polls",
+        "file": "src/app/api/appointments/meeting-polls/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/new",
+        "file": "src/app/(app)/appointments/new/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/no-show-recovery",
+        "file": "src/app/(app)/appointments/no-show-recovery/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/no-show-recovery",
+        "file": "src/app/api/appointments/no-show-recovery/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/org",
+        "file": "src/app/api/appointments/org/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/overview",
+        "file": "src/app/(app)/appointments/overview/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/overview",
+        "file": "src/app/api/appointments/overview/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/polls",
+        "file": "src/app/(app)/appointments/polls/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/recall-campaigns",
+        "file": "src/app/(app)/appointments/recall-campaigns/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/recall-campaigns",
+        "file": "src/app/api/appointments/recall-campaigns/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/recalls",
+        "file": "src/app/(app)/appointments/recalls/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/recalls/hub",
+        "file": "src/app/api/appointments/recalls/hub/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/reminders",
+        "file": "src/app/(app)/appointments/reminders/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/reminders/test",
+        "file": "src/app/api/appointments/reminders/test/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/reminders/track/click",
+        "file": "src/app/api/appointments/reminders/track/click/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/reminders/track/open",
+        "file": "src/app/api/appointments/reminders/track/open/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/reschedule/:token",
+        "file": "src/app/(public)/appointments/reschedule/[token]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/routing",
+        "file": "src/app/(app)/appointments/routing/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/routing-forms",
+        "file": "src/app/(app)/appointments/routing-forms/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/routing-forms",
+        "file": "src/app/api/appointments/routing-forms/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/settings",
+        "file": "src/app/api/appointments/settings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/setup",
+        "file": "src/app/(app)/appointments/setup/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/staff",
+        "file": "src/app/(app)/appointments/staff/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/team-pages",
+        "file": "src/app/(app)/appointments/team-pages/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/team-pages",
+        "file": "src/app/api/appointments/team-pages/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/types",
+        "file": "src/app/(app)/appointments/types/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/types",
+        "file": "src/app/api/appointments/types/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/types/:id",
+        "file": "src/app/api/appointments/types/[id]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/types/bulk",
+        "file": "src/app/api/appointments/types/bulk/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/voice-reminders",
+        "file": "src/app/(app)/appointments/voice-reminders/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/voice-reminders",
+        "file": "src/app/api/appointments/voice-reminders/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/voice-reminders/caller-id",
+        "file": "src/app/api/appointments/voice-reminders/caller-id/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/waitlist",
+        "file": "src/app/(app)/appointments/waitlist/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/waitlist",
+        "file": "src/app/api/appointments/waitlist/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/workflows",
+        "file": "src/app/(app)/appointments/workflows/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows",
+        "file": "src/app/api/appointments/workflows/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows/:id",
+        "file": "src/app/api/appointments/workflows/[id]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/workflows/:id/edit",
+        "file": "src/app/(app)/appointments/workflows/[id]/edit/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows/:id/test",
+        "file": "src/app/api/appointments/workflows/[id]/test/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows/logs",
+        "file": "src/app/api/appointments/workflows/logs/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/workflows/new",
+        "file": "src/app/(app)/appointments/workflows/new/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows/preview",
+        "file": "src/app/api/appointments/workflows/preview/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/appointments/workflows/setup/:templateId",
+        "file": "src/app/(app)/appointments/workflows/setup/[templateId]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/appointments/workflows/unknown-replies",
+        "file": "src/app/api/appointments/workflows/unknown-replies/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/book/:slug",
+        "file": "src/app/(public)/book/[slug]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/book/:slug/:serviceId",
+        "file": "src/app/(public)/book/[slug]/[serviceId]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/book/:slug/reminders",
+        "file": "src/app/(public)/book/[slug]/reminders/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/book/payment/canceled",
+        "file": "src/app/(public)/book/payment/canceled/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/book/payment/success",
+        "file": "src/app/(public)/book/payment/success/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/meetings",
+        "file": "src/app/(app)/meetings/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings",
+        "file": "src/app/api/meetings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/meetings/:id",
+        "file": "src/app/(app)/meetings/[id]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/:id",
+        "file": "src/app/api/meetings/[id]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/:id/recording",
+        "file": "src/app/api/meetings/[id]/recording/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/:id/transcript",
+        "file": "src/app/api/meetings/[id]/transcript/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/enable",
+        "file": "src/app/api/meetings/enable/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/overview",
+        "file": "src/app/api/meetings/overview/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/settings",
+        "file": "src/app/api/meetings/settings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/meetings/standalone",
+        "file": "src/app/api/meetings/standalone/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/recap/:token",
+        "file": "src/app/(public)/recap/[token]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/recap/:token",
+        "file": "src/app/api/recap/[token]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/recap/:token/unlock",
+        "file": "src/app/api/recap/[token]/unlock/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/routing/:slug/:formSlug",
+        "file": "src/app/(public)/routing/[slug]/[formSlug]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/team",
+        "file": "src/app/api/team/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/team/:slug/:pageSlug",
+        "file": "src/app/(public)/team/[slug]/[pageSlug]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/video",
+        "file": "src/app/(app)/video/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/video/:token",
+        "file": "src/app/(public)/video/[token]/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/meetings",
+        "file": "src/app/api/video/meetings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/meetings/:id",
+        "file": "src/app/api/video/meetings/[id]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/meetings/:id/invite",
+        "file": "src/app/api/video/meetings/[id]/invite/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/meetings/:id/join",
+        "file": "src/app/api/video/meetings/[id]/join/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/overview",
+        "file": "src/app/api/video/overview/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token",
+        "file": "src/app/api/video/public/[token]/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/chat",
+        "file": "src/app/api/video/public/[token]/chat/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/connected",
+        "file": "src/app/api/video/public/[token]/connected/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/join",
+        "file": "src/app/api/video/public/[token]/join/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/left",
+        "file": "src/app/api/video/public/[token]/left/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/moderate",
+        "file": "src/app/api/video/public/[token]/moderate/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/public/:token/participants",
+        "file": "src/app/api/video/public/[token]/participants/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/video/rooms/:id/host",
+        "file": "src/app/(app)/video/rooms/[id]/host/page.tsx"
+      },
+      {
+        "product": "appointments",
+        "kind": "api",
+        "path": "/video/settings",
+        "file": "src/app/api/video/settings/route.ts"
+      },
+      {
+        "product": "appointments",
+        "kind": "page",
+        "path": "/waitlist/accept/:token",
+        "file": "src/app/(public)/waitlist/accept/[token]/page.tsx"
+      }
+    ],
+    "mctb": [
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/admin/mctb/:workspaceId",
+        "file": "src/app/api/admin/mctb/[workspaceId]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/analytics/mctb",
+        "file": "src/app/(app)/analytics/mctb/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/f/mctb/:token",
+        "file": "src/app/f/mctb/[token]/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb",
+        "file": "src/app/(app)/mctb/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/admin-test/bootstrap",
+        "file": "src/app/api/mctb/admin-test/bootstrap/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/analytics",
+        "file": "src/app/(app)/mctb/analytics/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/analytics",
+        "file": "src/app/api/mctb/analytics/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/compliance/consent",
+        "file": "src/app/(app)/mctb/compliance/consent/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/consent-log",
+        "file": "src/app/api/mctb/consent-log/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/consent-prompt",
+        "file": "src/app/api/mctb/consent-prompt/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/conversations",
+        "file": "src/app/(app)/mctb/conversations/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/debug/log",
+        "file": "src/app/api/mctb/debug/log/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/exclusions",
+        "file": "src/app/api/mctb/exclusions/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/handoff",
+        "file": "src/app/api/mctb/handoff/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/handoff/actions",
+        "file": "src/app/api/mctb/handoff/actions/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/handoff/context",
+        "file": "src/app/api/mctb/handoff/context/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/live-test",
+        "file": "src/app/api/mctb/live-test/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/missed-calls",
+        "file": "src/app/(app)/mctb/missed-calls/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/missed-calls",
+        "file": "src/app/api/mctb/missed-calls/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/missed-calls/:id",
+        "file": "src/app/(app)/mctb/missed-calls/[id]/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/missed-calls/:id",
+        "file": "src/app/api/mctb/missed-calls/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/numbers",
+        "file": "src/app/(app)/mctb/numbers/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/onboarding",
+        "file": "src/app/api/mctb/onboarding/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/overview",
+        "file": "src/app/api/mctb/overview/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup",
+        "file": "src/app/(app)/mctb/setup/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/setup",
+        "file": "src/app/api/mctb/setup/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/setup-test",
+        "file": "src/app/api/mctb/setup-test/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/consent",
+        "file": "src/app/(app)/mctb/setup/consent/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/exclusions",
+        "file": "src/app/(app)/mctb/setup/exclusions/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/missed-call-rules",
+        "file": "src/app/(app)/mctb/setup/missed-call-rules/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/notifications",
+        "file": "src/app/(app)/mctb/setup/notifications/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/phone",
+        "file": "src/app/(app)/mctb/setup/phone/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/recovery",
+        "file": "src/app/(app)/mctb/setup/recovery/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/start",
+        "file": "src/app/(app)/mctb/setup/start/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/test",
+        "file": "src/app/(app)/mctb/setup/test/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/text-back",
+        "file": "src/app/(app)/mctb/setup/text-back/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/setup/voicemail",
+        "file": "src/app/(app)/mctb/setup/voicemail/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/tfv",
+        "file": "src/app/api/mctb/tfv/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/mctb/try-it",
+        "file": "src/app/api/mctb/try-it/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/mctb/voicemail",
+        "file": "src/app/(app)/mctb/voicemail/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/onboarding/mctb",
+        "file": "src/app/(app)/onboarding/mctb/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/public/mctb-request-form",
+        "file": "src/app/api/public/mctb-request-form/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-call-control",
+        "file": "src/app/api/telnyx/voice/mctb-call-control/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-consent",
+        "file": "src/app/api/telnyx/voice/mctb-consent/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-entry",
+        "file": "src/app/api/telnyx/voice/mctb-entry/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-press-1",
+        "file": "src/app/api/telnyx/voice/mctb-press-1/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-texml-voicemail",
+        "file": "src/app/api/telnyx/voice/mctb-texml-voicemail/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/telnyx/voice/mctb-voicemail",
+        "file": "src/app/api/telnyx/voice/mctb-voicemail/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents",
+        "file": "src/app/(app)/voice/agents/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents",
+        "file": "src/app/api/voice/agents/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id",
+        "file": "src/app/(app)/voice/agents/[id]/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id",
+        "file": "src/app/api/voice/agents/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id/about",
+        "file": "src/app/(app)/voice/agents/[id]/about/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id/advanced",
+        "file": "src/app/(app)/voice/agents/[id]/advanced/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id/capabilities",
+        "file": "src/app/(app)/voice/agents/[id]/capabilities/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/flows",
+        "file": "src/app/api/voice/agents/[id]/flows/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/flows/generate",
+        "file": "src/app/api/voice/agents/[id]/flows/generate/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/flows/optimize",
+        "file": "src/app/api/voice/agents/[id]/flows/optimize/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id/integrations",
+        "file": "src/app/(app)/voice/agents/[id]/integrations/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/knowledge",
+        "file": "src/app/api/voice/agents/[id]/knowledge/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/latency-profile",
+        "file": "src/app/api/voice/agents/[id]/latency-profile/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/test",
+        "file": "src/app/api/voice/agents/[id]/test/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/test-session",
+        "file": "src/app/api/voice/agents/[id]/test-session/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/agents/:id/tools",
+        "file": "src/app/api/voice/agents/[id]/tools/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/:id/voice-test",
+        "file": "src/app/(app)/voice/agents/[id]/voice-test/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/agents/new",
+        "file": "src/app/(app)/voice/agents/new/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/ai",
+        "file": "src/app/api/voice/ai/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/ai-platform",
+        "file": "src/app/(app)/voice/ai-platform/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/analytics",
+        "file": "src/app/(app)/voice/analytics/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/analytics",
+        "file": "src/app/api/voice/analytics/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/analytics/export",
+        "file": "src/app/api/voice/analytics/export/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/billing",
+        "file": "src/app/(app)/voice/billing/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/billing",
+        "file": "src/app/api/voice/billing/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/calendars",
+        "file": "src/app/(app)/voice/calendars/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars",
+        "file": "src/app/api/voice/calendars/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars/availability",
+        "file": "src/app/api/voice/calendars/availability/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars/oauth/google",
+        "file": "src/app/api/voice/calendars/oauth/google/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars/oauth/google/callback",
+        "file": "src/app/api/voice/calendars/oauth/google/callback/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars/oauth/microsoft",
+        "file": "src/app/api/voice/calendars/oauth/microsoft/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calendars/oauth/microsoft/callback",
+        "file": "src/app/api/voice/calendars/oauth/microsoft/callback/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/callback-requests",
+        "file": "src/app/(app)/voice/callback-requests/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/caller-history",
+        "file": "src/app/api/voice/caller-history/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/calls",
+        "file": "src/app/(app)/voice/calls/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calls",
+        "file": "src/app/api/voice/calls/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/calls/:id",
+        "file": "src/app/(app)/voice/calls/[id]/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/calls/:id",
+        "file": "src/app/api/voice/calls/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/campaigns",
+        "file": "src/app/(app)/voice/campaigns/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/campaigns",
+        "file": "src/app/api/voice/campaigns/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/campaigns/:id",
+        "file": "src/app/api/voice/campaigns/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/consent-log",
+        "file": "src/app/(app)/voice/consent-log/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/conversations",
+        "file": "src/app/(app)/voice/conversations/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/conversations",
+        "file": "src/app/api/voice/conversations/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/conversations/:id",
+        "file": "src/app/api/voice/conversations/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/flows/generate",
+        "file": "src/app/api/voice/flows/generate/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/inbound-routing",
+        "file": "src/app/(app)/voice/inbound-routing/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/knowledge",
+        "file": "src/app/(app)/voice/knowledge/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge",
+        "file": "src/app/api/voice/knowledge/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge/:id",
+        "file": "src/app/api/voice/knowledge/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge/:id/search",
+        "file": "src/app/api/voice/knowledge/[id]/search/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge/:id/sources",
+        "file": "src/app/api/voice/knowledge/[id]/sources/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge/:id/sources/:sourceId",
+        "file": "src/app/api/voice/knowledge/[id]/sources/[sourceId]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/knowledge/:id/upload",
+        "file": "src/app/api/voice/knowledge/[id]/upload/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/livekit/readiness",
+        "file": "src/app/api/voice/livekit/readiness/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/missed-calls",
+        "file": "src/app/(app)/voice/missed-calls/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/missed-calls/:id",
+        "file": "src/app/(app)/voice/missed-calls/[id]/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/needs-attention",
+        "file": "src/app/(app)/voice/needs-attention/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/needs-attention",
+        "file": "src/app/api/voice/needs-attention/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/numbers",
+        "file": "src/app/(app)/voice/numbers/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/numbers/buy",
+        "file": "src/app/(app)/voice/numbers/buy/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/outbound/qualification/test",
+        "file": "src/app/api/voice/outbound/qualification/test/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/overview",
+        "file": "src/app/(app)/voice/overview/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/overview",
+        "file": "src/app/api/voice/overview/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/receptionist",
+        "file": "src/app/(app)/voice/receptionist/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/recordings/:id/stream",
+        "file": "src/app/api/voice/recordings/[id]/stream/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/recordings/:id/url",
+        "file": "src/app/api/voice/recordings/[id]/url/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/reports",
+        "file": "src/app/(app)/voice/reports/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/routing",
+        "file": "src/app/api/voice/routing/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/routing/:id",
+        "file": "src/app/api/voice/routing/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/routing/simulate",
+        "file": "src/app/api/voice/routing/simulate/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/schedule",
+        "file": "src/app/(app)/voice/schedule/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/services",
+        "file": "src/app/api/voice/services/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/services/:id",
+        "file": "src/app/api/voice/services/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/settings",
+        "file": "src/app/(app)/voice/settings/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/settings",
+        "file": "src/app/api/voice/settings/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/setup",
+        "file": "src/app/(app)/voice/setup/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/staff",
+        "file": "src/app/api/voice/staff/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/staff/:id",
+        "file": "src/app/api/voice/staff/[id]/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/telnyx-official-baseline",
+        "file": "src/app/api/voice/telnyx-official-baseline/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/templates",
+        "file": "src/app/api/voice/templates/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/templates/test-session",
+        "file": "src/app/api/voice/templates/test-session/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/testing",
+        "file": "src/app/(app)/voice/testing/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/tools",
+        "file": "src/app/(app)/voice/tools/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/tools",
+        "file": "src/app/api/voice/tools/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/tools/:id/test",
+        "file": "src/app/api/voice/tools/[id]/test/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/tools/search-details",
+        "file": "src/app/api/voice/tools/search-details/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/tools/send-resource",
+        "file": "src/app/api/voice/tools/send-resource/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/transcription",
+        "file": "src/app/(app)/voice/transcription/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/try-it",
+        "file": "src/app/(app)/voice/try-it/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/tts-preview",
+        "file": "src/app/api/voice/tts-preview/route.ts"
+      },
+      {
+        "product": "mctb",
+        "kind": "page",
+        "path": "/voice/voicemail",
+        "file": "src/app/(app)/voice/voicemail/page.tsx"
+      },
+      {
+        "product": "mctb",
+        "kind": "api",
+        "path": "/voice/voices",
+        "file": "src/app/api/voice/voices/route.ts"
+      }
+    ],
+    "public": [
+      {
+        "product": "public",
+        "kind": "page",
+        "path": "/embed/book/:slug",
+        "file": "src/app/(public)/embed/book/[slug]/page.tsx"
+      },
+      {
+        "product": "public",
+        "kind": "page",
+        "path": "/embed/f/:slug",
+        "file": "src/app/embed/f/[slug]/page.tsx"
+      },
+      {
+        "product": "public",
+        "kind": "page",
+        "path": "/embed/voice/:agentId",
+        "file": "src/app/embed/voice/[agentId]/page.tsx"
+      },
+      {
+        "product": "public",
+        "kind": "page",
+        "path": "/embed/w/:slug",
+        "file": "src/app/embed/w/[slug]/page.tsx"
+      }
+    ]
+  },
+  "testScripts": [
+    "assign:mctb-571-admin",
+    "audit:livekit-booking-steps",
+    "replay:mctb-consent-texml",
+    "setup:frontdesk-booking-agent",
+    "setup:frontdesk-booking-agent-realtime",
+    "test:ai-transcription",
+    "test:appointments-v1",
+    "test:call-handling-mctb-isolation",
+    "test:john-preprod",
+    "test:mctb-571-admin-workspace-assignment",
+    "test:mctb-571-demo-routing-preserved",
+    "test:mctb-admin-setup",
+    "test:mctb-answer-test-texml",
+    "test:mctb-call-control-handler",
+    "test:mctb-call-event",
+    "test:mctb-consent-log",
+    "test:mctb-demo-call-detect",
+    "test:mctb-demo-session-workspace-isolation",
+    "test:mctb-final-pipeline-contract",
+    "test:mctb-paid-user-hides-try-it-nav",
+    "test:mctb-pipeline-trace",
+    "test:mctb-try-it-existing-consent",
+    "test:mctb-try-it-no-forwarding-required",
+    "test:mctb-try-it-press1",
+    "test:mctb-try-it-ux",
+    "test:mctb-try-it-zero-delay",
+    "test:voice-livekit-booking-orchestration",
+    "ui:appointments-v1-revamp",
+    "verify:mctb-final-pipeline"
+  ]
+}

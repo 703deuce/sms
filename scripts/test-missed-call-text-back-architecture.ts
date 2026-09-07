@@ -173,7 +173,7 @@ const voicePrimary = buildVoiceAgentPrimaryDefinition({
 });
 assert.deepEqual(
   voicePrimary.nodes.map((n) => n.data.blockType),
-  ["inbound_call", "run_voice_agent", "end_automation"],
+  ["inbound_call", "run_voice_agent", "wait_for_call_result", "end_automation"],
 );
 
 assert.ok(types.has("inbound_call"), "catalog includes inbound_call");

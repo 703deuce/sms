@@ -1,0 +1,19 @@
+{
+  "batches": [
+    {
+      "batchId": "AI-TRX-01",
+      "index": 18,
+      "command": "npm run test:ai-transcription",
+      "matrixIds": [
+        "AI-VM-001",
+        "AI-VM-002"
+      ],
+      "status": "FAIL",
+      "exitCode": 1,
+      "timedOut": false,
+      "durationMs": 303,
+      "finishedAt": "2026-09-07T21:19:28.757Z"
+    }
+  ],
+  "updatedAt": "2026-09-07T21:19:28.757Z"
+}
