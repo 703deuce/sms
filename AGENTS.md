@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo — new pages, APIs, backend, lib, jobs. Full text: `docs/TRANSOVO-*.md`. Not optional.
+**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** `.cursor/rules/transovo-mctb-canonical.mdc` + `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 

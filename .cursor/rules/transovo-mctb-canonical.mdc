@@ -1,0 +1,68 @@
+---
+description: MANDATORY — MCTB canonical product map. Read FIRST for any missed-call text-back work.
+alwaysApply: true
+---
+
+# MANDATORY: TRANSOVO MCTB CANONICAL PRODUCT MAP
+
+**Source of truth:** `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md`  
+**Applies with:** All 15 `.cursor/rules/transovo-*.mdc` standards (always).
+
+## When this rule activates
+
+**Before any work** touching Missed Call Text Back — UI, API, `src/lib/mctb/`, `src/lib/agents/missed-call-text-back/`, voice/MCTB routes, consent, SMS recovery, onboarding, setup, analytics, exclusions, or related Prisma models — you **MUST read the full canonical map first**.
+
+Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`, `src/app/api/mctb/**`, `src/app/api/telnyx/voice/mctb*`, `src/lib/mctb/**`, `src/lib/agents/missed-call-text-back/**`, `src/app/f/mctb/**`, `src/app/(app)/onboarding/mctb/**`.
+
+## Hard requirements
+
+1. **Read `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` FIRST** — then apply all Transovo standards guides.
+2. **Screenshots and current UI are evidence only** — not authority for IA, nav, or page placement.
+3. **Preserve runtime** — Audit → Preserve → Extend → Consolidate. Do not rewrite working telephony/SMS/consent pipelines without explicit approval.
+4. **One canonical home** per feature — no duplicate sidebar destinations for setup subsections.
+5. **Mental model:** configure → missed call → eligibility/consent → text-back → reply → follow-up → measure.
+6. **Consent (Guide #8):** No `consent = true` model. `press_1` and `existing_consent` are different provenance paths.
+7. **Three state families:** SENDER / RECIPIENT / MESSAGE — never one collapsed "SMS status."
+8. **Suppressed ≠ Failed** — correct suppression is success.
+9. **Conversations = canonical inbox** (`/inbox` or MCTB-filtered) — one thread UI.
+10. **Eligibility engine** — one deterministic path for all sends; recheck before delivery.
+
+## Canonical nav (locked)
+
+```
+Missed Call Text Back: Home | Missed Calls | Conversations | Analytics
+Configure: Setup | Numbers
+Settings
+```
+
+Try It, Compliance, Exclusions, consent editor, carrier guide, etc. are **contextual** — not permanent primary nav.
+
+## Setup structure (not 11 sidebar items)
+
+Wizard (first-time): Phone → Forwarding → Recovery → Consent → Texting → Test  
+Edit mode sections: Phone & Forwarding | What Counts as Missed | Text Back | Consent | Hours | Follow-up Rules | Links & Request Form | Exclusions | Test & Activate
+
+## Domain objects (use canonical names)
+
+Missed call, Conversation, Consent event, Suppression, Recovery configuration, Business line, Forwarding destination, SMS sender, Exclusion — see full map for homes.
+
+## Status vocabulary (do not invent synonyms)
+
+Recovery: Eligible | Scheduled | Sending | Sent | Delivered | Suppressed | Failed  
+Consent: Captured | Existing permission | Not captured | Opted out | Unknown  
+Sender: Ready | Registration required | Pending | Needs information | Rejected | Suspended  
+Service: Active | Paused | Needs attention | Setup incomplete
+
+## Legacy
+
+- `/voice/setup` — preserve engine, rebuild presentation per map  
+- `/solutions/missed-call-text-back/setup`, `/agents/john` — redirect only  
+- Do not duplicate compliance inside MCTB — link to Business texting / shared compliance  
+
+## Kimi
+
+Pass full canonical map + Transovo standards. Screenshots = reference only. Do not "make prettier" without IA reorganization per map.
+
+## Governing sentence
+
+Rebuild MCTB as one coherent domain. Daily ops (Missed Calls, Conversations) get highest nav prominence. Configuration under Setup. Every feature one canonical home. Every state one runtime source. Centralized eligibility. No duplicate architecture from legacy routes or screenshots.

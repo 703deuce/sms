@@ -11,17 +11,23 @@ alwaysApply: true
 
 ## Hard requirement
 
-Auth flows, session UI, permission gates, and sensitive actions **MUST** follow this guide. Read before touching login, settings security, or role-based UI.
+Auth flows, session handling, permission checks, API routes, and sensitive actions **MUST** follow this guide. Read before touching login, settings security, middleware, or role-based UI **or** server handlers.
 
 ## Non-negotiables
 
-- **Server enforces authorization** — UI hiding is not security.
+### Always (UI + backend)
+- **Server enforces authorization** — UI hiding is not security. Every `src/app/api/**` route must verify workspace/session/role.
 - Sensitive actions require **appropriate confirmation** and audit trail where specified.
 - Session expiry, re-auth, and lockout UX follow guide — no cryptic errors.
-- **Never expose** secrets, tokens, or internal IDs in UI copy unnecessarily.
+- **Never expose** secrets, tokens, or internal IDs in UI copy or API responses unnecessarily.
 - Permission-denied states explain **what's missing**, not generic "Error".
-- 2FA/MFA flows preserve context; recovery paths are documented in guide.
+- 2FA/MFA flows preserve context; recovery paths are documented in full doc.
 - Admin/impersonation flows (if any) follow elevated-auth patterns in full doc.
+
+### API / lib
+- **Tenant isolation** — workspaceId scoping on every query and mutation.
+- No auth bypass in dev paths shipped to production.
+- Rate-limit and validate auth on webhooks per guide.
 
 ## On conflict
 
