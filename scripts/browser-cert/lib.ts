@@ -422,7 +422,7 @@ export function generateResultsMarkdown(state: BrowserCertState): string {
     "# Appointments + MCTB Browser Certification Results",
     "",
     `**Updated:** ${state.updatedAt}`,
-    `**Base URL:** ${state.baseUrl}`,
+    `**Base URL:** \`scripts/browser-cert/browser-cert.config.ts\` → previewBaseUrl`,
     `**Provenance:** git \`${state.provenance?.gitCommitSha ?? "?"}\` · deploy \`${state.provenance?.deployCommitSha ?? "?"}\``,
     "",
     `**State file:** \`docs/certification/appointments-mctb-browser-cert-state.json\``,

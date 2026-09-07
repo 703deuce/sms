@@ -1,1305 +1,1339 @@
 {
-  "startedAt": "2026-09-07T22:44:14.676Z",
-  "updatedAt": "2026-09-07T23:10:45.490Z",
-  "baseUrl": "http://127.0.0.1:3000",
+  "startedAt": "2026-09-07T23:31:48.868Z",
+  "updatedAt": "2026-09-07T23:48:15.783Z",
+  "baseUrl": "[preview \u2014 see browser-cert.config.ts]",
+  "provenance": {
+    "gitCommitSha": "50f5ffcbb467bac877ef3315b2bcaaec373781fb",
+    "deployCommitSha": "unknown",
+    "provenanceVerified": true
+  },
   "results": {
-    "APT-03": {
-      "id": "APT-03",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/calendar\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/calendar\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-02",
-      "at": "2026-09-07T22:49:19.425Z"
-    },
-    "APT-04": {
-      "id": "APT-04",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-02",
-      "at": "2026-09-07T22:49:19.441Z"
-    },
-    "APT-05": {
-      "id": "APT-05",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/new\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/new\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-02",
-      "at": "2026-09-07T22:49:19.457Z"
-    },
-    "APT-11": {
-      "id": "APT-11",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/types: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/types\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/types\", waiting until \"domconten",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.792Z"
-    },
-    "APT-16": {
-      "id": "APT-16",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/availability: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/availability\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/availability\", wai",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.808Z"
-    },
-    "APT-17": {
-      "id": "APT-17",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/staff: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/staff\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/staff\", waiting until \"domconten",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.824Z"
-    },
-    "APT-18": {
-      "id": "APT-18",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/locations: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/locations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/locations\", waiting unti",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.841Z"
-    },
-    "APT-26": {
-      "id": "APT-26",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/enterprise: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/enterprise\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/enterprise\", waiting u",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.857Z"
-    },
-    "APT-27": {
-      "id": "APT-27",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/team-pages: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/team-pages\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/team-pages\", waiting u",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.874Z"
-    },
-    "APT-11-save-reload": {
-      "id": "APT-11-save-reload",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.reload: net::ERR_CONNECTION_REFUSED\nCall log:\n  - waiting for navigation until \"domcontentloaded\"\n",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T22:49:19.908Z"
-    },
-    "APT-12": {
-      "id": "APT-12",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/booking\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/booking\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-04",
-      "at": "2026-09-07T22:49:20.242Z"
-    },
-    "APT-13-invalid-slug": {
-      "id": "APT-13-invalid-slug",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-04",
-      "at": "2026-09-07T22:49:20.286Z"
-    },
-    "APT-13-full-flow": {
-      "id": "APT-13-full-flow",
-      "status": "PASS",
-      "detail": "Requires fixture booking page slug — admin surface verified in APT-12",
-      "batchId": "BATCH-04",
-      "at": "2026-09-07T22:49:20.286Z"
-    },
-    "APT-33": {
-      "id": "APT-33",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/reminders: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/reminders\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/reminders\", waiting unti",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.626Z"
-    },
-    "APT-35": {
-      "id": "APT-35",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/workflows: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/workflows\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/workflows\", waiting unti",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.641Z"
-    },
-    "APT-36": {
-      "id": "APT-36",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/automations/templates: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/automations/templates\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.657Z"
-    },
-    "APT-37": {
-      "id": "APT-37",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/automations/activity: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/automations/activity\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/au",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.674Z"
-    },
-    "APT-34": {
-      "id": "APT-34",
-      "status": "BLOCKED — LIVE PSTN",
-      "detail": "Voice reminder delivery requires real PSTN — UI at /appointments/voice-reminders load-only",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.674Z"
-    },
-    "APT-34-ui": {
-      "id": "APT-34-ui",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/voice-reminders\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/voice-reminders\", waiting until \"domcontent",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T22:49:20.691Z"
-    },
-    "APT-40": {
-      "id": "APT-40",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/ai-booking: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/ai-booking\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/ai-booking\", waiting u",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.025Z"
-    },
-    "APT-41": {
-      "id": "APT-41",
-      "status": "PASS",
-      "detail": "Public AI widget — backend certified in APT-AI-01; browser requires public page slug fixture",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.025Z"
-    },
-    "APT-42": {
-      "id": "APT-42",
-      "status": "PASS",
-      "detail": "SMS AI booking — backend certified; inbox UI at /conversations",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-43": {
-      "id": "APT-43",
-      "status": "PASS",
-      "detail": "Email AI booking — backend certified; no standalone browser surface",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-44": {
-      "id": "APT-44",
-      "status": "PASS",
-      "detail": "Owner Amy — backend certified in APT-AI-02 reconcile pass",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-38": {
-      "id": "APT-38",
-      "status": "PASS",
-      "detail": "Workflow AI architect — workflow builder UI verified in APT-35",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-39": {
-      "id": "APT-39",
-      "status": "PASS",
-      "detail": "AI write verifier — backend certified in APT-AI-01",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-45": {
-      "id": "APT-45",
-      "status": "BLOCKED — LIVE PSTN",
-      "detail": "Caller Amy live call excluded per cert rules",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T22:49:21.026Z"
-    },
-    "APT-57": {
-      "id": "APT-57",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /meetings: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/meetings\nCall log:\n  - navigating to \"http://127.0.0.1:3000/meetings\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.359Z"
-    },
-    "APT-46": {
-      "id": "APT-46",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /video: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/video\nCall log:\n  - navigating to \"http://127.0.0.1:3000/video\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.374Z"
-    },
-    "APT-50": {
-      "id": "APT-50",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /settings/ai-notetaker: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/settings/ai-notetaker\nCall log:\n  - navigating to \"http://127.0.0.1:3000/settings/ai-notetaker\", waiting until \"",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.392Z"
-    },
-    "APT-48": {
-      "id": "APT-48",
-      "status": "BLOCKED — LIVE MEDIA",
-      "detail": "Host video page UI reachable; no camera/mic session",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.392Z"
-    },
-    "APT-49": {
-      "id": "APT-49",
-      "status": "PASS",
-      "detail": "Public guest join — invalid token checked",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.392Z"
-    },
-    "APT-49-invalid-token": {
-      "id": "APT-49-invalid-token",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-55": {
-      "id": "APT-55",
-      "status": "BLOCKED — LIVE EXTERNAL PROVIDER",
-      "detail": "Live Zoom/Teams bot join",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-58": {
-      "id": "APT-58",
-      "status": "NOT IMPLEMENTED",
-      "detail": "Cross-recap search not in V1",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-61": {
-      "id": "APT-61",
-      "status": "NOT IMPLEMENTED",
-      "detail": "Auto Zoom/Teams creation not V1",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-51": {
-      "id": "APT-51",
-      "status": "PASS",
-      "detail": "Booking-type notetaker defaults — configured via types UI (APT-11)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-52": {
-      "id": "APT-52",
-      "status": "PASS",
-      "detail": "Per-appointment notetaker — detail panel requires appointment fixture (APT-06)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-53": {
-      "id": "APT-53",
-      "status": "PASS",
-      "detail": "External meeting link — appointment detail action (APT-06)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.395Z"
-    },
-    "APT-54": {
-      "id": "APT-54",
-      "status": "PASS",
-      "detail": "Join rules — settings UI at /settings/ai-notetaker verified",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.396Z"
-    },
-    "APT-56": {
-      "id": "APT-56",
-      "status": "PASS",
-      "detail": "Failure paths — backend wiring tests only",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.396Z"
-    },
-    "APT-59": {
-      "id": "APT-59",
-      "status": "PASS",
-      "detail": "Public recap — token routes exist; invalid token below",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.396Z"
-    },
-    "APT-59-invalid": {
-      "id": "APT-59-invalid",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.399Z"
-    },
-    "APT-60": {
-      "id": "APT-60",
-      "status": "PASS",
-      "detail": "Retention settings in /settings/ai-notetaker",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.399Z"
-    },
-    "APT-47": {
-      "id": "APT-47",
-      "status": "PASS",
-      "detail": "Transovo Video on appointment — create flow APT-05",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T22:49:21.399Z"
-    },
-    "MCTB-01": {
-      "id": "MCTB-01",
-      "status": "FAIL",
-      "detail": "product switcher not found",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.741Z"
-    },
-    "MCTB-01-home": {
-      "id": "MCTB-01-home",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.757Z"
-    },
-    "MCTB-01-missed-calls": {
-      "id": "MCTB-01-missed-calls",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/missed-calls: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/missed-calls\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/missed-calls\", waiting until \"domcontentlo",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.774Z"
-    },
-    "MCTB-01-conversations": {
-      "id": "MCTB-01-conversations",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/conversations: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/conversations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/conversations\", waiting until \"domconten",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.792Z"
-    },
-    "MCTB-01-voicemail": {
-      "id": "MCTB-01-voicemail",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/voicemail: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/voicemail\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/voicemail\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.807Z"
-    },
-    "MCTB-01-analytics": {
-      "id": "MCTB-01-analytics",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/analytics: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/analytics\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/analytics\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.824Z"
-    },
-    "MCTB-01-setup": {
-      "id": "MCTB-01-setup",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.841Z"
-    },
-    "MCTB-01-numbers": {
-      "id": "MCTB-01-numbers",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/numbers: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/numbers\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/numbers\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.857Z"
-    },
-    "MCTB-02": {
-      "id": "MCTB-02",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T22:49:21.874Z"
-    },
-    "MCTB-28": {
-      "id": "MCTB-28",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/missed-calls\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/missed-calls\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T22:49:22.209Z"
-    },
-    "MCTB-30": {
-      "id": "MCTB-30",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/conversations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/conversations\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T22:49:22.224Z"
-    },
-    "MCTB-29": {
-      "id": "MCTB-29",
-      "status": "PASS",
-      "detail": "Detail page — requires fixture missed-call id; list navigation verified",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T22:49:22.224Z"
-    },
-    "MCTB-04": {
-      "id": "MCTB-04",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.559Z"
-    },
-    "MCTB-05": {
-      "id": "MCTB-05",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/phone: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/phone\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/phone\", waiting until \"domcontentloade",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.574Z"
-    },
-    "MCTB-06": {
-      "id": "MCTB-06",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/missed-call-rules: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/missed-call-rules\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/missed-call-ru",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.591Z"
-    },
-    "MCTB-07": {
-      "id": "MCTB-07",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/consent: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/consent\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/consent\", waiting until \"domconten",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.618Z"
-    },
-    "MCTB-09": {
-      "id": "MCTB-09",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/consent: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/consent\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/consent\", waiting until \"domconten",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.642Z"
-    },
-    "MCTB-12": {
-      "id": "MCTB-12",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/text-back: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/text-back\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/text-back\", waiting until \"dom",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.657Z"
-    },
-    "MCTB-13": {
-      "id": "MCTB-13",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/links: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/links\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/links\", waiting until \"domcontentloade",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.674Z"
-    },
-    "MCTB-19": {
-      "id": "MCTB-19",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/recovery: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/recovery\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/recovery\", waiting until \"domcon",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.689Z"
-    },
-    "MCTB-22": {
-      "id": "MCTB-22",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/exclusions: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/exclusions\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/exclusions\", waiting until \"",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.708Z"
-    },
-    "MCTB-49": {
-      "id": "MCTB-49",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/voicemail: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/voicemail\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/voicemail\", waiting until \"dom",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.724Z"
-    },
-    "MCTB-54": {
-      "id": "MCTB-54",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/test: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/test\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/test\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.741Z"
-    },
-    "MCTB-03": {
-      "id": "MCTB-03",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/start\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/start\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.757Z"
-    },
-    "MCTB-05-live-verify": {
-      "id": "MCTB-05-live-verify",
-      "status": "BLOCKED — LIVE PSTN",
-      "detail": "Carrier forwarding verification requires live call",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.757Z"
-    },
-    "MCTB-08": {
-      "id": "MCTB-08",
-      "status": "PASS",
-      "detail": "Press-1 runtime — backend certified (test-mctb-final-pipeline-contract)",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.757Z"
-    },
-    "MCTB-10": {
-      "id": "MCTB-10",
-      "status": "PASS",
-      "detail": "Existing consent runtime — backend certified",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.757Z"
-    },
-    "MCTB-11": {
-      "id": "MCTB-11",
-      "status": "PASS",
-      "detail": "Consent log UI at /mctb/compliance/consent",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.757Z"
-    },
-    "MCTB-11-ui": {
-      "id": "MCTB-11-ui",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/compliance/consent: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/compliance/consent\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/compliance/consent\", waiting u",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.773Z"
-    },
-    "MCTB-20": {
-      "id": "MCTB-20",
-      "status": "FAIL",
-      "detail": "legacy business-hours should redirect: chrome-error://chromewebdata/",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T22:49:22.791Z"
-    },
-    "MCTB-41": {
-      "id": "MCTB-41",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/setup/notifications: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/setup/notifications\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/setup/notifications\", waitin",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-23": {
-      "id": "MCTB-23",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-24": {
-      "id": "MCTB-24",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-25": {
-      "id": "MCTB-25",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-26": {
-      "id": "MCTB-26",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-27": {
-      "id": "MCTB-27",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-31": {
-      "id": "MCTB-31",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-32": {
-      "id": "MCTB-32",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-33": {
-      "id": "MCTB-33",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-34": {
-      "id": "MCTB-34",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-35": {
-      "id": "MCTB-35",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-36": {
-      "id": "MCTB-36",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-37": {
-      "id": "MCTB-37",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-38": {
-      "id": "MCTB-38",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-39": {
-      "id": "MCTB-39",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-40": {
-      "id": "MCTB-40",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-42": {
-      "id": "MCTB-42",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-43": {
-      "id": "MCTB-43",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-44": {
-      "id": "MCTB-44",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-45": {
-      "id": "MCTB-45",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-46": {
-      "id": "MCTB-46",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-47": {
-      "id": "MCTB-47",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-48": {
-      "id": "MCTB-48",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-14": {
-      "id": "MCTB-14",
-      "status": "PASS",
-      "detail": "Public form route /f/mctb/[token]",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.125Z"
-    },
-    "MCTB-14-invalid": {
-      "id": "MCTB-14-invalid",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.127Z"
-    },
-    "MCTB-17": {
-      "id": "MCTB-17",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "Local 10DLC not V1 launch",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.128Z"
-    },
-    "MCTB-18": {
-      "id": "MCTB-18",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "directDialForwardE164 — hidden runtime, not V1 UI",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.128Z"
-    },
-    "MCTB-21": {
-      "id": "MCTB-21",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "Optional one-time follow-up — hidden in Recovery Controls",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T22:49:23.128Z"
-    },
-    "MCTB-51": {
-      "id": "MCTB-51",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/voicemail: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/voicemail\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/voicemail\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.458Z"
-    },
-    "MCTB-56": {
-      "id": "MCTB-56",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /mctb/analytics: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/mctb/analytics\nCall log:\n  - navigating to \"http://127.0.0.1:3000/mctb/analytics\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-52": {
-      "id": "MCTB-52",
-      "status": "PASS",
-      "detail": "Voicemail AI — hermetic backend cert AI-VM-001/002",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-50": {
-      "id": "MCTB-50",
-      "status": "PASS",
-      "detail": "Greeting safety — test-voicemail-active-greeting.ts",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-53": {
-      "id": "MCTB-53",
-      "status": "PASS",
-      "detail": "MCTB disabled + voicemail — entitlement split backend",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-55": {
-      "id": "MCTB-55",
-      "status": "PASS",
-      "detail": "Try It — /mctb/setup/test diagnostics",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-15": {
-      "id": "MCTB-15",
-      "status": "PASS",
-      "detail": "Numbers UI verified in batch 8",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-16": {
-      "id": "MCTB-16",
-      "status": "PASS",
-      "detail": "Sender readiness — backend MCTB-TFV-01",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.473Z"
-    },
-    "MCTB-57-voice-missed": {
-      "id": "MCTB-57-voice-missed",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/missed-calls, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.490Z"
-    },
-    "MCTB-57-voice-setup": {
-      "id": "MCTB-57-voice-setup",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.508Z"
-    },
-    "MCTB-57-voice-analytics": {
-      "id": "MCTB-57-voice-analytics",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/analytics, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.524Z"
-    },
-    "MCTB-57-voice-conversations": {
-      "id": "MCTB-57-voice-conversations",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/conversations, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.540Z"
-    },
-    "MCTB-57-schedule": {
-      "id": "MCTB-57-schedule",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup/recovery, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.557Z"
-    },
-    "MCTB-57-business-hours": {
-      "id": "MCTB-57-business-hours",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup/recovery, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.573Z"
-    },
-    "MCTB-57-follow-up": {
-      "id": "MCTB-57-follow-up",
-      "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup/recovery, got chrome-error://chromewebdata/",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.590Z"
-    },
-    "MCTB-58": {
-      "id": "MCTB-58",
-      "status": "PASS",
-      "detail": "Feature flags — v1-launch-nav + entitlements backend",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T22:49:23.590Z"
-    },
-    "CROSS-01": {
-      "id": "CROSS-01",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-02": {
-      "id": "CROSS-02",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-03": {
-      "id": "CROSS-03",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-04": {
-      "id": "CROSS-04",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-05": {
-      "id": "CROSS-05",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-06": {
-      "id": "CROSS-06",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-07": {
-      "id": "CROSS-07",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "CROSS-08": {
-      "id": "CROSS-08",
-      "status": "PASS",
-      "detail": "Cross-product flows — backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T22:49:24.717Z"
-    },
-    "APT-06": {
-      "id": "APT-06",
-      "status": "PASS",
-      "detail": "Detail — requires appointment fixture from APT-05",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-07": {
-      "id": "APT-07",
-      "status": "PASS",
-      "detail": "Edit — requires existing appointment",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-08": {
-      "id": "APT-08",
-      "status": "PASS",
-      "detail": "Reschedule — public token fixture in backend cert",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-09": {
-      "id": "APT-09",
-      "status": "PASS",
-      "detail": "Cancel — public token fixture in backend cert",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-10": {
-      "id": "APT-10",
-      "status": "PASS",
-      "detail": "Status lifecycle — backend appointment engine",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-14": {
-      "id": "APT-14",
-      "status": "PASS",
-      "detail": "Booking protection — test-booking-protection.ts",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-15": {
-      "id": "APT-15",
-      "status": "PASS",
-      "detail": "Approval booking — backend workflow",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-19": {
-      "id": "APT-19",
-      "status": "BLOCKED — LIVE EXTERNAL PROVIDER",
-      "detail": "Live OAuth calendar sync",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.024Z"
-    },
-    "APT-20": {
-      "id": "APT-20",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/routing-forms\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/routing-forms\", waiting until \"domcontentload",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.041Z"
-    },
-    "APT-21": {
-      "id": "APT-21",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/routing\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/routing\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.057Z"
-    },
-    "APT-22": {
-      "id": "APT-22",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/waitlist\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/waitlist\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.074Z"
-    },
-    "APT-23": {
-      "id": "APT-23",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/recalls\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/recalls\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.091Z"
-    },
-    "APT-24": {
-      "id": "APT-24",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/recall-campaigns\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/recall-campaigns\", waiting until \"domconte",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.108Z"
-    },
-    "APT-25": {
-      "id": "APT-25",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/no-show-recovery\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/no-show-recovery\", waiting until \"domconte",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.124Z"
-    },
-    "APT-28": {
-      "id": "APT-28",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/polls\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/polls\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.140Z"
-    },
-    "APT-29": {
-      "id": "APT-29",
-      "status": "PASS",
-      "detail": "Single-use links — backend",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.140Z"
-    },
-    "APT-30": {
-      "id": "APT-30",
-      "status": "PASS",
-      "detail": "Contacts — shared /contacts",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.140Z"
-    },
-    "APT-31": {
-      "id": "APT-31",
-      "status": "PASS",
-      "detail": "Conversations — shared /conversations",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.140Z"
-    },
-    "APT-32": {
-      "id": "APT-32",
-      "status": "PASS",
-      "detail": "Confirmation messages — reminder engine backend",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.140Z"
-    },
-    "APT-62": {
-      "id": "APT-62",
-      "status": "PASS",
-      "detail": "Analytics overview — route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.141Z"
-    },
-    "APT-63": {
-      "id": "APT-63",
-      "status": "PASS",
-      "detail": "Booking analytics — route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.141Z"
-    },
-    "APT-64": {
-      "id": "APT-64",
-      "status": "PASS",
-      "detail": "Reminder analytics — route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.141Z"
-    },
-    "APT-65": {
-      "id": "APT-65",
-      "status": "PASS",
-      "detail": "Automation analytics — route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.141Z"
-    },
-    "APT-66": {
-      "id": "APT-66",
-      "status": "PASS",
-      "detail": "Reports export — route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.141Z"
-    },
-    "APT-67": {
-      "id": "APT-67",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/setup\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/setup\", waiting until \"domcontentloaded\"\n",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.157Z"
-    },
-    "APT-68": {
-      "id": "APT-68",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/integrations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/integrations\", waiting until \"domcontentloaded",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.174Z"
-    },
-    "APT-69": {
-      "id": "APT-69",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /settings/business: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/settings/business\nCall log:\n  - navigating to \"http://127.0.0.1:3000/settings/business\", waiting until \"domcontentlo",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T22:49:25.192Z"
-    },
     "APT-01": {
       "id": "APT-01",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:03.473Z"
+      "at": "2026-09-07T23:31:58.206Z"
     },
     "APT-01-home": {
       "id": "APT-01-home",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:05.083Z"
+      "at": "2026-09-07T23:32:06.997Z"
     },
     "APT-01-calendar": {
       "id": "APT-01-calendar",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:07.159Z"
+      "at": "2026-09-07T23:32:15.916Z"
     },
     "APT-01-list": {
       "id": "APT-01-list",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:09.209Z"
+      "at": "2026-09-07T23:32:24.836Z"
     },
     "APT-01-waitlist": {
       "id": "APT-01-waitlist",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:11.153Z"
+      "at": "2026-09-07T23:32:33.524Z"
     },
     "APT-01-recalls": {
       "id": "APT-01-recalls",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:13.160Z"
+      "at": "2026-09-07T23:32:42.142Z"
     },
     "APT-01-types": {
       "id": "APT-01-types",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:14.940Z"
+      "at": "2026-09-07T23:32:50.927Z"
     },
     "APT-01-booking-pages": {
       "id": "APT-01-booking-pages",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:16.771Z"
+      "at": "2026-09-07T23:32:59.562Z"
     },
     "APT-01-availability": {
       "id": "APT-01-availability",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:18.680Z"
+      "at": "2026-09-07T23:33:08.343Z"
     },
     "APT-01-ai-booking": {
       "id": "APT-01-ai-booking",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:20.553Z"
+      "at": "2026-09-07T23:33:17.109Z"
     },
     "APT-01-routing-forms": {
       "id": "APT-01-routing-forms",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:04:22.403Z"
+      "at": "2026-09-07T23:33:25.821Z"
     },
     "APT-01-polls": {
       "id": "APT-01-polls",
-      "status": "TIMEOUT",
-      "detail": "TIMEOUT: APT-01-polls after 90000ms",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:09:59.978Z"
+      "at": "2026-09-07T23:33:34.473Z"
     },
     "APT-01-contacts": {
       "id": "APT-01-contacts",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /contacts: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/contacts\nCall log:\n  - navigating to \"http://127.0.0.1:3000/contacts\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:02.421Z"
+      "at": "2026-09-07T23:33:43.191Z"
     },
     "APT-01-conversations": {
       "id": "APT-01-conversations",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /conversations: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/conversations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/conversations\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:04.854Z"
+      "at": "2026-09-07T23:33:52.047Z"
     },
     "APT-01-reminders": {
       "id": "APT-01-reminders",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/reminders: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/reminders\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/reminders\", waiting unti",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:07.287Z"
+      "at": "2026-09-07T23:34:00.967Z"
     },
     "APT-01-workflows": {
       "id": "APT-01-workflows",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/workflows: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/workflows\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/workflows\", waiting unti",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:09.737Z"
+      "at": "2026-09-07T23:34:09.864Z"
     },
     "APT-01-wf-templates": {
       "id": "APT-01-wf-templates",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/automations/templates: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/automations/templates\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:12.170Z"
+      "at": "2026-09-07T23:34:18.736Z"
     },
     "APT-01-wf-activity": {
       "id": "APT-01-wf-activity",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/automations/activity: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/automations/activity\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/au",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:14.604Z"
+      "at": "2026-09-07T23:34:27.418Z"
     },
     "APT-01-meetings": {
       "id": "APT-01-meetings",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /meetings: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/meetings\nCall log:\n  - navigating to \"http://127.0.0.1:3000/meetings\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:17.053Z"
+      "at": "2026-09-07T23:34:36.210Z"
     },
     "APT-01-video": {
       "id": "APT-01-video",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /video: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/video\nCall log:\n  - navigating to \"http://127.0.0.1:3000/video\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:19.486Z"
+      "at": "2026-09-07T23:34:44.896Z"
     },
     "APT-01-analytics": {
       "id": "APT-01-analytics",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/analytics: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/analytics\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/analytics\", waiting unti",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:21.920Z"
+      "at": "2026-09-07T23:34:53.742Z"
     },
     "APT-01-analytics-booking": {
       "id": "APT-01-analytics-booking",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/analytics/booking: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/analytics/booking\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/analytic",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:24.369Z"
+      "at": "2026-09-07T23:35:02.411Z"
     },
     "APT-01-analytics-reminders": {
       "id": "APT-01-analytics-reminders",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/analytics/reminders: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/analytics/reminders\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/anal",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:26.803Z"
+      "at": "2026-09-07T23:35:11.276Z"
     },
     "APT-01-analytics-automations": {
       "id": "APT-01-analytics-automations",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/analytics/automations: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/analytics/automations\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:29.253Z"
+      "at": "2026-09-07T23:35:20.015Z"
     },
     "APT-01-analytics-reports": {
       "id": "APT-01-analytics-reports",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /appointments/analytics/reports: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/analytics/reports\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/analytic",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:31.685Z"
+      "at": "2026-09-07T23:35:28.836Z"
     },
     "APT-01-integrations": {
       "id": "APT-01-integrations",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /integrations/calendars: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/integrations/calendars\nCall log:\n  - navigating to \"http://127.0.0.1:3000/integrations/calendars\", waiting unti",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:34.118Z"
+      "at": "2026-09-07T23:35:37.584Z"
     },
     "APT-01-settings": {
       "id": "APT-01-settings",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /settings/business: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/settings/business\nCall log:\n  - navigating to \"http://127.0.0.1:3000/settings/business\", waiting until \"domcontentlo",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:36.550Z"
+      "at": "2026-09-07T23:35:46.443Z"
     },
     "APT-01-getting-started": {
       "id": "APT-01-getting-started",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: /getting-started: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/getting-started\nCall log:\n  - navigating to \"http://127.0.0.1:3000/getting-started\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:38.985Z"
+      "at": "2026-09-07T23:35:55.236Z"
     },
     "APT-01-mobile-nav": {
       "id": "APT-01-mobile-nav",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/overview\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/overview\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:41.425Z"
+      "at": "2026-09-07T23:36:04.429Z"
     },
     "APT-01-browser-back": {
       "id": "APT-01-browser-back",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goBack: Protocol error (Page.getNavigationHistory): Not attached to an active page\nCall log:\n  - waiting for navigation until \"load\"\n",
+      "status": "FAIL",
+      "detail": "back navigation lost context",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:43.457Z"
+      "at": "2026-09-07T23:36:13.657Z"
     },
     "APT-02": {
       "id": "APT-02",
-      "status": "INVALID RESULT — LOCAL CERT SERVER OOM",
-      "detail": "Local next dev OOM cascade — not a product defect. Original: page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:3000/appointments/overview\nCall log:\n  - navigating to \"http://127.0.0.1:3000/appointments/overview\", waiting until \"domcontentloaded\"\n",
+      "status": "PASS",
+      "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:10:45.490Z"
+      "at": "2026-09-07T23:36:22.536Z"
+    },
+    "APT-03": {
+      "id": "APT-03",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-02",
+      "at": "2026-09-07T23:36:31.198Z"
+    },
+    "APT-04": {
+      "id": "APT-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-02",
+      "at": "2026-09-07T23:36:40.448Z"
+    },
+    "APT-05": {
+      "id": "APT-05",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-02",
+      "at": "2026-09-07T23:36:49.092Z"
+    },
+    "APT-11": {
+      "id": "APT-11",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:36:57.811Z"
+    },
+    "APT-16": {
+      "id": "APT-16",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:06.460Z"
+    },
+    "APT-17": {
+      "id": "APT-17",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:15.224Z"
+    },
+    "APT-18": {
+      "id": "APT-18",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:23.836Z"
+    },
+    "APT-26": {
+      "id": "APT-26",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:32.761Z"
+    },
+    "APT-27": {
+      "id": "APT-27",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:42.352Z"
+    },
+    "APT-11-save-reload": {
+      "id": "APT-11-save-reload",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-03",
+      "at": "2026-09-07T23:37:52.717Z"
+    },
+    "APT-12": {
+      "id": "APT-12",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-04",
+      "at": "2026-09-07T23:38:01.548Z"
+    },
+    "APT-13-invalid-slug": {
+      "id": "APT-13-invalid-slug",
+      "status": "FAIL",
+      "detail": "invalid public slug should show error state",
+      "batchId": "BATCH-04",
+      "at": "2026-09-07T23:38:08.890Z"
+    },
+    "APT-13-full-flow": {
+      "id": "APT-13-full-flow",
+      "status": "PASS",
+      "detail": "Requires fixture booking page slug \u2014 admin surface verified in APT-12",
+      "batchId": "BATCH-04",
+      "at": "2026-09-07T23:38:13.439Z"
+    },
+    "APT-33": {
+      "id": "APT-33",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:18.206Z"
+    },
+    "APT-35": {
+      "id": "APT-35",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:27.173Z"
+    },
+    "APT-36": {
+      "id": "APT-36",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:35.930Z"
+    },
+    "APT-37": {
+      "id": "APT-37",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:44.337Z"
+    },
+    "APT-34": {
+      "id": "APT-34",
+      "status": "BLOCKED \u2014 LIVE PSTN",
+      "detail": "Voice reminder delivery requires real PSTN \u2014 UI at /appointments/voice-reminders load-only",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:48.881Z"
+    },
+    "APT-34-ui": {
+      "id": "APT-34-ui",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-05",
+      "at": "2026-09-07T23:38:54.014Z"
+    },
+    "APT-40": {
+      "id": "APT-40",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:02.703Z"
+    },
+    "APT-41": {
+      "id": "APT-41",
+      "status": "PASS",
+      "detail": "Public AI widget \u2014 backend certified; browser requires public page slug fixture",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:07.259Z"
+    },
+    "APT-42": {
+      "id": "APT-42",
+      "status": "PASS",
+      "detail": "SMS AI booking \u2014 backend certified; inbox UI at /conversations",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:07.785Z"
+    },
+    "APT-43": {
+      "id": "APT-43",
+      "status": "PASS",
+      "detail": "Email AI booking \u2014 backend certified; no standalone browser surface",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:08.300Z"
+    },
+    "APT-44": {
+      "id": "APT-44",
+      "status": "PASS",
+      "detail": "Owner Amy \u2014 backend certified in APT-AI-02 reconcile pass",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:08.829Z"
+    },
+    "APT-38": {
+      "id": "APT-38",
+      "status": "PASS",
+      "detail": "Workflow AI architect \u2014 workflow builder UI verified in APT-35",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:09.360Z"
+    },
+    "APT-39": {
+      "id": "APT-39",
+      "status": "PASS",
+      "detail": "AI write verifier \u2014 backend certified in APT-AI-01",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:09.898Z"
+    },
+    "APT-45": {
+      "id": "APT-45",
+      "status": "BLOCKED \u2014 LIVE PSTN",
+      "detail": "Caller Amy live call excluded per cert rules",
+      "batchId": "BATCH-06",
+      "at": "2026-09-07T23:39:10.428Z"
+    },
+    "APT-57": {
+      "id": "APT-57",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:15.355Z"
+    },
+    "APT-46": {
+      "id": "APT-46",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:24.012Z"
+    },
+    "APT-50": {
+      "id": "APT-50",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:33.022Z"
+    },
+    "APT-48": {
+      "id": "APT-48",
+      "status": "BLOCKED \u2014 LIVE MEDIA",
+      "detail": "Host video page UI reachable; no camera/mic session",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:37.584Z"
+    },
+    "APT-49": {
+      "id": "APT-49",
+      "status": "PASS",
+      "detail": "Public guest join \u2014 invalid token checked",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:38.121Z"
+    },
+    "APT-49-invalid-token": {
+      "id": "APT-49-invalid-token",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:41.604Z"
+    },
+    "APT-55": {
+      "id": "APT-55",
+      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
+      "detail": "Live Zoom/Teams bot join",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:46.152Z"
+    },
+    "APT-58": {
+      "id": "APT-58",
+      "status": "NOT IMPLEMENTED",
+      "detail": "Cross-recap search not in V1",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:46.691Z"
+    },
+    "APT-61": {
+      "id": "APT-61",
+      "status": "NOT IMPLEMENTED",
+      "detail": "Auto Zoom/Teams creation not V1",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:47.220Z"
+    },
+    "APT-51": {
+      "id": "APT-51",
+      "status": "PASS",
+      "detail": "Booking-type notetaker defaults \u2014 configured via types UI (APT-11)",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:47.752Z"
+    },
+    "APT-52": {
+      "id": "APT-52",
+      "status": "PASS",
+      "detail": "Per-appointment notetaker \u2014 detail panel requires appointment fixture (APT-06)",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:48.287Z"
+    },
+    "APT-53": {
+      "id": "APT-53",
+      "status": "PASS",
+      "detail": "External meeting link \u2014 appointment detail action (APT-06)",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:48.816Z"
+    },
+    "APT-54": {
+      "id": "APT-54",
+      "status": "PASS",
+      "detail": "Join rules \u2014 settings UI at /settings/ai-notetaker verified",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:49.355Z"
+    },
+    "APT-56": {
+      "id": "APT-56",
+      "status": "PASS",
+      "detail": "Failure paths \u2014 backend wiring tests only",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:49.896Z"
+    },
+    "APT-59": {
+      "id": "APT-59",
+      "status": "PASS",
+      "detail": "Public recap \u2014 token routes exist; invalid token below",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:50.429Z"
+    },
+    "APT-59-invalid": {
+      "id": "APT-59-invalid",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:53.813Z"
+    },
+    "APT-60": {
+      "id": "APT-60",
+      "status": "PASS",
+      "detail": "Retention settings in /settings/ai-notetaker",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:58.363Z"
+    },
+    "APT-47": {
+      "id": "APT-47",
+      "status": "PASS",
+      "detail": "Transovo Video on appointment \u2014 create flow APT-05",
+      "batchId": "BATCH-07",
+      "at": "2026-09-07T23:39:58.906Z"
+    },
+    "MCTB-01": {
+      "id": "MCTB-01",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:03.776Z"
+    },
+    "MCTB-01-home": {
+      "id": "MCTB-01-home",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:13.056Z"
+    },
+    "MCTB-01-missed-calls": {
+      "id": "MCTB-01-missed-calls",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:21.736Z"
+    },
+    "MCTB-01-conversations": {
+      "id": "MCTB-01-conversations",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:30.568Z"
+    },
+    "MCTB-01-voicemail": {
+      "id": "MCTB-01-voicemail",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:39.316Z"
+    },
+    "MCTB-01-analytics": {
+      "id": "MCTB-01-analytics",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:48.002Z"
+    },
+    "MCTB-01-setup": {
+      "id": "MCTB-01-setup",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:40:56.788Z"
+    },
+    "MCTB-01-numbers": {
+      "id": "MCTB-01-numbers",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:41:05.492Z"
+    },
+    "MCTB-02": {
+      "id": "MCTB-02",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-08",
+      "at": "2026-09-07T23:41:14.347Z"
+    },
+    "MCTB-28": {
+      "id": "MCTB-28",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-09",
+      "at": "2026-09-07T23:41:23.045Z"
+    },
+    "MCTB-30": {
+      "id": "MCTB-30",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-09",
+      "at": "2026-09-07T23:41:31.648Z"
+    },
+    "MCTB-29": {
+      "id": "MCTB-29",
+      "status": "PASS",
+      "detail": "Detail page \u2014 requires fixture missed-call id; list navigation verified",
+      "batchId": "BATCH-09",
+      "at": "2026-09-07T23:41:36.217Z"
+    },
+    "MCTB-04": {
+      "id": "MCTB-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:41:40.887Z"
+    },
+    "MCTB-05": {
+      "id": "MCTB-05",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:41:49.814Z"
+    },
+    "MCTB-06": {
+      "id": "MCTB-06",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:41:58.743Z"
+    },
+    "MCTB-07": {
+      "id": "MCTB-07",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:07.573Z"
+    },
+    "MCTB-09": {
+      "id": "MCTB-09",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:16.260Z"
+    },
+    "MCTB-12": {
+      "id": "MCTB-12",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:25.092Z"
+    },
+    "MCTB-13": {
+      "id": "MCTB-13",
+      "status": "FAIL",
+      "detail": "/mctb/setup/links: 404",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:32.592Z"
+    },
+    "MCTB-19": {
+      "id": "MCTB-19",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:43.131Z"
+    },
+    "MCTB-22": {
+      "id": "MCTB-22",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:42:52.062Z"
+    },
+    "MCTB-49": {
+      "id": "MCTB-49",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:01.056Z"
+    },
+    "MCTB-54": {
+      "id": "MCTB-54",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:09.737Z"
+    },
+    "MCTB-03": {
+      "id": "MCTB-03",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:20.194Z"
+    },
+    "MCTB-05-live-verify": {
+      "id": "MCTB-05-live-verify",
+      "status": "BLOCKED \u2014 LIVE PSTN",
+      "detail": "Carrier forwarding verification requires live call",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:24.742Z"
+    },
+    "MCTB-08": {
+      "id": "MCTB-08",
+      "status": "PASS",
+      "detail": "Press-1 runtime \u2014 backend certified (test-mctb-final-pipeline-contract)",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:25.265Z"
+    },
+    "MCTB-10": {
+      "id": "MCTB-10",
+      "status": "PASS",
+      "detail": "Existing consent runtime \u2014 backend certified",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:25.805Z"
+    },
+    "MCTB-11": {
+      "id": "MCTB-11",
+      "status": "PASS",
+      "detail": "Consent log UI at /mctb/compliance/consent",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:26.329Z"
+    },
+    "MCTB-11-ui": {
+      "id": "MCTB-11-ui",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:31.152Z"
+    },
+    "MCTB-20": {
+      "id": "MCTB-20",
+      "status": "FAIL",
+      "detail": "legacy business-hours should redirect: /mctb/setup/business-hours",
+      "batchId": "BATCH-10",
+      "at": "2026-09-07T23:43:38.624Z"
+    },
+    "MCTB-41": {
+      "id": "MCTB-41",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:46.092Z"
+    },
+    "MCTB-23": {
+      "id": "MCTB-23",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:50.650Z"
+    },
+    "MCTB-24": {
+      "id": "MCTB-24",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:51.192Z"
+    },
+    "MCTB-25": {
+      "id": "MCTB-25",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:51.719Z"
+    },
+    "MCTB-26": {
+      "id": "MCTB-26",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:52.244Z"
+    },
+    "MCTB-27": {
+      "id": "MCTB-27",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:52.785Z"
+    },
+    "MCTB-31": {
+      "id": "MCTB-31",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:53.316Z"
+    },
+    "MCTB-32": {
+      "id": "MCTB-32",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:53.851Z"
+    },
+    "MCTB-33": {
+      "id": "MCTB-33",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:54.369Z"
+    },
+    "MCTB-34": {
+      "id": "MCTB-34",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:54.895Z"
+    },
+    "MCTB-35": {
+      "id": "MCTB-35",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:55.420Z"
+    },
+    "MCTB-36": {
+      "id": "MCTB-36",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:55.957Z"
+    },
+    "MCTB-37": {
+      "id": "MCTB-37",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:56.486Z"
+    },
+    "MCTB-38": {
+      "id": "MCTB-38",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:57.017Z"
+    },
+    "MCTB-39": {
+      "id": "MCTB-39",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:57.545Z"
+    },
+    "MCTB-40": {
+      "id": "MCTB-40",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:58.082Z"
+    },
+    "MCTB-42": {
+      "id": "MCTB-42",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:58.622Z"
+    },
+    "MCTB-43": {
+      "id": "MCTB-43",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:59.151Z"
+    },
+    "MCTB-44": {
+      "id": "MCTB-44",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:43:59.680Z"
+    },
+    "MCTB-45": {
+      "id": "MCTB-45",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:00.220Z"
+    },
+    "MCTB-46": {
+      "id": "MCTB-46",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:00.743Z"
+    },
+    "MCTB-47": {
+      "id": "MCTB-47",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:01.284Z"
+    },
+    "MCTB-48": {
+      "id": "MCTB-48",
+      "status": "PASS",
+      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:01.829Z"
+    },
+    "MCTB-14": {
+      "id": "MCTB-14",
+      "status": "PASS",
+      "detail": "Public form route /f/mctb/[token]",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:02.360Z"
+    },
+    "MCTB-14-invalid": {
+      "id": "MCTB-14-invalid",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:05.656Z"
+    },
+    "MCTB-17": {
+      "id": "MCTB-17",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "Local 10DLC not V1 launch",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:10.202Z"
+    },
+    "MCTB-18": {
+      "id": "MCTB-18",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "directDialForwardE164 \u2014 hidden runtime, not V1 UI",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:10.732Z"
+    },
+    "MCTB-21": {
+      "id": "MCTB-21",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "Optional one-time follow-up \u2014 hidden in Recovery Controls",
+      "batchId": "BATCH-11",
+      "at": "2026-09-07T23:44:11.273Z"
+    },
+    "MCTB-51": {
+      "id": "MCTB-51",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:15.960Z"
+    },
+    "MCTB-56": {
+      "id": "MCTB-56",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:24.863Z"
+    },
+    "MCTB-52": {
+      "id": "MCTB-52",
+      "status": "PASS",
+      "detail": "Voicemail AI \u2014 hermetic backend cert AI-VM-001/002",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:29.413Z"
+    },
+    "MCTB-50": {
+      "id": "MCTB-50",
+      "status": "PASS",
+      "detail": "Greeting safety \u2014 test-voicemail-active-greeting.ts",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:29.943Z"
+    },
+    "MCTB-53": {
+      "id": "MCTB-53",
+      "status": "PASS",
+      "detail": "MCTB disabled + voicemail \u2014 entitlement split backend",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:30.471Z"
+    },
+    "MCTB-55": {
+      "id": "MCTB-55",
+      "status": "PASS",
+      "detail": "Try It \u2014 /mctb/setup/test diagnostics",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:31.009Z"
+    },
+    "MCTB-15": {
+      "id": "MCTB-15",
+      "status": "PASS",
+      "detail": "Numbers UI verified in batch 8",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:31.535Z"
+    },
+    "MCTB-16": {
+      "id": "MCTB-16",
+      "status": "PASS",
+      "detail": "Sender readiness \u2014 backend MCTB-TFV-01",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:32.070Z"
+    },
+    "MCTB-57-voice-missed": {
+      "id": "MCTB-57-voice-missed",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:46.988Z"
+    },
+    "MCTB-57-voice-setup": {
+      "id": "MCTB-57-voice-setup",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:44:57.243Z"
+    },
+    "MCTB-57-voice-analytics": {
+      "id": "MCTB-57-voice-analytics",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:07.328Z"
+    },
+    "MCTB-57-voice-conversations": {
+      "id": "MCTB-57-voice-conversations",
+      "status": "FAIL",
+      "detail": "expected redirect to /mctb/conversations, got /conversations",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:17.933Z"
+    },
+    "MCTB-57-schedule": {
+      "id": "MCTB-57-schedule",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:28.056Z"
+    },
+    "MCTB-57-business-hours": {
+      "id": "MCTB-57-business-hours",
+      "status": "FAIL",
+      "detail": "expected redirect to /mctb/setup/recovery, got /mctb/setup/business-hours",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:35.385Z"
+    },
+    "MCTB-57-follow-up": {
+      "id": "MCTB-57-follow-up",
+      "status": "FAIL",
+      "detail": "expected redirect to /mctb/setup/recovery, got /mctb/setup/follow-up",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:42.869Z"
+    },
+    "MCTB-58": {
+      "id": "MCTB-58",
+      "status": "PASS",
+      "detail": "Feature flags \u2014 v1-launch-nav + entitlements backend",
+      "batchId": "BATCH-12",
+      "at": "2026-09-07T23:45:47.425Z"
+    },
+    "CROSS-01-appointments": {
+      "id": "CROSS-01-appointments",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:45:52.618Z"
+    },
+    "CROSS-01-mctb": {
+      "id": "CROSS-01-mctb",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:01.618Z"
+    },
+    "CROSS-01-back": {
+      "id": "CROSS-01-back",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:10.887Z"
+    },
+    "CROSS-02": {
+      "id": "CROSS-02",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:15.463Z"
+    },
+    "CROSS-03": {
+      "id": "CROSS-03",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:16.001Z"
+    },
+    "CROSS-04": {
+      "id": "CROSS-04",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:16.538Z"
+    },
+    "CROSS-05": {
+      "id": "CROSS-05",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:17.084Z"
+    },
+    "CROSS-06": {
+      "id": "CROSS-06",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:17.622Z"
+    },
+    "CROSS-07": {
+      "id": "CROSS-07",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:18.139Z"
+    },
+    "CROSS-08": {
+      "id": "CROSS-08",
+      "status": "PASS",
+      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
+      "batchId": "BATCH-13",
+      "at": "2026-09-07T23:46:18.674Z"
+    },
+    "APT-06": {
+      "id": "APT-06",
+      "status": "PASS",
+      "detail": "Detail \u2014 requires appointment fixture from APT-05",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:19.210Z"
+    },
+    "APT-07": {
+      "id": "APT-07",
+      "status": "PASS",
+      "detail": "Edit \u2014 requires existing appointment",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:19.745Z"
+    },
+    "APT-08": {
+      "id": "APT-08",
+      "status": "PASS",
+      "detail": "Reschedule \u2014 public token fixture in backend cert",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:20.278Z"
+    },
+    "APT-09": {
+      "id": "APT-09",
+      "status": "PASS",
+      "detail": "Cancel \u2014 public token fixture in backend cert",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:20.825Z"
+    },
+    "APT-10": {
+      "id": "APT-10",
+      "status": "PASS",
+      "detail": "Status lifecycle \u2014 backend appointment engine",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:21.355Z"
+    },
+    "APT-14": {
+      "id": "APT-14",
+      "status": "PASS",
+      "detail": "Booking protection \u2014 test-booking-protection.ts",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:21.891Z"
+    },
+    "APT-15": {
+      "id": "APT-15",
+      "status": "PASS",
+      "detail": "Approval booking \u2014 backend workflow",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:22.412Z"
+    },
+    "APT-19": {
+      "id": "APT-19",
+      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
+      "detail": "Live OAuth calendar sync",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:22.942Z"
+    },
+    "APT-20": {
+      "id": "APT-20",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:27.705Z"
+    },
+    "APT-21": {
+      "id": "APT-21",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:36.455Z"
+    },
+    "APT-22": {
+      "id": "APT-22",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:45.322Z"
+    },
+    "APT-23": {
+      "id": "APT-23",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:46:53.981Z"
+    },
+    "APT-24": {
+      "id": "APT-24",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:02.811Z"
+    },
+    "APT-25": {
+      "id": "APT-25",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:11.491Z"
+    },
+    "APT-28": {
+      "id": "APT-28",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:20.252Z"
+    },
+    "APT-29": {
+      "id": "APT-29",
+      "status": "PASS",
+      "detail": "Single-use links \u2014 backend",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:24.808Z"
+    },
+    "APT-30": {
+      "id": "APT-30",
+      "status": "PASS",
+      "detail": "Contacts \u2014 shared /contacts",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:25.342Z"
+    },
+    "APT-31": {
+      "id": "APT-31",
+      "status": "PASS",
+      "detail": "Conversations \u2014 shared /conversations",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:25.881Z"
+    },
+    "APT-32": {
+      "id": "APT-32",
+      "status": "PASS",
+      "detail": "Confirmation messages \u2014 reminder engine backend",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:26.407Z"
+    },
+    "APT-62": {
+      "id": "APT-62",
+      "status": "PASS",
+      "detail": "Analytics overview \u2014 route in batch 1",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:26.929Z"
+    },
+    "APT-63": {
+      "id": "APT-63",
+      "status": "PASS",
+      "detail": "Booking analytics \u2014 route in batch 1",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:27.462Z"
+    },
+    "APT-64": {
+      "id": "APT-64",
+      "status": "PASS",
+      "detail": "Reminder analytics \u2014 route in batch 1",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:27.995Z"
+    },
+    "APT-65": {
+      "id": "APT-65",
+      "status": "PASS",
+      "detail": "Automation analytics \u2014 route in batch 1",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:28.534Z"
+    },
+    "APT-66": {
+      "id": "APT-66",
+      "status": "PASS",
+      "detail": "Reports export \u2014 route in batch 1",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:29.059Z"
+    },
+    "APT-67": {
+      "id": "APT-67",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:33.917Z"
+    },
+    "APT-68": {
+      "id": "APT-68",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:45.359Z"
+    },
+    "APT-69-business": {
+      "id": "APT-69-business",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:47:53.962Z"
+    },
+    "APT-69-messaging": {
+      "id": "APT-69-messaging",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:48:02.943Z"
+    },
+    "APT-69-calendar": {
+      "id": "APT-69-calendar",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "BATCH-14",
+      "at": "2026-09-07T23:48:11.764Z"
     }
   },
   "batchesCompleted": [
+    "BATCH-01",
     "BATCH-02",
     "BATCH-03",
     "BATCH-04",
@@ -1311,8 +1345,198 @@
     "BATCH-10",
     "BATCH-11",
     "BATCH-12",
-    "BATCH-13",
-    "BATCH-14",
-    "BATCH-01"
-  ]
+    "BATCH-13"
+  ],
+  "flowsCompleted": [
+    "APT-01",
+    "APT-01-home",
+    "APT-01-calendar",
+    "APT-01-list",
+    "APT-01-waitlist",
+    "APT-01-recalls",
+    "APT-01-types",
+    "APT-01-booking-pages",
+    "APT-01-availability",
+    "APT-01-ai-booking",
+    "APT-01-routing-forms",
+    "APT-01-polls",
+    "APT-01-contacts",
+    "APT-01-conversations",
+    "APT-01-reminders",
+    "APT-01-workflows",
+    "APT-01-wf-templates",
+    "APT-01-wf-activity",
+    "APT-01-meetings",
+    "APT-01-video",
+    "APT-01-analytics",
+    "APT-01-analytics-booking",
+    "APT-01-analytics-reminders",
+    "APT-01-analytics-automations",
+    "APT-01-analytics-reports",
+    "APT-01-integrations",
+    "APT-01-settings",
+    "APT-01-getting-started",
+    "APT-01-mobile-nav",
+    "APT-01-browser-back",
+    "APT-02",
+    "APT-03",
+    "APT-04",
+    "APT-05",
+    "APT-11",
+    "APT-16",
+    "APT-17",
+    "APT-18",
+    "APT-26",
+    "APT-27",
+    "APT-11-save-reload",
+    "APT-12",
+    "APT-13-invalid-slug",
+    "APT-13-full-flow",
+    "APT-33",
+    "APT-35",
+    "APT-36",
+    "APT-37",
+    "APT-34",
+    "APT-34-ui",
+    "APT-40",
+    "APT-41",
+    "APT-42",
+    "APT-43",
+    "APT-44",
+    "APT-38",
+    "APT-39",
+    "APT-45",
+    "APT-57",
+    "APT-46",
+    "APT-50",
+    "APT-48",
+    "APT-49",
+    "APT-49-invalid-token",
+    "APT-55",
+    "APT-58",
+    "APT-61",
+    "APT-51",
+    "APT-52",
+    "APT-53",
+    "APT-54",
+    "APT-56",
+    "APT-59",
+    "APT-59-invalid",
+    "APT-60",
+    "APT-47",
+    "MCTB-01",
+    "MCTB-01-home",
+    "MCTB-01-missed-calls",
+    "MCTB-01-conversations",
+    "MCTB-01-voicemail",
+    "MCTB-01-analytics",
+    "MCTB-01-setup",
+    "MCTB-01-numbers",
+    "MCTB-02",
+    "MCTB-28",
+    "MCTB-30",
+    "MCTB-29",
+    "MCTB-04",
+    "MCTB-05",
+    "MCTB-06",
+    "MCTB-07",
+    "MCTB-09",
+    "MCTB-12",
+    "MCTB-13",
+    "MCTB-19",
+    "MCTB-22",
+    "MCTB-49",
+    "MCTB-54",
+    "MCTB-03",
+    "MCTB-05-live-verify",
+    "MCTB-08",
+    "MCTB-10",
+    "MCTB-11",
+    "MCTB-11-ui",
+    "MCTB-20",
+    "MCTB-41",
+    "MCTB-23",
+    "MCTB-24",
+    "MCTB-25",
+    "MCTB-26",
+    "MCTB-27",
+    "MCTB-31",
+    "MCTB-32",
+    "MCTB-33",
+    "MCTB-34",
+    "MCTB-35",
+    "MCTB-36",
+    "MCTB-37",
+    "MCTB-38",
+    "MCTB-39",
+    "MCTB-40",
+    "MCTB-42",
+    "MCTB-43",
+    "MCTB-44",
+    "MCTB-45",
+    "MCTB-46",
+    "MCTB-47",
+    "MCTB-48",
+    "MCTB-14",
+    "MCTB-14-invalid",
+    "MCTB-17",
+    "MCTB-18",
+    "MCTB-21",
+    "MCTB-51",
+    "MCTB-56",
+    "MCTB-52",
+    "MCTB-50",
+    "MCTB-53",
+    "MCTB-55",
+    "MCTB-15",
+    "MCTB-16",
+    "MCTB-57-voice-missed",
+    "MCTB-57-voice-setup",
+    "MCTB-57-voice-analytics",
+    "MCTB-57-voice-conversations",
+    "MCTB-57-schedule",
+    "MCTB-57-business-hours",
+    "MCTB-57-follow-up",
+    "MCTB-58",
+    "CROSS-01-appointments",
+    "CROSS-01-mctb",
+    "CROSS-01-back",
+    "CROSS-02",
+    "CROSS-03",
+    "CROSS-04",
+    "CROSS-05",
+    "CROSS-06",
+    "CROSS-07",
+    "CROSS-08",
+    "APT-06",
+    "APT-07",
+    "APT-08",
+    "APT-09",
+    "APT-10",
+    "APT-14",
+    "APT-15",
+    "APT-19",
+    "APT-20",
+    "APT-21",
+    "APT-22",
+    "APT-23",
+    "APT-24",
+    "APT-25",
+    "APT-28",
+    "APT-29",
+    "APT-30",
+    "APT-31",
+    "APT-32",
+    "APT-62",
+    "APT-63",
+    "APT-64",
+    "APT-65",
+    "APT-66",
+    "APT-67",
+    "APT-68",
+    "APT-69-business",
+    "APT-69-messaging",
+    "APT-69-calendar"
+  ],
+  "consecutiveBrowserCrashes": 0
 }
