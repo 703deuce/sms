@@ -4,16 +4,15 @@ import { Button } from "@/components/ui/button";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
 import {
   MctbCallout,
-  MctbCheckpointList,
   MctbHeroNumber,
-  MctbOptionCard,
 } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import { MctbConsentModeCards, MctbVerificationTimeline } from "@/components/mctb/wizard/mctb-wizard-ui";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { TryItStatus } from "@/lib/mctb/try-it/types";
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
 import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
-import { Phone, Radio, Sparkles, Zap } from "lucide-react";
+import { FileCheck, Phone, Radio, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -163,41 +162,31 @@ export function MctbSetupTestView() {
         configured.
       </MctbCallout>
 
-      <div className="ref-card space-y-5 p-5 sm:p-6">
-        <div>
-          <h2 className={SECTION_TITLE}>1. Choose consent mode for demo test</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <MctbOptionCard
-              selected={consentMode === "press_1"}
-              disabled={tryItStarted && !tryItStatus?.expired}
-              title="Ask callers to press 1"
-              description="Hear the disclosure, press 1, receive compliance confirmation, then recovery text."
-              onClick={() => setConsentMode("press_1")}
-            />
-            <MctbOptionCard
-              selected={consentMode === "existing_consent"}
-              disabled={tryItStarted && !tryItStatus?.expired}
-              title="Use permission my business already has"
-              description="No Press-1 interaction. Recovery text sends after the missed-call path completes."
-              onClick={() => setConsentMode("existing_consent")}
-            />
-          </div>
-          {consentMode === "existing_consent" ? (
-            <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-[13px]">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={existingConsentAttested}
-                disabled={tryItStarted && !tryItStatus?.expired}
-                onChange={(e) => setExistingConsentAttested(e.target.checked)}
-              />
-              <span>
-                I certify that I have the required permission to send SMS messages to callers covered
-                by this test.
-              </span>
-            </label>
-          ) : null}
-        </div>
+      <div className="voice-card space-y-5 p-5 sm:p-6">
+        <MctbConsentModeCards
+          value={consentMode}
+          onChange={setConsentMode}
+          attested={existingConsentAttested}
+          onAttestedChange={setExistingConsentAttested}
+          options={[
+            {
+              id: "press_1",
+              title: "Ask callers to press 1",
+              subtitle: "Full Press-1 path on the demo line.",
+              audience: "Validate disclosure + DTMF before production.",
+              icon: ShieldCheck,
+              nextSteps: ["Greeting plays", "Press 1 captured", "Compliance + recovery SMS"],
+            },
+            {
+              id: "existing_consent",
+              title: "Use permission my business already has",
+              subtitle: "Skips Press 1 on the demo call.",
+              audience: "Only if you already hold compliant permission.",
+              icon: FileCheck,
+              nextSteps: ["Greeting plays", "Missed call classified", "Recovery SMS sends"],
+            },
+          ]}
+        />
 
         <MctbHeroNumber label="Demo number" number={demoDisplay} tint="blue" />
 
@@ -225,19 +214,20 @@ export function MctbSetupTestView() {
                   ? "Waiting for your call…"
                   : "Call in progress…"}
             </p>
-            <MctbCheckpointList
-              items={[
-                { done: tryItStatus?.checks.callReceived || false, label: "Call received" },
-                { done: tryItStatus?.checks.greetingPlayed || false, label: "Greeting played" },
+            <MctbVerificationTimeline
+              title="Demo progress"
+              waitingHint="Call the demo number and let it ring without answering."
+              passed={tryItStatus?.completed}
+              passedTitle="Demo complete"
+              steps={[
+                { id: "call", label: "Call received", done: tryItStatus?.checks.callReceived || false },
+                { id: "greeting", label: "Greeting played", done: tryItStatus?.checks.greetingPlayed || false },
                 ...(showPress1
-                  ? [{ done: tryItStatus?.checks.press1Received || false, label: "Press 1 received" }]
+                  ? [{ id: "p1", label: "Press 1 received", done: tryItStatus?.checks.press1Received || false }]
                   : []),
-                { done: tryItStatus?.checks.consentConfirmed || false, label: "Consent confirmed" },
-                {
-                  done: tryItStatus?.checks.recoverySmsQueued || false,
-                  label: "Recovery SMS queued",
-                },
-                { done: tryItStatus?.checks.recoverySmsSent || false, label: "Recovery SMS sent" },
+                { id: "consent", label: "Consent confirmed", done: tryItStatus?.checks.consentConfirmed || false },
+                { id: "queued", label: "Recovery SMS queued", done: tryItStatus?.checks.recoverySmsQueued || false },
+                { id: "sent", label: "Recovery SMS sent", done: tryItStatus?.checks.recoverySmsSent || false },
               ]}
             />
             {tryItStatus?.expired ? (
@@ -279,19 +269,22 @@ export function MctbSetupTestView() {
         </div>
 
         {setupTest?.started ? (
-          <MctbCheckpointList
-            items={[
-              { done: setupTest.checks.transovoDidReceived, label: "Call reached MCTB number" },
-              { done: setupTest.checks.workspaceResolved, label: "Workspace resolved" },
-              { done: setupTest.checks.consentModeLoaded, label: "Consent mode loaded" },
-              { done: setupTest.checks.greetingPlayed, label: "Greeting played" },
+          <MctbVerificationTimeline
+            title="Setup test sequence"
+            passed={setupTest.verified}
+            passedTitle="Production path verified"
+            steps={[
+              { id: "did", label: "Call reached MCTB number", done: setupTest.checks.transovoDidReceived },
+              { id: "ws", label: "Workspace resolved", done: setupTest.checks.workspaceResolved },
+              { id: "mode", label: "Consent mode loaded", done: setupTest.checks.consentModeLoaded },
+              { id: "greeting", label: "Greeting played", done: setupTest.checks.greetingPlayed },
               ...(setupTest.consentMode === "press_1"
-                ? [{ done: setupTest.checks.press1Received, label: "Press 1 received" }]
+                ? [{ id: "p1", label: "Press 1 received", done: setupTest.checks.press1Received }]
                 : []),
-              { done: setupTest.checks.consentRecorded, label: "Consent recorded" },
-              { done: setupTest.checks.missedCallEventCreated, label: "Missed call event created" },
-              { done: setupTest.checks.smsQueued, label: "Recovery SMS queued" },
-              { done: setupTest.checks.smsProviderAccepted, label: "SMS accepted by provider" },
+              { id: "consent", label: "Consent recorded", done: setupTest.checks.consentRecorded },
+              { id: "event", label: "Missed call event created", done: setupTest.checks.missedCallEventCreated },
+              { id: "queue", label: "Recovery SMS queued", done: setupTest.checks.smsQueued },
+              { id: "provider", label: "SMS accepted by provider", done: setupTest.checks.smsProviderAccepted },
             ]}
           />
         ) : null}
@@ -330,14 +323,18 @@ export function MctbSetupTestView() {
         </div>
 
         {liveTest?.started ? (
-          <MctbCheckpointList
-            items={[
-              { done: liveTest.checks.callDetected, label: "Call arrived on MCTB number" },
-              { done: liveTest.checks.missedCall, label: "Classified as missed call" },
-              { done: liveTest.checks.consentCompleted, label: "Consent completed (if required)" },
-              { done: liveTest.checks.textSent, label: "Recovery SMS sent" },
-              { done: liveTest.checks.textDelivered, label: "SMS delivered" },
-              { done: liveTest.checks.replyReceived, label: "Reply received in inbox" },
+          <MctbVerificationTimeline
+            title="Live forward test"
+            passed={liveTest.passed}
+            passedTitle="Forwarding and recovery verified"
+            waitingHint={`Call ${liveBusiness} and let it forward to ${liveForward}.`}
+            steps={[
+              { id: "call", label: "Call arrived on MCTB number", done: liveTest.checks.callDetected },
+              { id: "missed", label: "Classified as missed call", done: liveTest.checks.missedCall },
+              { id: "consent", label: "Consent completed (if required)", done: liveTest.checks.consentCompleted },
+              { id: "sent", label: "Recovery SMS sent", done: liveTest.checks.textSent },
+              { id: "delivered", label: "SMS delivered", done: liveTest.checks.textDelivered },
+              { id: "reply", label: "Reply received in inbox", done: liveTest.checks.replyReceived },
             ]}
           />
         ) : null}

@@ -1,10 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
+import { MctbPhoneForwardingPanel } from "@/components/mctb/wizard/mctb-phone-forwarding-panel";
+import { MCTB_CARRIER_GUIDES, type CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,6 +24,8 @@ function fmtPhone(e164: string) {
   return e164;
 }
 
+const DEFAULT_CARRIERS: CarrierForwardingGuide[] = MCTB_CARRIER_GUIDES;
+
 export function MctbSetupPhoneView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,6 +36,8 @@ export function MctbSetupPhoneView() {
   const [businessLineE164, setBusinessLineE164] = useState("");
   const [productionForwardE164, setProductionForwardE164] = useState<string | null>(null);
   const [messagingReady, setMessagingReady] = useState(false);
+  const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
+  const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
   const [paused, setPaused] = useState(false);
   const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [pauseUntil, setPauseUntil] = useState<string | null>(null);
@@ -69,6 +74,7 @@ export function MctbSetupPhoneView() {
   );
 
   const forwardTarget = selected?.e164 || productionForwardE164;
+  const forwardDisplay = forwardTarget ? fmtPhone(forwardTarget) : "—";
 
   async function save() {
     setSaving(true);
@@ -97,9 +103,9 @@ export function MctbSetupPhoneView() {
 
   if (loading) {
     return (
-      <div className="mctb-page">
+      <div className="mctb-page voice-theme">
         <div className="mctb-page-inner">
-          <div className="ref-card p-12 text-center text-sm text-gray-500">Loading…</div>
+          <div className="voice-card p-12 text-center text-sm text-gray-500">Loading…</div>
         </div>
       </div>
     );
@@ -108,7 +114,7 @@ export function MctbSetupPhoneView() {
   return (
     <MctbSetupSectionLayout
       title="Phone & Forwarding"
-      description="Connect your public business line and forward unanswered calls to Transovo so missed-call recovery can run."
+      description="Connect your public business line and forward unanswered calls to Transovo."
       saving={saving}
       saved={saved}
       error={error}
@@ -119,7 +125,7 @@ export function MctbSetupPhoneView() {
       ) : null}
 
       {!messagingReady ? (
-        <div className="ref-card border-amber-200 bg-amber-50/60 p-4 text-[13px] text-amber-950">
+        <div className="voice-card border-amber-200 bg-amber-50/60 p-4 text-[13px] text-amber-950">
           <p className="font-semibold">Messaging setup incomplete</p>
           <p className="mt-1">
             Complete sender verification before going live.{" "}
@@ -127,36 +133,17 @@ export function MctbSetupPhoneView() {
           </p>
         </div>
       ) : (
-        <div className="ref-card border-emerald-200 bg-emerald-50/50 p-4 text-[13px] text-emerald-950">
+        <div className="voice-card border-emerald-200 bg-emerald-50/50 p-4 text-[13px] text-emerald-950">
           <p className="font-semibold">Messaging ready</p>
           <p className="mt-1">Your text-back sender can send recovery messages once forwarding is verified.</p>
         </div>
       )}
 
-      <div className="ref-card space-y-4 p-5">
-        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Business line</h2>
-        <p className="text-[13px] text-muted-foreground">
-          The public number customers call. This is not your hidden forwarding destination or SMS sender.
-        </p>
+      <div className="voice-card space-y-3 p-4 sm:p-5">
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-semibold text-foreground">Your business line</span>
-          <Input
-            placeholder="+1..."
-            value={businessLineE164}
-            onChange={(e) => setBusinessLineE164(e.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="ref-card space-y-4 p-5">
-        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Text-back sender</h2>
-        <p className="text-[13px] text-muted-foreground">
-          Which assigned number sends recovery SMS after a missed call.
-        </p>
-        <label className="block space-y-1.5">
-          <span className="text-[12px] font-semibold text-foreground">Sender number</span>
+          <span className="text-[12px] font-semibold text-foreground">Text-back sender</span>
           <select
-            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+            className="flex h-10 w-full max-w-md rounded-lg border border-input bg-background px-3 text-sm"
             value={phoneNumberId || ""}
             onChange={(e) => setPhoneNumberId(e.target.value || null)}
           >
@@ -175,29 +162,29 @@ export function MctbSetupPhoneView() {
         </Link>
       </div>
 
-      <div className="ref-card space-y-4 p-5">
-        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Carrier forwarding</h2>
-        <p className="text-[13px] text-muted-foreground">
-          Forward your business line to this hidden toll-free ingress when calls are not answered.
-        </p>
-        {forwardTarget ? (
-          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Forward your business line to
-            </p>
-            <p className="mt-1 font-mono text-xl font-bold text-foreground">{fmtPhone(forwardTarget)}</p>
-            <p className="mt-2 text-[12px] text-muted-foreground">
-              Call your business line from another phone and let it ring unanswered to verify. Use{" "}
-              <Link href={MCTB_ROUTES.setupTest} className="font-semibold text-primary hover:underline">
-                Test & diagnostics
-              </Link>{" "}
-              for guided checks.
-            </p>
-          </div>
-        ) : (
-          <p className="text-[13px] text-amber-800">Select a sender number to see your forward target.</p>
-        )}
+      <div className="voice-card p-4 sm:p-6">
+        <MctbPhoneForwardingPanel
+          businessNumber={businessLineE164}
+          onBusinessNumberChange={setBusinessLineE164}
+          carrier={carrier}
+          onCarrierChange={setCarrier}
+          carriers={DEFAULT_CARRIERS}
+          forwardDisplay={forwardDisplay}
+          forwardE164={forwardTarget}
+          forwardRingSeconds={forwardRingSeconds}
+          onForwardRingSecondsChange={setForwardRingSeconds}
+          verification={null}
+          connectionStatus={forwardTarget && businessLineE164 ? "pending" : "unknown"}
+        />
       </div>
+
+      <p className="text-[13px] text-muted-foreground">
+        Run guided verification in{" "}
+        <Link href={MCTB_ROUTES.setupTest} className="font-semibold text-primary hover:underline">
+          Test & diagnostics
+        </Link>
+        .
+      </p>
     </MctbSetupSectionLayout>
   );
 }

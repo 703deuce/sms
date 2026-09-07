@@ -2,6 +2,7 @@
 
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
+import { MctbTriggerRuleCards } from "@/components/mctb/wizard/mctb-wizard-ui";
 import { useCallback, useEffect, useState } from "react";
 import "../kimi-ui/reference.css";
 
@@ -117,36 +118,17 @@ export function MctbSetupMissedCallRulesView() {
         <MctbPausedNotice pauseKind={pauseKind} pauseUntil={pauseUntil} variant="banner" />
       ) : null}
 
-      <div className="ref-card space-y-4 p-5">
-        <div>
-          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">What counts as a missed call</h2>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Each enabled outcome creates a separate missed-call event for the recovery engine.
-          </p>
-        </div>
-        <ul className="space-y-3">
-          {triggerOptions.map((opt) => (
-            <li key={opt.key}>
-              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-100 px-4 py-3 hover:border-indigo-100">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={triggers[opt.key]}
-                  onChange={(e) => setTriggers((t) => ({ ...t, [opt.key]: e.target.checked }))}
-                />
-                <span>
-                  <span className="block text-[13px] font-semibold text-foreground">{opt.label}</span>
-                  <span className="block text-[12px] text-muted-foreground">{opt.helper}</span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-        {!anyOn ? (
-          <p className="text-[13px] font-medium text-rose-700" role="alert">
-            Select at least one trigger before saving.
-          </p>
-        ) : null}
+      <div className="ref-card p-5 voice-theme">
+        <MctbTriggerRuleCards
+          options={triggerOptions.map((opt) => ({
+            id: opt.key,
+            label: opt.label,
+            helper: opt.helper,
+            enabled: triggers[opt.key],
+            onToggle: (enabled) => setTriggers((t) => ({ ...t, [opt.key]: enabled })),
+          }))}
+          errorMessage={!anyOn ? "Select at least one trigger before saving." : null}
+        />
       </div>
 
       <p className="text-[12px] text-muted-foreground">

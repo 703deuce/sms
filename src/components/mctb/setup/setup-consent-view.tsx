@@ -3,13 +3,13 @@
 import { MctbConsentPromptEditor } from "@/components/mctb/consent-prompt-editor";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
+import { MctbConsentModeCards } from "@/components/mctb/wizard/mctb-wizard-ui";
 import {
   MCTB_CONSENT_MODE_EXISTING,
-  MCTB_CONSENT_MODE_LABELS,
   MCTB_CONSENT_MODE_VERIFIED,
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
-import { cn } from "@/lib/utils";
+import { FileCheck, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -78,11 +78,13 @@ export function MctbSetupConsentView() {
     }
   }
 
+  const uiMode = consentMode === MCTB_CONSENT_MODE_EXISTING ? "existing_consent" : "press_1";
+
   if (loading) {
     return (
-      <div className="mctb-page">
+      <div className="mctb-page voice-theme">
         <div className="mctb-page-inner">
-          <div className="ref-card p-12 text-center text-sm text-gray-500">Loading…</div>
+          <div className="voice-card p-12 text-center text-sm text-muted-foreground">Loading…</div>
         </div>
       </div>
     );
@@ -101,60 +103,51 @@ export function MctbSetupConsentView() {
         <MctbPausedNotice pauseKind={pauseKind} pauseUntil={pauseUntil} variant="banner" />
       ) : null}
 
-      <div className="ref-card space-y-4 p-5">
-        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Permission method</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {([MCTB_CONSENT_MODE_EXISTING, MCTB_CONSENT_MODE_VERIFIED] as const).map((mode) => {
-            const meta = MCTB_CONSENT_MODE_LABELS[mode];
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setConsentMode(mode)}
-                className={cn(
-                  "rounded-xl border p-4 text-left transition",
-                  consentMode === mode
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                    : "border-gray-200 hover:border-gray-300",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {meta.productCode.replace(/_/g, " ")}
-                </p>
-                <p className="mt-1 text-[14px] font-semibold text-foreground">{meta.title}</p>
-                <p className="mt-1 text-[12px] text-muted-foreground">{meta.subtitle}</p>
-              </button>
-            );
-          })}
-        </div>
+      <div className="voice-card p-4 sm:p-6">
+        <MctbConsentModeCards
+          value={uiMode}
+          onChange={(mode) =>
+            setConsentMode(mode === "existing_consent" ? MCTB_CONSENT_MODE_EXISTING : MCTB_CONSENT_MODE_VERIFIED)
+          }
+          attested={existingConsentAttested}
+          onAttestedChange={setExistingConsentAttested}
+          options={[
+            {
+              id: "press_1",
+              title: "Ask callers to press 1",
+              subtitle: "Platform-captured consent via voice disclosure + DTMF 1.",
+              audience: "Default for most businesses — strongest evidence per call.",
+              badge: "Recommended",
+              icon: ShieldCheck,
+              nextSteps: [
+                "Caller hears your Press-1 disclosure.",
+                "Pressing 1 records consent for that call.",
+                "Compliance SMS, then your recovery opener.",
+              ],
+            },
+            {
+              id: "existing_consent",
+              title: "Use permission my business already has",
+              subtitle: "Attestation-based — no Press 1 on the call.",
+              audience: "Only when you already hold compliant permission for this texting use case.",
+              icon: FileCheck,
+              nextSteps: [
+                "No voice consent prompt on missed calls.",
+                "Eligibility engine must still pass before send.",
+                "You maintain proof of existing permission.",
+              ],
+            },
+          ]}
+        />
       </div>
 
       {consentMode === MCTB_CONSENT_MODE_VERIFIED ? (
-        <div className="ref-card p-5">
+        <div className="voice-card p-5">
           <MctbConsentPromptEditor phoneNumberId={phoneNumberId} />
         </div>
-      ) : (
-        <div className="ref-card space-y-4 p-5">
-          <p className="text-[13px] text-muted-foreground">
-            Missed calls proceed directly to your recovery text after eligibility checks — no voice
-            prompt or DTMF capture.
-          </p>
-          <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-[13px]">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={existingConsentAttested}
-              onChange={(e) => setExistingConsentAttested(e.target.checked)}
-            />
-            <span>
-              I certify that I have the required permission to send SMS messages to callers covered
-              by this setup.
-            </span>
-          </label>
-        </div>
-      )}
+      ) : null}
 
-      <div className="ref-card space-y-2 p-5 text-[12px] text-muted-foreground">
+      <div className="voice-card space-y-2 p-5 text-[12px] text-muted-foreground">
         <p className="font-semibold text-foreground">Messaging use case (toll-free verification)</p>
         <p>{campaignDescription}</p>
         <p className="pt-2 font-semibold text-foreground">Opt-in description</p>

@@ -1,8 +1,8 @@
 "use client";
 
-import { Textarea } from "@/components/ui/input";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
+import { MctbTextBackComposer, WizardQuestionBlock } from "@/components/mctb/wizard/mctb-wizard-ui";
 import {
   MCTB_CONSENT_MODE_EXISTING,
   MCTB_CONSENT_MODE_VERIFIED,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/mctb/consent-mode";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const COMPLIANCE_PREVIEW =
   "Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out.";
@@ -55,11 +55,6 @@ export function MctbSetupTextBackView() {
     void load();
   }, [load]);
 
-  const previewOpener = useMemo(
-    () => messageTemplate.replace(/\{\{customer\.firstName\}\}/g, "there").replace(/\{\{business\.name\}\}/g, "Your Business"),
-    [messageTemplate],
-  );
-
   const isPress1 = consentMode === MCTB_CONSENT_MODE_VERIFIED;
 
   async function save() {
@@ -91,9 +86,9 @@ export function MctbSetupTextBackView() {
 
   if (loading) {
     return (
-      <div className="mctb-page">
+      <div className="mctb-page voice-theme">
         <div className="mctb-page-inner">
-          <div className="ref-card p-12 text-center text-sm text-gray-500">Loading…</div>
+          <div className="voice-card p-12 text-center text-sm text-gray-500">Loading…</div>
         </div>
       </div>
     );
@@ -112,7 +107,7 @@ export function MctbSetupTextBackView() {
         <MctbPausedNotice pauseKind={pauseKind} pauseUntil={pauseUntil} variant="banner" />
       ) : null}
 
-      <div className="ref-card flex flex-wrap items-center justify-between gap-3 p-4 text-[13px]">
+      <div className="voice-card flex flex-wrap items-center justify-between gap-3 p-4 text-[13px]">
         <div>
           <span className="text-muted-foreground">Consent method:</span>{" "}
           <span className="font-semibold text-foreground">
@@ -124,66 +119,46 @@ export function MctbSetupTextBackView() {
         </Link>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="ref-card space-y-4 p-5">
-          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Recovery opener</h2>
-          <label className="block space-y-1.5">
-            <span className="text-[12px] font-semibold text-foreground">Message template</span>
-            <Textarea
-              className="min-h-[120px]"
-              value={messageTemplate}
-              onChange={(e) => setMessageTemplate(e.target.value)}
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-[12px] font-semibold text-foreground">Delay before sending (seconds)</span>
-            <input
-              type="number"
-              min={0}
-              className="flex h-10 w-full max-w-[200px] rounded-lg border border-input bg-background px-3 text-sm"
-              value={delaySeconds}
-              onChange={(e) => setDelaySeconds(Number(e.target.value || 0))}
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-[12px] font-semibold text-foreground">Default link URL</span>
-            <input
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-              placeholder="https://example.com/contact"
-              value={defaultLinkUrl}
-              onChange={(e) => setDefaultLinkUrl(e.target.value)}
-            />
-            <span className="text-[11px] text-muted-foreground">Use {"{{link}}"} in your template.</span>
-          </label>
-        </div>
+      <div className="voice-card p-4 sm:p-6">
+        <MctbTextBackComposer
+          message={messageTemplate}
+          onMessageChange={setMessageTemplate}
+          press1Mode={isPress1}
+          compliancePreview={COMPLIANCE_PREVIEW}
+          variablesHint="{{customer.firstName}} · {{business.name}} · {{link}}"
+        />
+      </div>
 
-        <div className="ref-card space-y-3 p-5">
-          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Preview</h2>
-          <p className="text-[12px] text-muted-foreground">Canonical send order — production uses the same renderer.</p>
-          {isPress1 ? (
-            <div className="space-y-3">
-              <div className="rounded-2xl rounded-tl-md bg-gray-100 px-4 py-3 text-[13px] text-gray-800">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                  System compliance confirmation (locked)
-                </p>
-                {COMPLIANCE_PREVIEW}
-              </div>
-              <div className="rounded-2xl rounded-tl-md bg-indigo-600 px-4 py-3 text-[13px] text-white">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-200">
-                  Recovery opener
-                </p>
-                {previewOpener || "Your recovery message preview…"}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl rounded-tl-md bg-indigo-600 px-4 py-3 text-[13px] text-white">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-200">
-                Recovery message
-              </p>
-              {previewOpener || "Your recovery message preview…"}
-            </div>
-          )}
-        </div>
+      <div className="voice-card p-4 sm:p-6">
+        <WizardQuestionBlock
+          number={2}
+          title="Delivery timing & links"
+          subtitle="Optional — applies to future recovery sends only."
+          optional
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-[#374151]">Delay before sending (seconds)</span>
+              <input
+                type="number"
+                min={0}
+                className="flex h-10 w-full max-w-[200px] rounded-lg border border-input bg-background px-3 text-sm"
+                value={delaySeconds}
+                onChange={(e) => setDelaySeconds(Number(e.target.value || 0))}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-[#374151]">Default link URL</span>
+              <input
+                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                placeholder="https://example.com/contact"
+                value={defaultLinkUrl}
+                onChange={(e) => setDefaultLinkUrl(e.target.value)}
+              />
+              <span className="text-[11px] text-muted-foreground">Use {"{{link}}"} in your template.</span>
+            </label>
+          </div>
+        </WizardQuestionBlock>
       </div>
     </MctbSetupSectionLayout>
   );
