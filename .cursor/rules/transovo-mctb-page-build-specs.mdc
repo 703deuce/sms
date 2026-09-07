@@ -36,7 +36,18 @@ alwaysApply: true
 | `/mctb/voicemail/:id` | *(same spec 05)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
 | `/mctb/setup/voicemail` | *(spec 05 — greeting configuration)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
 | `/mctb/analytics` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md` | `transovo-mctb-page-spec-06-analytics.mdc` |
-| `/mctb/setup` | *(pending — spec 07)* | — |
+| `/mctb/setup` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md` | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/start` | *(spec 07 — guided wizard)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/phone` | *(spec 07 overview; spec 08 editor detail pending)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/missed-call-rules` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/text-back` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/consent` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/business-hours` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/follow-up` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/voicemail` | *(spec 07 + spec 05 greeting editor)* | `transovo-mctb-page-spec-07-setup.mdc` + `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
+| `/mctb/setup/links` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/exclusions` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/test` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
 
 ## Hard requirements (all pages)
 

@@ -1,0 +1,73 @@
+---
+description: MANDATORY — MCTB Setup architecture. Guided wizard + configuration home; one canonical config.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 07: SETUP & GUIDED SETUP
+
+**Primary route:** `/mctb/setup` | **Wizard:** `/mctb/setup/start` (or equivalent) | **Sections:** `/mctb/setup/...`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–06
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Setup (`/mctb/setup`, wizard, setup section routes, legacy `/voice/setup`).
+
+## Core architecture (LOCKED)
+
+**One canonical MCTB configuration.** Two presentations:
+
+| State | Experience |
+|-------|------------|
+| First-time / incomplete | Guided wizard: Phone → Missed Calls → Consent → Text Back → Business Hours → Voicemail → Test & Activate |
+| Configured / operational | Setup Overview — direct jump to any section; **no wizard** for single edits |
+
+Wizard and standalone editors **read/write the same backend**. No separate onboarding settings.
+
+## Setup Overview (`/mctb/setup`)
+
+Configuration home with status rows: Name | Summary | Problem | Manage/Fix.
+
+Canonical areas: Phone & Forwarding, Missed-call Rules, Text Back, Consent, Business Hours, Follow-up Rules, Voicemail, Links & Request Form, Exclusions, Test & Diagnostics.
+
+Lifecycle: **Start setup** / **Continue setup** (incomplete) | normal overview (active) | degraded problem + direct fix (no full wizard rerun).
+
+## Wizard rules
+
+- User-language progress (Phone, Consent, Text Back — not TFV/Pending/Runtime)
+- Incremental save on advance; Back preserves fields; resume at incomplete step
+- Readiness-based completion — not click-through
+- Real forwarding verification evidence; real test checkpoints (not fake %)
+- Press-1: locked system confirmation + editable conversation opener
+- `existing_consent`: explicit attestation, never prechecked
+- Sender readiness ≠ recipient consent
+- External review (TFV/10DLC) — status surface, not trapping wizard step
+- After activation: `/mctb/setup` opens overview, not Step 1
+
+## Direct editors (post-setup)
+
+Page title + purpose + status + form + Save. **No wizard progress.**
+
+Local config nav (sidebar/list), not 10 horizontal tabs.
+
+Voicemail greeting details: also see spec 05.
+
+## Readiness model
+
+Orthogonal facets — not one overloaded `setup_status`: Configuration, Forwarding, Sender, Consent, Operational mode, Health, Live test. "Needs attention" is derived.
+
+## API
+
+Audit legacy SolutionSetup vs MCTB setup APIs. Wizard + editors → **one** canonical configuration domain.
+
+## Prohibited
+
+Giant 12-section page as primary UX; separate wizard/real settings; force wizard for one change; provider jargon on overview; fake verified forwarding; editable Press-1 compliance message; fake test progress; restart wizard on partial failure
+
+## Definition of done
+
+See full spec §107 checklist.
+
+## Next in series
+
+**08 — Phone & Forwarding** — dedicated editor spec (pending).

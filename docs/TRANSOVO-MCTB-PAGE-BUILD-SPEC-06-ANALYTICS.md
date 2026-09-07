@@ -1594,4 +1594,4 @@ Cursor may mark `/mctb/analytics` complete only when:
 
 ## Build handoff
 
-Next page-spec: **07 — Setup Overview / Configuration Home** — consolidating the current giant 12-section setup page into the approved MCTB configuration architecture.
+Next page-spec: **07 — Setup & Guided Setup** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md`.

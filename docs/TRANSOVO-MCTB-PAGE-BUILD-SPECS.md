@@ -30,8 +30,9 @@
 | 04 | Conversations | `/mctb/conversations` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md) | `transovo-mctb-page-spec-04-conversations.mdc` |
 | 05 | Visual Voicemail | `/mctb/voicemail` + `/mctb/setup/voicemail` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md) | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
 | 06 | Analytics | `/mctb/analytics` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md) | `transovo-mctb-page-spec-06-analytics.mdc` |
-| 07 | Setup Overview | `/mctb/setup` | *(pending)* | — |
-| 08+ | *Additional pages TBD* | | | |
+| 07 | Setup & Guided Setup | `/mctb/setup` + `/mctb/setup/...` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md) | `transovo-mctb-page-spec-07-setup.mdc` |
+| 08 | Phone & Forwarding | `/mctb/setup/phone` | *(pending)* | — |
+| 09+ | *Additional setup editors TBD* | | | |
 
 When implementing a route, read the governing MCTB docs **and** the page-specific build spec for that route before writing code.
 
