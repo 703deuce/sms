@@ -5,6 +5,7 @@ import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
 import { loadConsentForMissedCallEvent } from "@/lib/mctb/consent-log";
 import { loadMissedCallTextConfig } from "@/lib/agents/missed-call-text-back/config";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
+import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -27,7 +28,8 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const [repeatCaller, linkClicks, formSubmissions, config, consent] = await Promise.all([
+    const [repeatCaller, linkClicks, formSubmissions, config, consent, contact, conversation, voicemail] =
+      await Promise.all([
       countCallerMissedEventsToday(workspaceId, event.callerE164),
       prisma.linkClickEvent.findMany({
         where: { workspaceId, missedCallEventId: id },
@@ -45,6 +47,48 @@ export async function GET(_request: Request, { params }: Params) {
         .catch(() => []),
       loadMissedCallTextConfig(workspaceId),
       loadConsentForMissedCallEvent({ workspaceId, missedCallEventId: id }),
+      event.contactId
+        ? prisma.contact.findFirst({
+            where: { id: event.contactId, workspaceId },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : Promise.resolve(null),
+      event.contactId
+        ? prisma.conversation.findFirst({
+            where: {
+              workspaceId,
+              contactId: event.contactId,
+              productSource: appProductSourceToPrisma("mctb"),
+            },
+            orderBy: { updatedAt: "desc" },
+            select: {
+              id: true,
+              unread: true,
+              status: true,
+              updatedAt: true,
+              messages: { orderBy: { createdAt: "desc" }, take: 1, select: { body: true, createdAt: true, direction: true } },
+            },
+          })
+        : Promise.resolve(null),
+      prisma.voicemailMessage.findFirst({
+        where: {
+          workspaceId,
+          fromE164: event.callerE164,
+          createdAt: {
+            gte: new Date(event.detectedAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(event.detectedAt.getTime() + 60 * 60 * 1000),
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          createdAt: true,
+          transcriptText: true,
+          transcriptStatus: true,
+          aiSummary: true,
+          durationSeconds: true,
+        },
+      }),
     ]);
 
     traceMctbDebug("missed-call-detail", "get_complete", {
@@ -70,6 +114,32 @@ export async function GET(_request: Request, { params }: Params) {
       })),
       leadCaptureEnabled: config.leadCaptureEnabled,
       consent,
+      contact,
+      conversation: conversation
+        ? {
+            id: conversation.id,
+            unread: conversation.unread,
+            status: conversation.status,
+            updatedAt: conversation.updatedAt.toISOString(),
+            lastMessage: conversation.messages[0]
+              ? {
+                  body: conversation.messages[0].body,
+                  createdAt: conversation.messages[0].createdAt.toISOString(),
+                  direction: conversation.messages[0].direction,
+                }
+              : null,
+          }
+        : null,
+      voicemail: voicemail
+        ? {
+            id: voicemail.id,
+            createdAt: voicemail.createdAt.toISOString(),
+            transcriptText: voicemail.transcriptText,
+            transcriptStatus: voicemail.transcriptStatus,
+            aiSummary: voicemail.aiSummary,
+            durationSeconds: voicemail.durationSeconds,
+          }
+        : null,
     });
   } catch (err) {
     traceMctbDebugError("missed-call-detail", "get_failed", err, { workspaceId, eventId: id });

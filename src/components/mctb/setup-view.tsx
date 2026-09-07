@@ -9,6 +9,7 @@ import {
   MCTB_CONSENT_MODE_VERIFIED,
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
+import { PageHeader } from "@/components/ui/page-header";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -97,12 +98,59 @@ const SECTIONS = [
   { id: "message", title: "5. First Text" },
   { id: "links", title: "6. Links & request form" },
   { id: "consent", title: "7. Consent" },
-  { id: "hours", title: "8. Schedule" },
-  { id: "cooldown", title: "9. Recovery behavior" },
-  { id: "replies", title: "10. Reply handling" },
-  { id: "exclusions", title: "11. Do-not-text list" },
-  { id: "test", title: "12. Test" },
+  { id: "exclusions", title: "8. Do-not-text list" },
+  { id: "test", title: "9. Test" },
 ] as const;
+
+export type MctbSetupSection =
+  | "phone"
+  | "missed-call-rules"
+  | "text-back"
+  | "consent"
+  | "voicemail"
+  | "exclusions"
+  | "test";
+
+const SECTION_CARD_IDS: Record<MctbSetupSection, readonly string[]> = {
+  phone: ["number", "forwarding"],
+  "missed-call-rules": ["triggers"],
+  "text-back": ["message", "links"],
+  consent: ["consent"],
+  voicemail: ["voicemail"],
+  exclusions: ["exclusions"],
+  test: ["test"],
+};
+
+const SECTION_COPY: Record<MctbSetupSection, { title: string; description: string }> = {
+  phone: {
+    title: "Phone & Forwarding",
+    description: "Connect your business line and verify carrier forwarding to Transovo.",
+  },
+  "missed-call-rules": {
+    title: "Missed-call rules",
+    description: "Choose which call outcomes create missed-call recovery events.",
+  },
+  "text-back": {
+    title: "Text Back",
+    description: "Configure the recovery message callers receive after a missed call.",
+  },
+  consent: {
+    title: "Consent",
+    description: "Choose how permission to text missed callers is established.",
+  },
+  voicemail: {
+    title: "Voicemail",
+    description: "Configure greeting and voicemail behavior for missed calls.",
+  },
+  exclusions: {
+    title: "Exclusions",
+    description: "Numbers that should never receive automated recovery texts.",
+  },
+  test: {
+    title: "Test & diagnostics",
+    description: "Run an end-to-end test before going live.",
+  },
+};
 
 type ExclusionRow = {
   id: string;
@@ -120,7 +168,9 @@ function fmtPhone(e164: string) {
   return e164;
 }
 
-export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = {}) {
+export function MctbSetupView({ section }: { section: MctbSetupSection }) {
+  const visibleCards = new Set(SECTION_CARD_IDS[section]);
+  const showCard = (id: string) => visibleCards.has(id);
   const [data, setData] = useState<SetupData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -241,12 +291,6 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
     void load();
     void loadExclusions();
   }, [load, loadExclusions]);
-
-  useEffect(() => {
-    if (!focusSectionId || loading) return;
-    const el = document.getElementById(focusSectionId);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [focusSectionId, loading]);
 
   useEffect(() => {
     if (!setupTest?.started || setupTest.verified) return;
@@ -402,16 +446,19 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-[#111827]">
-          Text Back Setup
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Central configuration for missed-call text back — triggers, consent, first message,
-          voicemail, recovery behavior, and testing.
-        </p>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
+      <PageHeader
+        title={SECTION_COPY[section].title}
+        description={SECTION_COPY[section].description}
+        actions={
+          <Link
+            href={MCTB_ROUTES.setup}
+            className="inline-flex h-9 items-center rounded-[10px] border border-border bg-card px-4 text-[13px] font-medium hover:bg-muted"
+          >
+            Back to setup
+          </Link>
+        }
+      />
 
       {data?.schedule?.paused ? (
         <MctbPausedNotice
@@ -439,7 +486,7 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
           <p className="mt-1">
             At least one assigned number has approved SMS messaging (A2P or toll-free verification).
             {data?.schedule?.paused
-              ? " You can save setup changes while paused; text-backs resume when you turn them back on from Schedule."
+              ? " You can save setup changes while paused; resume automated recovery from Recovery controls."
               : " You can save, activate, and run production tests."}
           </p>
         </div>
@@ -507,20 +554,8 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
         </Card>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-        <nav className="hidden space-y-1 lg:block">
-          {SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              className="block rounded-lg px-3 py-2 text-[13px] font-medium text-[#4b5563] hover:bg-[#f3f4f6]"
-            >
-              {s.title}
-            </a>
-          ))}
-        </nav>
-
-        <div className="space-y-5">
+      <div className="space-y-5">
+          {showCard("number") ? (
           <Card id="number" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Choose the number</h2>
             <p className="text-[13px] text-muted-foreground">
@@ -587,7 +622,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               Manage numbers →
             </Link>
           </Card>
+          ) : null}
 
+          {showCard("forwarding") ? (
           <Card id="forwarding" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Carrier forwarding</h2>
             <p className="text-[13px] text-muted-foreground">
@@ -619,7 +656,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </p>
             )}
           </Card>
+          ) : null}
 
+          {showCard("triggers") ? (
           <Card id="triggers" className="scroll-mt-24 space-y-3 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Trigger</h2>
             {(
@@ -629,7 +668,6 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
                 ["rejected", "Rejected"],
                 ["timeout", "Ring timeout"],
                 ["voicemail", "Voicemail"],
-                ["afterHours", "After hours (when outside business hours)"],
               ] as const
             ).map(([key, label]) => (
               <label key={key} className="flex items-center gap-2 text-[13px] text-[#374151]">
@@ -642,12 +680,16 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </label>
             ))}
           </Card>
+          ) : null}
 
+          {showCard("voicemail") ? (
           <Card id="voicemail" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Voicemail</h2>
             <MctbVoicemailSetupSection phoneNumberId={phoneNumberId} />
           </Card>
+          ) : null}
 
+          {showCard("message") ? (
           <Card id="message" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">First Text</h2>
             <label className="block space-y-1.5">
@@ -656,28 +698,6 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
                 className="min-h-[100px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
                 value={messageTemplate}
                 onChange={(e) => setMessageTemplate(e.target.value)}
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-[#374151]">
-                Business hours message (optional)
-              </span>
-              <textarea
-                className="min-h-[80px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
-                placeholder="Used during your business hours when set"
-                value={messageTemplateBusinessHours}
-                onChange={(e) => setMessageTemplateBusinessHours(e.target.value)}
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-[#374151]">
-                After hours message (optional)
-              </span>
-              <textarea
-                className="min-h-[80px] w-full rounded-lg border border-[#D1D5DB] px-3 py-2 text-[14px]"
-                placeholder="Used outside business hours when set"
-                value={messageTemplateAfterHours}
-                onChange={(e) => setMessageTemplateAfterHours(e.target.value)}
               />
             </label>
             <label className="block space-y-1.5">
@@ -697,7 +717,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               <p className="mt-1 whitespace-pre-wrap">{previewMessage}</p>
             </div>
           </Card>
+          ) : null}
 
+          {showCard("links") ? (
           <Card id="links" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Links & request form</h2>
             <p className="text-[13px] text-muted-foreground">
@@ -750,7 +772,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </p>
             </label>
           </Card>
+          ) : null}
 
+          {showCard("consent") ? (
           <Card id="consent" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">
               How do you have permission to text callers?
@@ -820,86 +844,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </Link>
             </div>
           </Card>
+          ) : null}
 
-          <Card id="hours" className="scroll-mt-24 space-y-4 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-[15px] font-semibold text-[#111827]">Schedule</h2>
-              <Link href={MCTB_ROUTES.setupRecovery} className="text-[13px] font-semibold text-primary hover:underline">
-                Open Schedule page →
-              </Link>
-            </div>
-            <label className="flex items-center gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                checked={businessHoursOnly}
-                onChange={(e) => setBusinessHoursOnly(e.target.checked)}
-              />
-              Only send during business hours
-            </label>
-            {businessHoursOnly ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="block space-y-1">
-                  <span className="text-[12px] font-semibold">Start</span>
-                  <input
-                    type="time"
-                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
-                    value={allowedStartTime}
-                    onChange={(e) => setAllowedStartTime(e.target.value)}
-                  />
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-[12px] font-semibold">End</span>
-                  <input
-                    type="time"
-                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
-                    value={allowedEndTime}
-                    onChange={(e) => setAllowedEndTime(e.target.value)}
-                  />
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-[12px] font-semibold">Timezone</span>
-                  <input
-                    className="h-10 w-full rounded-lg border px-3 text-[14px]"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                  />
-                </label>
-              </div>
-            ) : null}
-          </Card>
-
-          <Card id="cooldown" className="scroll-mt-24 space-y-3 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Recovery behavior</h2>
-            <p className="text-[13px] text-muted-foreground">
-              Prevent multiple texts if the same person calls repeatedly.
-            </p>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold">Cooldown (minutes)</span>
-              <input
-                type="number"
-                min={0}
-                className="h-10 w-full max-w-[200px] rounded-lg border px-3 text-[14px]"
-                value={cooldownMinutes}
-                onChange={(e) => setCooldownMinutes(Number(e.target.value || 0))}
-              />
-            </label>
-          </Card>
-
-          <Card id="replies" className="scroll-mt-24 space-y-3 p-5">
-            <h2 className="text-[15px] font-semibold text-[#111827]">Reply handling</h2>
-            <label className="flex items-center gap-2 text-[13px]">
-              <input
-                type="checkbox"
-                checked={replyNotifications}
-                onChange={(e) => setReplyNotifications(e.target.checked)}
-              />
-              Route replies to Conversations and notify your team
-            </label>
-            <Link href="/conversations" className="text-[13px] font-semibold text-primary hover:underline">
-              Open Conversations →
-            </Link>
-          </Card>
-
+          {showCard("exclusions") ? (
           <Card id="exclusions" className="scroll-mt-24 space-y-4 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Do-not-text list</h2>
             <p className="text-[13px] text-muted-foreground">
@@ -976,7 +923,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </ul>
             )}
           </Card>
+          ) : null}
 
+          {showCard("test") ? (
           <Card id="test" className="scroll-mt-24 space-y-3 p-5">
             <h2 className="text-[15px] font-semibold text-[#111827]">Test</h2>
             <p className="text-[13px] text-muted-foreground">
@@ -1033,7 +982,7 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               <Link href={MCTB_ROUTES.complianceConsent}>
                 <Button variant="outline">View consent log</Button>
               </Link>
-              <Link href="/conversations">
+              <Link href="/conversations?product=mctb">
                 <Button variant="outline">View conversations</Button>
               </Link>
             </div>
@@ -1050,6 +999,7 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               </div>
             ) : null}
           </Card>
+          ) : null}
 
           {error ? <p className="text-[13px] font-medium text-rose-600">{error}</p> : null}
           {savedWhilePaused ? (
@@ -1074,10 +1024,9 @@ export function MctbSetupView({ focusSectionId }: { focusSectionId?: string } = 
               {data?.schedule?.paused ? "Save changes (draft)" : "Save draft"}
             </Button>
             <Link href={MCTB_ROUTES.setupRecovery} className="text-[13px] text-primary hover:underline">
-              Pause or schedule text-backs →
+              Recovery controls →
             </Link>
           </div>
-        </div>
       </div>
     </div>
   );

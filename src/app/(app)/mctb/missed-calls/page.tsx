@@ -4,6 +4,7 @@ import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements
 import { isActiveEntitlement } from "@/lib/products/types";
 import { getSession } from "@/lib/auth";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { Suspense } from "react";
 
 export default async function MctbMissedCallsPage() {
   const { workspaceId } = await requireWorkspaceContext();
@@ -16,7 +17,9 @@ export default async function MctbMissedCallsPage() {
   return (
     <div className="space-y-4">
       {showMassSmsBanner ? <CrossProductBanner variant="mass_sms_on_mctb" /> : null}
-      <MctbMissedCallsView />
+      <Suspense fallback={<div className="px-6 py-12 text-sm text-muted-foreground">Loading missed calls…</div>}>
+        <MctbMissedCallsView />
+      </Suspense>
     </div>
   );
 }

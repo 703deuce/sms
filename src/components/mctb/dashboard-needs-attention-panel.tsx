@@ -1,6 +1,7 @@
 "use client";
 
 import type { NeedsAttentionItem } from "@/lib/platform/needs-attention-types";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { fmtRelativeTime } from "@/lib/smart-routing/display";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -48,10 +49,23 @@ export function DashboardNeedsAttentionPanel() {
         </Link>
       </div>
       <ul className="mt-3 space-y-2">
-        {items.map((item) => (
+        {items.map((item) => {
+          const primaryHref =
+            item.primaryKind === "missed_call" || item.primaryKind === "mctb_reply"
+              ? MCTB_ROUTES.missedCallDetail(item.primaryRefId)
+              : item.primaryKind === "voicemail"
+                ? MCTB_ROUTES.voicemail
+                : item.events[0]?.href;
+          return (
           <li key={item.id} className="flex items-start justify-between gap-3 text-[13px]">
             <div>
-              <p className="font-medium text-[#111827]">{item.title}</p>
+              {primaryHref ? (
+                <Link href={primaryHref} className="font-medium text-[#111827] hover:underline">
+                  {item.title}
+                </Link>
+              ) : (
+                <p className="font-medium text-[#111827]">{item.title}</p>
+              )}
               {item.subtitle ? (
                 <p className="text-muted-foreground">{item.subtitle}</p>
               ) : null}
@@ -60,7 +74,8 @@ export function DashboardNeedsAttentionPanel() {
               {fmtRelativeTime(item.latestAt)}
             </span>
           </li>
-        ))}
+          );
+        })}
       </ul>
       <div className="mt-3">
         <Link

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatCarrierStep, type CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type {
   MctbConsentMode,
   MctbForwardingCarrier,
@@ -497,7 +498,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           {consentMode === "press_1" ? (
             <p className="text-sm text-muted-foreground">
               After onboarding, customize your spoken Press-1 script and generate audio in{" "}
-              <Link href="/voice/setup" className="font-medium text-primary hover:underline">
+              <Link href={MCTB_ROUTES.setup} className="font-medium text-primary hover:underline">
                 Setup → Verified Call Consent
               </Link>
               . Live calls play your saved recording before collecting Press 1.
@@ -768,7 +769,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           {!forwardE164 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
               Assign your production MCTB number in the previous step or in{" "}
-              <Link href="/voice/setup" className="font-medium underline">
+              <Link href={MCTB_ROUTES.setup} className="font-medium underline">
                 Setup
               </Link>{" "}
               before configuring forwarding. Set env <code className="text-xs">MCTB_PRODUCTION_FORWARD_E164</code>{" "}

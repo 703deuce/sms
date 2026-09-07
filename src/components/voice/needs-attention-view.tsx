@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import { fmtRelativeTime } from "@/lib/smart-routing/display";
 import type { NeedsAttentionItem } from "@/lib/platform/needs-attention-types";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -154,14 +155,14 @@ export function NeedsAttentionView() {
                     )}
                     {item.primaryKind === "mctb_reply" || item.primaryKind === "missed_call" ? (
                       <Link
-                        href={`/voice/missed-calls/${item.primaryRefId}`}
+                        href={MCTB_ROUTES.missedCallDetail(item.primaryRefId)}
                         className="text-xs font-semibold text-primary hover:underline"
                       >
                         Open missed call
                       </Link>
                     ) : item.primaryKind === "voicemail" ? (
                       <Link
-                        href="/voice/voicemail"
+                        href={MCTB_ROUTES.voicemail}
                         className="text-xs font-semibold text-primary hover:underline"
                       >
                         Open voicemail

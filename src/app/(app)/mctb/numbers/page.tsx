@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/ui/page-header";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import {
   enrichWorkspacePhoneWithMessagingStatus,
@@ -27,13 +28,13 @@ export default async function VoiceNumbersPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/voice/numbers/buy"
+              href="/numbers/buy"
               className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary-hover"
             >
               Add number
             </Link>
             <Link
-              href="/voice/numbers"
+              href={MCTB_ROUTES.numbers}
               className="inline-flex h-9 items-center rounded-[10px] border border-[#e5e7eb] px-4 text-[13px] font-semibold text-[#374151] hover:bg-[#f9fafb]"
             >
               Refresh list
@@ -94,7 +95,7 @@ export default async function VoiceNumbersPage() {
 
       <p className="mt-3 text-xs text-muted-foreground">
         Choose which number runs missed-call text back in{" "}
-        <Link href="/voice/setup" className="font-semibold text-primary underline">
+        <Link href={MCTB_ROUTES.setupPhone} className="font-semibold text-primary underline">
           Setup
         </Link>
         . Switching numbers in Setup updates which line handles missed-call recovery. Complete{" "}
