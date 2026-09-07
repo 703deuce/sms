@@ -1,0 +1,63 @@
+---
+description: MANDATORY — MCTB Recovery Controls (/mctb/setup/recovery). Pause + follow-up rules; NO Business Hours.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 12: RECOVERY CONTROLS & FOLLOW-UP RULES
+
+**Route:** `/mctb/setup/recovery`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–10
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Recovery Controls (`/mctb/setup/recovery`, Home pause/resume, legacy `/mctb/setup/business-hours`, `/mctb/setup/follow-up`).
+
+## Architecture correction (LOCKED)
+
+**No Business Hours / weekly schedule page for MCTB.** Carrier conditional forwarding determines when unanswered calls reach Transovo — the business answers or doesn't.
+
+**Replaces:** standalone Business Hours + separate Follow-up Rules nav entries → **one page: Recovery Controls**
+
+## Primary job
+
+1. **Operational:** Active / Pause (presets, 24h, custom date-time, indefinite) / Resume now — shared with Home
+2. **Follow-up:** repeat-caller cooldown + max automated recovery messages (runtime-defined period)
+
+## Pause semantics (LOCKED)
+
+| Pause is NOT | |
+|--------------|---|
+| Carrier forwarding disabled | |
+| Customer opt-out | |
+| Sender failure | |
+
+Use reason `recovery_paused` — not `recipient_opted_out`. Calls may still log; automated recovery texts stop. No backlog blast on resume.
+
+## Follow-up rules
+
+- Repeat calls = **separate** missed-call events; cooldown suppresses duplicate **texts**
+- Cooldown basis = last automated recovery send (backend authoritative)
+- Press-1 system confirmation + opener = one recovery attempt if domain defines
+- Opt-out/exclusion/sender/consent override follow-up limits
+- No drip campaigns, AI bypass, workflow builder
+
+## Wizard
+
+No dedicated wizard step — sensible defaults; optional summary at Test review.
+
+## Text Back alignment
+
+One recovery opener — **no** required business-hours/after-hours message variants (spec 10 corrected).
+
+## Legacy routes
+
+`/mctb/setup/business-hours`, `/mctb/setup/follow-up` → redirect/resolve to `/mctb/setup/recovery`
+
+## End of page-spec series (this pass)
+
+Final spec for current MCTB rebuild. Spec 11 Consent not produced this pass. Numbers, Exclusions, Links, Reports, Integrations out of scope.
+
+## Definition of done
+
+See full spec §81 checklist.

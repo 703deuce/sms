@@ -34,8 +34,10 @@
 | 08 | Phone & Forwarding | `/mctb/setup/phone` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md) | `transovo-mctb-page-spec-08-phone-forwarding.mdc` |
 | 09 | Missed-call Rules | `/mctb/setup/missed-call-rules` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md) | `transovo-mctb-page-spec-09-missed-call-rules.mdc` |
 | 10 | Text Back | `/mctb/setup/text-back` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md) | `transovo-mctb-page-spec-10-text-back.mdc` |
-| 11 | Consent | `/mctb/setup/consent` | *(pending)* | — |
-| 12+ | *Additional setup editors TBD* | | | |
+| 11 | Consent | `/mctb/setup/consent` | *(not produced this pass)* | — |
+| 12 | Recovery Controls & Follow-up Rules | `/mctb/setup/recovery` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md) | `transovo-mctb-page-spec-12-recovery-controls.mdc` |
+
+**End of page-spec series for this MCTB pass.** Legacy routes `/mctb/setup/business-hours` and `/mctb/setup/follow-up` redirect to `/mctb/setup/recovery`. Numbers, Exclusions, Links, Reports, Integrations intentionally out of scope.
 
 When implementing a route, read the governing MCTB docs **and** the page-specific build spec for that route before writing code.
 

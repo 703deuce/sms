@@ -19,7 +19,7 @@ alwaysApply: true
 
 | State | Experience |
 |-------|------------|
-| First-time / incomplete | Guided wizard: Phone → Missed Calls → Consent → Text Back → Business Hours → Voicemail → Test & Activate |
+| First-time / incomplete | Guided wizard: Phone → Missed Calls → Consent → Text Back → Voicemail → Test & Activate |
 | Configured / operational | Setup Overview — direct jump to any section; **no wizard** for single edits |
 
 Wizard and standalone editors **read/write the same backend**. No separate onboarding settings.
@@ -28,7 +28,7 @@ Wizard and standalone editors **read/write the same backend**. No separate onboa
 
 Configuration home with status rows: Name | Summary | Problem | Manage/Fix.
 
-Canonical areas: Phone & Forwarding, Missed-call Rules, Text Back, Consent, Business Hours, Follow-up Rules, Voicemail, Links & Request Form, Exclusions, Test & Diagnostics.
+Canonical areas: Phone & Forwarding, Missed-call Rules, Text Back, Consent, **Recovery Controls** (spec 12 — replaces Business Hours + Follow-up Rules), Voicemail, Test & Diagnostics. Links/Exclusions/Numbers out of scope for this page-spec pass.
 
 Lifecycle: **Start setup** / **Continue setup** (incomplete) | normal overview (active) | degraded problem + direct fix (no full wizard rerun).
 
@@ -70,6 +70,4 @@ See full spec §107 checklist.
 
 ## Next in series
 
-**08 — Phone & Forwarding** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md`.
-
-**09 — Missed-call Rules** — pending build spec.
+**08–10, 12** — dedicated editor specs (see index). **11 Consent** — not produced this pass. **12 Recovery Controls** — final spec; replaces Business Hours.

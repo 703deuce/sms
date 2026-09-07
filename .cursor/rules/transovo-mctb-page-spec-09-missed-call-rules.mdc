@@ -25,7 +25,7 @@ Call outcome matches enabled rule → MissedCallEvent → central eligibility en
 
 **Owns:** trigger conditions (no answer, busy, unreachable, rejected/voicemail only if runtime supports), no-answer timing only if MCTB owns it
 
-**Does not own:** forwarding, consent, sender, message text, business hours, voicemail greeting, cooldown/max sends (→ Follow-up Rules), opt-out policy
+**Does not own:** forwarding, consent, sender, message text, weekly schedule, voicemail greeting, cooldown/max sends (→ Recovery Controls spec 12), opt-out policy
 
 ## UI model
 
@@ -38,7 +38,7 @@ Call outcome matches enabled rule → MissedCallEvent → central eligibility en
 ## Locked distinctions
 
 - **Classification ≠ messaging eligibility** — no "text opted-out callers anyway"
-- **Repeat calls** = separate events; cooldown is Follow-up Rules
+- **Repeat calls** = separate events; cooldown is Recovery Controls (spec 12)
 - **Rules apply prospectively** — history not rewritten
 - **Zero triggers** = validation error
 - **Loading** — no false unchecked defaults
@@ -49,7 +49,7 @@ Call outcome matches enabled rule → MissedCallEvent → central eligibility en
 |------|----------------|
 | Phone & Forwarding | Did call reach Transovo? |
 | Missed-call Rules | Did outcome match enabled rule? |
-| Consent / Schedule / Follow-up | After event created |
+| Consent / Recovery Controls | After event created |
 
 ## Prohibited
 
@@ -63,4 +63,4 @@ See full spec §51 checklist.
 
 **10 — Text Back** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md`.
 
-**11 — Consent** — pending build spec.
+**12 — Recovery Controls** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md` (final spec this pass).

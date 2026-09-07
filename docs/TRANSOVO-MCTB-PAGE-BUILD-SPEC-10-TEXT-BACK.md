@@ -12,6 +12,8 @@
 
 **Cursor rule:** `.cursor/rules/transovo-mctb-page-spec-10-text-back.mdc` (`alwaysApply: true`)
 
+**Architecture note (spec 12):** MCTB uses **one recovery opener** — not business-hours/after-hours message variants. Schedule-based variants are **not required** in the new MCTB UI. Recovery pause and repeat-caller limits live under **Recovery Controls** (`/mctb/setup/recovery`).
+
 ---
 
 ## 1. Master Cursor rule
@@ -38,7 +40,6 @@ This page owns:
 
 * the customer-facing recovery-message configuration
 * the actual message sequence preview
-* business-hours / after-hours message variants where supported
 * sender context/readiness display
 * supported message variables
 * timing/delay configuration where runtime genuinely supports it
@@ -381,70 +382,13 @@ Do not silently send `{{business_name}}`.
 
 ---
 
-## 18. Business-hours and after-hours variants
+## 18–21. Business-hours variants — superseded (spec 12)
 
-If runtime supports variants, this page should expose them clearly.
+**Do not implement** business-hours / after-hours message variants in the new MCTB Text Back UI unless runtime already depends on them and product explicitly retains them.
 
-Recommended structure:
+Use **one recovery opener** for all qualifying missed calls. Operational pause and repeat-caller behavior belong on **Recovery Controls** (`TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md`), not a weekly schedule.
 
-```
-Conversation opener
-○ Use one message all the time
-○ Use different messages by schedule
-```
-
-If separate messages selected:
-
-* Business-hours message
-* After-hours message
-
-Reuse the canonical Business Hours schedule.
-
-Do not create another schedule editor here.
-
----
-
-## 19. Schedule reference
-
-Example:
-
-```
-Business hours
-Mon–Fri · 8:00 AM–6:00 PM Eastern
-[Manage business hours]
-```
-
-This page uses the schedule.
-
-Setup → Business Hours owns the schedule itself.
-
----
-
-## 20. Business-hours message
-
-Example:
-
-```
-Thanks for calling Joe's Plumbing. Reply here and our team will help you shortly.
-```
-
-Only actual supported content.
-
-Do not imply immediate human availability unless business has configured that expectation.
-
----
-
-## 21. After-hours message
-
-Example:
-
-```
-Thanks for calling Joe's Plumbing. We're currently closed, but reply here and we'll follow up when we reopen.
-```
-
-Keep it factual.
-
-Do not make scheduling promises that runtime/business cannot guarantee.
+If legacy backend stores variant templates, audit before removal — stop exposing in UI first.
 
 ---
 
@@ -496,13 +440,12 @@ There should be one canonical delay control.
 Do not duplicate delay in:
 
 * Text Back
-* Follow-up Rules
-* Schedule
+* Recovery Controls (follow-up cooldown is different — repeat sends, not initial delay)
 * Automation
 
 The initial recovery-message delay belongs here.
 
-Repeat-message cadence/cooldown belongs under Follow-up Rules.
+Repeat-message cadence/cooldown belongs under **Recovery Controls** (spec 12).
 
 ---
 
@@ -964,31 +907,21 @@ Do not put full reply composer here.
 
 ---
 
-## 58. Follow-up Rules relationship
+## 58. Recovery Controls relationship
 
 This page owns initial recovery opener.
 
-Follow-up Rules owns:
+Recovery Controls owns:
 
+* Active/Pause operational state
 * repeat-caller cooldown
 * max automated recovery attempts/messages
-* later follow-up automation if supported
 
 Do not duplicate those controls.
 
 ---
 
-## 59. Business Hours relationship
-
-This page can define message variants.
-
-Business Hours owns when each variant applies.
-
-No duplicate weekly schedule editor here.
-
----
-
-## 60. Consent relationship
+## 59. Consent relationship
 
 Consent owns mode/disclosure.
 
@@ -1434,4 +1367,4 @@ Cursor may mark this section complete only when:
 
 ## Build handoff
 
-Next page-spec: **11 — Consent** — materially different configuration for Press-1 vs Existing Consent, prompt/audio publishing, and evidence/provenance rules.
+Next page-spec: **12 — Recovery Controls & Follow-up Rules** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md`. (**11 — Consent** not produced in this pass.)

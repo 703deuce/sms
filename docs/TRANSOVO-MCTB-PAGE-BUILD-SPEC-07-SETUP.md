@@ -116,8 +116,7 @@ Post-setup, users need direct access to these canonical areas:
 * Missed-call Rules
 * Text Back
 * Consent
-* Business Hours
-* Follow-up Rules
+* Recovery Controls *(pause/resume + follow-up rules — see spec 12)*
 * Voicemail
 * Links & Request Form
 * Exclusions
@@ -137,8 +136,7 @@ Conceptually:
 /mctb/setup/missed-call-rules
 /mctb/setup/text-back
 /mctb/setup/consent
-/mctb/setup/business-hours
-/mctb/setup/follow-up
+/mctb/setup/recovery
 /mctb/setup/voicemail
 /mctb/setup/links
 /mctb/setup/exclusions
@@ -174,19 +172,15 @@ No answer, busy and unreachable
 [Manage]
 
 Text Back
-Business-hours and after-hours messages
+Recovery message configured
 [Manage]
 
 Consent
 Verified Call Consent
 [Manage]
 
-Business Hours
-Mon–Fri, 8:00 AM–6:00 PM Eastern
-[Manage]
-
-Follow-up Rules
-Cooldown 30 min • Max 2 recovery attempts
+Recovery Controls
+Active · 30-minute repeat-call cooldown
 [Manage]
 
 Voicemail
@@ -275,9 +269,10 @@ Recommended first-time sequence:
 2. Missed Calls
 3. Consent
 4. Text Back
-5. Business Hours
-6. Voicemail
-7. Test & Activate
+5. Voicemail
+6. Test & Activate
+
+Recovery Controls use sensible defaults during first-time setup — no dedicated wizard step (see spec 12).
 
 This is a recommended conceptual sequence, not an instruction to rebuild working backend onboarding state.
 
@@ -299,8 +294,6 @@ What calls should count
 How messaging permission works
     ↓
 What customer receives
-    ↓
-When behavior operates
     ↓
 What happens if they leave voicemail
     ↓
@@ -327,9 +320,8 @@ Setup MCTB
 2 Missed Calls
 3 Consent
 4 Text Back
-5 Business Hours
-6 Voicemail
-7 Test
+5 Voicemail
+6 Test
 ```
 
 On narrow screens, use a compact equivalent.
@@ -348,7 +340,6 @@ Good:
 * Missed Calls
 * Consent
 * Text Back
-* Business Hours
 * Voicemail
 * Test
 
@@ -826,71 +817,19 @@ Whether wizard can continue while registration is pending depends on actual prod
 
 ---
 
-## 39. Step 5 — Business Hours
+## 39–42. Business Hours removed — Recovery Controls (spec 12)
 
-**Primary question**
+**Architecture correction:** MCTB does **not** use a weekly Business Hours / schedule page. Carrier conditional forwarding determines when unanswered calls reach Transovo.
 
-When should MCTB run?
+**Replaced by:** `/mctb/setup/recovery` — **Recovery Controls** (Active/Pause + repeat-caller cooldown + max recovery attempts).
 
-Potential choices if actual runtime supports:
+Operational pause (1 hour, 24 hours, until time, indefinite) and follow-up rules live on that page and on Home. See `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md`.
 
-* Always on
-* During business hours
-* After business hours
-* Custom schedule
-
-If MCTB normally should always recover missed calls regardless of hours, don't artificially make schedule mandatory.
-
-Use product default.
+Legacy `/mctb/setup/business-hours` and `/mctb/setup/follow-up` should redirect to `/mctb/setup/recovery`.
 
 ---
 
-## 40. Weekly schedule
-
-If needed:
-
-* weekday rows
-* start
-* end
-* workspace timezone
-
-Use canonical shared schedule editor.
-
-Do not create a second MCTB-only timezone picker if shared component exists.
-
----
-
-## 41. Timezone
-
-Display clearly.
-
-Example:
-
-Eastern Time — America/New_York
-
-Scheduling stores civil time intent + IANA timezone.
-
-No fixed UTC-4 configuration.
-
----
-
-## 42. Temporary pause is not first-time schedule setup
-
-Controls such as:
-
-* Pause 1 hour
-* Pause until tomorrow
-* Pause until resumed
-
-are operational overrides.
-
-They belong post-setup under Business Hours/Schedule and possibly Home.
-
-Do not clutter first-time wizard.
-
----
-
-## 43. Step 6 — Voicemail
+## 43. Step 5 — Voicemail
 
 Since Voicemail is a real first-class MCTB capability, initial setup should configure its basic caller experience.
 
@@ -969,7 +908,7 @@ Do not make users configure AI prompts during setup.
 
 ---
 
-## 47. Step 7 — Test & Activate
+## 47. Step 6 — Test & Activate
 
 This is not a fake checklist.
 
@@ -1235,8 +1174,7 @@ Phone & Forwarding
 Missed-call Rules
 Text Back
 Consent
-Business Hours
-Follow-up Rules
+Recovery Controls
 Voicemail
 Links & Request Form
 Exclusions
@@ -1298,14 +1236,12 @@ Advanced settings progressively disclosed.
 Manages:
 
 * business/recovery message
-* business-hours variant
-* after-hours variant
-* actual supported delay
+* actual supported initial delay
 * sender context
 * preview
 * links where appropriate
 
-Press-1 Message 1 remains system controlled.
+Press-1 Message 1 remains system controlled. No business-hours/after-hours message variants required (spec 12).
 
 ---
 
@@ -1325,36 +1261,19 @@ Warn appropriately if active runtime behavior changes.
 
 ---
 
-## 66. Business Hours editor
+## 66. Recovery Controls editor
 
-Manages permanent schedule:
+See **spec 12**. Manages:
 
-* always on
-* business hours
-* after hours/custom
-* weekly schedule
-* timezone
+* Active / Pause / Resume
+* repeat-caller cooldown
+* maximum automated recovery messages
 
-And operational pause controls where appropriate.
+Do not recreate weekly schedule or separate Follow-up Rules page.
 
 ---
 
-## 67. Follow-up Rules editor
-
-Known/expected MCTB rules may include:
-
-* cooldown
-* maximum recovery messages per caller
-* reply behavior
-* repeat caller behavior
-
-Expose only real runtime features.
-
-Do not create a mini automation builder.
-
----
-
-## 68. Voicemail editor
+## 67. Voicemail editor (setup)
 
 This is the full configuration surface from the previous specification:
 
@@ -1495,8 +1414,8 @@ Ready · Verified Call Consent
 Text Back
 Ready
 
-Business Hours
-Always on
+Recovery Controls
+Active · 30-minute cooldown
 
 Voicemail
 Ready · Custom greeting
@@ -2178,4 +2097,6 @@ Next page-specs define individual substantial editors where details matter:
 
 **08 — Phone & Forwarding** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md`.
 
-**09 — Missed-call Rules** — pending build spec.
+**12 — Recovery Controls & Follow-up Rules** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md` (final page spec for this MCTB pass; replaces Business Hours).
+
+**11 — Consent** — not produced in this pass; architecture still references consent mode in Text Back and wizard.

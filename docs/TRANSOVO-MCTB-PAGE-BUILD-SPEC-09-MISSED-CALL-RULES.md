@@ -314,11 +314,11 @@ Do not duplicate them here and later.
 
 Preferred ownership:
 
-**Follow-up Rules** owns SMS cooldown and maximum recovery sends.
+**Follow-up Rules** / **Recovery Controls** (spec 12) owns SMS cooldown and maximum recovery sends.
 
 Missed-call Rules may show a read-only note:
 
-Repeat calls may still be logged as separate missed calls. Text-back frequency is controlled under Follow-up Rules.
+Repeat calls may still be logged as separate missed calls. Text-back frequency is controlled under Recovery Controls.
 
 This preserves object truth:
 
@@ -414,7 +414,7 @@ Example:
 * call is missed at 9 PM
 * condition = No answer
 * event is a valid missed call
-* Business Hours/Schedule determines whether/how recovery messaging should proceed
+* Recovery Controls / pause state determines whether automated recovery proceeds (see spec 12)
 
 Do not make Missed-call Rules silently ignore after-hours calls unless that is the explicit product rule.
 
@@ -462,7 +462,7 @@ Do not create a rule where choosing Voicemail replaces the missed-call event ent
 
 This page should show a compact explanatory relationship:
 
-Calls matching these rules enter the MCTB recovery flow. Whether a text is sent is determined by your Consent, Business Hours, Follow-up Rules, sender readiness, and recipient eligibility.
+Calls matching these rules enter the MCTB recovery flow. Whether a text is sent is determined by your Consent, Recovery Controls (pause/cooldown), sender readiness, and recipient eligibility.
 
 This helps users understand why a "missed" call might not produce a text.
 
@@ -862,9 +862,9 @@ That is a valid lifecycle.
 
 ---
 
-## 48. Follow-up Rules relationship
+## 48. Recovery Controls relationship
 
-Cooldown/max message limits belong there.
+Cooldown/max message limits belong on Recovery Controls (spec 12).
 
 Missed-call Rules determines events.
 
@@ -968,8 +968,8 @@ Cursor may mark this section complete only when:
 * [ ] Call classification is separate from messaging eligibility
 * [ ] Consent controls are not duplicated here
 * [ ] Sender/compliance controls are not duplicated here
-* [ ] Business Hours remains separate
-* [ ] SMS cooldown/message limits remain under Follow-up Rules
+* [ ] Recovery Controls / pause remains separate (spec 12)
+* [ ] SMS cooldown/message limits remain under Recovery Controls
 * [ ] Repeat calls remain separate canonical events
 * [ ] Changing rules applies prospectively
 * [ ] Historical events are not rewritten

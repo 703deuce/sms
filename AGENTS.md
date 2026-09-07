@@ -77,7 +77,10 @@ The **five governing MCTB rule documents** (scope, IA, manifest, canonical map, 
 | 08 | Phone & Forwarding | `/mctb/setup/phone` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md` |
 | 09 | Missed-call Rules | `/mctb/setup/missed-call-rules` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md` |
 | 10 | Text Back | `/mctb/setup/text-back` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md` |
-| 11 | Consent | `/mctb/setup/consent` | *(pending)* |
+| 11 | Consent | `/mctb/setup/consent` | *(not produced this pass)* |
+| 12 | Recovery Controls | `/mctb/setup/recovery` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md` |
+
+Page-spec series **ends at 12** for this MCTB pass. Specs 08–10 + 12 are local commits pending push.
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

@@ -32,9 +32,9 @@ Hide Press-1 system confirmation. Show only applicable recovery message flow.
 
 ## Page scope
 
-**Owns:** opener template, business/after-hours variants, initial delay (if supported), variables, link insertion, segment preview, canonical renderer preview
+**Owns:** opener template, initial delay (if supported), variables, link insertion, segment preview, canonical renderer preview
 
-**Does not own:** consent mode/editor, Press-1 audio, sender registration, forwarding, campaigns, inbox replies
+**Does not own:** consent mode/editor, Press-1 audio, sender registration, forwarding, campaigns, inbox replies, **business-hours variants** (removed — spec 12), cooldown/pause (→ Recovery Controls)
 
 ## Consent & sender context
 
@@ -44,8 +44,8 @@ Show compact consent method + link to Setup → Consent. Show sender readiness s
 
 - One canonical message renderer for preview + production
 - Centralized compliance copy/version for system confirmation
-- Business Hours schedule referenced, not duplicated
-- Cooldown/repeat sends → Follow-up Rules
+- One recovery opener — **no** business-hours/after-hours variants (spec 12)
+- Cooldown/repeat sends → Recovery Controls (`/mctb/setup/recovery`)
 - Template changes apply to future sends only
 - GSM-7/Unicode-aware segment count if shown
 - System confirmation before opener (runtime ordering)
@@ -60,4 +60,4 @@ See full spec §84 checklist.
 
 ## Next in series
 
-**11 — Consent** — pending build spec.
+**12 — Recovery Controls** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md` (final spec this pass).
