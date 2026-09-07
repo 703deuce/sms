@@ -7,7 +7,7 @@ alwaysApply: true
 
 **Source of truth:** `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md`  
 **Prerequisites:** product scope → IA navigation map (`.cursor/rules/transovo-mctb-product-scope.mdc`, `transovo-mctb-ia-navigation.mdc`)  
-**Applies with:** `transovo-mctb-canonical.mdc`, all `transovo-*.mdc` standards (always).
+**Applies with:** `transovo-mctb-canonical.mdc`, `transovo-mctb-page-build-specs.mdc`, all `transovo-*.mdc` standards (always).
 
 ## When this rule activates
 
@@ -21,8 +21,9 @@ Paths: `src/app/**/mctb/**`, `src/app/**/voice/**`, `src/components/mctb/**`, `s
 2. IA & navigation map — where everything lives
 3. **This manifest — completeness** (every route, page, section, state, legacy migration)
 4. Canonical product map — domain model, lifecycle
-5. Transovo standards
-6. Existing code/screenshots — evidence only
+5. Page build specs — screen implementation (`docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md`)
+6. Transovo standards
+7. Existing code/screenshots — evidence only
 
 ## Hard requirements
 
