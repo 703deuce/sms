@@ -60,11 +60,10 @@ Defines every required route, page, major section, state, cross-link, and legacy
 
 Before any MCTB UI, API, `src/lib/mctb/`, or runtime change: read product scope **first**, then IA map, then page manifest, then canonical map, then the **page build spec** for the route being built, then all Transovo standards. Screenshots and current pages are evidence only — not product or IA authority.
 
-**5. Page-by-page build specs (implementation)**  
-**Cursor rules:** `.cursor/rules/transovo-mctb-page-build-specs.mdc` + per-page rules (`alwaysApply: true`)  
-**Index:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md`
+## Page-by-page build specs (implementation phase)
 
-Screen-by-screen implementation authority. When building a page, read its spec:
+The **five governing MCTB rule documents** (scope, IA, manifest, canonical map, + Transovo standards) are separate from this **page-spec implementation phase**. Current page specs:
+
 
 | # | Page | Route | Spec |
 |---|------|-------|------|
@@ -73,7 +72,8 @@ Screen-by-screen implementation authority. When building a page, read its spec:
 | 03 | Missed Call Detail | `/mctb/missed-calls/:id` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md` |
 | 04 | Conversations | `/mctb/conversations` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md` |
 | 05 | Visual Voicemail | `/mctb/voicemail` + `/mctb/setup/voicemail` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md` |
-| 06 | Analytics | `/mctb/analytics` | *(pending)* |
+| 06 | Analytics | `/mctb/analytics` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md` |
+| 07 | Setup Overview | `/mctb/setup` | *(pending)* |
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

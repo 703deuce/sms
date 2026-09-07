@@ -29,8 +29,9 @@
 | 03 | Missed Call Detail | `/mctb/missed-calls/:id` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md) | `transovo-mctb-page-spec-03-missed-call-detail.mdc` |
 | 04 | Conversations | `/mctb/conversations` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md) | `transovo-mctb-page-spec-04-conversations.mdc` |
 | 05 | Visual Voicemail | `/mctb/voicemail` + `/mctb/setup/voicemail` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md) | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
-| 06 | Analytics | `/mctb/analytics` | *(pending)* | — |
-| 07+ | *Additional pages TBD* | | | |
+| 06 | Analytics | `/mctb/analytics` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md) | `transovo-mctb-page-spec-06-analytics.mdc` |
+| 07 | Setup Overview | `/mctb/setup` | *(pending)* | — |
+| 08+ | *Additional pages TBD* | | | |
 
 When implementing a route, read the governing MCTB docs **and** the page-specific build spec for that route before writing code.
 

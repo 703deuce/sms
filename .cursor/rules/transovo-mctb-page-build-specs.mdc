@@ -35,7 +35,8 @@ alwaysApply: true
 | `/mctb/voicemail` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md` | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
 | `/mctb/voicemail/:id` | *(same spec 05)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
 | `/mctb/setup/voicemail` | *(spec 05 — greeting configuration)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
-| `/mctb/analytics` | *(pending — spec 06)* | — |
+| `/mctb/analytics` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md` | `transovo-mctb-page-spec-06-analytics.mdc` |
+| `/mctb/setup` | *(pending — spec 07)* | — |
 
 ## Hard requirements (all pages)
 

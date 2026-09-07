@@ -1,0 +1,66 @@
+---
+description: MANDATORY — MCTB Analytics build spec (/mctb/analytics). Recovery funnel authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 06: ANALYTICS
+
+**Route:** `/mctb/analytics`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–05
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Analytics (`/mctb/analytics`, legacy `/voice/analytics`).
+
+## Primary job
+
+Measure MCTB recovery funnel with authoritative data and drilldowns — **not** voice AI, provider diagnostics, or vanity metrics.
+
+## Page structure
+
+1. H1: Analytics + date range (+ business line if multi-line)
+2. Primary KPIs (≤4): Missed calls | Recovery texts sent | Customers replied | Reply rate *(or defined recovery metric)*
+3. Recovery funnel with stage drilldowns
+4. Recovery over time (trends)
+5. Why some callers weren't texted (suppression — distinct from failure)
+6. Delivery breakdown
+7. Voicemail metrics + drilldown to `/mctb/voicemail`
+8. Conversation/engagement secondary metrics
+
+## Locked metric rules
+
+- **Recovery texts sent** — exclude Press-1 compliance confirmation as separate outreach KPI
+- **Customers replied** — distinct conversations, not raw message count
+- **Eligible** — centralized eligibility engine only
+- **Suppressed ≠ Failed**
+- **Reply rate** — documented denominator; same across all pages
+- **No** Recovered revenue, invented bookings, or reply = recovered sale
+
+## Drilldowns (preserve date range)
+
+| Metric | Target |
+|--------|--------|
+| Missed calls | `/mctb/missed-calls?from=&to=` |
+| Replied | `/mctb/conversations?status=replied` |
+| Suppressed | `/mctb/missed-calls?recovery=suppressed` |
+| Voicemail | `/mctb/voicemail?from=&to=` |
+
+## Data requirements
+
+- Centralized metrics service — must match Home, Missed Calls, Conversations, Voicemail
+- Workspace timezone; IANA + DST; half-open ranges
+- Real data only; accessible chart/text equivalents
+- URL state for range/filters preserved on refresh
+
+## Prohibited
+
+Mock analytics, voice-AI metrics, provider jargon in charts, combining suppression+failure, duplicate `/voice/analytics` implementation
+
+## Definition of done
+
+See full spec §89 checklist.
+
+## Next in series
+
+**07 — Setup Overview / Configuration Home** — pending build spec.
