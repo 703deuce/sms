@@ -10,6 +10,28 @@ export const APPOINTMENTS_APP_ROUTE_PREFIXES = [
   "/integrations",
   "/settings",
   "/help",
+  "/getting-started",
+] as const;
+
+/**
+ * API prefixes used by Mode 4 Kimi connected surfaces — must bypass legacy SMS/voice
+ * product guards in middleware when Appointments V1 is primary.
+ */
+export const APPOINTMENTS_API_ROUTE_PREFIXES = [
+  "/api/appointments",
+  "/api/meetings",
+  "/api/merchant-payments",
+  "/api/calendar",
+  "/api/contacts",
+  "/api/conversations",
+  "/api/templates",
+  "/api/team",
+  "/api/workspace",
+  "/api/settings",
+  "/api/messaging",
+  "/api/integrations/calendars",
+  "/api/integrations/payments",
+  "/api/video",
 ] as const;
 
 export function isAppointmentsProductPath(pathname: string): boolean {
@@ -17,6 +39,17 @@ export function isAppointmentsProductPath(pathname: string): boolean {
   return APPOINTMENTS_APP_ROUTE_PREFIXES.some(
     (p) => p !== "/appointments" && (pathname === p || pathname.startsWith(`${p}/`)),
   );
+}
+
+export function isAppointmentsApiPath(pathname: string): boolean {
+  return APPOINTMENTS_API_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+/** Page or API route belonging to the Appointments V1 platform shell. */
+export function isAppointmentsPlatformPath(pathname: string): boolean {
+  return isAppointmentsProductPath(pathname) || isAppointmentsApiPath(pathname);
 }
 
 export function appointmentsShellHome(): string {

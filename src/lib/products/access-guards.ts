@@ -4,7 +4,7 @@ import {
   isSmsProductPath,
   productOfferPath,
 } from "@/lib/products/paths";
-import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
+import { isAppointmentsPlatformPath } from "@/lib/products/appointments-routes";
 import { isMctbAppPath, isVoiceProductPath } from "@/lib/products/voice-routes";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
@@ -23,7 +23,7 @@ export function productAccessDeniedRedirect(
   options?: { authenticated?: boolean },
 ): string | null {
   // Appointments V1 is the primary product — do not bounce to /dashboard (SMS entitlement loop).
-  if (isAppointmentsV1Primary() && isAppointmentsProductPath(pathname)) {
+  if (isAppointmentsV1Primary() && isAppointmentsPlatformPath(pathname)) {
     return null;
   }
   if (isMctbAppPath(pathname)) {

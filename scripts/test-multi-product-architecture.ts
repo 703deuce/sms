@@ -22,6 +22,12 @@ import {
 import { resolvePostLoginPath, productAccessDeniedRedirect } from "@/lib/products/routing";
 import { productHomePath } from "@/lib/products/types";
 import type { UserProductAccess } from "@/lib/products/types";
+import {
+  isAppointmentsApiPath,
+  isAppointmentsPlatformPath,
+  isAppointmentsProductPath,
+} from "@/lib/products/appointments-routes";
+import { isKimiIntegratedRoute } from "@/lib/products/kimi-ui-routes";
 
 function access(
   partial: Partial<UserProductAccess> &
@@ -185,5 +191,54 @@ assert.equal(
   null,
   "SMS analytics stays reachable while standalone SMS is hidden",
 );
+
+// Appointments V1 — promoted pages must not bounce through product open without voice/SMS.
+const appointmentsOnlyAccess = {
+  hasVoice: false,
+  hasNumbers: true,
+  hasSms: false,
+};
+for (const route of [
+  "/appointments/overview",
+  "/appointments/workflows",
+  "/appointments/automations/activity",
+  "/contacts",
+  "/conversations/saved-replies",
+  "/settings/business",
+  "/integrations/calendars",
+  "/payments/transactions",
+  "/meetings",
+  "/video",
+  "/getting-started",
+] as const) {
+  assert.equal(
+    productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
+    null,
+    `Appointments shell route ${route} stays reachable`,
+  );
+  assert.equal(isAppointmentsProductPath(route), true, `${route} is appointments product path`);
+}
+
+for (const route of [
+  "/api/appointments",
+  "/api/appointments/overview",
+  "/api/appointments/settings",
+  "/api/meetings/overview",
+  "/api/merchant-payments/status",
+  "/api/templates",
+  "/api/team",
+  "/api/settings/billing",
+] as const) {
+  assert.equal(
+    productAccessDeniedRedirect(route, appointmentsOnlyAccess, { authenticated: true }),
+    null,
+    `Appointments API ${route} stays reachable`,
+  );
+  assert.equal(isAppointmentsApiPath(route), true, `${route} is appointments API path`);
+  assert.equal(isAppointmentsPlatformPath(route), true, `${route} is appointments platform path`);
+}
+
+assert.equal(isKimiIntegratedRoute("/appointments/calendar"), true, "Calendar is Kimi integrated");
+assert.equal(isKimiIntegratedRoute("/getting-started"), true, "Getting started is Kimi integrated");
 
 console.log("test-multi-product-architecture: all checks passed");

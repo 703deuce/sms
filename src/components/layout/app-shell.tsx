@@ -52,10 +52,15 @@ function shouldAutoCollapseSidebar(path: string) {
   return path.startsWith("/conversations") || /^\/automations\/[^/]+\/edit/.test(path);
 }
 
+function isAppointmentsKimiFullBleedRoute(pathname: string): boolean {
+  if (!isAppointmentsV1Primary()) return false;
+  return isKimiIntegratedRoute(pathname) && !pathname.startsWith("/automations");
+}
+
 function isSmsFullBleedRoute(pathname: string): boolean {
   if (isLegacyAutomationRoute(pathname)) return false;
   return (
-    (isKimiIntegratedRoute(pathname) && !pathname.startsWith("/automations")) ||
+    (isKimiIntegratedRoute(pathname) && !pathname.startsWith("/appointments")) ||
     pathname.startsWith("/automations/drip-campaigns") ||
     pathname.startsWith("/drip-campaigns") ||
     pathname.startsWith("/playbooks") ||
@@ -153,7 +158,7 @@ export function AppShell({
   const isLauncher = pathname === "/app" || pathname.startsWith("/app/");
   const legacyAutomation = isLegacyAutomationRoute(pathname);
   const fixedViewport = isFixedViewportSmsRoute(pathname);
-  const isFullBleed = isSmsFullBleedRoute(pathname);
+  const isFullBleed = isSmsFullBleedRoute(pathname) || isAppointmentsKimiFullBleedRoute(pathname);
   const isKimiFullBleed =
     isFullBleed &&
     isKimiIntegratedRoute(pathname) &&
