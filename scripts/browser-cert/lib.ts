@@ -26,6 +26,7 @@ export type CertStatus =
   | "BLOCKED — LIVE MEDIA"
   | "BLOCKED — LIVE EXTERNAL PROVIDER"
   | "BLOCKED — TEST ENVIRONMENT UNAVAILABLE"
+  | "BLOCKED — BROWSER PHASE STOPPED"
   | "INVALID RESULT — LOCAL CERT SERVER OOM"
   | "NOT IMPLEMENTED"
   | "INTENTIONALLY DEFERRED"
@@ -50,8 +51,14 @@ export type BrowserCertState = {
   };
   results: Record<string, CertResult>;
   batchesCompleted: string[];
+  /** Per-flow checkpoint IDs (disposable-browser mode) */
+  flowsCompleted?: string[];
   environmentBlocked?: boolean;
   environmentBlockedReason?: string;
+  browserPhaseBlocked?: boolean;
+  browserPhaseBlockedReason?: string;
+  consecutiveBrowserCrashes?: number;
+  lastUnfinishedFlowId?: string;
 };
 
 export const CERT_DIR = join(process.cwd(), "docs/certification");
@@ -195,6 +202,7 @@ export function withFlowTimeout<T>(label: string, ms: number, fn: () => Promise<
 export async function launchBrowser(): Promise<Browser> {
   return chromium.launch({
     headless: true,
+    args: ["--disable-dev-shm-usage", "--no-sandbox"],
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
   });
 }
@@ -272,33 +280,26 @@ export async function visitRoute(
 ): Promise<{ ok: boolean; status: number; note: string }> {
   const timeout = opts.navTimeout ?? NAV_TIMEOUT;
   getServerGuard()?.assertHealthy(path);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const resp = await page.goto(path, { waitUntil: "domcontentloaded", timeout });
-      await page.waitForTimeout(300);
-      const body = await page.locator("body").innerText().catch(() => "");
-      const status = resp?.status() || 0;
-      if (!opts.allow404 && (status === 404 || /could not be found/i.test(body))) {
-        return { ok: false, status, note: "404" };
-      }
-      if (status >= 500 || ERROR_PATTERNS.some((re) => re.test(body))) {
-        return { ok: false, status, note: `HTTP ${status} or error page` };
-      }
-      if (page.url().includes("/login")) {
-        return { ok: false, status, note: "redirected to login" };
-      }
-      return { ok: true, status, note: "" };
-    } catch (err) {
-      if (err instanceof TestEnvironmentUnavailableError) throw err;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (attempt === 0 && /Timeout/i.test(msg) && !isServerConnectionError(msg)) {
-        await page.waitForTimeout(2000);
-        continue;
-      }
-      return { ok: false, status: 0, note: msg };
+  try {
+    const resp = await page.goto(path, { waitUntil: "domcontentloaded", timeout });
+    await page.waitForTimeout(300);
+    const body = await page.locator("body").innerText().catch(() => "");
+    const status = resp?.status() || 0;
+    if (!opts.allow404 && (status === 404 || /could not be found/i.test(body))) {
+      return { ok: false, status, note: "404" };
     }
+    if (status >= 500 || ERROR_PATTERNS.some((re) => re.test(body))) {
+      return { ok: false, status, note: `HTTP ${status} or error page` };
+    }
+    if (page.url().includes("/login")) {
+      return { ok: false, status, note: "redirected to login" };
+    }
+    return { ok: true, status, note: "" };
+  } catch (err) {
+    if (err instanceof TestEnvironmentUnavailableError) throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: 0, note: msg };
   }
-  return { ok: false, status: 0, note: "unreachable after retry" };
 }
 
 export async function failureScreenshot(page: Page, name: string) {

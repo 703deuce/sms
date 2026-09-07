@@ -1,4 +1,15 @@
-# Browser certification — preview-only architecture
+# Browser certification — disposable-browser + preview-only
+
+## Architecture (Layer 2)
+
+1. **Preview/staging URL only** — Cloud Agent never starts Next.js or Turbopack.
+2. **One headless Chromium per flow** — launch → 3–5 UI actions → record → kill browser → wait → next flow.
+3. **Checkpoint after every flow ID** — resume automatically from `flowsCompleted`.
+4. **Circuit breakers:**
+   - 2 consecutive server-unreachable errors → `BLOCKED — TEST ENVIRONMENT UNAVAILABLE`
+   - 2 consecutive browser process crashes → `BLOCKED — BROWSER PHASE STOPPED`
+
+No video, no trace, no headed mode, no parallel workers, no navigation retries.
 
 ## Root cause (confirmed)
 
@@ -43,7 +54,13 @@ npm run cert:appointments-mctb-browser:preflight
 
 BROWSER_CERT_BASE_URL=https://preview.example.com \
 BROWSER_CERT_DEPLOY_SHA=$(git rev-parse HEAD) \
-  npm run cert:appointments-mctb-browser -- --only BATCH-01 --retest
+  npm run cert:appointments-mctb-browser -- --only BATCH-01
+
+# Single flow
+npm run cert:appointments-mctb-browser -- --flow APT-01-contacts
+
+# Cap flows per invocation (useful for agent runs)
+npm run cert:appointments-mctb-browser -- --limit 20
 ```
 
 Or pass `--preflight` to the main runner:
