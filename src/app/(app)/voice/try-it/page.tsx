@@ -1,5 +1,6 @@
-import { MctbTryItView } from "@/components/mctb/try-it-view";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export default function VoiceTryItPage() {
-  return <MctbTryItView />;
+  redirect(MCTB_ROUTES.setupTest);
 }

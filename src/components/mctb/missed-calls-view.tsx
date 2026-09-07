@@ -2,8 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusChip } from "@/components/ui/status-chip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
@@ -48,8 +49,9 @@ function fmtTime(iso: string) {
   }
 }
 
-function statusLabel(status: string) {
-  return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+function triggerLabel(classification: string | null) {
+  if (!classification) return "—";
+  return classification.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }
 
 export function MctbMissedCallsView() {
@@ -87,7 +89,7 @@ export function MctbMissedCallsView() {
         description="Every missed-call event and what happened — texts sent, suppressed, or replied."
         actions={
           <Link
-            href="/voice/setup"
+            href={MCTB_ROUTES.setup}
             className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary-hover"
           >
             Configure setup
@@ -117,7 +119,7 @@ export function MctbMissedCallsView() {
             <p className="mt-1 text-sm text-muted-foreground">
               Events appear here when someone calls and your recovery flow runs.
             </p>
-            <Link href="/voice/setup" className="mt-4 inline-block text-sm font-semibold text-primary">
+            <Link href={MCTB_ROUTES.setup} className="mt-4 inline-block text-sm font-semibold text-primary">
               Finish setup →
             </Link>
           </div>
@@ -126,17 +128,18 @@ export function MctbMissedCallsView() {
             <THead>
               <TR>
                 <TH>Caller</TH>
+                <TH>Missed</TH>
+                <TH>Trigger</TH>
+                <TH>Recovery</TH>
+                <TH>Reply</TH>
                 <TH>Business line</TH>
-                <TH>Detected</TH>
-                <TH>SMS sent</TH>
-                <TH>Status</TH>
               </TR>
             </THead>
             <TBody>
               {events.map((row) => (
                 <TR key={row.id} className="cursor-pointer hover:bg-muted/40">
                   <TD className="font-medium">
-                    <Link href={`/voice/missed-calls/${row.id}`} className="hover:underline">
+                    <Link href={MCTB_ROUTES.missedCallDetail(row.id)} className="hover:underline">
                       {fmtPhone(row.callerE164)}
                     </Link>
                     {row.callsToday != null && row.callsToday > 1 ? (
@@ -145,14 +148,13 @@ export function MctbMissedCallsView() {
                       </span>
                     ) : null}
                   </TD>
-                  <TD>{fmtPhone(row.businessE164)}</TD>
                   <TD className="text-muted-foreground">{fmtTime(row.detectedAt)}</TD>
-                  <TD className="text-muted-foreground">
-                    {row.smsSentAt ? fmtTime(row.smsSentAt) : "—"}
-                  </TD>
+                  <TD className="text-muted-foreground">{triggerLabel(row.classification)}</TD>
                   <TD>
                     <div className="flex flex-col gap-1">
-                      <StatusChip status={row.status} />
+                      <span className="text-sm font-medium text-foreground">
+                        {formatRecoveryStatus(row.status, row.suppressionReason)}
+                      </span>
                       {row.suppressionReason ? (
                         <span className="text-[11px] text-muted-foreground">
                           {row.suppressionReason.replace(/_/g, " ").toLowerCase()}
@@ -160,6 +162,8 @@ export function MctbMissedCallsView() {
                       ) : null}
                     </div>
                   </TD>
+                  <TD className="text-muted-foreground">{formatReplyStatus(row.status)}</TD>
+                  <TD>{fmtPhone(row.businessE164)}</TD>
                 </TR>
               ))}
             </TBody>

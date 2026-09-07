@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -86,7 +87,7 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
           <h1 className="text-xl font-semibold">Missed call event</h1>
           <p className="text-sm text-muted-foreground">{eventId}</p>
         </div>
-        <Link href="/voice/missed-calls">
+        <Link href={MCTB_ROUTES.missedCalls}>
           <Button variant="outline">Back to log</Button>
         </Link>
       </div>
@@ -121,7 +122,7 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         <Card className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[15px] font-semibold">Press-1 consent</h2>
-            <Link href="/voice/consent-log" className="text-sm font-semibold text-primary hover:underline">
+            <Link href={MCTB_ROUTES.complianceConsent} className="text-sm font-semibold text-primary hover:underline">
               Open consent log
             </Link>
           </div>

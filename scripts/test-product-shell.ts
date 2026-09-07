@@ -27,6 +27,8 @@ assert.equal(productShellLabel("ai_after_hours"), AI_AFTER_HOURS_DISPLAY_NAME);
 assert.equal(resolveProductShellFromPath("/appointments/overview"), "appointments");
 assert.equal(resolveProductShellFromPath("/appointments/calendar"), "appointments");
 assert.equal(resolveProductShellFromPath("/voice/missed-calls"), "mctb");
+assert.equal(resolveProductShellFromPath("/mctb"), "mctb");
+assert.equal(resolveProductShellFromPath("/mctb/missed-calls"), "mctb");
 assert.equal(resolveProductShellFromPath("/voice/agents"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/voice/overview"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/settings"), null);
@@ -62,7 +64,7 @@ assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));
 assert.ok(mctbLabels.includes("Numbers"));
-assert.ok(mctbLabels.includes("Settings"));
+assert.ok(!mctbLabels.includes("Settings"));
 assert.ok(!mctbLabels.includes("Campaigns"));
 assert.ok(!mctbLabels.includes("Calendar"));
 

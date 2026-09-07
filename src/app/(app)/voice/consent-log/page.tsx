@@ -1,5 +1,6 @@
-import { MctbConsentLogView } from "@/components/mctb/consent-log-view";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
 export default function VoiceConsentLogPage() {
-  return <MctbConsentLogView />;
+  redirect(MCTB_ROUTES.complianceConsent);
 }

@@ -62,7 +62,7 @@ export function massSmsShellHome(): string {
 }
 
 export function mctbShellHome(): string {
-  return "/voice/missed-calls";
+  return "/mctb";
 }
 
 export function aiAfterHoursShellHome(): string {

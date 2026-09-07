@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { Phone, Sparkles } from "lucide-react";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -221,7 +222,7 @@ export function MctbTryItView() {
 
       <p className="text-sm text-muted-foreground">
         Ready to configure your own number and forwarding?{" "}
-        <Link href="/voice/setup" className="font-medium text-primary hover:underline">
+        <Link href={MCTB_ROUTES.setup} className="font-medium text-primary hover:underline">
           Go to Text Back Setup
         </Link>
         .

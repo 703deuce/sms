@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
@@ -135,7 +136,7 @@ export function MctbConsentLogView() {
         description="A durable record of callers who pressed 1 to receive a text back. Use this if you need to show when consent was captured before an SMS was sent."
         actions={
           <Link
-            href="/voice/setup"
+            href={MCTB_ROUTES.setup}
             className="inline-flex h-9 items-center rounded-[10px] border border-border bg-white px-4 text-[13px] font-semibold text-foreground hover:bg-muted/40"
           >
             Consent settings
@@ -201,7 +202,7 @@ export function MctbConsentLogView() {
                 ? "Consent records exist for this account but did not match the current filter. Clear the caller filter and try again."
                 : "When callers press 1 on your consent prompt, those events appear here."}
             </p>
-            <Link href="/voice/setup" className="mt-4 inline-block text-sm font-semibold text-primary">
+            <Link href={MCTB_ROUTES.setup} className="mt-4 inline-block text-sm font-semibold text-primary">
               Review consent setup →
             </Link>
           </div>
@@ -293,7 +294,7 @@ export function MctbConsentLogView() {
                                 <p>
                                   <span className="font-semibold">Missed call event:</span>{" "}
                                   <Link
-                                    href={`/voice/missed-calls/${row.missedCallEventId}`}
+                                    href={MCTB_ROUTES.missedCallDetail(row.missedCallEventId)}
                                     className="font-semibold text-primary hover:underline"
                                   >
                                     View recovery timeline

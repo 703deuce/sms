@@ -1,3 +1,4 @@
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 
 export type MctbPausedNoticeKind = "manual" | "timed" | null;
@@ -47,7 +48,7 @@ export function MctbPausedNotice({
           {timing ? <> {timing}</> : null}
         </p>
         <p className="mt-2">
-          <Link href="/voice/schedule" className="font-semibold text-violet-900 underline">
+          <Link href={MCTB_ROUTES.setupRecovery} className="font-semibold text-violet-900 underline">
             Resume on Schedule →
           </Link>
         </p>
