@@ -1,0 +1,63 @@
+---
+description: MANDATORY — MCTB Text Back (/mctb/setup/text-back). Recovery message sequence authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 10: TEXT BACK
+
+**Route:** `/mctb/setup/text-back` | **Wizard:** Setup Step 4 (spec 07)  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–09
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Text Back (`/mctb/setup/text-back`, wizard text-back step).
+
+## Primary job
+
+Configure **customer-facing recovery message sequence** — preview, variants, variables, encoding — matching actual runtime/compliance flow.
+
+## Press-1 mode (LOCKED)
+
+```
+Message 1 — System compliance confirmation (LOCKED, Transovo-authored, versioned)
+Message 2 — Conversation opener (editable where supported)
+```
+
+Two distinct preview bubbles. Never merge into one editable "First Text."
+
+## Existing Consent mode
+
+Hide Press-1 system confirmation. Show only applicable recovery message flow.
+
+## Page scope
+
+**Owns:** opener template, business/after-hours variants, initial delay (if supported), variables, link insertion, segment preview, canonical renderer preview
+
+**Does not own:** consent mode/editor, Press-1 audio, sender registration, forwarding, campaigns, inbox replies
+
+## Consent & sender context
+
+Show compact consent method + link to Setup → Consent. Show sender readiness separately — valid message ≠ ready sender ≠ recipient consent.
+
+## Key rules
+
+- One canonical message renderer for preview + production
+- Centralized compliance copy/version for system confirmation
+- Business Hours schedule referenced, not duplicated
+- Cooldown/repeat sends → Follow-up Rules
+- Template changes apply to future sends only
+- GSM-7/Unicode-aware segment count if shown
+- System confirmation before opener (runtime ordering)
+
+## Prohibited
+
+Editable compliance message, fake AI rewrite, naive 160-char limit, duplicate schedule/sender/consent editors, preview ≠ production, campaign/bulk controls
+
+## Definition of done
+
+See full spec §84 checklist.
+
+## Next in series
+
+**11 — Consent** — pending build spec.

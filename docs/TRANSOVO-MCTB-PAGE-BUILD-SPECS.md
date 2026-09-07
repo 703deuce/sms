@@ -33,8 +33,9 @@
 | 07 | Setup & Guided Setup | `/mctb/setup` + `/mctb/setup/...` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md) | `transovo-mctb-page-spec-07-setup.mdc` |
 | 08 | Phone & Forwarding | `/mctb/setup/phone` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md) | `transovo-mctb-page-spec-08-phone-forwarding.mdc` |
 | 09 | Missed-call Rules | `/mctb/setup/missed-call-rules` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md) | `transovo-mctb-page-spec-09-missed-call-rules.mdc` |
-| 10 | Text Back | `/mctb/setup/text-back` | *(pending)* | — |
-| 11+ | *Additional setup editors TBD* | | | |
+| 10 | Text Back | `/mctb/setup/text-back` | [TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md](./TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md) | `transovo-mctb-page-spec-10-text-back.mdc` |
+| 11 | Consent | `/mctb/setup/consent` | *(pending)* | — |
+| 12+ | *Additional setup editors TBD* | | | |
 
 When implementing a route, read the governing MCTB docs **and** the page-specific build spec for that route before writing code.
 

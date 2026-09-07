@@ -989,4 +989,6 @@ Cursor may mark this section complete only when:
 
 ## Build handoff
 
-Next page-spec: **10 — Text Back** — customer-facing message sequence, locked Press-1 compliance confirmation vs editable conversational opener, business-hours/after-hours variants, sender preview, Unicode/SMS segmentation, and real send behavior.
+Next page-spec: **10 — Text Back** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md`.
+
+**11 — Consent** — pending build spec.

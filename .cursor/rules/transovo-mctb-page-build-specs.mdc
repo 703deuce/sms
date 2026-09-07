@@ -40,7 +40,7 @@ alwaysApply: true
 | `/mctb/setup/start` | *(spec 07 — guided wizard)* | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/phone` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md` | `transovo-mctb-page-spec-08-phone-forwarding.mdc` |
 | `/mctb/setup/missed-call-rules` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md` | `transovo-mctb-page-spec-09-missed-call-rules.mdc` |
-| `/mctb/setup/text-back` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/text-back` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md` | `transovo-mctb-page-spec-10-text-back.mdc` |
 | `/mctb/setup/consent` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/business-hours` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
 | `/mctb/setup/follow-up` | *(spec 07)* | `transovo-mctb-page-spec-07-setup.mdc` |
