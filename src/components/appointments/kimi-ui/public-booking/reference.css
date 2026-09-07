@@ -1,0 +1,89 @@
+:root {
+  --background: #f4f5f7;
+  --foreground: #0f1222;
+  --card: #ffffff;
+  --card-foreground: #0f1222;
+  --muted: #eceef1;
+  --muted-foreground: #5b6070;
+  --border: #e3e6eb;
+  --primary: #4338ca;
+  --primary-hover: #3730a3;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef1;
+  --secondary-foreground: #0f1222;
+  --danger: #e11d48;
+  --danger-foreground: #ffffff;
+  --ring: #4338ca;
+  --accent: #eef0ff;
+  --accent-foreground: #3730a3;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: "Plus Jakarta Sans", "Inter", -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* utility token classes used across components */
+.bg-card { background: var(--card); }
+.bg-muted { background: var(--muted); }
+.bg-primary { background: var(--primary); }
+.bg-primary\/10 { background: rgba(67, 56, 202, 0.1); }
+.bg-accent { background: var(--accent); }
+.text-foreground { color: var(--foreground); }
+.text-muted-foreground { color: var(--muted-foreground); }
+.text-primary { color: var(--primary); }
+.text-primary-foreground { color: var(--primary-foreground); }
+.text-accent-foreground { color: var(--accent-foreground); }
+.border-border { border-color: var(--border); }
+.ring-ring { --tw-ring-color: var(--ring); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes tv-spin { to { transform: rotate(360deg); } }
+.tv-spinner {
+  width: 18px; height: 18px;
+  border-radius: 9999px;
+  border: 2px solid rgba(67, 56, 202, 0.25);
+  border-top-color: var(--primary);
+  animation: tv-spin 0.7s linear infinite;
+}
+
+@keyframes tv-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tv-fade-up { animation: tv-fade-up 0.25s ease-out both; }
+
+@keyframes tv-bubble-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.tv-bubble-in { animation: tv-bubble-in 0.2s ease-out both; }
+
+.tv-slot-scroll::-webkit-scrollbar { width: 6px; }
+.tv-slot-scroll::-webkit-scrollbar-thumb { background: #d4d8df; border-radius: 3px; }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

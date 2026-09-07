@@ -1,4 +1,4 @@
-import { PublicBookingClient } from "@/components/appointments/public-booking-client";
+import { PublicBookingConnected } from "@/features/appointments/kimi/public/public-booking-connected";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -9,7 +9,7 @@ export default async function PublicBookPage({ params, searchParams }: Props) {
   const { slug } = await params;
   const query = await searchParams;
   return (
-    <PublicBookingClient
+    <PublicBookingConnected
       slug={slug}
       preselectTypeId={query.type}
       singleUseToken={query.singleUse}
