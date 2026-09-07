@@ -104,7 +104,7 @@ export function ListConnected() {
       notes: string;
       sendSms: boolean;
     }) => {
-      await fetch("/api/appointments", {
+      const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -118,6 +118,10 @@ export function ListConnected() {
           sendConfirmation: payload.sendSms,
         }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Could not create appointment");
+      }
       load();
     },
     [load],
@@ -125,11 +129,15 @@ export function ListConnected() {
 
   const cancelAppointment = useCallback(
     async (id: string) => {
-      await fetch(`/api/appointments/${id}`, {
+      const res = await fetch(`/api/appointments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "canceled" }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Could not cancel appointment");
+      }
       load();
     },
     [load],
@@ -137,11 +145,15 @@ export function ListConnected() {
 
   const rescheduleAppointment = useCallback(
     async (id: string, startsAt: string) => {
-      await fetch(`/api/appointments/${id}`, {
+      const res = await fetch(`/api/appointments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startsAt }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Could not reschedule appointment");
+      }
       load();
     },
     [load],

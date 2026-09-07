@@ -2,6 +2,7 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { loadAppointmentsAnalytics } from "@/lib/appointments/analytics";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
 export async function loadExtendedAppointmentsAnalytics(
   workspaceId: string,
@@ -68,6 +69,25 @@ export async function loadExtendedAppointmentsAnalytics(
     return Boolean(utm?.source);
   }).length;
 
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const routingForms = ((platform as { routingForms?: Array<{ id: string; name: string }> }).routingForms || []).map(
+    (form) => {
+      const stats = (
+        (platform as { routingAnalytics?: Record<string, { views: number; routes: Record<string, number> }> })
+          .routingAnalytics || {}
+      )[form.id];
+      const routed = stats
+        ? Object.values(stats.routes).reduce((sum, count) => sum + count, 0)
+        : 0;
+      return {
+        id: form.id,
+        name: form.name,
+        views: stats?.views || 0,
+        routed,
+      };
+    },
+  );
+
   return {
     ...base,
     completed,
@@ -82,6 +102,7 @@ export async function loadExtendedAppointmentsAnalytics(
     smsResponses,
     utmConversions,
     conversionRate: booked > 0 ? Math.round((confirmed / booked) * 100) : 0,
+    routingForms,
   };
 }
 

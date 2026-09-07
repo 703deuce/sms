@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot, Sparkles, Send, MessageSquareText, Mail, Phone, User, CalendarCheck2,
   ShieldCheck, Handshake, Copy, Check, AlertCircle, RotateCcw, Clock3,
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import {
   BOOKING_TYPES, CAPABILITY_CARDS, SUGGESTED_PROMPTS,
-  type Channel, type ChatMessage, type MockOrchestratorResult,
+  type Channel, type ChatMessage, type MockOrchestratorResult, type BookingTypeOption,
 } from "../types";
 import { InboundChannelsCard } from "./InboundChannelsCard";
 
@@ -25,6 +25,7 @@ export function AiBookingClient() {
   const [email, setEmail] = useState("");
   const [contactId, setContactId] = useState("");
   const [bookingType, setBookingType] = useState("");
+  const [bookingTypes, setBookingTypes] = useState<BookingTypeOption[]>(BOOKING_TYPES);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<Turn[]>([]);
   const [lastResult, setLastResult] = useState<MockOrchestratorResult | null>(null);
@@ -32,7 +33,24 @@ export function AiBookingClient() {
   const [copied, setCopied] = useState(false);
   const convoRef = useRef<HTMLDivElement>(null);
 
-  const activeTypes = useMemo(() => BOOKING_TYPES.filter((t) => t.active), []);
+  const activeTypes = useMemo(() => bookingTypes.filter((t) => t.active), []);
+
+  useEffect(() => {
+    fetch("/api/appointments/types")
+      .then((r) => r.json())
+      .then((json) => {
+        const types = (json.data || []).map(
+          (t: { id: string; name: string; durationMinutes?: number; active?: boolean }) => ({
+            id: t.id,
+            name: t.name,
+            duration: t.durationMinutes ? `${t.durationMinutes} min` : "30 min",
+            active: t.active !== false,
+          }),
+        );
+        if (types.length) setBookingTypes(types);
+      })
+      .catch(() => undefined);
+  }, []);
 
   function now() {
     return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -59,6 +77,7 @@ export function AiBookingClient() {
           phone: phone || undefined,
           email: email || undefined,
           contactId: contactId || undefined,
+          appointmentTypeId: bookingType || undefined,
         }),
       });
       const json = await res.json();

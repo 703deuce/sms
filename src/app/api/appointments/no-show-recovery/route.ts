@@ -18,7 +18,10 @@ export async function GET() {
       getNoShowRecoveryConfig(auth.workspaceId),
       getNoShowRecoveryStats(auth.workspaceId),
     ]);
-    return NextResponse.json({ data: { config, stats } });
+    const { recentNoShows, ...statsWithoutRows } = stats;
+    return NextResponse.json({
+      data: { config, stats: statsWithoutRows, recentNoShows },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

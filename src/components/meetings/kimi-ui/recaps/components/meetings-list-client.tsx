@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sparkles, AlertTriangle, Search, Settings2, CheckCircle2, Zap } from "lucide-react";
-import { MOCK_MEETINGS, type MeetingRow } from "../types";
+import type { MeetingRow } from "../types";
 import { MeetingRowCard } from "./meeting-row";
 import { NewMeetingMenu } from "./new-meeting-menu";
 import { ShareRecapModal } from "./share-recap-modal";
@@ -65,15 +65,15 @@ export function MeetingsListClient() {
 
   const counts = useMemo(
     () => ({
-      upcoming: MOCK_MEETINGS.filter(isUpcoming).length,
-      past: MOCK_MEETINGS.filter((m) => !isUpcoming(m)).length,
-      all: MOCK_MEETINGS.length,
+      upcoming: sessions.filter(isUpcoming).length,
+      past: sessions.filter((m) => !isUpcoming(m)).length,
+      all: sessions.length,
     }),
-    [],
+    [sessions],
   );
 
   const navigate = useCallback((path: string) => {
-    setToast(`Navigate to ${path}`);
+    window.location.href = path;
   }, []);
 
   const retry = useCallback(() => {

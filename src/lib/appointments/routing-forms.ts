@@ -17,6 +17,12 @@ export async function saveRoutingForm(workspaceId: string, form: RoutingForm) {
   return form;
 }
 
+export async function deleteRoutingForm(workspaceId: string, formId: string) {
+  const forms = await listRoutingForms(workspaceId);
+  const next = forms.filter((f) => f.id !== formId);
+  await saveAppointmentPlatformConfig(workspaceId, { routingForms: next } as object);
+}
+
 function evaluateRoutingCondition(
   fieldId: string,
   operator: RoutingFormRule["conditions"][0]["operator"],

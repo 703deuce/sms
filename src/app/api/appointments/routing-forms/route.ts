@@ -28,3 +28,18 @@ export async function POST(request: Request) {
     return jsonError(err, 400);
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    const { deleteRoutingForm } = await import("@/lib/appointments/routing-forms");
+    await deleteRoutingForm(auth.workspaceId, id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}

@@ -14,6 +14,7 @@ export async function POST(request: Request) {
       phone?: string;
       email?: string;
       conversationId?: string;
+      appointmentTypeId?: string;
     };
     if (!body.message) return NextResponse.json({ error: "message required" }, { status: 400 });
     if (body.channel === "voice") {
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
       phone: body.phone,
       email: body.email,
       conversationId: body.conversationId,
+      metadata: body.appointmentTypeId
+        ? { preferredAppointmentTypeId: body.appointmentTypeId }
+        : undefined,
     });
     return NextResponse.json({ data: result });
   } catch (err) {

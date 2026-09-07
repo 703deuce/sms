@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, CheckCircle2 } from "lucide-react";
 import {
-  type SchedulingGroup, type TeamBookingPage, type BookingTypeLite, staffMembers,
+  type SchedulingGroup, type TeamBookingPage, type BookingTypeLite, type StaffLite,
 } from "../types";
 import { GroupCard } from "./GroupCard";
 import { PageCard } from "./PageCard";
@@ -18,6 +18,7 @@ export function TeamPagesClient({ workspaceSlug }: { workspaceSlug: string }) {
   const [groups, setGroups] = useState<SchedulingGroup[]>([]);
   const [pages, setPages] = useState<TeamBookingPage[]>([]);
   const [types, setTypes] = useState<BookingTypeLite[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffLite[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [typesDegraded, setTypesDegraded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -31,9 +32,10 @@ export function TeamPagesClient({ workspaceSlug }: { workspaceSlug: string }) {
   const load = useCallback(async () => {
     setState("loading");
     try {
-      const [teamRes, typesRes] = await Promise.all([
+      const [teamRes, typesRes, settingsRes] = await Promise.all([
         fetch("/api/appointments/team-pages"),
         fetch("/api/appointments/types"),
+        fetch("/api/appointments/settings"),
       ]);
       if (teamRes.ok) {
         const json = await teamRes.json();
@@ -41,6 +43,17 @@ export function TeamPagesClient({ workspaceSlug }: { workspaceSlug: string }) {
         const groupsJson = groupsRes.ok ? await groupsRes.json() : { data: [] };
         setPages(json.data || []);
         setGroups(groupsJson.data || []);
+      }
+      if (settingsRes.ok) {
+        const settingsJson = await settingsRes.json();
+        const staff = (settingsJson.data?.staff || []).map(
+          (s: { id?: string; name?: string; role?: string }, i: number) => ({
+            id: s.id || `st_${i}`,
+            name: s.name || "Team member",
+            role: s.role || "Staff",
+          }),
+        );
+        if (staff.length) setStaffMembers(staff);
       }
       if (!typesRes.ok) setTypesDegraded(true);
       else {
@@ -121,23 +134,35 @@ export function TeamPagesClient({ workspaceSlug }: { workspaceSlug: string }) {
   async function confirmDeleteGroup() {
     if (!deleteGroup) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
+    const res = await fetch(
+      `/api/appointments/team-pages?kind=groups&id=${encodeURIComponent(deleteGroup.id)}`,
+      { method: "DELETE" },
+    );
     setSaving(false);
-    setGroups((prev) => prev.filter((g) => g.id !== deleteGroup.id));
-    // Detach the deleted group from any pages that referenced it
-    setPages((prev) => prev.map((p) => (p.schedulingGroupId === deleteGroup.id ? { ...p, schedulingGroupId: undefined } : p)));
+    if (!res.ok) {
+      showToast("Could not delete scheduling group.");
+      return;
+    }
     setDeleteGroup(null);
     showToast("Scheduling group deleted.");
+    await load();
   }
 
   async function confirmDeletePage() {
     if (!deletePage) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
+    const res = await fetch(
+      `/api/appointments/team-pages?id=${encodeURIComponent(deletePage.id)}`,
+      { method: "DELETE" },
+    );
     setSaving(false);
-    setPages((prev) => prev.filter((p) => p.id !== deletePage.id));
+    if (!res.ok) {
+      showToast("Could not delete team booking page.");
+      return;
+    }
     setDeletePage(null);
     showToast("Team booking page deleted.");
+    await load();
   }
 
   const pagesUsingGroup = deleteGroup

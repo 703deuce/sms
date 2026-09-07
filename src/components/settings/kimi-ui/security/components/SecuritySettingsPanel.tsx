@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { MOCK_SECURITY_STATE, MOCK_SESSIONS, type SessionRow } from "../types";
 import { resolveSettingsTabs } from "@/features/settings/kimi/shared/settings-tabs";
 import { PasswordCard } from "./PasswordCard";
 import { SessionsCard } from "./SessionsCard";
 import { TwoFactorCard } from "./TwoFactorCard";
 import { Button, InlineAlert } from "./ui";
+import type { SessionRow } from "../types";
 
 export function SecuritySettingsPanel() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -23,18 +23,17 @@ export function SecuritySettingsPanel() {
   const loadSessions = useCallback(() => {
     setSessionsLoading(true);
     setSessionsError(false);
-    // Preserve /api/settings/security/sessions wiring with mock fallback
     fetch("/api/settings/security/sessions")
       .then((r) => {
         if (!r.ok) throw new Error("failed");
         return r.json();
       })
       .then((j) => {
-        setSessions(j.data?.length ? j.data : MOCK_SESSIONS);
+        setSessions(j.data || []);
       })
       .catch(() => {
-        // Sandbox: no live API — fall back to mock data (degraded state shown in footer)
-        setSessions(MOCK_SESSIONS);
+        setSessions([]);
+        setSessionsError(true);
       })
       .finally(() => setSessionsLoading(false));
   }, []);
@@ -42,7 +41,6 @@ export function SecuritySettingsPanel() {
   const loadSecurity = useCallback(() => {
     setSecurityLoading(true);
     setSecurityError(false);
-    // Preserve /api/settings/security wiring with mock fallback
     fetch("/api/settings/security")
       .then((r) => {
         if (!r.ok) throw new Error("failed");
@@ -52,14 +50,10 @@ export function SecuritySettingsPanel() {
         if (j.data) {
           setTotpEnabled(Boolean(j.data.totpEnabled));
           setBackupRemaining(j.data.backupCodesRemaining || 0);
-        } else {
-          setTotpEnabled(MOCK_SECURITY_STATE.totpEnabled);
-          setBackupRemaining(MOCK_SECURITY_STATE.backupCodesRemaining);
         }
       })
       .catch(() => {
-        setTotpEnabled(MOCK_SECURITY_STATE.totpEnabled);
-        setBackupRemaining(MOCK_SECURITY_STATE.backupCodesRemaining);
+        setSecurityError(true);
       })
       .finally(() => setSecurityLoading(false));
   }, []);

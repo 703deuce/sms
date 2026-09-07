@@ -163,6 +163,17 @@ export async function acceptWaitlistOffer(token: string) {
       notes: "Accepted waitlist offer",
     });
 
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: ws.id },
+      select: { displayName: true, name: true },
+    });
+    const appointment = await prisma.voiceAppointment.findFirst({
+      where: { id: result.appointmentId, workspaceId: ws.id },
+      select: { serviceName: true, startsAt: true, staffName: true, metadata: true },
+    });
+    const platformConfig = await loadAppointmentPlatformConfig(ws.id);
+    const timezone = (platformConfig as { timezone?: string }).timezone || "America/New_York";
+
     await prisma.appointmentWaitlistEntry.update({
       where: { id: entry.id },
       data: { status: "filled", updatedAt: new Date() },
@@ -173,7 +184,15 @@ export async function acceptWaitlistOffer(token: string) {
     );
     await saveAppointmentPlatformConfig(ws.id, { waitlistOffers: updatedOffers } as object);
 
-    return { appointmentId: result.appointmentId, workspaceId: ws.id };
+    return {
+      appointmentId: result.appointmentId,
+      workspaceId: ws.id,
+      businessName: workspace?.displayName || workspace?.name || "Your business",
+      serviceName: appointment?.serviceName || offer.serviceName,
+      startsAt: appointment?.startsAt?.toISOString() || offer.startsAt,
+      staffName: appointment?.staffName || null,
+      timezone,
+    };
   }
   return { error: "Offer not found" };
 }

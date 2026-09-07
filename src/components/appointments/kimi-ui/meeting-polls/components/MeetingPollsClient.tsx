@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Vote, CheckCircle2, AlertCircle } from "lucide-react";
-import { MOCK_POLLS, MeetingPoll, PollStatus } from "../types";
+import { MeetingPoll, PollStatus } from "../types";
 import { Button, Input, EmptyState } from "./ui";
 import { PollRow } from "./PollCard";
 import { CreatePollModal } from "./CreatePollModal";
@@ -67,34 +67,59 @@ export function MeetingPollsClient() {
     showToast("Poll link copied to clipboard.");
   }
 
+  async function persistPoll(poll: MeetingPoll) {
+    const res = await fetch("/api/appointments/meeting-polls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ poll }),
+    });
+    if (!res.ok) throw new Error("save failed");
+    const json = await res.json();
+    return json.data as MeetingPoll;
+  }
+
   /** Book winner — from ConfirmTimeModal */
-  function bookWinningTime(poll: MeetingPoll, winningOptionId: string) {
-    setPolls((ps) =>
-      ps.map((p) => (p.id === poll.id ? { ...p, status: "scheduled", winningOptionId } : p))
-    );
-    if (selected?.id === poll.id) {
-      setSelected({ ...poll, status: "scheduled", winningOptionId });
+  async function bookWinningTime(poll: MeetingPoll, winningOptionId: string) {
+    try {
+      const saved = await persistPoll({ ...poll, status: "scheduled", winningOptionId });
+      setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
+      if (selected?.id === poll.id) setSelected(saved);
+      setConfirmingPoll(null);
+      const winner = poll.options.find((o) => o.id === winningOptionId);
+      const when = winner
+        ? new Date(winner.startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        : "";
+      showToast(`Poll closed — ${when} booked and invites sent.`);
+    } catch {
+      showToast("Could not book the winning time.");
     }
-    setConfirmingPoll(null);
-    const winner = poll.options.find((o) => o.id === winningOptionId);
-    const when = winner
-      ? new Date(winner.startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-      : "";
-    showToast(`Poll closed — ${when} booked and invites sent.`);
   }
 
   /** Close without booking */
-  function closeWithoutBooking(poll: MeetingPoll) {
-    setPolls((ps) => ps.map((p) => (p.id === poll.id ? { ...p, status: "closed" } : p)));
-    if (selected?.id === poll.id) setSelected({ ...poll, status: "closed" });
-    showToast("Poll closed. The voting link no longer accepts responses.");
+  async function closeWithoutBooking(poll: MeetingPoll) {
+    try {
+      const saved = await persistPoll({ ...poll, status: "closed" });
+      setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
+      if (selected?.id === poll.id) setSelected(saved);
+      showToast("Poll closed. The voting link no longer accepts responses.");
+    } catch {
+      showToast("Could not close poll.");
+    }
   }
 
-  function deletePoll(poll: MeetingPoll) {
-    setPolls((ps) => ps.filter((p) => p.id !== poll.id));
-    if (selected?.id === poll.id) setSelected(null);
-    setDeletingPoll(null);
-    showToast("Poll deleted.");
+  async function deletePoll(poll: MeetingPoll) {
+    try {
+      const res = await fetch(`/api/appointments/meeting-polls?id=${encodeURIComponent(poll.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("delete failed");
+      setPolls((ps) => ps.filter((p) => p.id !== poll.id));
+      if (selected?.id === poll.id) setSelected(null);
+      setDeletingPoll(null);
+      showToast("Poll deleted.");
+    } catch {
+      showToast("Could not delete poll.");
+    }
   }
 
   function handleCreate(poll: MeetingPoll) {

@@ -17,6 +17,12 @@ export async function saveMeetingPoll(workspaceId: string, poll: MeetingPoll) {
   return poll;
 }
 
+export async function deleteMeetingPoll(workspaceId: string, pollId: string) {
+  const polls = await listMeetingPolls(workspaceId);
+  const next = polls.filter((p) => p.id !== pollId);
+  await saveAppointmentPlatformConfig(workspaceId, { meetingPolls: next } as object);
+}
+
 export async function voteMeetingPollOption(
   workspaceId: string,
   pollId: string,

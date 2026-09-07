@@ -24,11 +24,50 @@ import {
   type WaitlistErrorKind,
 } from "../mock-data";
 
+type AcceptedAppointmentDetails = {
+  businessName: string;
+  serviceName: string;
+  startsAt: string;
+  staffName?: string | null;
+  timezone?: string;
+};
+
+function formatAcceptedDetails(data: AcceptedAppointmentDetails) {
+  const startsAt = new Date(data.startsAt);
+  const tz = data.timezone || "America/New_York";
+  const dateLabel = startsAt.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: tz,
+  });
+  const timeLabel = startsAt.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: tz,
+  });
+  const timezoneLabel = startsAt
+    .toLocaleTimeString("en-US", { timeZoneName: "short", timeZone: tz })
+    .split(" ")
+    .pop();
+  return {
+    businessName: data.businessName,
+    serviceName: data.serviceName,
+    dateLabel,
+    timeLabel,
+    timezoneLabel: timezoneLabel || tz,
+    staffName: data.staffName || null,
+  };
+}
+
 export function PublicWaitlistAcceptClient({ token, live = false }: { token: string; live?: boolean }) {
   const [status, setStatus] = useState<WaitlistAcceptStatus>("loading");
   const [errorKind, setErrorKind] = useState<WaitlistErrorKind>("unavailable");
   const [message, setMessage] = useState<string>(WAITLIST_ACCEPT_COPY.loading.message);
   const [attempt, setAttempt] = useState(0);
+  const [acceptedDetails, setAcceptedDetails] = useState<ReturnType<typeof formatAcceptedDetails> | null>(
+    null,
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -36,6 +75,7 @@ export function PublicWaitlistAcceptClient({ token, live = false }: { token: str
 
     setStatus("loading");
     setMessage(WAITLIST_ACCEPT_COPY.loading.message);
+    setAcceptedDetails(null);
 
     // Production contract (Cursor wires this):
     // fetch(`/api/public/waitlist/accept/${encodeURIComponent(token)}`, { method: "POST" })
@@ -45,6 +85,9 @@ export function PublicWaitlistAcceptClient({ token, live = false }: { token: str
           const json = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(json.error || WAITLIST_ACCEPT_COPY.error.message);
           if (cancelled) return;
+          if (json.data?.startsAt) {
+            setAcceptedDetails(formatAcceptedDetails(json.data as AcceptedAppointmentDetails));
+          }
           setStatus("success");
           setMessage(WAITLIST_ACCEPT_COPY.success.message);
         })
@@ -84,7 +127,7 @@ export function PublicWaitlistAcceptClient({ token, live = false }: { token: str
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  const appt = ACCEPTED_APPOINTMENT;
+  const appt = acceptedDetails || ACCEPTED_APPOINTMENT;
 
   return (
     <PublicShell>

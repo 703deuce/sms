@@ -32,10 +32,19 @@ export async function handleUnifiedAiBooking(
         ? "conversation"
         : "sms";
 
+  const preferredTypeId =
+    typeof input.metadata?.preferredAppointmentTypeId === "string"
+      ? input.metadata.preferredAppointmentTypeId
+      : undefined;
+
+  const message = preferredTypeId
+    ? `${input.message}\n\n[preferred appointment type id: ${preferredTypeId}]`
+    : input.message;
+
   return handleAppointmentAIRequest({
     workspaceId: input.workspaceId,
     channel,
-    message: input.message,
+    message,
     customerId: input.contactId || undefined,
     conversationId:
       input.conversationId ||

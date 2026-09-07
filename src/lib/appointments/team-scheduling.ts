@@ -33,6 +33,25 @@ export async function saveTeamBookingPage(workspaceId: string, page: TeamBooking
   return page;
 }
 
+export async function deleteSchedulingGroup(workspaceId: string, groupId: string) {
+  const groups = await listSchedulingGroups(workspaceId);
+  const next = groups.filter((g) => g.id !== groupId);
+  await saveAppointmentPlatformConfig(workspaceId, { schedulingGroups: next } as object);
+  const pages = await listTeamBookingPages(workspaceId);
+  const updatedPages = pages.map((p) =>
+    p.schedulingGroupId === groupId ? { ...p, schedulingGroupId: undefined } : p,
+  );
+  if (updatedPages.some((p, i) => p.schedulingGroupId !== pages[i]?.schedulingGroupId)) {
+    await saveAppointmentPlatformConfig(workspaceId, { teamBookingPages: updatedPages } as object);
+  }
+}
+
+export async function deleteTeamBookingPage(workspaceId: string, pageId: string) {
+  const pages = await listTeamBookingPages(workspaceId);
+  const next = pages.filter((p) => p.id !== pageId);
+  await saveAppointmentPlatformConfig(workspaceId, { teamBookingPages: next } as object);
+}
+
 export async function getOrganizationSchedulingPolicy(
   workspaceId: string,
 ): Promise<OrganizationSchedulingPolicy> {

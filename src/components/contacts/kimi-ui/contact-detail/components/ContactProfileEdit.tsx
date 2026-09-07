@@ -20,18 +20,24 @@ export function ContactProfileEdit({
 
   async function save() {
     setSaving(true);
+    setSaved(false);
     try {
-      await fetch("/api/contacts/actions", {
+      const res = await fetch("/api/contacts/actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contactId, timezone: tz, linkedin: li }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Save failed");
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch {
-      // sandbox: still show success state
+      // Keep form editable; parent surface can add toast wiring later.
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   }
 
   return (

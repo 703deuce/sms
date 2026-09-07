@@ -107,13 +107,18 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
   }
 
   function handleDelete(id: string) {
-    setForms((prev) => {
-      const next = prev.filter((f) => f.id !== id);
-      setSelected(next[0] ?? null);
-      return next;
-    });
-    setDirty(false);
-    setToast("Routing form deleted.");
+    fetch(`/api/appointments/routing-forms?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+      .then((r) => {
+        if (!r.ok) throw new Error("delete failed");
+        setForms((prev) => {
+          const next = prev.filter((f) => f.id !== id);
+          setSelected(next[0] ?? null);
+          return next;
+        });
+        setDirty(false);
+        setToast("Routing form deleted.");
+      })
+      .catch(() => setToast("Could not delete routing form."));
   }
 
   return (

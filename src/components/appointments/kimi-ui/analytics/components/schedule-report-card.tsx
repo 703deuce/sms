@@ -15,10 +15,20 @@ export function ScheduleReportCard() {
       return;
     }
     setScheduling(true);
-    // Preserve backend contract: POST /api/appointments/analytics/export (schedule)
-    await new Promise((r) => setTimeout(r, 700));
-    setScheduling(false);
-    setDone(true);
+    try {
+      const res = await fetch("/api/appointments/analytics/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, cadence: "weekly", rangeDays: 30 }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not schedule report");
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not schedule report.");
+    } finally {
+      setScheduling(false);
+    }
   }
 
   return (

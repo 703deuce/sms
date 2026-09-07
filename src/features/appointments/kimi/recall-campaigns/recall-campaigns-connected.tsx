@@ -99,13 +99,16 @@ export function RecallCampaignsConnected() {
     const campaign = deleteConfirm;
     if (!campaign) return;
     setActing(true);
-    await fetch("/api/appointments/recall-campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", campaignId: campaign.id }),
-    }).catch(() => {});
+    const res = await fetch(
+      `/api/appointments/recall-campaigns?id=${encodeURIComponent(campaign.id)}`,
+      { method: "DELETE" },
+    );
     setActing(false);
     setDeleteConfirm(null);
+    if (!res.ok) {
+      setNotice({ kind: "error", text: "Could not delete campaign. Try again." });
+      return;
+    }
     setDirty(false);
     setNotice({ kind: "success", text: `"${campaign.name}" was deleted.` });
     load();
