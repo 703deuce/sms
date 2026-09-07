@@ -433,6 +433,7 @@ export function generateResultsMarkdown(state: BrowserCertState): string {
     `**Provenance:** git \`${state.provenance?.gitCommitSha ?? "?"}\` · deploy \`${state.provenance?.deployCommitSha ?? "?"}\``,
     "",
     `**State file:** \`docs/certification/appointments-mctb-browser-cert-state.json\``,
+    `**Mode:** disposable-browser (${state.flowsCompleted?.length ?? 0}/${Object.keys(state.results).length} flows checkpointed)`,
     "",
     "## Summary",
     "",
