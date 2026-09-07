@@ -41,7 +41,9 @@ for (const tier of ["starter", "business", "pro"] as const) {
 }
 
 const atProducts = listPlatformPurchasableProducts().filter((p) => p.family === "ai_transcription");
-assert.equal(atProducts.length, 3);
+// V1 defers ai_transcription purchasability — catalog tiers still exist for future launch.
+assert.equal(atProducts.length, 0, "ai_transcription not purchasable in V1");
+assert.equal(catalog.ai_transcription.tiers.starter.includedMinutes, AI_TRANSCRIPTION_INCLUDED_MINUTES.starter);
 
 // Independent tier selection: SR pro + AT starter must both resolve
 const srPro = parseCheckoutSelection("smart_routing_pro");

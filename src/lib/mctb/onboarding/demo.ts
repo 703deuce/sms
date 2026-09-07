@@ -28,8 +28,13 @@ export function formatDemoPhoneDisplay(e164: string): string {
   return e164;
 }
 
-export function isPlatformDemoNumber(_businessE164: string): boolean {
-  return false;
+export function isPlatformDemoNumber(businessE164: string): boolean {
+  if (!businessE164?.trim()) return false;
+  try {
+    return normalizeE164(businessE164) === getPlatformDemoNumberE164();
+  } catch {
+    return false;
+  }
 }
 
 function isActiveDemoStatus(status: MctbDemoSessionStatus | undefined): boolean {

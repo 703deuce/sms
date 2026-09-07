@@ -24,7 +24,6 @@ export function MctbSetupTextBackView() {
   const [messageTemplate, setMessageTemplate] = useState("");
   const [delaySeconds, setDelaySeconds] = useState(0);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>(MCTB_CONSENT_MODE_VERIFIED);
-  const [defaultLinkUrl, setDefaultLinkUrl] = useState("");
   const [paused, setPaused] = useState(false);
   const [pauseKind, setPauseKind] = useState<"manual" | "timed" | null>(null);
   const [pauseUntil, setPauseUntil] = useState<string | null>(null);
@@ -40,7 +39,6 @@ export function MctbSetupTextBackView() {
       setMessageTemplate(r.messageTemplate || "");
       setDelaySeconds(r.delaySeconds ?? 0);
       setConsentMode(json.data.consentMode);
-      setDefaultLinkUrl(r.defaultLinkUrl || "");
       setPaused(Boolean(json.data.schedule?.paused));
       setPauseKind(json.data.schedule?.pauseKind ?? null);
       setPauseUntil(json.data.schedule?.pauseUntil ?? null);
@@ -69,7 +67,6 @@ export function MctbSetupTextBackView() {
           phoneNumberId,
           messageTemplate,
           delaySeconds,
-          defaultLinkUrl: defaultLinkUrl.trim() || null,
           activate: false,
         }),
       });
@@ -132,32 +129,27 @@ export function MctbSetupTextBackView() {
       <div className="voice-card p-4 sm:p-6">
         <WizardQuestionBlock
           number={2}
-          title="Delivery timing & links"
+          title="Delivery timing"
           subtitle="Optional — applies to future recovery sends only."
           optional
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-[#374151]">Delay before sending (seconds)</span>
-              <input
-                type="number"
-                min={0}
-                className="flex h-10 w-full max-w-[200px] rounded-lg border border-input bg-background px-3 text-sm"
-                value={delaySeconds}
-                onChange={(e) => setDelaySeconds(Number(e.target.value || 0))}
-              />
-            </label>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-[#374151]">Default link URL</span>
-              <input
-                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                placeholder="https://example.com/contact"
-                value={defaultLinkUrl}
-                onChange={(e) => setDefaultLinkUrl(e.target.value)}
-              />
-              <span className="text-[11px] text-muted-foreground">Use {"{{link}}"} in your template.</span>
-            </label>
-          </div>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-[#374151]">Delay before sending (seconds)</span>
+            <input
+              type="number"
+              min={0}
+              className="flex h-10 w-full max-w-[200px] rounded-lg border border-input bg-background px-3 text-sm"
+              value={delaySeconds}
+              onChange={(e) => setDelaySeconds(Number(e.target.value || 0))}
+            />
+          </label>
+          <p className="mt-3 text-[13px] text-muted-foreground">
+            Configure {"{{link}}"} and the public request form in{" "}
+            <Link href={MCTB_ROUTES.setupLinks} className="font-semibold text-primary hover:underline">
+              Links & request form
+            </Link>
+            .
+          </p>
         </WizardQuestionBlock>
       </div>
     </MctbSetupSectionLayout>

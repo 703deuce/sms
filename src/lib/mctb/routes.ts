@@ -11,6 +11,7 @@ export const MCTB_ROUTES = {
   setupPhone: "/mctb/setup/phone",
   setupMissedCallRules: "/mctb/setup/missed-call-rules",
   setupTextBack: "/mctb/setup/text-back",
+  setupLinks: "/mctb/setup/links",
   setupConsent: "/mctb/setup/consent",
   setupNotifications: "/mctb/setup/notifications",
   setupRecovery: "/mctb/setup/recovery",

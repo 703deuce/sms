@@ -80,6 +80,7 @@ export type MctbSetupPayload = {
   defaultLinkUrl?: string | null;
   requestFormEnabled?: boolean;
   leadCaptureEnabled?: boolean;
+  requestFormFieldsJson?: unknown;
   activate?: boolean;
   existingConsentAttested?: boolean;
 };
@@ -422,6 +423,7 @@ export async function POST(req: Request) {
       default_link_url: body.defaultLinkUrl,
       request_form_enabled: body.requestFormEnabled,
       lead_capture_enabled: body.leadCaptureEnabled,
+      request_form_fields_json: body.requestFormFieldsJson,
     },
     actor: session.userId,
     source: "mctb_setup_page",

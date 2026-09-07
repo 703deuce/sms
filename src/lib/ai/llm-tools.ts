@@ -68,6 +68,7 @@ export async function llmChatWithTools(
           tools: tools.length ? tools : undefined,
           tool_choice: tools.length ? options?.toolChoice || "auto" : undefined,
         }),
+        signal: AbortSignal.timeout(45_000),
       });
       if (!res.ok) {
         const errText = await res.text();

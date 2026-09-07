@@ -1,11 +1,18 @@
 /**
- * MCTB engine regression matrix — frozen SIP path + demo/production ingress split.
+ * MCTB engine regression matrix — TeXML-first ingress + demo/production split.
  * Run: npx tsx scripts/test-mctb-engine-matrix.ts
  */
 import assert from "node:assert/strict";
-import { isMctb571SipDiagnosticTarget } from "@/lib/mctb/sip-diagnostic/constants";
 import { MCTB_PLATFORM_DEMO_E164 } from "@/lib/mctb/onboarding/constants";
-import { isPhoneMctbSipIngress, isMctbSipIngressTargetSync } from "@/lib/mctb/sip-ingress/sync";
+import {
+  isMctbTexmlIngressLocked,
+  isMctbTexmlVoiceIngress,
+  isPhoneMctbSipIngress,
+} from "@/lib/mctb/sip-ingress/sync";
+import {
+  MCTB_TEXML_ROUTING_MODE,
+  MCTB_TEXML_ROUTING_OWNER,
+} from "@/lib/mctb/texml-ingress/constants";
 import {
   classifyMctbIngress,
   demoRequiresForwarding,
@@ -34,11 +41,20 @@ function activeDemoSession(): MctbDemoSession {
   };
 }
 
-async function testMctbSipPress1Route() {
-  assert.equal(isMctbSipIngressTargetSync(MCTB_PLATFORM_DEMO_E164), true);
-  assert.equal(isMctb571SipDiagnosticTarget(MCTB_PLATFORM_DEMO_E164), true);
-  assert.equal(isMctbSipIngressTargetSync("+18880001002"), false);
-  console.log("test:mctb-sip-press1-route ok");
+function mctbTexmlSettings() {
+  return {
+    routingOwner: MCTB_TEXML_ROUTING_OWNER,
+    telephony: { routingMode: MCTB_TEXML_ROUTING_MODE },
+    mctbRole: "customer_mctb",
+  };
+}
+
+async function testMctbTexmlPress1Route() {
+  const settings = mctbTexmlSettings();
+  assert.equal(isMctbTexmlVoiceIngress(settings), true);
+  assert.equal(isMctbTexmlIngressLocked(settings), true);
+  assert.equal(isMctbTexmlVoiceIngress({ telephony: { routingMode: "livekit" } }), false);
+  console.log("test:mctb-texml-press1-route ok");
 }
 
 async function testMctbExistingConsentRoute() {
@@ -176,8 +192,8 @@ function testMctbProductionStillRequiresForwardingSetup() {
 }
 
 function testMctbProductionPipelineUnchanged() {
-  // Regression guard: frozen SIP ingress targets and customer DID flags remain intact.
-  assert.equal(isMctbSipIngressTargetSync(MCTB_PLATFORM_DEMO_E164), true);
+  // Regression guard: TeXML-locked DIDs and customer MCTB role flags remain intact.
+  assert.equal(isMctbTexmlIngressLocked(mctbTexmlSettings()), true);
   assert.equal(
     isPhoneMctbSipIngress({ mctbSipIngress: true, mctbRole: "customer_mctb" }),
     true,
@@ -196,7 +212,7 @@ function testMctbProductionPipelineUnchanged() {
 }
 
 async function main() {
-  await testMctbSipPress1Route();
+  await testMctbTexmlPress1Route();
   await testMctbExistingConsentRoute();
   testMctbDemoDirectPress1();
   testMctbDemoDirectExistingConsent();

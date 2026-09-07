@@ -123,10 +123,17 @@ const BATCHES: Batch[] = [
   {
     phase: "4-appointments-api",
     id: "APT-AI-02",
-    matrixIds: ["X-PRODUCT-*"],
+    matrixIds: ["AP-BOOKING-AGENT-*"],
     command: "npx tsx scripts/test-appointment-booking-agent-layer.ts",
     timeoutMs: 120_000,
     serverOnly: true,
+  },
+  {
+    phase: "4-appointments-api",
+    id: "APT-XPROD-01",
+    matrixIds: ["X-PRODUCT-*"],
+    command: "npx tsx scripts/test-mctb-cross-product-booking.ts",
+    timeoutMs: 90_000,
   },
   {
     phase: "4-appointments-api",
@@ -148,10 +155,19 @@ const BATCHES: Batch[] = [
     phase: "4-appointments-api",
     id: "APT-WF-03",
     matrixIds: ["AP-WORKFLOWS-minutes"],
+    command: "npx tsx scripts/test-appointment-workflow-minutes-scheduling.ts",
+    timeoutMs: 90_000,
+    serverOnly: true,
+  },
+  {
+    phase: "4-appointments-api",
+    id: "APT-WF-03-live",
+    matrixIds: ["AP-WORKFLOWS-minutes-live"],
     command: "npx tsx scripts/test-appointment-workflow-minutes.ts",
     timeoutMs: 120_000,
     serverOnly: true,
-    blocked: "Requires TEST_PHONE E.164 for live workflow SMS",
+    blocked:
+      "Live SMS delivery only — requires TEST_PHONE E.164 (scheduling certified locally in APT-WF-03)",
     blockedStatus: "BLOCKED — PSTN",
   },
   {
@@ -290,21 +306,24 @@ const BATCHES: Batch[] = [
   },
   {
     phase: "7-cross-ai",
-    id: "AI-TRX-01",
+    id: "AI-VM-01",
     matrixIds: ["AI-VM-001", "AI-VM-002"],
+    command: "npx tsx scripts/test-mctb-voicemail-ai-hermetic.ts",
+    timeoutMs: 90_000,
+  },
+  {
+    phase: "7-cross-ai",
+    id: "AI-TRX-01",
+    matrixIds: ["AI-TRANSCRIPTION-CATALOG"],
     command: "npm run test:ai-transcription",
     timeoutMs: 120_000,
   },
-  // Defect markers (no command — recorded in static phase)
   {
-    phase: "1-static",
-    id: "DEFECT-01",
+    phase: "6-mctb-api",
+    id: "MCTB-LINKS-01",
     matrixIds: ["MCTB-DEFECT-SETUP-LINKS"],
-    command: "true",
-    timeoutMs: 5_000,
-    staticOnly: true,
-    blocked: "DEFECT — MISSING UI: /mctb/setup/links",
-    blockedStatus: "DEFECT — MISSING UI",
+    command: "npx tsx scripts/test-mctb-setup-links.ts",
+    timeoutMs: 90_000,
   },
 ];
 
@@ -409,7 +428,16 @@ function writeResultsMd(state: State, summary: { pass: number; fail: number; blo
   }
 
   lines.push(``, `## Known defects`, ``);
-  lines.push(`- **MCTB-DEFECT-SETUP-LINKS:** /mctb/setup/links missing — request form + defaultLinkUrl runtime exists`);
+  const openDefects = Object.entries(state.caseResults).filter(
+    ([, v]) => v.status.startsWith("DEFECT") || v.status === "FAIL",
+  );
+  if (openDefects.length === 0) {
+    lines.push(`_No open certification defects._`);
+  } else {
+    for (const [id, v] of openDefects) {
+      lines.push(`- **${id}:** ${v.reason || v.status}`);
+    }
+  }
   lines.push(`- **MCTB-LEGACY-SCHED-001:** Legacy business-hours fields — backward compat only; Business Hours UI must not return`);
 
   if (existsSync(MATRIX_JSON)) {

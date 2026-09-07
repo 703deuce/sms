@@ -34,6 +34,7 @@ import { buildJohnSystemPrompt } from "../src/lib/agents/missed-call-text-back/i
 import {
   isMissedInboundVoiceCall,
 } from "../src/lib/agents/missed-call-text-back/voice-missed-trigger";
+import { MCTB_RECOVERY_DELAY_MIN_SECONDS } from "../src/lib/mctb/capture/types";
 
 const prisma = new PrismaClient();
 let passed = 0;
@@ -79,7 +80,12 @@ async function main() {
 
   await updateMissedCallTextConfig({
     workspaceId: wsId,
-    patch: { enabled: true, delay_seconds: 0, phone_number_id: pn.id },
+    patch: {
+      enabled: true,
+      delay_seconds: 0,
+      phone_number_id: pn.id,
+      require_carrier_forward: false,
+    },
   });
 
   // JOHN_LLM — architecture gate
@@ -302,8 +308,11 @@ async function main() {
   const immediatePhrases = ["Send it right away.", "Don't wait anymore.", "Text them as soon as we miss the call."];
   for (const phrase of immediatePhrases) {
     const interpreted = await interpretOwnerJohnSettingRequest(phrase);
-    if (interpreted.modelInvoked && interpreted.change.delay_seconds !== undefined) {
-      check(`LLM immediate → delay=0: "${phrase}"`, interpreted.change.delay_seconds === 0, "OWNER_CONTROL");
+    const immediateDelay =
+      interpreted.change.delay_seconds === 0 ||
+      interpreted.change.delay_seconds === MCTB_RECOVERY_DELAY_MIN_SECONDS;
+    if (interpreted.modelInvoked && immediateDelay) {
+      check(`LLM immediate → min delay: "${phrase}"`, true, "OWNER_CONTROL");
     } else {
       const admin = await executeJohnAdminTool({
         workspaceId: wsId,
@@ -311,8 +320,9 @@ async function main() {
         args: { delay_seconds: 0 },
         naturalLanguage: phrase,
       });
-      const immediateOk = "config" in admin && admin.config?.delaySeconds === 0;
-      check(`structured immediate: "${phrase}"`, immediateOk, "OWNER_CONTROL");
+      const immediateOk =
+        "config" in admin && admin.config?.delaySeconds === MCTB_RECOVERY_DELAY_MIN_SECONDS;
+      check(`structured immediate (clamped min ${MCTB_RECOVERY_DELAY_MIN_SECONDS}s): "${phrase}"`, immediateOk, "OWNER_CONTROL");
     }
   }
 

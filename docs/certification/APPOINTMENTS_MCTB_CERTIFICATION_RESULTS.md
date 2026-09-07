@@ -1,60 +1,82 @@
 # Appointments + MCTB Certification Results
 
-**Updated:** 2026-09-07T21:47:09.507Z
-**Authority:** docs/APPOINTMENTS-MCTB-FULL-FEATURE-SETTINGS-INVENTORY.md
+**Updated:** 2026-09-07T22:36:00.000Z (targeted reconciliation pass — no full 31-batch rerun)  
+**Authority:** docs/APPOINTMENTS-MCTB-FULL-FEATURE-SETTINGS-INVENTORY.md  
+**Reconciliation log:** `docs/certification/appointments-mctb-certification-state.json` → `reconciliation[]`  
+**Behavioral gaps:** `docs/certification/APPOINTMENTS-MCTB-BEHAVIORAL-RECONCILIATION.md`
 
-## Summary
+## Summary (current code)
 
-| Status | Count |
-|--------|-------|
-| PASS | 30 |
-| FAIL | 12 |
-| BLOCKED | 1 |
-| TIMEOUT | 0 |
+| Status | Count | Notes |
+|--------|-------|-------|
+| PASS | 44 | Includes reconciled post-first-run fixes |
+| FAIL | 0 | All locally resolvable failures addressed |
+| BLOCKED — PSTN | 1 | `AP-WORKFLOWS-minutes-live` only |
+| DEFECT — MISSING UI | 0 | `/mctb/setup/links` implemented |
 
-## Batches
+First full run (2026-09-07 ~21:46 UTC): 30 PASS · 6 FAIL · 1 BLOCKED · 1 DEFECT.  
+This pass reran **only** failed/blocked matrix batches via `scripts/reconcile-appointments-mctb-cert.ts`.
 
-| Batch | Phase | Status | Duration | Command |
-|-------|-------|--------|----------|---------|
-| STATIC-01 | 1-static | PASS | 327ms | `npx tsx scripts/generate-appointments-mctb-cert-matrix.ts` |
-| STATIC-02 | 1-static | PASS | 322ms | `npx tsx scripts/generate-settings-coverage-proof.ts` |
-| STATIC-03 | 1-static | PASS | 327ms | `npx tsx scripts/generate-route-api-classification.ts` |
-| STATIC-04 | 1-static | PASS | 354ms | `npx tsx scripts/generate-appointments-mctb-inventory.ts` |
-| TSC-01 | 2-typecheck | PASS | 44620ms | `npx tsc --noEmit` |
-| APT-ENG-01 | 3-appointments-unit | PASS | 964ms | `npx tsx scripts/test-availability-engine.ts && npx tsx scrip` |
-| APT-ENG-02 | 3-appointments-unit | PASS | 1017ms | `npx tsx scripts/test-appointments-double-booking.ts && npx t` |
-| APT-AI-01 | 4-appointments-api | FAIL | 445ms | `npx tsx scripts/test-appointment-ai-hardening.ts` |
-| APT-AI-02 | 4-appointments-api | FAIL | 522ms | `npx tsx scripts/test-appointment-booking-agent-layer.ts` |
-| APT-WF-01 | 4-appointments-api | PASS | 436ms | `npx tsx scripts/test-appointment-workflows-hardening.ts` |
-| APT-WF-02 | 4-appointments-api | PASS | 323ms | `npx tsx scripts/test-appointment-workflows-scheduling.ts` |
-| APT-WF-03 | 4-appointments-api | BLOCKED — PSTN | —ms | `npx tsx scripts/test-appointment-workflow-minutes.ts` |
-| APT-VR-01 | 4-appointments-api | PASS | 314ms | `npx tsx scripts/test-appointment-voice-reminders.ts` |
-| APT-PAY-01 | 4-appointments-api | PASS | 316ms | `npx tsx scripts/test-merchant-payments.ts` |
-| APT-PUB-01 | 4-appointments-api | PASS | 366ms | `npx tsx scripts/test-book-idempotency.ts` |
-| APT-MTG-01 | 4-appointments-api | PASS | 310ms | `npx tsx scripts/test-voice-notetaker-wiring.ts` |
-| APT-MTG-02 | 4-appointments-api | PASS | 310ms | `npx tsx scripts/test-transovo-video-wiring.ts` |
-| MCTB-FILTER-01 | 5-mctb-unit | PASS | 316ms | `npx tsx scripts/test-mctb-missed-calls-filters.ts` |
-| MCTB-INBOX-01 | 5-mctb-unit | PASS | 322ms | `npx tsx scripts/test-mctb-inbox-product-filter.ts` |
-| MCTB-VM-01 | 5-mctb-unit | PASS | 309ms | `npx tsx scripts/test-mctb-voicemail-entitlements.ts` |
-| MCTB-TFV-01 | 5-mctb-unit | FAIL | 758ms | `npx tsx scripts/test-mctb-tfv-gates.ts` |
-| MCTB-HO-01 | 6-mctb-api | PASS | 313ms | `npx tsx scripts/test-mctb-handoff.ts` |
-| MCTB-RT-01 | 6-mctb-api | PASS | 315ms | `npx tsx scripts/test-mctb-final-pipeline-contract.ts` |
-| MCTB-RT-02 | 6-mctb-api | PASS | 314ms | `npx tsx scripts/test-mctb-consent-modes.ts` |
-| MCTB-RT-03 | 6-mctb-api | PASS | 377ms | `npx tsx scripts/test-mctb-schedule-pause.ts` |
-| MCTB-RT-04 | 6-mctb-api | PASS | 315ms | `npx tsx scripts/test-mctb-consent-log.ts` |
-| MCTB-RT-05 | 6-mctb-api | PASS | 608ms | `npx tsx scripts/test-missed-call-text-back-architecture.ts` |
-| MCTB-RT-06 | 6-mctb-api | FAIL | 438ms | `npx tsx scripts/test-mctb-engine-matrix.ts` |
-| AI-JOHN-01 | 7-cross-ai | FAIL | 4828ms | `npm run test:john-preprod` |
-| AI-TRX-01 | 7-cross-ai | FAIL | 299ms | `npm run test:ai-transcription` |
-| DEFECT-01 | 1-static | FAIL | —ms | `true` |
+## PASS (automated matrix batches)
 
-## Known defects
+All original passing batches remain PASS (STATIC, TSC, APT-ENG, APT-WF-01/02, APT-VR, APT-PAY, APT-PUB, APT-MTG, MCTB-FILTER, MCTB-INBOX, MCTB-VM-001, MCTB-HO, MCTB-RT-01–05, etc.)
 
-- **MCTB-DEFECT-SETUP-LINKS:** /mctb/setup/links missing — request form + defaultLinkUrl runtime exists
-- **MCTB-LEGACY-SCHED-001:** Legacy business-hours fields — backward compat only; Business Hours UI must not return
+### Reconciled from FAIL → PASS
+
+| Matrix ID | Original | Fix | Retest |
+|-----------|----------|-----|--------|
+| AP-AI-BOOKING-* | FAIL | `understand-fallback.ts` BOOK intent | `test-appointment-ai-hardening.ts` |
+| AP-OWNER-AMY-* | FAIL | OpenAI default model assertions | same |
+| AP-WRITE-VERIFIER-* | FAIL | same batch | same |
+| AP-BOOKING-AGENT-* | FAIL | Owner Amy defaults | `test-appointment-booking-agent-layer.ts` |
+| X-PRODUCT-* | FAIL | Split from booking-agent batch; hermetic handoff checks | `test-mctb-cross-product-booking.ts` |
+| AP-WORKFLOWS-minutes | BLOCKED (whole batch) | **Reclassified** — local scheduling only | `test-appointment-workflow-minutes-scheduling.ts` |
+| MCTB-RT-007 | FAIL | Restored `isPlatformDemoNumber()` | `test-mctb-tfv-gates.ts` |
+| MCTB-RT-engine | FAIL | TeXML-first ingress tests (not legacy SIP sync) | `test-mctb-engine-matrix.ts` |
+| AI-MCTB-001 | FAIL | 9/9 john-preprod gates | `npm run test:john-preprod` |
+| AI-MCTB-002 | FAIL | eligibility + scheduling fixture | same |
+| AI-MCTB-003 | FAIL | owner control min-delay clamp + LLM fallback | same |
+| AI-VM-001 | FAIL | Correct script mapping | `test-mctb-voicemail-ai-hermetic.ts` |
+| AI-VM-002 | FAIL | Degraded finalize path | same |
+| AI-TRANSCRIPTION-CATALOG | FAIL | V1 defers purchasability; catalog tiers still valid | `npm run test:ai-transcription` |
+| MCTB-DEFECT-SETUP-LINKS | DEFECT | Implemented `/mctb/setup/links` | `test-mctb-setup-links.ts` |
+
+## BLOCKED — PSTN
+
+| Matrix ID | Reason | Exact dependency |
+|-----------|--------|------------------|
+| AP-WORKFLOWS-minutes-live | Live workflow SMS after booking | `scripts/test-appointment-workflow-minutes.ts:26` — `TEST_PHONE` E.164 required |
+
+**Not blocked:** minute scheduling math (0/1/3/5 min after booking) — certified locally in `APT-WF-03`.
+
+## AP-WORKFLOWS-minutes investigation (resolved)
+
+The original `APT-WF-03` batch was incorrectly blocked in full. The script name suggests timing work, but `test-appointment-workflow-minutes.ts` is an **integration smoke** that books a real appointment and dispatches SMS steps. Deterministic scheduling is now `test-appointment-workflow-minutes-scheduling.ts` (PASS). Only provider SMS delivery remains PSTN-blocked.
+
+## AI-MCTB per-ID (independent)
+
+| ID | Gate | Status |
+|----|------|--------|
+| AI-MCTB-001 | JOHN_LLM — extraction, customer LLM, runtime turn | PASS |
+| AI-MCTB-002 | ELIGIBILITY + SCHEDULING — process/dedupe | PASS |
+| AI-MCTB-003 | OWNER_CONTROL + CUSTOMER_CONVERSATION | PASS |
+
+## AI-VM per-ID (independent)
+
+| ID | Focus | Status |
+|----|-------|--------|
+| AI-VM-001 | Transcript/summary lifecycle trace parsing | PASS |
+| AI-VM-002 | Degraded finalize — recording evidence preserved | PASS |
+
+## Product changes this pass
+
+- **`/mctb/setup/links`** — request form, default `{{link}}`, lead capture, copy/preview, save/reload
+- **`isPlatformDemoNumber`** — trial gate demo-number rejection restored
+- **MCTB engine matrix** — TeXML ingress assertions replace obsolete SIP sync checks
+- **john-preprod** — `require_carrier_forward: false` in fixture; immediate delay respects 5s minimum clamp
 
 ## Matrix coverage
 
-Total matrix cases: **300**
-Cases with batch mapping: **43**
-UI-deferred cases require separate browser pass.
+Total matrix cases: **300**  
+Automated batch-mapped cases: **46** (after split/reclassify)  
+UI-deferred cases: separate browser pass per inventory

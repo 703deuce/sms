@@ -83,34 +83,42 @@ Never use keyword matching — understand meaning.`,
     { role: "user", content: naturalLanguage },
   ];
 
-  const result = await llmChatWithTools(messages, [INTERPRET_OWNER_SETTING_TOOL], {
-    temperature: 0.1,
-    maxTokens: 300,
-    providerChain: resolveJohnLlmProviders("customer_john"),
-  });
+  try {
+    const result = await llmChatWithTools(messages, [INTERPRET_OWNER_SETTING_TOOL], {
+      temperature: 0.1,
+      maxTokens: 300,
+      providerChain: resolveJohnLlmProviders("customer_john"),
+    });
 
-  let change: OwnerJohnSettingChange = {
-    change_type: "UNKNOWN",
-    target_agent: "john",
-  };
+    let change: OwnerJohnSettingChange = {
+      change_type: "UNKNOWN",
+      target_agent: "john",
+    };
 
-  if (result?.message.tool_calls?.length) {
-    const tc = result.message.tool_calls[0];
-    try {
-      const parsed = JSON.parse(tc.function.arguments || "{}") as OwnerJohnSettingChange;
-      change = { ...parsed, target_agent: "john" };
-    } catch {
-      // keep UNKNOWN
+    if (result?.message.tool_calls?.length) {
+      const tc = result.message.tool_calls[0];
+      try {
+        const parsed = JSON.parse(tc.function.arguments || "{}") as OwnerJohnSettingChange;
+        change = { ...parsed, target_agent: "john" };
+      } catch {
+        // keep UNKNOWN
+      }
     }
-  }
 
-  return {
-    change,
-    modelInvoked: Boolean(result),
-    modelRequestId,
-    modelProvider: result?.provider,
-    modelName: result?.model,
-  };
+    return {
+      change,
+      modelInvoked: Boolean(result),
+      modelRequestId,
+      modelProvider: result?.provider,
+      modelName: result?.model,
+    };
+  } catch {
+    return {
+      change: { change_type: "UNKNOWN", target_agent: "john" },
+      modelInvoked: false,
+      modelRequestId,
+    };
+  }
 }
 
 /** Apply owner setting change after LLM interpretation. */

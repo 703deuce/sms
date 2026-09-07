@@ -18,6 +18,8 @@ type SetupPayload = {
     enabled: boolean;
     phoneNumberId: string | null;
     messageTemplate: string;
+    defaultLinkUrl?: string | null;
+    requestFormEnabled?: boolean;
     sendAfterNoAnswer: boolean;
     sendAfterBusy: boolean;
     sendAfterRejected: boolean;
@@ -118,6 +120,20 @@ export function MctbSetupOverview() {
         status: r.messageTemplate.trim() ? "ready" : "attention",
         icon: MessageSquare,
         tint: "blue",
+      },
+      {
+        id: "links",
+        title: "Links & request form",
+        summary:
+          r.requestFormEnabled || r.defaultLinkUrl
+            ? r.requestFormEnabled
+              ? "Public request form enabled"
+              : "Default link configured"
+            : "Configure {{link}} for recovery texts",
+        href: MCTB_ROUTES.setupLinks,
+        status: r.requestFormEnabled || r.defaultLinkUrl ? "ready" : "unknown",
+        icon: MessageSquare,
+        tint: "green",
       },
       {
         id: "consent",
