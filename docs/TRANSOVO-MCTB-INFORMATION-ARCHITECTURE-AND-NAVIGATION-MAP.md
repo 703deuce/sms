@@ -776,7 +776,7 @@ CONFIGURE
   Setup
 ```
 
-**Optional:** Voicemail — only if voicemail proves to be a recurring inbox.
+**Voicemail** — permanent operational peer (locked). Setup → Voicemail = greeting **configuration** only.
 
 This is deliberately smaller than the current legacy Voice navigation.
 
@@ -1098,7 +1098,7 @@ Overview
 WORK
   Missed Calls
   Conversations
-  [Voicemail — only if recurring operational inbox]
+  Voicemail
 INSIGHTS
   Analytics
 CONFIGURE

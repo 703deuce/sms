@@ -28,8 +28,8 @@ Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`,
 ## Hard requirements
 
 1. **Task-based IA:** Missed Call → Conversation → Follow-up → Recovery. Operational work dominates setup.
-2. **Minimal sidebar:** Overview | Missed Calls | Conversations | Analytics | Setup. Optional Voicemail only if recurring inbox.
-3. **Setup is grouped** — Phone, Messaging, Consent, Schedule, Voicemail, Exclusions, Test live inside Setup, not as equal top-level nav peers.
+2. **Minimal sidebar:** Home | Missed Calls | Conversations | **Voicemail** | Analytics | Setup (+ Numbers under Configure; Settings org-wide). **Voicemail is a permanent operational peer** (locked per build spec 05).
+3. **Setup is grouped** — Phone, Messaging, Consent, Schedule, Voicemail **configuration**, Exclusions, Test live inside Setup. Voicemail **inbox** is `/mctb/voicemail`, not buried in Setup.
 4. **One canonical home** per feature. One canonical label. No duplicate management surfaces.
 5. **Canonical prefix:** `/mctb/*` (legacy `/voice/*` → redirects during migration).
 6. **Operational vs config:** Overview/Missed Calls/Conversations/Analytics = daily work. Everything else = setup, audit, process, or admin.
@@ -44,9 +44,10 @@ Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`,
 ## Canonical route map (target)
 
 ```
-/mctb                          Overview
+/mctb                          Home
 /mctb/missed-calls[/:id]
 /mctb/conversations[/:id]
+/mctb/voicemail[/:id]
 /mctb/analytics
 /mctb/setup[/phone|messaging|consent|schedule|voicemail|exclusions|test]
 /mctb/compliance[/consent]

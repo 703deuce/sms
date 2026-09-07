@@ -451,4 +451,6 @@ Cursor may mark MCTB Conversations complete only when:
 
 ## Build handoff
 
-Next screen in sequence: **05 — Voicemail** — including decision rules for permanent operational destination vs contextual/subordinate surface.
+Next screen in sequence: **05 — Visual Voicemail** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md`.
+
+**06 — Analytics** — pending build spec.

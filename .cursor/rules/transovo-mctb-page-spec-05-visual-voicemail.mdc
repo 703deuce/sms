@@ -1,0 +1,78 @@
+---
+description: MANDATORY — MCTB Visual Voicemail. Operational inbox + Setup greeting; permanent nav peer.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 05: VISUAL VOICEMAIL
+
+**Operational route:** `/mctb/voicemail` | **Setup route:** `/mctb/setup/voicemail`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–04
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Voicemail inbox or Voicemail Setup (`/mctb/voicemail`, `/mctb/setup/voicemail`, legacy `/voice/voicemail`).
+
+## Navigation (LOCKED)
+
+Voicemail is a **permanent operational peer:**
+
+```
+Home | Missed Calls | Conversations | Voicemail | Analytics
+Configure: Setup | Numbers | Settings
+```
+
+Not setup-only. Not optional.
+
+## Two surfaces (do not merge)
+
+| Surface | Route | Job |
+|---------|-------|-----|
+| **Operational inbox** | `/mctb/voicemail` | Listen, transcript, AI summary, follow up |
+| **Voicemail setup** | `/mctb/setup/voicemail` | Greeting, TTS, ElevenLabs, record, upload, behavior |
+
+Inbox header: **Voicemail settings** → Setup only. No greeting builder in inbox.
+
+## Content hierarchy (authoritative → derived)
+
+1. **Original audio recording** — AUTHORITATIVE
+2. **Transcript** — derived, labeled
+3. **AI summary** — derived, explicitly labeled; never verbatim speech
+
+AI must not auto-set callback/consent/appointment state.
+
+## Operational inbox
+
+Master-detail: list | selected voicemail (audio → AI summary → transcript → related missed call/conversation).
+
+Actions: Call customer | Open conversation | View missed call | Mark reviewed (if canonical).
+
+Independent states: audio / transcription / summary / follow-up — partial failure must not blank page.
+
+Deep link: `/mctb/voicemail/:id`. Return context preserved.
+
+## Voicemail setup
+
+Greeting sources: Transovo TTS (default) | ElevenLabs AI voice | Record | Upload.
+
+**Critical:** New greeting does not replace active until valid/ready. Failure keeps current greeting active.
+
+Preview before activate. Save vs Activate per runtime truth.
+
+Trigger/behavior: text-back after voicemail explicit when supported.
+
+## Prohibited
+
+- Greeting configuration cluttering operational inbox
+- Transcript/summary replacing or editing audio evidence
+- Mock transcripts/summaries; fabricated AI facts
+- Insecure raw audio URLs; cross-tenant AI context
+- Merging voicemail + SMS into one fake stream
+
+## Definition of done
+
+See full spec §114 checklist.
+
+## Next in series
+
+**06 — Analytics** — pending build spec.

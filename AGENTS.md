@@ -72,7 +72,8 @@ Screen-by-screen implementation authority. When building a page, read its spec:
 | 02 | Missed Calls List | `/mctb/missed-calls` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md` |
 | 03 | Missed Call Detail | `/mctb/missed-calls/:id` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md` |
 | 04 | Conversations | `/mctb/conversations` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md` |
-| 05 | Voicemail | `/mctb/voicemail` or contextual | *(pending)* |
+| 05 | Visual Voicemail | `/mctb/voicemail` + `/mctb/setup/voicemail` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md` |
+| 06 | Analytics | `/mctb/analytics` | *(pending)* |
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

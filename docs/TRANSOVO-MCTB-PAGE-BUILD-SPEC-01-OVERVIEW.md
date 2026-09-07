@@ -136,7 +136,7 @@ MCTB is a product workspace within the same Transovo system.
 - Overview *(selected)*
 - Missed Calls
 - Conversations
-- [Voicemail — only if final product decision retains operational inbox]
+- Voicemail *(permanent operational peer — locked)*
 - Analytics
 - Setup
 

@@ -32,6 +32,10 @@ alwaysApply: true
 | `/mctb/missed-calls/:id` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-03-MISSED-CALL-DETAIL.md` | `transovo-mctb-page-spec-03-missed-call-detail.mdc` |
 | `/mctb/conversations` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md` | `transovo-mctb-page-spec-04-conversations.mdc` |
 | `/mctb/conversations/:id` | *(same spec 04 — thread deep link)* | `transovo-mctb-page-spec-04-conversations.mdc` |
+| `/mctb/voicemail` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-05-VISUAL-VOICEMAIL.md` | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
+| `/mctb/voicemail/:id` | *(same spec 05)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
+| `/mctb/setup/voicemail` | *(spec 05 — greeting configuration)* | `transovo-mctb-page-spec-05-visual-voicemail.mdc` |
+| `/mctb/analytics` | *(pending — spec 06)* | — |
 
 ## Hard requirements (all pages)
 
