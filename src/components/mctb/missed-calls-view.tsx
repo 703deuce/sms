@@ -246,18 +246,18 @@ export function MctbMissedCallsView() {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {[
-          { label: "Missed today", value: summary?.missedToday ?? "—" },
-          { label: "Recovery texts today", value: summary?.sentToday ?? "—" },
-          { label: "Replies today", value: summary?.repliedToday ?? "—" },
+          { label: "Missed today", value: summary?.missedToday ?? "—", tint: "purple" as const },
+          { label: "Recovery texts today", value: summary?.sentToday ?? "—", tint: "blue" as const },
+          { label: "Replies today", value: summary?.repliedToday ?? "—", tint: "green" as const },
         ].map((stat) => (
-          <div key={stat.label} className="ref-card px-5 py-4 transition hover:border-indigo-200 hover:shadow-sm">
+          <div key={stat.label} className={`ref-deco-kpi ref-deco-kpi--${stat.tint} px-5 py-4`}>
             <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
             <p className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="ref-card mb-4 p-4">
+      <div className="ref-deco-control-bar mb-4 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2">
@@ -364,7 +364,7 @@ export function MctbMissedCallsView() {
         </div>
       </div>
 
-      <div className="ref-card overflow-hidden p-0">
+      <div className="ref-deco-table-wrap">
         {loading ? (
           <TableSkeleton />
         ) : error ? (

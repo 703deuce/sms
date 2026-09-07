@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MctbPageHeader, MctbPrimaryLink } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import { MctbPageHeader, MctbPrimaryLink, MctbStatusBadge } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import "./kimi-ui/reference.css";
 
 function fmtTime(iso: string) {
@@ -139,10 +139,11 @@ export function MctbOverviewView() {
           description="Missed call recovery health — activity, attention, and setup status."
           badge={
             data.status === "active" ? (
-              <span className="ref-pill pill-green inline-flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
-                Active
-              </span>
+              <MctbStatusBadge tone="active" label="Active" />
+            ) : data.status === "paused" ? (
+              <MctbStatusBadge tone="paused" label="Paused" />
+            ) : data.status === "messaging_blocked" ? (
+              <MctbStatusBadge tone="attention" label="Needs attention" />
             ) : undefined
           }
           action={<MctbPrimaryLink href={headerCta.href}>{headerCta.label}</MctbPrimaryLink>}
@@ -226,13 +227,19 @@ export function MctbOverviewView() {
             />
 
             <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
-              <div className="lg:col-span-2 ref-card p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-[15px] font-bold text-gray-900">Recent missed calls</h3>
-                  <Link href={MCTB_ROUTES.missedCalls} className="text-[13px] font-semibold text-indigo-600 hover:underline">
-                    View all
-                  </Link>
+              <div className="ref-deco-section lg:col-span-2">
+                <div className="ref-deco-section-head">
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="ref-deco-section-accent" aria-hidden />
+                      <h3 className="text-[15px] font-bold text-gray-900">Recent missed calls</h3>
+                    </div>
+                    <Link href={MCTB_ROUTES.missedCalls} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+                      View all
+                    </Link>
+                  </div>
                 </div>
+                <div className="ref-deco-section-body">
                 {data.recentMissedCalls.length === 0 ? (
                   <p className="py-8 text-center text-[13px] text-gray-500">No missed calls today.</p>
                 ) : (
@@ -261,6 +268,7 @@ export function MctbOverviewView() {
                     </tbody>
                   </table>
                 )}
+                </div>
               </div>
 
               <MctbNeedsAttention
@@ -270,13 +278,19 @@ export function MctbOverviewView() {
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-              <div className="ref-card p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-[15px] font-bold text-gray-900">Recent conversations</h3>
-                  <Link href={MCTB_ROUTES.conversations} className="text-[13px] font-semibold text-indigo-600 hover:underline">
-                    Open inbox
-                  </Link>
+              <div className="ref-deco-section ref-deco-section--tint-blue">
+                <div className="ref-deco-section-head">
+                  <div className="flex w-full items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="ref-deco-section-accent ref-deco-section-accent--blue" aria-hidden />
+                      <h3 className="text-[15px] font-bold text-gray-900">Recent conversations</h3>
+                    </div>
+                    <Link href={MCTB_ROUTES.conversations} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+                      Open inbox
+                    </Link>
+                  </div>
                 </div>
+                <div className="ref-deco-section-body">
                 {data.recentConversations.length === 0 ? (
                   <p className="py-6 text-center text-[13px] text-gray-500">No recent conversations.</p>
                 ) : (
@@ -299,10 +313,17 @@ export function MctbOverviewView() {
                     ))}
                   </ul>
                 )}
+                </div>
               </div>
 
-              <div className="ref-card p-5">
-                <h3 className="mb-3 text-[15px] font-bold text-gray-900">Setup status</h3>
+              <div className="ref-deco-section ref-deco-section--tint-purple">
+                <div className="ref-deco-section-head">
+                  <div className="flex items-center gap-2.5">
+                    <span className="ref-deco-section-accent" aria-hidden />
+                    <h3 className="text-[15px] font-bold text-gray-900">Setup status</h3>
+                  </div>
+                </div>
+                <div className="ref-deco-section-body">
                 <dl className="space-y-2 text-[13px]">
                   {[
                     ["Business line", data.setupHealth.businessLine || "Not set", MCTB_ROUTES.setupPhone],
@@ -331,6 +352,7 @@ export function MctbOverviewView() {
                 >
                   View analytics <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                 </Link>
+                </div>
               </div>
             </div>
           </>

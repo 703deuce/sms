@@ -30,7 +30,7 @@ export function MctbRecoveryTrendChart({
   const labelEvery = rangeDays >= 30 ? 5 : rangeDays >= 14 ? 3 : 1;
 
   return (
-    <div className="ref-card p-5">
+    <div className="ref-deco-chart p-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-bold text-gray-900">{title}</h2>
@@ -63,7 +63,7 @@ export function MctbRecoveryTrendChart({
               <div
                 className={cn(
                   "w-full rounded-t-[3px] transition-colors",
-                  hover === i ? "bg-primary" : "bg-indigo-200",
+                  hover === i ? "bg-primary shadow-[0_0_12px_rgba(79,70,229,0.35)]" : "bg-indigo-200/90",
                 )}
                 style={{ height: `${Math.max(3, (p.count / max) * 100)}%` }}
               />

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { MctbIconRing } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import "../kimi-ui/reference.css";
 
 export type MctbStatItem = {
@@ -19,13 +20,11 @@ export function MctbStatCards({ stats }: { stats: MctbStatItem[] }) {
         const Icon = s.icon;
         const inner = (
           <div
-            className={`ref-card flex items-center gap-4 px-5 py-5 transition hover:border-indigo-200 ${
-              s.highlight ? "ring-1 ring-indigo-200" : ""
+            className={`ref-deco-kpi ref-deco-kpi--${s.tint} flex items-center gap-4 px-5 py-5 ${
+              s.highlight ? "ref-deco-kpi--highlight" : ""
             }`}
           >
-            <div className={`icon-tile tile-${s.tint}`}>
-              <Icon size={20} strokeWidth={2} aria-hidden />
-            </div>
+            <MctbIconRing icon={Icon} tint={s.tint} size={48} />
             <div className="min-w-0">
               <div className="text-[12px] font-medium text-gray-500">{s.label}</div>
               <div className="text-[22px] font-bold leading-tight text-gray-900 tabular-nums">
@@ -36,7 +35,11 @@ export function MctbStatCards({ stats }: { stats: MctbStatItem[] }) {
           </div>
         );
         return s.href ? (
-          <Link key={s.label} href={s.href} className="block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+          <Link
+            key={s.label}
+            href={s.href}
+            className="block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
             {inner}
           </Link>
         ) : (

@@ -129,7 +129,7 @@ export function MctbAnalyticsView() {
             <div
               role="group"
               aria-label="Date range"
-              className="inline-flex items-center rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm"
+              className="inline-flex items-center rounded-xl border border-gray-200 bg-white/90 p-0.5 shadow-[0_2px_8px_rgba(79,70,229,0.06)] backdrop-blur-sm"
             >
               {RANGE_OPTIONS.map((opt) => (
                 <button
@@ -169,17 +169,22 @@ export function MctbAnalyticsView() {
               ]}
             />
 
-            <div className="mt-5 ref-card p-5">
-              <h2 className="text-[15px] font-bold text-gray-900">Recovery funnel</h2>
-              <p className="mt-1 text-[12px] text-gray-500">Suppressed is distinct from failed delivery.</p>
-              <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-5 ref-deco-section ref-deco-section--tint-purple">
+              <div className="ref-deco-section-head">
+                <div className="flex items-center gap-2.5">
+                  <span className="ref-deco-section-accent" aria-hidden />
+                  <div>
+                    <h2 className="text-[15px] font-bold text-gray-900">Recovery funnel</h2>
+                    <p className="mt-0.5 text-[12px] text-gray-500">Suppressed is distinct from failed delivery.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="ref-deco-section-body">
+              <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {funnel.map((step, i) => (
                   <li key={step.label}>
-                    <Link
-                      href={step.href}
-                      className="block rounded-xl border border-gray-100 px-4 py-3 transition hover:border-indigo-200 hover:shadow-sm"
-                    >
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    <Link href={step.href} className="ref-deco-funnel-step">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-indigo-400">
                         Step {i + 1}
                       </span>
                       <p className="mt-1 text-[13px] font-medium text-gray-700">{step.label}</p>
@@ -188,6 +193,7 @@ export function MctbAnalyticsView() {
                   </li>
                 ))}
               </ol>
+              </div>
             </div>
 
             {mctb?.trends ? (
@@ -217,36 +223,53 @@ export function MctbAnalyticsView() {
             ) : null}
 
             <div className="mt-5 grid gap-5 lg:grid-cols-2">
-              <div className="ref-card p-5">
-                <h2 className="text-[15px] font-bold text-gray-900">Delivery & engagement</h2>
-                <dl className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
+              <div className="ref-deco-section">
+                <div className="ref-deco-section-head">
+                  <div className="flex items-center gap-2.5">
+                    <span className="ref-deco-section-accent ref-deco-section-accent--blue" aria-hidden />
+                    <h2 className="text-[15px] font-bold text-gray-900">Delivery & engagement</h2>
+                  </div>
+                </div>
+                <div className="ref-deco-section-body">
+                <dl className="grid grid-cols-2 gap-3 text-[13px]">
                   <div><dt className="text-gray-500">Delivery rate</dt><dd className="font-semibold text-gray-900">{mctb?.deliveryRate ?? 0}%</dd></div>
                   <div><dt className="text-gray-500">Link clicks</dt><dd className="font-semibold text-gray-900">{formatNumber(mctb?.linkClicks ?? 0)}</dd></div>
                   <div><dt className="text-gray-500">Delivery failures</dt><dd className="font-semibold text-gray-900">{formatNumber(mctb?.deliveryFailures ?? 0)}</dd></div>
                   <div><dt className="text-gray-500">Opt-outs</dt><dd className="font-semibold text-gray-900">{formatNumber(mctb?.optOuts ?? 0)}</dd></div>
                 </dl>
+                </div>
               </div>
 
-              <div className="ref-card p-5">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-[15px] font-bold text-gray-900">Voicemail</h2>
-                  <Link href={`${MCTB_ROUTES.voicemail}?from=${range}`} className="text-[13px] font-semibold text-indigo-600 hover:underline">
-                    Open inbox
-                  </Link>
+              <div className="ref-deco-section ref-deco-section--tint-blue">
+                <div className="ref-deco-section-head">
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="ref-deco-section-accent ref-deco-section-accent--blue" aria-hidden />
+                      <h2 className="text-[15px] font-bold text-gray-900">Voicemail</h2>
+                    </div>
+                    <Link href={`${MCTB_ROUTES.voicemail}?from=${range}`} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+                      Open inbox
+                    </Link>
+                  </div>
                 </div>
+                <div className="ref-deco-section-body">
                 <p className="mt-2 flex items-center gap-2 text-[22px] font-bold text-gray-900">
                   <Voicemail className="h-5 w-5 text-indigo-600" aria-hidden />
                   {formatNumber(mctb?.voicemailCount ?? 0)}
                 </p>
                 <p className="text-[12px] text-gray-500">Voicemails in selected range</p>
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 ref-card p-5">
-              <div className="flex items-center gap-2">
-                <ShieldOff className="h-4 w-4 text-amber-600" aria-hidden />
-                <h2 className="text-[15px] font-bold text-gray-900">Why some callers weren&apos;t texted</h2>
+            <div className="mt-5 ref-deco-section ref-deco-section--tint-amber">
+              <div className="ref-deco-section-head">
+                <div className="flex items-center gap-2.5">
+                  <ShieldOff className="h-4 w-4 text-amber-600" aria-hidden />
+                  <h2 className="text-[15px] font-bold text-gray-900">Why some callers weren&apos;t texted</h2>
+                </div>
               </div>
+              <div className="ref-deco-section-body">
               {topSuppressions.length === 0 ? (
                 <p className="mt-3 text-[13px] text-gray-500">No suppressions in this period.</p>
               ) : (
@@ -264,6 +287,7 @@ export function MctbAnalyticsView() {
                   ))}
                 </ul>
               )}
+              </div>
             </div>
           </>
         )}

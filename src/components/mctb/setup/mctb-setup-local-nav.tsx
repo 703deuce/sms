@@ -4,6 +4,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import "../kimi-ui/reference.css";
 
 const SETUP_LINKS = [
   { href: MCTB_ROUTES.setup, label: "Overview", exact: true },
@@ -21,7 +22,7 @@ export function MctbSetupLocalNav() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Setup sections" className="ref-card p-2">
+    <nav aria-label="Setup sections" className="ref-deco-setup-nav p-2">
       <ul className="space-y-0.5">
         {SETUP_LINKS.map((link) => {
           const exact = "exact" in link && link.exact;
@@ -33,10 +34,8 @@ export function MctbSetupLocalNav() {
               <Link
                 href={link.href}
                 className={cn(
-                  "block rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
-                  active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  "ref-deco-setup-nav-link",
+                  active && "ref-deco-setup-nav-link--active",
                 )}
                 aria-current={active ? "page" : undefined}
               >

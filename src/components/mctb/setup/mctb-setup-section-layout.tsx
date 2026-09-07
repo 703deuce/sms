@@ -48,7 +48,8 @@ export function MctbSetupSectionLayout({
           </aside>
 
           <div className="min-w-0">
-            <div className="mb-6 rounded-2xl border border-gray-100 bg-gradient-to-r from-white via-white to-indigo-50/40 p-5 sm:p-6">
+            <div className="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50/50 p-5 shadow-[0_8px_24px_rgba(79,70,229,0.06)] sm:p-6">
+              <div className="mb-3 h-1 w-16 rounded-full bg-gradient-to-r from-indigo-500 to-violet-400" aria-hidden />
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h1 className="font-display text-[22px] font-bold tracking-tight text-gray-900">{title}</h1>

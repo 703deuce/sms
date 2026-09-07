@@ -7,9 +7,9 @@ import {
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { ArrowRight, Ban, CheckCircle2, CircleAlert, MessageSquare, Phone, PhoneMissed, ShieldCheck, Sparkles, Voicemail } from "lucide-react";
+import { ArrowRight, Ban, MessageSquare, Phone, PhoneMissed, ShieldCheck, Sparkles, Voicemail } from "lucide-react";
 import Link from "next/link";
-import { MctbPageHeader, MctbPrimaryLink } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import { MctbPageHeader, MctbPrimaryLink, MctbStatusBadge, MctbIconRing } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./kimi-ui/reference.css";
 
@@ -42,23 +42,9 @@ type SetupRow = {
 };
 
 function RowStatus({ status }: { status: SetupRow["status"] }) {
-  if (status === "ready") {
-    return (
-      <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700">
-        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-        Ready
-      </span>
-    );
-  }
-  if (status === "attention") {
-    return (
-      <span className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-800">
-        <CircleAlert className="h-3.5 w-3.5" aria-hidden />
-        Needs attention
-      </span>
-    );
-  }
-  return <span className="text-[12px] text-muted-foreground">Not configured</span>;
+  if (status === "ready") return <MctbStatusBadge tone="ready" label="Ready" />;
+  if (status === "attention") return <MctbStatusBadge tone="attention" label="Needs attention" />;
+  return <MctbStatusBadge tone="paused" label="Not configured" showDot={false} />;
 }
 
 export function MctbSetupOverview() {
@@ -254,16 +240,13 @@ export function MctbSetupOverview() {
             </p>
           </div>
         ) : (
-          <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
-            <span>
-              <span className="font-medium text-foreground">Configured</span> — review any section
-              below to make changes.
-            </span>
+          <p className="mt-6 flex items-center gap-2.5 text-sm text-muted-foreground">
+            <MctbStatusBadge tone="active" label="Configured" />
+            <span>Review any section below to make changes.</span>
           </p>
         )}
 
-        <div className="ref-card mt-4 overflow-hidden p-0">
+        <div className="ref-deco-section mt-4 overflow-hidden p-0">
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const Icon = row.icon;
@@ -271,12 +254,10 @@ export function MctbSetupOverview() {
               <li key={row.id}>
                 <Link
                   href={row.href}
-                  className="flex flex-col gap-3 px-5 py-4 transition hover:bg-indigo-50/30 sm:flex-row sm:items-center sm:justify-between"
+                  className="ref-deco-setup-row flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className={`icon-tile tile-${row.tint} shrink-0`}>
-                      <Icon size={18} strokeWidth={2} aria-hidden />
-                    </div>
+                    <MctbIconRing icon={Icon} tint={row.tint} size={44} />
                     <div className="min-w-0">
                       <p className="font-semibold text-foreground">{row.title}</p>
                       <p className="mt-0.5 text-[13px] text-muted-foreground">{row.summary}</p>

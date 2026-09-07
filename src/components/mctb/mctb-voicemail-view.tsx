@@ -6,9 +6,10 @@ import { parseVoicemailApiPayload } from "@/lib/personal/voicemail-mappers";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { formatPhone } from "@/lib/utils";
 import { MessageSquare, Phone, Search, Settings, Voicemail } from "lucide-react";
+import { MctbEmptyState, MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import "../kimi-ui/reference.css";
+import "./kimi-ui/reference.css";
 
 type VmMessage = {
   id: string;
@@ -93,53 +94,48 @@ export function MctbVoicemailView({ initialId }: { initialId?: string }) {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Voicemail</h1>
-            <p className="mt-1 text-[13.5px] text-gray-500">
-              Listen to messages, read transcripts, and follow up on missed callers.
-            </p>
-          </div>
-          <Link
-            href={MCTB_ROUTES.setupVoicemail}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            <Settings size={15} aria-hidden />
-            Voicemail settings
-          </Link>
-        </div>
+        <MctbPageHeader
+          title="Voicemail"
+          description="Listen to messages, read transcripts, and follow up on missed callers."
+          action={
+            <Link
+              href={MCTB_ROUTES.setupVoicemail}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-100 bg-white/90 px-4 text-[13px] font-semibold text-gray-700 shadow-[0_2px_8px_rgba(79,70,229,0.06)] transition hover:border-indigo-200 hover:shadow-sm"
+            >
+              <Settings size={15} aria-hidden />
+              Voicemail settings
+            </Link>
+          }
+        />
 
         {loading ? (
-          <div className="ref-card p-12 text-center text-sm text-gray-500" aria-busy="true">
+          <div className="ref-deco-section p-12 text-center text-sm text-gray-500" aria-busy="true">
             Loading voicemail…
           </div>
         ) : error ? (
-          <div className="ref-card p-8 text-center">
+          <div className="ref-deco-section p-8 text-center">
             <p className="text-sm font-medium text-gray-900">Voicemail couldn&apos;t be loaded.</p>
             <Button type="button" size="sm" className="mt-4" onClick={() => void load()}>
               Retry
             </Button>
           </div>
         ) : messages.length === 0 ? (
-          <div className="ref-card flex flex-col items-center px-8 py-16 text-center">
-            <div className="icon-tile tile-purple mb-4">
-              <Voicemail size={22} aria-hidden />
-            </div>
-            <p className="text-[15px] font-semibold text-gray-900">No voicemails yet</p>
-            <p className="mt-1 max-w-md text-[13px] text-gray-500">
-              When callers leave a message on your business line, it will appear here with transcript
-              and summary.
-            </p>
-            <Link
-              href={MCTB_ROUTES.setupVoicemail}
-              className="mt-6 inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground"
-            >
-              Configure voicemail
-            </Link>
-          </div>
+          <MctbEmptyState
+            icon={Voicemail}
+            title="No voicemails yet"
+            description="When callers leave a message on your business line, it will appear here with transcript and summary."
+            action={
+              <Link
+                href={MCTB_ROUTES.setupVoicemail}
+                className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-[0_4px_14px_rgba(79,70,229,0.22)]"
+              >
+                Configure voicemail
+              </Link>
+            }
+          />
         ) : (
           <div className="mctb-master-detail">
-            <div className="ref-card flex flex-col overflow-hidden">
+            <div className="ref-deco-section flex flex-col overflow-hidden">
               <div className="border-b border-gray-100 p-3">
                 <label className="sr-only" htmlFor="mctb-vm-search">Search voicemail</label>
                 <div className="relative">
@@ -160,7 +156,9 @@ export function MctbVoicemailView({ initialId }: { initialId?: string }) {
                       type="button"
                       onClick={() => setSelectedId(m.id)}
                       className={`flex w-full items-start gap-3 px-4 py-3.5 text-left transition ${
-                        selected?.id === m.id ? "bg-indigo-50/80" : "hover:bg-gray-50"
+                        selected?.id === m.id
+                          ? "bg-gradient-to-r from-indigo-50/90 to-violet-50/40 shadow-[inset_3px_0_0_#6366f1]"
+                          : "hover:bg-gray-50/90"
                       }`}
                     >
                       <div className="avatar av-purple mt-0.5 text-[11px]">
@@ -189,7 +187,9 @@ export function MctbVoicemailView({ initialId }: { initialId?: string }) {
             </div>
 
             {selected ? (
-              <div className="ref-card flex flex-col p-5">
+              <div className="ref-deco-section ref-deco-section--tint-purple flex flex-col">
+                <div className="ref-deco-section-body flex flex-col p-0 sm:p-0">
+                <div className="flex flex-col p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
                   <div>
                     <h2 className="text-[18px] font-bold text-gray-900">
@@ -255,9 +255,11 @@ export function MctbVoicemailView({ initialId }: { initialId?: string }) {
                     <p className="text-[13px] text-gray-500">Transcript pending or unavailable.</p>
                   )}
                 </div>
+                </div>
+                </div>
               </div>
             ) : (
-              <div className="ref-card flex items-center justify-center p-12 text-sm text-gray-500">
+              <div className="ref-deco-empty flex items-center justify-center p-12 text-sm text-gray-500">
                 Select a voicemail to listen.
               </div>
             )}
