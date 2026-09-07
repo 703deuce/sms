@@ -16,6 +16,7 @@ import {
   Calendar,
   Globe,
   Home,
+  LayoutDashboard,
   Megaphone,
   MessageSquare,
   Moon,
