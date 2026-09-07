@@ -101,6 +101,13 @@ export async function enqueueJob(input: EnqueueJobInput) {
           error: message,
         }),
       );
+      // BullMQ unavailable — fall back to in-process DB drain so jobs are not stranded.
+      try {
+        const { scheduleJobDrain } = await import("@/lib/jobs/inprocess-worker");
+        scheduleJobDrain();
+      } catch {
+        // poller/cron may still catch up
+      }
     }
   } else {
     // Web-container drain: kick soon so CRM/sync/push don't wait on the poll interval.

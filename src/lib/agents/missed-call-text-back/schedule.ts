@@ -47,6 +47,32 @@ export async function scheduleMissedCallText(input: {
     runAfter: runAt,
   });
 
+  // Do not rely solely on background workers — press-1 callers expect the text promptly.
+  // executeMissedCallTextSend is idempotent; the queued job remains as a retry path.
+  try {
+    const { executeMissedCallTextSend } = await import("./send");
+    void executeMissedCallTextSend({
+      workspaceId: input.workspaceId,
+      missedCallEventId: input.missedCallEventId,
+      traceId: input.traceId,
+    }).catch((err) => {
+      console.error("[mctb] inline missed-call-text send failed", err);
+    });
+  } catch (err) {
+    console.error("[mctb] inline missed-call-text send import failed", err);
+  }
+
+  if (process.env.QUEUE_DRIVER === "bullmq" && process.env.REDIS_URL) {
+    try {
+      const { syncDbOutboxToBullmq } = await import("@/lib/jobs/bullmq");
+      void syncDbOutboxToBullmq(10).catch((err) => {
+        console.warn("[mctb] syncDbOutboxToBullmq after schedule failed", err);
+      });
+    } catch {
+      // optional — inline send above is the primary path for press-1
+    }
+  }
+
   traceMctbPipeline({
     layer: "schedule",
     step: "john_mctb_send_enqueued",

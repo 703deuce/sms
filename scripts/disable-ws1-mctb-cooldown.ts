@@ -17,6 +17,7 @@ async function main() {
     patch: {
       cooldown_minutes: 0,
       max_messages_per_caller: 100,
+      delay_seconds: 0,
     },
   });
 
