@@ -1,0 +1,65 @@
+---
+description: MANDATORY — MCTB Conversations build spec. Reuse canonical inbox; no duplicate SMS engine.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 04: CONVERSATIONS
+
+**Route:** `/mctb/conversations` or `/inbox?source=mctb` (canonical shared inbox + MCTB filter)  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-04-CONVERSATIONS.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–03 + `transovo-mctb-page-build-specs.mdc`
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Conversations workspace (`/mctb/conversations`, `/inbox` MCTB context, legacy `/voice/conversations`).
+
+## Primary job
+
+Read and respond to MCTB-originated SMS conversations from **one authoritative messaging workspace**.
+
+## Hard architecture rule
+
+**Do NOT build a duplicate MCTB inbox** if `/inbox` is canonical. Reuse shared Conversations engine + `source=mctb` filter + MCTB context links.
+
+Legacy `/voice/conversations` → redirect to canonical MCTB Conversations or retire from MCTB IA.
+
+## Workspace anatomy
+
+Split-pane: conversation list | selected thread | optional context panel (missed call, contact).
+
+- Deep link: `/mctb/conversations/:id` or equivalent
+- No "New conversation" unless MCTB scope explicitly supports manual outbound
+- Thread header: identity + *Started from missed call* + **View missed call**
+
+## Message thread
+
+- Actual historical content — compliance message ≠ business recovery message visually
+- Opt-out as system event; suppressed ≠ sent bubble
+- Delivery states from runtime — not provider jargon in thread
+
+## Composer
+
+Centralized eligibility before enable **and** recheck on send. Blocked states: opted out, sender unavailable, read-only, permission denied.
+
+- No opt-out override / resubscribe without formal flow
+- No duplicate send; preserve draft on recoverable failure
+- Reply vs internal note explicit if notes supported
+
+## Needs-reply
+
+Centralized domain definition — must match Overview, Missed Calls, Detail.
+
+## Prohibited
+
+- Parallel MCTB conversation state model
+- Campaign/marketing templates in MCTB context
+- Fake message search; decorative attach; AI auto-send
+- Misleading voice-conversations nav for SMS threads
+
+## Definition of done
+
+See full spec §102 checklist before marking Conversations complete.
+
+## Next in series
+
+**05 — Voicemail** — pending build spec.
