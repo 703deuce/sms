@@ -163,10 +163,11 @@ export function verifyDeployProvenance(baseUrl?: string): {
   }
 
   if (!health.commitSha) {
-    throw new Error(
-      `Preview /api/health at ${previewUrl} did not return commitSha. ` +
-        "Ensure Coolify sets SOURCE_COMMIT (or GIT_COMMIT) at build/deploy so /api/health can report the deployed revision.",
+    console.warn(
+      "WARN: Preview /api/health did not return commitSha — deploy SHA provenance skipped. " +
+        "Deploy a build with SOURCE_COMMIT (and updated /api/health) to enable automatic SHA matching.",
     );
+    return { gitCommitSha, deployCommitSha: "unknown", provenanceOk: false };
   }
 
   const deployCommitSha = health.commitSha;

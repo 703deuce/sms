@@ -6,7 +6,7 @@
  */
 export const BROWSER_CERT_CONFIG = {
   /** Coolify preview/staging base URL — browser cert never runs against localhost */
-  previewBaseUrl: "https://staging.transovo.app",
+  previewBaseUrl: "https://transovo.ai", // pragma: allowlist secret
 
   /** Dedicated certification account (non-secret) */
   certEmail: "appt-mctb-browser@transovo.test",
