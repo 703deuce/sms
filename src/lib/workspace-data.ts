@@ -267,10 +267,14 @@ export async function loadConversations(
       contact: true,
       assignee: { select: { id: true, name: true, email: true } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      missedCallEvent: { select: { detectedAt: true } },
     },
   });
 
-  type ConversationQueryRow = (typeof rows)[number] & { campaignId?: string | null };
+  type ConversationQueryRow = (typeof rows)[number] & {
+    campaignId?: string | null;
+    missedCallEvent?: { detectedAt: Date } | null;
+  };
 
   const campaignIds = [
     ...new Set(
@@ -295,6 +299,9 @@ export async function loadConversations(
     mapConversation({
       ...row,
       campaignName: row.campaignId ? campaignNames.get(row.campaignId) ?? null : null,
+      missedCallDetectedAt: row.missedCallEvent?.detectedAt
+        ? row.missedCallEvent.detectedAt.toISOString()
+        : null,
     }),
   );
 }

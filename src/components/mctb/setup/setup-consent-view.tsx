@@ -102,7 +102,7 @@ export function MctbSetupConsentView() {
       ) : null}
 
       <div className="ref-card space-y-4 p-5">
-        <h2 className="mctb-section-title">Permission method</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Permission method</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {([MCTB_CONSENT_MODE_EXISTING, MCTB_CONSENT_MODE_VERIFIED] as const).map((mode) => {
             const meta = MCTB_CONSENT_MODE_LABELS[mode];

@@ -134,7 +134,7 @@ export function MctbSetupPhoneView() {
       )}
 
       <div className="ref-card space-y-4 p-5">
-        <h2 className="mctb-section-title">Business line</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Business line</h2>
         <p className="text-[13px] text-muted-foreground">
           The public number customers call. This is not your hidden forwarding destination or SMS sender.
         </p>
@@ -149,7 +149,7 @@ export function MctbSetupPhoneView() {
       </div>
 
       <div className="ref-card space-y-4 p-5">
-        <h2 className="mctb-section-title">Text-back sender</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Text-back sender</h2>
         <p className="text-[13px] text-muted-foreground">
           Which assigned number sends recovery SMS after a missed call.
         </p>
@@ -176,7 +176,7 @@ export function MctbSetupPhoneView() {
       </div>
 
       <div className="ref-card space-y-4 p-5">
-        <h2 className="mctb-section-title">Carrier forwarding</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Carrier forwarding</h2>
         <p className="text-[13px] text-muted-foreground">
           Forward your business line to this hidden toll-free ingress when calls are not answered.
         </p>

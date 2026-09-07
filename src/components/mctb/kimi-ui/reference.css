@@ -1,35 +1,15 @@
-/* MCTB operational surfaces — shared visual tokens with Appointments Kimi UI */
+/* MCTB layout composition only — visual tokens from Appointments Kimi UI */
 @import "../../appointments/kimi-ui/overview/reference.css";
 
 .mctb-page {
   min-height: 100%;
   background: #f7f8fb;
-  font-family: inherit;
 }
 
 .mctb-page-inner {
   margin-inline: auto;
   max-width: 72rem;
   padding: 1.5rem 1.75rem 2.5rem;
-}
-
-.mctb-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--foreground, #111827);
-}
-
-.mctb-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  background: #fff;
-  border: 1px solid #eef0f4;
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
 }
 
 .mctb-master-detail {

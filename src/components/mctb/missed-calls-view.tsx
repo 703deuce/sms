@@ -258,7 +258,7 @@ export function MctbMissedCallsView() {
         ))}
       </div>
 
-      <div className="mctb-filter-bar mb-4">
+      <div className="ref-card mb-4 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2">

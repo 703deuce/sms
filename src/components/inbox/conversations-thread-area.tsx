@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState, type MutableRefObject
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
 import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
+import { MctbConversationContextBanner } from "@/components/inbox/mctb-conversation-context";
 import {
   InboxAiAssistPanel,
   InboxAiBanner,
@@ -154,6 +155,13 @@ export function ConversationsThreadArea({
           <div style={{ padding: "8px 16px 0", background: "#fff" }}>
             <InboxAiBanner session={assist.session} onTakeover={() => void assist.takeover()} />
           </div>
+        ) : null}
+        {convo.productSource === "mctb" && convo.missedCallEventId ? (
+          <MctbConversationContextBanner
+            missedCallEventId={convo.missedCallEventId}
+            detectedAt={convo.missedCallDetectedAt}
+            repeatCaller={convo.repeatCaller}
+          />
         ) : null}
         <ThreadView
           convo={convo}

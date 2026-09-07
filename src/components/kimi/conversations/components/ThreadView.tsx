@@ -1,7 +1,9 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { ChevronDown, UserCheck, Tag as TagIcon, MoreVertical, EyeOff, Download, MessageSquare, FileText, CalendarDays, StickyNote, Users, Check } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, UserCheck, Tag as TagIcon, MoreVertical, EyeOff, Download, MessageSquare, FileText, CalendarDays, StickyNote, Users, Check, PhoneMissed } from "lucide-react";
 import type { Conversation, Message, Tag, Teammate } from "@/lib/inbox/conversation-types";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { Popover, usePopover } from "./Popover";
 import Composer from "./Composer";
 
@@ -140,6 +142,16 @@ export default function ThreadView({ convo, onUpdate, onToggleContact, contactOp
           <div style={{ display: "flex", gap: 6, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
             {convo.productSourceLabel ? (
               <span className="tv-chip" style={{ fontSize: 10 }}>{convo.productSourceLabel}</span>
+            ) : null}
+            {convo.productSource === "mctb" && convo.missedCallEventId ? (
+              <Link
+                href={MCTB_ROUTES.missedCallDetail(convo.missedCallEventId)}
+                className="tv-chip"
+                style={{ fontSize: 10, color: "#4338ca", textDecoration: "none" }}
+              >
+                <PhoneMissed size={10} style={{ marginRight: 3, verticalAlign: -1 }} aria-hidden />
+                View missed call
+              </Link>
             ) : null}
             {convo.campaignName ? (
               <span className="tv-chip" style={{ fontSize: 10 }}>Campaign: {convo.campaignName}</span>

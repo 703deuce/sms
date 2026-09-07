@@ -168,7 +168,7 @@ export function MctbConsentLogView() {
           ))}
         </div>
 
-        <div className="mctb-filter-bar mt-4">
+        <div className="ref-card mt-4 p-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-muted-foreground">Filter by caller</span>

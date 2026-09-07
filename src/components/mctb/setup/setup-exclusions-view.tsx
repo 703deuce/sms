@@ -61,7 +61,7 @@ export function MctbSetupExclusionsView() {
       error={error}
     >
       <div className="ref-card space-y-4 p-5">
-        <h2 className="mctb-section-title">Do-not-text list</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Do-not-text list</h2>
         <div className="flex flex-wrap gap-2">
           <Input
             className="min-w-[180px] flex-1"

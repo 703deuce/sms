@@ -29,6 +29,8 @@ export type InboxListItem = {
   campaignId?: string | null;
   campaignName?: string | null;
   fromE164?: string | null;
+  missedCallEventId?: string | null;
+  missedCallDetectedAt?: string | null;
   appointmentContext?: {
     id: string;
     serviceName: string | null;
@@ -190,6 +192,8 @@ export function mapApiConversationToKimi(
     fromE164: c.fromE164 ?? null,
     repeatCaller: c.repeatCaller,
     appointmentContext: c.appointmentContext ?? null,
+    missedCallEventId: c.missedCallEventId ?? null,
+    missedCallDetectedAt: c.missedCallDetectedAt ?? null,
   };
 }
 
@@ -222,6 +226,8 @@ export function mapListItemToKimi(
     campaignName: item.campaignName ?? null,
     fromE164: item.fromE164 ?? null,
     appointmentContext: item.appointmentContext ?? null,
+    missedCallEventId: item.missedCallEventId ?? null,
+    missedCallDetectedAt: item.missedCallDetectedAt ?? null,
   };
 }
 

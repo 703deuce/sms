@@ -119,7 +119,7 @@ export function MctbSetupMissedCallRulesView() {
 
       <div className="ref-card space-y-4 p-5">
         <div>
-          <h2 className="mctb-section-title">What counts as a missed call</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">What counts as a missed call</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Each enabled outcome creates a separate missed-call event for the recovery engine.
           </p>

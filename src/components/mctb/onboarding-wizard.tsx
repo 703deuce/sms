@@ -22,6 +22,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
+import { MctbWizardStepShell } from "@/components/mctb/setup/wizard-step-shell";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./kimi-ui/reference.css";
@@ -136,6 +137,10 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     () => (data ? data.steps.indexOf(step) : 0),
     [data, step],
   );
+  const previousStep = useMemo((): MctbOnboardingStep | null => {
+    if (!data || stepIndex <= 0) return null;
+    return data.steps[stepIndex - 1] ?? null;
+  }, [data, stepIndex]);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/mctb/onboarding", { cache: "no-store" });
@@ -246,6 +251,10 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     }
   }
 
+  const goBack = () => {
+    if (previousStep) void post({ step: previousStep });
+  };
+
   async function startDemo() {
     setSaving(true);
     setError(null);
@@ -341,8 +350,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       ) : null}
 
       {step === "business" ? (
-        <div className="ref-card space-y-4 p-5">
-          <h2 className="text-lg font-semibold">Business information</h2>
+        <MctbWizardStepShell
+          title="Business information"
+          description="Tell us how your business should appear on missed-call recovery messages."
+          onPrimary={() =>
+            void post({ businessName: businessName.trim(), websiteUrl: websiteUrl.trim() })
+          }
+          primaryDisabled={!businessName.trim()}
+          primaryLoading={saving}
+        >
           <div className="space-y-2">
             <Label htmlFor="businessName">Business name</Label>
             <Input
@@ -361,15 +377,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               placeholder="https://acmeplumbing.com"
             />
           </div>
-          <Button
-            disabled={!businessName.trim() || saving}
-            onClick={() =>
-              void post({ businessName: businessName.trim(), websiteUrl: websiteUrl.trim() })
-            }
-          >
-            Continue
-          </Button>
-        </div>
+        </MctbWizardStepShell>
       ) : null}
 
       {step === "trial_number" ? (
@@ -417,11 +425,14 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       ) : null}
 
       {step === "configure" ? (
-        <div className="ref-card space-y-4 p-5">
-          <h2 className="text-lg font-semibold">Configure text back</h2>
-          <p className="text-sm text-muted-foreground">
-            This message is sent when you miss a call on {trialDisplay || "your Transovo number"}.
-          </p>
+        <MctbWizardStepShell
+          title="Configure text back"
+          description={`Recovery message sent when you miss a call on ${trialDisplay || "your Transovo number"}.`}
+          onBack={previousStep ? goBack : undefined}
+          onPrimary={() => void post({ messageTemplate: messageTemplate.trim() })}
+          primaryDisabled={!messageTemplate.trim()}
+          primaryLoading={saving}
+        >
           <div className="space-y-2">
             <Label htmlFor="message">Recovery message</Label>
             <textarea
@@ -431,18 +442,26 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               onChange={(e) => setMessageTemplate(e.target.value)}
             />
           </div>
-          <Button
-            disabled={!messageTemplate.trim() || saving}
-            onClick={() => void post({ messageTemplate: messageTemplate.trim() })}
-          >
-            Continue
-          </Button>
-        </div>
+        </MctbWizardStepShell>
       ) : null}
 
       {step === "consent" ? (
-        <div className="ref-card space-y-4 p-5">
-          <h2 className="text-lg font-semibold">How should missed-call texting be authorized?</h2>
+        <MctbWizardStepShell
+          title="How should missed-call texting be authorized?"
+          description="Choose how Transovo establishes permission to text missed callers."
+          onBack={previousStep ? goBack : undefined}
+          onPrimary={() =>
+            void post({
+              consentMode,
+              existingConsentAttested:
+                consentMode === "existing_consent" ? true : undefined,
+            })
+          }
+          primaryDisabled={
+            saving || (consentMode === "existing_consent" && !existingConsentAttested)
+          }
+          primaryLoading={saving}
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             {(
               [
@@ -505,22 +524,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               . Live calls play your saved recording before collecting Press 1.
             </p>
           ) : null}
-          <Button
-            disabled={
-              saving ||
-              (consentMode === "existing_consent" && !existingConsentAttested)
-            }
-            onClick={() =>
-              void post({
-                consentMode,
-                existingConsentAttested:
-                  consentMode === "existing_consent" ? true : undefined,
-              })
-            }
-          >
-            Continue
-          </Button>
-        </div>
+        </MctbWizardStepShell>
       ) : null}
 
       {step === "demo" ? (

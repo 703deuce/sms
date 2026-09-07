@@ -204,6 +204,7 @@ export function mapConversation(c: {
   fromE164?: string | null;
   campaignId?: string | null;
   campaignName?: string | null;
+  missedCallEventId?: string | null;
   contact?: {
     id: string;
     phone: string;
@@ -260,6 +261,12 @@ export function mapConversation(c: {
       "appointmentContext" in c && c.appointmentContext
         ? (c.appointmentContext as Conversation["appointmentContext"])
         : undefined,
+    missedCallEventId:
+      "missedCallEventId" in c && c.missedCallEventId ? String(c.missedCallEventId) : null,
+    missedCallDetectedAt:
+      "missedCallDetectedAt" in c && c.missedCallDetectedAt
+        ? String(c.missedCallDetectedAt)
+        : null,
     messages: sortedMessages.map((m) => ({
         id: m.id,
         direction: (m.direction === "in" || m.direction === "inbound"

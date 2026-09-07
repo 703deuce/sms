@@ -126,6 +126,8 @@ export type Conversation = {
     startsAt: string;
     label: string;
   } | null;
+  missedCallEventId?: string | null;
+  missedCallDetectedAt?: string | null;
   messages: Array<{
     id: string;
     direction: "in" | "out" | "note";

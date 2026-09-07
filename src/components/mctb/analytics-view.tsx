@@ -1,8 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { MctbRecoveryTrendChart } from "@/components/mctb/kimi-ui/mctb-recovery-trend-chart";
 import { MctbStatCards } from "@/components/mctb/kimi-ui/mctb-stat-cards";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
 import { formatNumber } from "@/lib/utils";
 import {
   BarChart3,
@@ -13,7 +14,8 @@ import {
   Voicemail,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./kimi-ui/reference.css";
 
 type MctbAnalytics = {
@@ -34,13 +36,50 @@ type MctbAnalytics = {
   optOuts: number;
   deliveryFailures: number;
   suppressionByReason: Record<string, number>;
+  trends?: {
+    missedCalls: Array<{ date: string; count: number }>;
+    recoveryTexts: Array<{ date: string; count: number }>;
+    replies: Array<{ date: string; count: number }>;
+  };
 };
 
+const RANGE_OPTIONS: Array<{ id: MctbAnalyticsRange; label: string }> = [
+  { id: "7d", label: "7 days" },
+  { id: "30d", label: "30 days" },
+  { id: "90d", label: "90 days" },
+];
+
+function parseRange(raw: string | null): MctbAnalyticsRange {
+  if (raw === "7d" || raw === "30d" || raw === "90d") return raw;
+  return "30d";
+}
+
+function rangeDays(range: MctbAnalyticsRange): number {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  return 90;
+}
+
 export function MctbAnalyticsView() {
-  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const range = useMemo(
+    () => parseRange(searchParams.get("range")),
+    [searchParams],
+  );
+
   const [mctb, setMctb] = useState<MctbAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  const setRange = useCallback(
+    (next: MctbAnalyticsRange) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("range", next);
+      router.push(`${MCTB_ROUTES.analytics}?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -69,14 +108,15 @@ export function MctbAnalyticsView() {
   const funnel = useMemo(() => {
     if (!mctb) return [];
     const missed = mctb.totalMissed || 0;
-    const eligible = Math.max(0, missed - mctb.suppressed);
     return [
       { label: "Missed calls", value: missed, href: `${MCTB_ROUTES.missedCalls}?date=${range}` },
-      { label: "Recovery texts sent", value: mctb.textsSent, href: MCTB_ROUTES.missedCalls },
-      { label: "Customers replied", value: mctb.replies, href: `${MCTB_ROUTES.conversations}?filter=replied` },
-      { label: "Reply rate", value: `${mctb.replyRate}%`, href: MCTB_ROUTES.analytics },
+      { label: "Recovery texts sent", value: mctb.textsSent, href: `${MCTB_ROUTES.missedCalls}?date=${range}` },
+      { label: "Customers replied", value: mctb.replies, href: `${MCTB_ROUTES.conversations}?filter=replied&product=mctb` },
+      { label: "Reply rate", value: `${mctb.replyRate}%`, href: `${MCTB_ROUTES.analytics}?range=${range}` },
     ];
   }, [mctb, range]);
+
+  const days = rangeDays(range);
 
   return (
     <div className="mctb-page">
@@ -93,17 +133,17 @@ export function MctbAnalyticsView() {
             aria-label="Date range"
             className="inline-flex items-center rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm"
           >
-            {(["7d", "30d", "90d"] as const).map((r) => (
+            {RANGE_OPTIONS.map((opt) => (
               <button
-                key={r}
+                key={opt.id}
                 type="button"
-                onClick={() => setRange(r)}
-                aria-pressed={range === r}
+                onClick={() => setRange(opt.id)}
+                aria-pressed={range === opt.id}
                 className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${
-                  range === r ? "bg-primary text-white" : "text-gray-500 hover:text-gray-900"
+                  range === opt.id ? "bg-primary text-white" : "text-gray-500 hover:text-gray-900"
                 }`}
               >
-                {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
+                {opt.label}
               </button>
             ))}
           </div>
@@ -124,9 +164,9 @@ export function MctbAnalyticsView() {
             <MctbStatCards
               stats={[
                 { label: "Missed calls", value: formatNumber(mctb?.totalMissed ?? 0), icon: PhoneMissed, tint: "purple", href: `${MCTB_ROUTES.missedCalls}?date=${range}` },
-                { label: "Recovery texts sent", value: formatNumber(mctb?.textsSent ?? 0), icon: Send, tint: "blue", href: MCTB_ROUTES.missedCalls },
-                { label: "Customers replied", value: formatNumber(mctb?.replies ?? 0), icon: MessageSquare, tint: "green", href: `${MCTB_ROUTES.conversations}?filter=replied` },
-                { label: "Reply rate", value: `${mctb?.replyRate ?? 0}%`, icon: BarChart3, tint: "amber", href: MCTB_ROUTES.analytics },
+                { label: "Recovery texts sent", value: formatNumber(mctb?.textsSent ?? 0), icon: Send, tint: "blue", href: `${MCTB_ROUTES.missedCalls}?date=${range}` },
+                { label: "Customers replied", value: formatNumber(mctb?.replies ?? 0), icon: MessageSquare, tint: "green", href: `${MCTB_ROUTES.conversations}?filter=replied&product=mctb` },
+                { label: "Reply rate", value: `${mctb?.replyRate ?? 0}%`, icon: BarChart3, tint: "amber", href: `${MCTB_ROUTES.analytics}?range=${range}` },
               ]}
             />
 
@@ -150,6 +190,32 @@ export function MctbAnalyticsView() {
                 ))}
               </ol>
             </div>
+
+            {mctb?.trends ? (
+              <div className="mt-5 grid gap-5 lg:grid-cols-2">
+                <MctbRecoveryTrendChart
+                  title="Missed calls over time"
+                  subtitle={`Missed-call events per day · last ${days} days`}
+                  series={mctb.trends.missedCalls}
+                  rangeDays={days}
+                  valueLabel="total"
+                />
+                <MctbRecoveryTrendChart
+                  title="Recovery texts over time"
+                  subtitle={`Recovery texts sent per day · last ${days} days`}
+                  series={mctb.trends.recoveryTexts}
+                  rangeDays={days}
+                  valueLabel="total"
+                />
+                <MctbRecoveryTrendChart
+                  title="Replies over time"
+                  subtitle={`Customer replies per day · last ${days} days`}
+                  series={mctb.trends.replies}
+                  rangeDays={days}
+                  valueLabel="total"
+                />
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-5 lg:grid-cols-2">
               <div className="ref-card p-5">

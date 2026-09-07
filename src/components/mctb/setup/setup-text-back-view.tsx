@@ -126,7 +126,7 @@ export function MctbSetupTextBackView() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="ref-card space-y-4 p-5">
-          <h2 className="mctb-section-title">Recovery opener</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Recovery opener</h2>
           <label className="block space-y-1.5">
             <span className="text-[12px] font-semibold text-foreground">Message template</span>
             <Textarea
@@ -158,7 +158,7 @@ export function MctbSetupTextBackView() {
         </div>
 
         <div className="ref-card space-y-3 p-5">
-          <h2 className="mctb-section-title">Preview</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Preview</h2>
           <p className="text-[12px] text-muted-foreground">Canonical send order — production uses the same renderer.</p>
           {isPress1 ? (
             <div className="space-y-3">
