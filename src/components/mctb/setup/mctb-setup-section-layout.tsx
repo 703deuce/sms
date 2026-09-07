@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { MctbSetupLocalNav } from "@/components/mctb/setup/mctb-setup-local-nav";
 import { Check } from "lucide-react";
 import Link from "next/link";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -31,39 +32,52 @@ export function MctbSetupSectionLayout({
 }: Props) {
   return (
     <div className="mctb-page">
-      <div className="mx-auto max-w-[900px] px-6 py-7">
+      <div className="mctb-page-inner mx-auto max-w-[1100px]">
         <div className="mb-2">
           <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
             ← Setup
           </Link>
         </div>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">{title}</h1>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{description}</p>
-          </div>
-          {showSave && onSave ? (
-            <div className="flex shrink-0 items-center gap-3 pt-1">
-              {saved && !saving ? (
-                <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600">
-                  <Check className="h-4 w-4" aria-hidden />
-                  Saved
-                </span>
+
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="hidden lg:block">
+            <MctbSetupLocalNav />
+          </aside>
+
+          <div className="min-w-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">{title}</h1>
+                <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+              </div>
+              {showSave && onSave ? (
+                <div className="flex shrink-0 items-center gap-3 pt-1">
+                  {saved && !saving ? (
+                    <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600">
+                      <Check className="h-4 w-4" aria-hidden />
+                      Saved
+                    </span>
+                  ) : null}
+                  <Button onClick={onSave} disabled={saving} size="md" className="text-[13px]">
+                    {saving ? "Saving…" : saveLabel}
+                  </Button>
+                </div>
               ) : null}
-              <Button onClick={onSave} disabled={saving} size="md" className="text-[13px]">
-                {saving ? "Saving…" : saveLabel}
-              </Button>
             </div>
-          ) : null}
-        </div>
 
-        {error ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
-            {error}
+            <div className="mb-4 mt-4 lg:hidden">
+              <MctbSetupLocalNav />
+            </div>
+
+            {error ? (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="mt-6 space-y-4">{children}</div>
           </div>
-        ) : null}
-
-        <div className="mt-6 space-y-4">{children}</div>
+        </div>
       </div>
     </div>
   );

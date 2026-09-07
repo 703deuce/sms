@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { MctbSetupLocalNav } from "@/components/mctb/setup/mctb-setup-local-nav";
 import {
   MCTB_CONSENT_MODE_LABELS,
   type MctbConsentMode,
@@ -198,7 +199,13 @@ export function MctbSetupOverview() {
 
   return (
     <div className="mctb-page">
-      <div className="mctb-page-inner max-w-3xl">
+      <div className="mctb-page-inner mx-auto max-w-[1100px]">
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="hidden lg:block">
+            <MctbSetupLocalNav />
+          </aside>
+
+          <div className="min-w-0">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">Setup</h1>
@@ -221,6 +228,10 @@ export function MctbSetupOverview() {
               Run test
             </Link>
           )}
+        </div>
+
+        <div className="mb-4 mt-4 lg:hidden">
+          <MctbSetupLocalNav />
         </div>
 
         {setupIncomplete ? (
@@ -271,6 +282,8 @@ export function MctbSetupOverview() {
             Manage numbers
           </Link>
         </p>
+          </div>
+        </div>
       </div>
     </div>
   );

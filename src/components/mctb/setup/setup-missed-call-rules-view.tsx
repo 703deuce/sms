@@ -1,7 +1,6 @@
 "use client";
 
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
-import { MctbVoicemailSetupSection } from "@/components/mctb/voicemail-setup-section";
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { useCallback, useEffect, useState } from "react";
 import "../kimi-ui/reference.css";

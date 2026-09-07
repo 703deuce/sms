@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatCarrierStep, type CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
@@ -342,7 +341,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       ) : null}
 
       {step === "business" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <h2 className="text-lg font-semibold">Business information</h2>
           <div className="space-y-2">
             <Label htmlFor="businessName">Business name</Label>
@@ -370,11 +369,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           >
             Continue
           </Button>
-        </Card>
+        </div>
       ) : null}
 
       {step === "trial_number" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <h2 className="text-lg font-semibold">Your production MCTB number</h2>
           <p className="text-sm text-muted-foreground">
             Now that you&apos;ve tried the demo, we assign your own Telnyx number for real
@@ -414,11 +413,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           {data?.trialNumber.provisioned ? (
             <Button onClick={() => void post({ step: "configure" })}>Continue</Button>
           ) : null}
-        </Card>
+        </div>
       ) : null}
 
       {step === "configure" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <h2 className="text-lg font-semibold">Configure text back</h2>
           <p className="text-sm text-muted-foreground">
             This message is sent when you miss a call on {trialDisplay || "your Transovo number"}.
@@ -438,11 +437,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           >
             Continue
           </Button>
-        </Card>
+        </div>
       ) : null}
 
       {step === "consent" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <h2 className="text-lg font-semibold">How should missed-call texting be authorized?</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {(
@@ -521,11 +520,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           >
             Continue
           </Button>
-        </Card>
+        </div>
       ) : null}
 
       {step === "demo" ? (
-        <Card className="space-y-5 p-6">
+        <div className="ref-card space-y-5 p-5">
           <div className="flex items-start gap-3">
             <Sparkles className="mt-0.5 h-5 w-5 text-primary" />
             <div>
@@ -627,11 +626,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               </Button>
             </div>
           )}
-        </Card>
+        </div>
       ) : null}
 
       {step === "tfv" || step === "pending" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
             <div>
@@ -712,11 +711,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               early — but your trial clock hasn&apos;t started.
             </p>
           ) : null}
-        </Card>
+        </div>
       ) : null}
 
       {step === "connect" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <div className="flex items-start gap-3">
             <PhoneMissed className="mt-0.5 h-5 w-5 text-primary" />
             <div>
@@ -887,11 +886,11 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               Test forwarding
             </Button>
           </div>
-        </Card>
+        </div>
       ) : null}
 
       {step === "live_test" ? (
-        <Card className="space-y-4 p-6">
+        <div className="ref-card space-y-4 p-5">
           <h2 className="text-lg font-semibold">Real live test</h2>
           <p className="text-sm text-muted-foreground">
             Call your business number ({businessNumber || "your line"}) from another phone.
@@ -932,19 +931,19 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
               Waiting for your test call… checks update automatically.
             </p>
           )}
-        </Card>
+        </div>
       ) : null}
 
       {step === "complete" ? (
-        <Card className="space-y-4 p-6 text-center">
+        <div className="ref-card space-y-4 p-5 text-center">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
           <h2 className="text-xl font-semibold">Your 14-day free trial starts now</h2>
           <p className="text-sm text-muted-foreground">
             Missed Call Text Back is live. Day 1 of 14 begins today — not while you were waiting on
             verification.
           </p>
-          <Button onClick={() => router.push("/dashboard")}>Go to dashboard</Button>
-        </Card>
+          <Button onClick={() => router.push(MCTB_ROUTES.home)}>Go to Overview</Button>
+        </div>
       ) : null}
       </div>
     </div>

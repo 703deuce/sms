@@ -1,5 +1,5 @@
-import { MctbTryItView } from "@/components/mctb/try-it-view";
+import { MctbSetupTestView } from "@/components/mctb/setup/setup-test-view";
 
 export default function MctbSetupTestPage() {
-  return <MctbTryItView />;
+  return <MctbSetupTestView />;
 }

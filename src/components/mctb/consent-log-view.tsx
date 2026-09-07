@@ -1,12 +1,13 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
+import "./kimi-ui/reference.css";
 
 type ConsentLogEvent = {
   id: string;
@@ -15,19 +16,15 @@ type ConsentLogEvent = {
   consentingCallerNumber: string | null;
   customerBusinessNumber: string | null;
   transovoIngressNumber: string;
-  callerIdentityStatus: string;
   consentIdentityVerified: boolean;
   consentMethod: string;
   consentedAt: string;
-  affirmativeInput: string;
   method: string;
   consentScope: string;
   callSessionId: string | null;
   promptAssetId: string | null;
   captureMode: string | null;
   consentMode: string | null;
-  path: string | null;
-  mediaBackend: string | null;
   missedCallEventId: string | null;
   missedCallStatus: string | null;
   smsSentAt: string | null;
@@ -111,12 +108,7 @@ export function MctbConsentLogView() {
       }
       setEvents(json.data?.events || []);
       setSummary(json.data?.summary || null);
-      traceMctbClient("consent-log", "load_complete", {
-        eventCount: (json.data?.events || []).length,
-        summary: json.data?.summary ?? null,
-      });
     } catch {
-      traceMctbClient("consent-log", "load_failed");
       setError("Could not load consent log");
       setEvents([]);
       setSummary(null);
@@ -129,190 +121,188 @@ export function MctbConsentLogView() {
     void load();
   }, [load]);
 
+  const statCards = [
+    { label: "Total consent events", value: summary?.total ?? "—" },
+    { label: "Consents today", value: summary?.today ?? "—" },
+    { label: "Texts sent after consent today", value: summary?.withSmsToday ?? "—" },
+  ];
+
   return (
-    <div>
-      <PageHeader
-        title="Consent log"
-        description="A durable record of callers who pressed 1 to receive a text back. Use this if you need to show when consent was captured before an SMS was sent."
-        actions={
+    <div className="mctb-page">
+      <div className="mctb-page-inner max-w-5xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+              ← Setup
+            </Link>
+            <h1 className="mt-2 font-display text-[22px] font-semibold tracking-tight text-foreground">
+              Consent history
+            </h1>
+            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+              Durable record of callers who pressed 1 to receive a text back — for audit and compliance review.
+            </p>
+          </div>
           <Link
-            href={MCTB_ROUTES.setup}
-            className="inline-flex h-9 items-center rounded-[10px] border border-border bg-white px-4 text-[13px] font-semibold text-foreground hover:bg-muted/40"
+            href={MCTB_ROUTES.setupConsent}
+            className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
           >
             Consent settings
           </Link>
-        }
-      />
+        </div>
 
-      <Card className="mb-6 border-indigo-100 bg-indigo-50/40 p-4 text-sm text-indigo-950">
-        <p className="font-medium">What this log proves</p>
-        <p className="mt-1 text-indigo-900/80">
-          Each row separates the consenting caller, the customer business number called, and the
-          Transovo number that received the forwarded leg. If the original caller cannot be proven
-          from signaling, the consenter is marked unavailable rather than recording a business line
-          as the caller.
-        </p>
-      </Card>
+        <div className="ref-card mt-6 border-indigo-100 bg-indigo-50/40 p-4 text-[13px] text-indigo-950">
+          <p className="font-semibold">What this log proves</p>
+          <p className="mt-1 text-indigo-900/90">
+            Each row separates the consenting caller, the customer business number called, and the
+            Transovo ingress number. If the original caller cannot be proven from signaling, the
+            consenter is marked unavailable rather than recording a business line as the caller.
+          </p>
+        </div>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-muted-foreground">Filter by caller</span>
-          <input
-            type="search"
-            value={callerFilter}
-            onChange={(e) => setCallerFilter(e.target.value)}
-            placeholder="Phone number"
-            className="h-9 w-56 rounded-[10px] border border-border bg-white px-3 text-sm"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-white hover:bg-primary-hover"
-        >
-          Search
-        </button>
-      </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {statCards.map((stat) => (
+            <div key={stat.label} className="ref-card px-5 py-4">
+              <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
+            </div>
+          ))}
+        </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        {[
-          { label: "Total consent events", value: summary?.total ?? "—" },
-          { label: "Consents today", value: summary?.today ?? "—" },
-          { label: "Texts sent after consent today", value: summary?.withSmsToday ?? "—" },
-        ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-[12px] font-medium text-muted-foreground">{stat.label}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-[#111827]">{stat.value}</p>
-          </Card>
-        ))}
-      </div>
-
-      {error ? (
-        <Card className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</Card>
-      ) : null}
-
-      <Card className="overflow-hidden p-0">
-        {loading ? (
-          <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading…</div>
-        ) : events.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-[#111827]">No consent events yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {summary && summary.total > 0
-                ? "Consent records exist for this account but did not match the current filter. Clear the caller filter and try again."
-                : "When callers press 1 on your consent prompt, those events appear here."}
-            </p>
-            <Link href={MCTB_ROUTES.setup} className="mt-4 inline-block text-sm font-semibold text-primary">
-              Review consent setup →
-            </Link>
+        <div className="mctb-filter-bar mt-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[12px] font-medium text-muted-foreground">Filter by caller</span>
+              <Input
+                type="search"
+                value={callerFilter}
+                onChange={(e) => setCallerFilter(e.target.value)}
+                placeholder="Phone number"
+                className="w-56"
+              />
+            </label>
+            <Button type="button" size="sm" onClick={() => void load()}>
+              Search
+            </Button>
           </div>
-        ) : (
-          <Table>
-            <THead>
-              <TR>
-                <TH>Caller / Consenting Number</TH>
-                <TH>Customer Business Number</TH>
-                <TH>Transovo Number</TH>
-                <TH>Consent Method</TH>
-                <TH>Timestamp</TH>
-                <TH>Follow-up text</TH>
-                <TH />
-              </TR>
-            </THead>
-            <TBody>
-              {events.map((row) => {
-                const expanded = expandedId === row.id;
-                return (
-                  <Fragment key={row.id}>
-                    <TR className="hover:bg-muted/40">
-                      <TD className="font-medium">
-                        <span className={row.consentIdentityVerified ? "" : "text-amber-800"}>
-                          {callerDisplay(row)}
-                        </span>
-                      </TD>
-                      <TD>{optionalPhone(row.customerBusinessNumber)}</TD>
-                      <TD>{fmtPhone(row.transovoIngressNumber || row.businessNumber)}</TD>
-                      <TD>
-                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
-                          {row.consentMethod || "Press 1"}
-                        </span>
-                      </TD>
-                      <TD className="text-muted-foreground">{fmtTime(row.consentedAt)}</TD>
-                      <TD className="text-muted-foreground">
-                        {row.smsSentAt ? (
-                          <span className="text-emerald-700">Sent {fmtTime(row.smsSentAt)}</span>
-                        ) : row.missedCallEventId ? (
-                          <span>{row.missedCallStatus?.replace(/_/g, " ").toLowerCase() || "Queued"}</span>
-                        ) : (
-                          "—"
-                        )}
-                      </TD>
-                      <TD className="text-right">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expanded ? null : row.id)}
-                          className="text-[12px] font-semibold text-primary hover:underline"
-                        >
-                          {expanded ? "Hide" : "Details"}
-                        </button>
-                      </TD>
-                    </TR>
-                    {expanded ? (
+        </div>
+
+        {error ? (
+          <div className="ref-card mt-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
+        ) : null}
+
+        <div className="ref-card mt-4 overflow-hidden p-0">
+          {loading ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : events.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm font-medium text-foreground">No consent events yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                When callers press 1 on your consent prompt, those events appear here.
+              </p>
+              <Link href={MCTB_ROUTES.setupConsent} className="mt-4 inline-block text-sm font-semibold text-primary">
+                Review consent setup →
+              </Link>
+            </div>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH scope="col">Caller / Consenting number</TH>
+                  <TH scope="col">Business number</TH>
+                  <TH scope="col">Transovo number</TH>
+                  <TH scope="col">Method</TH>
+                  <TH scope="col">Timestamp</TH>
+                  <TH scope="col">Follow-up text</TH>
+                  <TH scope="col" className="text-right">Details</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {events.map((row) => {
+                  const expanded = expandedId === row.id;
+                  return (
+                    <Fragment key={row.id}>
                       <TR>
-                        <TD colSpan={7} className="bg-muted/20">
-                          <div className="grid gap-3 py-2 text-sm sm:grid-cols-2">
-                            <div>
-                              <p>
-                                <span className="font-semibold">Identity status:</span>{" "}
-                                {row.consentIdentityVerified ? "Verified" : "Unavailable"}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Method:</span> {methodLabel(row.method)}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Scope:</span> {scopeLabel(row.consentScope)}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Consent mode:</span>{" "}
-                                {row.consentMode?.replace(/_/g, " ") || "—"}
-                              </p>
-                              <p>
-                                <span className="font-semibold">Capture mode:</span>{" "}
-                                {row.captureMode?.replace(/_/g, " ") || "—"}
-                              </p>
-                            </div>
-                            <div>
-                              <p>
-                                <span className="font-semibold">Call reference:</span>{" "}
-                                <code className="text-[12px]">{row.callSessionId || "—"}</code>
-                              </p>
-                              <p>
-                                <span className="font-semibold">Consent prompt audio:</span>{" "}
-                                {row.promptAssetId || "—"}
-                              </p>
-                              {row.missedCallEventId ? (
-                                <p>
-                                  <span className="font-semibold">Missed call event:</span>{" "}
-                                  <Link
-                                    href={MCTB_ROUTES.missedCallDetail(row.missedCallEventId)}
-                                    className="font-semibold text-primary hover:underline"
-                                  >
-                                    View recovery timeline
-                                  </Link>
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
+                        <TH scope="row" className={row.consentIdentityVerified ? "" : "text-amber-800"}>
+                          {callerDisplay(row)}
+                        </TH>
+                        <TD>{optionalPhone(row.customerBusinessNumber)}</TD>
+                        <TD>{fmtPhone(row.transovoIngressNumber || row.businessNumber)}</TD>
+                        <TD>
+                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
+                            {row.consentMethod || "Press 1"}
+                          </span>
+                        </TD>
+                        <TD className="text-muted-foreground">{fmtTime(row.consentedAt)}</TD>
+                        <TD className="text-muted-foreground">
+                          {row.smsSentAt ? (
+                            <span className="text-emerald-700">Sent {fmtTime(row.smsSentAt)}</span>
+                          ) : row.missedCallEventId ? (
+                            row.missedCallStatus?.replace(/_/g, " ").toLowerCase() || "Queued"
+                          ) : (
+                            "—"
+                          )}
+                        </TD>
+                        <TD className="text-right">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(expanded ? null : row.id)}
+                            className="text-[12px] font-semibold text-primary hover:underline"
+                          >
+                            {expanded ? "Hide" : "Show"}
+                          </button>
                         </TD>
                       </TR>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </TBody>
-          </Table>
-        )}
-      </Card>
+                      {expanded ? (
+                        <TR>
+                          <TD colSpan={7} className="bg-muted/20">
+                            <div className="grid gap-3 py-2 text-sm sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <p>
+                                  <span className="font-semibold">Identity:</span>{" "}
+                                  {row.consentIdentityVerified ? "Verified" : "Unavailable"}
+                                </p>
+                                <p>
+                                  <span className="font-semibold">Method:</span> {methodLabel(row.method)}
+                                </p>
+                                <p>
+                                  <span className="font-semibold">Scope:</span> {scopeLabel(row.consentScope)}
+                                </p>
+                                <p>
+                                  <span className="font-semibold">Consent mode:</span>{" "}
+                                  {row.consentMode?.replace(/_/g, " ") || "—"}
+                                </p>
+                              </div>
+                              <div className="space-y-1">
+                                <p>
+                                  <span className="font-semibold">Call reference:</span>{" "}
+                                  <code className="text-[12px]">{row.callSessionId || "—"}</code>
+                                </p>
+                                <p>
+                                  <span className="font-semibold">Prompt audio:</span> {row.promptAssetId || "—"}
+                                </p>
+                                {row.missedCallEventId ? (
+                                  <p>
+                                    <Link
+                                      href={MCTB_ROUTES.missedCallDetail(row.missedCallEventId)}
+                                      className="font-semibold text-primary hover:underline"
+                                    >
+                                      View missed call timeline
+                                    </Link>
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </TD>
+                        </TR>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
