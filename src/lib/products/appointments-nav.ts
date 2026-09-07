@@ -99,6 +99,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Home",
       href: "/appointments/overview",
       icon: Home,
+      matchExact: true,
     },
     {
       label: "Appointments",

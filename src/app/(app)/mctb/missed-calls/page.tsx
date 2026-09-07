@@ -1,25 +1,26 @@
-import { CrossProductBanner } from "@/components/products/cross-product-banner";
 import { MctbMissedCallsView } from "@/components/mctb/missed-calls-view";
-import { getWorkspaceProductFeatures } from "@/lib/products/feature-entitlements";
-import { isActiveEntitlement } from "@/lib/products/types";
-import { getSession } from "@/lib/auth";
+import { loadMctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
+import { parseMissedCallsListQuery } from "@/lib/mctb/missed-calls-list-filters";
 import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { Suspense } from "react";
 
-export default async function MctbMissedCallsPage() {
+export default async function MctbMissedCallsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { workspaceId } = await requireWorkspaceContext();
-  const session = await getSession();
-  const productFeatures = await getWorkspaceProductFeatures(workspaceId, {
-    isPlatformAdmin: session?.isAdmin,
-  });
-  const showMassSmsBanner = isActiveEntitlement(productFeatures.mass_texting);
+  const params = await searchParams;
+  const query = parseMissedCallsListQuery(new URLSearchParams(
+    Object.entries(params).flatMap(([key, value]) =>
+      value === undefined ? [] : Array.isArray(value) ? value.map((v) => [key, v]) : [[key, value]],
+    ) as [string, string][],
+  ));
+  const initialData = await loadMctbMissedCallsListData(workspaceId, query);
 
   return (
-    <div className="space-y-4">
-      {showMassSmsBanner ? <CrossProductBanner variant="mass_sms_on_mctb" /> : null}
-      <Suspense fallback={<div className="px-6 py-12 text-sm text-muted-foreground">Loading missed calls…</div>}>
-        <MctbMissedCallsView />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <MctbMissedCallsView initialData={initialData} />
+    </Suspense>
   );
 }

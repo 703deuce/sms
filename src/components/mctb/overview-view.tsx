@@ -67,9 +67,13 @@ function attentionFromOverview(data: MctbOverviewPayload): MctbAttentionItem[] {
   return items.slice(0, 5);
 }
 
-export function MctbOverviewView() {
-  const [data, setData] = useState<MctbOverviewPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+type MctbOverviewViewProps = {
+  initialData?: MctbOverviewPayload | null;
+};
+
+export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) {
+  const [data, setData] = useState<MctbOverviewPayload | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
@@ -89,8 +93,14 @@ export function MctbOverviewView() {
   }, []);
 
   useEffect(() => {
+    if (initialData) {
+      setData(initialData);
+      setLoading(false);
+      setError(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [initialData, load]);
 
   const attentionItems = useMemo(() => (data ? attentionFromOverview(data) : []), [data]);
 

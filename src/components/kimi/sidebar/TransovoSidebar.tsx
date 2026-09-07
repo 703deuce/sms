@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronsLeft,
@@ -9,7 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { KimiCredits, KimiNavItem, KimiSidebarUser } from "./types";
-import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
+import { findBestNavMatch } from "@/lib/nav-active";
 
 function hasPositiveBadge(badge: string | number | undefined): boolean {
   if (badge == null) return false;
@@ -21,6 +21,7 @@ function hasPositiveBadge(badge: string | number | undefined): boolean {
 export interface TransovoSidebarProps {
   navItems: KimiNavItem[];
   activeRoute?: string;
+  search?: string;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   credits: KimiCredits;
@@ -122,17 +123,14 @@ function CollapsedNavButton({ item, active }: { item: KimiNavItem; active: boole
   );
 }
 
-function isChildNavActive(childHref: string, activeRoute: string): boolean {
-  const childPath = childHref.split("?")[0];
-  const routePath = activeRoute.split("?")[0];
-  if (routePath === childPath) return true;
-  if (childPath !== "/contacts" && routePath.startsWith(`${childPath}/`)) return true;
-  return false;
+function isChildNavActive(childHref: string, bestMatch: ReturnType<typeof findBestNavMatch>) {
+  return bestMatch?.isChild === true && bestMatch.href === childHref;
 }
 
 export function TransovoSidebar({
   navItems,
   activeRoute = "/conversations",
+  search = "",
   collapsed = false,
   onToggleCollapse,
   credits,
@@ -146,16 +144,13 @@ export function TransovoSidebar({
   const toggleGroup = (label: string) =>
     setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
 
-  const isActive = (item: KimiNavItem) => {
-    if (item.href === "/appointments" || item.href.startsWith("/appointments/")) {
-      return isAppointmentsNavItemActive(item.href, activeRoute);
-    }
-    return (
-      activeRoute === item.href ||
-      item.children?.some((c) => activeRoute === c.href) ||
-      activeRoute.startsWith(`${item.href}/`)
-    );
-  };
+  const bestMatch = useMemo(
+    () => findBestNavMatch(navItems, activeRoute, search),
+    [navItems, activeRoute, search],
+  );
+
+  const isActive = (item: KimiNavItem) =>
+    bestMatch?.isChild === false && bestMatch.href === item.href;
 
   const creditsPct = Math.min(
     100,
@@ -183,7 +178,10 @@ export function TransovoSidebar({
           if (collapsed) {
             return <CollapsedNavButton key={item.label} item={item} active={active} />;
           }
-          const expanded = expandedGroups[item.label] ?? active;
+          const childActive = item.children?.some((c) => isChildNavActive(c.href, bestMatch));
+          const expanded = expandedGroups[item.label] ?? (active || childActive);
+          // Expandable parents are never the active row — only a leaf child highlights.
+          const rowActive = item.children?.length ? false : active;
           return (
             <div key={item.label}>
               {item.sectionLabel ? (
@@ -202,7 +200,7 @@ export function TransovoSidebar({
               ) : null}
               <ExpandedNavRow
                 item={item}
-                active={active}
+                active={rowActive}
                 expanded={expanded}
                 onToggleExpand={() => toggleGroup(item.label)}
               />
@@ -212,7 +210,7 @@ export function TransovoSidebar({
                     <Link
                       key={child.label}
                       href={child.href}
-                      data-active={isChildNavActive(child.href, activeRoute) ? "true" : undefined}
+                      data-active={isChildNavActive(child.href, bestMatch) ? "true" : undefined}
                       className="transovo-nav-item flex w-full items-center rounded-md px-2 py-[6px] text-[13px] text-muted-foreground hover:text-foreground"
                     >
                       <span className="whitespace-nowrap">{child.label}</span>

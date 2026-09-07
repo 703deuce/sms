@@ -489,6 +489,7 @@ export function Sidebar({
       <TransovoSidebar
         navItems={mapProductionNavToKimi(navItems)}
         activeRoute={pathname}
+        search={search}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}

@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
+import type { MctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
 import "./kimi-ui/reference.css";
 
 type MissedCallEvent = {
@@ -124,7 +125,25 @@ function TableSkeleton() {
   );
 }
 
-export function MctbMissedCallsView() {
+function toMissedCallEvents(data: MctbMissedCallsListData["events"]): MissedCallEvent[] {
+  return data.map((row) => ({
+    ...row,
+    detectedAt:
+      typeof row.detectedAt === "string" ? row.detectedAt : row.detectedAt.toISOString(),
+    smsSentAt:
+      row.smsSentAt == null
+        ? null
+        : typeof row.smsSentAt === "string"
+          ? row.smsSentAt
+          : row.smsSentAt.toISOString(),
+  }));
+}
+
+type MctbMissedCallsViewProps = {
+  initialData?: MctbMissedCallsListData | null;
+};
+
+export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const query = useMemo(
@@ -132,10 +151,12 @@ export function MctbMissedCallsView() {
     [searchParams],
   );
 
-  const [events, setEvents] = useState<MissedCallEvent[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<MissedCallEvent[]>(() =>
+    initialData ? toMissedCallEvents(initialData.events) : [],
+  );
+  const [summary, setSummary] = useState<Summary | null>(initialData?.summary ?? null);
+  const [pagination, setPagination] = useState<Pagination | null>(initialData?.pagination ?? null);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(false);
   const [searchInput, setSearchInput] = useState(query.q ?? "");
 
@@ -176,8 +197,16 @@ export function MctbMissedCallsView() {
   }, [query]);
 
   useEffect(() => {
+    if (initialData) {
+      setEvents(toMissedCallEvents(initialData.events));
+      setSummary(initialData.summary);
+      setPagination(initialData.pagination);
+      setLoading(false);
+      setError(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [initialData, load]);
 
   useEffect(() => {
     const saved = sessionStorage.getItem(SCROLL_STORAGE_KEY);

@@ -14,6 +14,7 @@ export interface KimiNavItem {
   children?: KimiNavChild[];
   sectionLabel?: string;
   areaLabel?: string;
+  matchExact?: boolean;
 }
 
 export interface KimiCredits {

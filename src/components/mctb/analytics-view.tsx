@@ -4,7 +4,7 @@ import { MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns"
 import { MctbRecoveryTrendChart } from "@/components/mctb/kimi-ui/mctb-recovery-trend-chart";
 import { MctbStatCards } from "@/components/mctb/kimi-ui/mctb-stat-cards";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import type { MctbAnalyticsRange } from "@/lib/mctb/analytics";
+import { loadMctbAnalytics, type MctbAnalyticsRange } from "@/lib/mctb/analytics";
 import { formatNumber } from "@/lib/utils";
 import {
   BarChart3,
@@ -19,30 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./kimi-ui/reference.css";
 
-type MctbAnalytics = {
-  range: string;
-  totalMissed: number;
-  textsSent: number;
-  suppressed: number;
-  uniqueCallers: number;
-  repeatCallers: number;
-  replies: number;
-  conversationsStarted: number;
-  replyRate: number;
-  deliveryRate: number;
-  consentRate: number;
-  linkClicks: number;
-  linkClickRate: number;
-  voicemailCount: number;
-  optOuts: number;
-  deliveryFailures: number;
-  suppressionByReason: Record<string, number>;
-  trends?: {
-    missedCalls: Array<{ date: string; count: number }>;
-    recoveryTexts: Array<{ date: string; count: number }>;
-    replies: Array<{ date: string; count: number }>;
-  };
-};
+type MctbAnalytics = Awaited<ReturnType<typeof loadMctbAnalytics>>;
 
 const RANGE_OPTIONS: Array<{ id: MctbAnalyticsRange; label: string }> = [
   { id: "7d", label: "7 days" },
@@ -61,7 +38,11 @@ function rangeDays(range: MctbAnalyticsRange): number {
   return 90;
 }
 
-export function MctbAnalyticsView() {
+type MctbAnalyticsViewProps = {
+  initialData?: MctbAnalytics | null;
+};
+
+export function MctbAnalyticsView({ initialData = null }: MctbAnalyticsViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = useMemo(
@@ -69,8 +50,8 @@ export function MctbAnalyticsView() {
     [searchParams],
   );
 
-  const [mctb, setMctb] = useState<MctbAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [mctb, setMctb] = useState<MctbAnalytics | null>(initialData);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(false);
 
   const setRange = useCallback(
@@ -83,6 +64,12 @@ export function MctbAnalyticsView() {
   );
 
   useEffect(() => {
+    if (initialData) {
+      setMctb(initialData);
+      setLoading(false);
+      setError(false);
+      return;
+    }
     setLoading(true);
     setError(false);
     fetch(`/api/mctb/analytics?range=${range}`, { cache: "no-store" })
@@ -96,7 +83,7 @@ export function MctbAnalyticsView() {
         setMctb(null);
       })
       .finally(() => setLoading(false));
-  }, [range]);
+  }, [initialData, range]);
 
   const topSuppressions = useMemo(
     () =>

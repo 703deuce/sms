@@ -21,6 +21,7 @@ export function mapProductionNavToKimi(items: NavItem[]): KimiNavItem[] {
       children: children.length ? children : undefined,
       sectionLabel: item.sectionLabel,
       areaLabel: item.areaLabel,
+      matchExact: item.matchExact,
     };
   });
 }
