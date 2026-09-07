@@ -1,0 +1,21 @@
+/** Canonical MCTB customer-facing routes (frontend). APIs remain on existing paths. */
+export const MCTB_ROUTES = {
+  home: "/mctb",
+  missedCalls: "/mctb/missed-calls",
+  missedCallDetail: (id: string) => `/mctb/missed-calls/${id}`,
+  conversations: "/mctb/conversations",
+  voicemail: "/mctb/voicemail",
+  analytics: "/mctb/analytics",
+  setup: "/mctb/setup",
+  setupStart: "/mctb/setup/start",
+  setupPhone: "/mctb/setup/phone",
+  setupMissedCallRules: "/mctb/setup/missed-call-rules",
+  setupTextBack: "/mctb/setup/text-back",
+  setupConsent: "/mctb/setup/consent",
+  setupRecovery: "/mctb/setup/recovery",
+  setupVoicemail: "/mctb/setup/voicemail",
+  setupExclusions: "/mctb/setup/exclusions",
+  setupTest: "/mctb/setup/test",
+  numbers: "/mctb/numbers",
+  complianceConsent: "/mctb/compliance/consent",
+} as const;
