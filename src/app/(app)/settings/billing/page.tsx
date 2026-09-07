@@ -1,4 +1,4 @@
-import { BillingSettingsPanel } from "@/components/settings/billing-settings-panel";
+import { BillingSettingsConnected } from "@/features/settings/kimi/billing/billing-connected";
 
 export default async function SettingsBillingPage({
   searchParams,
@@ -6,5 +6,9 @@ export default async function SettingsBillingPage({
   searchParams: Promise<{ upgrade?: string }>;
 }) {
   const { upgrade } = await searchParams;
-  return <BillingSettingsPanel highlightProduct={upgrade ?? null} />;
+  return (
+    <div className="kimi-surface kimi-settings-billing">
+      <BillingSettingsConnected highlightProduct={upgrade ?? null} />
+    </div>
+  );
 }

@@ -1,5 +1,9 @@
-import { SecuritySettingsPanel } from "@/components/settings/security-settings-panel";
+import { SecuritySettingsConnected } from "@/features/settings/kimi/security/security-connected";
 
 export default function SettingsSecurityPage() {
-  return <SecuritySettingsPanel />;
+  return (
+    <div className="kimi-surface kimi-settings-security">
+      <SecuritySettingsConnected />
+    </div>
+  );
 }

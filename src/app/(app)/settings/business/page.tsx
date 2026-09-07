@@ -1,4 +1,4 @@
-import { BusinessSettingsForm } from "@/components/settings/business-settings-form";
+import { BusinessSettingsConnected } from "@/features/settings/kimi/business/business-connected";
 import {
   loadComplianceOverview,
   loadRegistration,
@@ -18,11 +18,13 @@ export default async function SettingsBusinessPage() {
   const campaignOk = (registration?.campaignStatus || "").toLowerCase() === "approved";
 
   return (
-    <BusinessSettingsForm
-      workspaceName={workspace?.name || ""}
-      registration={registration}
-      complianceReady={Boolean(brandOk && campaignOk && compliance.ready)}
-      lastSynced={registration?.updatedAt?.toISOString() || null}
-    />
+    <div className="kimi-surface kimi-settings-business">
+      <BusinessSettingsConnected
+        workspaceName={workspace?.name || ""}
+        registration={registration}
+        complianceReady={Boolean(brandOk && campaignOk && compliance.ready)}
+        lastSynced={registration?.updatedAt?.toISOString() || null}
+      />
+    </div>
   );
 }
