@@ -6,17 +6,18 @@ alwaysApply: true
 # MANDATORY: TRANSOVO MCTB CANONICAL PRODUCT MAP
 
 **Source of truth:** `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md`  
+**Prerequisite:** `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` (`.cursor/rules/transovo-mctb-product-scope.mdc`)  
 **Applies with:** All 15 `.cursor/rules/transovo-*.mdc` standards (always).
 
 ## When this rule activates
 
-**Before any work** touching Missed Call Text Back — UI, API, `src/lib/mctb/`, `src/lib/agents/missed-call-text-back/`, voice/MCTB routes, consent, SMS recovery, onboarding, setup, analytics, exclusions, or related Prisma models — you **MUST read the full canonical map first**.
+**Before any work** touching Missed Call Text Back — UI, API, `src/lib/mctb/`, `src/lib/agents/missed-call-text-back/`, voice/MCTB routes, consent, SMS recovery, onboarding, setup, analytics, exclusions, or related Prisma models — you **MUST read product scope first**, then the full canonical map.
 
 Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`, `src/app/api/mctb/**`, `src/app/api/telnyx/voice/mctb*`, `src/lib/mctb/**`, `src/lib/agents/missed-call-text-back/**`, `src/app/f/mctb/**`, `src/app/(app)/onboarding/mctb/**`.
 
 ## Hard requirements
 
-1. **Read `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` FIRST** — then apply all Transovo standards guides.
+1. **Read `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` FIRST** — then `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — then apply all Transovo standards guides.
 2. **Screenshots and current UI are evidence only** — not authority for IA, nav, or page placement.
 3. **Preserve runtime** — Audit → Preserve → Extend → Consolidate. Do not rewrite working telephony/SMS/consent pipelines without explicit approval.
 4. **One canonical home** per feature — no duplicate sidebar destinations for setup subsections.

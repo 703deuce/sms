@@ -6,8 +6,9 @@
 
 > **Governing instruction:** Rebuild Missed Call Text Back as one coherent Transovo product domain using the complete Transovo governance and Guides #1–#11. Existing screenshots and pages are feature/content evidence only; they do not control information architecture, navigation, page archetype, terminology, visual hierarchy, or component placement. Preserve verified business logic and runtime behavior, but reorganize all customer-visible MCTB functionality around the canonical mental model: configure recovery → detect missed call → determine eligibility/consent → send recovery text → receive reply → follow up → measure outcome. Daily operational objects—Missed Calls and Conversations—receive highest navigational prominence. Configuration is consolidated under Setup; sender/number infrastructure under Numbers; organization-wide configuration under Settings; aggregate outcomes under Analytics. Every feature has one canonical home, every state has one authoritative runtime source, every compliance decision comes from the centralized deterministic eligibility layer, and no legacy page, screenshot, route, or component may create duplicate product architecture. Use the same Transovo shell, visual tokens, components, accessibility, responsive, form, table, privacy, security, temporal, and internationalization standards already governing the Appointments product. **Audit → Preserve → Extend → Consolidate.**
 
+**Prerequisite:** `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` (`.cursor/rules/transovo-mctb-product-scope.mdc`)  
 **Cursor rule:** `.cursor/rules/transovo-mctb-canonical.mdc`  
-**Must be read FIRST** (along with all `transovo-*.mdc` standards) before any MCTB UI, API, backend, or runtime change.
+**Read order:** Product scope → this map → all `transovo-*.mdc` standards — before any MCTB UI, API, backend, or runtime change.
 
 ---
 
