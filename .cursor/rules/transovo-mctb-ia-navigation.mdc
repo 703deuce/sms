@@ -1,0 +1,61 @@
+---
+description: MANDATORY — MCTB IA & navigation map. Read after product-scope for any missed-call text-back work.
+alwaysApply: true
+---
+
+# MANDATORY: TRANSOVO MCTB INFORMATION ARCHITECTURE & NAVIGATION MAP
+
+**Source of truth:** `docs/TRANSOVO-MCTB-INFORMATION-ARCHITECTURE-AND-NAVIGATION-MAP.md`  
+**Prerequisite:** `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` (`.cursor/rules/transovo-mctb-product-scope.mdc`)  
+**Applies with:** `transovo-mctb-canonical.mdc`, all `transovo-*.mdc` standards (always).
+
+## When this rule activates
+
+**Before any work** on MCTB navigation, routing, page placement, sidebar, redirects, or feature discoverability — read product scope first, then **this IA map**, then canonical product map.
+
+Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`, `src/app/**/mctb/**`, `src/lib/products/voice-nav.ts`, `src/lib/mctb/**`, onboarding MCTB routes.
+
+## Authority order (MCTB)
+
+1. `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` — what MCTB is / is not
+2. **`docs/TRANSOVO-MCTB-INFORMATION-ARCHITECTURE-AND-NAVIGATION-MAP.md` — this rule** (where everything lives)
+3. `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — domain model, lifecycle, page specs
+4. All Transovo standards (`transovo-*.mdc`)
+5. Existing code and screenshots — evidence only
+
+## Hard requirements
+
+1. **Task-based IA:** Missed Call → Conversation → Follow-up → Recovery. Operational work dominates setup.
+2. **Minimal sidebar:** Overview | Missed Calls | Conversations | Analytics | Setup. Optional Voicemail only if recurring inbox.
+3. **Setup is grouped** — Phone, Messaging, Consent, Schedule, Voicemail, Exclusions, Test live inside Setup, not as equal top-level nav peers.
+4. **One canonical home** per feature. One canonical label. No duplicate management surfaces.
+5. **Canonical prefix:** `/mctb/*` (legacy `/voice/*` → redirects during migration).
+6. **Operational vs config:** Overview/Missed Calls/Conversations/Analytics = daily work. Everything else = setup, audit, process, or admin.
+7. **Filters ≠ nav** — Needs attention, Today, Replied, Suppressed are filters, not sidebar items.
+8. **Try It / Test** → Setup → Test. Onboarding is temporary process nav, not sidebar.
+9. **Consent Log** → compliance/audit (Setup → Compliance or contextual detail), not default primary nav.
+10. **Number roles separated** — Business line | Forwarding destination | Text-back sender. Never "Your number."
+11. **Cross-link, don't duplicate** — Missed Call ↔ Conversation ↔ Contact. One thread editor.
+12. **One nav source of truth** — central MCTB nav config; do not hard-code sidebar per page.
+13. **Legacy routes** — inventory/redirects only; Voice/Agent John architecture does not define MCTB IA.
+
+## Canonical route map (target)
+
+```
+/mctb                          Overview
+/mctb/missed-calls[/:id]
+/mctb/conversations[/:id]
+/mctb/analytics
+/mctb/setup[/phone|messaging|consent|schedule|voicemail|exclusions|test]
+/mctb/compliance[/consent]
+/f/mctb/:token                 Public request form (no admin nav)
+/onboarding/mctb               Temporary process only
+```
+
+## Page classification gate
+
+Before adding any MCTB page, classify as: **operational workspace | object detail | configuration | audit/compliance | temporary process | public/customer | admin/support**. Then place per this map.
+
+## Governing sentence
+
+MCTB navigation answers: **who called → did we text → did they reply → do I follow up → is it configured** — with operational surfaces prominent and configuration grouped under Setup.
