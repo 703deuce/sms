@@ -5,6 +5,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
+import { processMctbInboundReply, emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
 import { loadMissedCallTextConfig } from "./config";
 import { appendMctbTrace } from "./trace";
 import { runJohnCustomerLlmLoop } from "./intelligence/customer-llm-loop";
@@ -67,6 +68,38 @@ export async function handleJohnCustomerSmsReply(input: {
     select: { name: true },
   });
 
+  const handoff = await processMctbInboundReply({
+    workspaceId: input.workspaceId,
+    fromE164: input.fromE164,
+    body: input.body,
+    conversationId: input.conversationId,
+  });
+
+  if (handoff.handled && handoff.skipAi) {
+    const sender = await resolveMctbSmsSender({
+      workspaceId: input.workspaceId,
+      config,
+    });
+    if (handoff.automationReply && sender?.e164) {
+      await sendQuickSms({
+        workspaceId: input.workspaceId,
+        to: input.fromE164,
+        body: handoff.automationReply,
+        from: sender.e164,
+        idempotencyKey: `mctb-handoff-reply:${handoff.handoffEventId || recentEvent.id}:${input.body.slice(0, 32)}`,
+      }).catch(() => undefined);
+    }
+    await prisma.missedCallEvent.update({
+      where: { id: recentEvent.id },
+      data: { status: "CUSTOMER_REPLIED" },
+    });
+    return {
+      handled: true,
+      action: handoff.eventType || "handoff",
+      reply: handoff.automationReply,
+    };
+  }
+
   const llmResult = await runJohnCustomerLlmLoop({
     workspaceId: input.workspaceId,
     traceId: recentEvent.traceId,
@@ -115,6 +148,17 @@ export async function handleJohnCustomerSmsReply(input: {
       runtime_turn: llmResult.runtimeTurn,
     },
   });
+
+  const runtimeTurn = llmResult.runtimeTurn as { action?: string } | undefined;
+  if (runtimeTurn?.action === "ESCALATE_HUMAN") {
+    await emitMctbHumanRequiredHandoff({
+      workspaceId: input.workspaceId,
+      fromE164: input.fromE164,
+      body: input.body,
+      conversationId: input.conversationId,
+      missedCallEventId: recentEvent.id,
+    }).catch(() => undefined);
+  }
 
   return {
     handled: true,

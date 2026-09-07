@@ -12,6 +12,7 @@ const SETUP_LINKS = [
   { href: MCTB_ROUTES.setupMissedCallRules, label: "Missed-call rules" },
   { href: MCTB_ROUTES.setupTextBack, label: "Text Back" },
   { href: MCTB_ROUTES.setupConsent, label: "Consent" },
+  { href: MCTB_ROUTES.setupNotifications, label: "Notifications & Handoff" },
   { href: MCTB_ROUTES.setupRecovery, label: "Recovery controls" },
   { href: MCTB_ROUTES.setupVoicemail, label: "Voicemail" },
   { href: MCTB_ROUTES.setupExclusions, label: "Exclusions" },

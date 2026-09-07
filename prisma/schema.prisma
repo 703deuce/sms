@@ -399,6 +399,13 @@ model Workspace {
   platformTranscriptionUsageRecords PlatformTranscriptionUsageRecord[]
   callbackRequests CallbackRequest[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
+  mctbHandoffConfig MctbHandoffConfig?
+  mctbNotificationRecipients MctbNotificationRecipient[]
+  mctbConversationAutomationStates MctbConversationAutomationState[]
+  mctbLeadSnapshots MctbLeadSnapshot[]
+  mctbUrgencyAssessments MctbUrgencyAssessment[]
+  mctbHandoffEvents MctbHandoffEvent[]
+  mctbNotificationDeliveries MctbNotificationDelivery[]
   faxAccount FaxAccount?
   owner           User?     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
@@ -5606,5 +5613,161 @@ model MeetingRecapShare {
 
   @@index([workspaceId])
   @@map("meeting_recap_shares")
+}
+
+/// MCTB response mode, emergency handling, field schema, notification routing (one per workspace).
+model MctbHandoffConfig {
+  id                          String   @id @default(cuid())
+  workspaceId                 String   @unique
+  responseMode                String   @default("notify_only")
+  emergencyDetectionEnabled   Boolean  @default(false)
+  emergencyCriteria           String?
+  emergencyAction             String   @default("notify_only")
+  emergencyUncertainBehavior  String   @default("handoff_human")
+  bookingBehavior             String   @default("off")
+  fieldSchemaJson             Json     @default("{}")
+  routingMatrixJson           Json     @default("{}")
+  quietHoursEnabled           Boolean  @default(false)
+  quietHoursStart             String?
+  quietHoursEnd               String?
+  quietHoursEmergencyBypass   Boolean  @default(true)
+  quietHoursNonUrgentSmsDelay Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  workspace                   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("mctb_handoff_configs")
+}
+
+/// Team/owner notification recipient for MCTB handoff events.
+model MctbNotificationRecipient {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  name              String
+  email             String?
+  mobileE164        String?
+  roleDescription   String?
+  eventChannelsJson Json     @default("{}")
+  enabled           Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries        MctbNotificationDelivery[]
+
+  @@index([workspaceId, enabled])
+  @@map("mctb_notification_recipients")
+}
+
+/// Persisted automation / handoff state for an MCTB conversation thread.
+model MctbConversationAutomationState {
+  id                    String    @id @default(cuid())
+  workspaceId           String
+  conversationId        String    @unique
+  missedCallEventId     String?
+  state                 String    @default("waiting_for_caller")
+  responseMode          String?
+  capturedFieldsJson    Json      @default("{}")
+  activeFieldId         String?
+  humanTakenOverAt      DateTime?
+  humanTakenOverByUserId String?
+  followUpStatus        String?
+  followUpActorUserId   String?
+  followUpAt            DateTime?
+  appointmentId         String?
+  metadataJson          Json      @default("{}")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, missedCallEventId])
+  @@index([workspaceId, state])
+  @@map("mctb_conversation_automation_states")
+}
+
+/// Immutable lead handoff snapshot at a point in time.
+model MctbLeadSnapshot {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  missedCallEventId String?
+  conversationId    String?
+  triggerEvent      String
+  customerFactsJson Json     @default("{}")
+  aiDerivedJson     Json     @default("{}")
+  summaryText       String?
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  handoffEvents     MctbHandoffEvent[]
+
+  @@index([workspaceId, conversationId])
+  @@index([workspaceId, missedCallEventId])
+  @@map("mctb_lead_snapshots")
+}
+
+/// Derived urgency classification for a caller message (not immutable customer truth).
+model MctbUrgencyAssessment {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  conversationId    String?
+  missedCallEventId String?
+  customerText      String
+  classification    String
+  confidence        Float?
+  reason            String?
+  ruleVersion       String?
+  createdAt         DateTime @default(now())
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  handoffEvents     MctbHandoffEvent[]
+
+  @@index([workspaceId, conversationId])
+  @@map("mctb_urgency_assessments")
+}
+
+/// Authoritative handoff / notification trigger event.
+model MctbHandoffEvent {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  missedCallEventId   String?
+  conversationId      String?
+  eventType           String
+  leadSnapshotId      String?
+  urgencyAssessmentId String?
+  idempotencyKey      String   @unique
+  metadataJson        Json     @default("{}")
+  createdAt           DateTime @default(now())
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leadSnapshot        MctbLeadSnapshot? @relation(fields: [leadSnapshotId], references: [id], onDelete: SetNull)
+  urgencyAssessment   MctbUrgencyAssessment? @relation(fields: [urgencyAssessmentId], references: [id], onDelete: SetNull)
+  deliveries          MctbNotificationDelivery[]
+
+  @@index([workspaceId, eventType, createdAt])
+  @@index([workspaceId, conversationId])
+  @@map("mctb_handoff_events")
+}
+
+/// Persisted notification delivery attempt (idempotent).
+model MctbNotificationDelivery {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  handoffEventId    String
+  recipientId       String?
+  channel           String
+  destination       String
+  status            String   @default("pending")
+  providerMessageId String?
+  attemptCount      Int      @default(0)
+  failureReason     String?
+  idempotencyKey    String   @unique
+  createdAt         DateTime @default(now())
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  handoffEvent      MctbHandoffEvent @relation(fields: [handoffEventId], references: [id], onDelete: Cascade)
+  recipient         MctbNotificationRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, handoffEventId])
+  @@index([workspaceId, status])
+  @@map("mctb_notification_deliveries")
 }
 
