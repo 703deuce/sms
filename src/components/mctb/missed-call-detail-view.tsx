@@ -1,8 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
 import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import {
   MCTB_CONSENT_MODE_EXISTING,
@@ -15,6 +13,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import "./kimi-ui/reference.css";
 
 type TimelineStep = {
   id: string;
@@ -181,10 +180,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-        <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading missed call">
-          <div className="h-8 w-64 rounded bg-muted" />
-          <div className="h-32 rounded-xl border border-border bg-card" />
+      <div className="mctb-page">
+        <div className="mctb-page-inner">
+          <div className="ref-card animate-pulse p-12" aria-busy="true" aria-label="Loading missed call" />
         </div>
       </div>
     );
@@ -192,11 +190,13 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
 
   if (error || !event) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-        <p className="text-sm text-rose-600">{error || "Missed call not found."}</p>
-        <Link href={backHref} className="mt-4 inline-block text-sm font-semibold text-primary">
-          ← Missed Calls
-        </Link>
+      <div className="mctb-page">
+        <div className="mctb-page-inner">
+          <p className="text-sm text-rose-600">{error || "Missed call not found."}</p>
+          <Link href={backHref} className="mt-4 inline-block text-sm font-semibold text-primary">
+            ← Missed Calls
+          </Link>
+        </div>
       </div>
     );
   }
@@ -223,22 +223,27 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
-      <div>
-        <Link href={backHref} className="text-sm font-semibold text-primary hover:underline">
+    <div className="mctb-page">
+      <div className="mctb-page-inner max-w-3xl">
+        <Link href={backHref} className="text-[13px] font-semibold text-indigo-600 hover:underline">
           ← Missed Calls
         </Link>
-        <PageHeader
-          title={callerLabel}
-          description={`Missed call · ${event.detectedAt ? fmtDateTime(String(event.detectedAt)) : "—"} · Called ${fmtPhone(String(event.businessE164 || ""))}`}
-          actions={primaryAction}
-        />
-        <p className="text-sm font-medium text-foreground">
-          {primaryStatusLabel(status, suppressionReason)}
-        </p>
-      </div>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-[22px] font-bold text-gray-900">{callerLabel}</h1>
+            <p className="mt-1 text-[13px] text-gray-500">
+              Missed call · {event.detectedAt ? fmtDateTime(String(event.detectedAt)) : "—"} · Called{" "}
+              {fmtPhone(String(event.businessE164 || ""))}
+            </p>
+            <p className="mt-2 text-sm font-semibold text-gray-800">
+              {primaryStatusLabel(status, suppressionReason)}
+            </p>
+          </div>
+          {primaryAction}
+        </div>
 
-      <Card className="p-4">
+      <div className="mt-6 space-y-4">
+      <div className="ref-card p-4">
         <h2 className="text-sm font-semibold">Recovery lifecycle</h2>
         <ol className="mt-3 space-y-2">
           {lifecycleSteps.map((step) => (
@@ -251,9 +256,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </li>
           ))}
         </ol>
-      </Card>
+      </div>
 
-      <Card className="space-y-3 p-4">
+      <div className="ref-card space-y-3 p-4">
         <h2 className="text-sm font-semibold">Call details</h2>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
@@ -283,9 +288,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </div>
           ) : null}
         </dl>
-      </Card>
+      </div>
 
-      <Card className="space-y-3 p-4">
+      <div className="ref-card space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">Consent</h2>
           <Link href={MCTB_ROUTES.complianceConsent} className="text-sm font-semibold text-primary hover:underline">
@@ -323,9 +328,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         ) : (
           <p className="text-sm text-muted-foreground">Consent status unavailable.</p>
         )}
-      </Card>
+      </div>
 
-      <Card className="space-y-3 p-4">
+      <div className="ref-card space-y-3 p-4">
         <h2 className="text-sm font-semibold">Text-back</h2>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
@@ -355,10 +360,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </p>
           ) : null}
         </dl>
-      </Card>
+      </div>
 
       {voicemail ? (
-        <Card className="space-y-3 p-4">
+        <div className="ref-card space-y-3 p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">Voicemail</h2>
             <Link
@@ -392,10 +397,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               Transcript {voicemail.transcriptStatus.replace(/_/g, " ")}
             </p>
           ) : null}
-        </Card>
+        </div>
       ) : null}
 
-      <Card className="space-y-3 p-4">
+      <div className="ref-card space-y-3 p-4">
         <h2 className="text-sm font-semibold">Conversation</h2>
         {conversation ? (
           <>
@@ -417,21 +422,21 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         ) : (
           <p className="text-sm text-muted-foreground">No reply yet.</p>
         )}
-      </Card>
+      </div>
 
       {showCallBack && event.callerE164 ? (
-        <Card className="space-y-3 p-4">
+        <div className="ref-card space-y-3 p-4">
           <h2 className="text-sm font-semibold">Call customer</h2>
           <BusinessCallBackButton
             destinationE164={String(event.callerE164)}
             contextType="missed_call"
             contextRefId={eventId}
           />
-        </Card>
+        </div>
       ) : null}
 
       {linkClicks.length ? (
-        <Card className="space-y-3 p-4">
+        <div className="ref-card space-y-3 p-4">
           <h2 className="text-sm font-semibold">Link activity</h2>
           <ul className="space-y-2 text-sm">
             {linkClicks.map((click) => (
@@ -443,11 +448,11 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               </li>
             ))}
           </ul>
-        </Card>
+        </div>
       ) : null}
 
       {formSubmissions.length ? (
-        <Card className="space-y-3 p-4">
+        <div className="ref-card space-y-3 p-4">
           <h2 className="text-sm font-semibold">Request form</h2>
           <ul className="space-y-2 text-sm">
             {formSubmissions.map((sub) => (
@@ -456,10 +461,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               </li>
             ))}
           </ul>
-        </Card>
+        </div>
       ) : null}
 
-      <details className="rounded-xl border border-border bg-card p-4">
+      <details className="ref-card p-4">
         <summary className="cursor-pointer text-sm font-semibold">Diagnostics</summary>
         <div className="mt-3 space-y-2 text-xs text-muted-foreground">
           <p>Event ID: {eventId}</p>
@@ -475,6 +480,8 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
           </ol>
         </div>
       </details>
+      </div>
+      </div>
     </div>
   );
 }

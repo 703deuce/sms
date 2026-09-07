@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import "./kimi-ui/reference.css";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -297,14 +298,15 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
+      <div className="mctb-page flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
+    <div className="mctb-page">
+      <div className="mctb-page-inner max-w-3xl space-y-6">
       <div>
         <p className="text-sm font-medium text-primary">Missed Call Text Back</p>
         <h1 className="font-display text-2xl font-semibold tracking-tight">
@@ -944,6 +946,7 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           <Button onClick={() => router.push("/dashboard")}>Go to dashboard</Button>
         </Card>
       ) : null}
+      </div>
     </div>
   );
 }

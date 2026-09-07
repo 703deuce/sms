@@ -1,8 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/ui/page-header";
 import {
   MCTB_CONSENT_MODE_LABELS,
   type MctbConsentMode,
@@ -11,6 +9,7 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import "./kimi-ui/reference.css";
 
 type SetupPayload = {
   runtime: {
@@ -170,10 +169,12 @@ export function MctbSetupOverview() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-        <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading setup">
-          <div className="h-8 w-40 rounded bg-muted" />
-          <div className="h-48 rounded-xl border border-border bg-card" />
+      <div className="mctb-page">
+        <div className="mctb-page-inner max-w-3xl">
+          <div className="animate-pulse space-y-4" aria-busy="true" aria-label="Loading setup">
+            <div className="h-8 w-40 rounded bg-muted" />
+            <div className="ref-card h-48" />
+          </div>
         </div>
       </div>
     );
@@ -181,90 +182,96 @@ export function MctbSetupOverview() {
 
   if (error || !data) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-        <PageHeader title="Setup" />
-        <Card className="p-6">
-          <p className="text-sm font-medium">Setup couldn&apos;t be loaded.</p>
-          <Button type="button" size="sm" className="mt-4" onClick={() => void load()}>
-            Retry
-          </Button>
-        </Card>
+      <div className="mctb-page">
+        <div className="mctb-page-inner max-w-3xl">
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">Setup</h1>
+          <div className="ref-card mt-6 p-6">
+            <p className="text-sm font-medium">Setup couldn&apos;t be loaded.</p>
+            <Button type="button" size="sm" className="mt-4" onClick={() => void load()}>
+              Retry
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
-      <PageHeader
-        title="Setup"
-        description="Configure forwarding, consent, recovery messages, and operational controls."
-        actions={
-          setupIncomplete ? (
+    <div className="mctb-page">
+      <div className="mctb-page-inner max-w-3xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">Setup</h1>
+            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+              Configure forwarding, consent, recovery messages, and operational controls.
+            </p>
+          </div>
+          {setupIncomplete ? (
             <Link
               href={MCTB_ROUTES.setupStart}
-              className="inline-flex h-9 items-center rounded-[10px] bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
+              className="inline-flex h-10 shrink-0 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
             >
               Continue setup
             </Link>
           ) : (
             <Link
               href={MCTB_ROUTES.setupTest}
-              className="inline-flex h-9 items-center rounded-[10px] border border-border bg-card px-4 text-[13px] font-medium hover:bg-muted"
+              className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
             >
               Run test
             </Link>
-          )
-        }
-      />
+          )}
+        </div>
 
-      {setupIncomplete ? (
-        <Card className="border-amber-200 bg-amber-50/60 p-4" role="status">
-          <p className="text-sm font-semibold text-amber-950">Setup is not complete</p>
-          <p className="mt-1 text-[13px] text-amber-900">
-            Finish the sections marked below so missed calls can be recovered reliably.
+        {setupIncomplete ? (
+          <div className="ref-card mt-6 border-amber-200 bg-amber-50/60 p-4" role="status">
+            <p className="text-sm font-semibold text-amber-950">Setup is not complete</p>
+            <p className="mt-1 text-[13px] text-amber-900">
+              Finish the sections marked below so missed calls can be recovered reliably.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
+            <span>
+              <span className="font-medium text-foreground">Configured</span> — review any section
+              below to make changes.
+            </span>
           </p>
-        </Card>
-      ) : (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
-          <span>
-            <span className="font-medium text-foreground">Configured</span> — review any section
-            below to make changes.
-          </span>
+        )}
+
+        <div className="ref-card mt-4 overflow-hidden p-0">
+          <ul className="divide-y divide-border">
+            {rows.map((row) => (
+              <li key={row.id}>
+                <Link
+                  href={row.href}
+                  className="flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground">{row.title}</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">{row.summary}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <RowStatus status={row.status} />
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="mt-6 text-[13px] text-muted-foreground">
+          <Link href={MCTB_ROUTES.complianceConsent} className="font-semibold text-primary hover:underline">
+            View consent history
+          </Link>
+          {" · "}
+          <Link href={MCTB_ROUTES.numbers} className="font-semibold text-primary hover:underline">
+            Manage numbers
+          </Link>
         </p>
-      )}
-
-      <Card className="divide-y divide-border overflow-hidden p-0">
-        <ul className="divide-y divide-border">
-          {rows.map((row) => (
-            <li key={row.id}>
-              <Link
-                href={row.href}
-                className="flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-semibold text-foreground">{row.title}</p>
-                  <p className="mt-0.5 text-[13px] text-muted-foreground">{row.summary}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <RowStatus status={row.status} />
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <p className="text-[13px] text-muted-foreground">
-        <Link href={MCTB_ROUTES.complianceConsent} className="font-semibold text-primary hover:underline">
-          View consent history
-        </Link>
-        {" · "}
-        <Link href={MCTB_ROUTES.numbers} className="font-semibold text-primary hover:underline">
-          Manage numbers
-        </Link>
-      </p>
+      </div>
     </div>
   );
 }

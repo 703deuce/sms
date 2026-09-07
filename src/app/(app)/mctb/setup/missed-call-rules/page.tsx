@@ -1,5 +1,5 @@
-import { MctbSetupView } from "@/components/mctb/setup-view";
+import { MctbSetupMissedCallRulesView } from "@/components/mctb/setup/setup-missed-call-rules-view";
 
 export default function MctbSetupMissedCallRulesPage() {
-  return <MctbSetupView section="missed-call-rules" />;
+  return <MctbSetupMissedCallRulesView />;
 }

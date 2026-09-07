@@ -2,14 +2,13 @@
 
 import { MctbPausedNotice } from "@/components/mctb/mctb-paused-notice";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/page-header";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
+import "./kimi-ui/reference.css";
 
 type ScheduleSlice = {
   paused: boolean;
@@ -160,105 +159,112 @@ export function MctbRecoveryControlsView() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
-        <p className="text-sm text-muted-foreground">Loading recovery controls…</p>
+      <div className="mctb-page">
+        <div className="mctb-page-inner max-w-3xl">
+          <div className="ref-card animate-pulse p-12" aria-busy="true" aria-label="Loading recovery controls" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
-      <PageHeader
-        title="Recovery controls"
-        description="Pause automated recovery texts or adjust repeat-caller follow-up rules."
-        actions={
-          <Link
-            href={MCTB_ROUTES.setup}
-            className="inline-flex h-9 items-center rounded-[10px] border border-border bg-card px-4 text-[13px] font-medium hover:bg-muted"
-          >
-            Back to setup
-          </Link>
-        }
-      />
+    <div className="mctb-page">
+      <div className="mctb-page-inner max-w-3xl">
+        <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+          ← Setup
+        </Link>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">
+              Recovery controls
+            </h1>
+            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+              Pause automated recovery texts or adjust repeat-caller follow-up rules.
+            </p>
+          </div>
+        </div>
 
-      <Card className="p-4">
-        <p className="text-sm font-semibold">{statusLabel}</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Pausing stops automated recovery texts. Carrier forwarding and missed-call logging may
-          continue.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-6 space-y-4">
+          <div className="ref-card p-5">
+            <p className="text-sm font-semibold text-foreground">{statusLabel}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Pausing stops automated recovery texts. Carrier forwarding and missed-call logging may
+              continue.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {isPaused ? (
+                <Button type="button" size="sm" onClick={resume} disabled={saving}>
+                  Resume now
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => pauseFor("1h")}
+                    disabled={saving}
+                  >
+                    Pause 1 hour
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => pauseFor("4h")}
+                    disabled={saving}
+                  >
+                    Pause 4 hours
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => pauseFor("tomorrow")}
+                    disabled={saving}
+                  >
+                    Until tomorrow 8 AM
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={pauseManual} disabled={saving}>
+                    Pause until resumed
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+
           {isPaused ? (
-            <Button type="button" size="sm" onClick={resume} disabled={saving}>
-              Resume now
+            <MctbPausedNotice pauseKind={pauseKind} pauseUntil={pauseUntil} variant="banner" />
+          ) : null}
+
+          <div className="ref-card space-y-4 p-5">
+            <div>
+              <h2 className="mctb-section-title">Follow-up rules</h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Repeat calls from the same person create separate missed-call events. Cooldown suppresses
+                duplicate automated recovery texts.
+              </p>
+            </div>
+            <div className="max-w-xs space-y-1.5">
+              <Label htmlFor="cooldown-minutes">Repeat-caller cooldown (minutes)</Label>
+              <Input
+                id="cooldown-minutes"
+                type="number"
+                min={0}
+                value={cooldownMinutes}
+                onChange={(e) => setCooldownMinutes(Number(e.target.value || 0))}
+              />
+            </div>
+            <Button type="button" size="sm" onClick={saveCooldown} disabled={saving}>
+              Save follow-up rules
             </Button>
-          ) : (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => pauseFor("1h")}
-                disabled={saving}
-              >
-                Pause 1 hour
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => pauseFor("4h")}
-                disabled={saving}
-              >
-                Pause 4 hours
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => pauseFor("tomorrow")}
-                disabled={saving}
-              >
-                Until tomorrow 8 AM
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={pauseManual} disabled={saving}>
-                Pause until resumed
-              </Button>
-            </>
-          )}
-        </div>
-      </Card>
+          </div>
 
-      {isPaused ? (
-        <MctbPausedNotice pauseKind={pauseKind} pauseUntil={pauseUntil} variant="banner" />
-      ) : null}
-
-      <Card className="space-y-4 p-5">
-        <div>
-          <h2 className="text-sm font-semibold">Follow-up rules</h2>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Repeat calls from the same person create separate missed-call events. Cooldown suppresses
-            duplicate automated recovery texts.
-          </p>
+          {message ? (
+            <p className="text-sm text-muted-foreground" role="status">{message}</p>
+          ) : null}
         </div>
-        <div className="max-w-xs space-y-1.5">
-          <Label htmlFor="cooldown-minutes">Repeat-caller cooldown (minutes)</Label>
-          <Input
-            id="cooldown-minutes"
-            type="number"
-            min={0}
-            value={cooldownMinutes}
-            onChange={(e) => setCooldownMinutes(Number(e.target.value || 0))}
-          />
-        </div>
-        <Button type="button" size="sm" onClick={saveCooldown} disabled={saving}>
-          Save follow-up rules
-        </Button>
-      </Card>
-
-      {message ? (
-        <p className="text-sm text-muted-foreground" role="status">{message}</p>
-      ) : null}
+      </div>
     </div>
   );
 }

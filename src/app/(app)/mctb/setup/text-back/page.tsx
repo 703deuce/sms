@@ -1,5 +1,5 @@
-import { MctbSetupView } from "@/components/mctb/setup-view";
+import { MctbSetupTextBackView } from "@/components/mctb/setup/setup-text-back-view";
 
 export default function MctbSetupTextBackPage() {
-  return <MctbSetupView section="text-back" />;
+  return <MctbSetupTextBackView />;
 }

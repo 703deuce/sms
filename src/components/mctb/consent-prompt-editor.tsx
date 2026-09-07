@@ -132,19 +132,19 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
   const stale = audioStatus === "stale";
 
   return (
-    <div className="space-y-4 rounded-xl border border-[#e5e7eb] bg-[#fafafa] p-4">
+    <div className="ref-card space-y-4 p-5">
       <div>
-        <p className="text-[14px] font-semibold text-[#111827]">What callers will hear</p>
-        <p className="mt-1 text-[12px] text-muted-foreground">
+        <p className="mctb-section-title">What callers will hear</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">
           Write your Press-1 disclosure. We generate static audio once — live calls play the saved
           recording (no runtime text-to-speech).
         </p>
       </div>
 
       <label className="block space-y-1.5">
-        <span className="text-[12px] font-semibold text-[#374151]">Spoken consent script</span>
+        <span className="text-[12px] font-semibold text-foreground">Spoken consent script</span>
         <textarea
-          className="min-h-[110px] w-full rounded-lg border border-[#D1D5DB] bg-white px-3 py-2 text-[14px]"
+          className="min-h-[110px] w-full rounded-lg border border-border bg-background px-3 py-2 text-[14px]"
           value={scriptText}
           disabled={disabled}
           onChange={(e) => setScriptText(e.target.value)}
@@ -153,7 +153,7 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
       </label>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold text-[#374151]">Voice</p>
+        <p className="mb-2 text-[12px] font-semibold text-foreground">Voice</p>
         <GreetingVoicePicker
           value={voiceId}
           previewText={scriptText}
@@ -205,13 +205,13 @@ export function MctbConsentPromptEditor({ disabled = false, phoneNumberId = null
         </Button>
       </div>
 
-      <div className="grid gap-2 text-[12px] text-[#4b5563] sm:grid-cols-2">
-        <div className="rounded-lg border bg-white p-3">
-          <p className="font-semibold text-[#111827]">When caller presses 1</p>
+      <div className="grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-2">
+        <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <p className="font-semibold text-foreground">When caller presses 1</p>
           <p className="mt-1">✓ Send missed-call recovery text</p>
         </div>
-        <div className="rounded-lg border bg-white p-3">
-          <p className="font-semibold text-[#111827]">No response / wrong key</p>
+        <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <p className="font-semibold text-foreground">No response / wrong key</p>
           <p className="mt-1">No text is sent</p>
         </div>
       </div>

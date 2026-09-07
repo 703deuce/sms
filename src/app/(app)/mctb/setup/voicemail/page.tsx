@@ -1,5 +1,5 @@
-import { MctbSetupView } from "@/components/mctb/setup-view";
+import { MctbSetupVoicemailEditorView } from "@/components/mctb/setup/setup-voicemail-editor-view";
 
 export default function MctbSetupVoicemailPage() {
-  return <MctbSetupView section="voicemail" />;
+  return <MctbSetupVoicemailEditorView />;
 }

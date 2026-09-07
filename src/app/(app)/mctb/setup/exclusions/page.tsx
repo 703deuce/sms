@@ -1,5 +1,5 @@
-import { MctbSetupView } from "@/components/mctb/setup-view";
+import { MctbSetupExclusionsView } from "@/components/mctb/setup/setup-exclusions-view";
 
 export default function MctbSetupExclusionsPage() {
-  return <MctbSetupView section="exclusions" />;
+  return <MctbSetupExclusionsView />;
 }

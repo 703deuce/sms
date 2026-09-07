@@ -1,13 +1,12 @@
+import { MctbVoicemailView } from "@/components/mctb/mctb-voicemail-view";
 import { AddOnUpgradeCard } from "@/components/products/add-on-upgrade-card";
-import { PersonalVoicemailUI } from "@/components/personal/personal-voicemail-ui";
-import { loadPersonalNumbers } from "@/lib/workspace/personal-data";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
 import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
+import { requireWorkspaceContext } from "@/lib/workspace-data";
 
 export default async function MctbVoicemailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ numberId?: string }>;
+  searchParams: Promise<{ id?: string }>;
 }) {
   const { workspaceId, session } = await requireWorkspaceContext();
   const entitled = await hasMctbBundledVoicemailAccess(workspaceId, {
@@ -18,8 +17,6 @@ export default async function MctbVoicemailPage({
     return <AddOnUpgradeCard feature="visual_voicemail" />;
   }
 
-  const numbers = await loadPersonalNumbers(workspaceId);
-  const { numberId } = await searchParams;
-
-  return <PersonalVoicemailUI numberId={numberId} numbers={numbers} />;
+  const { id } = await searchParams;
+  return <MctbVoicemailView initialId={id} />;
 }

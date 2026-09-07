@@ -1,5 +1,5 @@
-import { MctbSetupView } from "@/components/mctb/setup-view";
+import { MctbSetupConsentView } from "@/components/mctb/setup/setup-consent-view";
 
 export default function MctbSetupConsentPage() {
-  return <MctbSetupView section="consent" />;
+  return <MctbSetupConsentView />;
 }

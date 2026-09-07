@@ -1,9 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/page-header";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   classificationToTriggerLabel,
@@ -21,6 +19,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
+import "./kimi-ui/reference.css";
 
 type MissedCallEvent = {
   id: string;
@@ -229,19 +228,22 @@ export function MctbMissedCallsView() {
   }, [pagination]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      <PageHeader
-        title="Missed Calls"
-        description="Review missed calls and see what happened after each one."
-        actions={
+    <div className="mctb-page">
+      <div className="mctb-page-inner">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Missed Calls</h1>
+            <p className="mt-1 text-[13.5px] text-gray-500">
+              Review missed calls and see what happened after each one.
+            </p>
+          </div>
           <Link
             href={MCTB_ROUTES.setup}
-            className="inline-flex h-9 items-center rounded-[10px] border border-border bg-card px-4 text-[13px] font-medium hover:bg-muted"
+            className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
           >
             Manage setup
           </Link>
-        }
-      />
+        </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {[
@@ -249,14 +251,14 @@ export function MctbMissedCallsView() {
           { label: "Recovery texts today", value: summary?.sentToday ?? "—" },
           { label: "Replies today", value: summary?.repliedToday ?? "—" },
         ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-[12px] font-medium text-muted-foreground">{stat.label}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{stat.value}</p>
-          </Card>
+          <div key={stat.label} className="ref-card px-5 py-4">
+            <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
+          </div>
         ))}
       </div>
 
-      <Card className="mb-4 space-y-3 p-4">
+      <div className="mctb-filter-bar mb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="sm:col-span-2">
@@ -361,9 +363,9 @@ export function MctbMissedCallsView() {
             </Button>
           ) : null}
         </div>
-      </Card>
+      </div>
 
-      <Card className="overflow-hidden p-0">
+      <div className="ref-card overflow-hidden p-0">
         {loading ? (
           <TableSkeleton />
         ) : error ? (
@@ -494,7 +496,8 @@ export function MctbMissedCallsView() {
             ) : null}
           </>
         )}
-      </Card>
+      </div>
+      </div>
     </div>
   );
 }
