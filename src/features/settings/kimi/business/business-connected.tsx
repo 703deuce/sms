@@ -9,6 +9,9 @@ import BusinessProfileCard from "@/components/settings/kimi-ui/business/componen
 import MessagingRegistrationCard from "@/components/settings/kimi-ui/business/components/MessagingRegistrationCard";
 import BookingEnabledCard from "@/components/settings/kimi-ui/business/components/BookingEnabledCard";
 import PublicLegalCard from "@/components/settings/kimi-ui/business/components/PublicLegalCard";
+import SuspiciousBookingsCard, {
+  type SuspiciousBookingRow,
+} from "@/components/settings/kimi-ui/business/components/SuspiciousBookingsCard";
 import { mapBusinessRegistration } from "@/features/settings/kimi/shared/map-registration";
 import { resolveSettingsTabs } from "@/features/settings/kimi/shared/settings-tabs";
 import { Building2, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -50,6 +53,7 @@ export function BusinessSettingsConnected({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState("");
   const [platformLoading, setPlatformLoading] = useState(true);
+  const [suspiciousBookings, setSuspiciousBookings] = useState<SuspiciousBookingRow[]>([]);
 
   const registrationCard = mapBusinessRegistration(registration);
 
@@ -66,6 +70,20 @@ export function BusinessSettingsConnected({
         if (data.privacyUrl) setPrivacyUrl(data.privacyUrl);
         if (data.consentText) setConsentText(data.consentText);
         if (data.consentVersion) setConsentVersion(data.consentVersion);
+        const rows = (data.suspiciousBookings || []) as SuspiciousBookingRow[];
+        setSuspiciousBookings(
+          rows.map((row) => ({
+            ...row,
+            at: row.at
+              ? new Date(row.at).toLocaleString([], {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : row.at,
+          })),
+        );
       })
       .catch(() => undefined)
       .finally(() => setPlatformLoading(false));
@@ -240,6 +258,7 @@ export function BusinessSettingsConnected({
             consentVersion={consentVersion}
             setConsentVersion={setConsentVersion}
           />
+          <SuspiciousBookingsCard rows={suspiciousBookings} />
         </div>
         <div className="settings-side">
           <MessagingRegistrationCard

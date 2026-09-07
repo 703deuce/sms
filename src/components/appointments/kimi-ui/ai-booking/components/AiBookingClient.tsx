@@ -10,6 +10,7 @@ import {
   BOOKING_TYPES, CAPABILITY_CARDS, SUGGESTED_PROMPTS,
   type Channel, type ChatMessage, type MockOrchestratorResult,
 } from "../types";
+import { InboundChannelsCard } from "./InboundChannelsCard";
 
 const LOCAL_TABS = ["Booking Types", "Booking Pages", "Availability", "AI Booking", "Routing", "Meeting Polls"];
 
@@ -368,6 +369,8 @@ export function AiBookingClient() {
 
         {/* Right column — context */}
         <div className="stack">
+          <InboundChannelsCard />
+
           <section className="surface card-pad">
             <div className="card-head" style={{ marginBottom: 12 }}>
               <div>

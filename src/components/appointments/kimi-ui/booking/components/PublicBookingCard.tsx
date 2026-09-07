@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Calendar, Globe, ExternalLink, Copy, Mail, Share2, MoreHorizontal } from "lucide-react";
+import { Calendar, Globe, ExternalLink, Copy, Mail, Share2, MoreHorizontal, BellRing } from "lucide-react";
 import type { BookingPageModel } from "@/features/appointments/kimi/booking/types";
 
 type Props = {
@@ -91,6 +91,13 @@ export default function PublicBookingCard({
             <button type="button" className="booking-btn" onClick={onCopy}>
               <Copy size={14} /> {copied ? "Copied" : "Copy link"}
             </button>
+            <a
+              href={`/book/${model.workspaceSlug}/reminders`}
+              className="booking-btn"
+              style={{ textDecoration: "none" }}
+            >
+              <BellRing size={14} /> Preview reminder schedule
+            </a>
             <button type="button" className="booking-btn"><Mail size={14} /> Email</button>
             <button type="button" className="booking-btn"><Share2 size={14} /> Facebook</button>
             <button type="button" className="booking-btn"><Share2 size={14} /> X (Twitter)</button>

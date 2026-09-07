@@ -9,6 +9,7 @@ import { InfoStep } from "@/components/appointments/kimi-ui/public-booking-servi
 import { DoneStep } from "@/components/appointments/kimi-ui/public-booking-service/components/DoneStep";
 import { WaitlistStep } from "@/components/appointments/kimi-ui/public-booking-service/components/WaitlistStep";
 import { AiBookingStep } from "@/components/appointments/kimi-ui/public-booking-service/components/AiBookingStep";
+import { EmailVerificationStep } from "@/components/appointments/kimi-ui/public-booking-service/components/EmailVerificationStep";
 import { SquarePaymentStep } from "@/components/appointments/square-payment-step";
 import type { BookingType as KimiServiceBookingType } from "@/components/appointments/kimi-ui/public-booking-service/mock-data";
 import type { PublicBookingFlow } from "@/features/appointments/kimi/public/use-public-booking-flow";
@@ -98,7 +99,25 @@ export function PublicBookingServiceFlowInner({
             />
           ) : null}
 
-          {flow.step === "info" && flow.selectedType ? (
+          {flow.step === "info" && flow.selectedType && flow.challengeRequired && !flow.otpVerified ? (
+            <EmailVerificationStep
+              email={flow.email}
+              otpCode={flow.otpCode}
+              otpSent={flow.otpSent}
+              submitting={flow.submitting}
+              error={flow.error}
+              onEmailChange={flow.setEmail}
+              onOtpChange={flow.setOtpCode}
+              onSend={() => void flow.sendOtp()}
+              onVerify={() => void flow.verifyOtp()}
+              onBack={() => {
+                flow.setError("");
+                flow.setStep("datetime");
+              }}
+            />
+          ) : null}
+
+          {flow.step === "info" && flow.selectedType && (!flow.challengeRequired || flow.otpVerified) ? (
             <InfoStep
               type={toServiceType(flow.selectedType)}
               startsAt={flow.startsAt}
@@ -106,7 +125,16 @@ export function PublicBookingServiceFlowInner({
               submitting={flow.submitting || flow.paymentPending}
               error={flow.error}
               onBack={() => flow.setStep("datetime")}
-              onBook={(payload) => void flow.book(payload)}
+              onBook={(payload) => {
+                flow.setFirstName(payload.firstName);
+                flow.setLastName(payload.lastName);
+                flow.setPhone(payload.phone);
+                flow.setEmail(payload.email);
+                flow.setNotes(payload.notes);
+                flow.setSmsConsent(payload.smsConsent);
+                flow.setBookingAnswers(payload.answers);
+                void flow.book(payload);
+              }}
             />
           ) : null}
 
