@@ -609,6 +609,12 @@
         "reconciledAt": "2026-09-07T22:15:13.426Z"
       }
     },
+    "AP-WORKFLOWS-minutes-live": {
+      "status": "BLOCKED — PSTN",
+      "batchId": "APT-WF-03-live",
+      "at": "2026-09-07T22:36:00.000Z",
+      "reason": "Live SMS delivery requires TEST_PHONE — test-appointment-workflow-minutes.ts:26"
+    },
     "AP-VOICE-REMINDERS-*": {
       "status": "PASS",
       "batchId": "APT-VR-01",
