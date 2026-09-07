@@ -113,6 +113,7 @@
     "inventory:appointments-mctb": "tsx scripts/generate-appointments-mctb-inventory.ts",
     "cert:matrix:appointments-mctb": "tsx scripts/generate-appointments-mctb-cert-matrix.ts && tsx scripts/generate-settings-coverage-proof.ts && tsx scripts/generate-route-api-classification.ts",
     "cert:appointments-mctb-staged": "tsx scripts/run-appointments-mctb-cert-staged.ts",
+    "cert:appointments-mctb-browser": "tsx scripts/run-appointments-mctb-browser-cert.ts",
     "ui:appointments-v1-revamp": "tsx scripts/appointments-v1-kimi-revamp.ts",
     "test:v1-api-products": "tsx scripts/test-v1-api-products.ts",
     "test:verify": "tsx scripts/test-verify.ts",
