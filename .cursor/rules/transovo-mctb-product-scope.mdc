@@ -10,7 +10,7 @@ alwaysApply: true
 
 ## When this rule activates
 
-**Before any work** touching Missed Call Text Back — you **MUST read the full product-scope document first**, then the IA/navigation map, then the canonical product map.
+**Before any work** touching Missed Call Text Back — you **MUST read the full product-scope document first**, then the IA/navigation map, then the page manifest, then the canonical product map.
 
 Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`, `src/app/api/mctb/**`, `src/app/api/telnyx/voice/mctb*`, `src/lib/mctb/**`, `src/lib/agents/missed-call-text-back/**`, `src/app/f/mctb/**`, `src/app/(app)/onboarding/mctb/**`.
 

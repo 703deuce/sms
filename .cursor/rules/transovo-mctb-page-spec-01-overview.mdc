@@ -1,0 +1,76 @@
+---
+description: MANDATORY — MCTB Overview page build spec (/mctb). Operational dashboard implementation authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 01: OVERVIEW
+
+**Route:** `/mctb`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md`  
+**Prerequisites:** All governing MCTB docs + `transovo-mctb-page-build-specs.mdc`  
+**Visual baseline:** Finished Appointment product screenshots (visual only)
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** the MCTB Overview page (`/mctb`, `src/app/**/mctb/**` overview/dashboard).
+
+## Primary job
+
+Concise operational snapshot: **Is MCTB working? What happened? What needs attention? Where next?**
+
+Not a duplicate Missed Calls list, Conversations inbox, Analytics report, or Setup editor.
+
+## Page structure (top → bottom)
+
+1. Transovo shell + MCTB local nav (Overview selected)
+2. Page header (H1: Overview)
+3. Critical status region — **only when necessary**
+4. Primary KPI strip (Today: missed calls, recovery texts sent, replies, need reply)
+5. Needs attention (authoritative reason codes)
+6. Recent missed calls (~5) → View all
+7. Recent conversations → Open conversations
+8. Setup health (compact, links to Setup sections)
+9. Performance snapshot (optional, links to Analytics)
+
+## Header actions (state-dependent)
+
+| State | Primary | Secondary |
+|-------|---------|-----------|
+| Setup incomplete | Finish setup | Test setup (if possible) |
+| Paused | Resume MCTB | Manage schedule |
+| Healthy | None or quiet "Manage setup" | — |
+
+## Healthy state
+
+Quiet: **● Active** with text. No giant green banner.
+
+## Terminology (locked)
+
+Missed calls | Recovery texts sent | Replies | Business line | Text-back sender | Needs attention | Suppressed | Opted out
+
+Never: Your number, provider jargon, mock metrics, legal guarantees.
+
+## States required
+
+First-use/setup | Healthy active | No activity today | Paused | Messaging blocked | Partial/degraded | Loading (skeletons, not false zeros) | Error (with Retry) | Permission-limited staff
+
+## Prohibited
+
+- Old Voice shell or MCTB-specific global chrome
+- Full setup form on Overview
+- Full conversations composer
+- Mock analytics / fabricated consent
+- Cards around everything
+- Permanent Try It / Consent Log in nav
+
+## Data contract
+
+Use authoritative backend for: `mctb_status`, `paused_until`, today KPIs, `needs_reply_count`, `recent_missed_calls[]`, `recent_conversations[]`, `setup_readiness`, forwarding/sender/consent/schedule state. No frontend-only state inference.
+
+## Definition of done
+
+See full spec §61 checklist before marking `/mctb` complete.
+
+## Next page in series
+
+**02 — Missed Calls List** (`/mctb/missed-calls`) — pending build spec.

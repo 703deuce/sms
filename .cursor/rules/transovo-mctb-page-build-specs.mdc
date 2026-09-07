@@ -1,0 +1,43 @@
+---
+description: MANDATORY — MCTB page build spec series index. Read when implementing any MCTB page.
+alwaysApply: true
+---
+
+# MANDATORY: TRANSOVO MCTB PAGE-BY-PAGE BUILD SPECS
+
+**Index:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md`  
+**Prerequisites:** product scope → IA map → page manifest → canonical map (all `transovo-mctb-*.mdc` except page specs)  
+**Applies with:** All Transovo standards (always).
+
+## When this rule activates
+
+**Before implementing or declaring complete** any MCTB page UI — read governing MCTB docs, then the **page-specific build spec** for that route.
+
+## Authority order (MCTB implementation)
+
+1. Product scope
+2. IA & navigation map
+3. Page inventory & route manifest (completeness)
+4. Canonical product map (domain/lifecycle)
+5. **Page build spec for the route being built**
+6. Transovo standards
+7. Appointment screenshots (visual only)
+
+## Page spec index
+
+| Route | Spec | Rule |
+|-------|------|------|
+| `/mctb` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md` | `transovo-mctb-page-spec-01-overview.mdc` |
+| `/mctb/missed-calls` | *(pending — spec 02)* | — |
+
+## Hard requirements (all pages)
+
+- Appointment screenshots = visual language only
+- Page manifest = nothing omitted
+- Page build spec = exact screen implementation
+- Real runtime data; no mock analytics or fake controls
+- Shared Transovo shell unless public/onboarding/admin exception
+
+## Governing sentence
+
+**Manifest says what must exist; page build specs say how each screen is built.**
