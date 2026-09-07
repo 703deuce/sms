@@ -3,7 +3,7 @@
  *
  * Env:
  *   OPENAI_API_KEY — when set, uses OpenAI Chat Completions for analysis
- *   OPENAI_MODEL   — optional model name (default gpt-4o-mini)
+ *   OPENAI_MODEL   — optional model name (default gpt-5-nano)
  */
 
 import { openAiChatCompletion } from "@/lib/ai/openai";

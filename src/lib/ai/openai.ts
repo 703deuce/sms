@@ -3,7 +3,7 @@
  *
  * Env:
  *   OPENAI_API_KEY — required for live LLM responses
- *   OPENAI_MODEL   — optional, defaults to gpt-4o-mini
+ *   OPENAI_MODEL   — optional, defaults to gpt-5-nano
  */
 
 export function getOpenAiApiKey() {
@@ -11,7 +11,7 @@ export function getOpenAiApiKey() {
 }
 
 export function getOpenAiModel() {
-  return process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+  return process.env.OPENAI_MODEL?.trim() || "gpt-5-nano";
 }
 
 export async function openAiChatCompletion(

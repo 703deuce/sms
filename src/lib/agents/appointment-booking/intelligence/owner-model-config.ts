@@ -19,26 +19,26 @@ export type RuntimeModelConfig = {
 
 const DEFAULTS: Record<AmyLlmRuntime, RuntimeModelConfig> = {
   owner_amy: {
-    provider: "deepseek",
-    model: "deepseek-chat",
-    fallbackProvider: "openai",
-    fallbackModel: "gpt-4o-mini",
+    provider: "openai",
+    model: "gpt-5-nano",
+    fallbackProvider: "deepseek",
+    fallbackModel: "deepseek-chat",
   },
   caller_amy: {
     provider: "telnyx",
     model: "anthropic/claude-haiku-4-5",
   },
   workflow_architect: {
-    provider: "deepseek",
-    model: "deepseek-chat",
-    fallbackProvider: "openai",
-    fallbackModel: "gpt-4o-mini",
+    provider: "openai",
+    model: "gpt-5-nano",
+    fallbackProvider: "deepseek",
+    fallbackModel: "deepseek-chat",
   },
   diagnostic: {
-    provider: "deepseek",
-    model: "deepseek-chat",
-    fallbackProvider: "openai",
-    fallbackModel: "gpt-4o-mini",
+    provider: "openai",
+    model: "gpt-5-nano",
+    fallbackProvider: "deepseek",
+    fallbackModel: "deepseek-chat",
   },
 };
 

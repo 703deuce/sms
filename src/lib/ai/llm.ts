@@ -2,8 +2,8 @@
  * Multi-provider chat completions for Transovo product AI features.
  *
  * Tries providers in order based on available env keys:
- *   1. DeepSeek  (DEEPSEEK_API_KEY / DEEPSEEK_MODEL)
- *   2. OpenAI    (OPENAI_API_KEY / OPENAI_MODEL)
+ *   1. OpenAI    (OPENAI_API_KEY / OPENAI_MODEL — default gpt-5-nano)
+ *   2. DeepSeek  (DEEPSEEK_API_KEY / DEEPSEEK_MODEL) — fallback when configured
  *   3. OpenAI-compatible base URL (LLM_API_KEY + LLM_BASE_URL + LLM_MODEL)
  */
 

@@ -15,10 +15,10 @@ export type RuntimeModelConfig = {
 };
 
 const DEFAULTS: RuntimeModelConfig = {
-  provider: "deepseek",
-  model: "deepseek-chat",
-  fallbackProvider: "openai",
-  fallbackModel: "gpt-4o-mini",
+  provider: "openai",
+  model: "gpt-5-nano",
+  fallbackProvider: "deepseek",
+  fallbackModel: "deepseek-chat",
 };
 
 export function getAiRoutingModelConfig(): RuntimeModelConfig {

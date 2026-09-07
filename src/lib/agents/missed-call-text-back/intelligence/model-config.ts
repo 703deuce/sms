@@ -15,15 +15,15 @@ export type JohnRuntimeModelConfig = {
 const DEFAULTS: Record<JohnRuntimeId, JohnRuntimeModelConfig> = {
   customer_john: {
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5-nano",
     fallbackProvider: "deepseek",
     fallbackModel: "deepseek-chat",
   },
   mctb_workflow_architect: {
-    provider: "deepseek",
-    model: "deepseek-chat",
-    fallbackProvider: "openai",
-    fallbackModel: "gpt-4o-mini",
+    provider: "openai",
+    model: "gpt-5-nano",
+    fallbackProvider: "deepseek",
+    fallbackModel: "deepseek-chat",
   },
 };
 
