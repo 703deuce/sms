@@ -1,0 +1,72 @@
+---
+description: MANDATORY — MCTB page inventory & route manifest. Completeness authority for frontend rebuild.
+alwaysApply: true
+---
+
+# MANDATORY: TRANSOVO MCTB PAGE INVENTORY & ROUTE MANIFEST
+
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md`  
+**Prerequisites:** product scope → IA navigation map (`.cursor/rules/transovo-mctb-product-scope.mdc`, `transovo-mctb-ia-navigation.mdc`)  
+**Applies with:** `transovo-mctb-canonical.mdc`, all `transovo-*.mdc` standards (always).
+
+## When this rule activates
+
+**Before implementing, rebuilding, or declaring complete** any MCTB page, route, section, state, or cross-link — read product scope and IA map first, then **this manifest**.
+
+Paths: `src/app/**/mctb/**`, `src/app/**/voice/**`, `src/components/mctb/**`, `src/app/(app)/onboarding/mctb/**`, `src/app/f/mctb/**`.
+
+## Authority order (MCTB)
+
+1. Product scope — what MCTB is / is not
+2. IA & navigation map — where everything lives
+3. **This manifest — completeness** (every route, page, section, state, legacy migration)
+4. Canonical product map — domain model, lifecycle
+5. Transovo standards
+6. Existing code/screenshots — evidence only
+
+## Hard requirements
+
+1. **Account for every route** in the manifest before declaring MCTB frontend rebuild complete.
+2. **Six route categories:** operational | configuration | compliance/audit | temporary process | public/customer | admin/support.
+3. **Do not silently omit** working functionality, states, controls, or workflows already in scope.
+4. **No mock controls or analytics** — real runtime or explicitly unavailable.
+5. **Shared shell** on authenticated pages; public/onboarding/admin exceptions only.
+6. **Number labels:** Business line | Forwarding destination | Text-back sender.
+7. **Press-1 vs existing-consent** — correct UI per mode; system compliance message ≠ conversational recovery message.
+8. **Legacy `/voice/*`** — redirect/merge/retire per migration matrix; no orphan routes.
+9. **System states per page:** normal, loading, empty, filtered empty, error, partial/degraded, permission-blocked where applicable.
+10. **Cross-links, deep links, return context** — required per manifest §45–47.
+11. **Reuse canonical engines** — no frontend-only duplicate business logic.
+
+## Required route inventory (minimum)
+
+**Operational:** `/mctb`, `/mctb/missed-calls[/:id]`, `/mctb/conversations[/:id]`, `/mctb/analytics`, optional `/mctb/voicemail`
+
+**Configuration:** `/mctb/setup[/phone|messaging|consent|schedule|voicemail|exclusions|test]`
+
+**Compliance:** `/mctb/compliance[/consent]`
+
+**Process:** `/onboarding/mctb`
+
+**Public:** `/f/mctb/:token`
+
+## Legacy redirects (minimum)
+
+| Legacy | Target |
+|--------|--------|
+| `/voice/missed-calls` | `/mctb/missed-calls` |
+| `/voice/setup` | `/mctb/setup` |
+| `/voice/schedule` | `/mctb/setup/schedule` |
+| `/voice/try-it` | `/mctb/setup/test` |
+| `/voice/consent-log` | `/mctb/compliance/consent` |
+| `/voice/analytics` | `/mctb/analytics` |
+| `/agents/john` | canonical MCTB |
+| `/solutions/missed-call-text-back/setup` | `/mctb/setup` |
+
+## Build order
+
+Appointment visual refs → shared shell/tokens → MCTB nav config → routes → operational pages → setup → compliance → onboarding/public → legacy redirects → integration → responsive/a11y QA.
+
+## Governing sentence
+
+**IA map says where; this manifest says what must exist.** No page is complete without route, runtime, states, cross-links, and legacy decision documented.

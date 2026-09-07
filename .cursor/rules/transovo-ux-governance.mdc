@@ -60,7 +60,7 @@ These rules apply when you touch **any** of:
 
 **Excluded (Kimi orchestration only):** `TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md`, `TRANSOVO-MODE-4-REBUILD-MANIFEST.md`, `TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`, `TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md`.
 
-**MCTB (Missed Call Text Back):** product scope → IA/navigation map → canonical product map (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — **read FIRST** before any MCTB UI, API, backend, or runtime change (along with all standards above).
+**MCTB (Missed Call Text Back):** product scope → IA map → page manifest → canonical map (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — **read FIRST** before any MCTB UI, API, backend, or runtime change (along with all standards above).
 
 ## Pre-flight checklist (new page or feature)
 

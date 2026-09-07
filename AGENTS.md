@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA/navigation map → canonical product map (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
+**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA map → page manifest → canonical map (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
@@ -48,11 +48,17 @@ Defines what MCTB is/is not, domain objects, user jobs, in-scope vs out-of-scope
 
 Defines where everything lives: nav structure, route ownership, operational vs setup hierarchy, legacy route migration, page placement, and cross-linking.
 
-**3. Canonical product map (domain / lifecycle / pages)**  
+**3. Page inventory & route manifest (completeness)**  
+**Cursor rule:** `.cursor/rules/transovo-mctb-page-manifest.mdc` (`alwaysApply: true`)  
+**Full doc:** `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md`
+
+Defines every required route, page, major section, state, cross-link, and legacy migration mapping. Completeness authority for the frontend rebuild.
+
+**4. Canonical product map (domain / lifecycle)**  
 **Cursor rule:** `.cursor/rules/transovo-mctb-canonical.mdc` (`alwaysApply: true`)  
 **Full map:** `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md`
 
-Before any MCTB UI, API, `src/lib/mctb/`, or runtime change: read product scope **first**, then IA map, then canonical map, then all Transovo standards. Screenshots and current pages are evidence only — not product or IA authority.
+Before any MCTB UI, API, `src/lib/mctb/`, or runtime change: read product scope **first**, then IA map, then page manifest, then canonical map, then all Transovo standards. Screenshots and current pages are evidence only — not product or IA authority.
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

@@ -6,7 +6,7 @@ alwaysApply: true
 # MANDATORY: TRANSOVO MCTB PRODUCT SCOPE & DOMAIN RULES
 
 **Source of truth:** `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md`  
-**Applies with:** `transovo-mctb-ia-navigation.mdc`, `transovo-mctb-canonical.mdc`, all `transovo-*.mdc` standards (always).
+**Applies with:** `transovo-mctb-ia-navigation.mdc`, `transovo-mctb-page-manifest.mdc`, `transovo-mctb-canonical.mdc`, all `transovo-*.mdc` standards (always).
 
 ## When this rule activates
 
@@ -18,7 +18,8 @@ Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`,
 
 1. `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` — **this rule** (what MCTB is / is not)
 2. `docs/TRANSOVO-MCTB-INFORMATION-ARCHITECTURE-AND-NAVIGATION-MAP.md` — where everything lives (nav, routes)
-3. `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — domain model, lifecycle, page specs
+3. `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md` — completeness (every page, route, state)
+4. `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — domain model, lifecycle, page specs
 3. All Transovo standards (`transovo-*.mdc`)
 4. Existing code and screenshots — **evidence only**, lowest authority
 
