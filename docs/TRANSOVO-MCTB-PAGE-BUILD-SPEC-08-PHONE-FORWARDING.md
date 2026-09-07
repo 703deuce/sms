@@ -1808,4 +1808,6 @@ Cursor may mark this section complete only when:
 
 ## Build handoff
 
-Next page-spec: **09 — Missed-call Rules** — narrower scope: which call outcomes MCTB treats as recoverable missed calls, repeat/cooldown behavior boundaries, and basic vs advanced configuration.
+Next page-spec: **09 — Missed-call Rules** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md`.
+
+**10 — Text Back** — pending build spec.

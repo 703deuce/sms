@@ -1,0 +1,64 @@
+---
+description: MANDATORY — MCTB Missed-call Rules (/mctb/setup/missed-call-rules). Wizard Step 2.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 09: MISSED-CALL RULES
+
+**Route:** `/mctb/setup/missed-call-rules` | **Wizard:** Setup Step 2 (spec 07)  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–08
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Missed-call Rules (`/mctb/setup/missed-call-rules`, wizard step 2).
+
+## Primary job
+
+Define **which call outcomes** create canonical missed-call events — not consent, SMS content, forwarding, schedule, or eligibility.
+
+```
+Call outcome matches enabled rule → MissedCallEvent → central eligibility engine
+```
+
+## Page scope
+
+**Owns:** trigger conditions (no answer, busy, unreachable, rejected/voicemail only if runtime supports), no-answer timing only if MCTB owns it
+
+**Does not own:** forwarding, consent, sender, message text, business hours, voicemail greeting, cooldown/max sends (→ Follow-up Rules), opt-out policy
+
+## UI model
+
+**Wizard:** one simple screen — checkboxes + plain-language helpers → Continue (persist before advance)
+
+**Post-setup:** direct editor, Save changes, no stepper
+
+**Defaults:** no answer / busy / unreachable on (operational — not consent attestation)
+
+## Locked distinctions
+
+- **Classification ≠ messaging eligibility** — no "text opted-out callers anyway"
+- **Repeat calls** = separate events; cooldown is Follow-up Rules
+- **Rules apply prospectively** — history not rewritten
+- **Zero triggers** = validation error
+- **Loading** — no false unchecked defaults
+
+## Relationships
+
+| Area | Relationship |
+|------|----------------|
+| Phone & Forwarding | Did call reach Transovo? |
+| Missed-call Rules | Did outcome match enabled rule? |
+| Consent / Schedule / Follow-up | After event created |
+
+## Prohibited
+
+Workflow builder, provider disposition codes, duplicate cooldown controls, fake triggers, rewriting history, mock controls
+
+## Definition of done
+
+See full spec §51 checklist.
+
+## Next in series
+
+**10 — Text Back** — pending build spec.
