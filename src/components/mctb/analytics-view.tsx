@@ -1,5 +1,6 @@
 "use client";
 
+import { MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import { MctbRecoveryTrendChart } from "@/components/mctb/kimi-ui/mctb-recovery-trend-chart";
 import { MctbStatCards } from "@/components/mctb/kimi-ui/mctb-stat-cards";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -121,33 +122,31 @@ export function MctbAnalyticsView() {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Analytics</h1>
-            <p className="mt-1 text-[13.5px] text-gray-500">
-              Recovery funnel, delivery health, and suppression — observable facts only.
-            </p>
-          </div>
-          <div
-            role="group"
-            aria-label="Date range"
-            className="inline-flex items-center rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm"
-          >
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setRange(opt.id)}
-                aria-pressed={range === opt.id}
-                className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${
-                  range === opt.id ? "bg-primary text-white" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <MctbPageHeader
+          title="Analytics"
+          description="Recovery funnel, delivery health, and suppression — observable facts only."
+          action={
+            <div
+              role="group"
+              aria-label="Date range"
+              className="inline-flex items-center rounded-xl border border-gray-200 bg-white p-0.5 shadow-sm"
+            >
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setRange(opt.id)}
+                  aria-pressed={range === opt.id}
+                  className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${
+                    range === opt.id ? "bg-primary text-white shadow-sm" : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          }
+        />
 
         {loading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-busy="true">

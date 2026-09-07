@@ -7,8 +7,9 @@ import {
   type MctbConsentMode,
 } from "@/lib/mctb/consent-mode";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
+import { ArrowRight, Ban, CheckCircle2, CircleAlert, MessageSquare, Phone, PhoneMissed, ShieldCheck, Sparkles, Voicemail } from "lucide-react";
 import Link from "next/link";
+import { MctbPageHeader, MctbPrimaryLink } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./kimi-ui/reference.css";
 
@@ -36,6 +37,8 @@ type SetupRow = {
   summary: string;
   href: string;
   status: "ready" | "attention" | "unknown";
+  icon: typeof Phone;
+  tint: "purple" | "green" | "blue" | "amber";
 };
 
 function RowStatus({ status }: { status: SetupRow["status"] }) {
@@ -105,6 +108,8 @@ export function MctbSetupOverview() {
           : "Connect your business line and verify forwarding",
         href: MCTB_ROUTES.setupPhone,
         status: hasLine && hasSender ? "ready" : "attention",
+        icon: Phone,
+        tint: "purple",
       },
       {
         id: "rules",
@@ -114,6 +119,8 @@ export function MctbSetupOverview() {
           : "Choose which call outcomes create missed-call events",
         href: MCTB_ROUTES.setupMissedCallRules,
         status: triggersOn ? "ready" : "attention",
+        icon: PhoneMissed,
+        tint: "amber",
       },
       {
         id: "text-back",
@@ -123,6 +130,8 @@ export function MctbSetupOverview() {
           : "Set your recovery message",
         href: MCTB_ROUTES.setupTextBack,
         status: r.messageTemplate.trim() ? "ready" : "attention",
+        icon: MessageSquare,
+        tint: "blue",
       },
       {
         id: "consent",
@@ -130,6 +139,8 @@ export function MctbSetupOverview() {
         summary: MCTB_CONSENT_MODE_LABELS[data.consentMode]?.title || "Choose how permission is established",
         href: MCTB_ROUTES.setupConsent,
         status: data.consentMode ? "ready" : "attention",
+        icon: ShieldCheck,
+        tint: "green",
       },
       {
         id: "recovery",
@@ -139,6 +150,8 @@ export function MctbSetupOverview() {
           : `Active · ${r.cooldownMinutes} min repeat-caller cooldown`,
         href: MCTB_ROUTES.setupRecovery,
         status: paused ? "attention" : "ready",
+        icon: Sparkles,
+        tint: "purple",
       },
       {
         id: "voicemail",
@@ -146,6 +159,8 @@ export function MctbSetupOverview() {
         summary: "Greeting and voicemail behavior",
         href: MCTB_ROUTES.setupVoicemail,
         status: "ready",
+        icon: Voicemail,
+        tint: "blue",
       },
       {
         id: "exclusions",
@@ -153,6 +168,8 @@ export function MctbSetupOverview() {
         summary: "Do-not-text numbers",
         href: MCTB_ROUTES.setupExclusions,
         status: "ready",
+        icon: Ban,
+        tint: "amber",
       },
       {
         id: "test",
@@ -162,6 +179,8 @@ export function MctbSetupOverview() {
           : `Messaging blocked: ${data.compliance.requiredActions[0] || "complete sender registration"}`,
         href: MCTB_ROUTES.setupTest,
         status: messagingReady ? "ready" : "attention",
+        icon: Sparkles,
+        tint: "green",
       },
     ];
   }, [data]);
@@ -206,29 +225,22 @@ export function MctbSetupOverview() {
           </aside>
 
           <div className="min-w-0">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">Setup</h1>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-              Configure forwarding, consent, recovery messages, and operational controls.
-            </p>
-          </div>
-          {setupIncomplete ? (
-            <Link
-              href={MCTB_ROUTES.setupStart}
-              className="inline-flex h-10 shrink-0 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              Continue setup
-            </Link>
-          ) : (
-            <Link
-              href={MCTB_ROUTES.setupTest}
-              className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              Run test
-            </Link>
-          )}
-        </div>
+        <MctbPageHeader
+          title="Setup"
+          description="Configure forwarding, consent, recovery messages, and operational controls."
+          action={
+            setupIncomplete ? (
+              <MctbPrimaryLink href={MCTB_ROUTES.setupStart}>Continue setup</MctbPrimaryLink>
+            ) : (
+              <Link
+                href={MCTB_ROUTES.setupTest}
+                className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:border-indigo-200 hover:shadow"
+              >
+                Run test
+              </Link>
+            )
+          }
+        />
 
         <div className="mb-4 mt-4 lg:hidden">
           <MctbSetupLocalNav />
@@ -253,23 +265,31 @@ export function MctbSetupOverview() {
 
         <div className="ref-card mt-4 overflow-hidden p-0">
           <ul className="divide-y divide-border">
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const Icon = row.icon;
+              return (
               <li key={row.id}>
                 <Link
                   href={row.href}
-                  className="flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 px-5 py-4 transition hover:bg-indigo-50/30 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground">{row.title}</p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">{row.summary}</p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={`icon-tile tile-${row.tint} shrink-0`}>
+                      <Icon size={18} strokeWidth={2} aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground">{row.title}</p>
+                      <p className="mt-0.5 text-[13px] text-muted-foreground">{row.summary}</p>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
+                  <div className="flex shrink-0 items-center gap-3 pl-[52px] sm:pl-0">
                     <RowStatus status={row.status} />
                     <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
                   </div>
                 </Link>
               </li>
-            ))}
+            );
+            })}
           </ul>
         </div>
 

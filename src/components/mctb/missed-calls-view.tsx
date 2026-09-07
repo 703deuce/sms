@@ -14,6 +14,7 @@ import {
 } from "@/lib/mctb/missed-calls-list-filters";
 import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -230,20 +231,18 @@ export function MctbMissedCallsView() {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Missed Calls</h1>
-            <p className="mt-1 text-[13.5px] text-gray-500">
-              Review missed calls and see what happened after each one.
-            </p>
-          </div>
-          <Link
-            href={MCTB_ROUTES.setup}
-            className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            Manage setup
-          </Link>
-        </div>
+        <MctbPageHeader
+          title="Missed Calls"
+          description="Review missed calls and see what happened after each one."
+          action={
+            <Link
+              href={MCTB_ROUTES.setup}
+              className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:border-indigo-200 hover:shadow"
+            >
+              Manage setup
+            </Link>
+          }
+        />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {[
@@ -251,9 +250,9 @@ export function MctbMissedCallsView() {
           { label: "Recovery texts today", value: summary?.sentToday ?? "—" },
           { label: "Replies today", value: summary?.repliedToday ?? "—" },
         ].map((stat) => (
-          <div key={stat.label} className="ref-card px-5 py-4">
+          <div key={stat.label} className="ref-card px-5 py-4 transition hover:border-indigo-200 hover:shadow-sm">
             <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
+            <p className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
           </div>
         ))}
       </div>

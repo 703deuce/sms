@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MctbPageHeader, MctbPrimaryLink } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import "./kimi-ui/reference.css";
 
 function fmtTime(iso: string) {
@@ -133,26 +134,19 @@ export function MctbOverviewView() {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-[26px] font-bold tracking-tight text-gray-900">Overview</h1>
-            <p className="mt-1 text-[13.5px] text-gray-500">
-              Missed call recovery health — activity, attention, and setup status.
-            </p>
-            {data.status === "active" ? (
-              <p className="mt-2 flex items-center gap-2 text-[13px] text-gray-600">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" aria-hidden />
-                <span><strong className="text-gray-900">Active</strong> — recovery is running.</span>
-              </p>
-            ) : null}
-          </div>
-          <Link
-            href={headerCta.href}
-            className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            {headerCta.label}
-          </Link>
-        </div>
+        <MctbPageHeader
+          title="Overview"
+          description="Missed call recovery health — activity, attention, and setup status."
+          badge={
+            data.status === "active" ? (
+              <span className="ref-pill pill-green inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
+                Active
+              </span>
+            ) : undefined
+          }
+          action={<MctbPrimaryLink href={headerCta.href}>{headerCta.label}</MctbPrimaryLink>}
+        />
 
         {data.status === "setup_incomplete" ? (
           <div className="mb-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4" role="status">

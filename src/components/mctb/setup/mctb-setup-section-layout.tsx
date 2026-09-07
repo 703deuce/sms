@@ -34,7 +34,10 @@ export function MctbSetupSectionLayout({
     <div className="mctb-page">
       <div className="mctb-page-inner mx-auto max-w-[1100px]">
         <div className="mb-2">
-          <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+          <Link
+            href={MCTB_ROUTES.setup}
+            className="inline-flex items-center gap-1 text-[13px] font-semibold text-indigo-600 transition hover:text-indigo-800 hover:underline"
+          >
             ← Setup
           </Link>
         </div>
@@ -45,11 +48,12 @@ export function MctbSetupSectionLayout({
           </aside>
 
           <div className="min-w-0">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">{title}</h1>
-                <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{description}</p>
-              </div>
+            <div className="mb-6 rounded-2xl border border-gray-100 bg-gradient-to-r from-white via-white to-indigo-50/40 p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h1 className="font-display text-[22px] font-bold tracking-tight text-gray-900">{title}</h1>
+                  <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-gray-600">{description}</p>
+                </div>
               {showSave && onSave ? (
                 <div className="flex shrink-0 items-center gap-3 pt-1">
                   {saved && !saving ? (
@@ -63,6 +67,7 @@ export function MctbSetupSectionLayout({
                   </Button>
                 </div>
               ) : null}
+              </div>
             </div>
 
             <div className="mb-4 mt-4 lg:hidden">

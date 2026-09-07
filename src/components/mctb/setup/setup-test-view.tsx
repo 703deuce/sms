@@ -2,34 +2,22 @@
 
 import { Button } from "@/components/ui/button";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
+import {
+  MctbCallout,
+  MctbCheckpointList,
+  MctbHeroNumber,
+  MctbOptionCard,
+} from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { TryItStatus } from "@/lib/mctb/try-it/types";
 import type { MctbSetupTestStatus } from "@/lib/mctb/setup-test";
 import type { LiveTestStatus } from "@/lib/mctb/onboarding/live-test";
-import { cn } from "@/lib/utils";
 import { Phone, Radio, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 const SECTION_TITLE = "text-[15px] font-semibold tracking-tight text-foreground";
-
-function StepCheck({ done, label }: { done: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <span
-        className={cn(
-          "flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold",
-          done ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground",
-        )}
-        aria-hidden
-      >
-        {done ? "✓" : "·"}
-      </span>
-      <span className={done ? "text-foreground" : "text-muted-foreground"}>{label}</span>
-    </div>
-  );
-}
 
 export function MctbSetupTestView() {
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
@@ -170,52 +158,29 @@ export function MctbSetupTestView() {
       showSave={false}
       error={error}
     >
-      {/* Demo try-it */}
-      <div className="ref-card flex items-start gap-3 border-indigo-100 bg-indigo-50/40 p-4">
-        <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" aria-hidden />
-        <div className="text-[13px] text-indigo-950">
-          <p className="font-semibold">Demo test (no forwarding)</p>
-          <p className="mt-1 text-indigo-900/90">
-            Call your workspace demo line from your verified mobile. Use this before carrier forwarding
-            is configured.
-          </p>
-        </div>
-      </div>
+      <MctbCallout icon={Sparkles} title="Demo test (no forwarding)">
+        Call your workspace demo line from your verified mobile. Use this before carrier forwarding is
+        configured.
+      </MctbCallout>
 
-      <div className="ref-card space-y-5 p-5">
+      <div className="ref-card space-y-5 p-5 sm:p-6">
         <div>
           <h2 className={SECTION_TITLE}>1. Choose consent mode for demo test</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {(
-              [
-                {
-                  id: "press_1" as const,
-                  title: "Ask callers to press 1",
-                  body: "Hear the disclosure, press 1, receive compliance confirmation, then recovery text.",
-                },
-                {
-                  id: "existing_consent" as const,
-                  title: "Use permission my business already has",
-                  body: "No Press-1 interaction. Recovery text sends after the missed-call path completes.",
-                },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                disabled={tryItStarted && !tryItStatus?.expired}
-                onClick={() => setConsentMode(opt.id)}
-                className={cn(
-                  "rounded-xl border px-4 py-3 text-left text-sm transition",
-                  consentMode === opt.id
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                    : "border-gray-200 hover:border-gray-300",
-                )}
-              >
-                <p className="font-semibold text-foreground">{opt.title}</p>
-                <p className="mt-1 text-[12px] text-muted-foreground">{opt.body}</p>
-              </button>
-            ))}
+            <MctbOptionCard
+              selected={consentMode === "press_1"}
+              disabled={tryItStarted && !tryItStatus?.expired}
+              title="Ask callers to press 1"
+              description="Hear the disclosure, press 1, receive compliance confirmation, then recovery text."
+              onClick={() => setConsentMode("press_1")}
+            />
+            <MctbOptionCard
+              selected={consentMode === "existing_consent"}
+              disabled={tryItStarted && !tryItStatus?.expired}
+              title="Use permission my business already has"
+              description="No Press-1 interaction. Recovery text sends after the missed-call path completes."
+              onClick={() => setConsentMode("existing_consent")}
+            />
           </div>
           {consentMode === "existing_consent" ? (
             <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-[13px]">
@@ -234,19 +199,13 @@ export function MctbSetupTestView() {
           ) : null}
         </div>
 
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 text-center">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Demo number
-          </p>
-          <p className="mt-1 font-display text-3xl font-semibold tracking-tight text-primary">
-            {demoDisplay}
-          </p>
-        </div>
+        <MctbHeroNumber label="Demo number" number={demoDisplay} tint="blue" />
 
         {!tryItStarted ? (
           <div className="space-y-3">
             <h2 className={SECTION_TITLE}>2. Start demo test</h2>
             <Button
+              className="shadow-sm"
               disabled={
                 startingTryIt || (consentMode === "existing_consent" && !existingConsentAttested)
               }
@@ -266,19 +225,21 @@ export function MctbSetupTestView() {
                   ? "Waiting for your call…"
                   : "Call in progress…"}
             </p>
-            <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-              <StepCheck done={tryItStatus?.checks.callReceived || false} label="Call received" />
-              <StepCheck done={tryItStatus?.checks.greetingPlayed || false} label="Greeting played" />
-              {showPress1 ? (
-                <StepCheck done={tryItStatus?.checks.press1Received || false} label="Press 1 received" />
-              ) : null}
-              <StepCheck done={tryItStatus?.checks.consentConfirmed || false} label="Consent confirmed" />
-              <StepCheck
-                done={tryItStatus?.checks.recoverySmsQueued || false}
-                label="Recovery SMS queued"
-              />
-              <StepCheck done={tryItStatus?.checks.recoverySmsSent || false} label="Recovery SMS sent" />
-            </div>
+            <MctbCheckpointList
+              items={[
+                { done: tryItStatus?.checks.callReceived || false, label: "Call received" },
+                { done: tryItStatus?.checks.greetingPlayed || false, label: "Greeting played" },
+                ...(showPress1
+                  ? [{ done: tryItStatus?.checks.press1Received || false, label: "Press 1 received" }]
+                  : []),
+                { done: tryItStatus?.checks.consentConfirmed || false, label: "Consent confirmed" },
+                {
+                  done: tryItStatus?.checks.recoverySmsQueued || false,
+                  label: "Recovery SMS queued",
+                },
+                { done: tryItStatus?.checks.recoverySmsSent || false, label: "Recovery SMS sent" },
+              ]}
+            />
             {tryItStatus?.expired ? (
               <Button variant="secondary" onClick={() => void startTryIt()} disabled={startingTryIt}>
                 Start a new demo test
@@ -288,17 +249,10 @@ export function MctbSetupTestView() {
         )}
       </div>
 
-      {/* Production setup test */}
-      <div className="ref-card flex items-start gap-3 border-emerald-100 bg-emerald-50/40 p-4">
-        <Zap className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
-        <div className="text-[13px] text-emerald-950">
-          <p className="font-semibold">Production path test</p>
-          <p className="mt-1 text-emerald-900/90">
-            Call your assigned MCTB number ({setupNumber}) directly. Validates workspace routing,
-            consent mode, missed-call event creation, and SMS delivery on the production ingress.
-          </p>
-        </div>
-      </div>
+      <MctbCallout icon={Zap} title="Production path test" variant="success">
+        Call your assigned MCTB number ({setupNumber}) directly. Validates workspace routing, consent
+        mode, missed-call event creation, and SMS delivery on the production ingress.
+      </MctbCallout>
 
       <div className="ref-card space-y-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -325,36 +279,31 @@ export function MctbSetupTestView() {
         </div>
 
         {setupTest?.started ? (
-          <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-            <StepCheck done={setupTest.checks.transovoDidReceived} label="Call reached MCTB number" />
-            <StepCheck done={setupTest.checks.workspaceResolved} label="Workspace resolved" />
-            <StepCheck done={setupTest.checks.consentModeLoaded} label="Consent mode loaded" />
-            <StepCheck done={setupTest.checks.greetingPlayed} label="Greeting played" />
-            {setupTest.consentMode === "press_1" ? (
-              <StepCheck done={setupTest.checks.press1Received} label="Press 1 received" />
-            ) : null}
-            <StepCheck done={setupTest.checks.consentRecorded} label="Consent recorded" />
-            <StepCheck done={setupTest.checks.missedCallEventCreated} label="Missed call event created" />
-            <StepCheck done={setupTest.checks.smsQueued} label="Recovery SMS queued" />
-            <StepCheck done={setupTest.checks.smsProviderAccepted} label="SMS accepted by provider" />
-          </div>
+          <MctbCheckpointList
+            items={[
+              { done: setupTest.checks.transovoDidReceived, label: "Call reached MCTB number" },
+              { done: setupTest.checks.workspaceResolved, label: "Workspace resolved" },
+              { done: setupTest.checks.consentModeLoaded, label: "Consent mode loaded" },
+              { done: setupTest.checks.greetingPlayed, label: "Greeting played" },
+              ...(setupTest.consentMode === "press_1"
+                ? [{ done: setupTest.checks.press1Received, label: "Press 1 received" }]
+                : []),
+              { done: setupTest.checks.consentRecorded, label: "Consent recorded" },
+              { done: setupTest.checks.missedCallEventCreated, label: "Missed call event created" },
+              { done: setupTest.checks.smsQueued, label: "Recovery SMS queued" },
+              { done: setupTest.checks.smsProviderAccepted, label: "SMS accepted by provider" },
+            ]}
+          />
         ) : null}
         {setupTest?.failureReason ? (
           <p className="text-[13px] text-amber-800">{setupTest.failureReason}</p>
         ) : null}
       </div>
 
-      {/* Live forward test */}
-      <div className="ref-card flex items-start gap-3 border-sky-100 bg-sky-50/40 p-4">
-        <Radio className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" aria-hidden />
-        <div className="text-[13px] text-sky-950">
-          <p className="font-semibold">Forwarded business line test</p>
-          <p className="mt-1 text-sky-900/90">
-            Call {liveBusiness} from another phone and don&apos;t answer. Transovo should receive the
-            forward on {liveForward}, classify the miss, and send recovery SMS.
-          </p>
-        </div>
-      </div>
+      <MctbCallout icon={Radio} title="Forwarded business line test">
+        Call {liveBusiness} from another phone and don&apos;t answer. Transovo should receive the
+        forward on {liveForward}, classify the miss, and send recovery SMS.
+      </MctbCallout>
 
       <div className="ref-card space-y-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -381,27 +330,26 @@ export function MctbSetupTestView() {
         </div>
 
         {liveTest?.started ? (
-          <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50/80 p-4">
-            <StepCheck done={liveTest.checks.callDetected} label="Call arrived on MCTB number" />
-            <StepCheck done={liveTest.checks.missedCall} label="Classified as missed call" />
-            <StepCheck done={liveTest.checks.consentCompleted} label="Consent completed (if required)" />
-            <StepCheck done={liveTest.checks.textSent} label="Recovery SMS sent" />
-            <StepCheck done={liveTest.checks.textDelivered} label="SMS delivered" />
-            <StepCheck done={liveTest.checks.replyReceived} label="Reply received in inbox" />
-          </div>
+          <MctbCheckpointList
+            items={[
+              { done: liveTest.checks.callDetected, label: "Call arrived on MCTB number" },
+              { done: liveTest.checks.missedCall, label: "Classified as missed call" },
+              { done: liveTest.checks.consentCompleted, label: "Consent completed (if required)" },
+              { done: liveTest.checks.textSent, label: "Recovery SMS sent" },
+              { done: liveTest.checks.textDelivered, label: "SMS delivered" },
+              { done: liveTest.checks.replyReceived, label: "Reply received in inbox" },
+            ]}
+          />
         ) : null}
       </div>
 
-      <div className="ref-card space-y-2 p-5 text-[13px] text-muted-foreground">
-        <p className="font-semibold text-foreground">After testing</p>
-        <p>
-          Verify carrier forwarding in{" "}
-          <Link href={MCTB_ROUTES.setupPhone} className="font-semibold text-primary hover:underline">
-            Phone & Forwarding
-          </Link>
-          . Review consent and message copy before activating recovery.
-        </p>
-      </div>
+      <MctbCallout icon={Phone} title="After testing">
+        Verify carrier forwarding in{" "}
+        <Link href={MCTB_ROUTES.setupPhone} className="font-semibold text-primary hover:underline">
+          Phone & Forwarding
+        </Link>
+        . Review consent and message copy before activating recovery.
+      </MctbCallout>
     </MctbSetupSectionLayout>
   );
 }
