@@ -7,6 +7,11 @@ import { chromium, request } from "playwright";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import dotenv from "dotenv";
+import {
+  getServerGuard,
+  isServerConnectionError,
+  TestEnvironmentUnavailableError,
+} from "./server-guard";
 
 for (const file of [".env.local", ".env"]) {
   const p = join(process.cwd(), file);
@@ -20,6 +25,8 @@ export type CertStatus =
   | "BLOCKED — LIVE PSTN"
   | "BLOCKED — LIVE MEDIA"
   | "BLOCKED — LIVE EXTERNAL PROVIDER"
+  | "BLOCKED — TEST ENVIRONMENT UNAVAILABLE"
+  | "INVALID RESULT — LOCAL CERT SERVER OOM"
   | "NOT IMPLEMENTED"
   | "INTENTIONALLY DEFERRED"
   | "SKIPPED";
@@ -36,8 +43,15 @@ export type BrowserCertState = {
   startedAt: string;
   updatedAt: string;
   baseUrl: string;
+  provenance?: {
+    gitCommitSha: string;
+    deployCommitSha: string;
+    provenanceVerified: boolean;
+  };
   results: Record<string, CertResult>;
   batchesCompleted: string[];
+  environmentBlocked?: boolean;
+  environmentBlockedReason?: string;
 };
 
 export const CERT_DIR = join(process.cwd(), "docs/certification");
@@ -49,6 +63,7 @@ export const ARTIFACTS_DIR =
 export const NAV_TIMEOUT = Number(process.env.BROWSER_CERT_NAV_TIMEOUT_MS || 30_000);
 export const ACTION_TIMEOUT = Number(process.env.BROWSER_CERT_ACTION_TIMEOUT_MS || 20_000);
 export const FLOW_TIMEOUT = Number(process.env.BROWSER_CERT_FLOW_TIMEOUT_MS || 90_000);
+export const ROUTE_PAUSE_MS = Number(process.env.BROWSER_CERT_ROUTE_PAUSE_MS || 1500);
 export const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 
 export const ERROR_PATTERNS = [
@@ -90,9 +105,11 @@ export function recordResult(
       ? "✓"
       : status.startsWith("BLOCKED")
         ? "⊘"
-        : status === "NOT IMPLEMENTED" || status === "INTENTIONALLY DEFERRED"
-          ? "—"
-          : "✗";
+        : status === "INVALID RESULT — LOCAL CERT SERVER OOM"
+          ? "○"
+          : status === "NOT IMPLEMENTED" || status === "INTENTIONALLY DEFERRED"
+            ? "—"
+            : "✗";
   console.log(`${icon} ${id}: ${status}${detail ? ` — ${detail}` : ""}`);
 }
 
@@ -123,7 +140,10 @@ export async function authenticate(baseUrl: string): Promise<{
   storageState: Awaited<ReturnType<BrowserContext["storageState"]>>;
   email: string;
 }> {
-  const api = await request.newContext({ baseURL: baseUrl });
+  const api = await request.newContext({
+    baseURL: baseUrl,
+    timeout: Number(process.env.BROWSER_CERT_API_TIMEOUT_MS || 120_000),
+  });
   const useDevBypass =
     process.env.DEV_AUTH_BYPASS?.trim() === "1" ||
     process.env.DEV_AUTH_BYPASS?.trim()?.toLowerCase() === "true";
@@ -147,6 +167,22 @@ export async function authenticate(baseUrl: string): Promise<{
     `appt-mctb-browser-${Date.now().toString(36)}@transovo.test`;
   const password = process.env.CERT_BROWSER_PASSWORD || `BrowserCert_${Date.now().toString(36)}!`;
 
+  const stableEmail = process.env.CERT_BROWSER_EMAIL || "appt-mctb-browser@transovo.test";
+  const stablePassword = process.env.CERT_BROWSER_PASSWORD || "ApptMctbBrowserCert_v1!";
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const login = await api.post("/api/auth/login", {
+      data: { email: stableEmail, password: stablePassword, next: "/appointments/overview" },
+    });
+    const loginBody = await login.json().catch(() => ({}));
+    if (login.ok() && !loginBody.error) {
+      const storageState = await api.storageState();
+      await api.dispose();
+      return { ok: true, storageState, email: stableEmail };
+    }
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 3000));
+  }
+
   const signup = await api.post("/api/auth/smoke-signup", {
     headers: { "x-smoke-bootstrap": BOOTSTRAP },
     data: {
@@ -168,30 +204,37 @@ export async function authenticate(baseUrl: string): Promise<{
 export async function visitRoute(
   page: Page,
   path: string,
-  opts: { allow404?: boolean } = {},
+  opts: { allow404?: boolean; navTimeout?: number } = {},
 ): Promise<{ ok: boolean; status: number; note: string }> {
-  try {
-    const resp = await page.goto(path, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT });
-    await page.waitForTimeout(300);
-    const body = await page.locator("body").innerText().catch(() => "");
-    const status = resp?.status() || 0;
-    if (!opts.allow404 && (status === 404 || /could not be found/i.test(body))) {
-      return { ok: false, status, note: "404" };
+  const timeout = opts.navTimeout ?? NAV_TIMEOUT;
+  getServerGuard()?.assertHealthy(path);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await page.goto(path, { waitUntil: "domcontentloaded", timeout });
+      await page.waitForTimeout(300);
+      const body = await page.locator("body").innerText().catch(() => "");
+      const status = resp?.status() || 0;
+      if (!opts.allow404 && (status === 404 || /could not be found/i.test(body))) {
+        return { ok: false, status, note: "404" };
+      }
+      if (status >= 500 || ERROR_PATTERNS.some((re) => re.test(body))) {
+        return { ok: false, status, note: `HTTP ${status} or error page` };
+      }
+      if (page.url().includes("/login")) {
+        return { ok: false, status, note: "redirected to login" };
+      }
+      return { ok: true, status, note: "" };
+    } catch (err) {
+      if (err instanceof TestEnvironmentUnavailableError) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt === 0 && /Timeout/i.test(msg) && !isServerConnectionError(msg)) {
+        await page.waitForTimeout(2000);
+        continue;
+      }
+      return { ok: false, status: 0, note: msg };
     }
-    if (status >= 500 || ERROR_PATTERNS.some((re) => re.test(body))) {
-      return { ok: false, status, note: `HTTP ${status} or error page` };
-    }
-    if (page.url().includes("/login")) {
-      return { ok: false, status, note: "redirected to login" };
-    }
-    return { ok: true, status, note: "" };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      note: err instanceof Error ? err.message : String(err),
-    };
   }
+  return { ok: false, status: 0, note: "unreachable after retry" };
 }
 
 export async function failureScreenshot(page: Page, name: string) {
@@ -254,12 +297,37 @@ export async function runCertCase(
   }
   try {
     await withFlowTimeout(id, FLOW_TIMEOUT, fn);
+    getServerGuard()?.recordNavigationSuccess();
     recordResult(state, batchId, id, "PASS");
   } catch (err) {
+    if (err instanceof TestEnvironmentUnavailableError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     const status: CertStatus = msg.startsWith("TIMEOUT:") ? "TIMEOUT" : "FAIL";
     await failureScreenshot(page, `${id}-${status}`);
     recordResult(state, batchId, id, status, msg.slice(0, 500));
+    if (isServerConnectionError(msg)) {
+      getServerGuard()?.recordConnectionFailure(msg);
+    }
+  }
+}
+
+/** Preflight only — verify env, provenance, and deployed health without launching Chromium. */
+export async function browserCertPreflight(): Promise<{ ok: boolean; message: string }> {
+  const { resolveCertBaseUrl, verifyDeployProvenance, waitForDeployedApp } = await import(
+    "./server-guard"
+  );
+  try {
+    const baseUrl = resolveCertBaseUrl();
+    const provenance = verifyDeployProvenance();
+    if (!waitForDeployedApp(baseUrl, 30_000)) {
+      return { ok: false, message: `Deployed app not reachable at ${baseUrl}` };
+    }
+    return {
+      ok: true,
+      message: `OK — ${baseUrl} · git ${provenance.gitCommitSha.slice(0, 7)} · deploy ${provenance.deployCommitSha.slice(0, 7)}`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -267,13 +335,23 @@ export async function visitRoutesBatch(
   state: BrowserCertState,
   batchId: string,
   page: Page,
-  routes: Array<{ id: string; path: string; allow404?: boolean }>,
+  routes: Array<{ id: string; path: string; allow404?: boolean; navTimeout?: number }>,
 ) {
   for (const r of routes) {
-    await runCertCase(state, batchId, r.id, page, async () => {
-      const v = await visitRoute(page, r.path, { allow404: r.allow404 });
-      if (!v.ok) throw new Error(`${r.path}: ${v.note}`);
-    });
+    try {
+      getServerGuard()?.assertHealthy(r.path);
+      await runCertCase(state, batchId, r.id, page, async () => {
+        const v = await visitRoute(page, r.path, { allow404: r.allow404, navTimeout: r.navTimeout });
+        if (!v.ok) throw new Error(`${r.path}: ${v.note}`);
+      });
+    } catch (err) {
+      if (err instanceof TestEnvironmentUnavailableError) {
+        console.error(`\n⛔ ${err.message}`);
+        throw err;
+      }
+      throw err;
+    }
+    await page.waitForTimeout(ROUTE_PAUSE_MS);
   }
 }
 
@@ -287,6 +365,8 @@ export function generateResultsMarkdown(state: BrowserCertState): string {
     "",
     `**Updated:** ${state.updatedAt}`,
     `**Base URL:** ${state.baseUrl}`,
+    `**Provenance:** git \`${state.provenance?.gitCommitSha ?? "?"}\` · deploy \`${state.provenance?.deployCommitSha ?? "?"}\``,
+    "",
     `**State file:** \`docs/certification/appointments-mctb-browser-cert-state.json\``,
     "",
     "## Summary",

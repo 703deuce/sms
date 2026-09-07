@@ -1,27 +1,35 @@
 /**
  * Appointments + MCTB front-end browser certification runner.
  *
- * Resource-constrained: one browser, one page/tab, serial batches, no parallel workers.
- * Does NOT rerun backend/unit certification.
+ * HARD RULE: runs only against a deployed preview/staging URL (BROWSER_CERT_BASE_URL).
+ * Does NOT start local next dev, Turbopack, or any app server on the Cloud Agent VM.
  *
  * Usage:
- *   npm run cert:appointments-mctb-browser
- *   npm run cert:appointments-mctb-browser -- --from 3 --continue-on-fail
- *   npm run cert:appointments-mctb-browser -- --fresh
- *   BROWSER_CERT_BASE_URL=http://localhost:3000 npm run cert:appointments-mctb-browser
+ *   BROWSER_CERT_BASE_URL=https://preview.example.com \
+ *   BROWSER_CERT_DEPLOY_SHA=$(git rev-parse HEAD) \
+ *   npm run cert:appointments-mctb-browser -- --only BATCH-01 --retest
  */
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Browser, Page } from "playwright";
 import { BATCHES } from "./browser-cert/batches";
+import { writeProvenance } from "./browser-cert/provenance";
 import {
-  ARTIFACTS_DIR,
-  authenticate,
+  resolveCertBaseUrl,
+  ServerGuard,
+  setServerGuard,
+  TestEnvironmentUnavailableError,
+  verifyDeployProvenance,
+  waitForDeployedApp,
+} from "./browser-cert/server-guard";
+import {
   attachConsoleCapture,
+  authenticate,
+  browserCertPreflight,
   generateResultsMarkdown,
   launchBrowser,
   loadState,
+  recordResult,
   RESULTS_MD,
   saveState,
   successScreenshot,
@@ -34,91 +42,89 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const fromIdx = args.indexOf("--from");
   const from = fromIdx >= 0 ? Number(args[fromIdx + 1]) : 1;
+  const onlyIdx = args.indexOf("--only");
+  const only = onlyIdx >= 0 ? String(args[onlyIdx + 1]) : null;
   const fresh = args.includes("--fresh");
+  const retest = args.includes("--retest");
   const continueOnFail = args.includes("--continue-on-fail");
-  const noServer = args.includes("--no-server");
-  const stopServer = args.includes("--stop-server");
-  return { from, fresh, continueOnFail, noServer, stopServer };
+  const preflight = args.includes("--preflight");
+  return { from, only, fresh, retest, continueOnFail, preflight };
 }
 
-function isPortFree(port: number): boolean {
-  const r = spawnSync("bash", ["-c", `ss -tln | grep -q ':${port} ' && echo busy || echo free`], {
-    encoding: "utf8",
-  });
-  return r.stdout?.trim() === "free";
-}
-
-function waitForServer(baseUrl: string, maxMs = 180_000): boolean {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    try {
-      const r = spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", `${baseUrl}/`], {
-        encoding: "utf8",
-      });
-      const code = r.stdout?.trim();
-      if (code && code !== "000" && Number(code) < 500) return true;
-    } catch {
-      /* retry */
-    }
-    spawnSync("sleep", ["3"]);
-  }
-  return false;
-}
-
-function startDevServer(): boolean {
-  if (!isPortFree(3000)) {
-    console.log("Port 3000 already in use — reusing existing server");
-    return true;
-  }
-  const cmd = `cd ${ROOT} && DEV_AUTH_BYPASS=1 npm run dev -- -p 3000`;
-  spawnSync("tmux", [
-    "-f",
-    "/exec-daemon/tmux.portal.conf",
-    "new-session",
-    "-d",
-    "-s",
-    "browser-cert-dev",
-    cmd,
-  ]);
-  return waitForServer("http://127.0.0.1:3000");
-}
-
-function stopDevServer() {
-  spawnSync("tmux", ["-f", "/exec-daemon/tmux.portal.conf", "kill-session", "-t", "browser-cert-dev"], {
-    stdio: "ignore",
-  });
+function markEnvironmentBlocked(state: BrowserCertState, batchId: string, reason: string) {
+  state.environmentBlocked = true;
+  state.environmentBlockedReason = reason;
+  recordResult(state, batchId, "ENV-UNAVAILABLE", "BLOCKED — TEST ENVIRONMENT UNAVAILABLE", reason);
+  saveState(state);
 }
 
 async function runBatches() {
-  const { from, fresh, continueOnFail, noServer, stopServer } = parseArgs();
-  const baseUrl = (process.env.BROWSER_CERT_BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
+  const { from, only, fresh, retest, continueOnFail, preflight } = parseArgs();
 
-  let startedServer = false;
-  if (!noServer && !process.env.BROWSER_CERT_BASE_URL) {
-    startedServer = startDevServer();
-    if (!startedServer) {
-      console.error("Failed to start dev server on port 3000");
-      process.exit(1);
-    }
-  } else if (!waitForServer(baseUrl, 30_000)) {
-    console.error(`Server not reachable at ${baseUrl}`);
+  if (preflight) {
+    const r = await browserCertPreflight();
+    console.log(r.message);
+    process.exit(r.ok ? 0 : 1);
+  }
+
+  let baseUrl: string;
+  let provenance: ReturnType<typeof verifyDeployProvenance>;
+  try {
+    baseUrl = resolveCertBaseUrl();
+    provenance = verifyDeployProvenance();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
     process.exit(1);
   }
 
+  const startedAt = new Date().toISOString();
+  writeProvenance({
+    recordedAt: startedAt,
+    certificationStartedAt: startedAt,
+    baseUrl,
+    gitCommitSha: provenance.gitCommitSha,
+    deployCommitSha: provenance.deployCommitSha,
+    provenanceVerified: provenance.provenanceOk,
+  });
+
+  console.log("Browser certification provenance:");
+  console.log(`  base URL:      ${baseUrl}`);
+  console.log(`  git SHA:       ${provenance.gitCommitSha}`);
+  console.log(`  deploy SHA:    ${provenance.deployCommitSha}`);
+  console.log(`  started:       ${startedAt}`);
+
+  if (!waitForDeployedApp(baseUrl)) {
+    console.error(`Deployed application not reachable at ${baseUrl} (/api/health or /)`);
+    process.exit(1);
+  }
+
+  const guard = new ServerGuard({ baseUrl, consecutiveFailureLimit: 2 });
+  setServerGuard(guard);
+
   let state: BrowserCertState = fresh
     ? {
-        startedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        startedAt,
+        updatedAt: startedAt,
         baseUrl,
+        provenance: {
+          gitCommitSha: provenance.gitCommitSha,
+          deployCommitSha: provenance.deployCommitSha,
+          provenanceVerified: true,
+        },
         results: {},
         batchesCompleted: [],
       }
     : loadState();
   state.baseUrl = baseUrl;
+  state.provenance = {
+    gitCommitSha: provenance.gitCommitSha,
+    deployCommitSha: provenance.deployCommitSha,
+    provenanceVerified: true,
+  };
 
   const auth = await authenticate(baseUrl);
   if (!auth.ok) {
-    console.error("Authentication failed — set DEV_AUTH_BYPASS=1 or ensure smoke-signup works");
+    console.error("Authentication failed — configure CERT_BROWSER_EMAIL/PASSWORD on the preview deployment");
     process.exit(1);
   }
   console.log(`Authenticated as ${auth.email}`);
@@ -136,19 +142,50 @@ async function runBatches() {
     page = await context.newPage();
     attachConsoleCapture(page);
 
-    const startIdx = Math.max(0, from - 1);
-    for (let i = startIdx; i < BATCHES.length; i++) {
+    const startIdx = only
+      ? Math.max(0, BATCHES.findIndex((b) => b.id === only))
+      : Math.max(0, from - 1);
+    if (only && startIdx < 0) {
+      console.error(`Unknown batch: ${only}. Use BATCH-01 … BATCH-${String(BATCHES.length).padStart(2, "0")}`);
+      process.exit(1);
+    }
+    const endIdx = only ? startIdx + 1 : BATCHES.length;
+
+    for (let i = startIdx; i < endIdx; i++) {
       const batch = BATCHES[i];
-      if (state.batchesCompleted.includes(batch.id) && !fresh) {
-        console.log(`\n=== Skip ${batch.id} (already checkpointed) ===`);
+      if (state.batchesCompleted.includes(batch.id) && !fresh && !retest) {
+        console.log(`\n=== Skip ${batch.id} (already checkpointed — use --retest to rerun) ===`);
         continue;
+      }
+
+      if (retest && batch.id) {
+        for (const [key, result] of Object.entries(state.results)) {
+          if (result.batchId === batch.id) delete state.results[key];
+        }
+        state.batchesCompleted = state.batchesCompleted.filter((id) => id !== batch.id);
       }
 
       console.log(`\n=== ${batch.id}: ${batch.title} ===`);
       try {
+        guard.assertHealthy(batch.id);
+      } catch (err) {
+        if (err instanceof TestEnvironmentUnavailableError) {
+          markEnvironmentBlocked(state, batch.id, err.message);
+          process.exitCode = 1;
+          break;
+        }
+        throw err;
+      }
+
+      try {
         await batch.run({ state, page, batchId: batch.id });
         await successScreenshot(page, batch.id);
       } catch (err) {
+        if (err instanceof TestEnvironmentUnavailableError) {
+          markEnvironmentBlocked(state, batch.id, err.message);
+          process.exitCode = 1;
+          break;
+        }
         console.error(`Batch ${batch.id} error:`, err);
         if (!continueOnFail) {
           saveState(state);
@@ -161,28 +198,32 @@ async function runBatches() {
       }
       saveState(state);
 
-      // Memory hygiene between batches
+      if (only) {
+        console.log(`\nCompleted single batch: ${batch.id}`);
+        break;
+      }
+
       await page.goto("/appointments/overview", { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(
         () => page!.goto("/mctb", { waitUntil: "domcontentloaded" }).catch(() => {}),
       );
       await page.waitForTimeout(300);
     }
 
-    const md = generateResultsMarkdown(state);
-    const { writeFileSync, mkdirSync } = await import("node:fs");
     mkdirSync(join(ROOT, "docs/certification"), { recursive: true });
-    writeFileSync(RESULTS_MD, md);
+    writeFileSync(RESULTS_MD, generateResultsMarkdown(state));
     console.log(`\nWrote ${RESULTS_MD}`);
 
-    const fails = Object.values(state.results).filter((r) => r.status === "FAIL" || r.status === "TIMEOUT");
+    const fails = Object.values(state.results).filter(
+      (r) => r.status === "FAIL" || r.status === "TIMEOUT",
+    );
     if (fails.length) {
       console.error(`\n${fails.length} FAIL/TIMEOUT — see ${RESULTS_MD}`);
       process.exitCode = 1;
     }
   } finally {
+    setServerGuard(null);
     if (page) await page.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
-    if (startedServer && stopServer) stopDevServer();
   }
 }
 

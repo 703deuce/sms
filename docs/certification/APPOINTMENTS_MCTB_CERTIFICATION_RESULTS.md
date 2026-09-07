@@ -80,3 +80,24 @@ The original `APT-WF-03` batch was incorrectly blocked in full. The script name 
 Total matrix cases: **300**  
 Automated batch-mapped cases: **46** (after split/reclassify)  
 UI-deferred cases: separate browser pass per inventory
+
+## Browser certification (preview-only)
+
+**Architecture:** `docs/certification/BROWSER_CERT_STABILITY.md`
+
+Local `next dev` + Turbopack OOM on the Cloud Agent VM (~13–14 GB RSS) invalidated the first localhost run. Those cascade failures are reclassified as `INVALID RESULT — LOCAL CERT SERVER OOM` — **not product defects**.
+
+**Hard rule:** Browser cert runs only against a deployed Coolify preview/staging URL (`BROWSER_CERT_BASE_URL` + matching `BROWSER_CERT_DEPLOY_SHA`). The Cloud Agent runs Chromium + the test runner only.
+
+**Current browser state:** `docs/certification/appointments-mctb-browser-cert-state.json`  
+**Results:** `docs/certification/APPOINTMENTS_MCTB_BROWSER_CERT_RESULTS.md`
+
+| Status | Count (after OOM reclassify) |
+|--------|------------------------------|
+| PASS | 89 |
+| INVALID RESULT — LOCAL CERT SERVER OOM | 75 |
+| FAIL | 9 (pre-OOM localhost — review on preview rerun) |
+| BLOCKED (live PSTN/media/provider) | 6 |
+| NOT IMPLEMENTED / DEFERRED | 5 |
+
+**Next step:** Deploy this branch to Coolify preview, set env vars, run `npm run cert:appointments-mctb-browser:preflight`, then batches `BATCH-01` … `BATCH-14` with `--retest` / `--fresh`.

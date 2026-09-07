@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/artifacts/browser-cert/
 
 # next.js
 /.next/
