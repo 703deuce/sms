@@ -92,6 +92,70 @@ export function saveState(state: BrowserCertState) {
   writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+/** Results preserved across deploy/environment changes (not re-run automatically). */
+const PRESERVE_ACROSS_ENV_CHANGE: CertStatus[] = [
+  "BLOCKED — LIVE PSTN",
+  "BLOCKED — LIVE MEDIA",
+  "BLOCKED — LIVE EXTERNAL PROVIDER",
+  "BLOCKED — TEST ENVIRONMENT UNAVAILABLE",
+  "NOT IMPLEMENTED",
+  "INTENTIONALLY DEFERRED",
+  "SKIPPED",
+];
+
+function isLocalCertUrl(url: string): boolean {
+  return /localhost|127\.0\.0\.1/i.test(url);
+}
+
+export type ProvenanceReconcileResult = {
+  cleared: number;
+  reason: string | null;
+  priorBaseUrl: string;
+  priorDeploySha: string | null;
+};
+
+/**
+ * Drop PASS/FAIL/INVALID/etc. when base URL or deploy SHA changes.
+ * Localhost pre-OOM PASS results are never carried forward to preview certification.
+ */
+export function reconcileStateProvenance(
+  state: BrowserCertState,
+  baseUrl: string,
+  deployCommitSha: string,
+): ProvenanceReconcileResult {
+  const priorBaseUrl = state.baseUrl || "";
+  const priorDeploySha = state.provenance?.deployCommitSha ?? null;
+  const sameUrl = priorBaseUrl.replace(/\/$/, "") === baseUrl.replace(/\/$/, "");
+  const sameSha =
+    priorDeploySha !== null &&
+    priorDeploySha.toLowerCase() === deployCommitSha.toLowerCase();
+
+  const fromLocalhost = isLocalCertUrl(priorBaseUrl);
+  const envChanged = !sameUrl || !sameSha || fromLocalhost;
+
+  if (!envChanged || Object.keys(state.results).length === 0) {
+    return { cleared: 0, reason: null, priorBaseUrl, priorDeploySha };
+  }
+
+  let cleared = 0;
+  for (const [id, result] of Object.entries(state.results)) {
+    if (PRESERVE_ACROSS_ENV_CHANGE.includes(result.status)) continue;
+    delete state.results[id];
+    cleared += 1;
+  }
+  state.batchesCompleted = [];
+  state.environmentBlocked = false;
+  state.environmentBlockedReason = undefined;
+
+  const reason = fromLocalhost
+    ? "prior run used localhost — preview certification requires a full rerun at the same deploy SHA"
+    : !sameSha
+      ? `deploy SHA changed (${priorDeploySha?.slice(0, 7) ?? "?"} → ${deployCommitSha.slice(0, 7)})`
+      : `base URL changed (${priorBaseUrl} → ${baseUrl})`;
+
+  return { cleared, reason, priorBaseUrl, priorDeploySha };
+}
+
 export function recordResult(
   state: BrowserCertState,
   batchId: string,

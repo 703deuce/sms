@@ -29,6 +29,7 @@ import {
   generateResultsMarkdown,
   launchBrowser,
   loadState,
+  reconcileStateProvenance,
   recordResult,
   RESULTS_MD,
   saveState,
@@ -121,6 +122,17 @@ async function runBatches() {
     deployCommitSha: provenance.deployCommitSha,
     provenanceVerified: true,
   };
+
+  const reconcile = reconcileStateProvenance(state, baseUrl, provenance.deployCommitSha);
+  if (reconcile.cleared > 0) {
+    console.log(
+      `\nProvenance reconcile: cleared ${reconcile.cleared} stale results (${reconcile.reason}).`,
+    );
+    console.log(
+      "Prior PASS from localhost or a different deploy are not valid for final certification — rerunning on preview.",
+    );
+    saveState(state);
+  }
 
   const auth = await authenticate(baseUrl);
   if (!auth.ok) {

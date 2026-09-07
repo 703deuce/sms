@@ -64,6 +64,32 @@ Written to `docs/certification/appointments-mctb-browser-cert-provenance.json`:
 
 Cert **aborts** if git SHA ≠ deploy SHA.
 
+## Final certification rule (same SHA)
+
+**Do not treat prior PASS results as sufficient for go-live** unless they were recorded against the **same deploy SHA and preview base URL** you are certifying.
+
+- The 89 localhost pre-OOM PASS results are **not** carried forward when you switch to preview — the runner clears them automatically.
+- The 75 `INVALID RESULT — LOCAL CERT SERVER OOM` and 9 pre-OOM FAILs must be **rerun on preview**.
+- `BLOCKED — LIVE PSTN/MEDIA` cases are preserved (they require live provider smoke, not preview UI).
+
+On first preview run after localhost, you do **not** need `--fresh` — provenance reconcile clears stale results when `BROWSER_CERT_BASE_URL` or `BROWSER_CERT_DEPLOY_SHA` changes.
+
+## Preview first-run checklist
+
+1. Deploy commit `80dc8ea2` (or current HEAD) to Coolify preview/staging.
+2. Seed cert user on preview DB: `npm run seed:appointments-mctb-browser-cert` (on preview host or against preview `DATABASE_URL`).
+3. Set env: `BROWSER_CERT_BASE_URL`, `BROWSER_CERT_DEPLOY_SHA`, `CERT_BROWSER_EMAIL`, `CERT_BROWSER_PASSWORD`.
+4. Preflight: `npm run cert:appointments-mctb-browser:preflight`
+5. Run full matrix: batches `BATCH-01` … `BATCH-14` (checkpoint after each batch).
+
+```bash
+BROWSER_CERT_BASE_URL=https://preview.example.com \
+BROWSER_CERT_DEPLOY_SHA=80dc8ea2 \
+  npm run cert:appointments-mctb-browser -- --only BATCH-01
+```
+
+Repeat `--only BATCH-02` … `BATCH-14`, or run without `--only` for sequential execution.
+
 ## Server health circuit breaker
 
 Before each batch:

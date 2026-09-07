@@ -100,4 +100,6 @@ Local `next dev` + Turbopack OOM on the Cloud Agent VM (~13–14 GB RSS) invalid
 | BLOCKED (live PSTN/media/provider) | 6 |
 | NOT IMPLEMENTED / DEFERRED | 5 |
 
-**Next step:** Deploy this branch to Coolify preview, set env vars, run `npm run cert:appointments-mctb-browser:preflight`, then batches `BATCH-01` … `BATCH-14` with `--retest` / `--fresh`.
+**Next step:** Deploy this branch to Coolify preview, set env vars, run `npm run cert:appointments-mctb-browser:preflight`, then batches `BATCH-01` … `BATCH-14`.
+
+**Final certification:** Prior localhost PASS (89) are **not** valid for go-live — the runner auto-clears them on first preview run when URL/SHA changes. Rerun all flows on preview at the same deploy SHA (`80dc8ea2` or current HEAD).
