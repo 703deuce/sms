@@ -8,7 +8,7 @@
 
 **Prerequisite:** `docs/TRANSOVO-MCTB-PRODUCT-SCOPE-AND-DOMAIN-RULES.md` + `docs/TRANSOVO-MCTB-INFORMATION-ARCHITECTURE-AND-NAVIGATION-MAP.md` + `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md`  
 **Cursor rule:** `.cursor/rules/transovo-mctb-canonical.mdc`  
-**Read order:** Product scope → IA/navigation map → page manifest → this map → all `transovo-*.mdc` standards — before any MCTB UI, API, backend, or runtime change.
+**Read order:** Product scope → IA/navigation map → page manifest → this map → page build spec (per route) → all `transovo-*.mdc` standards — before any MCTB UI, API, backend, or runtime change.
 
 ---
 

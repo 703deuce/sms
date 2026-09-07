@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA map → page manifest → canonical map (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
+**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA map → page manifest → canonical map → page build specs (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
@@ -58,7 +58,18 @@ Defines every required route, page, major section, state, cross-link, and legacy
 **Cursor rule:** `.cursor/rules/transovo-mctb-canonical.mdc` (`alwaysApply: true`)  
 **Full map:** `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md`
 
-Before any MCTB UI, API, `src/lib/mctb/`, or runtime change: read product scope **first**, then IA map, then page manifest, then canonical map, then all Transovo standards. Screenshots and current pages are evidence only — not product or IA authority.
+Before any MCTB UI, API, `src/lib/mctb/`, or runtime change: read product scope **first**, then IA map, then page manifest, then canonical map, then the **page build spec** for the route being built, then all Transovo standards. Screenshots and current pages are evidence only — not product or IA authority.
+
+**5. Page-by-page build specs (implementation)**  
+**Cursor rules:** `.cursor/rules/transovo-mctb-page-build-specs.mdc` + per-page rules (`alwaysApply: true`)  
+**Index:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md`
+
+Screen-by-screen implementation authority. When building a page, read its spec:
+
+| # | Page | Route | Spec |
+|---|------|-------|------|
+| 01 | Overview | `/mctb` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md` |
+| 02 | Missed Calls List | `/mctb/missed-calls` | *(pending)* |
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

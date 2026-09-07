@@ -21,6 +21,7 @@ Paths include (not exhaustive): `src/components/mctb/**`, `src/app/**/voice/**`,
 2. **`docs/TRANSOVO-MCTB-INFORMATION-ARCHITECTURE-AND-NAVIGATION-MAP.md` — this rule** (where everything lives)
 3. `docs/TRANSOVO-MCTB-PAGE-INVENTORY-AND-ROUTE-MANIFEST.md` — completeness (every page, route, state)
 4. `docs/TRANSOVO-MCTB-CANONICAL-PRODUCT-MAP.md` — domain model, lifecycle, page specs
+5. `docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md` + route-specific spec — screen implementation
 4. All Transovo standards (`transovo-*.mdc`)
 5. Existing code and screenshots — evidence only
 
