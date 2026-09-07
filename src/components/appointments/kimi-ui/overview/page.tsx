@@ -1,14 +1,15 @@
 "use client";
 
-import { Calendar, ChevronDown } from 'lucide-react';
-import StatCards from './components/StatCards';
-import TodaysSchedule from './components/TodaysSchedule';
-import BookingsChart from './components/BookingsChart';
-import RecentConversations from './components/RecentConversations';
-import NeedsAttention from './components/NeedsAttention';
-import QuickActions from './components/QuickActions';
-import type { OverviewPageActions, OverviewPageModel } from '@/features/appointments/kimi/overview/types';
-import './reference.css';
+import { Calendar, ChevronDown } from "lucide-react";
+import StatCards from "./components/StatCards";
+import TodaysSchedule from "./components/TodaysSchedule";
+import BookingsChart from "./components/BookingsChart";
+import RecentConversations from "./components/RecentConversations";
+import NeedsAttention from "./components/NeedsAttention";
+import QuickActions from "./components/QuickActions";
+import type { OverviewPageActions, OverviewPageModel } from "@/features/appointments/kimi/overview/types";
+import { RefDecoPageHeader } from "../shared/ref-deco-patterns";
+import "./reference.css";
 
 type Props = {
   model: OverviewPageModel;
@@ -18,23 +19,21 @@ type Props = {
 
 export default function OverviewView({ model, actions, copied }: Props) {
   return (
-    <div className="ref-root min-h-full bg-[#f7f8fb] px-7 pb-10 pt-6 font-sans">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-[26px] font-bold tracking-tight text-gray-900">
-            Overview <span className="text-[22px]">👋</span>
-          </h1>
-          <p className="mt-1 text-[13.5px] text-gray-500">Here&apos;s what&apos;s happening with your appointments today.</p>
-        </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-        >
-          <Calendar size={15} className="text-gray-500" />
-          {model.dateLabel}
-          <ChevronDown size={14} className="text-gray-400" />
-        </button>
-      </div>
+    <div className="ref-root min-h-full px-7 pb-10 pt-6 font-sans">
+      <RefDecoPageHeader
+        title="Overview"
+        description="Here's what's happening with your appointments today."
+        action={
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <Calendar size={15} className="text-gray-500" aria-hidden />
+            {model.dateLabel}
+            <ChevronDown size={14} className="text-gray-400" aria-hidden />
+          </button>
+        }
+      />
 
       <StatCards stats={model.stats} />
 

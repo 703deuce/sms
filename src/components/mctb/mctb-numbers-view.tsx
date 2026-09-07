@@ -1,5 +1,6 @@
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
+import { MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import "./kimi-ui/reference.css";
 
 type NumberRow = {
@@ -25,32 +26,28 @@ export function MctbNumbersView({ numbers }: { numbers: NumberRow[] }) {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner max-w-4xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="font-display text-[22px] font-semibold tracking-tight text-foreground">
-              Numbers
-            </h1>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-              Business lines and text-back senders used for missed-call recovery.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/numbers/buy"
-              className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              Add number
-            </Link>
-            <Link
-              href={MCTB_ROUTES.numbers}
-              className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              Refresh list
-            </Link>
-          </div>
-        </div>
+        <MctbPageHeader
+          title="Numbers"
+          description="Business lines and text-back senders used for missed-call recovery."
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/numbers/buy"
+                className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-[0_4px_14px_rgba(79,70,229,0.25)] hover:bg-primary/90"
+              >
+                Add number
+              </Link>
+              <Link
+                href={MCTB_ROUTES.numbers}
+                className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Refresh list
+              </Link>
+            </div>
+          }
+        />
 
-        <div className="ref-card mt-6 overflow-hidden p-0">
+        <div className="ref-deco-table-wrap mt-6">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-border bg-muted/30 text-muted-foreground">
               <tr>

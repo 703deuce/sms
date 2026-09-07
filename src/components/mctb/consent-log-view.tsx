@@ -7,6 +7,11 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
+import {
+  MctbCallout,
+  MctbPageHeader,
+} from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import { Info } from "lucide-react";
 import "./kimi-ui/reference.css";
 
 type ConsentLogEvent = {
@@ -130,45 +135,45 @@ export function MctbConsentLogView() {
   return (
     <div className="mctb-page">
       <div className="mctb-page-inner max-w-5xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
-              ← Setup
-            </Link>
-            <h1 className="mt-2 font-display text-[22px] font-semibold tracking-tight text-foreground">
-              Consent history
-            </h1>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-              Durable record of callers who pressed 1 to receive a text back — for audit and compliance review.
-            </p>
-          </div>
-          <Link
-            href={MCTB_ROUTES.setupConsent}
-            className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            Consent settings
-          </Link>
+        <Link href={MCTB_ROUTES.setup} className="text-[13px] font-semibold text-indigo-600 hover:underline">
+          ← Setup
+        </Link>
+        <div className="mt-2">
+          <MctbPageHeader
+            title="Consent history"
+            description="Durable record of callers who pressed 1 to receive a text back — for audit and compliance review."
+            action={
+              <Link
+                href={MCTB_ROUTES.setupConsent}
+                className="inline-flex h-10 shrink-0 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Consent settings
+              </Link>
+            }
+          />
         </div>
 
-        <div className="ref-card mt-6 border-indigo-100 bg-indigo-50/40 p-4 text-[13px] text-indigo-950">
-          <p className="font-semibold">What this log proves</p>
-          <p className="mt-1 text-indigo-900/90">
+        <div className="mt-2">
+          <MctbCallout icon={Info} title="What this log proves">
             Each row separates the consenting caller, the customer business number called, and the
             Transovo ingress number. If the original caller cannot be proven from signaling, the
             consenter is marked unavailable rather than recording a business line as the caller.
-          </p>
+          </MctbCallout>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {statCards.map((stat) => (
-            <div key={stat.label} className="ref-card px-5 py-4">
+          {statCards.map((stat, i) => (
+            <div
+              key={stat.label}
+              className={`ref-deco-kpi px-5 py-4 ref-deco-kpi--${["purple", "blue", "green"][i]}`}
+            >
               <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
               <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="ref-card mt-4 p-4">
+        <div className="ref-deco-control-bar mt-4 p-4">
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-[12px] font-medium text-muted-foreground">Filter by caller</span>
@@ -187,10 +192,12 @@ export function MctbConsentLogView() {
         </div>
 
         {error ? (
-          <div className="ref-card mt-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
+          <div className="ref-deco-section ref-deco-section--tint-amber mt-4 border-rose-200 p-4 text-sm text-rose-900">
+            {error}
+          </div>
         ) : null}
 
-        <div className="ref-card mt-4 overflow-hidden p-0">
+        <div className="ref-deco-table-wrap mt-4">
           {loading ? (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">Loading…</div>
           ) : events.length === 0 ? (

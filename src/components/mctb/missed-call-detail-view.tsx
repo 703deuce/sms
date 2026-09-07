@@ -13,6 +13,11 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  MctbPageHeader,
+  MctbSectionPanel,
+  MctbStatusBadge,
+} from "@/components/mctb/kimi-ui/mctb-premium-patterns";
 import "./kimi-ui/reference.css";
 
 type TimelineStep = {
@@ -228,24 +233,31 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         <Link href={backHref} className="text-[13px] font-semibold text-indigo-600 hover:underline">
           ← Missed Calls
         </Link>
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-[22px] font-bold text-gray-900">{callerLabel}</h1>
-            <p className="mt-1 text-[13px] text-gray-500">
-              Missed call · {event.detectedAt ? fmtDateTime(String(event.detectedAt)) : "—"} · Called{" "}
-              {fmtPhone(String(event.businessE164 || ""))}
-            </p>
-            <p className="mt-2 text-sm font-semibold text-gray-800">
-              {primaryStatusLabel(status, suppressionReason)}
-            </p>
-          </div>
-          {primaryAction}
+        <div className="mt-3">
+          <MctbPageHeader
+            title={callerLabel}
+            description={`Missed call · ${event.detectedAt ? fmtDateTime(String(event.detectedAt)) : "—"} · Called ${fmtPhone(String(event.businessE164 || ""))}`}
+            badge={
+              <MctbStatusBadge
+                tone={
+                  status === "FAILED"
+                    ? "attention"
+                    : status === "SUPPRESSED"
+                      ? "suppressed"
+                      : status === "CUSTOMER_REPLIED"
+                        ? "active"
+                        : "ready"
+                }
+                label={primaryStatusLabel(status, suppressionReason)}
+              />
+            }
+            action={primaryAction}
+          />
         </div>
 
-      <div className="mt-6 space-y-4">
-      <div className="ref-card p-4">
-        <h2 className="text-sm font-semibold">Recovery lifecycle</h2>
-        <ol className="mt-3 space-y-2">
+      <div className="space-y-4">
+      <MctbSectionPanel title="Recovery lifecycle">
+        <ol className="space-y-2">
           {lifecycleSteps.map((step) => (
             <li key={step.label} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
               <span className="font-medium text-foreground">{step.label}</span>
@@ -256,10 +268,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </li>
           ))}
         </ol>
-      </div>
+      </MctbSectionPanel>
 
-      <div className="ref-card space-y-3 p-4">
-        <h2 className="text-sm font-semibold">Call details</h2>
+      <MctbSectionPanel title="Call details">
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Caller</dt>
@@ -288,15 +299,16 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </div>
           ) : null}
         </dl>
-      </div>
+      </MctbSectionPanel>
 
-      <div className="ref-card space-y-3 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Consent</h2>
+      <MctbSectionPanel
+        title="Consent"
+        action={
           <Link href={MCTB_ROUTES.complianceConsent} className="text-sm font-semibold text-primary hover:underline">
             View consent record
           </Link>
-        </div>
+        }
+      >
         {isPress1 ? (
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
             <div>
@@ -328,10 +340,9 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         ) : (
           <p className="text-sm text-muted-foreground">Consent status unavailable.</p>
         )}
-      </div>
+      </MctbSectionPanel>
 
-      <div className="ref-card space-y-3 p-4">
-        <h2 className="text-sm font-semibold">Text-back</h2>
+      <MctbSectionPanel title="Text-back">
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">
@@ -360,19 +371,20 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
             </p>
           ) : null}
         </dl>
-      </div>
+      </MctbSectionPanel>
 
       {voicemail ? (
-        <div className="ref-card space-y-3 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">Voicemail</h2>
+        <MctbSectionPanel
+          title="Voicemail"
+          action={
             <Link
               href={`${MCTB_ROUTES.voicemail}?id=${voicemail.id}`}
               className="text-sm font-semibold text-primary hover:underline"
             >
               Open voicemail
             </Link>
-          </div>
+          }
+        >
           <p className="text-sm text-muted-foreground">
             Left {fmtDateTime(voicemail.createdAt)}
             {voicemail.durationSeconds ? ` · ${voicemail.durationSeconds}s` : ""}
@@ -397,11 +409,10 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               Transcript {voicemail.transcriptStatus.replace(/_/g, " ")}
             </p>
           ) : null}
-        </div>
+        </MctbSectionPanel>
       ) : null}
 
-      <div className="ref-card space-y-3 p-4">
-        <h2 className="text-sm font-semibold">Conversation</h2>
+      <MctbSectionPanel title="Conversation">
         {conversation ? (
           <>
             <p className="text-sm text-muted-foreground">
@@ -422,22 +433,20 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
         ) : (
           <p className="text-sm text-muted-foreground">No reply yet.</p>
         )}
-      </div>
+      </MctbSectionPanel>
 
       {showCallBack && event.callerE164 ? (
-        <div className="ref-card space-y-3 p-4">
-          <h2 className="text-sm font-semibold">Call customer</h2>
+        <MctbSectionPanel title="Call customer">
           <BusinessCallBackButton
             destinationE164={String(event.callerE164)}
             contextType="missed_call"
             contextRefId={eventId}
           />
-        </div>
+        </MctbSectionPanel>
       ) : null}
 
       {linkClicks.length ? (
-        <div className="ref-card space-y-3 p-4">
-          <h2 className="text-sm font-semibold">Link activity</h2>
+        <MctbSectionPanel title="Link activity">
           <ul className="space-y-2 text-sm">
             {linkClicks.map((click) => (
               <li key={click.id} className="flex justify-between gap-3">
@@ -448,12 +457,11 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               </li>
             ))}
           </ul>
-        </div>
+        </MctbSectionPanel>
       ) : null}
 
       {formSubmissions.length ? (
-        <div className="ref-card space-y-3 p-4">
-          <h2 className="text-sm font-semibold">Request form</h2>
+        <MctbSectionPanel title="Request form">
           <ul className="space-y-2 text-sm">
             {formSubmissions.map((sub) => (
               <li key={sub.id}>
@@ -461,12 +469,12 @@ export function MctbMissedCallDetailView({ eventId }: { eventId: string }) {
               </li>
             ))}
           </ul>
-        </div>
+        </MctbSectionPanel>
       ) : null}
 
-      <details className="ref-card p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Diagnostics</summary>
-        <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+      <details className="ref-deco-section overflow-hidden">
+        <summary className="ref-deco-section-head cursor-pointer text-sm font-semibold">Diagnostics</summary>
+        <div className="ref-deco-section-body space-y-2 text-xs text-muted-foreground">
           <p>Event ID: {eventId}</p>
           {event.traceId ? <p>Trace: {String(event.traceId)}</p> : null}
           <p className="font-medium text-foreground">Authoritative timeline</p>

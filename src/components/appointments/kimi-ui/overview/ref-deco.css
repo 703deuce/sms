@@ -378,3 +378,168 @@
   margin: 16px 0;
   background: linear-gradient(90deg, transparent, #e2e8f0 20%, #e2e8f0 80%, transparent);
 }
+
+/* ========== Product shell backgrounds (Appointments + MCTB) ========== */
+.ref-root,
+.tv-page,
+.cal-page,
+.mctb-page,
+.ref-deco-page {
+  position: relative;
+}
+
+.ref-root::before,
+.tv-page::before,
+.cal-page::before,
+.mctb-page::before,
+.ref-deco-page::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: radial-gradient(circle at 1px 1px, rgba(79, 70, 229, 0.06) 1px, transparent 0);
+  background-size: 28px 28px;
+  z-index: 0;
+}
+
+.ref-root > *,
+.tv-page > *,
+.cal-page > *,
+.mctb-page > *,
+.ref-deco-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ref-root {
+  background:
+    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(79, 70, 229, 0.07), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(14, 165, 233, 0.05), transparent 50%),
+    linear-gradient(180deg, #f8f9fc 0%, #f4f6fa 100%) !important;
+}
+
+.tv-page {
+  background:
+    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(79, 70, 229, 0.06), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(14, 165, 233, 0.04), transparent 50%),
+    var(--tv-bg, #f6f7f9) !important;
+}
+
+.cal-page {
+  background:
+    radial-gradient(ellipse 80% 50% at 100% -10%, rgba(79, 70, 229, 0.06), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(14, 165, 233, 0.04), transparent 50%),
+    var(--bg, #f7f7fb) !important;
+}
+
+/* ========== Auto-upgrade legacy cards & surfaces ========== */
+.ref-root .ref-card,
+.mctb-page .ref-card,
+.tv-page .ref-card,
+.cal-page .ref-card,
+.ref-deco-page .ref-card {
+  position: relative;
+  overflow: hidden;
+  border-color: #e8ebf2;
+  background: linear-gradient(145deg, #ffffff 0%, #fafbff 100%);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(79, 70, 229, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ref-root .ref-card:hover,
+.mctb-page .ref-card:hover,
+.tv-page .ref-card:hover,
+.cal-page .ref-card:hover {
+  border-color: #d4daf8;
+  box-shadow:
+    0 2px 4px rgba(16, 24, 40, 0.05),
+    0 12px 28px rgba(79, 70, 229, 0.06);
+}
+
+.tv-page .tv-surface,
+.tv-page .tv-preview,
+.cal-page .week-grid,
+.cal-page .month-grid,
+.cal-page .day-grid {
+  border-color: #e8ebf2;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(79, 70, 229, 0.03);
+}
+
+.tv-page .tv-pageheader,
+.cal-page .cal-header {
+  margin-bottom: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(228, 231, 240, 0.9);
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.04), transparent 45%);
+  border-radius: 0 0 12px 12px;
+}
+
+.tv-page .tv-controlbar {
+  border-radius: 16px;
+  border: 1px solid #e4e7f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fafc 100%);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+  padding: 10px 12px;
+}
+
+.cal-page .stat-card {
+  position: relative;
+  overflow: hidden;
+  border-color: #e8ebf2;
+  background: linear-gradient(145deg, #ffffff 0%, #fafbff 100%);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(79, 70, 229, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.cal-page .stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, #6366f1, #a78bfa);
+  opacity: 0.85;
+}
+
+.cal-page .stat-card:hover {
+  border-color: #d4daf8;
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(16, 24, 40, 0.05),
+    0 12px 28px rgba(79, 70, 229, 0.08);
+}
+
+.cal-page .stat-icon {
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.1);
+}
+
+.ref-root .qa-btn {
+  border-color: #e8ebf2;
+  background: linear-gradient(180deg, #ffffff, #fafbff);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.ref-root .qa-btn:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Decorative panel — drop-in card replacement */
+.ref-deco-panel {
+  border-radius: 16px;
+  border: 1px solid #e8ebf2;
+  background: linear-gradient(180deg, #fafaff 0%, #ffffff 48%);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+  overflow: hidden;
+}
