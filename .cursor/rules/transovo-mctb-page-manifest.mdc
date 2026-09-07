@@ -41,7 +41,7 @@ Paths: `src/app/**/mctb/**`, `src/app/**/voice/**`, `src/components/mctb/**`, `s
 
 ## Required route inventory (minimum)
 
-**Operational:** `/mctb`, `/mctb/missed-calls[/:id]`, `/mctb/conversations[/:id]`, `/mctb/analytics`, optional `/mctb/voicemail`
+**Operational:** `/mctb`, `/mctb/missed-calls[/:id]`, `/mctb/conversations[/:id]`, `/mctb/voicemail[/:id]`, `/mctb/analytics`
 
 **Configuration:** `/mctb/setup[/phone|messaging|consent|schedule|voicemail|exclusions|test]`
 

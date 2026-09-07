@@ -400,4 +400,4 @@ Cursor may mark Voicemail domain complete only when all checklist items in full 
 
 Next page in sequence: **06 — Analytics** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-06-ANALYTICS.md`.
 
-**07 — Setup Overview / Configuration Home** — pending build spec.
+**07 — Setup & Guided Setup** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-07-SETUP.md`. Voicemail greeting editor in this product also references spec 05.
