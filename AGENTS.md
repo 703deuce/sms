@@ -82,6 +82,12 @@ The **five governing MCTB rule documents** (scope, IA, manifest, canonical map, 
 
 **Page-spec series complete (01–12).** All `transovo-mctb-*.mdc` rules use `alwaysApply: true`.
 
+### MCTB frontend rebuild (START HERE)
+
+**Kickoff:** `docs/MCTB-FRONTEND-REBUILD-KICKOFF.md` · rule: `.cursor/rules/transovo-mctb-rebuild-kickoff.mdc`
+
+Product shell/switcher is **approved — do not change** unless a page spec requires it. **Audit and reuse** working MCTB runtime/APIs/libs behind current `/voice/*` surfaces; new UI lives under `/mctb/*` without duplicating telephony/SMS backend. **Start Spec 01** (`/mctb` Overview) — Home must not remain `/voice/missed-calls` after Overview ships. Build one spec at a time; final legacy `/voice/*` redirect cleanup pass after all pages exist.
+
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 
 **Read:** `docs/MCTB_FINAL_PRODUCTION_PIPELINE.md`

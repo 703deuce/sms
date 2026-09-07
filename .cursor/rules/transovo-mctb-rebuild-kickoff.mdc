@@ -1,0 +1,35 @@
+---
+description: MANDATORY — MCTB frontend rebuild kickoff. Audit/reuse runtime; build specs in order; start Spec 01 Home.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB FRONTEND REBUILD KICKOFF
+
+**Full instructions:** `docs/MCTB-FRONTEND-REBUILD-KICKOFF.md`  
+**Page specs:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPECS.md` (01–12, all `alwaysApply`)
+
+## Shell — frozen
+
+Product switcher + per-product nav is **approved**. Do **not** change shell/navigation unless a page spec requires it.
+
+## Routes ≠ backends (critical)
+
+`/voice/*` today wraps **working MCTB runtime, APIs, libs, and data** — audit and **reuse**, do not rewrite telephony/SMS infrastructure for new `/mctb/*` UI routes. `/voice/*` is not “the backend”; it is the legacy **frontend route namespace**.
+
+## Interim Home → must fix with Spec 01
+
+**Now:** `mctbShellHome()` → `/voice/missed-calls` (temporary)  
+**After Spec 01:** → `/mctb` — Home ≠ Missed Calls. Do not leave interim mapping after Overview ships.
+
+## Build protocol
+
+1. Audit existing implementation per surface  
+2. Preserve runtime; replace frontend only  
+3. Match Appointments design system (real components/tokens — screenshot calibration)  
+4. One spec at a time; all states + a11y + responsive  
+5. **Start Spec 01 Overview (`/mctb`)** — verify before Spec 02  
+6. Final pass: redirect/cleanup all legacy `/voice/*` MCTB links after rebuild
+
+## Do not
+
+Duplicate backends for route churn · rebuild working telephony · skip spec order · ship Home as Missed Calls list · leave orphan `/voice/*` links after migration

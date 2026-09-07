@@ -50,6 +50,7 @@ export function massSmsShellHome(): string {
 }
 
 export function mctbShellHome(): string {
+  // INTERIM until Spec 01 Overview ships — then change to "/mctb" (see docs/MCTB-FRONTEND-REBUILD-KICKOFF.md)
   return "/voice/missed-calls";
 }
 
