@@ -1,0 +1,60 @@
+---
+description: MANDATORY — MCTB Missed Calls list build spec (/mctb/missed-calls). Operational list authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 02: MISSED CALLS
+
+**Route:** `/mctb/missed-calls`  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md`  
+**Prerequisites:** All governing MCTB docs + spec 01 Overview + `transovo-mctb-page-build-specs.mdc`  
+**Visual baseline:** Finished Appointment operational table/list screenshots
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** the Missed Calls list (`/mctb/missed-calls`, legacy `/voice/missed-calls`).
+
+## Primary job
+
+Trustworthy, filterable record of missed-call events and recovery outcomes — **not** dashboard, inbox, consent audit, or setup editor.
+
+## Page structure
+
+1. Transovo shell + MCTB nav (Missed Calls selected)
+2. H1: Missed Calls
+3. Optional compact summary strip (must match Overview metrics)
+4. Control bar: Search → Status → Date → More filters
+5. **Semantic HTML table** (desktop) / structured records (mobile) — **no ARIA grid**
+6. Pagination
+
+## Canonical columns
+
+Caller | Missed | Trigger | Recovery | Reply | Business line | Actions
+
+- **Caller** = primary row link → `/mctb/missed-calls/:id`
+- **Recovery** = authoritative runtime state (Waiting for consent, Delivered, Suppressed, Failed, etc.)
+- **Suppressed ≠ Failed**
+- **Reply** = domain `needs_reply` / `replied` / `no_reply` — not message count inference
+- **Business line** only — never hidden forwarding destination
+
+## Filters & state
+
+Preserve on detail return: search, filters, date, sort, page, scroll. Filtered-empty ≠ true empty. First-use → Finish setup CTA.
+
+## Row actions (minimal)
+
+Open (caller link) | Call back | Open conversation (if exists) | More (contextual a11y name)
+
+## Prohibited
+
+- ARIA grid, nested row links, mock status, provider jargon, consent evidence in table
+- Resetting filters on sort/page change
+- Independent recovery-state inference from timestamps alone
+
+## Definition of done
+
+See full spec §77 checklist before marking `/mctb/missed-calls` complete.
+
+## Next in series
+
+**03 — Missed Call Detail** (`/mctb/missed-calls/:id`) — pending build spec.

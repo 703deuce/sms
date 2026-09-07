@@ -28,7 +28,8 @@ alwaysApply: true
 | Route | Spec | Rule |
 |-------|------|------|
 | `/mctb` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md` | `transovo-mctb-page-spec-01-overview.mdc` |
-| `/mctb/missed-calls` | *(pending — spec 02)* | — |
+| `/mctb/missed-calls` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md` | `transovo-mctb-page-spec-02-missed-calls.mdc` |
+| `/mctb/missed-calls/:id` | *(pending — spec 03)* | — |
 
 ## Hard requirements (all pages)
 

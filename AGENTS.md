@@ -69,7 +69,8 @@ Screen-by-screen implementation authority. When building a page, read its spec:
 | # | Page | Route | Spec |
 |---|------|-------|------|
 | 01 | Overview | `/mctb` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-01-OVERVIEW.md` |
-| 02 | Missed Calls List | `/mctb/missed-calls` | *(pending)* |
+| 02 | Missed Calls List | `/mctb/missed-calls` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-02-MISSED-CALLS.md` |
+| 03 | Missed Call Detail | `/mctb/missed-calls/:id` | *(pending)* |
 
 ### MCTB Final Production Pipeline (FROZEN — `mctb_texml_final_v1`)
 

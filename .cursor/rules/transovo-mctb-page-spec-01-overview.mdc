@@ -71,6 +71,6 @@ Use authoritative backend for: `mctb_status`, `paused_until`, today KPIs, `needs
 
 See full spec §61 checklist before marking `/mctb` complete.
 
-## Next page in series
+## Next in series
 
-**02 — Missed Calls List** (`/mctb/missed-calls`) — pending build spec.
+**03 — Missed Call Detail** (`/mctb/missed-calls/:id`) — pending build spec.
