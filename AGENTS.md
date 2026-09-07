@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive (MANDATORY Cursor rules — not optional docs):** `.cursor/rules/transovo-ux-governance.mdc` + all `.cursor/rules/transovo-*.mdc` (15 standards). Full text lives in `docs/TRANSOVO-*.md` — agents **must read and comply** before any UI change. Kimi orchestration docs are excluded from this ruleset.
+**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo — new pages, APIs, backend, lib, jobs. Full text: `docs/TRANSOVO-*.md`. Not optional.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 
@@ -157,7 +157,7 @@ Exercises real webhook ingress, call lifecycle, field collection, transcript pip
 
 ## Visual UI Agent / Kimi UI Sub-Agent
 
-**Mandatory:** Kimi-generated UI and **all Cursor UI work** must conform to `.cursor/rules/transovo-ux-governance.mdc` and applicable `.cursor/rules/transovo-*.mdc` rules — backed by full `docs/TRANSOVO-*.md` standards. These are **hard requirements**, not optional guides. Cursor must verify output against governance before integration.
+**Mandatory (ALL work — UI, API, backend, lib, jobs):** `.cursor/rules/transovo-ux-governance.mdc` + all `.cursor/rules/transovo-*.mdc` — **alwaysApply: true**. Read full `docs/TRANSOVO-*.md` sources and comply before shipping any change.
 
 **Orchestration:** USER → CURSOR → repo-local Kimi tool → generated UI → CURSOR integrates.
 

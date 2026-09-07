@@ -1,13 +1,11 @@
 ---
-description: MANDATORY Guide #11 — TRANSOVO Internationalization & Localization
-globs:
-  - "src/**/*.tsx"
-  - "src/app/**"
-  - "src/components/**"
-alwaysApply: false
+description: MANDATORY Guide #11 — TRANSOVO Internationalization & Localization — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Internationalization & Localization Standards (Guide #11)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md`
 

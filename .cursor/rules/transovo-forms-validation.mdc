@@ -1,22 +1,21 @@
 ---
-description: MANDATORY Guide #5 — TRANSOVO Forms, Input & Validation
-globs:
-  - "src/**/*.tsx"
-  - "src/components/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY Guide #5 — TRANSOVO Forms, Input & Validation — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Forms, Input & Validation Standards (Guide #5)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md`
 
 ## Hard requirement
 
-Every form, field, toggle, and validation message **MUST** comply. Read the full guide before building or editing forms.
+Every form, field, toggle, validation message, **and API input schema** **MUST** comply. Read the full guide before building or editing forms **or** request handlers that accept user input.
 
 ## Non-negotiables
 
+### UI
 - Every input has a **visible label** (not placeholder-only).
 - **Inline validation** timing follows guide — don't punish on first keystroke unless specified.
 - Error messages are **specific and actionable** — not "Invalid input".
@@ -25,7 +24,12 @@ Every form, field, toggle, and validation message **MUST** comply. Read the full
 - Disabled submit until form is valid OR show errors on submit — pick one pattern per form, consistently.
 - Multi-step forms preserve **entered data** on back navigation.
 - Server errors surface at field or form level with recovery path.
-- Use shared form primitives — don't reinvent per page.
+
+### Backend / API (`src/app/api/`, `src/lib/`)
+- **Validate all inputs server-side** — never trust client-only validation.
+- Return **field-level errors** in a shape the UI can map (same messages as guide).
+- Reject invalid payloads with **4xx** and actionable body — not generic 500s for validation failures.
+- Persist only **normalized, validated** values (phone E.164, email format, etc.).
 
 ## On conflict
 

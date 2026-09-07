@@ -1,16 +1,11 @@
 ---
-description: MANDATORY — TRANSOVO UI Design Guide (domain, terminology, 30 UX rules)
-globs:
-  - "src/**/*.tsx"
-  - "src/**/*.css"
-  - "src/styles/**"
-  - "src/components/**"
-  - "src/app/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY — TRANSOVO UI Design Guide (domain, terminology, 30 UX rules) — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO UI Design Guide
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-UI-DESIGN-GUIDE.md`  
 **Authority:** Level 1 — domain definitions, terminology, product experience principles.

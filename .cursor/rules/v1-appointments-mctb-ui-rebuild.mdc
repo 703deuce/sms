@@ -5,7 +5,7 @@ alwaysApply: true
 
 # V1 Appointments + MCTB UI Rebuild
 
-**UX/DESIGN HARD RULES:** `.cursor/rules/transovo-ux-governance.mdc` and all `transovo-*.mdc` standards — **mandatory** for any UI work. Not optional guides.
+**UX/DESIGN HARD RULES (ALL CODE — always):** All 15 `.cursor/rules/transovo-*.mdc` standards apply to every page, API, backend, and lib change — not UI only.
 
 **Read first:** `docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md` (full spec + reuse map)
 

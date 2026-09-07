@@ -1,14 +1,11 @@
 ---
-description: MANDATORY Guide #2 — TRANSOVO Human-Centered Design (ISO 9241)
-globs:
-  - "src/**/*.tsx"
-  - "src/app/**"
-  - "src/components/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY Guide #2 — TRANSOVO Human-Centered Design (ISO 9241) — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Human-Centered Design Standards (Guide #2)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md`
 

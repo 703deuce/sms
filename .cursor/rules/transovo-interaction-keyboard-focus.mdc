@@ -1,13 +1,11 @@
 ---
-description: MANDATORY Guide #4 — TRANSOVO Interaction, Keyboard & Focus
-globs:
-  - "src/**/*.tsx"
-  - "src/components/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY Guide #4 — TRANSOVO Interaction, Keyboard & Focus — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Interaction, Keyboard & Focus Standards (Guide #4)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md`
 

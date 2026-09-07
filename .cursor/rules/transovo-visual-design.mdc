@@ -1,14 +1,11 @@
 ---
-description: MANDATORY — TRANSOVO Visual Design Guide (tokens, typography, color, density)
-globs:
-  - "src/**/*.tsx"
-  - "src/**/*.css"
-  - "src/styles/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY — TRANSOVO Visual Design Guide (tokens, typography, color, density) — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Visual Design Guide
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md`  
 **Authority:** Level 5 — visual design system.

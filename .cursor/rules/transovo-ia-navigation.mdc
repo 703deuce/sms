@@ -1,15 +1,11 @@
 ---
-description: MANDATORY Guide #3 — TRANSOVO IA & Navigation Standards
-globs:
-  - "src/**/*.tsx"
-  - "src/lib/products/**"
-  - "src/lib/nav.ts"
-  - "src/app/**"
-  - "src/components/**"
-alwaysApply: false
+description: MANDATORY Guide #3 — TRANSOVO IA & Navigation Standards — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO IA & Navigation Standards (Guide #3)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md`
 

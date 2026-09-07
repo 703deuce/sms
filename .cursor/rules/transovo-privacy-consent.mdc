@@ -1,22 +1,21 @@
 ---
-description: MANDATORY Guide #8 — TRANSOVO Privacy, Consent & Compliance UX
-globs:
-  - "src/**/*.tsx"
-  - "src/app/**"
-  - "src/components/**"
-alwaysApply: false
+description: MANDATORY Guide #8 — TRANSOVO Privacy, Consent & Compliance UX — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Privacy, Consent & Compliance UX Standards (Guide #8)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md`
 
 ## Hard requirement
 
-Any UI involving consent, opt-in/out, SMS permissions, data collection, or compliance messaging **MUST** read and follow this guide in full.
+Any **UI, API, webhook, job, or data model** involving consent, opt-in/out, SMS permissions, data collection, or compliance **MUST** read and follow this guide in full.
 
 ## Non-negotiables
 
+### UI
 - **Purpose-specific, channel-specific** consent — not one generic checkbox for everything.
 - **Never infer consent** from silence, preselected boxes, or broad Terms acceptance alone.
 - **Affirmative action required** where law/carrier policy requires it.
@@ -25,6 +24,13 @@ Any UI involving consent, opt-in/out, SMS permissions, data collection, or compl
 - Consent UI must match **what was submitted to carriers/providers**.
 - Preserve consent **provenance, scope, timestamp, version** in UX that displays audit/history.
 - Privacy settings actually **control runtime behavior**.
+
+### Backend / API / jobs (`src/lib/mctb/`, `src/lib/messaging/`, consent tables, SMS send gates)
+- **Enforce consent and suppression at send time** — UI checkbox alone is not enough.
+- Record **consent events** with method, scope, timestamp, and identity metadata before outbound SMS.
+- Honor **opt-out / STOP** in message pipelines and workers — not only in inbox UI.
+- Separate **sender registration (A2P)** from **recipient permission** in code paths and logs.
+- Data retention and deletion settings in UI must match **actual storage and purge behavior**.
 
 ## On conflict
 

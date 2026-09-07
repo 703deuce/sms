@@ -1,59 +1,76 @@
 ---
-description: MANDATORY — Transovo UX governance is law for all UI work. Read before any presentation change.
+description: MANDATORY — Transovo standards govern ALL work (UI, API, backend, lib, jobs). Always apply.
 alwaysApply: true
 ---
 
-# TRANSOVO UX GOVERNANCE — MANDATORY (ALWAYS)
+# TRANSOVO STANDARDS — MANDATORY FOR ALL WORK (ALWAYS)
 
-The files in `docs/TRANSOVO-*.md` (excluding Kimi orchestration docs) are **HARD REQUIREMENTS**, not optional design inspiration. They are enforced via `.cursor/rules/transovo-*.mdc`.
+The 15 standards in `.cursor/rules/transovo-*.mdc` (backed by `docs/TRANSOVO-*.md`) are **HARD REQUIREMENTS** for **every change** in this repository — not optional design guides.
 
-## You MUST
+## Scope (everything)
 
-1. Treat every Transovo UX/design standard as a **binding implementation rule**.
-2. Read `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` before UI, IA, layout, visual, or interaction changes.
-3. Read **every applicable** standards guide for the surface you touch (accessibility, forms, tables, etc.).
-4. Follow **authority order** when documents conflict — governance wins over visual polish; scope wins over convenience.
-5. Fix **shared systems** (tokens, components, shell) instead of page-specific patches.
-6. Ensure visible controls reflect **actual runtime truth** — no fake states, no dead toggles.
+These rules apply when you touch **any** of:
+
+- New or existing **pages**, routes, layouts, components (`src/app/`, `src/components/`, `src/kimi-ui/`)
+- **API routes**, server actions, webhooks (`src/app/api/`)
+- **Business logic** (`src/lib/`)
+- **Database** schema, migrations, Prisma models (when they affect user-visible behavior, consent, auth, or data rights)
+- **Workers**, jobs, queues, cron (`src/lib/jobs/`, BullMQ handlers)
+- **Scripts** that change product behavior or customer data
+- **Nav**, entitlements, product flags (`src/lib/products/`)
+
+**UI-only guides** (visual, responsive, page layout) still bind whenever you ship or change a customer-facing surface. **Backend-heavy guides** (security, privacy/consent, datetime, i18n, forms validation) bind on APIs and lib code even when no JSX changes.
+
+## You MUST (every task)
+
+1. Treat **all 15** Transovo standards as binding — read the **full source doc** for each guide that applies to your change.
+2. Read `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` first for authority order and conflict resolution.
+3. Before a **new page or feature**: check IA (Guide #3), page archetype (page architecture), HCD workflow fit (Guide #2), and runtime truth (settings must work).
+4. Before **API/backend** work: security/auth (Guide #9), privacy/consent (Guide #8), forms/validation (Guide #5), datetime (Guide #10), i18n (Guide #11) as applicable.
+5. Follow **authority order** when documents conflict.
+6. Fix **shared systems** — never one-off patches that bypass tokens, components, or canonical engines.
+7. Ensure **visible UI reflects actual runtime** — no fake toggles, no dead settings, no mock success in production paths.
 
 ## You MUST NOT
 
-- Design pages independently without the standards system.
-- Invent features, nav homes, or terminology outside approved product scope.
-- Use arbitrary colors, spacing, typography, or one-off components when shared system exists.
-- Ship UI that violates WCAG 2.2 AA, keyboard/focus rules, form validation rules, or privacy/consent UX.
-- Treat `docs/TRANSOVO-*` as "nice to have" reference material.
+- Ship any page, API, or feature without considering **all applicable** standards guides.
+- Invent features, nav homes, terminology, or consent flows outside approved scope.
+- Treat `docs/TRANSOVO-*` or `.cursor/rules/transovo-*` as reference-only.
+- Skip security, privacy, or consent rules because the task "is backend only."
 
-## Mandatory standards set (15 documents)
+## All 15 mandatory rules (always active)
 
-| Layer | Rule file | Source doc |
-|-------|-----------|------------|
-| Governance | `transovo-ux-governance.mdc` | `docs/TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` |
-| UI principles | `transovo-ui-design-guide.mdc` | `docs/TRANSOVO-UI-DESIGN-GUIDE.md` |
-| Page structure | `transovo-page-architecture.mdc` | `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md` |
-| Visual system | `transovo-visual-design.mdc` | `docs/TRANSOVO-VISUAL-DESIGN-GUIDE.md` |
-| Guide #1 | `transovo-accessibility.mdc` | `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md` |
-| Guide #2 | `transovo-human-centered-design.mdc` | `docs/TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` |
-| Guide #3 | `transovo-ia-navigation.mdc` | `docs/TRANSOVO-IA-NAVIGATION-STANDARDS.md` |
-| Guide #4 | `transovo-interaction-keyboard-focus.mdc` | `docs/TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md` |
-| Guide #5 | `transovo-forms-validation.mdc` | `docs/TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` |
-| Guide #6 | `transovo-responsive-reflow.mdc` | `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` |
-| Guide #7 | `transovo-table-grid.mdc` | `docs/TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` |
-| Guide #8 | `transovo-privacy-consent.mdc` | `docs/TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` |
-| Guide #9 | `transovo-security-auth.mdc` | `docs/TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` |
-| Guide #10 | `transovo-datetime-locale.mdc` | `docs/TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` |
-| Guide #11 | `transovo-i18n.mdc` | `docs/TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md` |
+| # | Rule file | Source doc | Primary scope |
+|---|-----------|------------|---------------|
+| — | `transovo-ux-governance.mdc` | `TRANSOVO-PRODUCT-DESIGN-UX-GOVERNANCE.md` | All work |
+| — | `transovo-ui-design-guide.mdc` | `TRANSOVO-UI-DESIGN-GUIDE.md` | UI + product terminology |
+| — | `transovo-page-architecture.mdc` | `TRANSOVO-PAGE-ARCHITECTURE-RULES.md` | Pages & layouts |
+| — | `transovo-visual-design.mdc` | `TRANSOVO-VISUAL-DESIGN-GUIDE.md` | Visual presentation |
+| 1 | `transovo-accessibility.mdc` | `TRANSOVO-ACCESSIBILITY-STANDARDS.md` | All user-facing output |
+| 2 | `transovo-human-centered-design.mdc` | `TRANSOVO-HUMAN-CENTERED-DESIGN-STANDARDS.md` | Workflows end-to-end |
+| 3 | `transovo-ia-navigation.mdc` | `TRANSOVO-IA-NAVIGATION-STANDARDS.md` | Nav, routes, naming |
+| 4 | `transovo-interaction-keyboard-focus.mdc` | `TRANSOVO-INTERACTION-KEYBOARD-FOCUS-STANDARDS.md` | Interactive UI |
+| 5 | `transovo-forms-validation.mdc` | `TRANSOVO-FORMS-INPUT-VALIDATION-STANDARDS.md` | Forms + API validation |
+| 6 | `transovo-responsive-reflow.mdc` | `TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md` | Responsive UI |
+| 7 | `transovo-table-grid.mdc` | `TRANSOVO-TABLE-GRID-SEMANTICS-STANDARDS.md` | Data tables/grids |
+| 8 | `transovo-privacy-consent.mdc` | `TRANSOVO-PRIVACY-CONSENT-COMPLIANCE-STANDARDS.md` | Consent, SMS, data rights |
+| 9 | `transovo-security-auth.mdc` | `TRANSOVO-SECURITY-AUTHENTICATION-STANDARDS.md` | Auth, permissions, APIs |
+| 10 | `transovo-datetime-locale.mdc` | `TRANSOVO-DATE-TIME-TIMEZONE-LOCALE-STANDARDS.md` | Times, schedules, TZ |
+| 11 | `transovo-i18n.mdc` | `TRANSOVO-INTERNATIONALIZATION-LOCALIZATION-STANDARDS.md` | Strings, locale, format |
 
-**Excluded from this ruleset (Kimi orchestration only):** `TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md`, `TRANSOVO-MODE-4-REBUILD-MANIFEST.md`, `TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`, `TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md`.
+**Excluded (Kimi orchestration only):** `TRANSOVO-KIMI-MODE-4-ORCHESTRATION.md`, `TRANSOVO-MODE-4-REBUILD-MANIFEST.md`, `TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`, `TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md`.
 
-## Before any UI change
+## Pre-flight checklist (new page or feature)
 
-1. Identify page archetype and canonical nav home.
-2. Open applicable rule files + full source docs.
-3. Reuse shared components and design tokens.
-4. Implement all states: loading, empty, error, partial, success.
-5. Verify keyboard, focus, responsive, and a11y requirements.
+1. **IA** — canonical nav home and terminology (Guide #3, UI guide)
+2. **Archetype** — list/detail/settings/builder/wizard (page architecture)
+3. **Workflow** — user goal, steps, error recovery (Guide #2)
+4. **API contract** — validation, authz, consent gates (Guides #5, #8, #9)
+5. **Data** — timezone storage, locale, retention (Guides #10, #11, #8)
+6. **UI states** — loading, empty, error, partial, success
+7. **A11y & interaction** — keyboard, focus, semantics (Guides #1, #4)
+8. **Visual system** — tokens, not arbitrary CSS (visual design guide)
 
-## Master principle (from governance)
+## Master principle
 
-> Transovo must be developed as **one coherent product system**, not a collection of individually designed pages.
+> Transovo is **one coherent product system**. Every layer — UI, API, backend, jobs — must align with the same standards.

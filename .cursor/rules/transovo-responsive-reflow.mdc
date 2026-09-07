@@ -1,14 +1,11 @@
 ---
-description: MANDATORY Guide #6 — TRANSOVO Responsive, Reflow & Zoom
-globs:
-  - "src/**/*.tsx"
-  - "src/**/*.css"
-  - "src/styles/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY Guide #6 — TRANSOVO Responsive, Reflow & Zoom — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Responsive, Reflow & Zoom Standards (Guide #6)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-RESPONSIVE-REFLOW-ZOOM-STANDARDS.md`
 

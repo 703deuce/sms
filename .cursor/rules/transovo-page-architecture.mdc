@@ -1,14 +1,11 @@
 ---
-description: MANDATORY — TRANSOVO Page Architecture Rules (layout, archetypes, worksheets)
-globs:
-  - "src/**/*.tsx"
-  - "src/app/**"
-  - "src/components/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY — TRANSOVO Page Architecture Rules (layout, archetypes, worksheets) — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Page Architecture Rules
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-PAGE-ARCHITECTURE-RULES.md`  
 **Authority:** Level 4 — page structure and layout.

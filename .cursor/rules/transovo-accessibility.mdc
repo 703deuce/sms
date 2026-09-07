@@ -1,14 +1,11 @@
 ---
-description: MANDATORY Guide #1 — TRANSOVO Accessibility (WCAG 2.2 AA)
-globs:
-  - "src/**/*.tsx"
-  - "src/app/**"
-  - "src/components/**"
-  - "src/kimi-ui/**"
-alwaysApply: false
+description: MANDATORY Guide #1 — TRANSOVO Accessibility (WCAG 2.2 AA) — ALWAYS applies to all code (UI, API, backend, lib).
+alwaysApply: true
 ---
 
 # MANDATORY: TRANSOVO Accessibility Standards (Guide #1)
+
+**Scope:** All repository work — pages, APIs, `src/lib/`, jobs, and any customer-facing behavior. Read the full source doc before implementing.
 
 **Source of truth:** `docs/TRANSOVO-ACCESSIBILITY-STANDARDS.md`
 
