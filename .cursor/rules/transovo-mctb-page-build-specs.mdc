@@ -41,7 +41,7 @@ alwaysApply: true
 | `/mctb/setup/phone` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-08-PHONE-FORWARDING.md` | `transovo-mctb-page-spec-08-phone-forwarding.mdc` |
 | `/mctb/setup/missed-call-rules` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-09-MISSED-CALL-RULES.md` | `transovo-mctb-page-spec-09-missed-call-rules.mdc` |
 | `/mctb/setup/text-back` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-10-TEXT-BACK.md` | `transovo-mctb-page-spec-10-text-back.mdc` |
-| `/mctb/setup/consent` | *(spec 07 — editor not spec'd this pass)* | `transovo-mctb-page-spec-07-setup.mdc` |
+| `/mctb/setup/consent` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-11-CONSENT.md` | `transovo-mctb-page-spec-11-consent.mdc` |
 | `/mctb/setup/recovery` | `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md` | `transovo-mctb-page-spec-12-recovery-controls.mdc` |
 | `/mctb/setup/business-hours` | *(legacy → redirect to `/mctb/setup/recovery`)* | `transovo-mctb-page-spec-12-recovery-controls.mdc` |
 | `/mctb/setup/follow-up` | *(legacy → redirect to `/mctb/setup/recovery`)* | `transovo-mctb-page-spec-12-recovery-controls.mdc` |

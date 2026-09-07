@@ -1367,4 +1367,4 @@ Cursor may mark this section complete only when:
 
 ## Build handoff
 
-Next page-spec: **12 — Recovery Controls & Follow-up Rules** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-12-RECOVERY-CONTROLS.md`. (**11 — Consent** not produced in this pass.)
+Next page-spec: **11 — Consent** — see `TRANSOVO-MCTB-PAGE-BUILD-SPEC-11-CONSENT.md`.

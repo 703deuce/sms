@@ -1,0 +1,62 @@
+---
+description: MANDATORY — MCTB Consent (/mctb/setup/consent). press_1 vs existing_consent authority.
+alwaysApply: true
+---
+
+# MANDATORY: MCTB PAGE BUILD SPEC — 11: CONSENT
+
+**Route:** `/mctb/setup/consent` | **Wizard:** Setup Step 3 (spec 07)  
+**Source of truth:** `docs/TRANSOVO-MCTB-PAGE-BUILD-SPEC-11-CONSENT.md`  
+**Prerequisites:** Governing MCTB docs + specs 01–10, 12
+
+## When this rule activates
+
+**Before implementing, restyling, or declaring complete** MCTB Consent (`/mctb/setup/consent`, wizard consent step).
+
+## Primary job
+
+High-consequence configuration: how MCTB **establishes or relies on** permission to text missed callers.
+
+## Two modes (LOCKED — semantically distinct)
+
+| UI label | Enum | Evidence |
+|----------|------|----------|
+| Ask callers to press 1 | `press_1` | Platform-captured — DTMF 1 after voice disclosure |
+| Use permission my business already has | `existing_consent` | Business attestation / external provenance — **not** Transovo-captured |
+
+**Never:** "Skip consent", Manual/Automatic, consent = boolean
+
+## Press-1 (`press_1`)
+
+Voice disclosure → caller presses 1 → consent event → system SMS → opener. Do not mark captured before DTMF succeeds.
+
+- Centralized/versioned disclosure; locked required wording where policy requires
+- Preview/Publish per runtime; failed generation keeps prior active prompt
+- Evidence: method, timestamp, disclosure version, source call
+
+## Existing Permission (`existing_consent`)
+
+Attestation checkbox — **never prechecked**. Provenance distinct from Press-1 evidence. No fake platform consent.
+
+## Not on this page
+
+Sender registration, A2P/TFV, message templates, opt-out override, forwarding, full Consent Log UI, AI eligibility
+
+## Relationships
+
+- **Text Back** — consumes mode for message sequence (no duplicate mode store)
+- **Test & Diagnostics** — Press-1 checkpoints only when `press_1`
+- **Missed Call Detail** — same canonical consent state
+- Link to Consent History — not main nav
+
+## Switching modes
+
+Future events only; history immutable; opt-out not overridden; consequential confirmation
+
+## Prohibited
+
+Skip consent label, prechecked attestation, A2P/TFV as recipient consent, AI decides permission, second consent engine, frontend send eligibility
+
+## Definition of done
+
+See full spec §83 checklist.
