@@ -191,6 +191,11 @@ export function CalendarConnected() {
       },
       onShowCalendarSettings: () => router.push("/appointments/availability"),
       onRetry: load,
+      onSlotClick: ({ dateKey, hour }) => {
+        const d = new Date(dateKey);
+        d.setHours(hour, 0, 0, 0);
+        router.push(`/appointments/new?startsAt=${encodeURIComponent(d.toISOString())}`);
+      },
     }),
     [load, router, selectedDayKey, shift, view],
   );

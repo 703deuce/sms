@@ -14,6 +14,7 @@ import {
   Clock,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
+import type { SchedulingModuleFlags } from "@/lib/products/scheduling-modules";
 import {
   isAnalyticsInV1Nav,
   isContactsInV1Nav,
@@ -22,6 +23,7 @@ import {
 
 export type AppointmentsNavOptions = {
   conversationsBadge?: number;
+  modules?: Partial<SchedulingModuleFlags>;
 };
 
 function calendarChildren(): NavItem["children"] {
@@ -33,16 +35,26 @@ function calendarChildren(): NavItem["children"] {
   ];
 }
 
-function bookingChildren(): NavItem["children"] {
-  return [
+function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
+  const children = [
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
-    { label: "Packages & Memberships", href: "/appointments/commerce" },
+    { label: "Share & embed", href: "/appointments/booking/share" },
+  ];
+  if (modules.commerce) {
+    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
+  }
+  if (modules.classes) {
+    children.push({ label: "Classes", href: "/appointments/classes" });
+  }
+  children.push(
+    { label: "Segments", href: "/appointments/segments" },
     { label: "Routing", href: "/appointments/routing-forms" },
     { label: "Team Booking", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
     { label: "AI Booking", href: "/appointments/ai-booking" },
-  ];
+  );
+  return children;
 }
 
 function availabilityChildren(): NavItem["children"] {
@@ -107,6 +119,16 @@ function settingsChildren(): NavItem["children"] {
  */
 export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
+  const modules = {
+    workflows: options.modules?.workflows ?? false,
+    meetings: options.modules?.meetings ?? false,
+    payments: options.modules?.payments ?? true,
+    analytics: options.modules?.analytics ?? true,
+    integrations: options.modules?.integrations ?? true,
+    classes: options.modules?.classes ?? false,
+    commerce: options.modules?.commerce ?? true,
+    globalSearch: options.modules?.globalSearch ?? true,
+  };
   const items: NavItem[] = [
     {
       label: "Home",
@@ -118,7 +140,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Booking",
       href: "/appointments/types",
       icon: Globe,
-      children: bookingChildren(),
+      children: bookingChildren(modules),
     },
     {
       label: "Calendar",
@@ -159,27 +181,36 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       icon: Workflow,
       children: remindersChildren(),
     },
-    {
+  );
+
+  if (modules.workflows) {
+    items.push({
       label: "Workflows",
       href: "/appointments/workflows",
       icon: Workflow,
       children: workflowsChildren(),
-    },
-    {
+    });
+  }
+
+  if (modules.meetings) {
+    items.push({
       label: "Meetings",
       href: "/video",
       icon: Sparkles,
       children: meetingsChildren(),
-    },
-    {
+    });
+  }
+
+  if (modules.payments) {
+    items.push({
       label: "Payments",
       href: "/payments/transactions",
       icon: CreditCard,
       children: [{ label: "Transactions", href: "/payments/transactions" }],
-    },
-  );
+    });
+  }
 
-  if (isAnalyticsInV1Nav()) {
+  if (modules.analytics && isAnalyticsInV1Nav()) {
     items.push({
       label: "Analytics",
       href: "/appointments/analytics",
@@ -188,14 +219,17 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
     });
   }
 
-  items.push(
-    {
+  if (modules.integrations) {
+    items.push({
       label: "Integrations",
       href: "/integrations/calendars",
       icon: Puzzle,
       sectionLabel: "Platform",
       children: integrationsChildren(),
-    },
+    });
+  }
+
+  items.push(
     {
       label: "Settings",
       href: "/settings/business",

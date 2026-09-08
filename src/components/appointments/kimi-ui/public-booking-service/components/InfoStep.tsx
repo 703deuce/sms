@@ -44,6 +44,10 @@ export function InfoStep({
   onIntakeAnswersChange,
   onBack,
   onBook,
+  recurringPreview,
+  recurringPreviewLoading,
+  sessionLineCount = 0,
+  onCheckoutSession,
 }: {
   type: BookingType;
   startsAt: string;
@@ -100,6 +104,10 @@ export function InfoStep({
     recurringOccurrences: number;
     attendeeCount: number;
   }) => void;
+  recurringPreview?: { dates: string[]; conflicts: Array<{ startsAt: string; reason: string }> } | null;
+  recurringPreviewLoading?: boolean;
+  sessionLineCount?: number;
+  onCheckoutSession?: () => void;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -364,18 +372,38 @@ export function InfoStep({
             ))}
           </div>
           {recurringMode !== "once" ? (
-            <div className="mt-3 flex items-center gap-2 text-[13px]">
-              <Label htmlFor="occurrences" className="font-normal text-muted-foreground">Total visits</Label>
-              <select
-                id="occurrences"
-                className="h-8 rounded-lg border border-border bg-card px-2 text-[13px]"
-                value={recurringOccurrences}
-                onChange={(e) => setRecurringOccurrences(Number(e.target.value))}
-              >
-                {Array.from({ length: recurring.maxOccurrences - 1 }, (_, i) => i + 2).map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center gap-2 text-[13px]">
+                <Label htmlFor="occurrences" className="font-normal text-muted-foreground">Total visits</Label>
+                <select
+                  id="occurrences"
+                  className="h-8 rounded-lg border border-border bg-card px-2 text-[13px]"
+                  value={recurringOccurrences}
+                  onChange={(e) => setRecurringOccurrences(Number(e.target.value))}
+                >
+                  {Array.from({ length: recurring.maxOccurrences - 1 }, (_, i) => i + 2).map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              {recurringPreviewLoading ? (
+                <p className="text-[12px] text-muted-foreground">Checking schedule preview…</p>
+              ) : recurringPreview?.dates?.length ? (
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-[12px]">
+                  <p className="font-medium text-foreground">Upcoming dates</p>
+                  <ul className="mt-1 max-h-28 overflow-y-auto text-muted-foreground">
+                    {recurringPreview.dates.map((d) => {
+                      const conflict = recurringPreview.conflicts.find((c) => c.startsAt === d);
+                      return (
+                        <li key={d} className={conflict ? "text-amber-700" : undefined}>
+                          {formatFullDate(d, timezone)} {formatSlotTime(d, timezone)}
+                          {conflict ? ` — ${conflict.reason}` : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -495,7 +523,19 @@ export function InfoStep({
         </div>
       ) : null}
 
-      <div className="mt-6">
+      <div className="mt-6 space-y-2">
+        {sessionLineCount > 0 && onCheckoutSession ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={onCheckoutSession}
+            disabled={submitting}
+          >
+            Checkout {sessionLineCount + 1} appointments
+          </Button>
+        ) : null}
         <Button size="lg" className="w-full" onClick={submit} disabled={submitting}>
           {submitting ? "Booking…" : "Book appointment"}
         </Button>

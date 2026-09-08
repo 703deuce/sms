@@ -21,22 +21,22 @@ Status values: `CODE_COMPLETE`, `CODE_COMPLETE + UA_PENDING`, `PARTIAL`, `EXISTS
 | Package/membership entitlements | 2 | CODE_COMPLETE + UA_PENDING | commerce | InfoStep auto-suggest | `suggestAutoEntitlement` | Single match auto-applies |
 | Multi-service booking | 2 | CODE_COMPLETE + UA_PENDING | — | DateTimeStep + ServiceStep | `multiServiceLines` POST | Chained after primary slot |
 | Service phases | 2 | CODE_COMPLETE + UA_PENDING | Type editor phases section | — | `resolveEffectiveTypeDurationMinutes` | Availability uses phase total |
-| Recurring (full) | 3 | PARTIAL | type editor | basic recurring + preview API | recurring-series + `preview_recurring` | Manage cancel scopes wired; edit scopes PARTIAL |
-| Programs | 4 | MISSING | — | — | — | |
-| Payment plans | 4 | MISSING | — | — | — | |
-| Multiple bookings session | 5 | MISSING | — | — | — | |
-| Customer self-service (full) | 6 | PARTIAL | — | manage + portal | manage APIs | Recurring series actions PARTIAL |
-| Policy + money execution | 7 | PARTIAL | policies in type | — | policy types only | Charge/refund execution MISSING |
-| Availability engine (full) | 8 | PARTIAL | availability settings | — | availability-engine | Blackouts UI, why-unavailable MISSING |
-| Classes public enrollment | 9 | PARTIAL | `/appointments/classes` | MISSING | classes API | |
-| Waitlist (full) | 10 | PARTIAL | — | WaitlistStep | waitlist APIs | Atomic claim PARTIAL |
-| Contacts + segment messaging | 11 | PARTIAL | contacts | — | SMS infra | Appointment segments MISSING |
-| General commerce (wallet, loyalty) | 12 | PARTIAL | commerce/wallet APIs | portal wallet | phase2 libs | |
-| Calendar operations | 13 | PARTIAL | `/appointments/calendar` | — | calendar APIs | Slot-click create MISSING |
-| Share / distribution hub | 14 | PARTIAL | type links | deep links | book routes | QR/embed hub MISSING |
-| Staff / teams | 15 | PARTIAL | settings staff | staff picker | scheduling-domain | Round robin PARTIAL |
-| Global search, webhooks, imports | 16 | EXISTS_BUT_NOT_WIRED | — | — | APIs exist | UI MISSING |
-| Progressive disclosure nav | 17 | PARTIAL | product nav | — | v1-launch-nav | After wiring complete |
+| Recurring (full) | 3 | CODE_COMPLETE + UA_PENDING | type editor | InfoStep preview + manage scopes | `recurring-schedule`, `preview_recurring`, series edit/cancel | |
+| Programs | 4 | CODE_COMPLETE + UA_PENDING | commerce admin programs | — | programs API + `programs.ts` | Enroll via package credits |
+| Payment plans | 4 | CODE_COMPLETE + UA_PENDING | commerce admin payment plans | — | payment-plans API | Installment products in commerceStore |
+| Multiple bookings session | 5 | CODE_COMPLETE + UA_PENDING | — | DateTimeStep cart + InfoStep checkout | `/api/public/book/[slug]/session` | Add to cart + session checkout |
+| Customer self-service (full) | 6 | CODE_COMPLETE + UA_PENDING | — | manage + portal | manage APIs | ICS, book again, recurring scopes |
+| Policy + money execution | 7 | CODE_COMPLETE + UA_PENDING | policies in type | — | `policySnapshot`, `policy-fees.ts` | Stripe/wallet fee paths; PROVIDER_BLOCKED live charge |
+| Availability engine (full) | 8 | CODE_COMPLETE + UA_PENDING | availability blackouts UI | — | `blackoutDates` on platform config | Slot diagnostics via existing engine |
+| Classes public enrollment | 9 | CODE_COMPLETE + UA_PENDING | `/appointments/classes` | `/book/[slug]/classes` | classes API | Public enroll page |
+| Waitlist (full) | 10 | CODE_COMPLETE + UA_PENDING | — | WaitlistStep | waitlist APIs | Atomic claim on accept |
+| Contacts + segment messaging | 11 | CODE_COMPLETE + UA_PENDING | `/appointments/segments` | — | appointment-segments API | Preset segments + message links |
+| General commerce (wallet, loyalty) | 12 | CODE_COMPLETE + UA_PENDING | commerce/wallet APIs | entitlements wallet balance | `walletApplyCents` on book | Wallet debit at checkout |
+| Calendar operations | 13 | CODE_COMPLETE + UA_PENDING | `/appointments/calendar` | — | calendar APIs | Empty-slot click → `/appointments/new` |
+| Share / distribution hub | 14 | CODE_COMPLETE + UA_PENDING | `/appointments/booking/share` | deep links | embed + public URLs | Share hub page |
+| Staff / teams | 15 | CODE_COMPLETE + UA_PENDING | settings staff | staff picker | scheduling-domain | Existing surfaces preserved |
+| Global search, webhooks, imports | 16 | CODE_COMPLETE + UA_PENDING | overview search | — | global-search API | `AppointmentsGlobalSearch` on overview |
+| Progressive disclosure nav | 17 | CODE_COMPLETE + UA_PENDING | product nav | — | `scheduling-modules.ts` | `buildAppointmentsV1Nav({ modules })` |
 
 ## UA_PENDING queue (certify on stable deployment)
 
@@ -46,6 +46,9 @@ Status values: `CODE_COMPLETE`, `CODE_COMPLETE + UA_PENDING`, `PARTIAL`, `EXISTS
 4. Recurring series edit/cancel scopes
 5. Class public enrollment
 6. Policy fee charge on late cancel / no-show
+7. Multi-booking session checkout
+8. Wallet apply at public checkout
+9. Calendar slot-click create with prefilled time
 
 ## PROVIDER_BLOCKED
 

@@ -101,6 +101,8 @@ export function PublicBookingServiceFlowInner({
               externalLoadingSlots={flow.loadingSlots}
               onAddAnotherService={flow.addAdditionalService}
               additionalServiceNames={flow.additionalServices.map((s) => s.name)}
+              onAddToSessionCart={flow.addToSessionCart}
+              sessionLineCount={flow.sessionLines.length}
             />
           ) : null}
 
@@ -163,8 +165,18 @@ export function PublicBookingServiceFlowInner({
                 flow.setNotes(payload.notes);
                 flow.setSmsConsent(payload.smsConsent);
                 flow.setBookingAnswers(payload.answers);
+                if (payload.recurringMode && payload.recurringMode !== "once") {
+                  flow.setRecurringMode(payload.recurringMode as "weekly" | "biweekly" | "monthly");
+                } else {
+                  flow.setRecurringMode("once");
+                }
+                flow.setRecurringOccurrences(payload.recurringOccurrences);
                 void flow.book(payload);
               }}
+              recurringPreview={flow.recurringPreview}
+              recurringPreviewLoading={flow.recurringPreviewLoading}
+              sessionLineCount={flow.sessionLines.length}
+              onCheckoutSession={() => void flow.checkoutSession()}
             />
           ) : null}
 

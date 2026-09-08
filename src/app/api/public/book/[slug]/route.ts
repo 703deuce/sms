@@ -295,21 +295,32 @@ export async function POST(request: Request, { params }: Params) {
       const { getSavedPaymentMethodForContact } = await import("@/lib/merchant-payments/saved-cards");
       const saved = await getSavedPaymentMethodForContact(workspace.id, contactId);
       const autoSuggestion = suggestAutoEntitlement(entitlements);
+      let walletBalanceCents = 0;
+      if (contactId) {
+        try {
+          const { getWalletBalance } = await import(
+            "@/lib/appointments/service-booking/phase2/client-wallet"
+          );
+          const wallet = await getWalletBalance(workspace.id, contactId);
+          walletBalanceCents = wallet.balanceCents;
+        } catch {
+          walletBalanceCents = 0;
+        }
+      }
       return NextResponse.json({
         data: {
           ...entitlements,
           hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
           autoSuggestion,
+          walletBalanceCents,
         },
       });
     }
 
     if (action === "preview_recurring") {
-      const { generateRecurringOccurrences, type RecurringFrequency } = await import(
-        "@/lib/appointments/recurring-schedule"
-      );
+      const { generateRecurringOccurrences } = await import("@/lib/appointments/recurring-schedule");
       const startsAt = String(body.startsAt || "");
-      const frequency = String(body.frequency || "weekly") as RecurringFrequency;
+      const frequency = String(body.frequency || "weekly");
       const occurrences = Math.min(Number(body.occurrences || 4), 52);
       const weekdays = Array.isArray(body.weekdays)
         ? (body.weekdays as number[]).map(Number).filter((n) => n >= 0 && n <= 6)
@@ -319,7 +330,7 @@ export async function POST(request: Request, { params }: Params) {
       }
       const dates = generateRecurringOccurrences({
         startsAt,
-        frequency,
+        frequency: frequency as import("@/lib/appointments/recurring-schedule").RecurringFrequency,
         occurrences,
         weekdays,
       });
@@ -717,7 +728,7 @@ export async function POST(request: Request, { params }: Params) {
           contactId,
           bookingTypeId: resolvedType?.id || serviceId,
           serviceName: resolvedServiceName,
-          payment: effectivePayment,
+          payment: paymentDue,
           selection,
         });
         if (entitlementOutcome.paymentWaived && entitlementOutcome.method !== "none") {
@@ -749,6 +760,23 @@ export async function POST(request: Request, { params }: Params) {
     } = { paymentRequired: false, checkoutUrl: null, checkoutConfigured: true };
     const paymentWaivedByEntitlement = Boolean(entitlementOutcome?.paymentWaived);
     let paymentHandled = paymentWaivedByEntitlement;
+    let paymentDue = effectivePayment ? { ...effectivePayment } : undefined;
+    const walletApplyCents = Math.max(0, Number(body.walletApplyCents || 0));
+    if (walletApplyCents > 0 && contactId && paymentDue?.priceCents) {
+      try {
+        const { debitWallet } = await import("@/lib/appointments/service-booking/phase2/client-wallet");
+        const applied = Math.min(walletApplyCents, paymentDue.priceCents);
+        await debitWallet(workspace.id, contactId, applied, {
+          kind: "booking_checkout",
+          referenceId: appointmentId,
+          note: "Applied to booking checkout",
+        });
+        paymentDue = { ...paymentDue, priceCents: paymentDue.priceCents - applied };
+        if (paymentDue.priceCents <= 0) paymentHandled = true;
+      } catch {
+        // Wallet debit failed — continue with full payment due
+      }
+    }
 
     if (appointmentId && payment?.mode && payment.mode !== "none" && !paymentHandled) {
       const useSavedCard = body.useSavedCard === true;
@@ -757,7 +785,7 @@ export async function POST(request: Request, { params }: Params) {
           workspaceId: workspace.id,
           appointmentId,
           contactId,
-          payment: effectivePayment,
+          payment: paymentDue,
           customerEmail: body.email ? String(body.email) : undefined,
           description: `${resolvedServiceName} appointment`,
         });
@@ -786,7 +814,7 @@ export async function POST(request: Request, { params }: Params) {
         paymentInfo = await attachPaymentCheckout(
           workspace.id,
           appointmentId,
-          effectivePayment!,
+          paymentDue!,
           body.email ? String(body.email) : undefined,
           `${resolvedServiceName} appointment`,
         );

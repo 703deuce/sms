@@ -26,6 +26,8 @@ export function DateTimeStep({
   externalLoadingSlots,
   onAddAnotherService,
   additionalServiceNames = [],
+  onAddToSessionCart,
+  sessionLineCount = 0,
 }: {
   type: BookingType;
   timezone: string;
@@ -47,6 +49,8 @@ export function DateTimeStep({
   externalLoadingSlots?: boolean;
   onAddAnotherService?: () => void;
   additionalServiceNames?: string[];
+  onAddToSessionCart?: () => void;
+  sessionLineCount?: number;
 }) {
   const useLiveSlots = externalSlots !== undefined;
   const [selectedDay, setSelectedDay] = useState(
@@ -250,6 +254,11 @@ export function DateTimeStep({
                 <ListPlus className="h-4 w-4" /> Add service
               </Button>
             ) : null}
+            {onAddToSessionCart ? (
+              <Button variant="outline" size="lg" type="button" disabled={!startsAt} onClick={onAddToSessionCart}>
+                <ListPlus className="h-4 w-4" /> Add to cart{sessionLineCount > 0 ? ` (${sessionLineCount})` : ""}
+              </Button>
+            ) : null}
             {aiEnabled ? (
               <Button variant="outline" size="lg" onClick={onAi}>
                 <Sparkles className="h-4 w-4 text-primary" /> Ask the assistant
@@ -379,6 +388,11 @@ export function DateTimeStep({
             {onAddAnotherService ? (
               <Button variant="outline" size="lg" type="button" onClick={onAddAnotherService}>
                 <ListPlus className="h-4 w-4" /> Add service
+              </Button>
+            ) : null}
+            {onAddToSessionCart ? (
+              <Button variant="outline" size="lg" type="button" disabled={!startsAt} onClick={onAddToSessionCart}>
+                <ListPlus className="h-4 w-4" /> Add to cart{sessionLineCount > 0 ? ` (${sessionLineCount})` : ""}
               </Button>
             ) : null}
             {aiEnabled ? (

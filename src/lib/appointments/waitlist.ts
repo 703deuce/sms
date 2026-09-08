@@ -149,50 +149,69 @@ export async function acceptWaitlistOffer(token: string) {
     const entry = await prisma.appointmentWaitlistEntry.findUnique({ where: { id: offer.waitlistEntryId } });
     if (!entry?.phone) return { error: "Waitlist entry not found" };
 
+    const claimed = await prisma.appointmentWaitlistEntry.updateMany({
+      where: {
+        id: entry.id,
+        status: { in: ["active", "notified"] },
+      },
+      data: { status: "claiming", updatedAt: new Date() },
+    });
+    if (!claimed.count) {
+      return { error: "This offer was already claimed" };
+    }
+
     const { createPlatformAppointment } = await import("@/lib/appointments/booking-platform");
-    const result = await createPlatformAppointment(ws.id, {
-      serviceName: offer.serviceName,
-      startsAt: offer.startsAt,
-      phone: entry.phone,
-      email: entry.email || undefined,
-      firstName: "Waitlist",
-      lastName: "Guest",
-      smsConsent: true,
-      source: "waitlist",
-      status: "scheduled",
-      notes: "Accepted waitlist offer",
-    });
+    try {
+      const result = await createPlatformAppointment(ws.id, {
+        serviceName: offer.serviceName,
+        startsAt: offer.startsAt,
+        phone: entry.phone,
+        email: entry.email || undefined,
+        firstName: "Waitlist",
+        lastName: "Guest",
+        smsConsent: true,
+        source: "waitlist",
+        status: "scheduled",
+        notes: "Accepted waitlist offer",
+      });
 
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: ws.id },
-      select: { displayName: true, name: true },
-    });
-    const appointment = await prisma.voiceAppointment.findFirst({
-      where: { id: result.appointmentId, workspaceId: ws.id },
-      select: { serviceName: true, startsAt: true, staffName: true, metadata: true },
-    });
-    const platformConfig = await loadAppointmentPlatformConfig(ws.id);
-    const timezone = (platformConfig as { timezone?: string }).timezone || "America/New_York";
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: ws.id },
+        select: { displayName: true, name: true },
+      });
+      const appointment = await prisma.voiceAppointment.findFirst({
+        where: { id: result.appointmentId, workspaceId: ws.id },
+        select: { serviceName: true, startsAt: true, staffName: true, metadata: true },
+      });
+      const platformConfig = await loadAppointmentPlatformConfig(ws.id);
+      const timezone = (platformConfig as { timezone?: string }).timezone || "America/New_York";
 
-    await prisma.appointmentWaitlistEntry.update({
-      where: { id: entry.id },
-      data: { status: "filled", updatedAt: new Date() },
-    });
+      await prisma.appointmentWaitlistEntry.update({
+        where: { id: entry.id },
+        data: { status: "filled", updatedAt: new Date() },
+      });
 
-    const updatedOffers = offers.map((o) =>
-      o.token === token ? { ...o, status: "accepted" as const } : o,
-    );
-    await saveAppointmentPlatformConfig(ws.id, { waitlistOffers: updatedOffers } as object);
+      const updatedOffers = offers.map((o) =>
+        o.token === token ? { ...o, status: "accepted" as const } : o,
+      );
+      await saveAppointmentPlatformConfig(ws.id, { waitlistOffers: updatedOffers } as object);
 
-    return {
-      appointmentId: result.appointmentId,
-      workspaceId: ws.id,
-      businessName: workspace?.displayName || workspace?.name || "Your business",
-      serviceName: appointment?.serviceName || offer.serviceName,
-      startsAt: appointment?.startsAt?.toISOString() || offer.startsAt,
-      staffName: appointment?.staffName || null,
-      timezone,
-    };
+      return {
+        appointmentId: result.appointmentId,
+        workspaceId: ws.id,
+        businessName: workspace?.displayName || workspace?.name || "Your business",
+        serviceName: appointment?.serviceName || offer.serviceName,
+        startsAt: appointment?.startsAt?.toISOString() || offer.startsAt,
+        staffName: appointment?.staffName || null,
+        timezone,
+      };
+    } catch (err) {
+      await prisma.appointmentWaitlistEntry.updateMany({
+        where: { id: entry.id, status: "claiming" },
+        data: { status: "notified", updatedAt: new Date() },
+      });
+      throw err;
+    }
   }
   return { error: "Offer not found" };
 }

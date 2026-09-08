@@ -62,6 +62,14 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [startsAt, setStartsAt] = useState("");
   const [recurringMode, setRecurringMode] = useState<"once" | "weekly" | "biweekly" | "monthly">("once");
   const [recurringOccurrences, setRecurringOccurrences] = useState(4);
+  const [recurringPreview, setRecurringPreview] = useState<{
+    dates: string[];
+    conflicts: Array<{ startsAt: string; reason: string }>;
+  } | null>(null);
+  const [recurringPreviewLoading, setRecurringPreviewLoading] = useState(false);
+  const [sessionLines, setSessionLines] = useState<
+    Array<{ serviceId: string; serviceName: string; startsAt: string; durationMinutes?: number }>
+  >([]);
   const [attendeeCount, setAttendeeCount] = useState(1);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -198,6 +206,52 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     }
     return [...map.entries()];
   }, [slots]);
+
+  useEffect(() => {
+    if (!recurringEnabled || recurringMode === "once" || !startsAt || !selectedType) {
+      setRecurringPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setRecurringPreviewLoading(true);
+    void fetch(`/api/public/book/${slug}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "preview_recurring",
+        startsAt,
+        frequency: recurringMode,
+        occurrences: recurringOccurrences,
+        serviceName: selectedType.name,
+      }),
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (json.data) {
+          setRecurringPreview({
+            dates: json.data.dates || [],
+            conflicts: json.data.conflicts || [],
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRecurringPreview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRecurringPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    slug,
+    recurringEnabled,
+    recurringMode,
+    recurringOccurrences,
+    startsAt,
+    selectedType,
+  ]);
 
   const smsDisclosure = workspace
     ? appointmentSmsConsentDisclosure(workspace.name)
@@ -886,6 +940,70 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     addAdditionalService: () => {
       setAddingAdditionalService(true);
       setStep("service");
+    },
+    recurringPreview,
+    recurringPreviewLoading,
+    sessionLines,
+    addToSessionCart: () => {
+      if (!selectedType || !startsAt) return;
+      setSessionLines((prev) => [
+        ...prev,
+        {
+          serviceId: selectedType.id,
+          serviceName: selectedType.name,
+          startsAt,
+          durationMinutes: effectiveDurationMinutes,
+        },
+      ]);
+      setStartsAt("");
+      setStep("service");
+    },
+    checkoutSession: async () => {
+      if (!selectedType || !startsAt || !phone.trim() || !firstName.trim()) {
+        setError("Complete contact details before checkout.");
+        return;
+      }
+      const lines = [
+        ...sessionLines,
+        {
+          serviceId: selectedType.id,
+          serviceName: selectedType.name,
+          startsAt,
+          durationMinutes: effectiveDurationMinutes,
+          staffId: selectedStaffId || undefined,
+          locationId: selectedLocationId || undefined,
+        },
+      ];
+      setSubmitting(true);
+      setError("");
+      try {
+        const res = await fetch(`/api/public/book/${slug}/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone,
+            firstName,
+            lastName,
+            email,
+            smsConsent,
+            bookingAnswers: Object.keys(bookingAnswers).length ? bookingAnswers : undefined,
+            lines,
+            payment: selectedType.config?.payment,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Checkout failed");
+        if (json.data?.checkoutUrl) {
+          window.location.href = json.data.checkoutUrl;
+          return;
+        }
+        setSessionLines([]);
+        setStep("done");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Checkout failed");
+      } finally {
+        setSubmitting(false);
+      }
     },
   };
 }

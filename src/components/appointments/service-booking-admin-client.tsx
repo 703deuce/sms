@@ -11,6 +11,8 @@ type Section =
   | "addons"
   | "resources"
   | "classes"
+  | "programs"
+  | "paymentPlans"
   | "restrictions"
   | "intake"
   | "webhooks"
@@ -29,6 +31,8 @@ const SECTION_API: Record<Section, string> = {
   addons: "/api/appointments/service-booking/add-ons",
   resources: "/api/appointments/service-booking/resources",
   classes: "/api/appointments/service-booking/classes",
+  programs: "/api/appointments/service-booking/programs",
+  paymentPlans: "/api/appointments/service-booking/payment-plans",
   restrictions: "/api/appointments/service-booking/client-restrictions",
   intake: "/api/appointments/service-booking/intake-forms",
   webhooks: "/api/appointments/service-booking/webhooks",
@@ -88,6 +92,19 @@ export function ServiceBookingAdminClient({
       body.priceCents = 9900;
       body.billingInterval = "month";
     }
+    if (section === "programs") {
+      body.priceCents = 49900;
+      body.currency = "usd";
+      body.steps = [];
+    }
+    if (section === "paymentPlans") {
+      body.totalCents = 49900;
+      body.currency = "usd";
+      body.installments = [
+        { id: "i1", label: "Deposit", amountCents: 19900, dueDaysFromStart: 0 },
+        { id: "i2", label: "Balance", amountCents: 30000, dueDaysFromStart: 30 },
+      ];
+    }
     if (section === "gifts") body.fixedAmountCents = 5000;
     const res = await fetch(SECTION_API[section], {
       method: "POST",
@@ -112,6 +129,8 @@ export function ServiceBookingAdminClient({
     { id: "addons", label: "Add-ons" },
     { id: "resources", label: "Resources" },
     { id: "classes", label: "Classes" },
+    { id: "programs", label: "Programs" },
+    { id: "paymentPlans", label: "Payment plans" },
     { id: "phases", label: "Processing phases" },
     { id: "households", label: "Households" },
     { id: "restrictions", label: "Client restrictions" },

@@ -138,4 +138,5 @@ export type CalendarPageActions = {
   onViewFullDay: () => void;
   onShowCalendarSettings: () => void;
   onRetry: () => void;
+  onSlotClick?: (input: { dateKey: string; hour: number }) => void;
 };

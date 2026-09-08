@@ -2,14 +2,19 @@ import "server-only";
 
 import { createPlatformAppointment } from "@/lib/appointments/booking-platform";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
+import {
+  generateRecurringOccurrences,
+  type RecurringFrequency,
+} from "@/lib/appointments/recurring-schedule";
 import { getPrisma } from "@/lib/db";
 
 export type RecurringBookingInput = {
   workspaceId: string;
   serviceName: string;
   startsAt: string;
-  frequency: "weekly" | "biweekly" | "monthly";
+  frequency: RecurringFrequency | "weekly" | "biweekly" | "monthly";
   occurrences: number;
+  weekdays?: number[];
   phone: string;
   firstName?: string;
   lastName?: string;
@@ -17,39 +22,37 @@ export type RecurringBookingInput = {
   smsConsent?: boolean;
 };
 
-function nextOccurrence(date: Date, frequency: RecurringBookingInput["frequency"]): Date {
-  const next = new Date(date);
-  switch (frequency) {
-    case "weekly":
-      next.setDate(next.getDate() + 7);
-      break;
-    case "biweekly":
-      next.setDate(next.getDate() + 14);
-      break;
-    case "monthly":
-      next.setMonth(next.getMonth() + 1);
-      break;
-  }
-  return next;
+function normalizeFrequency(freq: RecurringBookingInput["frequency"]): RecurringFrequency {
+  if (freq === "biweekly") return "biweekly";
+  if (freq === "monthly") return "monthly";
+  if (freq === "weekly") return "weekly";
+  return freq;
 }
 
 export async function createRecurringAppointments(input: RecurringBookingInput) {
   const prisma = getPrisma();
+  const frequency = normalizeFrequency(input.frequency);
   const series = await prisma.appointmentRecurringSeries.create({
     data: {
       workspaceId: input.workspaceId,
       serviceName: input.serviceName,
-      frequency: input.frequency,
+      frequency,
       occurrences: input.occurrences,
     },
   });
 
+  const dates = generateRecurringOccurrences({
+    startsAt: input.startsAt,
+    frequency,
+    occurrences: input.occurrences,
+    weekdays: input.weekdays,
+  });
+
   const created: string[] = [];
   const conflicts: Array<{ startsAt: string; reason: string }> = [];
-  let current = new Date(input.startsAt);
 
-  for (let i = 0; i < input.occurrences; i++) {
-    const startsAt = current.toISOString();
+  for (let i = 0; i < dates.length; i++) {
+    const startsAt = dates[i];
     try {
       await assertSlotAvailableForBooking(input.workspaceId, {
         serviceName: input.serviceName,
@@ -83,8 +86,7 @@ export async function createRecurringAppointments(input: RecurringBookingInput) 
         reason: err instanceof Error ? err.message : "unavailable",
       });
     }
-    current = nextOccurrence(current, input.frequency);
   }
 
-  return { seriesId: series.id, created, conflicts };
+  return { seriesId: series.id, created, conflicts, dates };
 }

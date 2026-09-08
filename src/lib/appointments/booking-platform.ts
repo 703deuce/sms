@@ -14,6 +14,7 @@ import {
   resolveManageLinkFromMetadata,
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, AppointmentTypeConfig } from "@/lib/appointments/types";
+import { buildPolicySnapshot } from "@/lib/appointments/policy-snapshot";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
 import { withAtomicSlotBooking } from "@/lib/appointments/slot-booking";
 import {
@@ -460,6 +461,7 @@ export async function createPlatformAppointment(
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
       reminderGeneration: 1,
+      policySnapshot: buildPolicySnapshot(svcCfg),
     }),
     { type: "created", label: "Appointment created" },
   );

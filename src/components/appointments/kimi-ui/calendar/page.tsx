@@ -41,6 +41,7 @@ export default function CalendarPage({ model, actions }: Props) {
             timezoneLabel={model.timezoneLabel}
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
+            onSlotClick={actions.onSlotClick}
           />
         ) : model.view === "month" ? (
           <MonthCalendar
@@ -60,6 +61,7 @@ export default function CalendarPage({ model, actions }: Props) {
             timezoneLabel={model.timezoneLabel}
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
+            onSlotClick={actions.onSlotClick}
           />
         )}
         <aside className="cal-side">

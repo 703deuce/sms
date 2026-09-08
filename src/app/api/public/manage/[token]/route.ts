@@ -35,13 +35,20 @@ export async function GET(_request: Request, { params }: Params) {
         : Promise.resolve([]),
     ]);
 
-    const meta = (resolved.appointment.metadata || {}) as { resourceIds?: string[] };
+    const meta = (resolved.appointment.metadata || {}) as { resourceIds?: string[]; recurringSeriesId?: string };
     const resourceLabels = await loadAppointmentResourceLabels(
       workspaceId,
       meta.resourceIds || [],
     );
     const preview = buildPublicAppointmentCustomerPreview(resolved.appointment);
     if (resourceLabels.length) preview.resources = resourceLabels;
+
+    const ws = await import("@/lib/db").then((m) =>
+      m.getPrisma().workspace.findUnique({
+        where: { id: workspaceId },
+        select: { slug: true },
+      }),
+    );
 
     return NextResponse.json({
       data: {
@@ -50,6 +57,8 @@ export async function GET(_request: Request, { params }: Params) {
         payment,
         intakeForms,
         contactId: resolved.appointment.contactId || null,
+        recurringSeriesId: meta.recurringSeriesId || null,
+        workspaceSlug: ws?.slug || null,
       },
     });
   } catch (err) {
@@ -103,13 +112,15 @@ export async function POST(request: Request, { params }: Params) {
           },
         });
       }
-      const updated = await manageAppointmentCancel(workspaceId, appointmentId, body.cancellationPolicy);
+      const cancelResult = await manageAppointmentCancel(workspaceId, appointmentId, body.cancellationPolicy);
+      const updated = cancelResult.appointment;
       const payment = await getManageAppointmentPaymentSummary(workspaceId, appointmentId);
       return NextResponse.json({
         data: {
           ...buildPublicAppointmentCustomerPreview(updated),
           permissions,
           payment,
+          policyFee: cancelResult.policyFee,
         },
       });
     }
@@ -117,6 +128,37 @@ export async function POST(request: Request, { params }: Params) {
     if (body.action === "reschedule" && body.startsAt) {
       if (!permissions.reschedule) {
         return NextResponse.json({ error: "Reschedule is not allowed for this link" }, { status: 403 });
+      }
+      const scope = body.recurringScope ? String(body.recurringScope) : undefined;
+      const meta = (resolved.appointment.metadata || {}) as { recurringSeriesId?: string };
+      if (scope && meta.recurringSeriesId) {
+        const { editRecurringSeries } = await import(
+          "@/lib/appointments/service-booking/recurring-series"
+        );
+        const editScope =
+          scope === "future"
+            ? "this_and_future"
+            : scope === "all"
+              ? "entire_series"
+              : "this_only";
+        await editRecurringSeries(
+          workspaceId,
+          meta.recurringSeriesId,
+          editScope,
+          appointmentId,
+          { startsAt: String(body.startsAt) },
+        );
+        const refreshed = await resolveManageAppointmentByToken(token);
+        const updated = refreshed?.appointment || resolved.appointment;
+        const payment = await getManageAppointmentPaymentSummary(workspaceId, appointmentId);
+        return NextResponse.json({
+          data: {
+            ...buildPublicAppointmentCustomerPreview(updated),
+            permissions,
+            payment,
+            recurringScope: scope,
+          },
+        });
       }
       const result = await manageAppointmentReschedule(
         workspaceId,

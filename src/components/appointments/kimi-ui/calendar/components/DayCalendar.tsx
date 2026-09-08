@@ -26,6 +26,7 @@ type Props = {
   timezoneLabel: string;
   onOpenAppointment: (id: string) => void;
   onShowCalendarSettings: () => void;
+  onSlotClick?: (input: { dateKey: string; hour: number }) => void;
 };
 
 export default function DayCalendar({
@@ -37,6 +38,7 @@ export default function DayCalendar({
   timezoneLabel,
   onOpenAppointment,
   onShowCalendarSettings,
+  onSlotClick,
 }: Props) {
   const day = weekDays[0];
 
@@ -57,10 +59,15 @@ export default function DayCalendar({
             </span>
           </div>
         ) : null}
-        {hours.map((h) => (
+        {hours.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="wg-time">{h}</div>
-            <div className={`wg-cell ${day?.today ? "today-col" : ""}`} />
+            <button
+              type="button"
+              className={`wg-cell ${day?.today ? "today-col" : ""}`}
+              aria-label={`Create appointment ${h}`}
+              onClick={() => day && onSlotClick?.({ dateKey: day.dateKey, hour: START + hi })}
+            />
           </React.Fragment>
         ))}
 

@@ -25,6 +25,8 @@ type ManageData = {
   timezone?: string;
   meetingLink?: string | null;
   locationLabel?: string | null;
+  recurringSeriesId?: string | null;
+  workspaceSlug?: string | null;
   permissions?: {
     cancel?: boolean;
     reschedule?: boolean;
@@ -66,6 +68,7 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [rescheduleAt, setRescheduleAt] = useState("");
   const [showReschedule, setShowReschedule] = useState(false);
+  const [recurringScope, setRecurringScope] = useState<"this" | "future" | "all">("this");
   const [intakeDrafts, setIntakeDrafts] = useState<Record<string, Record<string, string>>>({});
 
   async function reload() {
@@ -148,6 +151,32 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
 
   const balanceDue = data.payment?.balanceDueCents || 0;
   const canPay = data.permissions?.payBalance && balanceDue > 0;
+  const isRecurring = Boolean(data.recurringSeriesId);
+
+  function downloadIcs() {
+    if (!data.startsAt || !data.serviceName) return;
+    const start = new Date(data.startsAt);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const body = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "BEGIN:VEVENT",
+      `DTSTART:${fmt(start)}`,
+      `DTEND:${fmt(end)}`,
+      `SUMMARY:${data.serviceName}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const blob = new Blob([body], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "appointment.ics";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="mx-auto max-w-lg space-y-6 p-6">
@@ -210,6 +239,16 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
             Join video meeting
           </a>
         ) : null}
+        <div className="mt-3 flex flex-wrap gap-3">
+          <button type="button" className="text-sm font-medium text-primary underline" onClick={downloadIcs}>
+            Add to calendar
+          </button>
+          {data.workspaceSlug ? (
+            <a href={`/book/${data.workspaceSlug}`} className="text-sm font-medium text-primary underline">
+              Book again
+            </a>
+          ) : null}
+        </div>
       </section>
 
       {canPay ? (
@@ -326,7 +365,14 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
             disabled={busy || data.status === "canceled"}
             className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
             onClick={() => {
-              if (window.confirm("Cancel this appointment?")) void act({ action: "cancel" });
+              const msg = isRecurring
+                ? "Cancel this appointment? Choose whether to cancel this visit only, this and future visits, or the entire series."
+                : "Cancel this appointment?";
+              if (!window.confirm(msg)) return;
+              void act({
+                action: "cancel",
+                recurringScope: isRecurring ? recurringScope : undefined,
+              });
             }}
           >
             Cancel
@@ -334,9 +380,54 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
         ) : null}
       </div>
 
+      {isRecurring && data.permissions?.cancel ? (
+        <fieldset className="rounded-lg border p-4 text-sm">
+          <legend className="px-1 font-medium">Recurring series</legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {[
+              { id: "this", label: "This visit only" },
+              { id: "future", label: "This and future" },
+              { id: "all", label: "Entire series" },
+            ].map((opt) => (
+              <label key={opt.id} className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="recurring-scope"
+                  checked={recurringScope === opt.id}
+                  onChange={() => setRecurringScope(opt.id as "this" | "future" | "all")}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
       {showReschedule ? (
         <section className="rounded-lg border p-4">
           <h2 className="text-sm font-semibold">Pick a new time</h2>
+          {isRecurring ? (
+            <fieldset className="mt-3 text-sm">
+              <legend className="font-medium">Apply reschedule to</legend>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {[
+                  { id: "this", label: "This visit only" },
+                  { id: "future", label: "This and future" },
+                  { id: "all", label: "Entire series" },
+                ].map((opt) => (
+                  <label key={opt.id} className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="reschedule-scope"
+                      checked={recurringScope === opt.id}
+                      onChange={() => setRecurringScope(opt.id as "this" | "future" | "all")}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <label htmlFor="reschedule-at" className="mt-2 block text-xs text-muted-foreground">
             New date and time
           </label>
@@ -352,7 +443,13 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
             type="button"
             disabled={busy || !rescheduleAt}
             className="mt-3 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            onClick={() => void act({ action: "reschedule", startsAt: new Date(rescheduleAt).toISOString() })}
+            onClick={() =>
+              void act({
+                action: "reschedule",
+                startsAt: new Date(rescheduleAt).toISOString(),
+                recurringScope: isRecurring ? recurringScope : undefined,
+              })
+            }
           >
             Confirm reschedule
           </button>

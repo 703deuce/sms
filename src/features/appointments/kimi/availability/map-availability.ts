@@ -44,6 +44,7 @@ export const EMPTY_AVAILABILITY_FORM: AvailabilityFormState = {
   overrideClosed: false,
   overrideOpen: "10:00",
   overrideClose: "14:00",
+  blackoutDates: [],
 };
 
 export function formStateFromSettings(data: AppointmentPlatformConfig): AvailabilityFormState {
@@ -72,6 +73,7 @@ export function formStateFromSettings(data: AppointmentPlatformConfig): Availabi
       name: h.name,
       closed: h.closed,
     })),
+    blackoutDates: data.blackoutDates || [],
   };
 }
 
@@ -266,5 +268,6 @@ export function buildSettingsPatch(form: AvailabilityFormState) {
     bookingLimits,
     namedSchedules: form.namedSchedules,
     holidays: form.holidays,
+    blackoutDates: form.blackoutDates,
   };
 }

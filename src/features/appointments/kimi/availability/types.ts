@@ -68,6 +68,7 @@ export type AvailabilityFormState = {
   overrideClosed: boolean;
   overrideOpen: string;
   overrideClose: string;
+  blackoutDates: string[];
 };
 
 export type AvailabilityPageModel = {

@@ -139,5 +139,11 @@ export async function manageAppointmentCancel(
 
   await restoreBookingEntitlements(workspaceId, appointmentId);
 
-  return updated;
+  const { executePolicyFee } = await import("@/lib/appointments/policy-fees");
+  const fee = await executePolicyFee(workspaceId, appointmentId, {
+    kind: "cancel",
+    afterCutoff: evalResult.afterCutoff,
+  });
+
+  return { appointment: updated, policyFee: fee };
 }

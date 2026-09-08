@@ -292,6 +292,52 @@ export function AvailabilityConnected() {
           </Button>
         </div>
         <div className="avail-card p-6 space-y-4">
+          <h2 className="text-[15px] font-bold">Blackout dates</h2>
+          <p className="text-[12px] text-[#8a87a0]">
+            Days when no appointments can be booked (ISO dates, workspace timezone).
+          </p>
+          {form.blackoutDates.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">No blackout dates configured.</p>
+          ) : (
+            <ul className="space-y-2">
+              {form.blackoutDates.map((d) => (
+                <li key={d} className="flex items-center justify-between rounded-lg border px-3 py-2 text-[13px]">
+                  <span>{d}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      patchForm({ blackoutDates: form.blackoutDates.filter((x) => x !== d) })
+                    }
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="label" htmlFor="blackout-date">Date</label>
+              <input type="date" className="input mt-1" id="blackout-date" />
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                const dateEl = document.getElementById("blackout-date") as HTMLInputElement | null;
+                const date = dateEl?.value;
+                if (!date) return;
+                patchForm({
+                  blackoutDates: [...new Set([...form.blackoutDates, date])].sort(),
+                });
+                if (dateEl) dateEl.value = "";
+              }}
+            >
+              Add blackout
+            </Button>
+          </div>
+        </div>
+        <div className="avail-card p-6 space-y-4">
           <h2 className="text-[15px] font-bold">Holiday calendar</h2>
           <p className="text-[12px] text-[#8a87a0]">
             Closed dates applied across availability unless overridden.

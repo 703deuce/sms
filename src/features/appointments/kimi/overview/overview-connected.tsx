@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import OverviewView from "@/components/appointments/kimi-ui/overview/page";
+import { AppointmentsGlobalSearch } from "@/components/appointments/appointments-global-search";
 import {
   buildOverviewPageModel,
   type AnalyticsApiData,
@@ -119,5 +120,12 @@ export function OverviewConnected() {
   if (loading) return <OverviewLoading />;
   if (failed || !model) return <OverviewError onRetry={load} />;
 
-  return <OverviewView model={model} actions={actions} copied={copied} />;
+  return (
+    <div className="ref-root min-h-screen bg-[#f7f8fb]">
+      <div className="px-6 pt-6 max-w-[1280px] mx-auto">
+        <AppointmentsGlobalSearch />
+      </div>
+      <OverviewView model={model} actions={actions} copied={copied} />
+    </div>
+  );
 }
