@@ -7,6 +7,7 @@ import { evaluateExtendedCancellationPolicy, evaluateExtendedReschedulePolicy } 
 import type { ExtendedCancellationPolicy, ExtendedReschedulePolicy } from "./types";
 import { transferAppointmentEntitlements } from "./entitlements";
 import { restoreBookingEntitlements } from "./booking-entitlements";
+import { transferAppointmentPaymentOnReschedule } from "./manage-payments";
 
 const DEFAULT_PERMISSIONS: ManageAppointmentPermissions = {
   view: true,
@@ -107,6 +108,7 @@ export async function manageAppointmentReschedule(
   });
 
   await transferAppointmentEntitlements(workspaceId, appointmentId, appointmentId);
+  await transferAppointmentPaymentOnReschedule(workspaceId, appointmentId, appointmentId);
 
   return { appointment: updated, afterCutoff: evalResult.afterCutoff, behavior: evalResult.behavior };
 }
