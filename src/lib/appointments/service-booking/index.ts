@@ -29,3 +29,4 @@ export * from "./contact-merge";
 export * from "./scheduler-theme";
 export * from "./store-checkout";
 export * from "./webhook-delivery";
+export * from "./phase2";
