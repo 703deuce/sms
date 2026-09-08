@@ -20,7 +20,7 @@ type Props = {
 
 export default function OverviewView({ model, actions, copied }: Props) {
   return (
-    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5 font-sans">
+    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5">
       <RefDecoPageHeader
         title="Overview"
         description="Here's what's happening with your appointments today."

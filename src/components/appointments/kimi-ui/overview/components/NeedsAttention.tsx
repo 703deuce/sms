@@ -14,7 +14,7 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
   return (
     <RefDecoSection title="Needs attention" bodyClassName="flex flex-col">
       {items.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-gray-500">Nothing needs attention right now.</p>
+        <p className="appt-pilot-text-body py-8 text-center text-[var(--text-secondary)]">Nothing needs attention right now.</p>
       ) : (
         <div className="flex flex-col gap-2.5">
           {items.map((a) => {
@@ -30,8 +30,8 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
                   <Icon size={17} aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-gray-900">{a.title}</div>
-                  <div className="truncate text-[12px] text-gray-500">{a.sub}</div>
+                  <div className="appt-pilot-text-list font-semibold text-[var(--text-primary)]">{a.title}</div>
+                  <div className="appt-pilot-text-list truncate text-[var(--text-secondary)]">{a.sub}</div>
                 </div>
                 <ChevronRight size={16} className="text-gray-300" aria-hidden />
               </button>

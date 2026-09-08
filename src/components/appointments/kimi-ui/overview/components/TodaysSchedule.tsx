@@ -27,7 +27,7 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
       }
     >
       {schedule.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-gray-500">No appointments scheduled for today.</p>
+        <p className="appt-pilot-text-body py-8 text-center text-[var(--text-secondary)]">No appointments scheduled for today.</p>
       ) : (
         <div className="divide-y divide-gray-50">
           {schedule.map((a) => (
@@ -37,19 +37,19 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
               onClick={() => onOpenAppointment(a.id)}
             >
               <div className="w-[64px] shrink-0">
-                <div className="text-[13px] font-semibold text-gray-900">{a.time}</div>
-                <div className="text-[11px] text-gray-400">{a.dur}</div>
+                <div className="appt-pilot-text-list font-semibold text-[var(--text-primary)]">{a.time}</div>
+                <div className="appt-pilot-text-helper">{a.dur}</div>
               </div>
               <div className="w-[130px] shrink-0">
-                <div className="flex items-center gap-1.5 text-[13px] font-medium text-gray-700">
+                <div className="appt-pilot-text-list flex items-center gap-1.5 font-medium text-gray-700">
                   <span className="appt-pilot-schedule-dot h-1.5 w-1.5 rounded-full" aria-hidden />
                   {a.type}
                 </div>
-                <div className="pl-3 text-[11px] text-gray-400">{a.loc}</div>
+                <div className="appt-pilot-text-helper pl-3">{a.loc}</div>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-gray-900">{a.name}</div>
-                <div className="text-[11px] text-gray-400">{a.phone}</div>
+                <div className="appt-pilot-text-list font-semibold text-[var(--text-primary)]">{a.name}</div>
+                <div className="appt-pilot-text-helper">{a.phone}</div>
               </div>
               <span className={`ref-pill ${a.status === "Confirmed" ? "pill-green" : "pill-amber"}`}>
                 {a.status}

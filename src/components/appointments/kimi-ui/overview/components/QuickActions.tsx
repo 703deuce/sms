@@ -38,7 +38,7 @@ export default function QuickActions({
       <button
         type="button"
         onClick={onManageTypes}
-        className="appt-pilot-secondary-btn mt-3 flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-[13px] font-semibold transition"
+        className="appt-pilot-secondary-btn appt-pilot-text-list mt-3 flex min-h-[2.75rem] items-center gap-2.5 rounded-lg px-3.5 py-2.5 font-semibold transition"
       >
         <ListChecks size={17} aria-hidden />
         <span className="flex-1 text-left">Manage appointment types</span>

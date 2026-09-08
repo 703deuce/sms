@@ -24,7 +24,7 @@ export default function RecentConversations({ conversations, onOpenConversation,
       bodyClassName="flex flex-col"
     >
       {conversations.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-gray-500">No recent conversations.</p>
+        <p className="appt-pilot-text-body py-8 text-center text-[var(--text-secondary)]">No recent conversations.</p>
       ) : (
         <div className="divide-y divide-gray-50">
           {conversations.map((c) => (
@@ -35,12 +35,12 @@ export default function RecentConversations({ conversations, onOpenConversation,
             >
               <div className={`avatar av-${c.color}`}>{c.initials}</div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-gray-900">{c.name}</div>
-                <div className="truncate text-[12px] text-gray-500">{c.msg}</div>
+                <div className="appt-pilot-text-list font-semibold text-[var(--text-primary)]">{c.name}</div>
+                <div className="appt-pilot-text-list truncate text-[var(--text-secondary)]">{c.msg}</div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <span className={`ref-pill pill-${c.tagColor}`}>{c.tag}</span>
-                <span className="text-[11px] text-gray-400">{c.time}</span>
+                <span className="appt-pilot-text-helper">{c.time}</span>
               </div>
             </div>
           ))}

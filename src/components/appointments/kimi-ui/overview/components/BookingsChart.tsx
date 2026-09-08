@@ -31,8 +31,8 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
       bodyClassName="ref-deco-chart !p-4 flex flex-col"
     >
       <div className="appt-pilot-chart-total font-bold">{chart.total}</div>
-      <div className="mt-1 text-[12px] text-gray-500">Total appointments</div>
-      <div className="text-[12px] font-medium text-green-600">{chart.deltaLabel}</div>
+      <div className="appt-pilot-chart-label mt-1">Total appointments</div>
+      <div className="appt-pilot-chart-delta text-green-600">{chart.deltaLabel}</div>
       <div className="mt-3 -mx-1">
         <svg viewBox={`0 0 ${W} ${H + 22}`} className="w-full" role="img" aria-label="Bookings trend chart">
           <defs>
@@ -89,12 +89,12 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
       </div>
       <div className="appt-pilot-chart-stat mt-auto grid grid-cols-2 gap-3 px-3 py-2.5">
         <div>
-          <div className="text-[11px] text-gray-400">Peak day</div>
-          <div className="text-[13px] font-semibold text-gray-900">{chart.peakLabel}</div>
+          <div className="appt-pilot-text-helper">Peak day</div>
+          <div className="appt-pilot-text-list font-semibold text-[var(--text-primary)]">{chart.peakLabel}</div>
         </div>
         <div className="text-right">
-          <div className="text-[11px] text-gray-400">vs last week</div>
-          <div className="text-[13px] font-semibold text-green-600">{chart.vsLastWeek}</div>
+          <div className="appt-pilot-text-helper">vs last week</div>
+          <div className="appt-pilot-text-list font-semibold text-green-600">{chart.vsLastWeek}</div>
         </div>
       </div>
     </RefDecoSection>

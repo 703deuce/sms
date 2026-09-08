@@ -1,6 +1,6 @@
 /**
- * Appointments Overview — color-system pilot (scoped).
- * Charcoal + restrained teal on light neutrals. Do not import globally.
+ * Appointments Overview — color + typography pilot (scoped).
+ * Charcoal + restrained teal on light neutrals. Geist via overview layout.
  */
 .appt-overview-pilot {
   --surface: #ffffff;
@@ -17,6 +17,28 @@
   --state-warning-soft: #fffbeb;
   --state-error: #dc2626;
   --state-error-soft: #fef2f2;
+
+  /* Type scale — calm product density */
+  --type-page-title: 1.5rem; /* 24px */
+  --type-section: 1.0625rem; /* 17px */
+  --type-section-minor: 0.875rem; /* 14px */
+  --type-stat: 1.5rem; /* 24px */
+  --type-body: 0.875rem; /* 14px */
+  --type-list: 0.8125rem; /* 13px */
+  --type-helper: 0.75rem; /* 12px */
+  --type-button: 0.8125rem; /* 13px */
+
+  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--type-body);
+  line-height: 1.45;
+  letter-spacing: -0.011em;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.appt-overview-pilot .font-display {
+  font-family: inherit;
+  letter-spacing: -0.02em;
 }
 
 /* Page canvas — neutral 60% */
@@ -33,26 +55,56 @@
 
 /* Typography */
 .appt-overview-pilot .ref-deco-page-head {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(90deg, rgba(20, 125, 116, 0.04), transparent 42%);
 }
 
 .appt-overview-pilot .ref-deco-page-head h1 {
-  font-size: 1.375rem;
-  line-height: 1.25;
+  font-size: var(--type-page-title) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em;
   color: var(--text-primary);
 }
 
 .appt-overview-pilot .ref-deco-page-head p {
-  font-size: 0.8125rem;
+  font-size: var(--type-body);
+  line-height: 1.4;
   color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.appt-pilot-text-list {
+  font-size: var(--type-list);
+  line-height: 1.4;
+}
+
+.appt-pilot-text-helper {
+  font-size: var(--type-helper);
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+.appt-pilot-text-body {
+  font-size: var(--type-body);
+  line-height: 1.45;
+}
+
+.appt-pilot-text-section {
+  font-size: var(--type-section);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
 }
 
 .appt-pilot-muted-link {
   color: var(--brand-accent);
+  font-size: var(--type-list);
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .appt-pilot-muted-link:hover {
@@ -63,12 +115,14 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 2.25rem;
   border-radius: 0.625rem;
   border: 1px solid var(--border);
   background: var(--surface);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8125rem;
+  padding: 0.4375rem 0.875rem;
+  font-size: var(--type-button);
   font-weight: 500;
+  line-height: 1.3;
   color: var(--brand-primary);
   box-shadow: 0 1px 2px rgba(16, 20, 24, 0.03);
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -113,14 +167,26 @@
   transform: none;
 }
 
-.appt-overview-pilot .ref-deco-kpi .text-gray-500 {
+.appt-overview-pilot .ref-deco-kpi .text-gray-500,
+.appt-overview-pilot .ref-deco-kpi .min-w-0 > div:first-child {
   color: var(--text-secondary);
-  font-size: 0.6875rem;
+  font-size: var(--type-helper);
+  font-weight: 500;
+  line-height: 1.3;
 }
 
-.appt-overview-pilot .ref-deco-kpi .text-gray-900 {
+.appt-overview-pilot .ref-deco-kpi .text-gray-900,
+.appt-overview-pilot .ref-deco-kpi .min-w-0 > div:nth-child(2) {
   color: var(--text-primary);
-  font-size: 1.25rem;
+  font-size: var(--type-stat) !important;
+  font-weight: 600 !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.02em;
+}
+
+.appt-overview-pilot .ref-deco-kpi .min-w-0 > div:nth-child(3) {
+  font-size: var(--type-helper);
+  line-height: 1.3;
 }
 
 .appt-overview-pilot .ref-deco-icon-ring {
@@ -168,13 +234,16 @@
 }
 
 .appt-overview-pilot .ref-deco-section-head h2 {
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--type-section) !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.015em;
   color: var(--text-primary);
 }
 
 .appt-overview-pilot .ref-deco-section-head p {
-  font-size: 0.75rem;
+  font-size: var(--type-helper);
+  line-height: 1.35;
   color: var(--text-secondary);
 }
 
@@ -199,7 +268,9 @@
 
 /* Pills & avatars — semantic only where class says so */
 .appt-overview-pilot .ref-pill {
-  font-size: 0.6875rem;
+  font-size: var(--type-helper);
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .appt-overview-pilot .pill-purple,
@@ -263,12 +334,15 @@
 
 /* Quick actions */
 .appt-overview-pilot .qa-btn {
-  padding: 14px 10px;
+  padding: 12px 10px;
+  min-height: 4.25rem;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--brand-primary);
-  font-size: 0.75rem;
+  font-size: var(--type-button);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .appt-overview-pilot .qa-btn:hover {
@@ -333,14 +407,29 @@
 }
 
 .appt-overview-pilot .appt-pilot-chart-total {
-  font-size: 1.375rem;
-  line-height: 1;
+  font-size: var(--type-stat);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
+}
+
+.appt-overview-pilot .appt-pilot-chart-label {
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.appt-overview-pilot .appt-pilot-chart-delta {
+  font-size: var(--type-list);
+  font-weight: 500;
 }
 
 .appt-overview-pilot .appt-pilot-filter-btn {
   border: 1px solid var(--border);
   color: var(--text-secondary);
+  font-size: var(--type-button);
+  font-weight: 500;
+  min-height: 2rem;
 }
 
 .appt-overview-pilot .appt-pilot-filter-btn:hover {
