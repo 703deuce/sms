@@ -740,6 +740,27 @@ function serializeValue(v: unknown): unknown {
   return v;
 }
 
+/** Prisma JSON path filter → PostgREST arrow accessor (metadata->>field or metadata->a->>b). */
+function jsonPathColumn(column: string, path: string[]): string {
+  if (!path.length) return column;
+  if (path.length === 1) return `${column}->>${path[0]}`;
+  const nested = path.slice(0, -1).reduce((acc, segment) => `${acc}->${segment}`, column);
+  return `${nested}->>${path[path.length - 1]}`;
+}
+
+function applyJsonPathFilter(query: any, column: string, value: Row): any {
+  const path = Array.isArray(value.path) ? (value.path as string[]) : [];
+  const jsonKey = jsonPathColumn(column, path);
+  let q = query;
+  if ("equals" in value) {
+    if (value.equals === null) q = q.is(jsonKey, null);
+    else q = q.eq(jsonKey, serializeValue(value.equals));
+  }
+  if ("in" in value && Array.isArray(value.in)) q = q.in(jsonKey, value.in.map(serializeValue));
+  if ("not" in value) q = applyColumnNotFilter(q, jsonKey, value.not);
+  return q;
+}
+
 /** Prisma `{ not: ... }` on a column — must not stringify filter ops as JSON (22P02 on jsonb). */
 function applyColumnNotFilter(query: any, key: string, notValue: unknown): any {
   if (notValue === null) return query.not(key, "is", null);
@@ -899,6 +920,11 @@ function applyWhereSync(query: any, where: Args | undefined): any {
 
     if (value === null) {
       q = q.is(key, null);
+      continue;
+    }
+
+    if (isObject(value) && "path" in value && Array.isArray((value as Row).path)) {
+      q = applyJsonPathFilter(q, key, value as Row);
       continue;
     }
 
