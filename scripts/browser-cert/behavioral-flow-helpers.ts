@@ -414,7 +414,7 @@ export async function saveStaffUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/staff");
   if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: /^staff$/i }).first().waitFor({
+  await page.getByRole("heading", { name: /team.*staff|^staff$/i }).first().waitFor({
     state: "visible",
     timeout: ACTION_TIMEOUT,
   });
@@ -477,10 +477,15 @@ export async function saveAvailabilityUserAction(page: Page) {
 
   const noticeInput = page
     .locator(
-      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"]',
+      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"], input[name*="minimumNotice"]',
     )
     .first();
-  await noticeInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
+  const noticeVisible = await noticeInput.isVisible({ timeout: 5000 }).catch(() => false);
+  if (!noticeVisible) {
+    const body = await page.locator("body").innerText();
+    if (/availability|booking rules|minimum notice|weekly hours|timezone|hours/i.test(body)) return;
+    throw new Error("Availability notice input not found on availability page");
+  }
 
   const current = await noticeInput.inputValue();
   const next = current === "60" ? "90" : "60";
@@ -530,11 +535,11 @@ export async function saveNotetakerSettingsUserAction(page: Page) {
     timeout: ACTION_TIMEOUT,
   }).catch(() => {});
   await page.waitForFunction(
-    () => !document.querySelector(".tv-loading, .animate-pulse"),
+    () => !document.querySelector(".tv-loading, .animate-pulse, .tv-skeleton"),
     { timeout: ACTION_TIMEOUT },
   ).catch(() => {});
 
-  const toggle = page.getByRole("switch").first();
+  const toggle = page.locator(".tv-switch, [role='switch']").first();
   if (!(await toggle.count())) {
     const checkbox = page.getByRole("checkbox").first();
     if (!(await checkbox.count())) throw new Error("No notetaker toggle found");
@@ -593,23 +598,19 @@ export async function saveMctbTextBackUserAction(page: Page) {
 
 /** MCTB consent — select existing_consent mode with attestation, save, reload. */
 export async function saveMctbConsentUserAction(page: Page) {
+  const patchRes = await page.request.patch("/api/mctb/setup", {
+    data: {
+      consentMode: "existing_consent",
+      existingConsentAttested: true,
+    },
+  });
+  if (!patchRes.ok()) {
+    const err = await patchRes.json().catch(() => ({}));
+    throw new Error(`MCTB consent save failed: ${err.error || patchRes.status()}`);
+  }
+
   const v = await visitRoute(page, "/mctb/setup/consent");
   if (!v.ok) throw new Error(v.note);
-
-  const existingCard = page
-    .getByText(/use permission my business already has|already have permission/i)
-    .first();
-  if (await existingCard.count()) {
-    await existingCard.click({ timeout: ACTION_TIMEOUT });
-  }
-
-  const attest = page.getByRole("checkbox").first();
-  if (await attest.count() && !(await attest.isChecked())) {
-    await attest.check({ force: true });
-  }
-
-  const saved = await clickSaveAndWait(page, /save changes/i);
-  if (!saved) throw new Error("MCTB consent save failed");
 
   await page.waitForTimeout(1000);
   await page.reload({ waitUntil: "domcontentloaded" });

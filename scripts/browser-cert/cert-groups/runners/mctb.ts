@@ -185,13 +185,18 @@ export async function runMCTB28(ctx: CertContext) {
 
 export async function runMCTB29(ctx: CertContext) {
   await ctx.visit("/mctb/missed-calls");
-  const detailLink = ctx.page.locator('a[href*="/mctb/missed-calls/"]').first();
+  const detailLink = ctx.page
+    .locator('main a[href*="/mctb/missed-calls/"], table a[href*="/mctb/missed-calls/"]')
+    .first();
   if (await detailLink.count()) {
     await detailLink.click({ timeout: ACTION_TIMEOUT });
     await ctx.reload();
     return;
   }
-  const callerLink = ctx.page.getByRole("link", { name: /50177|missed call/i }).first();
+  const callerLink = ctx.page
+    .locator('table a, tbody a, [data-testid="missed-call-row"] a')
+    .filter({ hasText: /50177|\+1.*50177/i })
+    .first();
   if (await callerLink.count()) {
     await callerLink.click({ timeout: ACTION_TIMEOUT });
     await ctx.reload();

@@ -94,9 +94,21 @@ export function loadState(): BrowserCertState {
   };
 }
 
+function sanitizeCertDetail(detail: string): string {
+  return detail
+    .replace(/https?:\/\/[^\s/]+/gi, "[REDACTED]")
+    .replace(/→ GET \S+/g, "→ GET [REDACTED]/api/…")
+    .replace(/got \[REDACTED\]\//g, "got [REDACTED]/")
+    .slice(0, 400);
+}
+
 export function saveState(state: BrowserCertState) {
   mkdirSync(CERT_DIR, { recursive: true });
   state.updatedAt = new Date().toISOString();
+  if (state.baseUrl) state.baseUrl = "[REDACTED]";
+  for (const result of Object.values(state.results)) {
+    if (result.detail) result.detail = sanitizeCertDetail(result.detail);
+  }
   writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
@@ -171,7 +183,8 @@ export function recordResult(
   status: CertStatus,
   detail = "",
 ) {
-  state.results[id] = { id, status, detail, batchId, at: new Date().toISOString() };
+  const safeDetail = sanitizeCertDetail(detail);
+  state.results[id] = { id, status, detail: safeDetail, batchId, at: new Date().toISOString() };
   const icon =
     status === "PASS"
       ? "✓"
@@ -182,7 +195,7 @@ export function recordResult(
           : status === "NOT IMPLEMENTED" || status === "INTENTIONALLY DEFERRED"
             ? "—"
             : "✗";
-  console.log(`${icon} ${id}: ${status}${detail ? ` — ${detail}` : ""}`);
+  console.log(`${icon} ${id}: ${status}${safeDetail ? ` — ${safeDetail}` : ""}`);
 }
 
 export function withFlowTimeout<T>(label: string, ms: number, fn: () => Promise<T>): Promise<T> {
