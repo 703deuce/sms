@@ -1,0 +1,73 @@
+---
+description: MANDATORY — Appointments service-booking parity (Acuity floor + competitive bar). Read before any appointments/scheduling work.
+alwaysApply: true
+---
+
+# MANDATORY: TRANSOVO APPOINTMENTS SERVICE-BOOKING PARITY
+
+**Source of truth:** `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md`  
+**Applies with:** `docs/TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md`, `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md`, all `transovo-*.mdc` standards (always).
+
+## When this rule activates
+
+**Before any work** touching Appointments scheduling, booking types, public booking, client portal, packages, memberships, gift certificates, classes, availability, payments at booking, manage-appointment self-service, waitlists, intake, or certification — read the **full governing requirement** first.
+
+Paths include (not exhaustive): `src/app/**/appointments/**`, `src/app/**/book/**`, `src/app/api/**/appointments/**`, `src/app/api/public/book/**`, `src/lib/appointments/**`, `src/lib/scheduling/**`, `src/components/appointments/**`.
+
+## Authority order (Appointments)
+
+1. `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md` — **this rule** (parity floor + beyond-Acuity bar)
+2. `docs/TRANSOVO-APPOINTMENTS-DOMAIN-ARCHITECTURE.md` — domain objects and routes
+3. `docs/TRANSOVO-V1-APPOINTMENTS-PLATFORM-SCOPE.md` — V1 product scope
+4. Meeting / Service / Class architecture (prior build spec)
+5. Certification matrices (below) — completeness and done-ness
+6. All Transovo standards (`transovo-*.mdc`)
+7. Existing code — evidence only, lowest authority
+
+## Hard requirements
+
+1. **Acuity parity is the floor, not the ceiling** — do not ship behind Acuity on customer-operable scheduling.
+2. **Capability benchmark** — Acuity, SimplyBook.me, Square Appointments, Vagaro, Fresha (service-business model).
+3. **UX benchmark** — Cal.com / Calendly simplicity for basic booking (progressive disclosure).
+4. **Manage Appointment URL is core** — every appointment gets a secure manage link; rescheduling must preserve payment, deposit, package, and membership relationships transactionally.
+5. **One canonical pipeline** — public, staff, portal, API, and AI bookings enter the same runtime.
+6. **No narrower framing** — do not describe the product as “Acuity-like” or Calendly-only.
+7. **Preserve Transovo advantages** — reminders, workflows, two-way SMS, AI booking, notetaker, MCTB integration.
+8. **Progressive disclosure** — Meeting/Service/Class create flows stay simple; depth appears after creation.
+9. **Do not remove** functionality that already exceeds Acuity.
+
+## Certification matrices (required before “done”)
+
+| Matrix | Path |
+|--------|------|
+| Acuity capability parity | `docs/ACUITY-PARITY-MATRIX.md` |
+| Beyond-Acuity / complaint gaps | `docs/ACUITY-USER-COMPLAINT-GAP-MATRIX.md` |
+| Multi-platform competitive | `docs/SERVICE-BOOKING-COMPETITIVE-PARITY-MATRIX.md` |
+
+Status values: **PASS** | **FAIL** | **PROVIDER_BLOCKED** | **NOT_APPLICABLE** — **no UNKNOWN**.
+
+PASS requires real customer/admin action through persistence and reload — not UI render alone.
+
+## Competitive gaps beyond Acuity-only (required)
+
+- **BA** Multi-service appointments (one visit, chained services, one checkout)
+- **BB** Processing-time scheduling (staff/resource phases)
+- **BC** Mixed-entitlement packages (typed credits across services)
+- **BD** Membership benefits beyond simple credits
+- **BE** Family / dependent accounts (booker ≠ attendee)
+
+## Pre-implementation gate
+
+Before adding/changing appointments features, answer:
+
+1. Which parity section (A–AZ, BA–BE) owns it?
+2. Is it operational or configuration?
+3. What is the one canonical home (route + domain object)?
+4. Does basic Meeting/Service/Class setup stay simple?
+5. Which matrix row and UA test ID will certify it?
+
+If unclear — do not implement yet.
+
+## Governing sentence
+
+**Simple scheduling for Calendly-style users, plus a complete service-business operating model for Acuity-class businesses — with Transovo’s communication and automation advantages on top.**

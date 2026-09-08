@@ -3,6 +3,12 @@
 **Status:** Active domain reference for Mode 4 (appointments platform only)  
 **Supersedes for Mode 4:** `docs/PRODUCT_ARCHITECTURE.md` (legacy mass-SMS campaign catalog — **not** included in Mode 4 standards pack)
 
+**Governing parity requirement (read first):** `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md`  
+**Certification matrices:** `docs/ACUITY-PARITY-MATRIX.md` · `docs/ACUITY-USER-COMPLAINT-GAP-MATRIX.md` · `docs/SERVICE-BOOKING-COMPETITIVE-PARITY-MATRIX.md`  
+**Cursor rule:** `.cursor/rules/transovo-appointments-service-booking-parity.mdc`
+
+Acuity parity is the **floor**; service-booking competitive parity (SimplyBook.me, Square, Vagaro, Fresha) is the **bar**. Do not declare Appointments complete until matrices are certified.
+
 ---
 
 ## Core domain objects

@@ -1,5 +1,8 @@
 # Appointments Core Scheduling Parity — Implementation Status
 
+> **Superseded for scope and done-ness by:** `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md` and the certification matrices in `docs/ACUITY-PARITY-MATRIX.md`, `docs/ACUITY-USER-COMPLAINT-GAP-MATRIX.md`, and `docs/SERVICE-BOOKING-COMPETITIVE-PARITY-MATRIX.md`.  
+> This file remains a **legacy implementation snapshot** only — not authority for product completeness.
+
 Updated: 2026-09-04 (customer-facing implementation pass)
 
 ## Customer-Facing Surfaces — Implemented

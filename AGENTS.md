@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 **ACTIVE V1 products:** Appointments + SMS reminders · Missed Call Text Back · Conversations · Contacts · Transovo Fax
 
-**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA map → page manifest → canonical map → page build specs (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. Full text: `docs/TRANSOVO-*.md`. Not optional.
+**UI rebuild directive (MANDATORY — ALWAYS):** `.cursor/rules/transovo-ux-governance.mdc` + **all 15** `.cursor/rules/transovo-*.mdc` rules apply to **every task** in this repo. **MCTB:** product scope → IA map → page manifest → canonical map → page build specs (`.cursor/rules/transovo-mctb-*.mdc` + `docs/TRANSOVO-MCTB-*.md`) — read **first** for any missed-call text-back work. **Appointments:** `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md` + certification matrices (`docs/ACUITY-PARITY-MATRIX.md`, `docs/ACUITY-USER-COMPLAINT-GAP-MATRIX.md`, `docs/SERVICE-BOOKING-COMPETITIVE-PARITY-MATRIX.md`) — read **first** for any scheduling/booking work; Acuity parity is the floor, not “Acuity-like.” Full text: `docs/TRANSOVO-*.md`. Not optional.
 
 **PRESERVED (hidden from launch nav, not deleted):** Mass SMS — Campaigns, Drips, Keywords, Playbooks, Automations, bulk send, list/segment marketing
 

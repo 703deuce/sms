@@ -15,7 +15,7 @@ alwaysApply: true
 2. **Reuse before building** — audit existing Contacts, Conversations, SMS composer, templates, scheduler, compliance, MCTB components. No parallel appointment messaging system.
 3. **Nav flags** — use `src/lib/products/v1-launch-nav.ts`; do not scatter hardcoded nav conditionals.
 4. **MCTB** — rebuild frontend under `/mctb/*` per page build specs; **audit and reuse** runtime/APIs/libs behind existing `/voice/*` surfaces — do not rewrite telephony/SMS infrastructure for route changes. Keep both `press_1` and `existing_consent`. See `docs/MCTB-FRONTEND-REBUILD-KICKOFF.md`.
-5. **Appointments** — new surfaces required (`/appointments`, `/appointments/calendar`, `/appointments/types`). Reuse messaging + worker infra. `AppointmentType` ≠ `Appointment`.
+5. **Appointments** — new surfaces required (`/appointments`, `/appointments/calendar`, `/appointments/types`). Reuse messaging + worker infra. `AppointmentType` ≠ `Appointment`. **Service-booking parity:** read `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md` + certification matrices before declaring done — Acuity parity is the floor; Manage Appointment URL is core.
 6. **One product chrome** — single sidebar/header; operational dashboard; calendar stays visually sparse (Calendly/Google patterns for types, availability, preview, overlay detail).
 
 ## V1 primary nav
