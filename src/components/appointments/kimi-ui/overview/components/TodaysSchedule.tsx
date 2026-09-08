@@ -13,14 +13,13 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
   return (
     <RefDecoSection
       title="Today's schedule"
-      tint="purple"
       action={
         <div className="flex items-center gap-2">
           <span className="ref-pill pill-purple">{total}</span>
           <button
             type="button"
             onClick={onViewCalendar}
-            className="flex items-center gap-1 text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-700"
+            className="appt-pilot-muted-link flex items-center gap-1 text-[12.5px]"
           >
             View calendar <ExternalLink size={13} aria-hidden />
           </button>
@@ -43,7 +42,7 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
               </div>
               <div className="w-[130px] shrink-0">
                 <div className="flex items-center gap-1.5 text-[13px] font-medium text-gray-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden />
+                  <span className="appt-pilot-schedule-dot h-1.5 w-1.5 rounded-full" aria-hidden />
                   {a.type}
                 </div>
                 <div className="pl-3 text-[11px] text-gray-400">{a.loc}</div>
@@ -66,7 +65,7 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
         <button
           type="button"
           onClick={onViewCalendar}
-          className="mt-1 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700"
+          className="appt-pilot-muted-link mt-1 text-[13px]"
         >
           + {total - schedule.length} more appointments
         </button>

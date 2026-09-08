@@ -12,16 +12,19 @@ const icons: Record<string, typeof CalendarCheck2> = {
 export default function StatCards({ stats }: { stats: OverviewStatItem[] }) {
   return (
     <RefDecoStatCards
-      stats={stats.map((s) => ({
+      stats={stats.map((s, index) => ({
         label: s.label,
         value: s.value,
         sub: s.sub,
         icon: icons[s.icon],
         tint: s.tint,
+        highlight: index === 0,
         subClassName:
-          s.icon === "check" || s.icon === "shield"
+          s.icon === "check" || (s.icon === "shield" && /excellent|good/i.test(s.sub))
             ? "text-green-600 font-medium"
-            : "text-gray-400",
+            : s.icon === "shield" && /failed/i.test(s.sub)
+              ? "text-amber-600 font-medium"
+              : "text-gray-400",
       }))}
     />
   );

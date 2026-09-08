@@ -12,7 +12,7 @@ type Props = {
 
 export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props) {
   return (
-    <RefDecoSection title="Needs attention" tint="amber" accent="amber" bodyClassName="flex flex-col">
+    <RefDecoSection title="Needs attention" bodyClassName="flex flex-col">
       {items.length === 0 ? (
         <p className="py-8 text-center text-[13px] text-gray-500">Nothing needs attention right now.</p>
       ) : (
@@ -24,7 +24,7 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
                 key={a.id}
                 type="button"
                 onClick={() => onOpenItem(a.href)}
-                className="flex items-center gap-3 rounded-xl border border-gray-100 px-4 py-3.5 text-left transition hover:border-indigo-200 hover:shadow-sm"
+                className="appt-pilot-attention-row flex items-center gap-3 rounded-lg border border-gray-100 px-3.5 py-3 text-left transition"
               >
                 <div className={`icon-tile tile-${a.tint}`} style={{ width: 36, height: 36, borderRadius: 10 }}>
                   <Icon size={17} aria-hidden />
@@ -42,7 +42,7 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
       <button
         type="button"
         onClick={onReviewAll}
-        className="mt-3 flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700"
+        className="appt-pilot-muted-link mt-3 flex items-center gap-1.5 text-[13px]"
       >
         Review all issues <ArrowRight size={14} aria-hidden />
       </button>

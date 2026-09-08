@@ -26,7 +26,7 @@ export default function QuickActions({
   ];
 
   return (
-    <RefDecoSection title="Quick actions" tint="blue" accent="blue" bodyClassName="flex flex-col">
+    <RefDecoSection title="Quick actions" bodyClassName="flex flex-col">
       <div className="grid grid-cols-2 gap-3">
         {actions.map((a) => (
           <button key={a.label} type="button" onClick={a.onClick} className="qa-btn">
@@ -38,7 +38,7 @@ export default function QuickActions({
       <button
         type="button"
         onClick={onManageTypes}
-        className="mt-3 flex items-center gap-2.5 rounded-xl border border-gray-100 px-4 py-3 text-[13px] font-semibold text-indigo-600 transition hover:border-indigo-200 hover:shadow-sm"
+        className="appt-pilot-secondary-btn mt-3 flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-[13px] font-semibold transition"
       >
         <ListChecks size={17} aria-hidden />
         <span className="flex-1 text-left">Manage appointment types</span>

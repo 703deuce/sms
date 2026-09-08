@@ -12,12 +12,11 @@ export default function RecentConversations({ conversations, onOpenConversation,
   return (
     <RefDecoSection
       title="Recent conversations"
-      tint="purple"
       action={
         <button
           type="button"
           onClick={onViewAll}
-          className="text-[12.5px] font-semibold text-indigo-600 hover:text-indigo-700"
+          className="appt-pilot-muted-link text-[12.5px]"
         >
           View all
         </button>
@@ -50,7 +49,7 @@ export default function RecentConversations({ conversations, onOpenConversation,
       <button
         type="button"
         onClick={onViewAll}
-        className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700"
+        className="appt-pilot-muted-link mt-2 flex items-center gap-1.5 text-[13px]"
       >
         Go to conversations <ArrowRight size={14} aria-hidden />
       </button>

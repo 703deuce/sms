@@ -20,51 +20,56 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
   return (
     <RefDecoSection
       title="Bookings this week"
-      tint="blue"
-      accent="blue"
       action={
         <button
           type="button"
-          className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50"
+          className="appt-pilot-filter-btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium"
         >
           This week <ChevronDown size={14} aria-hidden />
         </button>
       }
-      bodyClassName="ref-deco-chart !p-5 flex flex-col"
+      bodyClassName="ref-deco-chart !p-4 flex flex-col"
     >
-      <div className="text-[26px] font-bold leading-none text-gray-900">{chart.total}</div>
+      <div className="appt-pilot-chart-total font-bold">{chart.total}</div>
       <div className="mt-1 text-[12px] text-gray-500">Total appointments</div>
       <div className="text-[12px] font-medium text-green-600">{chart.deltaLabel}</div>
       <div className="mt-3 -mx-1">
         <svg viewBox={`0 0 ${W} ${H + 22}`} className="w-full" role="img" aria-label="Bookings trend chart">
           <defs>
-            <linearGradient id="areaG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.22" />
-              <stop offset="100%" stopColor="#4f46e5" stopOpacity="0.02" />
+            <linearGradient id="apptPilotAreaG" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--brand-accent)" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="var(--brand-accent)" stopOpacity="0.02" />
             </linearGradient>
           </defs>
           {[max, Math.round(max * 0.66), Math.round(max * 0.33), 0].map((v) => {
             const y = H - 14 - (v / max) * (H - 40);
             return (
               <g key={v}>
-                <line x1={pad} x2={W - pad} y1={y} y2={y} stroke="#f1f3f7" />
-                <text x={pad - 2} y={y + 3} fontSize="9" fill="#b6bcc9" textAnchor="end">{v}</text>
+                <line x1={pad} x2={W - pad} y1={y} y2={y} stroke="var(--border)" />
+                <text x={pad - 2} y={y + 3} fontSize="9" fill="var(--text-secondary)" textAnchor="end">{v}</text>
               </g>
             );
           })}
-          <polygon points={areaPts} fill="url(#areaG)" />
+          <polygon points={areaPts} fill="url(#apptPilotAreaG)" />
           {solidPts ? (
             <polyline
               points={solidPts}
               fill="none"
-              stroke="#4f46e5"
+              stroke="var(--brand-accent)"
               strokeWidth="2.2"
               strokeLinejoin="round"
               strokeLinecap="round"
             />
           ) : null}
           {dashedPts ? (
-            <polyline points={dashedPts} fill="none" stroke="#a5b4fc" strokeWidth="2" strokeDasharray="4 4" />
+            <polyline
+              points={dashedPts}
+              fill="none"
+              stroke="var(--brand-accent)"
+              strokeOpacity="0.45"
+              strokeWidth="2"
+              strokeDasharray="4 4"
+            />
           ) : null}
           {xs[solidEnd] !== undefined ? <circle cx={xs[solidEnd]} cy={ys[solidEnd]} r="4.5" className="chart-dot" /> : null}
           {chart.days.map((d, i) => (
@@ -73,7 +78,7 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
               x={xs[i]}
               y={H + 12}
               fontSize="10"
-              fill={i === chart.days.length - 2 ? "#4f46e5" : "#9aa1af"}
+              fill={i === chart.days.length - 2 ? "var(--brand-accent)" : "var(--text-secondary)"}
               textAnchor="middle"
               fontWeight={i === chart.days.length - 2 ? 700 : 400}
             >
@@ -82,7 +87,7 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
           ))}
         </svg>
       </div>
-      <div className="mt-auto grid grid-cols-2 gap-3 rounded-xl bg-gray-50/80 px-4 py-3">
+      <div className="appt-pilot-chart-stat mt-auto grid grid-cols-2 gap-3 px-3 py-2.5">
         <div>
           <div className="text-[11px] text-gray-400">Peak day</div>
           <div className="text-[13px] font-semibold text-gray-900">{chart.peakLabel}</div>

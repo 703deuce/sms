@@ -10,6 +10,7 @@ import QuickActions from "./components/QuickActions";
 import type { OverviewPageActions, OverviewPageModel } from "@/features/appointments/kimi/overview/types";
 import { RefDecoPageHeader } from "../shared/ref-deco-patterns";
 import "./reference.css";
+import "./appointments-overview-pilot.css";
 
 type Props = {
   model: OverviewPageModel;
@@ -19,25 +20,22 @@ type Props = {
 
 export default function OverviewView({ model, actions, copied }: Props) {
   return (
-    <div className="ref-root min-h-full px-7 pb-10 pt-6 font-sans">
+    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5 font-sans">
       <RefDecoPageHeader
         title="Overview"
         description="Here's what's happening with your appointments today."
         action={
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[13px] font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-          >
-            <Calendar size={15} className="text-gray-500" aria-hidden />
+          <button type="button" className="appt-pilot-date-btn">
+            <Calendar size={15} className="text-[var(--text-secondary)]" aria-hidden />
             {model.dateLabel}
-            <ChevronDown size={14} className="text-gray-400" aria-hidden />
+            <ChevronDown size={14} className="text-[var(--text-secondary)]" aria-hidden />
           </button>
         }
       />
 
       <StatCards stats={model.stats} />
 
-      <div className="mt-5 grid grid-cols-2 gap-5">
+      <div className="mt-4 grid grid-cols-2 gap-4">
         <TodaysSchedule
           schedule={model.schedule}
           total={model.scheduleTotal}
@@ -47,7 +45,7 @@ export default function OverviewView({ model, actions, copied }: Props) {
         <BookingsChart chart={model.chart} />
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-5">
+      <div className="mt-4 grid grid-cols-3 gap-4">
         <RecentConversations
           conversations={model.conversations}
           onOpenConversation={actions.onOpenConversation}
