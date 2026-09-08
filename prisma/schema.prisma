@@ -320,6 +320,15 @@ model Workspace {
   clientPortalSessions ClientPortalSession[]
   appointmentImportBatches AppointmentImportBatch[]
   contactMergeAudits ContactMergeAudit[]
+  customerFieldDefinitions CustomerFieldDefinition[]
+  clientWalletAccounts ClientWalletAccount[]
+  loyaltyPrograms LoyaltyProgram[]
+  dynamicPricingRules DynamicPricingRule[]
+  waitlistPriorityRules WaitlistPriorityRule[]
+  appointmentTreatmentRecords AppointmentTreatmentRecord[]
+  posSessions PosSession[]
+  classSeatMaps ClassSeatMap[]
+  classCheckIns ClassCheckIn[]
   voiceTestRuns VoiceTestRun[]
   voiceComplianceProfile VoiceComplianceProfile?
   voiceUsageRecords VoiceUsageRecord[]
@@ -6347,5 +6356,247 @@ model ContactMergeAudit {
 
   @@index([workspaceId, createdAt])
   @@map("contact_merge_audits")
+}
+
+// ─── Appointments service-booking phase 2 (cross-competitor expansion) ───────
+
+model CustomerFieldDefinition {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  key          String
+  label        String
+  fieldType    String   @default("text")
+  options      Json?
+  required     Boolean  @default(false)
+  displayOrder Int      @default(0)
+  active       Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, active, displayOrder])
+  @@map("customer_field_definitions")
+}
+
+model ClientWalletAccount {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  contactId    String
+  balanceCents Int      @default(0)
+  currency     String   @default("usd")
+  status       String   @default("active")
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ledger       ClientWalletLedgerEntry[]
+
+  @@unique([workspaceId, contactId])
+  @@index([workspaceId, status])
+  @@map("client_wallet_accounts")
+}
+
+model ClientWalletLedgerEntry {
+  id                String   @id @default(cuid())
+  accountId         String
+  kind              String
+  amountCents       Int
+  balanceAfterCents Int
+  note              String?
+  referenceId       String?
+  createdAt         DateTime @default(now())
+  account           ClientWalletAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("client_wallet_ledger_entries")
+}
+
+model LoyaltyProgram {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  pointsPerDollar Int      @default(1)
+  redeemRateCents Int      @default(100)
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ledger          LoyaltyLedgerEntry[]
+
+  @@index([workspaceId, active])
+  @@map("loyalty_programs")
+}
+
+model LoyaltyLedgerEntry {
+  id            String   @id @default(cuid())
+  programId     String
+  contactId     String
+  kind          String
+  pointsDelta   Int
+  pointsBalance Int
+  appointmentId String?
+  note          String?
+  createdAt     DateTime @default(now())
+  program       LoyaltyProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId, contactId, createdAt])
+  @@map("loyalty_ledger_entries")
+}
+
+model DynamicPricingRule {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  ruleType        String
+  conditions      Json     @default("{}")
+  adjustmentType  String
+  adjustmentValue Int
+  priority        Int      @default(0)
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active, priority])
+  @@map("dynamic_pricing_rules")
+}
+
+model WaitlistPriorityRule {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  ruleType     String
+  scoreDelta   Int      @default(0)
+  conditions   Json     @default("{}")
+  priority     Int      @default(0)
+  active       Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active, priority])
+  @@map("waitlist_priority_rules")
+}
+
+model AppointmentTreatmentRecord {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  appointmentId   String
+  contactId       String?
+  subjective      String?
+  objective       String?
+  assessment      String?
+  plan            String?
+  providerNotes   String?
+  attachments     Json?
+  createdByUserId String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@map("appointment_treatment_records")
+}
+
+model PosSession {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  contactId     String?
+  staffUserId   String?
+  status        String   @default("open")
+  subtotalCents Int      @default(0)
+  taxCents      Int      @default(0)
+  totalCents    Int      @default(0)
+  currency      String   @default("usd")
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  checkedOutAt  DateTime?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lineItems     PosLineItem[]
+
+  @@index([workspaceId, status])
+  @@map("pos_sessions")
+}
+
+model PosLineItem {
+  id             String   @id @default(cuid())
+  sessionId      String
+  kind           String
+  description    String
+  quantity       Int      @default(1)
+  unitPriceCents Int      @default(0)
+  totalCents     Int      @default(0)
+  referenceId    String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  session        PosSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("pos_line_items")
+}
+
+model ClassSeatMap {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  occurrenceId String?
+  seriesId     String?
+  name         String
+  rows         Int
+  columns      Int
+  layout       Json     @default("[]")
+  active       Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reservations ClassSeatReservation[]
+
+  @@index([workspaceId, occurrenceId])
+  @@index([workspaceId, seriesId])
+  @@map("class_seat_maps")
+}
+
+model ClassSeatReservation {
+  id           String   @id @default(cuid())
+  seatMapId    String
+  enrollmentId String?
+  contactId    String
+  seatLabel    String
+  rowIndex     Int
+  colIndex     Int
+  status       String   @default("reserved")
+  reservedAt   DateTime @default(now())
+  releasedAt   DateTime?
+  seatMap      ClassSeatMap @relation(fields: [seatMapId], references: [id], onDelete: Cascade)
+
+  @@unique([seatMapId, rowIndex, colIndex])
+  @@index([seatMapId, contactId])
+  @@map("class_seat_reservations")
+}
+
+model ClassCheckIn {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  enrollmentId String?
+  occurrenceId String?
+  contactId    String
+  token        String   @unique
+  status       String   @default("pending")
+  checkedInAt  DateTime?
+  expiresAt    DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, occurrenceId])
+  @@index([workspaceId, contactId])
+  @@map("class_check_ins")
 }
 
