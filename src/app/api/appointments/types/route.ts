@@ -5,6 +5,7 @@ import {
   upsertAppointmentType,
 } from "@/lib/appointments";
 import type { AppointmentTypeConfig } from "@/lib/appointments/types";
+import { BOOKING_TYPE_KINDS, type BookingTypeKind } from "@/lib/appointments/booking-type-kind";
 import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   getOrganizationPolicy,
@@ -44,6 +45,12 @@ export async function POST(request: Request) {
     };
     if (!body.name?.trim()) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
+    }
+    if (
+      body.config?.bookingTypeKind &&
+      !BOOKING_TYPE_KINDS.includes(body.config.bookingTypeKind as BookingTypeKind)
+    ) {
+      return NextResponse.json({ error: "invalid bookingTypeKind" }, { status: 400 });
     }
     const orgPolicy = await getOrganizationPolicy(auth.workspaceId);
     if (body.config && !isManagedEventType(body.config, orgPolicy)) {
