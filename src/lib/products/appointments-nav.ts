@@ -11,6 +11,7 @@ import {
   Users,
   Workflow,
   HelpCircle,
+  ShoppingBag,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import {
@@ -37,9 +38,20 @@ function bookingChildren(): NavItem["children"] {
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
     { label: "Availability", href: "/appointments/availability" },
+    { label: "Commerce", href: "/appointments/commerce" },
+    { label: "Categories", href: "/appointments/categories" },
     { label: "AI Booking", href: "/appointments/ai-booking" },
     { label: "Routing", href: "/appointments/routing-forms" },
     { label: "Meeting Polls", href: "/appointments/polls" },
+  ];
+}
+
+function operationsChildren(): NavItem["children"] {
+  return [
+    { label: "Resources", href: "/appointments/resources" },
+    { label: "Classes", href: "/appointments/classes" },
+    { label: "Client restrictions", href: "/appointments/client-restrictions" },
+    { label: "Service booking reports", href: "/appointments/reports/service-booking" },
   ];
 }
 
@@ -112,6 +124,12 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       href: "/appointments/types",
       icon: Globe,
       children: bookingChildren(),
+    },
+    {
+      label: "Commerce",
+      href: "/appointments/commerce",
+      icon: ShoppingBag,
+      children: operationsChildren(),
     },
   ];
 
@@ -216,6 +234,12 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
+  if (pathname.startsWith("/appointments/commerce")) return "Commerce";
+  if (pathname.startsWith("/appointments/categories")) return "Categories";
+  if (pathname.startsWith("/appointments/resources")) return "Resources";
+  if (pathname.startsWith("/appointments/classes")) return "Classes";
+  if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
+  if (pathname.startsWith("/appointments/reports/service-booking")) return "Service booking reports";
   if (pathname.startsWith("/appointments/types")) return "Booking Types";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";

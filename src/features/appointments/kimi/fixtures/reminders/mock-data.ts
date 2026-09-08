@@ -11,6 +11,7 @@ export const mockRemindersPageModel: RemindersPageModel = {
     "{{appointment_date}}",
     "{{appointment_time}}",
     "{{business_name}}",
+    "{{manage_link}}",
     "{{reschedule_link}}",
     "{{cancel_link}}",
   ],
@@ -31,7 +32,7 @@ export const mockRemindersPageModel: RemindersPageModel = {
       badge: "At booking",
       description: "Sent immediately when a customer books online.",
       template:
-        "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}. Reply YES to confirm. Reschedule: {{reschedule_link}} • Cancel: {{cancel_link}}",
+        "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}. Manage: {{manage_link}} Reply YES to confirm.",
       preview:
         "Hi Alex, your Consultation with Mass Texting Browser Cert is confirmed for Saturday, Aug 30 at 9:00 AM. Reply YES to confirm.",
       characters: 199,
@@ -47,7 +48,7 @@ export const mockRemindersPageModel: RemindersPageModel = {
       badge: "24h before",
       description: "Sent the day before the appointment.",
       template:
-        "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}. Reply YES to confirm. Reschedule: {{reschedule_link}}",
+        "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}. Manage: {{manage_link}} Reply YES to confirm.",
       preview:
         "Reminder: Consultation with Mass Texting Browser Cert tomorrow at 9:00 AM. Reply YES to confirm.",
       characters: 132,

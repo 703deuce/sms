@@ -10,6 +10,7 @@ import {
   appendTimeline,
   loadAppointmentPlatformConfig,
   publicActionUrl,
+  resolveManageLinkFromMetadata,
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { normalizeAppointmentStatus } from "@/lib/appointments/types";
@@ -543,6 +544,7 @@ async function executeWorkflowStepAction(input: {
     rescheduleLink: input.meta.rescheduleToken
       ? publicActionUrl("reschedule", input.meta.rescheduleToken)
       : "",
+    manageLink: resolveManageLinkFromMetadata(input.meta, input.meta.rescheduleToken),
     reviewLink: typeof input.meta.reviewLink === "string" ? input.meta.reviewLink : "",
     bookingLink,
     paymentLink,

@@ -9,6 +9,7 @@ import {
   appendTimeline,
   loadAppointmentPlatformConfig,
   publicActionUrl,
+  resolveManageLinkFromMetadata,
 } from "@/lib/appointments/settings";
 import {
   cancelPlatformAppointment,
@@ -87,6 +88,7 @@ export async function buildAppointmentVoiceMergeVars(
     rescheduleLink: meta.rescheduleToken
       ? publicActionUrl("reschedule", meta.rescheduleToken)
       : "",
+    manageLink: resolveManageLinkFromMetadata(meta, meta.rescheduleToken),
     bookingLink,
     paymentLink,
   });

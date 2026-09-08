@@ -11,6 +11,7 @@ import {
   loadAppointmentPlatformConfig,
   publicActionUrl,
   publicToken,
+  resolveManageLinkFromMetadata,
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, AppointmentTypeConfig } from "@/lib/appointments/types";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
@@ -465,6 +466,7 @@ export async function createPlatformAppointment(
           confirmLink: publicActionUrl("confirm", confirmToken),
           cancelLink: publicActionUrl("cancel", cancelToken),
           rescheduleLink: publicActionUrl("reschedule", rescheduleToken),
+          manageLink: resolveManageLinkFromMetadata(latestMeta, rescheduleToken),
           meetingLink,
         }),
       );

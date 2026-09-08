@@ -5,6 +5,7 @@ export {
   resolveWorkspaceBySlug,
   publicBookingUrl,
   publicActionUrl,
+  resolveManageLinkFromMetadata,
 } from "./settings";
 export {
   listAppointments,

@@ -5,7 +5,7 @@ import {
   appointmentMergeVars,
   renderAppointmentTemplate,
 } from "@/lib/appointments/appointments-service";
-import { loadAppointmentPlatformConfig, publicActionUrl } from "@/lib/appointments/settings";
+import { loadAppointmentPlatformConfig, publicActionUrl, resolveManageLinkFromMetadata } from "@/lib/appointments/settings";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { evaluateConditionGroup, type AppointmentConditionContext } from "./conditions";
 import { resolveStepScheduledTime } from "./scheduler";
@@ -164,6 +164,10 @@ export async function previewAppointmentWorkflow(input: {
     rescheduleLink: appt.meta.rescheduleToken
       ? publicActionUrl("reschedule", appt.meta.rescheduleToken)
       : publicActionUrl("reschedule", "preview"),
+    manageLink: resolveManageLinkFromMetadata(
+      appt.meta,
+      appt.meta.rescheduleToken || "preview",
+    ),
     reviewLink: typeof appt.meta.reviewLink === "string" ? appt.meta.reviewLink : "https://example.com/review",
   });
 

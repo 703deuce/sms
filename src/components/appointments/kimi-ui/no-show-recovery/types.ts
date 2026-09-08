@@ -33,8 +33,8 @@ export const workflowTemplate = {
   name: "No-Show Recovery",
   trigger: "Appointment marked as no-show",
   steps: [
-    { timing: "15 minutes after no-show", action: "Send SMS to customer", preview: "Hi {{first_name}}, we missed you at your {{service}} today. Would you like to pick a new time? {{reschedule_link}}" },
-    { timing: "24 hours later (if no reply)", action: "Send SMS follow-up", preview: "Still happy to get you rebooked, {{first_name}} — grab any open slot here: {{reschedule_link}}" },
+    { timing: "15 minutes after no-show", action: "Send SMS to customer", preview: "Hi {{first_name}}, we missed you at your {{service}} today. Pick a new time: {{manage_link}}" },
+    { timing: "24 hours later (if no reply)", action: "Send SMS follow-up", preview: "Still happy to get you rebooked, {{first_name}} — manage your appointment here: {{manage_link}}" },
     { timing: "If customer rebooks", action: "Stop workflow + confirm booking", preview: "Automatic — workflow ends when the customer books a new appointment." },
   ],
 };

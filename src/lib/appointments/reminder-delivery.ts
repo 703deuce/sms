@@ -9,6 +9,7 @@ import {
   appendTimeline,
   loadAppointmentPlatformConfig,
   publicActionUrl,
+  resolveManageLinkFromMetadata,
 } from "@/lib/appointments/settings";
 import type { AppointmentMetadata, ReminderStepConfig } from "@/lib/appointments/types";
 import {
@@ -263,6 +264,7 @@ async function trySendStep(input: {
         rescheduleLink: input.rescheduleToken
           ? publicActionUrl("reschedule", input.rescheduleToken)
           : "",
+        manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
         meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
       }),
     );
@@ -281,6 +283,7 @@ async function trySendStep(input: {
         timezone: input.timezone,
         serviceName: input.serviceName || "Appointment",
         businessName: input.businessName,
+        manageUrl: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
       });
       if (result.status === "failed") {
         throw new Error(result.error || "Email delivery failed");
@@ -314,6 +317,7 @@ async function trySendStep(input: {
           timezone: input.timezone,
           serviceName: input.serviceName || "Appointment",
           businessName: input.businessName,
+          manageUrl: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
         });
       }
       return true;
@@ -343,6 +347,7 @@ async function trySendStep(input: {
       rescheduleLink: input.rescheduleToken
         ? publicActionUrl("reschedule", input.rescheduleToken)
         : "",
+      manageLink: resolveManageLinkFromMetadata(input.metadata, input.rescheduleToken),
       meetingLink: input.metadata.meetingUrl || input.metadata.joinUrl || "",
     }),
   );
@@ -506,6 +511,7 @@ export function previewReminderMessage(input: {
       rescheduleLink: input.tokens?.reschedule
         ? publicActionUrl("reschedule", input.tokens.reschedule)
         : publicActionUrl("reschedule", "preview"),
+      manageLink: publicActionUrl("reschedule", input.tokens?.reschedule || "preview"),
     }),
   );
 }

@@ -26,3 +26,4 @@ export * from "./import-export";
 export * from "./payments-extended";
 export * from "./contact-merge";
 export * from "./scheduler-theme";
+export * from "./store-checkout";

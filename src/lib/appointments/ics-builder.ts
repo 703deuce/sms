@@ -19,6 +19,7 @@ export function buildIcsAttachment(input: {
   organizerEmail?: string;
   location?: string;
   description?: string;
+  manageUrl?: string;
   uid?: string;
 }): string {
   const format = (d: Date) =>
@@ -40,7 +41,11 @@ export function buildIcsAttachment(input: {
     `ORGANIZER;CN=${escapeIcs(input.organizerName)}:MAILTO:${organizerEmail}`,
   ];
   if (input.location) lines.push(`LOCATION:${escapeIcs(input.location)}`);
-  if (input.description) lines.push(`DESCRIPTION:${escapeIcs(input.description)}`);
+  const descriptionParts = [input.description].filter(Boolean);
+  if (input.manageUrl) descriptionParts.push(`Manage appointment: ${input.manageUrl}`);
+  const description = descriptionParts.join("\\n");
+  if (description) lines.push(`DESCRIPTION:${escapeIcs(description)}`);
+  if (input.manageUrl) lines.push(`URL:${escapeIcs(input.manageUrl)}`);
   lines.push("END:VEVENT", "END:VCALENDAR");
   return lines.join("\r\n");
 }

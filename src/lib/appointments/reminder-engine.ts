@@ -133,6 +133,7 @@ export async function sendReminderEmailWithTracking(input: {
   timezone: string;
   serviceName: string;
   businessName: string;
+  manageUrl?: string;
 }) {
   const trackingId = `rem_${input.appointmentId}_${Date.now()}`;
   const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
@@ -156,6 +157,7 @@ export async function sendReminderEmailWithTracking(input: {
               endsAt: input.endsAt,
               timezone: input.timezone,
               organizerName: input.businessName,
+              manageUrl: input.manageUrl,
             }),
           ).toString("base64"),
         },

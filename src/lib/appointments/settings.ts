@@ -137,3 +137,18 @@ export function publicActionUrl(kind: "confirm" | "cancel" | "reschedule", token
   const path = `/appointments/${kind}/${encodeURIComponent(token)}`;
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
+
+/** Canonical manage-appointment URL from persisted metadata or legacy action links. */
+export function resolveManageLinkFromMetadata(
+  meta: { manageAppointmentUrl?: unknown; rescheduleUrl?: unknown },
+  rescheduleToken?: string | null,
+): string {
+  if (typeof meta.manageAppointmentUrl === "string" && meta.manageAppointmentUrl.trim()) {
+    return meta.manageAppointmentUrl;
+  }
+  if (typeof meta.rescheduleUrl === "string" && meta.rescheduleUrl.trim()) {
+    return meta.rescheduleUrl;
+  }
+  if (rescheduleToken) return publicActionUrl("reschedule", rescheduleToken);
+  return "";
+}

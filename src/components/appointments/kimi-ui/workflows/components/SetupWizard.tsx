@@ -32,7 +32,7 @@ export function SetupWizard({ templateId, template: templateOverride, onBack, on
     Array.from({ length: template.stepCount }, (_, i) =>
       i === 0
         ? "Hi {{first_name}}, you're booked for {{service}} on {{appointment_date}} at {{appointment_time}}. Reply YES to confirm."
-        : "Reminder: {{service}} at {{appointment_time}} with {{business_name}}. Need to change? {{reschedule_link}}"));
+        : "Reminder: {{service}} at {{appointment_time}} with {{business_name}}. Manage: {{manage_link}}"));
   const [msgErrors, setMsgErrors] = useState<string[]>(() => Array.from({ length: template.stepCount }, () => ""));
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);

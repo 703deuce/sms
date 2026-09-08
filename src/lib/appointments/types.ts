@@ -363,9 +363,9 @@ export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:
     "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.{{join_meeting_line}} Manage: {{manage_link}} Reply YES to confirm.",
   reminder24h:
-    "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}.{{join_meeting_line}} Reply YES to confirm. Reschedule: {{reschedule_link}}",
+    "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}.{{join_meeting_line}} Manage: {{manage_link}} Reply YES to confirm.",
   reminder2h:
-    "Reminder: {{service}} with {{business_name}} today at {{appointment_time}}.{{join_meeting_line}} See you soon!",
+    "Reminder: {{service}} with {{business_name}} today at {{appointment_time}}.{{join_meeting_line}} Manage: {{manage_link}}",
 };
 
 export const DEFAULT_PLATFORM_CONFIG: AppointmentPlatformConfig = {

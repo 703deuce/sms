@@ -17,10 +17,10 @@ export type PrebuiltWorkflowTemplate = {
 };
 
 const DEFAULT_CONFIRMATION =
-  "Hi {{first_name}}, your {{service}} appointment is booked for {{appointment_date}} at {{appointment_time}}. Reply YES to confirm or use {{reschedule_link}} to reschedule.";
+  "Hi {{first_name}}, your {{service}} appointment is booked for {{appointment_date}} at {{appointment_time}}. Manage: {{manage_link}} Reply YES to confirm.";
 
 const DEFAULT_REMINDER =
-  "Reminder: {{service}} on {{appointment_date}} at {{appointment_time}} with {{business_name}}. {{confirm_link}}";
+  "Reminder: {{service}} on {{appointment_date}} at {{appointment_time}} with {{business_name}}. Manage: {{manage_link}}";
 
 export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
   {
@@ -323,7 +323,7 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
         action: "send_reschedule_link",
         channel: "sms",
         messageTemplate:
-          "Hi {{first_name}}, we missed you today for {{service}}. Would you like to reschedule? {{reschedule_link}}",
+          "Hi {{first_name}}, we missed you today for {{service}}. Would you like to reschedule? {{manage_link}}",
       },
       {
         id: "no_show_followup",
@@ -338,7 +338,7 @@ export const PREBUILT_WORKFLOW_TEMPLATES: PrebuiltWorkflowTemplate[] = [
         action: "send_reschedule_link",
         channel: "sms",
         messageTemplate:
-          "Hi {{first_name}}, still hoping to get you rescheduled for {{service}}. {{reschedule_link}}",
+          "Hi {{first_name}}, still hoping to get you rescheduled for {{service}}. {{manage_link}}",
         stopIfRebooked: true,
       },
       {

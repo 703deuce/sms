@@ -148,7 +148,7 @@ export const PREBUILT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     recommended: true,
     steps: [
       step("s1", "Booking confirmation", { kind: "immediate" }, "send_sms_customer", "sms", "Hi {{first_name}}, you're booked for {{service}} on {{appointment_date}} at {{appointment_time}}. Reply YES to confirm."),
-      step("s2", "24-hour reminder", rel("appointment_start", 24, "hours", "before"), "send_sms_customer", "sms", "Reminder: {{service}} tomorrow at {{appointment_time}}. Need to change? {{reschedule_link}}"),
+      step("s2", "24-hour reminder", rel("appointment_start", 24, "hours", "before"), "send_sms_customer", "sms", "Reminder: {{service}} tomorrow at {{appointment_time}}. Manage: {{manage_link}}"),
       step("s3", "2-hour reminder", rel("appointment_start", 2, "hours", "before"), "send_sms_customer", "sms", "See you soon — {{service}} at {{appointment_time}} today."),
     ],
   },
@@ -160,7 +160,7 @@ export const PREBUILT_WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     trigger: "appointment_booked",
     channels: ["sms"],
     steps: [
-      step("s1", "Confirmation request", { kind: "immediate" }, "send_sms_customer", "sms", "Please confirm your {{service}} on {{appointment_date}} — reply YES to confirm or {{reschedule_link}} to reschedule."),
+      step("s1", "Confirmation request", { kind: "immediate" }, "send_sms_customer", "sms", "Please confirm your {{service}} on {{appointment_date}} — reply YES to confirm. Manage: {{manage_link}}"),
       step("s2", "Wait for reply", rel("booking_created", 5, "minutes", "after"), "wait_for_reply", "sms", ""),
       step("s3", "Unconfirmed follow-up", rel("appointment_start", 24, "hours", "before"), "send_sms_customer", "sms", "We haven't heard back — reply YES to keep your {{service}} appointment."),
       step("s4", "Alert team", rel("appointment_start", 6, "hours", "before"), "send_sms_team", "sms", "Heads up: {{first_name}} {{service}} at {{appointment_time}} is still unconfirmed."),
@@ -308,6 +308,7 @@ export const MERGE_TAGS = [
   "{{service}}",
   "{{appointment_date}}",
   "{{appointment_time}}",
+  "{{manage_link}}",
   "{{reschedule_link}}",
   "{{cancel_link}}",
   "{{booking_link}}",

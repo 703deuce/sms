@@ -33,7 +33,7 @@ export const savedReplies: SavedReply[] = [
     id: "sr-2",
     name: "Reschedule link",
     category: "Scheduling",
-    body: "No problem — you can pick a new time here: {{reschedule_link}}. If nothing works, just reply and we'll find something together.",
+    body: "No problem — you can manage your appointment here: {{manage_link}}. If nothing works, just reply and we'll find something together.",
     tags: ["reschedule"],
     shared: true,
     createdBy: "Sarah Kim",

@@ -176,7 +176,7 @@ export const MOCK_WORKFLOWS: WorkflowRecord[] = [
     sourceType: "template", templateId: "standard_reminders", updatedAt: "2026-09-02T14:22:00Z", executions30d: 184,
     steps: [
       step("s1", "Booking confirmation", { kind: "immediate" }, "send_sms_customer", "sms", "Hi {{first_name}}, you're booked for {{service}} on {{appointment_date}} at {{appointment_time}}. Reply YES to confirm."),
-      step("s2", "24-hour reminder", { kind: "relative", anchor: "appointment_start", amount: 24, unit: "hours", direction: "before" }, "send_sms_customer", "sms", "Reminder: {{service}} tomorrow at {{appointment_time}}. Need to change? {{reschedule_link}}"),
+      step("s2", "24-hour reminder", { kind: "relative", anchor: "appointment_start", amount: 24, unit: "hours", direction: "before" }, "send_sms_customer", "sms", "Reminder: {{service}} tomorrow at {{appointment_time}}. Manage: {{manage_link}}"),
       step("s3", "2-hour reminder", { kind: "relative", anchor: "appointment_start", amount: 2, unit: "hours", direction: "before" }, "send_sms_customer", "sms", "See you at {{appointment_time}} today for {{service}} at {{business_name}}."),
     ],
   },
@@ -219,4 +219,4 @@ export const APPOINTMENT_TYPES = [
   { id: "type_4", name: "Annual Checkup" },
 ];
 
-export const MERGE_TAGS = ["{{first_name}}", "{{business_name}}", "{{service}}", "{{appointment_date}}", "{{appointment_time}}", "{{reschedule_link}}", "{{cancel_link}}", "{{booking_link}}"];
+export const MERGE_TAGS = ["{{first_name}}", "{{business_name}}", "{{service}}", "{{appointment_date}}", "{{appointment_time}}", "{{manage_link}}", "{{reschedule_link}}", "{{cancel_link}}", "{{booking_link}}"];

@@ -14,6 +14,7 @@ export const REMINDER_MERGE_TAGS = [
   "{{appointment_date}}",
   "{{appointment_time}}",
   "{{business_name}}",
+  "{{manage_link}}",
   "{{reschedule_link}}",
   "{{cancel_link}}",
   "{{confirm_link}}",
