@@ -546,3 +546,128 @@
   background: var(--surface-muted) !important;
   color: var(--text-secondary) !important;
 }
+
+/* ========== Full-page shell pilot (sidebar, header, switcher) ========== */
+html.appt-overview-pilot-active {
+  --pilot-charcoal: #1f2329;
+  --pilot-teal: #147d74;
+  --pilot-teal-soft: #dcefeb;
+  --pilot-border: #e5e7eb;
+  --pilot-surface-muted: #f7f8fa;
+}
+
+html.appt-overview-pilot-active .product-theme {
+  --primary: #147d74;
+  --primary-foreground: #ffffff;
+  --primary-hover: #10665f;
+  --ring: #147d74;
+  --sidebar-active: #147d74;
+  --background: #f7f8fa;
+}
+
+html.appt-overview-pilot-active .product-theme .bg-mesh {
+  background-color: #f7f8fa;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(20, 125, 116, 0.05), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(31, 35, 41, 0.03), transparent);
+}
+
+html.appt-overview-pilot-active .transovo-sidebar {
+  background: #ffffff !important;
+  border-color: var(--pilot-border) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600 {
+  background-color: var(--pilot-charcoal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item:hover {
+  background-color: rgba(20, 125, 116, 0.06) !important;
+  color: var(--pilot-charcoal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+  background-color: rgba(20, 125, 116, 0.1) !important;
+  color: var(--pilot-teal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
+  background-color: var(--pilot-teal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-badge,
+html.appt-overview-pilot-active .transovo-badge-dot {
+  background-color: var(--pilot-teal) !important;
+  color: #ffffff !important;
+}
+
+html.appt-overview-pilot-active .transovo-credits-bar {
+  background-color: rgba(20, 125, 116, 0.12) !important;
+}
+
+html.appt-overview-pilot-active .transovo-credits-fill {
+  background: linear-gradient(90deg, #147d74, #1f2329) !important;
+}
+
+/* Product switcher */
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
+  border-color: var(--pilot-border) !important;
+  background: var(--pilot-surface-muted) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"]:hover {
+  border-color: rgba(20, 125, 116, 0.35) !important;
+  background: var(--pilot-teal-soft) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"],
+html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"]:hover {
+  background: rgba(20, 125, 116, 0.08) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"] > span:first-child {
+  background: var(--pilot-teal) !important;
+  color: #ffffff !important;
+}
+
+/* Product switcher onboarding tooltip */
+html.appt-overview-pilot-active .transovo-sidebar .border-primary\/20 {
+  border-color: rgba(20, 125, 116, 0.22) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .bg-primary {
+  background-color: var(--pilot-teal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .text-primary {
+  color: var(--pilot-teal) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .bg-primary\/10 {
+  background-color: rgba(20, 125, 116, 0.1) !important;
+}
+
+/* Top header */
+html.appt-overview-pilot-active header.sticky {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-bottom-color: var(--pilot-border) !important;
+}
+
+html.appt-overview-pilot-active header.sticky h1 {
+  color: var(--pilot-charcoal) !important;
+  font-weight: 600 !important;
+}
+
+html.appt-overview-pilot-active header.sticky input:focus {
+  border-color: rgba(20, 125, 116, 0.45) !important;
+  --tw-ring-color: rgba(20, 125, 116, 0.2) !important;
+}
+
+html.appt-overview-pilot-active header.sticky .text-primary {
+  color: var(--pilot-teal) !important;
+}
+
+html.appt-overview-pilot-active header.sticky .bg-primary\/5 {
+  background-color: rgba(20, 125, 116, 0.06) !important;
+}
+

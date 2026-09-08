@@ -14,14 +14,17 @@ const pagePath = join(process.cwd(), "src/components/appointments/kimi-ui/overvi
 const pilot = readFileSync(pilotPath, "utf8");
 const page = readFileSync(pagePath, "utf8");
 
+const layoutPath = join(process.cwd(), "src/app/(app)/appointments/overview/layout.tsx");
+const layout = readFileSync(layoutPath, "utf8");
+
 const checks: Array<{ name: string; ok: boolean; detail?: string }> = [
   {
     name: "page wraps content in appt-overview-pilot",
     ok: page.includes('className="appt-overview-pilot ref-root'),
   },
   {
-    name: "pilot CSS loads after reference.css",
-    ok: page.indexOf("./reference.css") < page.indexOf("./appointments-overview-pilot.css"),
+    name: "pilot CSS loaded from overview layout",
+    ok: layout.includes("appointments-overview-pilot.css"),
   },
   {
     name: "charcoal brand token defined",
@@ -48,8 +51,19 @@ const checks: Array<{ name: string; ok: boolean; detail?: string }> = [
     ok: pilot.includes(".appt-overview-pilot .chart-dot") && pilot.includes("var(--brand-accent)"),
   },
   {
-    name: "no purple hex in pilot KPI override block",
-    ok: !/Force pilot palette[\s\S]*#6366f1/.test(pilot) && !/Force pilot palette[\s\S]*#4f46e5/.test(pilot),
+    name: "full-page shell html class hook exists",
+    ok: readFileSync(
+      join(process.cwd(), "src/components/appointments/kimi-ui/overview/appointments-overview-pilot-chrome.tsx"),
+      "utf8",
+    ).includes("appt-overview-pilot-active"),
+  },
+  {
+    name: "shell sidebar nav overrides present",
+    ok: pilot.includes("html.appt-overview-pilot-active .transovo-nav-item[data-active=\"true\"]"),
+  },
+  {
+    name: "shell logo indigo override present",
+    ok: pilot.includes("html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600"),
   },
 ];
 

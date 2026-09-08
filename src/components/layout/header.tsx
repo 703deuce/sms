@@ -13,8 +13,9 @@ import {
   Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
 
 type SearchResult = {
   id: string;
@@ -72,7 +73,9 @@ export function Header({
   hasMctb?: boolean;
 }) {
   const router = useRouter();
-  const showMassSmsChrome = hasSms;
+  const pathname = usePathname();
+  const appointmentsChrome = isAppointmentsProductPath(pathname);
+  const showMassSmsChrome = hasSms && !appointmentsChrome;
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
   );
