@@ -60,8 +60,16 @@ export async function createAppointmentUserAction(page: Page) {
   await typeSelect.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
   const options = typeSelect.locator("option");
   const optCount = await options.count();
-  if (optCount < 2) throw new Error("No appointment types available — seed types first");
-  await typeSelect.selectOption({ index: 1 });
+  let selected = false;
+  for (let i = 0; i < optCount; i++) {
+    const value = await options.nth(i).getAttribute("value");
+    if (value?.trim()) {
+      await typeSelect.selectOption({ index: i });
+      selected = true;
+      break;
+    }
+  }
+  if (!selected) throw new Error("No appointment types available — seed types first");
 
   await page.waitForTimeout(800);
   const slot = page.locator('[role="radio"], button[data-slot], .slot-picker button').first();
@@ -178,7 +186,7 @@ export async function createBookingTypeUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/types");
   if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: /appointment types/i }).waitFor({
+  await page.getByRole("heading", { name: /appointment types/i }).first().waitFor({
     state: "visible",
     timeout: ACTION_TIMEOUT,
   });
