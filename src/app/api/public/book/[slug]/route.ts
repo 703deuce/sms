@@ -17,6 +17,8 @@ import {
   resolveContactIdByPhone,
   type BookingEntitlementSelection,
 } from "@/lib/appointments/service-booking/booking-entitlements";
+import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
+import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
 import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
 import {
   loadSchedulingContext,
@@ -140,6 +142,31 @@ export async function GET(_request: Request, { params }: Params) {
       kind: l.kind,
       address: l.address,
     }));
+    const categoryRows = await listBookingCategories(workspace.id);
+    const categories = categoryRows
+      .filter((c: { active: boolean }) => c.active)
+      .map(
+        (c: {
+          id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          displayOrder: number;
+          collapsible: boolean;
+          collapsedByDefault: boolean;
+          imageUrl: string | null;
+        }) => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description,
+          displayOrder: c.displayOrder,
+          collapsible: c.collapsible,
+          collapsedByDefault: c.collapsedByDefault,
+          imageUrl: c.imageUrl,
+        }),
+      );
+    const schedulerTheme = await loadSchedulerTheme(workspace.id);
     return NextResponse.json({
       data: {
         workspace: {
@@ -156,6 +183,8 @@ export async function GET(_request: Request, { params }: Params) {
         termsUrl: config.termsUrl,
         privacyUrl: config.privacyUrl,
         types,
+        categories,
+        schedulerTheme,
         staff,
         locations,
       },
@@ -204,7 +233,14 @@ export async function POST(request: Request, { params }: Params) {
         bookingTypeId: serviceId,
         serviceName,
       });
-      return NextResponse.json({ data: entitlements });
+      const { getSavedPaymentMethodForContact } = await import("@/lib/merchant-payments/saved-cards");
+      const saved = await getSavedPaymentMethodForContact(workspace.id, contactId);
+      return NextResponse.json({
+        data: {
+          ...entitlements,
+          hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
+        },
+      });
     }
 
     if (action === "availability") {

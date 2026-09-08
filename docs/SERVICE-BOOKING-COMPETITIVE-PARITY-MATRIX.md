@@ -43,28 +43,28 @@
 
 ---
 
-## Phase 2 — Cross-competitor expansion (not yet implemented)
+## Phase 2 — Cross-competitor expansion (runtime shipped; UA certification pending)
 
 | Feature | Competitor signal | Target route | UA test | Status |
 |---------|-------------------|--------------|---------|--------|
-| Pick-a-Spot / seat selection | Mindbody, Vagaro | `/book/[slug]` | CMP-PAS-001 | FAIL |
-| Client/class self check-in | Mindbody, Zenoti | `/portal/[token]` | CMP-CHK-001 | FAIL |
-| Intelligent / member-priority waitlist | Mindbody, Vagaro | `/appointments/waitlist` | CMP-WLT-001 | FAIL |
+| Pick-a-Spot / seat selection | Mindbody, Vagaro | `/book/[slug]` | CMP-PAS-001 | CODE |
+| Client/class self check-in | Mindbody, Zenoti | `/portal/[token]` | CMP-CHK-001 | CODE |
+| Intelligent / member-priority waitlist | Mindbody, Vagaro | `/appointments/waitlist` | CMP-WLT-001 | CODE |
 | Scheduled booking-release / member early access | Mindbody | `/appointments/availability` | CMP-REL-001 | FAIL |
-| Dynamic / off-peak pricing | Vagaro, Zenoti | type editor | CMP-DYN-001 | FAIL |
-| Client wallet | Vagaro, Fresha | `/portal/[token]` | CMP-WAL-001 | FAIL |
-| Loyalty program + ledger | Vagaro, Booksy | `/contacts` | CMP-LOY-001 | FAIL |
+| Dynamic / off-peak pricing | Vagaro, Zenoti | type editor | CMP-DYN-001 | CODE |
+| Client wallet | Vagaro, Fresha | `/portal/[token]` | CMP-WAL-001 | CODE |
+| Loyalty program + ledger | Vagaro, Booksy | `/contacts` | CMP-LOY-001 | CODE |
 | Referral program | GlossGenius, Fresha | settings | CMP-REF-001 | FAIL |
 | Customer tags / dynamic segments | Mangomint | `/contacts/segments` | CMP-TAG-001 | FAIL |
-| Custom customer fields | All incumbents | `/contacts` | CMP-CFL-001 | FAIL |
-| Global search | Mangomint, Boulevard | app shell | CMP-SCH-001 | FAIL |
-| SOAP notes / treatment records | Jane, Mangomint | appointment detail | CMP-SOAP-001 | FAIL |
+| Custom customer fields | All incumbents | `/contacts` | CMP-CFL-001 | CODE |
+| Global search | Mangomint, Boulevard | app shell | CMP-SCH-001 | CODE |
+| SOAP notes / treatment records | Jane, Mangomint | appointment detail | CMP-SOAP-001 | CODE |
 | Body charts / image annotation | Jane | appointment detail | CMP-BCH-001 | FAIL |
 | Patch-test requirements | Fresha, Vagaro | type editor | CMP-PCH-001 | FAIL |
 | File / document uploads | Jane, Mindbody | contact / appointment | CMP-FIL-001 | FAIL |
 | Retail products + inventory | Vagaro, Mindbody | new commerce surface | CMP-RTL-001 | FAIL |
 | Product/add-on recommendation rules | Zenoti | checkout | CMP-REC-001 | FAIL |
-| Unified POS / cart | Square, Vagaro | `/payments` POS | CMP-POS-001 | FAIL |
+| Unified POS / cart | Square, Vagaro | `/payments` POS | CMP-POS-001 | CODE |
 | Customer self-checkout | Square | `/book/[slug]/store` | CMP-SCO-001 | FAIL |
 | Split tender | Square, Mindbody | checkout | CMP-SPL-001 | FAIL |
 | Tip splitting | Vagaro | checkout | CMP-TIP-SPLIT | FAIL |
@@ -87,7 +87,7 @@
 | Book-soon / opening notifications | Cal.com | notifications | CMP-OPN-001 | FAIL |
 | Deep multi-location overrides | Mindbody, Zenoti | locations | CMP-MLC-001 | FAIL |
 | Independent-provider payment routing | Boulevard | payments | CMP-IPR-001 | FAIL |
-| Installable PWA | Fresha mobile web | public routes | CMP-PWA-001 | FAIL |
+| Installable PWA | Fresha mobile web | public routes | CMP-PWA-001 | CODE |
 | Push notifications | Native incumbents | — | CMP-PUSH-001 | PROVIDER_BLOCKED |
 | Public discovery directory | Fresha marketplace | marketing site | CMP-DIR-001 | FAIL |
 | External booking-channel adapters | Zenoti | integrations | CMP-CHN-001 | FAIL |

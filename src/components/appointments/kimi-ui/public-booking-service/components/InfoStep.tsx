@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BookingType } from "../mock-data";
 import { workspace } from "../mock-data";
 import { BookingQuestionField } from "./BookingQuestionField";
@@ -6,12 +6,33 @@ import { Button, Input, Label, Textarea } from "./ui";
 import { formatSlotTime, formatFullDate } from "./utils";
 import { ArrowLeft, CalendarCheck, Clock, MapPin, ShieldCheck } from "lucide-react";
 
+type EntitlementOption = {
+  packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
+  gifts: Array<{ id: string; code: string; balanceCents: number }>;
+  hasSavedCard?: boolean;
+};
+
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
 export function InfoStep({
   type,
   startsAt,
   timezone,
   submitting,
   error,
+  entitlements,
+  entitlementsLoading,
+  entitlementMethod,
+  packageBalanceId,
+  giftCertificateCode,
+  useSavedCard,
+  onEntitlementMethodChange,
+  onPackageBalanceIdChange,
+  onGiftCertificateCodeChange,
+  onUseSavedCardChange,
+  onLookupEntitlements,
   onBack,
   onBook,
 }: {
@@ -20,6 +41,17 @@ export function InfoStep({
   timezone: string;
   submitting: boolean;
   error: string;
+  entitlements?: EntitlementOption | null;
+  entitlementsLoading?: boolean;
+  entitlementMethod?: "none" | "package" | "gift";
+  packageBalanceId?: string;
+  giftCertificateCode?: string;
+  useSavedCard?: boolean;
+  onEntitlementMethodChange?: (method: "none" | "package" | "gift") => void;
+  onPackageBalanceIdChange?: (id: string) => void;
+  onGiftCertificateCodeChange?: (code: string) => void;
+  onUseSavedCardChange?: (value: boolean) => void;
+  onLookupEntitlements?: (phone: string, email?: string) => void;
   onBack: () => void;
   onBook: (payload: {
     firstName: string;
@@ -54,6 +86,16 @@ export function InfoStep({
     () => questions.filter((q) => q.required && !(answers[q.id] || "").trim()),
     [questions, answers],
   );
+
+  useEffect(() => {
+    if (!onLookupEntitlements) return;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length >= 10) onLookupEntitlements(phone, email);
+  }, [phone, email, onLookupEntitlements]);
+
+  const hasEntitlements =
+    Boolean(entitlements?.packages?.length) || Boolean(entitlements?.gifts?.length);
+  const paymentRequired = type.config?.payment && type.config.payment.mode !== "none";
 
   function validate() {
     const next: Record<string, string> = {};
@@ -119,6 +161,74 @@ export function InfoStep({
           {fieldErrors.email ? <p className="mt-1 text-[12px] text-rose-600">{fieldErrors.email}</p> : null}
         </div>
       </div>
+
+      {entitlementsLoading ? (
+        <p className="mt-4 text-[12px] text-muted-foreground">Checking packages and gift balances…</p>
+      ) : null}
+
+      {hasEntitlements ? (
+        <div className="mt-5 rounded-xl border border-border bg-muted/30 p-4">
+          <p className="text-[13px] font-semibold text-foreground">Apply a credit or gift balance</p>
+          <div className="mt-3 space-y-2">
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="radio"
+                name="entitlement"
+                checked={entitlementMethod === "none"}
+                onChange={() => onEntitlementMethodChange?.("none")}
+              />
+              Pay normally
+            </label>
+            {(entitlements?.packages || []).map((pkg) => (
+              <label key={pkg.id} className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="radio"
+                  name="entitlement"
+                  checked={entitlementMethod === "package" && packageBalanceId === pkg.id}
+                  onChange={() => {
+                    onEntitlementMethodChange?.("package");
+                    onPackageBalanceIdChange?.(pkg.id);
+                  }}
+                />
+                Use package: {pkg.productName} ({pkg.creditsRemaining} credits)
+              </label>
+            ))}
+            {(entitlements?.gifts || []).map((gift) => (
+              <label key={gift.id} className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="radio"
+                  name="entitlement"
+                  checked={entitlementMethod === "gift" && giftCertificateCode === gift.code}
+                  onChange={() => {
+                    onEntitlementMethodChange?.("gift");
+                    onGiftCertificateCodeChange?.(gift.code);
+                  }}
+                />
+                Use gift certificate {gift.code} ({formatMoney(gift.balanceCents)})
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {paymentRequired && entitlements?.hasSavedCard && entitlementMethod === "none" ? (
+        <div className="mt-4 rounded-xl border border-border p-4">
+          <label className="flex items-start gap-3 text-[13px]">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-primary"
+              checked={Boolean(useSavedCard)}
+              onChange={(e) => onUseSavedCardChange?.(e.target.checked)}
+            />
+            <span>
+              <span className="font-semibold text-foreground">Charge my saved card</span>
+              <span className="mt-0.5 block text-muted-foreground">
+                Use the card on file for this booking when payment is required.
+              </span>
+            </span>
+          </label>
+        </div>
+      ) : null}
 
       {group ? (
         <div className="mt-4">

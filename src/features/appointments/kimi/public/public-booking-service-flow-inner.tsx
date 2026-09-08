@@ -72,6 +72,8 @@ export function PublicBookingServiceFlowInner({
           {flow.step === "service" ? (
             <ServiceStep
               types={flow.types.map(toServiceType)}
+              categories={flow.categories}
+              activeCategorySlug={flow.initialCategorySlug}
               onPick={(type) => void flow.pickType(flow.types.find((t) => t.id === type.id)!)}
             />
           ) : null}
@@ -124,6 +126,17 @@ export function PublicBookingServiceFlowInner({
               timezone={ws.timezone}
               submitting={flow.submitting || flow.paymentPending}
               error={flow.error}
+              entitlements={flow.entitlements}
+              entitlementsLoading={flow.entitlementsLoading}
+              entitlementMethod={flow.entitlementMethod}
+              packageBalanceId={flow.packageBalanceId}
+              giftCertificateCode={flow.giftCertificateCode}
+              useSavedCard={flow.useSavedCard}
+              onEntitlementMethodChange={flow.setEntitlementMethod}
+              onPackageBalanceIdChange={flow.setPackageBalanceId}
+              onGiftCertificateCodeChange={flow.setGiftCertificateCode}
+              onUseSavedCardChange={flow.setUseSavedCard}
+              onLookupEntitlements={(phone, email) => void flow.lookupEntitlements(phone, email)}
               onBack={() => flow.setStep("datetime")}
               onBook={(payload) => {
                 flow.setFirstName(payload.firstName);

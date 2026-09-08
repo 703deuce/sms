@@ -5,7 +5,7 @@
  * Usage:
  *   npx tsx scripts/cert-service-booking-entitlements.ts
  */
-import { getPrisma } from "@/lib/db";
+import { PrismaClient } from "@prisma/client";
 
 const WORKSPACE_SLUG = process.env.CERT_WORKSPACE_SLUG || "cert-appointments-mctb";
 
@@ -14,7 +14,7 @@ function packageCreditsRemaining(remainingCredits: Record<string, number>): numb
 }
 
 async function main() {
-  const prisma = getPrisma();
+  const prisma = new PrismaClient();
   const workspace = await prisma.workspace.findFirst({ where: { slug: WORKSPACE_SLUG } });
   if (!workspace) {
     console.error(`FAIL: workspace ${WORKSPACE_SLUG} not found — run cert bootstrap first`);
@@ -73,7 +73,6 @@ async function main() {
     data: {
       workspaceId: workspace.id,
       serviceName: type.name,
-      phone: contact.phone!,
       contactId: contact.id,
       startsAt: new Date(Date.now() + 86_400_000),
       endsAt: new Date(Date.now() + 86_400_000 + 3_600_000),
@@ -152,9 +151,10 @@ async function main() {
   console.log(`OK  cancel restored credit — ${final} credits remaining`);
 
   console.log("\nPASS service-booking entitlement certification");
+  await prisma.$disconnect();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err);
   process.exit(1);
 });

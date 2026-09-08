@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { appointmentSmsConsentDisclosure } from "@/lib/appointments/sms-consent-disclosure";
 import type {
+  PublicBookingCategory,
   PublicBookingFlowOptions,
   PublicBookingStep,
   PublicBookingType,
@@ -12,6 +13,13 @@ import type {
   PublicStaffOption,
   SquarePaymentConfig,
 } from "./types";
+
+export type BookingEntitlements = {
+  packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
+  gifts: Array<{ id: string; code: string; balanceCents: number }>;
+  memberships: Array<{ id: string; productName: string; status: string }>;
+  hasSavedCard?: boolean;
+};
 
 import type { PaymentRequirement } from "@/lib/appointments/types";
 
@@ -30,11 +38,21 @@ function formatPrice(payment?: PaymentRequirement) {
 export type { PublicBookingFlowOptions } from "./types";
 
 export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
-  const { slug, initialServiceId, preselectTypeId, singleUseToken, theme } = options;
+  const {
+    slug,
+    initialServiceId,
+    preselectTypeId,
+    singleUseToken,
+    theme,
+    initialCategorySlug,
+    initialStaffId,
+    initialLocationId,
+  } = options;
 
   const [step, setStep] = useState<PublicBookingStep>("service");
   const [workspace, setWorkspace] = useState<PublicBookingWorkspace | null>(null);
   const [types, setTypes] = useState<PublicBookingType[]>([]);
+  const [categories, setCategories] = useState<PublicBookingCategory[]>([]);
   const [staffOptions, setStaffOptions] = useState<PublicStaffOption[]>([]);
   const [locationOptions, setLocationOptions] = useState<PublicLocationOption[]>([]);
   const [selectedType, setSelectedType] = useState<PublicBookingType | null>(null);
@@ -87,8 +105,16 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [extraRecipients, setExtraRecipients] = useState<
     Array<{ name: string; email: string; phone: string }>
   >([]);
+  const [entitlements, setEntitlements] = useState<BookingEntitlements | null>(null);
+  const [entitlementMethod, setEntitlementMethod] = useState<"none" | "package" | "gift">("none");
+  const [packageBalanceId, setPackageBalanceId] = useState("");
+  const [giftCertificateCode, setGiftCertificateCode] = useState("");
+  const [useSavedCard, setUseSavedCard] = useState(false);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
+  const deepLinkStaffId = initialStaffId || "";
+  const deepLinkLocationId = initialLocationId || "";
 
   const activeDurationOptions = useMemo(() => {
     const opts = selectedType?.durationOptions || selectedType?.config?.durationOptions || [];
@@ -201,8 +227,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setSelectedType(normalized);
       setStartsAt("");
       setBookingAnswers({});
-      setSelectedStaffId("");
-      setSelectedLocationId("");
+      setSelectedStaffId(deepLinkStaffId);
+      setSelectedLocationId(deepLinkLocationId);
       setRecurringMode("once");
       setAttendeeCount(1);
       const opts = (normalized.durationOptions || []).filter((o) => o.active !== false && o.minutes > 0);
@@ -225,7 +251,47 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setSlots(json.data?.slots || []);
       setLoadingSlots(false);
     },
-    [slug],
+    [slug, deepLinkStaffId, deepLinkLocationId],
+  );
+
+  const lookupEntitlements = useCallback(
+    async (phoneValue: string, emailValue?: string) => {
+      if (!phoneValue.trim() || phoneValue.replace(/\D/g, "").length < 10) {
+        setEntitlements(null);
+        setEntitlementMethod("none");
+        setPackageBalanceId("");
+        setGiftCertificateCode("");
+        setUseSavedCard(false);
+        return;
+      }
+      setEntitlementsLoading(true);
+      try {
+        const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "entitlements",
+            phone: phoneValue,
+            email: emailValue,
+            serviceId: selectedType?.id,
+            serviceName: selectedType?.name,
+          }),
+        });
+        const json = await res.json();
+        const data = (json.data || {}) as BookingEntitlements;
+        setEntitlements(data);
+        if (!data.packages?.length && !data.gifts?.length) {
+          setEntitlementMethod("none");
+          setPackageBalanceId("");
+          setGiftCertificateCode("");
+        }
+      } catch {
+        setEntitlements(null);
+      } finally {
+        setEntitlementsLoading(false);
+      }
+    },
+    [slug, selectedType],
   );
 
   const load = useCallback(() => {
@@ -255,8 +321,11 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         setWorkspace(ws);
         const list = (json.data.types || []) as PublicBookingType[];
         setTypes(list);
+        setCategories(json.data.categories || []);
         setStaffOptions(json.data.staff || []);
         setLocationOptions(json.data.locations || []);
+        if (deepLinkStaffId) setSelectedStaffId(deepLinkStaffId);
+        if (deepLinkLocationId) setSelectedLocationId(deepLinkLocationId);
         if (initialServiceId || preselectTypeId) {
           const match = list.find((t) => t.id === (preselectTypeId || initialServiceId));
           if (match) void pickType(match);
@@ -264,7 +333,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [slug, initialServiceId, preselectTypeId, pickType]);
+  }, [slug, initialServiceId, preselectTypeId, pickType, deepLinkStaffId, deepLinkLocationId]);
 
   useEffect(() => {
     load();
@@ -481,6 +550,16 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         occurrences: recurringOccurrences,
       };
     }
+    if (entitlementMethod === "package" && packageBalanceId) {
+      payload.entitlementMethod = "package";
+      payload.packageBalanceId = packageBalanceId;
+    } else if (entitlementMethod === "gift" && giftCertificateCode) {
+      payload.entitlementMethod = "gift";
+      payload.giftCertificateCode = giftCertificateCode;
+    }
+    if (useSavedCard && entitlements?.hasSavedCard) {
+      payload.useSavedCard = true;
+    }
     const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -563,6 +642,11 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     recurringMode,
     recurringEnabled,
     recurringOccurrences,
+    entitlementMethod,
+    packageBalanceId,
+    giftCertificateCode,
+    useSavedCard,
+    entitlements,
     slug,
   ]);
 
@@ -597,6 +681,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     setStep,
     workspace,
     types,
+    categories,
+    initialCategorySlug,
     staffOptions,
     locationOptions,
     selectedType,
@@ -689,6 +775,17 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     joinWaitlist,
     book,
     onPaymentSuccess,
+    entitlements,
+    entitlementsLoading,
+    entitlementMethod,
+    setEntitlementMethod,
+    packageBalanceId,
+    setPackageBalanceId,
+    giftCertificateCode,
+    setGiftCertificateCode,
+    useSavedCard,
+    setUseSavedCard,
+    lookupEntitlements,
   };
 }
 

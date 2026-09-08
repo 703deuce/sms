@@ -26,6 +26,8 @@ export type PublicBookingType = {
     description?: string;
     location?: string;
     priceDisplay?: string;
+    categoryId?: string;
+    imageUrl?: string;
     bookingQuestions?: BookingQuestion[];
     staffAssignment?: StaffAssignmentMode;
     staffIds?: string[];
@@ -61,6 +63,20 @@ export type PublicBookingFlowOptions = {
   preselectTypeId?: string;
   singleUseToken?: string;
   theme?: "light" | "dark" | "auto";
+  initialCategorySlug?: string;
+  initialStaffId?: string;
+  initialLocationId?: string;
+};
+
+export type PublicBookingCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  displayOrder: number;
+  collapsible: boolean;
+  collapsedByDefault: boolean;
+  imageUrl?: string | null;
 };
 
 export type PublicBookingStep =

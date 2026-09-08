@@ -26,6 +26,8 @@ export type BookingType = {
   config?: {
     description?: string;
     location?: string;
+    categoryId?: string;
+    imageUrl?: string;
     priceDisplay?: string;
     bookingQuestions?: BookingQuestion[];
     staffAssignment?: "any" | "specific" | "customer_choice";

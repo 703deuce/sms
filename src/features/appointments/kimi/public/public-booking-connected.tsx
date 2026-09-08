@@ -4,6 +4,7 @@ import "@/components/appointments/kimi-ui/public-booking/reference.css";
 import { BookingShell } from "@/components/appointments/kimi-ui/public-booking/components/BookingShell";
 import { BookingLoading, BookingError, BookingNotFound } from "@/components/appointments/kimi-ui/public-booking-service/components/BookingStates";
 import { PublicBookingServiceFlowInner } from "@/features/appointments/kimi/public/public-booking-service-flow-inner";
+import { PublicBookingPwaRegister } from "@/features/appointments/kimi/public/public-booking-pwa-register";
 import {
   usePublicBookingFlow,
 } from "@/features/appointments/kimi/public/use-public-booking-flow";
@@ -62,6 +63,7 @@ export function PublicBookingConnected(props: PublicBookingFlowOptions) {
         address: flow.workspace.businessAddress,
       }}
     >
+      <PublicBookingPwaRegister />
       <PublicBookingLandingFlowInner flow={flow} slug={props.slug} />
     </BookingShell>
   );

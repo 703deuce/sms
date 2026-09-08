@@ -18,6 +18,8 @@ async function main() {
     { name: "public store route", url: `${base}/book/demo/store` },
     { name: "manage appointment route shape", url: `${base}/manage/invalid-token` },
     { name: "client portal route shape", url: `${base}/portal/invalid-token` },
+    { name: "booking web manifest", url: `${base}/booking.webmanifest` },
+    { name: "booking service worker", url: `${base}/sw-booking.js` },
   ];
 
   for (const check of checks) {

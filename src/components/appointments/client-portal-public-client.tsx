@@ -54,6 +54,7 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [walletBalanceCents, setWalletBalanceCents] = useState<number | null>(null);
 
   useEffect(() => {
     void fetch(`/api/public/portal/${token}`)
@@ -74,6 +75,13 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
         if (res.ok) setHasSavedCard(Boolean(json.data?.hasSavedCard));
+      })
+      .catch(() => undefined);
+
+    void fetch(`/api/public/portal/${token}/wallet`)
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) setWalletBalanceCents(Number(json.data?.balanceCents ?? 0));
       })
       .catch(() => undefined);
   }, [token]);
@@ -156,6 +164,19 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
             ))
           )}
         </ul>
+      </section>
+
+      <section aria-labelledby="wallet-heading">
+        <h2 id="wallet-heading" className="text-lg font-medium">Client wallet</h2>
+        <div className="mt-3 rounded-lg border p-4 text-sm">
+          {walletBalanceCents != null ? (
+            <p className="text-muted-foreground">
+              Available balance: <span className="font-medium text-foreground">{formatMoney(walletBalanceCents)}</span>
+            </p>
+          ) : (
+            <p className="text-muted-foreground">Wallet balance unavailable.</p>
+          )}
+        </div>
       </section>
 
       <section aria-labelledby="payment-heading">

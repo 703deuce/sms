@@ -1,0 +1,16 @@
+{
+  "name": "Book appointment",
+  "short_name": "Booking",
+  "description": "Schedule appointments with your service provider",
+  "start_url": "/book",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

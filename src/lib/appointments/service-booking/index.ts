@@ -3,6 +3,8 @@ export * from "./crypto";
 export * from "./scheduling-limits";
 export * from "./minimize-gaps";
 export * from "./manage-appointment";
+export * from "./manage-intake";
+export * from "./manage-payments";
 export * from "./entitlements";
 export * from "./booking-entitlements";
 export * from "./booking-category";
