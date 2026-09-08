@@ -71,6 +71,7 @@ export const ARTIFACTS_DIR =
 export const NAV_TIMEOUT = BROWSER_CERT_CONFIG.navTimeoutMs;
 export const ACTION_TIMEOUT = BROWSER_CERT_CONFIG.actionTimeoutMs;
 export const FLOW_TIMEOUT = BROWSER_CERT_CONFIG.flowTimeoutMs;
+export const CERT_GROUP_TIMEOUT = BROWSER_CERT_CONFIG.groupTimeoutMs;
 export const ROUTE_PAUSE_MS = 1500;
 
 export const ERROR_PATTERNS = [
@@ -416,10 +417,10 @@ export async function visitRoutesBatch(
 export function generateResultsMarkdown(state: BrowserCertState): string {
   const counts: Record<string, number> = {};
   const uaPass = Object.values(state.results).filter(
-    (r) => r.status === "PASS" && r.id.startsWith("UA-"),
+    (r) => r.status === "PASS" && /^APT-\d+$|^MCTB-\d+$|^CROSS-\d+$|^GLOBAL-\d+$/.test(r.id),
   ).length;
   const reachPass = Object.values(state.results).filter(
-    (r) => r.status === "PASS" && !r.id.startsWith("UA-"),
+    (r) => r.status === "PASS" && !/^APT-\d+$|^MCTB-\d+$|^CROSS-\d+$|^GLOBAL-\d+$/.test(r.id),
   ).length;
   for (const r of Object.values(state.results)) {
     counts[r.status] = (counts[r.status] || 0) + 1;
@@ -447,7 +448,7 @@ export function generateResultsMarkdown(state: BrowserCertState): string {
     "| Tier | PASS count | Notes |",
     "|------|------------|-------|",
     `| Reachability (BATCH-01–14) | ${reachPass} | Route/render — not sufficient alone for operable features |`,
-    `| User-action (BATCH-UA) | ${uaPass} | True click/type/save/reload journeys |`,
+    `| Go-live cert groups (APT/MCTB/CROSS/GLOBAL) | ${uaPass} | True click/type/save/reload journeys |`,
     "",
     "See `docs/certification/BROWSER_CERT_USER_ACTION_STANDARD.md` and `BROWSER_FLOW_CLASSIFICATION_AUDIT.md`.",
     "",

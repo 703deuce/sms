@@ -12,8 +12,8 @@
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_FLOWS, BATCHES, REACHABILITY_FLOWS, resolveFlows } from "./browser-cert/flows";
-import { USER_ACTION_FLOWS } from "./browser-cert/behavioral-flows";
+import { ALL_FLOWS, BATCHES, CERT_GROUP_FLOWS, REACHABILITY_FLOWS, resolveFlows } from "./browser-cert/flows";
+import { CERT_GROUP_MANIFEST } from "./browser-cert/cert-groups/manifest";
 import { BROWSER_CERT_CONFIG } from "./browser-cert/browser-cert.config";
 import { writeProvenance } from "./browser-cert/provenance";
 import {
@@ -56,7 +56,9 @@ function parseArgs() {
   const preflight = args.includes("--preflight");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 0;
-  return { from, only, flowId, fresh, retest, continueOnFail, preflight, limit };
+  const certIdx = args.indexOf("--cert");
+  const certGroup = certIdx >= 0 ? String(args[certIdx + 1]) : null;
+  return { from, only, flowId, certGroup, fresh, retest, continueOnFail, preflight, limit };
 }
 
 function markEnvironmentBlocked(state: BrowserCertState, batchId: string, reason: string) {
@@ -82,7 +84,7 @@ function syncBatchCheckpoints(state: BrowserCertState) {
 }
 
 async function runDisposableCert() {
-  const { from, only, flowId, fresh, retest, continueOnFail, preflight, limit } = parseArgs();
+  const { from, only, flowId, certGroup, fresh, retest, continueOnFail, preflight, limit } = parseArgs();
 
   if (preflight) {
     const r = await browserCertPreflight();
@@ -114,7 +116,7 @@ async function runDisposableCert() {
   console.log(`  base URL:   ${baseUrl}`);
   console.log(`  git SHA:    ${provenance.gitCommitSha}`);
   console.log(`  deploy SHA: ${provenance.deployCommitSha}`);
-  console.log(`  flows:      ${ALL_FLOWS.length} total (${REACHABILITY_FLOWS.length} reachability + ${USER_ACTION_FLOWS.length} user-action)`);
+  console.log(`  flows:      ${ALL_FLOWS.length} total (${REACHABILITY_FLOWS.length} reachability + ${CERT_GROUP_FLOWS.length} cert groups)`);
   console.log(`  mode:       one Chromium per flow`);
 
   if (!waitForDeployedApp(baseUrl)) {
@@ -180,7 +182,12 @@ async function runDisposableCert() {
   }
   console.log(`Authenticated as ${auth.email}`);
 
-  let flows = resolveFlows({ only, from, flowId, retest });
+  let flows = resolveFlows({ only: certGroup ?? only, from, flowId, retest });
+  if (certGroup && flows.length === 0) {
+    console.error(`Unknown --cert group: ${certGroup}`);
+    console.error(`Valid cert IDs: ${CERT_GROUP_MANIFEST.map((g) => g.id).join(", ")}`);
+    process.exit(1);
+  }
   if (only && flows.length === 0) {
     console.error(`Unknown --only target: ${only}`);
     process.exit(1);

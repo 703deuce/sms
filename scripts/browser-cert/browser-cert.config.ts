@@ -14,6 +14,7 @@ export const BROWSER_CERT_CONFIG = {
   navTimeoutMs: 30_000,
   actionTimeoutMs: 20_000,
   flowTimeoutMs: 90_000,
+  groupTimeoutMs: 600_000,
   disposablePauseMs: 4_000,
   serverHealthMaxWaitMs: 120_000,
   consecutiveServerFailureLimit: 2,

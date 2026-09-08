@@ -7,6 +7,7 @@ import {
   attachConsoleCapture,
   failureScreenshot,
   FLOW_TIMEOUT,
+  CERT_GROUP_TIMEOUT,
   launchBrowser,
   recordResult,
   saveState,
@@ -108,7 +109,11 @@ export async function runDisposableFlow(opts: DisposableRunOptions): Promise<voi
     page = await context.newPage();
     attachConsoleCapture(page);
 
-    await withFlowTimeout(flow.id, FLOW_TIMEOUT, () => flow.run!(page));
+    await withFlowTimeout(
+      flow.id,
+      flow.certGroup ? CERT_GROUP_TIMEOUT : FLOW_TIMEOUT,
+      () => flow.run!(page),
+    );
     getServerGuard()?.recordNavigationSuccess();
     recordResult(state, flow.batchId, flow.id, "PASS");
     state.consecutiveBrowserCrashes = 0;

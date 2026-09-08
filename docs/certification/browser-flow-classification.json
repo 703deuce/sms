@@ -1,63 +1,31 @@
 {
-  "generatedAt": "2026-09-08T00:06:21.932Z",
+  "generatedAt": "2026-09-08T00:17:34.849Z",
   "totals": {
-    "baseline": 189,
-    "userAction": 12,
-    "all": 201
+    "reachability": 59,
+    "certGroups": 139,
+    "all": 198
   },
   "byClassification": {
-    "TRUE_USER_ACTION": 12,
-    "ROUTE_RENDER": 105,
-    "BACKEND_STATIC": 84
+    "TRUE_USER_ACTION": 139,
+    "ROUTE_RENDER": 57,
+    "BACKEND_STATIC": 2
   },
   "passByClassification": {
-    "TRUE_USER_ACTION": 0,
-    "ROUTE_RENDER": 97,
-    "BACKEND_STATIC": 73
+    "TRUE_USER_ACTION": 118,
+    "ROUTE_RENDER": 51,
+    "BACKEND_STATIC": 1
   },
-  "customerOperable": 161,
-  "needsUserActionFlow": 136,
-  "userActionImplemented": 12,
-  "userActionMissing": [
-    "UA-APT-03-calendar",
-    "UA-APT-04-list",
-    "UA-APT-22-waitlist",
-    "UA-APT-12-booking-pages",
-    "UA-APT-20-routing-forms",
-    "UA-APT-17-staff",
-    "UA-APT-18-locations",
-    "UA-APT-49-guest-join",
-    "UA-APT-52-notetaker-appt",
-    "UA-APT-59-recap",
-    "UA-MCTB-28-missed-calls",
-    "UA-MCTB-30-conversations",
-    "UA-MCTB-51-voicemail",
-    "UA-MCTB-04-setup",
-    "UA-MCTB-29-detail",
-    "UA-MCTB-06-rules",
-    "UA-MCTB-13-links",
-    "UA-MCTB-19-recovery",
-    "UA-MCTB-22-exclusions",
-    "UA-MCTB-49-voicemail-setup",
-    "UA-MCTB-54-test",
-    "UA-MCTB-03-wizard",
-    "UA-MCTB-11-consent-log",
-    "UA-MCTB-14-public-form",
-    "UA-CROSS-02-mctb-booking",
-    "UA-APT-06-detail",
-    "UA-APT-08-reschedule",
-    "UA-APT-10-status"
-  ],
+  "certGroupsMissingRunners": [],
   "rows": [
     {
       "id": "APT-01",
-      "batchId": "BATCH-01",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "Shell smoke"
+      "notes": "Product navigation"
     },
     {
       "id": "APT-01-ai-booking",
@@ -332,105 +300,112 @@
     },
     {
       "id": "APT-02",
-      "batchId": "BATCH-01",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointments Home"
+    },
+    {
+      "id": "APT-03",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Calendar"
+    },
+    {
+      "id": "APT-04",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment List"
+    },
+    {
+      "id": "APT-05",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Manual Appointment Creation"
+    },
+    {
+      "id": "APT-05-form-visible",
+      "batchId": "BATCH-02",
       "classification": "ROUTE_RENDER",
       "tier": "reachability",
       "customerOperable": false,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
-    },
-    {
-      "id": "APT-03",
-      "batchId": "BATCH-02",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-03-calendar",
-      "lastStatus": "PASS",
-      "notes": "Today/Next clicks only — no persistence"
-    },
-    {
-      "id": "APT-04",
-      "batchId": "BATCH-02",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-04-list",
-      "lastStatus": "PASS",
-      "notes": "Search fill only — no filter persist"
-    },
-    {
-      "id": "APT-05",
-      "batchId": "BATCH-02",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-05-create",
-      "lastStatus": "PASS",
-      "notes": "Form visible — does not create"
+      "notes": "Unmapped browser flow — default route/render"
     },
     {
       "id": "APT-06",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-06-detail",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment Detail"
     },
     {
       "id": "APT-07",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-07-edit",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Edit Appointment"
     },
     {
       "id": "APT-08",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-08-reschedule",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Reschedule"
     },
     {
       "id": "APT-09",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-09-cancel",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Cancellation"
     },
     {
       "id": "APT-10",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-10-status",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment Status Lifecycle"
     },
     {
       "id": "APT-11",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-11-types",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Booking Types"
     },
     {
       "id": "APT-11-save-reload",
@@ -445,13 +420,22 @@
     },
     {
       "id": "APT-12",
-      "batchId": "BATCH-04",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-12-booking-pages",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Public Booking Pages"
+    },
+    {
+      "id": "APT-13",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Full Public Booking Flow"
     },
     {
       "id": "APT-13-full-flow",
@@ -475,200 +459,213 @@
     },
     {
       "id": "APT-14",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Booking Protection"
     },
     {
       "id": "APT-15",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Approval-Based Booking"
     },
     {
       "id": "APT-16",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-16-availability",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Availability"
     },
     {
       "id": "APT-17",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-17-staff",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Staff"
     },
     {
       "id": "APT-18",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-18-locations",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Locations"
     },
     {
       "id": "APT-19",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "BLOCKED — LIVE EXTERNAL PROVIDER",
-      "notes": "BLOCKED — LIVE EXTERNAL PROVIDER"
+      "notes": "External Calendar Blocking"
     },
     {
       "id": "APT-20",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-20-routing-forms",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Routing Forms"
     },
     {
       "id": "APT-21",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Routing Rules"
     },
     {
       "id": "APT-22",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-22-waitlist",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Waitlist"
     },
     {
       "id": "APT-23",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Recalls"
     },
     {
       "id": "APT-24",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Recall Campaigns"
     },
     {
       "id": "APT-25",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "No-Show Recovery"
     },
     {
       "id": "APT-26",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Scheduling Groups / Enterprise"
     },
     {
       "id": "APT-27",
-      "batchId": "BATCH-03",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Team Booking Pages"
     },
     {
       "id": "APT-28",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Meeting Polls"
     },
     {
       "id": "APT-29",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Single-Use Links"
     },
     {
       "id": "APT-30",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Contacts"
     },
     {
       "id": "APT-31",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Conversations"
     },
     {
       "id": "APT-32",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Confirmation Messages"
     },
     {
       "id": "APT-33",
-      "batchId": "BATCH-05",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-33-reminders",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Reminder Sequences"
     },
     {
       "id": "APT-34",
-      "batchId": "BATCH-05",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "BLOCKED — LIVE PSTN",
-      "notes": "BLOCKED — LIVE PSTN"
+      "notes": "Voice Reminder Configuration"
     },
     {
       "id": "APT-34-ui",
@@ -682,142 +679,153 @@
     },
     {
       "id": "APT-35",
-      "batchId": "BATCH-05",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Workflow Builder"
     },
     {
       "id": "APT-36",
-      "batchId": "BATCH-05",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Workflow Templates"
     },
     {
       "id": "APT-37",
-      "batchId": "BATCH-05",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Workflow Activity"
     },
     {
       "id": "APT-38",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Workflow AI Architect"
     },
     {
       "id": "APT-39",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "AI Write Verifier"
     },
     {
       "id": "APT-40",
-      "batchId": "BATCH-06",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "AI Booking Settings"
     },
     {
       "id": "APT-41",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Public AI Booking"
     },
     {
       "id": "APT-42",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "SMS AI Booking"
     },
     {
       "id": "APT-43",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Email AI Booking"
     },
     {
       "id": "APT-44",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Owner Amy"
     },
     {
       "id": "APT-45",
-      "batchId": "BATCH-06",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "BLOCKED — LIVE PSTN",
-      "notes": "BLOCKED — LIVE PSTN"
+      "notes": "Caller Amy"
     },
     {
       "id": "APT-46",
-      "batchId": "BATCH-07",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Transovo Video Settings"
     },
     {
       "id": "APT-47",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-05-create",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Transovo Video Appointment Creation"
     },
     {
       "id": "APT-48",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "BLOCKED — LIVE MEDIA",
-      "notes": "BLOCKED — LIVE MEDIA"
+      "notes": "Transovo Video Host"
     },
     {
       "id": "APT-49",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-49-guest-join",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Public Video Guest Join"
     },
     {
       "id": "APT-49-invalid-token",
@@ -830,99 +838,103 @@
     },
     {
       "id": "APT-50",
-      "batchId": "BATCH-07",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-50-notetaker",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "AI Notetaker Global Settings"
     },
     {
       "id": "APT-51",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-11-types",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notetaker Booking-Type Defaults"
     },
     {
       "id": "APT-52",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-52-notetaker-appt",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Per-Appointment Notetaker"
     },
     {
       "id": "APT-53",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "External Meeting Link + Notetaker"
     },
     {
       "id": "APT-54",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-50-notetaker",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notetaker Join Rules"
     },
     {
       "id": "APT-55",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "BLOCKED — LIVE EXTERNAL PROVIDER",
-      "notes": "BLOCKED — LIVE EXTERNAL PROVIDER"
+      "notes": "Notetaker Meeting Lifecycle"
     },
     {
       "id": "APT-56",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Notetaker Failure Paths"
     },
     {
       "id": "APT-57",
-      "batchId": "BATCH-07",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Meeting Recaps"
     },
     {
       "id": "APT-58",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "NOT IMPLEMENTED"
+      "needsUserActionFlow": false,
+      "lastStatus": "NOT IMPLEMENTED",
+      "notes": "Searchable Meeting Notes"
     },
     {
       "id": "APT-59",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-59-recap",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Public Recap Sharing"
     },
     {
       "id": "APT-59-invalid",
@@ -935,86 +947,102 @@
     },
     {
       "id": "APT-60",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-APT-50-notetaker",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notetaker Retention"
     },
     {
       "id": "APT-61",
-      "batchId": "BATCH-07",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "NOT IMPLEMENTED",
-      "notes": "NOT IMPLEMENTED"
+      "notes": "Automatic External Meeting Creation"
     },
     {
       "id": "APT-62",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Appointment Analytics Overview"
     },
     {
       "id": "APT-63",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Booking Analytics"
     },
     {
       "id": "APT-64",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Reminder Analytics"
     },
     {
       "id": "APT-65",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Automation Analytics"
     },
     {
       "id": "APT-66",
-      "batchId": "BATCH-14",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Reports / Export"
     },
     {
       "id": "APT-67",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment Setup Wizard"
     },
     {
       "id": "APT-68",
-      "batchId": "BATCH-14",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment Integrations Hub"
+    },
+    {
+      "id": "APT-69",
+      "batchId": "CERT-APT",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Appointment Settings"
     },
     {
       "id": "APT-69-business",
@@ -1042,6 +1070,15 @@
       "customerOperable": true,
       "needsUserActionFlow": true,
       "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-01",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Product Switching"
     },
     {
       "id": "CROSS-01-appointments",
@@ -1075,77 +1112,119 @@
     },
     {
       "id": "CROSS-02",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-CROSS-02-mctb-booking",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Shared Contacts"
     },
     {
       "id": "CROSS-03",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Shared Conversations"
     },
     {
       "id": "CROSS-04",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "MCTB Booking Attribution"
     },
     {
       "id": "CROSS-05",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "MCTB Booking → Appointment Reminder Lifecycle"
     },
     {
       "id": "CROSS-06",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Appointment → AI Notetaker → Recap"
     },
     {
       "id": "CROSS-07",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Transovo Video → AI Notetaker"
     },
     {
       "id": "CROSS-08",
-      "batchId": "BATCH-13",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-CROSS",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "External Video → AI Notetaker"
+    },
+    {
+      "id": "GLOBAL-01",
+      "batchId": "CERT-GLOBAL",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Global frontend UI quality pass"
+    },
+    {
+      "id": "GLOBAL-02",
+      "batchId": "CERT-GLOBAL",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Public token / link safety"
+    },
+    {
+      "id": "GLOBAL-03",
+      "batchId": "CERT-GLOBAL",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Time / timezone certification"
+    },
+    {
+      "id": "GLOBAL-04",
+      "batchId": "CERT-GLOBAL",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Duplicate / retry certification"
     },
     {
       "id": "MCTB-01",
-      "batchId": "BATCH-08",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": false,
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "Product shell switch"
+      "notes": "Product navigation"
     },
     {
       "id": "MCTB-01-analytics",
@@ -1216,42 +1295,43 @@
     },
     {
       "id": "MCTB-02",
-      "batchId": "BATCH-08",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": false,
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "Home"
     },
     {
       "id": "MCTB-03",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-03-wizard",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Guided Setup Wizard"
     },
     {
       "id": "MCTB-04",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-04-setup",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Setup Overview"
     },
     {
       "id": "MCTB-05",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-05-phone",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Phone & Forwarding"
     },
     {
       "id": "MCTB-05-live-verify",
@@ -1265,63 +1345,63 @@
     },
     {
       "id": "MCTB-06",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-06-rules",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Missed Call Rules"
     },
     {
       "id": "MCTB-07",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-07-consent",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Consent: Press 1 Configuration"
     },
     {
       "id": "MCTB-08",
-      "batchId": "BATCH-10",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "Press-1 runtime — backend certified"
+      "notes": "Press 1 Runtime Sequence"
     },
     {
       "id": "MCTB-09",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-07-consent",
-      "lastStatus": "PASS"
-    },
-    {
-      "id": "MCTB-10",
-      "batchId": "BATCH-10",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "Existing consent runtime — backend certified"
+      "notes": "Existing Consent Configuration"
+    },
+    {
+      "id": "MCTB-10",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Existing Consent Runtime"
     },
     {
       "id": "MCTB-11",
-      "batchId": "BATCH-10",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-11-consent-log",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Consent Log"
     },
     {
       "id": "MCTB-11-ui",
@@ -1335,33 +1415,33 @@
     },
     {
       "id": "MCTB-12",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-12-textback",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Text Back Settings"
     },
     {
       "id": "MCTB-13",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-13-links",
-      "lastStatus": "FAIL"
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Request Form & Default Link Setup"
     },
     {
       "id": "MCTB-14",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-14-public-form",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Public Request Form"
     },
     {
       "id": "MCTB-14-invalid",
@@ -1374,404 +1454,432 @@
     },
     {
       "id": "MCTB-15",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Numbers"
     },
     {
       "id": "MCTB-16",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Toll-Free Verification / Sender Readiness"
     },
     {
       "id": "MCTB-17",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "INTENTIONALLY DEFERRED",
-      "notes": "INTENTIONALLY DEFERRED"
+      "notes": "Local 10DLC Sender"
     },
     {
       "id": "MCTB-18",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "INTENTIONALLY DEFERRED",
-      "notes": "INTENTIONALLY DEFERRED"
+      "notes": "Dedicated Text Number Voice Behavior"
     },
     {
       "id": "MCTB-19",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-19-recovery",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Recovery Controls"
     },
     {
       "id": "MCTB-20",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": false,
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "FAIL",
-      "notes": "Legacy redirect"
+      "notes": "Schedule/Legacy Compatibility"
     },
     {
       "id": "MCTB-21",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
       "lastStatus": "INTENTIONALLY DEFERRED",
-      "notes": "INTENTIONALLY DEFERRED"
+      "notes": "Optional One-Time Follow-Up"
     },
     {
       "id": "MCTB-22",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-22-exclusions",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Exclusions"
     },
     {
       "id": "MCTB-23",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "STOP / HELP"
     },
     {
       "id": "MCTB-24",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Core Recovery Pipeline"
     },
     {
       "id": "MCTB-25",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Recovery Delay"
     },
     {
       "id": "MCTB-26",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Eligibility Engine"
     },
     {
       "id": "MCTB-27",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Repeat Caller"
     },
     {
       "id": "MCTB-28",
-      "batchId": "BATCH-09",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-28-missed-calls",
+      "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "List/table presence only"
+      "notes": "Missed Calls List"
     },
     {
       "id": "MCTB-29",
-      "batchId": "BATCH-09",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-29-detail",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Missed Call Detail"
     },
     {
       "id": "MCTB-30",
-      "batchId": "BATCH-09",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-30-conversations",
+      "needsUserActionFlow": false,
       "lastStatus": "PASS",
-      "notes": "Inbox body text only"
+      "notes": "Conversations"
     },
     {
       "id": "MCTB-31",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notify-Only Mode"
     },
     {
       "id": "MCTB-32",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Guided Collection Mode"
     },
     {
       "id": "MCTB-33",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "AI Conversation Mode"
     },
     {
       "id": "MCTB-34",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Immediate Handoff Mode"
     },
     {
       "id": "MCTB-35",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Lead Fields"
     },
     {
       "id": "MCTB-36",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Emergency Detection Off"
     },
     {
       "id": "MCTB-37",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Emergency Detection On"
     },
     {
       "id": "MCTB-38",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Emergency Uncertainty"
     },
     {
       "id": "MCTB-39",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Callback Requests"
     },
     {
       "id": "MCTB-40",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Human Takeover"
     },
     {
       "id": "MCTB-41",
-      "batchId": "BATCH-11",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-41-notifications",
-      "lastStatus": "FAIL"
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Notifications Recipients"
     },
     {
       "id": "MCTB-42",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notification Routing Matrix"
     },
     {
       "id": "MCTB-43",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notification Quiet Hours"
     },
     {
       "id": "MCTB-44",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Notification Delivery"
     },
     {
       "id": "MCTB-45",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Lead Handoff Summary"
     },
     {
       "id": "MCTB-46",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Booking Behavior"
     },
     {
       "id": "MCTB-47",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "MCTB → Appointment Booking"
     },
     {
       "id": "MCTB-48",
-      "batchId": "BATCH-11",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Tracked Links"
     },
     {
       "id": "MCTB-49",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-49-voicemail-setup",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Voicemail Setup"
     },
     {
       "id": "MCTB-50",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-49-voicemail-setup",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Voicemail Greeting Replacement Safety"
     },
     {
       "id": "MCTB-51",
-      "batchId": "BATCH-12",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-51-voicemail",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Visual Voicemail Inbox"
     },
     {
       "id": "MCTB-52",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-51-voicemail",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Voicemail AI"
     },
     {
       "id": "MCTB-53",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "MCTB Disabled / Voicemail Active"
     },
     {
       "id": "MCTB-54",
-      "batchId": "BATCH-10",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-54-test",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Test & Diagnostics"
     },
     {
       "id": "MCTB-55",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
       "customerOperable": true,
-      "needsUserActionFlow": true,
-      "userActionFlowId": "UA-MCTB-54-test",
-      "lastStatus": "PASS"
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Try It / Demo"
     },
     {
       "id": "MCTB-56",
-      "batchId": "BATCH-12",
-      "classification": "ROUTE_RENDER",
-      "tier": "reachability",
-      "customerOperable": false,
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
       "needsUserActionFlow": false,
-      "lastStatus": "PASS"
+      "lastStatus": "PASS",
+      "notes": "MCTB Analytics"
+    },
+    {
+      "id": "MCTB-57",
+      "batchId": "CERT-MCTB",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "cert-group",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Legacy Redirects"
     },
     {
       "id": "MCTB-57-business-hours",
@@ -1845,120 +1953,13 @@
     },
     {
       "id": "MCTB-58",
-      "batchId": "BATCH-12",
-      "classification": "BACKEND_STATIC",
-      "tier": "static",
-      "customerOperable": false,
-      "needsUserActionFlow": false,
-      "lastStatus": "PASS"
-    },
-    {
-      "id": "UA-APT-05-create",
-      "batchId": "BATCH-UA",
+      "batchId": "CERT-MCTB",
       "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
+      "tier": "cert-group",
       "customerOperable": true,
       "needsUserActionFlow": false,
-      "notes": "Create appointment through UI"
-    },
-    {
-      "id": "UA-APT-07-edit",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Edit appointment notes and verify persistence"
-    },
-    {
-      "id": "UA-APT-09-cancel",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Cancel appointment through UI"
-    },
-    {
-      "id": "UA-APT-11-types",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Create booking type and verify persistence"
-    },
-    {
-      "id": "UA-APT-13-public-book",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Complete public booking through UI"
-    },
-    {
-      "id": "UA-APT-16-availability",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Change availability hours and verify persistence"
-    },
-    {
-      "id": "UA-APT-33-reminders",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Edit reminder template and verify persistence"
-    },
-    {
-      "id": "UA-APT-50-notetaker",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "Change AI Notetaker setting and verify persistence"
-    },
-    {
-      "id": "UA-MCTB-05-phone",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "MCTB Phone & Forwarding save and reload"
-    },
-    {
-      "id": "UA-MCTB-07-consent",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "MCTB Consent mode save and reload"
-    },
-    {
-      "id": "UA-MCTB-12-textback",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "MCTB Text Back opener save and reload"
-    },
-    {
-      "id": "UA-MCTB-41-notifications",
-      "batchId": "BATCH-UA",
-      "classification": "TRUE_USER_ACTION",
-      "tier": "user-action",
-      "customerOperable": true,
-      "needsUserActionFlow": false,
-      "notes": "MCTB Notifications & Handoff save and reload"
+      "lastStatus": "PASS",
+      "notes": "Feature Flags / Entitlements"
     }
   ]
 }

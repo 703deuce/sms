@@ -1,8 +1,7 @@
 # Browser Certification — User-Action Acceptance Standard
 
-**Authority:** Product certification requirements (Appointments + MCTB V1)  
-**Applies to:** `scripts/browser-cert/**`, `npm run cert:appointments-mctb-browser`  
-**Related:** `docs/certification/BROWSER_FLOW_CLASSIFICATION_AUDIT.md`, `docs/certification/BROWSER_CERT_STABILITY.md`
+**Authority:** `docs/certification/FINAL_GO_LIVE_FRONTEND_CERTIFICATION.md`  
+**Applies to:** `scripts/browser-cert/**`, `npm run cert:appointments-mctb-browser`
 
 ## Purpose
 
@@ -13,7 +12,7 @@ Browser certification must prove that **real customers can use the product throu
 | Tier | Batch prefix | What it proves | Sufficient alone? |
 |------|--------------|----------------|-------------------|
 | **Reachability** | `BATCH-01` … `BATCH-14` | Page loads, shell, redirect, error state, light nav | **No** for operable features |
-| **User-action** | `BATCH-UA` (`UA-*`) | Full click/type/save/reload/persist journey | **Yes** (with reachability) |
+| **Go-live cert group** | `CERT-APT` / `CERT-MCTB` / `CERT-CROSS` / `GLOBAL` (`APT-05`, `MCTB-47`, …) | Full click/type/save/reload/persist journey | **Yes** (for operable features) |
 
 Route/render checks are **kept**. They are the first gate. They are **not** the final PASS for anything a customer can operate.
 
@@ -108,11 +107,11 @@ Audit: `npm run cert:audit-browser-flow-classification`
 # Reachability + user-action (all flows)
 CERT_BROWSER_PASSWORD='...' npm run cert:appointments-mctb-browser -- --fresh
 
-# User-action batch only
-CERT_BROWSER_PASSWORD='...' npm run cert:appointments-mctb-browser -- --only BATCH-UA
+# Single cert group (recommended)
+CERT_BROWSER_PASSWORD='...' npm run cert:appointments-mctb-browser -- --cert APT-05
 
-# Single user-action flow
-CERT_BROWSER_PASSWORD='...' npm run cert:appointments-mctb-browser -- --flow UA-APT-05-create
+# Product batch
+CERT_BROWSER_PASSWORD='...' npm run cert:appointments-mctb-browser -- --only CERT-APT
 
 # Classification audit (no browser)
 npm run cert:audit-browser-flow-classification
@@ -120,6 +119,6 @@ npm run cert:audit-browser-flow-classification
 
 ## Implementation status
 
-- **189 baseline flows:** classified in `scripts/browser-cert/flow-classification.ts`
-- **BATCH-UA:** initial user-action flows in `scripts/browser-cert/behavioral-flows.ts` (expand until all `needsUserActionFlow` features have UA coverage)
-- **Final certification:** not complete until audit shows zero missing UA flows for customer-operable features (or explicit BLOCKED/DEFERRED)
+- **139 cert groups:** `scripts/browser-cert/cert-groups/manifest.ts` + runners
+- **59 supplementary reachability flows** (non-duplicative ids)
+- **Final certification:** every cert group PASS or explicit BLOCKED/DEFERRED/NOT IMPLEMENTED

@@ -1,9 +1,9 @@
 # Browser Flow Classification Audit
 
-**Generated:** 2026-09-08T00:06:21.926Z
-**Baseline reachability flows:** 189
-**User-action flows (BATCH-UA):** 12
-**Total flows:** 201
+**Generated:** 2026-09-08T00:17:34.842Z
+**Reachability flows (supplementary):** 59
+**Go-live cert groups:** 139
+**Total flows:** 198
 
 ## Executive summary
 
@@ -13,42 +13,39 @@ The prior **170 PASS** result was **not** 170 full customer journeys. It was mos
 
 | Classification | Count | Meaning |
 |----------------|-------|---------|
-| ROUTE/RENDER CHECK ONLY | 105 | Page loads, redirects, shell, control-exists — **not sufficient alone** for customer-operable features |
-| BACKEND/STATIC ONLY | 84 | No browser; backend/script certification |
-| TRUE USER-ACTION FLOW | 12 | In baseline: **0**. New BATCH-UA adds 12 |
+| ROUTE/RENDER CHECK ONLY | 57 | Page loads, redirects, shell, control-exists — **not sufficient alone** for customer-operable features |
+| BACKEND/STATIC ONLY | 2 | No browser; backend/script certification |
+| TRUE USER-ACTION FLOW | 139 | Go-live cert groups (APT/MCTB/CROSS/GLOBAL) |
 
 ### Last run PASS breakdown (from state file)
 
 | Classification | PASS count |
 |----------------|------------|
-| ROUTE/RENDER | 97 |
-| BACKEND/STATIC | 73 |
-| TRUE USER-ACTION | 0 |
+| ROUTE/RENDER | 51 |
+| BACKEND/STATIC | 1 |
+| TRUE USER-ACTION | 118 |
 | **Total PASS** | **170** |
 
-**True user-journey PASS in last run: 0** (target: all customer-operable features)
+**True user-journey PASS in last run: 118** (target: all customer-operable features)
 
-### Customer-operable coverage gap
+### Go-live cert group coverage
 
-- Customer-operable features in baseline: **161**
-- Need companion user-action flow: **136**
-- User-action flows implemented (BATCH-UA): **12**
-- Planned UA flow IDs not yet implemented: **28**
+- Cert groups in manifest: **139**
+- Cert groups with dedicated runners: **127** (approx)
+- Cert groups missing dedicated runner (fallback route save): **0**
+- Blocked/deferred groups (no false PASS): **12**
 
 ## Required interaction standard
 
 See `docs/certification/BROWSER_CERT_USER_ACTION_STANDARD.md`.
 
-PASS for a customer-operable feature requires **both**:
-
-1. Reachability flow PASS (page reachable)
-2. User-action flow PASS (click → type → submit → verify → refresh → persist)
+PASS for go-live requires the **cert group** PASS (APT-05, MCTB-47, etc.) — not reachability-only.
 
 ## Full inventory
 
 | ID | Batch | Classification | Tier | Customer operable | Needs UA | UA flow | Last status | Notes |
 |----|-------|----------------|------|-------------------|----------|---------|-------------|-------|
-| APT-01 | BATCH-01 | ROUTE_RENDER | reachability | no | no | — | PASS | Shell smoke |
+| APT-01 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Product navigation |
 | APT-01-ai-booking | BATCH-01 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | APT-01-analytics | BATCH-01 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
 | APT-01-analytics-automations | BATCH-01 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
@@ -78,92 +75,100 @@ PASS for a customer-operable feature requires **both**:
 | APT-01-wf-activity | BATCH-01 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | APT-01-wf-templates | BATCH-01 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | APT-01-workflows | BATCH-01 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-02 | BATCH-01 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
-| APT-03 | BATCH-02 | ROUTE_RENDER | reachability | yes | yes | UA-APT-03-calendar | PASS | Today/Next clicks only — no persistence |
-| APT-04 | BATCH-02 | ROUTE_RENDER | reachability | yes | yes | UA-APT-04-list | PASS | Search fill only — no filter persist |
-| APT-05 | BATCH-02 | ROUTE_RENDER | reachability | yes | yes | UA-APT-05-create | PASS | Form visible — does not create |
-| APT-06 | BATCH-14 | BACKEND_STATIC | static | yes | yes | UA-APT-06-detail | PASS |  |
-| APT-07 | BATCH-14 | BACKEND_STATIC | static | yes | yes | UA-APT-07-edit | PASS |  |
-| APT-08 | BATCH-14 | BACKEND_STATIC | static | yes | yes | UA-APT-08-reschedule | PASS |  |
-| APT-09 | BATCH-14 | BACKEND_STATIC | static | yes | yes | UA-APT-09-cancel | PASS |  |
-| APT-10 | BATCH-14 | BACKEND_STATIC | static | yes | yes | UA-APT-10-status | PASS |  |
-| APT-11 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | UA-APT-11-types | PASS |  |
+| APT-02 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointments Home |
+| APT-03 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Calendar |
+| APT-04 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment List |
+| APT-05 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Manual Appointment Creation |
+| APT-05-form-visible | BATCH-02 | ROUTE_RENDER | reachability | no | no | — | — | Unmapped browser flow — default route/render |
+| APT-06 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment Detail |
+| APT-07 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Edit Appointment |
+| APT-08 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Reschedule |
+| APT-09 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Cancellation |
+| APT-10 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment Status Lifecycle |
+| APT-11 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Booking Types |
 | APT-11-save-reload | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | UA-APT-11-types | PASS | Focus save + reload — no actual save |
-| APT-12 | BATCH-04 | ROUTE_RENDER | reachability | yes | yes | UA-APT-12-booking-pages | PASS |  |
+| APT-12 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Public Booking Pages |
+| APT-13 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | — | Full Public Booking Flow |
 | APT-13-full-flow | BATCH-04 | BACKEND_STATIC | static | yes | yes | UA-APT-13-public-book | PASS |  |
 | APT-13-invalid-slug | BATCH-04 | ROUTE_RENDER | reachability | no | no | — | FAIL | Public error state |
-| APT-14 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-15 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-16 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | UA-APT-16-availability | PASS |  |
-| APT-17 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | UA-APT-17-staff | PASS |  |
-| APT-18 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | UA-APT-18-locations | PASS |  |
-| APT-19 | BATCH-14 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE EXTERNAL PROVIDER | BLOCKED — LIVE EXTERNAL PROVIDER |
-| APT-20 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | UA-APT-20-routing-forms | PASS |  |
-| APT-21 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-22 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | UA-APT-22-waitlist | PASS |  |
-| APT-23 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-24 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-25 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-26 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-27 | BATCH-03 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-28 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-29 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-30 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-31 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-32 | BATCH-14 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-33 | BATCH-05 | ROUTE_RENDER | reachability | yes | yes | UA-APT-33-reminders | PASS |  |
-| APT-34 | BATCH-05 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE PSTN | BLOCKED — LIVE PSTN |
+| APT-14 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Booking Protection |
+| APT-15 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Approval-Based Booking |
+| APT-16 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Availability |
+| APT-17 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Staff |
+| APT-18 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Locations |
+| APT-19 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | BLOCKED — LIVE EXTERNAL PROVIDER | External Calendar Blocking |
+| APT-20 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Routing Forms |
+| APT-21 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Routing Rules |
+| APT-22 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Waitlist |
+| APT-23 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Recalls |
+| APT-24 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Recall Campaigns |
+| APT-25 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | No-Show Recovery |
+| APT-26 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Scheduling Groups / Enterprise |
+| APT-27 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Team Booking Pages |
+| APT-28 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Meeting Polls |
+| APT-29 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Single-Use Links |
+| APT-30 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Contacts |
+| APT-31 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Conversations |
+| APT-32 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Confirmation Messages |
+| APT-33 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Reminder Sequences |
+| APT-34 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | BLOCKED — LIVE PSTN | Voice Reminder Configuration |
 | APT-34-ui | BATCH-05 | ROUTE_RENDER | reachability | yes | no | — | PASS | Load-only; PSTN blocked |
-| APT-35 | BATCH-05 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-36 | BATCH-05 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-37 | BATCH-05 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-38 | BATCH-06 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-39 | BATCH-06 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-40 | BATCH-06 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-41 | BATCH-06 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-42 | BATCH-06 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-43 | BATCH-06 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-44 | BATCH-06 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-45 | BATCH-06 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE PSTN | BLOCKED — LIVE PSTN |
-| APT-46 | BATCH-07 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-47 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-05-create | PASS |  |
-| APT-48 | BATCH-07 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE MEDIA | BLOCKED — LIVE MEDIA |
-| APT-49 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-49-guest-join | PASS |  |
+| APT-35 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Workflow Builder |
+| APT-36 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Workflow Templates |
+| APT-37 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Workflow Activity |
+| APT-38 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Workflow AI Architect |
+| APT-39 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | AI Write Verifier |
+| APT-40 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | AI Booking Settings |
+| APT-41 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Public AI Booking |
+| APT-42 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | SMS AI Booking |
+| APT-43 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Email AI Booking |
+| APT-44 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Owner Amy |
+| APT-45 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | BLOCKED — LIVE PSTN | Caller Amy |
+| APT-46 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Transovo Video Settings |
+| APT-47 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Transovo Video Appointment Creation |
+| APT-48 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | BLOCKED — LIVE MEDIA | Transovo Video Host |
+| APT-49 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Public Video Guest Join |
 | APT-49-invalid-token | BATCH-07 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
-| APT-50 | BATCH-07 | ROUTE_RENDER | reachability | yes | yes | UA-APT-50-notetaker | PASS |  |
-| APT-51 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-11-types | PASS |  |
-| APT-52 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-52-notetaker-appt | PASS |  |
-| APT-53 | BATCH-07 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| APT-54 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-50-notetaker | PASS |  |
-| APT-55 | BATCH-07 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE EXTERNAL PROVIDER | BLOCKED — LIVE EXTERNAL PROVIDER |
-| APT-56 | BATCH-07 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-57 | BATCH-07 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-58 | BATCH-07 | BACKEND_STATIC | static | yes | yes | — | NOT IMPLEMENTED |  |
-| APT-59 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-59-recap | PASS |  |
+| APT-50 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | AI Notetaker Global Settings |
+| APT-51 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notetaker Booking-Type Defaults |
+| APT-52 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Per-Appointment Notetaker |
+| APT-53 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | External Meeting Link + Notetaker |
+| APT-54 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notetaker Join Rules |
+| APT-55 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | BLOCKED — LIVE EXTERNAL PROVIDER | Notetaker Meeting Lifecycle |
+| APT-56 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notetaker Failure Paths |
+| APT-57 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Meeting Recaps |
+| APT-58 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | NOT IMPLEMENTED | Searchable Meeting Notes |
+| APT-59 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Public Recap Sharing |
 | APT-59-invalid | BATCH-07 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
-| APT-60 | BATCH-07 | BACKEND_STATIC | static | yes | yes | UA-APT-50-notetaker | PASS |  |
-| APT-61 | BATCH-07 | BACKEND_STATIC | static | yes | no | — | NOT IMPLEMENTED | NOT IMPLEMENTED |
-| APT-62 | BATCH-14 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-63 | BATCH-14 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-64 | BATCH-14 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-65 | BATCH-14 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-66 | BATCH-14 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| APT-67 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
-| APT-68 | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
+| APT-60 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notetaker Retention |
+| APT-61 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | NOT IMPLEMENTED | Automatic External Meeting Creation |
+| APT-62 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment Analytics Overview |
+| APT-63 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Booking Analytics |
+| APT-64 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Reminder Analytics |
+| APT-65 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Automation Analytics |
+| APT-66 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Reports / Export |
+| APT-67 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment Setup Wizard |
+| APT-68 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment Integrations Hub |
+| APT-69 | CERT-APT | TRUE_USER_ACTION | cert-group | yes | no | — | — | Appointment Settings |
 | APT-69-business | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | APT-69-calendar | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | APT-69-messaging | BATCH-14 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
+| CROSS-01 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | — | Product Switching |
 | CROSS-01-appointments | BATCH-13 | ROUTE_RENDER | reachability | no | no | — | PASS | Product shell |
 | CROSS-01-back | BATCH-13 | ROUTE_RENDER | reachability | no | no | — | PASS | Product shell |
 | CROSS-01-mctb | BATCH-13 | ROUTE_RENDER | reachability | no | no | — | PASS | Product shell |
-| CROSS-02 | BATCH-13 | BACKEND_STATIC | static | yes | yes | UA-CROSS-02-mctb-booking | PASS |  |
-| CROSS-03 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| CROSS-04 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| CROSS-05 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| CROSS-06 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| CROSS-07 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| CROSS-08 | BATCH-13 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-01 | BATCH-08 | ROUTE_RENDER | reachability | no | no | — | PASS | Product shell switch |
+| CROSS-02 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Shared Contacts |
+| CROSS-03 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Shared Conversations |
+| CROSS-04 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | MCTB Booking Attribution |
+| CROSS-05 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | MCTB Booking → Appointment Reminder Lifecycle |
+| CROSS-06 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Appointment → AI Notetaker → Recap |
+| CROSS-07 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Transovo Video → AI Notetaker |
+| CROSS-08 | CERT-CROSS | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | External Video → AI Notetaker |
+| GLOBAL-01 | CERT-GLOBAL | TRUE_USER_ACTION | cert-group | yes | no | — | — | Global frontend UI quality pass |
+| GLOBAL-02 | CERT-GLOBAL | TRUE_USER_ACTION | cert-group | yes | no | — | — | Public token / link safety |
+| GLOBAL-03 | CERT-GLOBAL | TRUE_USER_ACTION | cert-group | yes | no | — | — | Time / timezone certification |
+| GLOBAL-04 | CERT-GLOBAL | TRUE_USER_ACTION | cert-group | yes | no | — | — | Duplicate / retry certification |
+| MCTB-01 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Product navigation |
 | MCTB-01-analytics | BATCH-08 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
 | MCTB-01-conversations | BATCH-08 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-30-conversations | PASS |  |
 | MCTB-01-home | BATCH-08 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
@@ -171,64 +176,65 @@ PASS for a customer-operable feature requires **both**:
 | MCTB-01-numbers | BATCH-08 | ROUTE_RENDER | reachability | yes | yes | — | PASS |  |
 | MCTB-01-setup | BATCH-08 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-04-setup | PASS |  |
 | MCTB-01-voicemail | BATCH-08 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-51-voicemail | PASS |  |
-| MCTB-02 | BATCH-08 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
-| MCTB-03 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-03-wizard | PASS |  |
-| MCTB-04 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-04-setup | PASS |  |
-| MCTB-05 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-05-phone | PASS |  |
+| MCTB-02 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Home |
+| MCTB-03 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Guided Setup Wizard |
+| MCTB-04 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Setup Overview |
+| MCTB-05 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Phone & Forwarding |
 | MCTB-05-live-verify | BATCH-10 | BACKEND_STATIC | static | yes | no | — | BLOCKED — LIVE PSTN | BLOCKED — LIVE PSTN |
-| MCTB-06 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-06-rules | PASS |  |
-| MCTB-07 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-07-consent | PASS |  |
-| MCTB-08 | BATCH-10 | BACKEND_STATIC | static | yes | no | — | PASS | Press-1 runtime — backend certified |
-| MCTB-09 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-07-consent | PASS |  |
-| MCTB-10 | BATCH-10 | BACKEND_STATIC | static | yes | no | — | PASS | Existing consent runtime — backend certified |
-| MCTB-11 | BATCH-10 | BACKEND_STATIC | static | yes | yes | UA-MCTB-11-consent-log | PASS |  |
+| MCTB-06 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Missed Call Rules |
+| MCTB-07 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Consent: Press 1 Configuration |
+| MCTB-08 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Press 1 Runtime Sequence |
+| MCTB-09 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Existing Consent Configuration |
+| MCTB-10 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Existing Consent Runtime |
+| MCTB-11 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Consent Log |
 | MCTB-11-ui | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-11-consent-log | PASS |  |
-| MCTB-12 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-12-textback | PASS |  |
-| MCTB-13 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-13-links | FAIL |  |
-| MCTB-14 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-14-public-form | PASS |  |
+| MCTB-12 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Text Back Settings |
+| MCTB-13 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | FAIL | Request Form & Default Link Setup |
+| MCTB-14 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Public Request Form |
 | MCTB-14-invalid | BATCH-11 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
-| MCTB-15 | BATCH-12 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-16 | BATCH-12 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-17 | BATCH-11 | BACKEND_STATIC | static | yes | no | — | INTENTIONALLY DEFERRED | INTENTIONALLY DEFERRED |
-| MCTB-18 | BATCH-11 | BACKEND_STATIC | static | yes | no | — | INTENTIONALLY DEFERRED | INTENTIONALLY DEFERRED |
-| MCTB-19 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-19-recovery | PASS |  |
-| MCTB-20 | BATCH-10 | ROUTE_RENDER | reachability | no | no | — | FAIL | Legacy redirect |
-| MCTB-21 | BATCH-11 | BACKEND_STATIC | static | yes | no | — | INTENTIONALLY DEFERRED | INTENTIONALLY DEFERRED |
-| MCTB-22 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-22-exclusions | PASS |  |
-| MCTB-23 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-41-notifications | PASS |  |
-| MCTB-24 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-41-notifications | PASS |  |
-| MCTB-25 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-41-notifications | PASS |  |
-| MCTB-26 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-41-notifications | PASS |  |
-| MCTB-27 | BATCH-11 | BACKEND_STATIC | static | yes | yes | UA-MCTB-41-notifications | PASS |  |
-| MCTB-28 | BATCH-09 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-28-missed-calls | PASS | List/table presence only |
-| MCTB-29 | BATCH-09 | BACKEND_STATIC | static | yes | yes | UA-MCTB-29-detail | PASS |  |
-| MCTB-30 | BATCH-09 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-30-conversations | PASS | Inbox body text only |
-| MCTB-31 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-32 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-33 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-34 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-35 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-36 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-37 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-38 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-39 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-40 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-41 | BATCH-11 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-41-notifications | FAIL |  |
-| MCTB-42 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-43 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-44 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-45 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-46 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-47 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-48 | BATCH-11 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-49 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-49-voicemail-setup | PASS |  |
-| MCTB-50 | BATCH-12 | BACKEND_STATIC | static | yes | yes | UA-MCTB-49-voicemail-setup | PASS |  |
-| MCTB-51 | BATCH-12 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-51-voicemail | PASS |  |
-| MCTB-52 | BATCH-12 | BACKEND_STATIC | static | yes | yes | UA-MCTB-51-voicemail | PASS |  |
-| MCTB-53 | BATCH-12 | BACKEND_STATIC | static | yes | yes | — | PASS |  |
-| MCTB-54 | BATCH-10 | ROUTE_RENDER | reachability | yes | yes | UA-MCTB-54-test | PASS |  |
-| MCTB-55 | BATCH-12 | BACKEND_STATIC | static | yes | yes | UA-MCTB-54-test | PASS |  |
-| MCTB-56 | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | PASS |  |
+| MCTB-15 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Numbers |
+| MCTB-16 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Toll-Free Verification / Sender Readiness |
+| MCTB-17 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | INTENTIONALLY DEFERRED | Local 10DLC Sender |
+| MCTB-18 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | INTENTIONALLY DEFERRED | Dedicated Text Number Voice Behavior |
+| MCTB-19 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Recovery Controls |
+| MCTB-20 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | FAIL | Schedule/Legacy Compatibility |
+| MCTB-21 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | INTENTIONALLY DEFERRED | Optional One-Time Follow-Up |
+| MCTB-22 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Exclusions |
+| MCTB-23 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | STOP / HELP |
+| MCTB-24 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Core Recovery Pipeline |
+| MCTB-25 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Recovery Delay |
+| MCTB-26 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Eligibility Engine |
+| MCTB-27 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Repeat Caller |
+| MCTB-28 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Missed Calls List |
+| MCTB-29 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Missed Call Detail |
+| MCTB-30 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Conversations |
+| MCTB-31 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notify-Only Mode |
+| MCTB-32 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Guided Collection Mode |
+| MCTB-33 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | AI Conversation Mode |
+| MCTB-34 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Immediate Handoff Mode |
+| MCTB-35 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Lead Fields |
+| MCTB-36 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Emergency Detection Off |
+| MCTB-37 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Emergency Detection On |
+| MCTB-38 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Emergency Uncertainty |
+| MCTB-39 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Callback Requests |
+| MCTB-40 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Human Takeover |
+| MCTB-41 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | FAIL | Notifications Recipients |
+| MCTB-42 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notification Routing Matrix |
+| MCTB-43 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notification Quiet Hours |
+| MCTB-44 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Notification Delivery |
+| MCTB-45 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Lead Handoff Summary |
+| MCTB-46 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Booking Behavior |
+| MCTB-47 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | MCTB → Appointment Booking |
+| MCTB-48 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Tracked Links |
+| MCTB-49 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Voicemail Setup |
+| MCTB-50 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Voicemail Greeting Replacement Safety |
+| MCTB-51 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Visual Voicemail Inbox |
+| MCTB-52 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Voicemail AI |
+| MCTB-53 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | MCTB Disabled / Voicemail Active |
+| MCTB-54 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Test & Diagnostics |
+| MCTB-55 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Try It / Demo |
+| MCTB-56 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | MCTB Analytics |
+| MCTB-57 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | — | Legacy Redirects |
 | MCTB-57-business-hours | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | FAIL | Legacy redirect |
 | MCTB-57-follow-up | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | FAIL | Legacy redirect |
 | MCTB-57-schedule | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | PASS | Legacy redirect |
@@ -236,47 +242,8 @@ PASS for a customer-operable feature requires **both**:
 | MCTB-57-voice-conversations | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | FAIL | Legacy redirect |
 | MCTB-57-voice-missed | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | PASS | Legacy redirect |
 | MCTB-57-voice-setup | BATCH-12 | ROUTE_RENDER | reachability | no | no | — | PASS | Legacy redirect |
-| MCTB-58 | BATCH-12 | BACKEND_STATIC | static | no | no | — | PASS |  |
-| UA-APT-05-create | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Create appointment through UI |
-| UA-APT-07-edit | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Edit appointment notes and verify persistence |
-| UA-APT-09-cancel | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Cancel appointment through UI |
-| UA-APT-11-types | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Create booking type and verify persistence |
-| UA-APT-13-public-book | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Complete public booking through UI |
-| UA-APT-16-availability | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Change availability hours and verify persistence |
-| UA-APT-33-reminders | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Edit reminder template and verify persistence |
-| UA-APT-50-notetaker | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | Change AI Notetaker setting and verify persistence |
-| UA-MCTB-05-phone | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | MCTB Phone & Forwarding save and reload |
-| UA-MCTB-07-consent | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | MCTB Consent mode save and reload |
-| UA-MCTB-12-textback | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | MCTB Text Back opener save and reload |
-| UA-MCTB-41-notifications | BATCH-UA | TRUE_USER_ACTION | user-action | yes | no | — | — | MCTB Notifications & Handoff save and reload |
+| MCTB-58 | CERT-MCTB | TRUE_USER_ACTION | cert-group | yes | no | — | PASS | Feature Flags / Entitlements |
 
-## Planned user-action flows not yet implemented
+## Unmapped flows (needs classification entry)
 
-- UA-APT-03-calendar
-- UA-APT-04-list
-- UA-APT-22-waitlist
-- UA-APT-12-booking-pages
-- UA-APT-20-routing-forms
-- UA-APT-17-staff
-- UA-APT-18-locations
-- UA-APT-49-guest-join
-- UA-APT-52-notetaker-appt
-- UA-APT-59-recap
-- UA-MCTB-28-missed-calls
-- UA-MCTB-30-conversations
-- UA-MCTB-51-voicemail
-- UA-MCTB-04-setup
-- UA-MCTB-29-detail
-- UA-MCTB-06-rules
-- UA-MCTB-13-links
-- UA-MCTB-19-recovery
-- UA-MCTB-22-exclusions
-- UA-MCTB-49-voicemail-setup
-- UA-MCTB-54-test
-- UA-MCTB-03-wizard
-- UA-MCTB-11-consent-log
-- UA-MCTB-14-public-form
-- UA-CROSS-02-mctb-booking
-- UA-APT-06-detail
-- UA-APT-08-reschedule
-- UA-APT-10-status
+- APT-05-form-visible

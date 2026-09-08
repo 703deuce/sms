@@ -17,7 +17,7 @@ import {
   typesSaveReload,
 } from "./flow-helpers";
 import { visitRoute } from "./lib";
-import { USER_ACTION_BATCH, USER_ACTION_FLOWS } from "./behavioral-flows";
+import { CERT_GROUP_BATCHES, CERT_GROUP_FLOWS, CERT_GROUP_IDS } from "./cert-groups";
 
 export type BrowserFlowTier = "reachability" | "user-action";
 
@@ -28,6 +28,8 @@ export type BrowserFlow = {
   force?: boolean;
   /** reachability = route/render/redirect; user-action = full acceptance standard */
   tier?: BrowserFlowTier;
+  /** Go-live cert group (APT-05, MCTB-47, etc.) — longer timeout, one browser per group */
+  certGroup?: boolean;
   /** No browser — backend/static certification only */
   static?: { status: CertStatus; detail: string };
   /** Max ~3–5 UI actions; fresh browser per invocation */
@@ -62,7 +64,7 @@ const B12 = "BATCH-12";
 const B13 = "BATCH-13";
 const B14 = "BATCH-14";
 
-export const ALL_FLOWS: BrowserFlow[] = [
+export const REACHABILITY_RAW: BrowserFlow[] = [
   // BATCH-01 — Appointments nav + Home
   {
     id: "APT-01",
@@ -116,7 +118,7 @@ export const ALL_FLOWS: BrowserFlow[] = [
   // BATCH-02
   { id: "APT-03", batchId: B02, run: calendarNavActions },
   { id: "APT-04", batchId: B02, run: listSearchAction },
-  { id: "APT-05", batchId: B02, run: createFormVisible },
+  { id: "APT-05-form-visible", batchId: B02, tier: "reachability", run: createFormVisible },
 
   // BATCH-03
   routeFlow(B03, "APT-11", "/appointments/types"),
@@ -361,13 +363,15 @@ export const ALL_FLOWS: BrowserFlow[] = [
   routeFlow(B14, "APT-69-business", "/settings/business"),
   routeFlow(B14, "APT-69-messaging", "/settings/messaging"),
   routeFlow(B14, "APT-69-calendar", "/settings/calendar"),
-
-  // BATCH-UA — true user-action acceptance (supplements reachability flows above)
-  ...USER_ACTION_FLOWS,
 ];
 
-/** Reachability/static flows only (189 baseline). */
-export const REACHABILITY_FLOWS = ALL_FLOWS.filter((f) => f.tier !== "user-action");
+const CERT_ID_SET = new Set(CERT_GROUP_IDS);
+
+/** Reachability flows excluding ids superseded by go-live cert groups. */
+export const REACHABILITY_FLOWS = REACHABILITY_RAW.filter((f) => !CERT_ID_SET.has(f.id));
+
+/** All flows: reachability + go-live cert groups (canonical APT/MCTB/CROSS/GLOBAL ids). */
+export const ALL_FLOWS: BrowserFlow[] = [...REACHABILITY_FLOWS, ...CERT_GROUP_FLOWS];
 
 export const BATCHES = [
   { id: "BATCH-01", title: "Appointments navigation + Home" },
@@ -384,7 +388,7 @@ export const BATCHES = [
   { id: "BATCH-12", title: "Voicemail + Analytics" },
   { id: "BATCH-13", title: "Cross-product" },
   { id: "BATCH-14", title: "Remaining Appointments IDs" },
-  USER_ACTION_BATCH,
+  ...CERT_GROUP_BATCHES,
 ] as const;
 
 export function flowsForBatch(batchId: string): BrowserFlow[] {

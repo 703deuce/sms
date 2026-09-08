@@ -7,8 +7,8 @@
  */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_FLOWS, REACHABILITY_FLOWS } from "./browser-cert/flows";
-import { USER_ACTION_FLOWS } from "./browser-cert/behavioral-flows";
+import { ALL_FLOWS, REACHABILITY_FLOWS, REACHABILITY_RAW } from "./browser-cert/flows";
+import { CERT_GROUP_FLOWS, CERT_GROUP_MANIFEST, certGroupsMissingRunners } from "./browser-cert/cert-groups";
 import { classifyFlow, FLOW_CLASSIFICATION, type FlowClassification } from "./browser-cert/flow-classification";
 import { loadState } from "./browser-cert/lib";
 
@@ -46,16 +46,16 @@ function main() {
     });
   }
 
-  for (const flow of USER_ACTION_FLOWS) {
+  for (const flow of CERT_GROUP_FLOWS) {
     rows.push({
       id: flow.id,
       batchId: flow.batchId,
       classification: "TRUE_USER_ACTION",
-      tier: "user-action",
+      tier: "cert-group",
       customerOperable: true,
       needsUserActionFlow: false,
       lastStatus: state.results[flow.id]?.status,
-      notes: flow.title,
+      notes: flow.title ?? CERT_GROUP_MANIFEST.find((g) => g.id === flow.id)?.title,
     });
   }
 
@@ -66,7 +66,7 @@ function main() {
   };
   for (const r of rows) byClass[r.classification]++;
 
-  const baselineRows = rows.filter((r) => !r.id.startsWith("UA-"));
+  const baselineRows = rows.filter((r) => !/^APT-\d+$|^MCTB-\d+$|^CROSS-\d+$|^GLOBAL-\d+$/.test(r.id));
   const baselineByClass: Record<FlowClassification, number> = {
     TRUE_USER_ACTION: 0,
     ROUTE_RENDER: 0,
@@ -82,13 +82,7 @@ function main() {
   };
   for (const r of passRows) passByClass[r.classification]++;
 
-  const customerOperable = rows.filter((r) => r.customerOperable);
-  const needsUa = customerOperable.filter((r) => r.needsUserActionFlow);
-  const hasUaPlanned = new Set(
-    [...needsUa.map((r) => r.userActionFlowId).filter(Boolean), ...USER_ACTION_FLOWS.map((f) => f.id)],
-  );
-  const uaImplemented = new Set(USER_ACTION_FLOWS.map((f) => f.id));
-  const uaMissing = [...hasUaPlanned].filter((id) => id && !uaImplemented.has(id));
+  const missingRunners = certGroupsMissingRunners();
 
   const unmapped = REACHABILITY_FLOWS.filter((f) => !FLOW_CLASSIFICATION[f.id]).map((f) => f.id);
 
@@ -96,8 +90,8 @@ function main() {
     "# Browser Flow Classification Audit",
     "",
     `**Generated:** ${new Date().toISOString()}`,
-    `**Baseline reachability flows:** ${REACHABILITY_FLOWS.length}`,
-    `**User-action flows (BATCH-UA):** ${USER_ACTION_FLOWS.length}`,
+    `**Reachability flows (supplementary):** ${REACHABILITY_FLOWS.length}`,
+    `**Go-live cert groups:** ${CERT_GROUP_FLOWS.length}`,
     `**Total flows:** ${ALL_FLOWS.length}`,
     "",
     "## Executive summary",
@@ -110,7 +104,7 @@ function main() {
     "|----------------|-------|---------|",
     `| ROUTE/RENDER CHECK ONLY | ${baselineByClass.ROUTE_RENDER} | Page loads, redirects, shell, control-exists — **not sufficient alone** for customer-operable features |`,
     `| BACKEND/STATIC ONLY | ${baselineByClass.BACKEND_STATIC} | No browser; backend/script certification |`,
-    `| TRUE USER-ACTION FLOW | ${baselineByClass.TRUE_USER_ACTION} | Baseline had none; BATCH-UA adds ${USER_ACTION_FLOWS.length} |`,
+    `| TRUE USER-ACTION FLOW | ${CERT_GROUP_FLOWS.length} | Go-live cert groups (APT/MCTB/CROSS/GLOBAL) |`,
     "",
     "### Last run PASS breakdown (from state file)",
     "",
@@ -123,21 +117,18 @@ function main() {
     "",
     `**True user-journey PASS in last run: ${passByClass.TRUE_USER_ACTION}** (target: all customer-operable features)`,
     "",
-    "### Customer-operable coverage gap",
+    "### Go-live cert group coverage",
     "",
-    `- Customer-operable features in baseline: **${customerOperable.length}**`,
-    `- Need companion user-action flow: **${needsUa.length}**`,
-    `- User-action flows implemented (BATCH-UA): **${USER_ACTION_FLOWS.length}**`,
-    `- Planned UA flow IDs not yet implemented: **${uaMissing.length}**`,
+    `- Cert groups in manifest: **${CERT_GROUP_MANIFEST.length}**`,
+    `- Cert groups with dedicated runners: **${CERT_GROUP_MANIFEST.length - missingRunners.length - CERT_GROUP_MANIFEST.filter((g) => g.blocked).length}** (approx)`,
+    `- Cert groups missing dedicated runner (fallback route save): **${missingRunners.length}**`,
+    `- Blocked/deferred groups (no false PASS): **${CERT_GROUP_MANIFEST.filter((g) => g.blocked).length}**`,
     "",
     "## Required interaction standard",
     "",
     "See `docs/certification/BROWSER_CERT_USER_ACTION_STANDARD.md`.",
     "",
-    "PASS for a customer-operable feature requires **both**:",
-    "",
-    "1. Reachability flow PASS (page reachable)",
-    "2. User-action flow PASS (click → type → submit → verify → refresh → persist)",
+    "PASS for go-live requires the **cert group** PASS (APT-05, MCTB-47, etc.) — not reachability-only.",
     "",
     "## Full inventory",
     "",
@@ -156,11 +147,11 @@ function main() {
     md.push("## Unmapped flows (needs classification entry)", "", unmapped.map((id) => `- ${id}`).join("\n"), "");
   }
 
-  if (uaMissing.length) {
+  if (missingRunners.length) {
     md.push(
-      "## Planned user-action flows not yet implemented",
+      "## Cert groups using fallback runner (needs dedicated implementation)",
       "",
-      uaMissing.map((id) => `- ${id}`).join("\n"),
+      missingRunners.map((id) => `- ${id}`).join("\n"),
       "",
     );
   }
@@ -172,16 +163,13 @@ function main() {
       {
         generatedAt: new Date().toISOString(),
         totals: {
-          baseline: REACHABILITY_FLOWS.length,
-          userAction: USER_ACTION_FLOWS.length,
+          reachability: REACHABILITY_FLOWS.length,
+          certGroups: CERT_GROUP_FLOWS.length,
           all: ALL_FLOWS.length,
         },
         byClassification: byClass,
         passByClassification: passByClass,
-        customerOperable: customerOperable.length,
-        needsUserActionFlow: needsUa.length,
-        userActionImplemented: USER_ACTION_FLOWS.length,
-        userActionMissing: uaMissing,
+        certGroupsMissingRunners: missingRunners,
         rows,
       },
       null,
@@ -190,11 +178,11 @@ function main() {
   );
 
   console.log("Browser flow classification audit");
-  console.log(`  Baseline flows:     ${REACHABILITY_FLOWS.length}`);
-  console.log(`  User-action flows:  ${USER_ACTION_FLOWS.length}`);
+  console.log(`  Reachability flows: ${REACHABILITY_FLOWS.length}`);
+  console.log(`  Cert groups:        ${CERT_GROUP_FLOWS.length}`);
   console.log(`  ROUTE/RENDER:       ${byClass.ROUTE_RENDER}`);
   console.log(`  BACKEND/STATIC:     ${byClass.BACKEND_STATIC}`);
-  console.log(`  TRUE USER-ACTION:   ${USER_ACTION_FLOWS.length} (BATCH-UA; baseline had 0)`);
+  console.log(`  CERT GROUPS:        ${CERT_GROUP_FLOWS.length}`);
   console.log(`  Last run PASS:      ${passRows.length}`);
   console.log(`  PASS user-action:   ${passByClass.TRUE_USER_ACTION}`);
   console.log(`  PASS route/render:  ${passByClass.ROUTE_RENDER}`);
