@@ -373,6 +373,8 @@ export const REACHABILITY_FLOWS = REACHABILITY_RAW.filter((f) => !CERT_ID_SET.ha
 /** All flows: reachability + go-live cert groups (canonical APT/MCTB/CROSS/GLOBAL ids). */
 export const ALL_FLOWS: BrowserFlow[] = [...REACHABILITY_FLOWS, ...CERT_GROUP_FLOWS];
 
+export { CERT_GROUP_FLOWS, CERT_GROUP_BATCHES, CERT_GROUP_IDS } from "./cert-groups";
+
 export const BATCHES = [
   { id: "BATCH-01", title: "Appointments navigation + Home" },
   { id: "BATCH-02", title: "Calendar + create appointment" },
