@@ -175,6 +175,7 @@ export function appointmentMergeVars(input: {
   confirmLink?: string | null;
   cancelLink?: string | null;
   rescheduleLink?: string | null;
+  manageLink?: string | null;
   reviewLink?: string | null;
   bookingLink?: string | null;
   paymentLink?: string | null;
@@ -204,6 +205,7 @@ export function appointmentMergeVars(input: {
     confirm_link: input.confirmLink || "",
     cancel_link: input.cancelLink || "",
     reschedule_link: input.rescheduleLink || "",
+    manage_link: input.manageLink || input.rescheduleLink || "",
     review_link: input.reviewLink || "",
     booking_link: input.bookingLink || "",
     payment_link: input.paymentLink || "",

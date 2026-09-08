@@ -296,6 +296,30 @@ model Workspace {
   appointmentRecurringSeries AppointmentRecurringSeries[]
   merchantPaymentConnections MerchantPaymentConnection[]
   appointmentMerchantPayments AppointmentMerchantPayment[]
+  bookingCategories BookingCategory[]
+  bookingAddOns BookingAddOn[]
+  schedulingResources SchedulingResource[]
+  servicePhaseTemplates ServicePhaseTemplate[]
+  manageAppointmentTokens ManageAppointmentToken[]
+  clientBookingRestrictions ClientBookingRestriction[]
+  householdAccounts HouseholdAccount[]
+  packageProducts PackageProduct[]
+  packageBalances PackageBalance[]
+  giftCertificateProducts GiftCertificateProduct[]
+  giftCertificateBalances GiftCertificateBalance[]
+  serviceMembershipProducts ServiceMembershipProduct[]
+  serviceMembershipSubscriptions ServiceMembershipSubscription[]
+  appointmentCoupons AppointmentCoupon[]
+  classSeries ClassSeries[]
+  classOccurrences ClassOccurrence[]
+  classEnrollments ClassEnrollment[]
+  intakeForms IntakeForm[]
+  intakeFormResponses IntakeFormResponse[]
+  appointmentServiceLines AppointmentServiceLine[]
+  appointmentWebhookEndpoints AppointmentWebhookEndpoint[]
+  clientPortalSessions ClientPortalSession[]
+  appointmentImportBatches AppointmentImportBatch[]
+  contactMergeAudits ContactMergeAudit[]
   voiceTestRuns VoiceTestRun[]
   voiceComplianceProfile VoiceComplianceProfile?
   voiceUsageRecords VoiceUsageRecord[]
@@ -5769,5 +5793,559 @@ model MctbNotificationDelivery {
   @@index([workspaceId, handoffEventId])
   @@index([workspaceId, status])
   @@map("mctb_notification_deliveries")
+}
+
+// ─── Appointments service-booking parity (Acuity-class) ─────────────────────
+
+model BookingCategory {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  slug          String
+  description   String?
+  displayOrder  Int      @default(0)
+  active        Boolean  @default(true)
+  collapsible   Boolean  @default(true)
+  collapsedByDefault Boolean @default(false)
+  imageUrl      String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, active, displayOrder])
+  @@map("booking_categories")
+}
+
+model BookingAddOn {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  name                String
+  description         String?
+  priceCents          Int      @default(0)
+  durationDeltaMinutes Int     @default(0)
+  quantityMax         Int      @default(1)
+  required            Boolean  @default(false)
+  active              Boolean  @default(true)
+  eligibleTypeIds     String[] @default([])
+  resourceIds         String[] @default([])
+  displayOrder        Int      @default(0)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("booking_add_ons")
+}
+
+model SchedulingResource {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  quantity     Int      @default(1)
+  description  String?
+  active       Boolean  @default(true)
+  eligibleTypeIds String[] @default([])
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("scheduling_resources")
+}
+
+model ServicePhaseTemplate {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  appointmentTypeId String?
+  name            String
+  phaseKind       String   // active_staff | processing | active_staff
+  durationMinutes Int
+  staffRequired   Boolean  @default(true)
+  resourceIds     String[] @default([])
+  displayOrder    Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentTypeId])
+  @@map("service_phase_templates")
+}
+
+model ManageAppointmentToken {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  appointmentId String
+  tokenHash     String   @unique
+  expiresAt     DateTime?
+  permissions   Json     @default("{}")
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@map("manage_appointment_tokens")
+}
+
+model ClientBookingRestriction {
+  id                    String   @id @default(cuid())
+  workspaceId           String
+  contactId             String?
+  email                 String?
+  phone                 String?
+  blockPublicBooking    Boolean  @default(true)
+  blockPurchases        Boolean  @default(true)
+  blockSelfService      Boolean  @default(true)
+  displayMessage        String?
+  reason                String?
+  createdByUserId       String?
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, contactId])
+  @@index([workspaceId, email])
+  @@index([workspaceId, phone])
+  @@map("client_booking_restrictions")
+}
+
+model HouseholdAccount {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  payerContactId String
+  name         String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members      HouseholdMember[]
+
+  @@index([workspaceId, payerContactId])
+  @@map("household_accounts")
+}
+
+model HouseholdMember {
+  id           String   @id @default(cuid())
+  householdId  String
+  contactId    String
+  role         String   @default("dependent")
+  displayName  String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  household    HouseholdAccount @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, contactId])
+  @@index([contactId])
+  @@map("household_members")
+}
+
+model PackageProduct {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  slug            String
+  description     String?
+  priceCents      Int      @default(0)
+  currency        String   @default("usd")
+  creditRules     Json     @default("[]")
+  expirationDays  Int?
+  categoryId      String?
+  active          Boolean  @default(true)
+  directPurchase  Boolean  @default(true)
+  standingSlotPolicy Json?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  balances        PackageBalance[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, active])
+  @@map("package_products")
+}
+
+model PackageBalance {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  productId     String
+  contactId     String
+  remainingCredits Json  @default("{}")
+  expiresAt     DateTime?
+  status        String   @default("active")
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product       PackageProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ledger        PackageLedgerEntry[]
+
+  @@index([workspaceId, contactId, status])
+  @@index([productId])
+  @@map("package_balances")
+}
+
+model PackageLedgerEntry {
+  id            String   @id @default(cuid())
+  balanceId     String
+  kind          String
+  delta         Json
+  appointmentId String?
+  note          String?
+  createdAt     DateTime @default(now())
+  balance       PackageBalance @relation(fields: [balanceId], references: [id], onDelete: Cascade)
+
+  @@index([balanceId, createdAt])
+  @@map("package_ledger_entries")
+}
+
+model GiftCertificateProduct {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  slug            String
+  description     String?
+  fixedAmountCents Int?
+  allowCustomAmount Boolean @default(false)
+  minAmountCents  Int?
+  maxAmountCents  Int?
+  denominations   Int[]    @default([])
+  eligibleTypeIds String[] @default([])
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  balances        GiftCertificateBalance[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, active])
+  @@map("gift_certificate_products")
+}
+
+model GiftCertificateBalance {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  productId     String?
+  code          String
+  purchaserContactId String?
+  recipientEmail String?
+  recipientName String?
+  giftMessage   String?
+  deliverAt     DateTime?
+  balanceCents  Int
+  currency      String   @default("usd")
+  expiresAt     DateTime?
+  status        String   @default("active")
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product       GiftCertificateProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  ledger        GiftCertificateLedgerEntry[]
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, recipientEmail])
+  @@map("gift_certificate_balances")
+}
+
+model GiftCertificateLedgerEntry {
+  id            String   @id @default(cuid())
+  balanceId     String
+  kind          String
+  amountCents   Int
+  appointmentId String?
+  note          String?
+  createdAt     DateTime @default(now())
+  balance       GiftCertificateBalance @relation(fields: [balanceId], references: [id], onDelete: Cascade)
+
+  @@index([balanceId, createdAt])
+  @@map("gift_certificate_ledger_entries")
+}
+
+model ServiceMembershipProduct {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  slug            String
+  description     String?
+  priceCents      Int
+  currency        String   @default("usd")
+  billingInterval String
+  benefits        Json     @default("{}")
+  stripePriceId   String?
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscriptions   ServiceMembershipSubscription[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, active])
+  @@map("service_membership_products")
+}
+
+model ServiceMembershipSubscription {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  productId     String
+  contactId     String
+  status        String   @default("active")
+  stripeSubscriptionId String?
+  currentPeriodEnd DateTime?
+  pausedUntil   DateTime?
+  benefitsSnapshot Json?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  product       ServiceMembershipProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, contactId, status])
+  @@index([stripeSubscriptionId])
+  @@map("service_membership_subscriptions")
+}
+
+model AppointmentCoupon {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  code            String
+  discountType    String
+  discountValue   Int
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  usageCap        Int?
+  onePerCustomer  Boolean  @default(false)
+  eligibleTargets Json     @default("{}")
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  redemptions     AppointmentCouponRedemption[]
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId, active])
+  @@map("appointment_coupons")
+}
+
+model AppointmentCouponRedemption {
+  id            String   @id @default(cuid())
+  couponId      String
+  contactId     String?
+  appointmentId String?
+  purchaseId    String?
+  amountCents   Int      @default(0)
+  createdAt     DateTime @default(now())
+  coupon        AppointmentCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  @@index([couponId, createdAt])
+  @@map("appointment_coupon_redemptions")
+}
+
+model ClassSeries {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  description     String?
+  appointmentTypeId String?
+  capacity        Int      @default(10)
+  staffId         String?
+  locationId      String?
+  requireFullSeries Boolean @default(false)
+  recurrenceRule  Json?
+  active          Boolean  @default(true)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  occurrences     ClassOccurrence[]
+
+  @@index([workspaceId, active])
+  @@map("class_series")
+}
+
+model ClassOccurrence {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  seriesId      String
+  startsAt      DateTime
+  endsAt        DateTime
+  capacity      Int?
+  status        String   @default("scheduled")
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series        ClassSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  enrollments   ClassEnrollment[]
+
+  @@index([workspaceId, startsAt])
+  @@index([seriesId, startsAt])
+  @@map("class_occurrences")
+}
+
+model ClassEnrollment {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  occurrenceId  String?
+  seriesId      String?
+  contactId     String
+  status        String   @default("enrolled")
+  attendance    String?
+  makeupCredit  Boolean  @default(false)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  occurrence    ClassOccurrence? @relation(fields: [occurrenceId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, contactId])
+  @@index([occurrenceId])
+  @@map("class_enrollments")
+}
+
+model IntakeForm {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  targetKind    String   @default("appointment")
+  fields        Json     @default("[]")
+  version       Int      @default(1)
+  active        Boolean  @default(true)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  responses     IntakeFormResponse[]
+
+  @@index([workspaceId, active])
+  @@map("intake_forms")
+}
+
+model IntakeFormResponse {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  formId        String
+  contactId     String?
+  appointmentId String?
+  purchaseId    String?
+  answers       Json     @default("{}")
+  formVersion   Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  form          IntakeForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@index([formId])
+  @@map("intake_form_responses")
+}
+
+model AppointmentServiceLine {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  appointmentId   String
+  appointmentTypeId String?
+  serviceName     String
+  staffId         String?
+  resourceIds     String[] @default([])
+  startsAt        DateTime
+  endsAt          DateTime
+  priceCents      Int      @default(0)
+  displayOrder    Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@map("appointment_service_lines")
+}
+
+model AppointmentWebhookEndpoint {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  url           String
+  secretHash    String
+  events        String[] @default([])
+  active        Boolean  @default(true)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries    AppointmentWebhookDelivery[]
+
+  @@index([workspaceId, active])
+  @@map("appointment_webhook_endpoints")
+}
+
+model AppointmentWebhookDelivery {
+  id            String   @id @default(cuid())
+  endpointId    String
+  eventType     String
+  payload       Json
+  status        String   @default("pending")
+  attemptCount  Int      @default(0)
+  responseCode  Int?
+  errorMessage  String?
+  deliveredAt   DateTime?
+  createdAt     DateTime @default(now())
+  endpoint      AppointmentWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("appointment_webhook_deliveries")
+}
+
+model ClientPortalSession {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  contactId     String
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, contactId])
+  @@map("client_portal_sessions")
+}
+
+model AppointmentImportBatch {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  kind          String
+  status        String   @default("pending")
+  fileName      String?
+  rowCount      Int      @default(0)
+  successCount  Int      @default(0)
+  errorCount    Int      @default(0)
+  errors        Json?
+  canRollback   Boolean  @default(false)
+  rolledBackAt  DateTime?
+  createdByUserId String?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("appointment_import_batches")
+}
+
+model ContactMergeAudit {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  sourceContactId String
+  targetContactId String
+  conflicts     Json?
+  chosenValues  Json?
+  performedByUserId String?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("contact_merge_audits")
 }
 

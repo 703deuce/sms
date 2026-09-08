@@ -96,3 +96,4 @@ export {
 } from "./team-scheduling";
 export { handleUnifiedAiBooking } from "./ai-booking-orchestrator";
 export { generateNativeSlots, getAvailableStaffForSlot } from "./availability-engine";
+export * from "./service-booking";

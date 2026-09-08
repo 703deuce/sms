@@ -217,6 +217,13 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    const { assertClientNotRestricted } = await import("@/lib/appointments/service-booking/client-restrictions");
+    await assertClientNotRestricted(workspace.id, {
+      email: body.email ? String(body.email) : undefined,
+      phone,
+      action: "book",
+    });
+
     const bookingAnswers =
       body.bookingAnswers && typeof body.bookingAnswers === "object"
         ? (body.bookingAnswers as Record<string, string>)

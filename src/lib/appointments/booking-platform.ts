@@ -401,6 +401,27 @@ export async function createPlatformAppointment(
     },
   });
 
+  try {
+    const { ensureManageAppointmentToken, manageAppointmentUrl } = await import(
+      "@/lib/appointments/service-booking/manage-appointment"
+    );
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
+    const { rawToken } = await ensureManageAppointmentToken(workspaceId, appointmentId);
+    const manageUrl = manageAppointmentUrl(baseUrl, rawToken);
+    await prisma.voiceAppointment.update({
+      where: { id: appointmentId },
+      data: {
+        metadata: {
+          ...metadata,
+          manageAppointmentUrl: manageUrl,
+          manageAppointmentTokenIssuedAt: new Date().toISOString(),
+        } as object,
+      },
+    });
+  } catch (err) {
+    console.warn("[appointments] manage appointment token issuance failed", err);
+  }
+
   if (needsApproval) {
     const { requestBookingApproval } = await import("@/lib/appointments/booking-approval");
     await requestBookingApproval(workspaceId, appointmentId);

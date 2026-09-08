@@ -248,6 +248,39 @@ export async function generateNativeSlots(
     }
   }
 
+  const minimizeMode =
+    (svcCfg as { schedulingLimits?: { minimizeGapsMode?: string } }).schedulingLimits
+      ?.minimizeGapsMode ||
+    (platform as { schedulingLimits?: { minimizeGapsMode?: string } }).schedulingLimits
+      ?.minimizeGapsMode ||
+    "off";
+
+  if (minimizeMode === "prefer_compact" && slots.length > 1) {
+    const { getPrisma } = await import("@/lib/db");
+    const { rankSlotsByScheduleDensity } = await import(
+      "@/lib/appointments/service-booking/minimize-gaps"
+    );
+    const prisma = getPrisma();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + input.daysAhead * 86_400_000);
+    const existing = await prisma.voiceAppointment.findMany({
+      where: {
+        workspaceId,
+        serviceName,
+        startsAt: { gte: dayStart, lte: dayEnd },
+        status: { notIn: ["canceled", "cancelled"] },
+      },
+      select: { startsAt: true },
+    });
+    const ranked = rankSlotsByScheduleDensity(
+      slots,
+      existing.map((r) => r.startsAt),
+      "prefer_compact",
+    );
+    return { slots: ranked, staffBySlot };
+  }
+
   return { slots, staffBySlot };
 }
 

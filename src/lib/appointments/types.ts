@@ -114,13 +114,35 @@ export type ReschedulePolicy = {
 };
 
 export type PaymentRequirement = {
-  mode: "none" | "deposit" | "full";
+  mode:
+    | "none"
+    | "optional"
+    | "deposit"
+    | "full"
+    | "deposit_fixed"
+    | "deposit_percent"
+    | "customer_choice"
+    | "pay_what_you_want"
+    | "save_card";
   /** Connected merchant processor — funds settle to business, not Transovo */
   provider?: "stripe" | "square";
   priceCents?: number;
   depositCents?: number;
   depositPercent?: number;
   currency?: string;
+  payWhatYouWant?: {
+    enabled?: boolean;
+    minimumCents?: number;
+    suggestedCents?: number;
+    presetCents?: number[];
+  };
+  tipping?: {
+    enabled?: boolean;
+    suggestedPercentages?: number[];
+    suggestedAmountCents?: number[];
+    allowCustom?: boolean;
+  };
+  allowSavedCard?: boolean;
 };
 
 export type RoutingRule = {
@@ -253,6 +275,13 @@ export type AppointmentTypeConfig = {
   recurring?: RecurringConfig;
   /** Reusable named availability schedule */
   namedScheduleId?: string;
+  categoryId?: string;
+  imageUrl?: string;
+  schedulingLimits?: import("@/lib/appointments/service-booking/types").SchedulingLimitsConfig;
+  extendedCancellationPolicy?: import("@/lib/appointments/service-booking/types").ExtendedCancellationPolicy;
+  extendedReschedulePolicy?: import("@/lib/appointments/service-booking/types").ExtendedReschedulePolicy;
+  addOnIds?: string[];
+  resourceIds?: string[];
   /** AI Notetaker defaults for this appointment type */
   notetaker?: import("@/lib/meeting-assistant/types").EventTypeNotetakerConfig;
   /** Transovo Video defaults for this appointment type */
@@ -316,6 +345,9 @@ export type AppointmentMetadata = {
   recurringOccurrenceIndex?: number;
   attendeeCount?: number;
   waitlistEntryId?: string;
+  manageAppointmentUrl?: string;
+  manageAppointmentTokenIssuedAt?: string;
+  bookingSource?: string;
   utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution;
   reminderOverride?: import("@/lib/appointments/scheduling-capabilities").AppointmentReminderOverride;
   emailTracking?: Record<string, { sentAt?: string; opens?: number; clicks?: number }>;
@@ -329,7 +361,7 @@ export { DEFAULT_SMS_CONSENT_TEXT };
 
 export const DEFAULT_REMINDER_TEMPLATES = {
   confirmation:
-    "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.{{join_meeting_line}} Reply YES to confirm. Reschedule: {{reschedule_link}} Cancel: {{cancel_link}}",
+    "Hi {{first_name}}, your {{service}} with {{business_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.{{join_meeting_line}} Manage: {{manage_link}} Reply YES to confirm.",
   reminder24h:
     "Reminder: {{service}} with {{business_name}} tomorrow at {{appointment_time}}.{{join_meeting_line}} Reply YES to confirm. Reschedule: {{reschedule_link}}",
   reminder2h:
