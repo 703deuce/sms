@@ -38,13 +38,25 @@ export async function getAvailability(
   const excludeAppointmentId = input.excludeAppointmentId
     ? String(input.excludeAppointmentId)
     : undefined;
+
+  let effectiveDuration = durationMinutes;
+  if (serviceId && !effectiveDuration) {
+    const types = await listAppointmentTypes(workspaceId);
+    const typeRow = types.find((t: DbRow) => t.id === serviceId);
+    const base = typeRow?.durationMinutes || 30;
+    const { resolveEffectiveTypeDurationMinutes } = await import(
+      "@/lib/appointments/service-booking/service-phases"
+    );
+    effectiveDuration = await resolveEffectiveTypeDurationMinutes(workspaceId, serviceId, base);
+  }
+
   const result = await generateNativeSlots(workspaceId, {
     serviceName,
     serviceId,
     daysAhead,
     timezone,
     staffId,
-    durationMinutes,
+    durationMinutes: effectiveDuration,
     excludeAppointmentId,
   });
   let slots = result.slots;
@@ -230,6 +242,18 @@ export async function createPlatformAppointment(
     resourceIds?: string[];
     addOnIds?: string[];
     addOnSelections?: Array<{ addOnId: string; quantity?: number }>;
+    intakeResponses?: Array<{ formId: string; answers: Record<string, unknown> }>;
+    customFieldValues?: Record<string, unknown>;
+    multiServiceLines?: Array<{
+      appointmentTypeId?: string;
+      serviceName: string;
+      staffId?: string;
+      resourceIds?: string[];
+      startsAt: string;
+      endsAt: string;
+      priceCents?: number;
+      displayOrder?: number;
+    }>;
   },
 ) {
   const prisma = getPrisma();
@@ -250,6 +274,14 @@ export async function createPlatformAppointment(
     serviceName = svc.name;
     svcCfg = (svc.config || {}) as AppointmentTypeConfig;
     if (!input.durationMinutes) durationMinutes = svc.durationMinutes || 30;
+    const { resolveEffectiveTypeDurationMinutes } = await import(
+      "@/lib/appointments/service-booking/service-phases"
+    );
+    durationMinutes = await resolveEffectiveTypeDurationMinutes(
+      workspaceId,
+      input.serviceId,
+      durationMinutes,
+    );
   } else {
     const svc = await prisma.voiceService.findFirst({
       where: { workspaceId, name: serviceName },
@@ -469,6 +501,44 @@ export async function createPlatformAppointment(
     }
   } catch (err) {
     console.warn("[appointments] resource persistence failed", err);
+  }
+
+  if (input.multiServiceLines?.length) {
+    try {
+      const { createMultiServiceAppointment } = await import(
+        "@/lib/appointments/service-booking/multi-service"
+      );
+      await createMultiServiceAppointment(workspaceId, appointmentId, input.multiServiceLines);
+    } catch (err) {
+      console.warn("[appointments] multi-service lines failed", err);
+    }
+  }
+
+  if (input.intakeResponses?.length) {
+    try {
+      const { saveIntakeResponse } = await import("@/lib/appointments/service-booking/intake-forms");
+      for (const response of input.intakeResponses) {
+        await saveIntakeResponse(workspaceId, {
+          formId: response.formId,
+          contactId,
+          appointmentId,
+          answers: response.answers,
+        });
+      }
+    } catch (err) {
+      console.warn("[appointments] intake response persistence failed", err);
+    }
+  }
+
+  if (input.customFieldValues && Object.keys(input.customFieldValues).length) {
+    try {
+      const { setContactCustomFieldValues } = await import(
+        "@/lib/appointments/service-booking/phase2/custom-fields"
+      );
+      await setContactCustomFieldValues(workspaceId, contactId, input.customFieldValues);
+    } catch (err) {
+      console.warn("[appointments] custom field persistence failed", err);
+    }
   }
 
   try {

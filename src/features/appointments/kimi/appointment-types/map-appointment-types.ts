@@ -112,6 +112,8 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   confirmationCtaUrl: "",
   namedScheduleId: "",
   ownerTeamId: "",
+  categoryId: "",
+  imageUrl: "",
   resourceIds: [],
   intakeFormIds: [],
   addOnIds: [],
@@ -253,6 +255,8 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     maxBookingsPerMonth: cfg.bookingLimits?.maxBookingsPerMonth,
     namedScheduleId: cfg.namedScheduleId || "",
     ownerTeamId: cfg.ownerTeamId || "",
+    categoryId: cfg.categoryId || "",
+    imageUrl: cfg.imageUrl || "",
     resourceIds: cfg.resourceIds || [],
     intakeFormIds: cfg.intakeFormIds || [],
     addOnIds: cfg.addOnIds || [],
@@ -342,6 +346,8 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
     displayOrder: form.displayOrder,
     namedScheduleId: form.namedScheduleId || undefined,
     ownerTeamId: form.ownerTeamId || undefined,
+    categoryId: form.categoryId || undefined,
+    imageUrl: form.imageUrl?.trim() || undefined,
     permissions: form.permissions.length ? form.permissions : undefined,
     durationOptions: form.durationOptions.length
       ? form.durationOptions.filter((o) => o.label && o.minutes > 0)

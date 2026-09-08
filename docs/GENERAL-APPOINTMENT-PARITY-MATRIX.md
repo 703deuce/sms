@@ -14,14 +14,14 @@ Status values: `CODE_COMPLETE`, `CODE_COMPLETE + UA_PENDING`, `PARTIAL`, `EXISTS
 | Resources — persist on book | 2 | CODE_COMPLETE + UA_PENDING | — | — | `persistAppointmentResources`, service line | |
 | Resources — manage link display | 2 | CODE_COMPLETE + UA_PENDING | — | manage page | manage GET + `resourceLabels` | |
 | Add-ons — configure on type | 2 | CODE_COMPLETE + UA_PENDING | Type editor + commerce | — | `addOnIds` on config | |
-| Add-ons — public selection | 2 | CODE_COMPLETE + UA_PENDING | — | InfoStep | public book POST `addOnSelections` | Checkout price merge UA_PENDING |
-| Categories + images | 2 | PARTIAL | `/appointments/categories` | ServiceStep | categories API | Direct category links PARTIAL |
-| Intake forms | 2 | PARTIAL | `/appointments` intake section | manage intake | intake APIs | Conditional fields PARTIAL |
-| Custom client fields | 2 | EXISTS_BUT_NOT_WIRED | API only | — | custom-fields API | Contacts UI PARTIAL |
-| Package/membership entitlements | 2 | PARTIAL | commerce | InfoStep | booking-entitlements | Auto identity PARTIAL |
-| Multi-service booking | 2 | EXISTS_BUT_NOT_WIRED | — | — | `multi-service.ts` | Public UI MISSING |
-| Service phases | 2 | EXISTS_BUT_NOT_WIRED | phases admin | — | service-phases API | Availability integration PARTIAL |
-| Recurring (full) | 3 | PARTIAL | type editor | basic recurring | recurring-series | Edit this/future/all MISSING |
+| Add-ons — public selection | 2 | CODE_COMPLETE + UA_PENDING | — | InfoStep | public book POST `addOnSelections` | Checkout merges add-on totals |
+| Categories + images | 2 | CODE_COMPLETE + UA_PENDING | Type editor + `/appointments/categories` | ServiceStep | categories API + `categoryId`/`imageUrl` on config | |
+| Intake forms | 2 | CODE_COMPLETE + UA_PENDING | Type editor + intake admin | InfoStep + manage | intake APIs + POST `intakeResponses` | |
+| Custom client fields | 2 | CODE_COMPLETE + UA_PENDING | custom-fields API | InfoStep | public GET + POST `customFieldValues` | |
+| Package/membership entitlements | 2 | CODE_COMPLETE + UA_PENDING | commerce | InfoStep auto-suggest | `suggestAutoEntitlement` | Single match auto-applies |
+| Multi-service booking | 2 | CODE_COMPLETE + UA_PENDING | — | DateTimeStep + ServiceStep | `multiServiceLines` POST | Chained after primary slot |
+| Service phases | 2 | CODE_COMPLETE + UA_PENDING | Type editor phases section | — | `resolveEffectiveTypeDurationMinutes` | Availability uses phase total |
+| Recurring (full) | 3 | PARTIAL | type editor | basic recurring + preview API | recurring-series + `preview_recurring` | Manage cancel scopes wired; edit scopes PARTIAL |
 | Programs | 4 | MISSING | — | — | — | |
 | Payment plans | 4 | MISSING | — | — | — | |
 | Multiple bookings session | 5 | MISSING | — | — | — | |

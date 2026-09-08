@@ -15,12 +15,15 @@ import {
   lookupBookingEntitlements,
   markAppointmentPaidByEntitlement,
   resolveContactIdByPhone,
+  suggestAutoEntitlement,
   type BookingEntitlementSelection,
 } from "@/lib/appointments/service-booking/booking-entitlements";
 import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
 import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
 import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
-import { listBookingAddOns, listSchedulingResources } from "@/lib/appointments/service-booking";
+import { listBookingAddOns, listSchedulingResources, listIntakeForms } from "@/lib/appointments/service-booking";
+import { listCustomerFieldDefinitions } from "@/lib/appointments/service-booking/phase2/custom-fields";
+import { calculateAddOnTotals } from "@/lib/appointments/service-booking/add-ons";
 import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
 import {
   loadSchedulingContext,
@@ -172,6 +175,8 @@ export async function GET(_request: Request, { params }: Params) {
     const schedulerTheme = await loadSchedulerTheme(workspace.id);
     const allResources = await listSchedulingResources(workspace.id);
     const allAddOns = await listBookingAddOns(workspace.id);
+    const intakeForms = await listIntakeForms(workspace.id, "appointment");
+    const customFieldDefinitions = await listCustomerFieldDefinitions(workspace.id);
     const resources = allResources
       .filter((r) => r.active)
       .map((r) => ({
@@ -212,6 +217,32 @@ export async function GET(_request: Request, { params }: Params) {
         categories,
         resources,
         addOns,
+        intakeForms: intakeForms
+          .filter((f: { active: boolean }) => f.active)
+          .map((f: { id: string; name: string; fields: unknown }) => ({
+            id: f.id,
+            name: f.name,
+            fields: f.fields,
+          })),
+        customFieldDefinitions: customFieldDefinitions
+          .filter((d: { active: boolean }) => d.active)
+          .map(
+            (d: {
+              id: string;
+              key: string;
+              label: string;
+              fieldType: string;
+              options?: string[] | null;
+              required: boolean;
+            }) => ({
+              id: d.id,
+              key: d.key,
+              label: d.label,
+              fieldType: d.fieldType,
+              options: d.options,
+              required: d.required,
+            }),
+          ),
         schedulerTheme,
         staff,
         locations,
@@ -263,12 +294,49 @@ export async function POST(request: Request, { params }: Params) {
       });
       const { getSavedPaymentMethodForContact } = await import("@/lib/merchant-payments/saved-cards");
       const saved = await getSavedPaymentMethodForContact(workspace.id, contactId);
+      const autoSuggestion = suggestAutoEntitlement(entitlements);
       return NextResponse.json({
         data: {
           ...entitlements,
           hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
+          autoSuggestion,
         },
       });
+    }
+
+    if (action === "preview_recurring") {
+      const { generateRecurringOccurrences, type RecurringFrequency } = await import(
+        "@/lib/appointments/recurring-schedule"
+      );
+      const startsAt = String(body.startsAt || "");
+      const frequency = String(body.frequency || "weekly") as RecurringFrequency;
+      const occurrences = Math.min(Number(body.occurrences || 4), 52);
+      const weekdays = Array.isArray(body.weekdays)
+        ? (body.weekdays as number[]).map(Number).filter((n) => n >= 0 && n <= 6)
+        : undefined;
+      if (!startsAt) {
+        return NextResponse.json({ error: "startsAt is required" }, { status: 400 });
+      }
+      const dates = generateRecurringOccurrences({
+        startsAt,
+        frequency,
+        occurrences,
+        weekdays,
+      });
+      const serviceName = body.serviceName ? String(body.serviceName) : "Appointment";
+      const conflicts: Array<{ startsAt: string; reason: string }> = [];
+      for (const date of dates) {
+        try {
+          const { assertSlotAvailableForBooking } = await import("@/lib/appointments/slot-validation");
+          await assertSlotAvailableForBooking(workspace.id, { serviceName, startsAt: date });
+        } catch (err) {
+          conflicts.push({
+            startsAt: date,
+            reason: err instanceof Error ? err.message : "unavailable",
+          });
+        }
+      }
+      return NextResponse.json({ data: { dates, conflicts } });
     }
 
     if (action === "availability") {
@@ -391,6 +459,26 @@ export async function POST(request: Request, { params }: Params) {
       : undefined;
     const addOnIds = addOnSelections?.map((s) => s.addOnId) || undefined;
 
+    const intakeResponses = Array.isArray(body.intakeResponses)
+      ? (body.intakeResponses as Array<{ formId: string; answers: Record<string, unknown> }>)
+      : undefined;
+    const customFieldValues =
+      body.customFieldValues && typeof body.customFieldValues === "object"
+        ? (body.customFieldValues as Record<string, unknown>)
+        : undefined;
+    const multiServiceLines = Array.isArray(body.multiServiceLines)
+      ? (body.multiServiceLines as Array<{
+          appointmentTypeId?: string;
+          serviceName: string;
+          staffId?: string;
+          resourceIds?: string[];
+          startsAt: string;
+          endsAt: string;
+          priceCents?: number;
+          displayOrder?: number;
+        }>)
+      : undefined;
+
     const risk = await evaluatePublicBookingRisk({
       workspaceId: workspace.id,
       ip,
@@ -503,6 +591,29 @@ export async function POST(request: Request, { params }: Params) {
     if (assignedStaff) staffId = assignedStaff.id;
 
     const payment = resolvedType?.config.payment;
+    let effectivePayment = payment ? { ...payment } : undefined;
+    if (effectivePayment && effectivePayment.mode !== "none" && addOnSelections?.length) {
+      const catalog = await listBookingAddOns(workspace.id);
+      const selectedAddOnRows = addOnSelections
+        .map((sel) => {
+          const row = catalog.find((a: { id: string }) => a.id === sel.addOnId);
+          if (!row) return null;
+          return {
+            priceCents: row.priceCents || 0,
+            durationDeltaMinutes: row.durationDeltaMinutes || 0,
+            quantity: sel.quantity ?? 1,
+          };
+        })
+        .filter(Boolean) as Array<{ priceCents: number; durationDeltaMinutes: number; quantity?: number }>;
+      const addOnTotals = calculateAddOnTotals(selectedAddOnRows);
+      if (addOnTotals.priceCents > 0) {
+        effectivePayment = {
+          ...effectivePayment,
+          priceCents: (effectivePayment.priceCents || 0) + addOnTotals.priceCents,
+        };
+      }
+    }
+
     const bookInput = {
       serviceId: resolvedType?.id || serviceId,
       serviceName: resolvedServiceName,
@@ -530,6 +641,9 @@ export async function POST(request: Request, { params }: Params) {
       resourceIds,
       addOnIds,
       addOnSelections,
+      intakeResponses,
+      customFieldValues,
+      multiServiceLines,
     };
 
     if (
@@ -555,11 +669,11 @@ export async function POST(request: Request, { params }: Params) {
       });
 
       let paymentInfo = { paymentRequired: false, checkoutUrl: null as string | null };
-      if (seriesResult.created[0] && payment?.mode && payment.mode !== "none") {
+      if (seriesResult.created[0] && effectivePayment?.mode && effectivePayment.mode !== "none") {
         paymentInfo = await attachPaymentCheckout(
           workspace.id,
           seriesResult.created[0],
-          payment,
+          effectivePayment,
           body.email ? String(body.email) : undefined,
           `${resolvedServiceName} appointment`,
         );
@@ -603,7 +717,7 @@ export async function POST(request: Request, { params }: Params) {
           contactId,
           bookingTypeId: resolvedType?.id || serviceId,
           serviceName: resolvedServiceName,
-          payment,
+          payment: effectivePayment,
           selection,
         });
         if (entitlementOutcome.paymentWaived && entitlementOutcome.method !== "none") {
@@ -643,7 +757,7 @@ export async function POST(request: Request, { params }: Params) {
           workspaceId: workspace.id,
           appointmentId,
           contactId,
-          payment,
+          payment: effectivePayment,
           customerEmail: body.email ? String(body.email) : undefined,
           description: `${resolvedServiceName} appointment`,
         });
@@ -672,7 +786,7 @@ export async function POST(request: Request, { params }: Params) {
         paymentInfo = await attachPaymentCheckout(
           workspace.id,
           appointmentId,
-          payment,
+          effectivePayment!,
           body.email ? String(body.email) : undefined,
           `${resolvedServiceName} appointment`,
         );

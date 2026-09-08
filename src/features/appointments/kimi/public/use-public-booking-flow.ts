@@ -113,6 +113,14 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [entitlementsLoading, setEntitlementsLoading] = useState(false);
   const [addOnCatalog, setAddOnCatalog] = useState<import("./types").PublicBookingAddOn[]>([]);
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, number>>({});
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState<
+    import("./types").PublicCustomFieldDefinition[]
+  >([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [intakeCatalog, setIntakeCatalog] = useState<import("./types").PublicIntakeForm[]>([]);
+  const [intakeAnswers, setIntakeAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [additionalServices, setAdditionalServices] = useState<PublicBookingType[]>([]);
+  const [addingAdditionalService, setAddingAdditionalService] = useState(false);
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -231,6 +239,15 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
 
   const pickType = useCallback(
     async (type: PublicBookingType) => {
+      if (addingAdditionalService && selectedType && type.id !== selectedType.id) {
+        setAdditionalServices((prev) =>
+          prev.some((s) => s.id === type.id) ? prev : [...prev, type],
+        );
+        setAddingAdditionalService(false);
+        setStep("datetime");
+        return;
+      }
+
       const normalized: PublicBookingType = {
         ...type,
         durationOptions: type.durationOptions || type.config?.durationOptions,
@@ -263,8 +280,14 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setSlots(json.data?.slots || []);
       setLoadingSlots(false);
     },
-    [slug, deepLinkStaffId, deepLinkLocationId],
+    [slug, deepLinkStaffId, deepLinkLocationId, addingAdditionalService, selectedType],
   );
+
+  const activeIntakeForms = useMemo(() => {
+    const ids = (selectedType?.config as { intakeFormIds?: string[] } | undefined)?.intakeFormIds;
+    if (!ids?.length) return [];
+    return intakeCatalog.filter((f) => ids.includes(f.id));
+  }, [intakeCatalog, selectedType]);
 
   const lookupEntitlements = useCallback(
     async (phoneValue: string, emailValue?: string) => {
@@ -290,9 +313,17 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
           }),
         });
         const json = await res.json();
-        const data = (json.data || {}) as BookingEntitlements;
+        const data = (json.data || {}) as BookingEntitlements & {
+          autoSuggestion?: { method: "package" | "gift" | "none"; packageBalanceId?: string; giftCode?: string };
+        };
         setEntitlements(data);
-        if (!data.packages?.length && !data.gifts?.length) {
+        if (data.autoSuggestion?.method === "package" && data.autoSuggestion.packageBalanceId) {
+          setEntitlementMethod("package");
+          setPackageBalanceId(data.autoSuggestion.packageBalanceId);
+        } else if (data.autoSuggestion?.method === "gift" && data.autoSuggestion.giftCode) {
+          setEntitlementMethod("gift");
+          setGiftCertificateCode(data.autoSuggestion.giftCode);
+        } else if (!data.packages?.length && !data.gifts?.length) {
           setEntitlementMethod("none");
           setPackageBalanceId("");
           setGiftCertificateCode("");
@@ -335,6 +366,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         setTypes(list);
         setCategories(json.data.categories || []);
         setAddOnCatalog(json.data.addOns || []);
+        setCustomFieldDefinitions(json.data.customFieldDefinitions || []);
+        setIntakeCatalog(json.data.intakeForms || []);
         setStaffOptions(json.data.staff || []);
         setLocationOptions(json.data.locations || []);
         if (deepLinkStaffId) setSelectedStaffId(deepLinkStaffId);
@@ -579,6 +612,34 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     if (addOnSelections.length) {
       payload.addOnSelections = addOnSelections;
     }
+    if (Object.keys(customFieldValues).length) {
+      payload.customFieldValues = customFieldValues;
+    }
+    if (activeIntakeForms.length) {
+      const responses = activeIntakeForms
+        .map((form) => ({
+          formId: form.id,
+          answers: intakeAnswers[form.id] || {},
+        }))
+        .filter((r) => Object.keys(r.answers).length > 0);
+      if (responses.length) payload.intakeResponses = responses;
+    }
+    if (additionalServices.length && startsAt) {
+      let cursor = new Date(startsAt).getTime() + effectiveDurationMinutes * 60_000;
+      payload.multiServiceLines = additionalServices.map((svc, index) => {
+        const dur = svc.durationMinutes || 30;
+        const lineStart = new Date(cursor);
+        const lineEnd = new Date(cursor + dur * 60_000);
+        cursor = lineEnd.getTime();
+        return {
+          appointmentTypeId: svc.id,
+          serviceName: svc.name,
+          startsAt: lineStart.toISOString(),
+          endsAt: lineEnd.toISOString(),
+          displayOrder: index + 1,
+        };
+      });
+    }
     const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -667,6 +728,11 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     useSavedCard,
     entitlements,
     slug,
+    customFieldValues,
+    activeIntakeForms,
+    intakeAnswers,
+    additionalServices,
+    selectedAddOns,
   ]);
 
   const onPaymentSuccess = useCallback(async () => {
@@ -808,6 +874,19 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     eligibleAddOns,
     selectedAddOns,
     setSelectedAddOns,
+    customFieldDefinitions,
+    customFieldValues,
+    setCustomFieldValues,
+    activeIntakeForms,
+    intakeAnswers,
+    setIntakeAnswers,
+    additionalServices,
+    addingAdditionalService,
+    setAddingAdditionalService,
+    addAdditionalService: () => {
+      setAddingAdditionalService(true);
+      setStep("service");
+    },
   };
 }
 

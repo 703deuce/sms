@@ -6,6 +6,9 @@ import TypePublishingSections from "./TypePublishingSections";
 import { BookingTypeKindPicker } from "./BookingTypeKindPicker";
 import { TypeResourcesSection } from "./TypeResourcesSection";
 import { TypeAddOnsSection } from "./TypeAddOnsSection";
+import { TypeCategoriesSection } from "./TypeCategoriesSection";
+import { TypeIntakeFormsSection } from "./TypeIntakeFormsSection";
+import { TypeServicePhasesSection } from "./TypeServicePhasesSection";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
 import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
@@ -23,6 +26,9 @@ interface Props {
   teamGroupOptions?: Array<{ id: string; name: string }>;
   resourceOptions?: Array<{ id: string; name: string; quantity?: number }>;
   addOnOptions?: Array<{ id: string; name: string; priceCents?: number }>;
+  categoryOptions?: Array<{ id: string; name: string }>;
+  intakeFormOptions?: Array<{ id: string; name: string; active?: boolean }>;
+  appointmentTypeId?: string | null;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -47,6 +53,9 @@ export default function TypeEditorPanel({
   teamGroupOptions,
   resourceOptions = [],
   addOnOptions = [],
+  categoryOptions = [],
+  intakeFormOptions = [],
+  appointmentTypeId = null,
   onFormChange,
   onSave,
   onCancel,
@@ -283,6 +292,12 @@ export default function TypeEditorPanel({
           onFormChange={onFormChange}
         />
 
+        <TypeCategoriesSection
+          form={form}
+          categoryOptions={categoryOptions}
+          onFormChange={onFormChange}
+        />
+
         <TypeResourcesSection
           form={form}
           resourceOptions={resourceOptions}
@@ -290,6 +305,17 @@ export default function TypeEditorPanel({
         />
 
         <TypeAddOnsSection form={form} addOnOptions={addOnOptions} onFormChange={onFormChange} />
+
+        <TypeIntakeFormsSection
+          form={form}
+          intakeFormOptions={intakeFormOptions}
+          onFormChange={onFormChange}
+        />
+
+        <TypeServicePhasesSection
+          appointmentTypeId={appointmentTypeId}
+          isCreating={isCreating}
+        />
 
         <details
           className="rounded-xl border border-[#ecedf2] bg-[#fafbfc]/50"

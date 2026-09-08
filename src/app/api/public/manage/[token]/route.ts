@@ -72,6 +72,37 @@ export async function POST(request: Request, { params }: Params) {
       if (!permissions.cancel) {
         return NextResponse.json({ error: "Cancellation is not allowed for this link" }, { status: 403 });
       }
+      const scope = body.recurringScope ? String(body.recurringScope) : undefined;
+      const meta = (resolved.appointment.metadata || {}) as { recurringSeriesId?: string };
+      if (scope && meta.recurringSeriesId) {
+        const { editRecurringSeries } = await import(
+          "@/lib/appointments/service-booking/recurring-series"
+        );
+        const editScope =
+          scope === "future"
+            ? "this_and_future"
+            : scope === "all"
+              ? "entire_series"
+              : "this_only";
+        await editRecurringSeries(
+          workspaceId,
+          meta.recurringSeriesId,
+          editScope,
+          appointmentId,
+          { status: "cancelled" },
+        );
+        const refreshed = await resolveManageAppointmentByToken(token);
+        const updated = refreshed?.appointment || resolved.appointment;
+        const payment = await getManageAppointmentPaymentSummary(workspaceId, appointmentId);
+        return NextResponse.json({
+          data: {
+            ...buildPublicAppointmentCustomerPreview(updated),
+            permissions,
+            payment,
+            recurringScope: scope,
+          },
+        });
+      }
       const updated = await manageAppointmentCancel(workspaceId, appointmentId, body.cancellationPolicy);
       const payment = await getManageAppointmentPaymentSummary(workspaceId, appointmentId);
       return NextResponse.json({

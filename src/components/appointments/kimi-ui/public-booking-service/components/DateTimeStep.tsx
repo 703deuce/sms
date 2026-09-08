@@ -24,6 +24,8 @@ export function DateTimeStep({
   onAi,
   externalSlots,
   externalLoadingSlots,
+  onAddAnotherService,
+  additionalServiceNames = [],
 }: {
   type: BookingType;
   timezone: string;
@@ -43,6 +45,8 @@ export function DateTimeStep({
   onAi: () => void;
   externalSlots?: Slot[] | null;
   externalLoadingSlots?: boolean;
+  onAddAnotherService?: () => void;
+  additionalServiceNames?: string[];
 }) {
   const useLiveSlots = externalSlots !== undefined;
   const [selectedDay, setSelectedDay] = useState(
@@ -241,6 +245,11 @@ export function DateTimeStep({
             <Button size="lg" className="flex-1" disabled={!startsAt} onClick={onContinue}>
               Continue <ChevronRight className="h-4 w-4" />
             </Button>
+            {onAddAnotherService ? (
+              <Button variant="outline" size="lg" type="button" onClick={onAddAnotherService}>
+                <ListPlus className="h-4 w-4" /> Add service
+              </Button>
+            ) : null}
             {aiEnabled ? (
               <Button variant="outline" size="lg" onClick={onAi}>
                 <Sparkles className="h-4 w-4 text-primary" /> Ask the assistant
@@ -367,6 +376,11 @@ export function DateTimeStep({
             <Button size="lg" className="flex-1" disabled={!startsAt} onClick={onContinue}>
               Continue <ChevronRight className="h-4 w-4" />
             </Button>
+            {onAddAnotherService ? (
+              <Button variant="outline" size="lg" type="button" onClick={onAddAnotherService}>
+                <ListPlus className="h-4 w-4" /> Add service
+              </Button>
+            ) : null}
             {aiEnabled ? (
               <Button variant="outline" size="lg" onClick={onAi}>
                 <Sparkles className="h-4 w-4 text-primary" /> Ask the assistant

@@ -36,6 +36,12 @@ export function InfoStep({
   eligibleAddOns = [],
   selectedAddOns = {},
   onSelectedAddOnsChange,
+  customFieldDefinitions = [],
+  customFieldValues = {},
+  onCustomFieldValuesChange,
+  intakeForms = [],
+  intakeAnswers = {},
+  onIntakeAnswersChange,
   onBack,
   onBook,
 }: {
@@ -65,6 +71,22 @@ export function InfoStep({
   }>;
   selectedAddOns?: Record<string, number>;
   onSelectedAddOnsChange?: (next: Record<string, number>) => void;
+  customFieldDefinitions?: Array<{
+    key: string;
+    label: string;
+    fieldType: string;
+    options?: string[] | null;
+    required: boolean;
+  }>;
+  customFieldValues?: Record<string, string>;
+  onCustomFieldValuesChange?: (next: Record<string, string>) => void;
+  intakeForms?: Array<{
+    id: string;
+    name: string;
+    fields: Array<{ id: string; label: string; type: string; required?: boolean; options?: string[] }>;
+  }>;
+  intakeAnswers?: Record<string, Record<string, string>>;
+  onIntakeAnswersChange?: (formId: string, fieldId: string, value: string) => void;
   onBack: () => void;
   onBook: (payload: {
     firstName: string;
@@ -371,6 +393,77 @@ export function InfoStep({
             />
           ))}
           {fieldErrors.questions ? <p className="text-[12px] text-rose-600">{fieldErrors.questions}</p> : null}
+        </div>
+      ) : null}
+
+      {customFieldDefinitions.length > 0 ? (
+        <div className="mt-5 space-y-4">
+          <p className="text-[13px] font-semibold text-foreground">About you</p>
+          {customFieldDefinitions.map((field) => (
+            <div key={field.key}>
+              <Label htmlFor={`cf-${field.key}`}>
+                {field.label}{field.required ? " *" : ""}
+              </Label>
+              {field.fieldType === "select" && field.options?.length ? (
+                <select
+                  id={`cf-${field.key}`}
+                  className="mt-1.5 h-9 w-full rounded-lg border border-border bg-card px-3 text-[13px]"
+                  value={customFieldValues[field.key] || ""}
+                  onChange={(e) =>
+                    onCustomFieldValuesChange?.({ ...customFieldValues, [field.key]: e.target.value })
+                  }
+                >
+                  <option value="">Select…</option>
+                  {field.options.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : field.fieldType === "textarea" ? (
+                <Textarea
+                  id={`cf-${field.key}`}
+                  rows={2}
+                  className="mt-1.5"
+                  value={customFieldValues[field.key] || ""}
+                  onChange={(e) =>
+                    onCustomFieldValuesChange?.({ ...customFieldValues, [field.key]: e.target.value })
+                  }
+                />
+              ) : (
+                <Input
+                  id={`cf-${field.key}`}
+                  className="mt-1.5"
+                  type={field.fieldType === "email" ? "email" : field.fieldType === "phone" ? "tel" : "text"}
+                  value={customFieldValues[field.key] || ""}
+                  onChange={(e) =>
+                    onCustomFieldValuesChange?.({ ...customFieldValues, [field.key]: e.target.value })
+                  }
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {intakeForms.length > 0 ? (
+        <div className="mt-5 space-y-5">
+          {intakeForms.map((form) => (
+            <div key={form.id} className="rounded-xl border border-border p-4 space-y-3">
+              <p className="text-[13px] font-semibold text-foreground">{form.name}</p>
+              {(form.fields || []).map((field) => (
+                <div key={field.id}>
+                  <Label htmlFor={`intake-${form.id}-${field.id}`}>
+                    {field.label}{field.required ? " *" : ""}
+                  </Label>
+                  <Input
+                    id={`intake-${form.id}-${field.id}`}
+                    className="mt-1.5"
+                    value={intakeAnswers[form.id]?.[field.id] || ""}
+                    onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ) : null}
 

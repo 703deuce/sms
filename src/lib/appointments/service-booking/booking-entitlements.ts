@@ -29,6 +29,18 @@ export function packageCreditsRemaining(remainingCredits: Record<string, number>
   return Object.values(remainingCredits).reduce((sum, n) => sum + (n || 0), 0);
 }
 
+export function suggestAutoEntitlement(
+  entitlements: Awaited<ReturnType<typeof lookupBookingEntitlements>>,
+): { method: "package" | "gift" | "none"; packageBalanceId?: string; giftCode?: string } {
+  if (entitlements.packages.length === 1) {
+    return { method: "package", packageBalanceId: entitlements.packages[0].id };
+  }
+  if (!entitlements.packages.length && entitlements.gifts.length === 1) {
+    return { method: "gift", giftCode: entitlements.gifts[0].code };
+  }
+  return { method: "none" };
+}
+
 export async function lookupBookingEntitlements(input: {
   workspaceId: string;
   contactId: string;

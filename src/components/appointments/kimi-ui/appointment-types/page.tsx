@@ -78,6 +78,9 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               teamGroupOptions={model.teamGroupOptions}
               resourceOptions={model.resourceOptions}
               addOnOptions={model.addOnOptions}
+              categoryOptions={model.categoryOptions}
+              intakeFormOptions={model.intakeFormOptions}
+              appointmentTypeId={model.selectedId}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}

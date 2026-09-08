@@ -47,6 +47,16 @@ export function computePhasedDurationMinutes(
   return phases.reduce((sum, p) => sum + p.durationMinutes, 0);
 }
 
+export async function resolveEffectiveTypeDurationMinutes(
+  workspaceId: string,
+  appointmentTypeId: string,
+  fallbackMinutes: number,
+): Promise<number> {
+  const phases = await listServicePhaseTemplates(workspaceId, appointmentTypeId);
+  if (!phases.length) return fallbackMinutes;
+  return computePhasedDurationMinutes(phases);
+}
+
 export async function validatePhasedSlot(
   workspaceId: string,
   phases: Array<{

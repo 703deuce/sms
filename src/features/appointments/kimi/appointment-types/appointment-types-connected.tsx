@@ -84,18 +84,24 @@ export function AppointmentTypesConnected() {
   const [addOnOptions, setAddOnOptions] = useState<
     Array<{ id: string; name: string; priceCents?: number }>
   >([]);
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [intakeFormOptions, setIntakeFormOptions] = useState<
+    Array<{ id: string; name: string; active?: boolean }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes, categoriesRes, intakeRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
         fetch("/api/merchant-payments/status"),
         fetch("/api/appointments/team-pages?kind=groups"),
         fetch("/api/appointments/service-booking/resources"),
         fetch("/api/appointments/service-booking/add-ons"),
+        fetch("/api/appointments/service-booking/categories"),
+        fetch("/api/appointments/service-booking/intake-forms?targetKind=appointment"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -132,6 +138,22 @@ export function AppointmentTypesConnected() {
           ((addOnsJson.data || []) as Array<{ id: string; name: string; priceCents?: number; active?: boolean }>)
             .filter((a) => a.active !== false)
             .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents })),
+        );
+      }
+      if (categoriesRes.ok) {
+        const categoriesJson = await categoriesRes.json();
+        setCategoryOptions(
+          ((categoriesJson.data || categoriesJson || []) as Array<{ id: string; name: string; active?: boolean }>)
+            .filter((c) => c.active !== false)
+            .map((c) => ({ id: c.id, name: c.name })),
+        );
+      }
+      if (intakeRes.ok) {
+        const intakeJson = await intakeRes.json();
+        setIntakeFormOptions(
+          ((intakeJson.data || intakeJson || []) as Array<{ id: string; name: string; active?: boolean }>).map(
+            (f) => ({ id: f.id, name: f.name, active: f.active }),
+          ),
         );
       }
       const staff = (settingsJson.data?.staff || []) as Array<{ id: string; name: string; active?: boolean }>;
@@ -385,6 +407,8 @@ export function AppointmentTypesConnected() {
       teamGroupOptions,
       resourceOptions,
       addOnOptions,
+      categoryOptions,
+      intakeFormOptions,
     };
   }, [
     bookingBaseUrl,
@@ -404,6 +428,8 @@ export function AppointmentTypesConnected() {
     teamGroupOptions,
     resourceOptions,
     addOnOptions,
+    categoryOptions,
+    intakeFormOptions,
     types,
     visibleTypes,
     workspaceSlug,

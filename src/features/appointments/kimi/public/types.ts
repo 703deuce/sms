@@ -37,6 +37,7 @@ export type PublicBookingType = {
     recurring?: RecurringConfig;
     durationOptions?: DurationOption[];
     confirmationPage?: ConfirmationResources;
+    intakeFormIds?: string[];
   };
 };
 
@@ -66,6 +67,27 @@ export type PublicBookingAddOn = {
   quantityMax: number;
   required: boolean;
   eligibleTypeIds: string[];
+};
+
+export type PublicCustomFieldDefinition = {
+  id: string;
+  key: string;
+  label: string;
+  fieldType: string;
+  options?: string[] | null;
+  required: boolean;
+};
+
+export type PublicIntakeForm = {
+  id: string;
+  name: string;
+  fields: Array<{
+    id: string;
+    label: string;
+    type: string;
+    required?: boolean;
+    options?: string[];
+  }>;
 };
 
 export type PublicBookingFlowOptions = {

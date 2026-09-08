@@ -81,11 +81,13 @@ export function ServiceStep({
   types,
   categories = [],
   activeCategorySlug,
+  addingAdditional = false,
   onPick,
 }: {
   types: BookingType[];
   categories?: ServiceCategory[];
   activeCategorySlug?: string;
+  addingAdditional?: boolean;
   onPick: (type: BookingType) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
@@ -140,8 +142,16 @@ export function ServiceStep({
         Book an appointment
       </h1>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        Choose a service to see available times.
+        {addingAdditional
+          ? "Select an additional service to book back-to-back in the same visit."
+          : "Choose a service to see available times."}
       </p>
+
+      {addingAdditional ? (
+        <p className="mt-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[12px] text-foreground">
+          Adding another service — it will be scheduled immediately after your first appointment.
+        </p>
+      ) : null}
 
       <div className="mt-5 space-y-6">
         {grouped.map((section) => {

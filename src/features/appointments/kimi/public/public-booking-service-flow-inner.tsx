@@ -74,6 +74,7 @@ export function PublicBookingServiceFlowInner({
               types={flow.types.map(toServiceType)}
               categories={flow.categories}
               activeCategorySlug={flow.initialCategorySlug}
+              addingAdditional={flow.addingAdditionalService}
               onPick={(type) => void flow.pickType(flow.types.find((t) => t.id === type.id)!)}
             />
           ) : null}
@@ -98,6 +99,8 @@ export function PublicBookingServiceFlowInner({
               onAi={() => flow.setStep("ai")}
               externalSlots={flow.slots}
               externalLoadingSlots={flow.loadingSlots}
+              onAddAnotherService={flow.addAdditionalService}
+              additionalServiceNames={flow.additionalServices.map((s) => s.name)}
             />
           ) : null}
 
@@ -140,6 +143,17 @@ export function PublicBookingServiceFlowInner({
               eligibleAddOns={flow.eligibleAddOns}
               selectedAddOns={flow.selectedAddOns}
               onSelectedAddOnsChange={flow.setSelectedAddOns}
+              customFieldDefinitions={flow.customFieldDefinitions}
+              customFieldValues={flow.customFieldValues}
+              onCustomFieldValuesChange={flow.setCustomFieldValues}
+              intakeForms={flow.activeIntakeForms}
+              intakeAnswers={flow.intakeAnswers}
+              onIntakeAnswersChange={(formId, fieldId, value) => {
+                flow.setIntakeAnswers((prev) => ({
+                  ...prev,
+                  [formId]: { ...(prev[formId] || {}), [fieldId]: value },
+                }));
+              }}
               onBack={() => flow.setStep("datetime")}
               onBook={(payload) => {
                 flow.setFirstName(payload.firstName);
