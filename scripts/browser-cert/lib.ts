@@ -307,11 +307,20 @@ export async function successScreenshot(page: Page, name: string) {
 }
 
 export async function switchProductShell(page: Page, label: "Appointments" | "Missed Call Text Back") {
+  const dismiss = page.getByRole("button", { name: /got it/i }).first();
+  if (await dismiss.count()) {
+    await dismiss.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+
   const btn = page.getByRole("button", { name: /Switch product/i }).first();
   if (!(await btn.count())) return { ok: false, note: "product switcher not found" };
   await btn.click({ timeout: ACTION_TIMEOUT });
+  await page.waitForTimeout(400);
+
   const option = page.getByRole("option", { name: label }).first();
-  await option.click({ timeout: ACTION_TIMEOUT });
+  await option.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
+  await option.click({ timeout: ACTION_TIMEOUT, force: true });
   await page.waitForTimeout(500);
   return { ok: true, note: "" };
 }

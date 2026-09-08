@@ -78,6 +78,7 @@ export async function mobileOverview(page: Page) {
 }
 
 export async function browserBackFromCalendar(page: Page) {
+  await visitRoute(page, "/appointments/overview");
   await visitRoute(page, "/appointments/calendar");
   await page.goBack({ timeout: ACTION_TIMEOUT });
   await page.waitForTimeout(300);

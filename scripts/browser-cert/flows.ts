@@ -17,6 +17,7 @@ import {
   typesSaveReload,
 } from "./flow-helpers";
 import { visitRoute } from "./lib";
+import { waitForPublicErrorText } from "./behavioral-flow-helpers";
 import { CERT_GROUP_BATCHES, CERT_GROUP_FLOWS, CERT_GROUP_IDS } from "./cert-groups";
 
 export type BrowserFlowTier = "reachability" | "user-action";
@@ -136,10 +137,8 @@ export const REACHABILITY_RAW: BrowserFlow[] = [
     batchId: B04,
     run: async (page) => {
       const v = await visitRoute(page, "/book/invalid-cert-slug-xyz", { allow404: true });
-      const body = await page.locator("body").innerText();
-      if (v.ok && !/not found|unavailable|invalid/i.test(body)) {
-        throw new Error("invalid public slug should show error state");
-      }
+      if (!v.ok) return;
+      await waitForPublicErrorText(page, /not found|unavailable|invalid/i);
     },
   },
   staticFlow(B04, "APT-13-full-flow", "PASS", "Requires fixture booking page slug — admin surface verified in APT-12"),

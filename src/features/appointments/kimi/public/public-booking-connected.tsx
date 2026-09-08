@@ -45,7 +45,11 @@ export function PublicBookingConnected(props: PublicBookingFlowOptions) {
   if (!flow.workspace) {
     return (
       <BookingShell>
-        <BookingError message={flow.error || "Booking unavailable"} onRetry={flow.load} />
+        {flow.error && /not found|invalid/i.test(flow.error) ? (
+          <BookingNotFound />
+        ) : (
+          <BookingError message={flow.error || "Booking unavailable"} onRetry={flow.load} />
+        )}
       </BookingShell>
     );
   }

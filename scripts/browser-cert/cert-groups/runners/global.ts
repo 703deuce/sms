@@ -1,8 +1,7 @@
 /**
  * Global certification passes (UI quality, public tokens, timezone, duplicates).
  */
-import type { CertContext } from "../../cert-context";
-import { CERT_PUBLIC_BOOK_SLUG } from "../../behavioral-flow-helpers";
+import { CERT_PUBLIC_BOOK_SLUG, waitForPublicErrorText } from "../../behavioral-flow-helpers";
 
 const PUBLIC_ROUTES = [
   `/book/${CERT_PUBLIC_BOOK_SLUG}`,
@@ -37,9 +36,8 @@ export async function runGLOBAL01(ctx: CertContext) {
 export async function runGLOBAL02(ctx: CertContext) {
   for (const path of PUBLIC_ROUTES) {
     await ctx.visit(path, { allow404: true });
-    const body = await ctx.bodyText();
-    if (path.includes("invalid") && !/not found|unavailable|invalid|expired/i.test(body)) {
-      throw new Error(`Public route ${path} should show safe error state`);
+    if (path.includes("invalid")) {
+      await waitForPublicErrorText(ctx.page, /not found|unavailable|invalid|expired/i);
     }
   }
 }

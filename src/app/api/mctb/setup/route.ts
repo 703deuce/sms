@@ -462,7 +462,7 @@ export async function POST(req: Request) {
     phoneNumberId: body.phoneNumberId ?? baseConfig.phoneNumberId,
     firstMessage: body.messageTemplate ?? baseConfig.firstMessage,
     initialDelaySeconds: body.delaySeconds ?? baseConfig.initialDelaySeconds ?? 0,
-    consentMode: body.consentMode,
+    consentMode: body.consentMode ?? baseConfig.consentMode,
     replyNotifications: body.replyNotifications,
     activate: body.activate ?? !pausing,
   };

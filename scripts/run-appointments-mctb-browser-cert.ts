@@ -52,13 +52,14 @@ function parseArgs() {
   const flowId = flowIdx >= 0 ? String(args[flowIdx + 1]) : null;
   const fresh = args.includes("--fresh");
   const retest = args.includes("--retest");
+  const seed = args.includes("--seed");
   const continueOnFail = args.includes("--continue-on-fail");
   const preflight = args.includes("--preflight");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 0;
   const certIdx = args.indexOf("--cert");
   const certGroup = certIdx >= 0 ? String(args[certIdx + 1]) : null;
-  return { from, only, flowId, certGroup, fresh, retest, continueOnFail, preflight, limit };
+  return { from, only, flowId, certGroup, fresh, retest, seed, continueOnFail, preflight, limit };
 }
 
 function markEnvironmentBlocked(state: BrowserCertState, batchId: string, reason: string) {
@@ -84,7 +85,7 @@ function syncBatchCheckpoints(state: BrowserCertState) {
 }
 
 async function runDisposableCert() {
-  const { from, only, flowId, certGroup, fresh, retest, continueOnFail, preflight, limit } = parseArgs();
+  const { from, only, flowId, certGroup, fresh, retest, seed, continueOnFail, preflight, limit } = parseArgs();
 
   if (preflight) {
     const r = await browserCertPreflight();
@@ -122,6 +123,20 @@ async function runDisposableCert() {
   if (!waitForDeployedApp(baseUrl)) {
     console.error(`Deployed application not reachable at ${baseUrl}`);
     process.exit(1);
+  }
+
+  if (seed || fresh) {
+    console.log("\nSeeding cert workspace (appointment types, MCTB fixtures)…");
+    const { spawnSync } = await import("node:child_process");
+    const seedResult = spawnSync(
+      "npm",
+      ["run", "seed:appointments-mctb-browser-cert"],
+      { stdio: "inherit", env: process.env, shell: true },
+    );
+    if (seedResult.status !== 0) {
+      console.error("Cert workspace seed failed — fix DATABASE_URL and retry");
+      process.exit(1);
+    }
   }
 
   const guard = new ServerGuard({

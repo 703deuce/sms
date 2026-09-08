@@ -60,10 +60,10 @@ export function BookingNotFound() {
           <CalendarX className="h-5 w-5" />
         </div>
         <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
-          This booking link is no longer active
+          Booking page not found
         </h1>
         <p className="mt-2 text-[13px] text-muted-foreground">
-          The business may have disabled this page, or the link was single-use. Contact the business directly to book.
+          This booking link is invalid or no longer active. Contact the business directly to book.
         </p>
       </Card>
     </div>

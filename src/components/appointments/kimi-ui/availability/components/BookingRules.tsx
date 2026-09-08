@@ -42,9 +42,13 @@ export default function BookingRules({
         </div>
 
         <div>
-          <label className="block text-[13px] font-semibold text-[#1c1a2e] mb-2">Minimum notice</label>
+          <label className="block text-[13px] font-semibold text-[#1c1a2e] mb-2" htmlFor="avail-minimum-notice">
+            Minimum notice
+          </label>
           <div className="avail-input w-full flex items-center justify-between">
             <input
+              id="avail-minimum-notice"
+              name="minimumBookingNotice"
               type="number"
               min={0}
               className="w-20 bg-transparent font-medium outline-none"

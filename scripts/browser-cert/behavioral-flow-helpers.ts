@@ -130,6 +130,18 @@ export async function cancelAppointmentUserAction(page: Page, appointmentId: str
   if (!/canceled|cancelled/i.test(after)) throw new Error("Canceled status did not persist after reload");
 }
 
+/** Wait for async public error copy (video, recap, booking). */
+export async function waitForPublicErrorText(page: Page, pattern: RegExp) {
+  const body = page.locator("body");
+  for (let i = 0; i < 40; i++) {
+    const text = await body.innerText();
+    if (pattern.test(text)) return;
+    await page.waitForTimeout(500);
+  }
+  const text = await body.innerText();
+  throw new Error(`Expected public error matching ${pattern}, got: ${text.slice(0, 200)}`);
+}
+
 /** Create booking type, save, reload, verify name persists. */
 export async function createBookingTypeUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/types");
@@ -137,15 +149,12 @@ export async function createBookingTypeUserAction(page: Page) {
 
   const newBtn = page.getByRole("button", { name: /new appointment type/i }).first();
   await newBtn.click({ timeout: ACTION_TIMEOUT });
+  await page.waitForTimeout(600);
 
   const typeName = `Cert Type ${Date.now().toString().slice(-6)}`;
-  const nameInput = page.getByLabel(/name/i).first();
-  if (await nameInput.count()) {
-    await nameInput.fill(typeName);
-  } else {
-    const fallback = page.locator('input[name="name"], input[placeholder*="name" i]').first();
-    await fallback.fill(typeName);
-  }
+  const nameInput = page.locator("#appointment-type-name, input[name='name']").first();
+  await nameInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
+  await nameInput.fill(typeName);
 
   const createBtn = page.getByRole("button", { name: /create type/i }).first();
   await createBtn.click({ timeout: ACTION_TIMEOUT });
@@ -162,8 +171,12 @@ export async function saveAvailabilityUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/availability");
   if (!v.ok) throw new Error(v.note);
 
-  const noticeInput = page.locator('input[name*="minimumBookingNotice"], input[type="number"]').first();
-  if (!(await noticeInput.count())) throw new Error("Minimum notice input not found");
+  const noticeInput = page
+    .locator(
+      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"]',
+    )
+    .first();
+  await noticeInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
 
   const current = await noticeInput.inputValue();
   const next = current === "60" ? "90" : "60";
@@ -173,7 +186,11 @@ export async function saveAvailabilityUserAction(page: Page) {
   if (!saved) throw new Error("Save availability button not clickable");
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  const after = await page.locator('input[name*="minimumBookingNotice"], input[type="number"]').first();
+  const after = page
+    .locator(
+      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"]',
+    )
+    .first();
   const value = await after.inputValue();
   if (value !== next) throw new Error(`Availability notice did not persist (expected ${next}, got ${value})`);
 }
@@ -203,9 +220,22 @@ export async function saveNotetakerSettingsUserAction(page: Page) {
   const v = await visitRoute(page, "/settings/ai-notetaker");
   if (!v.ok) throw new Error(v.note);
 
-  const toggle = page.getByRole("checkbox").first();
-  if (!(await toggle.count())) throw new Error("No notetaker toggle found");
-  const wasChecked = await toggle.isChecked();
+  const toggle = page.getByRole("switch").first();
+  if (!(await toggle.count())) {
+    const checkbox = page.getByRole("checkbox").first();
+    if (!(await checkbox.count())) throw new Error("No notetaker toggle found");
+    const wasChecked = await checkbox.isChecked();
+    await checkbox.click({ force: true });
+    await page.waitForTimeout(500);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const after = page.getByRole("checkbox").first();
+    if ((await after.isChecked()) === wasChecked) {
+      throw new Error("Notetaker setting did not change or persist");
+    }
+    return;
+  }
+
+  const wasChecked = (await toggle.getAttribute("aria-checked")) === "true";
   await toggle.click({ force: true });
   await page.waitForTimeout(500);
 
@@ -217,8 +247,8 @@ export async function saveNotetakerSettingsUserAction(page: Page) {
   await page.waitForTimeout(1500);
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  const toggleAfter = page.getByRole("checkbox").first();
-  const nowChecked = await toggleAfter.isChecked();
+  const toggleAfter = page.getByRole("switch").first();
+  const nowChecked = (await toggleAfter.getAttribute("aria-checked")) === "true";
   if (nowChecked === wasChecked) {
     const body = await page.locator("body").innerText();
     if (!/saved/i.test(body)) throw new Error("Notetaker setting did not change or persist");
@@ -252,7 +282,9 @@ export async function saveMctbConsentUserAction(page: Page) {
   const v = await visitRoute(page, "/mctb/setup/consent");
   if (!v.ok) throw new Error(v.note);
 
-  const existingCard = page.getByText(/use permission my business already has/i).first();
+  const existingCard = page
+    .getByText(/use permission my business already has|already have permission/i)
+    .first();
   if (await existingCard.count()) {
     await existingCard.click({ timeout: ACTION_TIMEOUT });
   }
@@ -265,9 +297,11 @@ export async function saveMctbConsentUserAction(page: Page) {
   const saved = await clickSaveAndWait(page, /save changes/i);
   if (!saved) throw new Error("MCTB consent save failed");
 
+  await page.waitForTimeout(1000);
   await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1000);
   const body = await page.locator("body").innerText();
-  if (!/existing permission|already have/i.test(body)) {
+  if (!/existing permission|already have|use permission my business already has/i.test(body)) {
     throw new Error("MCTB consent mode did not persist after reload");
   }
 }
@@ -315,6 +349,7 @@ export async function saveMctbPhoneUserAction(page: Page) {
   }
 
   await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1000);
   const body = await page.locator("body").innerText();
   if (!/business line|forwarding|phone/i.test(body)) throw new Error("MCTB phone setup did not render after reload");
 }

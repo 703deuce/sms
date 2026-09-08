@@ -65,8 +65,10 @@ export default function TypeEditorPanel({
           <h3 className="text-[14px] font-semibold mb-4">Basic details</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="label">Name</label>
+              <label className="label" htmlFor="appointment-type-name">Name</label>
               <input
+                id="appointment-type-name"
+                name="name"
                 className="input w-full"
                 value={form.name}
                 onChange={(e) => onFormChange("name", e.target.value)}

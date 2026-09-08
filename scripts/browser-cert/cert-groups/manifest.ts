@@ -22,8 +22,13 @@ function mctb(id: string, title: string, route?: string, blocked?: CertStatus): 
   return { id: `MCTB-${id}`, product: "mctb", title, primaryRoute: route, blocked };
 }
 
-function cross(id: string, title: string, blocked?: CertStatus): CertGroupManifest {
-  return { id: `CROSS-${id}`, product: "cross", title, blocked };
+function cross(
+  id: string,
+  title: string,
+  route?: string,
+  blocked?: CertStatus,
+): CertGroupManifest {
+  return { id: `CROSS-${id}`, product: "cross", title, primaryRoute: route, blocked };
 }
 
 function global(id: string, title: string): CertGroupManifest {

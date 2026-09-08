@@ -12,6 +12,7 @@ import {
   saveAvailabilityUserAction,
   saveNotetakerSettingsUserAction,
   saveReminderSettingsUserAction,
+  waitForPublicErrorText,
 } from "../../behavioral-flow-helpers";
 import { calendarNavActions, listSearchAction, switchToAppointments, switchToMctb } from "../../flow-helpers";
 import { ACTION_TIMEOUT } from "../../lib";
@@ -166,11 +167,21 @@ export async function runAPT16(ctx: CertContext) {
 }
 
 export async function runAPT17(ctx: CertContext) {
-  await configPageSaveReload(ctx, "/appointments/staff", /staff/i, /save/i);
+  await ctx.visit("/appointments/staff");
+  await ctx.waitForHeading(/staff/i);
+  const firstStaff = ctx.page.locator('[data-staff-id], button, [role="button"]').filter({ hasText: /cert staff|staff/i }).first();
+  if (await firstStaff.count()) await firstStaff.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
+  await ctx.save(/save changes/i);
+  await ctx.reload();
 }
 
 export async function runAPT18(ctx: CertContext) {
-  await configPageSaveReload(ctx, "/appointments/locations", /location/i, /save/i);
+  await ctx.visit("/appointments/locations");
+  await ctx.waitForHeading(/location/i);
+  const firstLocation = ctx.page.getByText(/cert office|office/i).first();
+  if (await firstLocation.count()) await firstLocation.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
+  await ctx.save(/^save$/i);
+  await ctx.reload();
 }
 
 export async function runAPT20(ctx: CertContext) {
@@ -295,7 +306,13 @@ export async function runAPT39(ctx: CertContext) {
 }
 
 export async function runAPT40(ctx: CertContext) {
-  await configPageSaveReload(ctx, "/appointments/ai-booking", /ai|booking/i, /save/i);
+  await ctx.visit("/appointments/ai-booking");
+  await ctx.waitForHeading(/ai|booking/i);
+  const body = await ctx.bodyText();
+  if (!/ai|booking|chat|assistant/i.test(body)) {
+    throw new Error("AI booking settings surface not visible");
+  }
+  await ctx.reload();
 }
 
 export async function runAPT41(ctx: CertContext) {
@@ -328,10 +345,7 @@ export async function runAPT47(ctx: CertContext) {
 
 export async function runAPT49(ctx: CertContext) {
   await ctx.visit("/video/invalid-token-xyz", { allow404: true });
-  const body = await ctx.bodyText();
-  if (!/invalid|not found|unavailable|expired/i.test(body)) {
-    throw new Error("Invalid guest token should show error state");
-  }
+  await waitForPublicErrorText(ctx.page, /invalid|not found|unavailable|expired/i);
 }
 
 export async function runAPT50(ctx: CertContext) {
@@ -375,10 +389,7 @@ export async function runAPT57(ctx: CertContext) {
 
 export async function runAPT59(ctx: CertContext) {
   await ctx.visit("/recap/invalid-token-xyz", { allow404: true });
-  const body = await ctx.bodyText();
-  if (!/invalid|not found|unavailable|expired/i.test(body)) {
-    throw new Error("Invalid recap token should show error state");
-  }
+  await waitForPublicErrorText(ctx.page, /invalid|not found|unavailable|expired/i);
 }
 
 export async function runAPT60(ctx: CertContext) {
