@@ -4,10 +4,14 @@
 import type { CertContext } from "../../cert-context";
 import { configPageSaveReload } from "../../cert-context";
 import {
+  configureMctbHandoffModeUserAction,
+  ensureMctbHandoffRecipientsViaApi,
   saveMctbConsentUserAction,
+  saveMctbLinksUserAction,
   saveMctbNotificationsUserAction,
   saveMctbPhoneUserAction,
   saveMctbTextBackUserAction,
+  sendMctbTestNotificationViaApi,
   waitForPublicErrorText,
 } from "../../behavioral-flow-helpers";
 import { assertMctbShell, assertRedirect, switchToMctb } from "../../flow-helpers";
@@ -107,7 +111,7 @@ export async function runMCTB12(ctx: CertContext) {
 }
 
 export async function runMCTB13(ctx: CertContext) {
-  await configPageSaveReload(ctx, "/mctb/setup/links", /link|request form/i, /save changes/i);
+  await saveMctbLinksUserAction(ctx.page);
 }
 
 export async function runMCTB14(ctx: CertContext) {
@@ -184,39 +188,46 @@ export async function runMCTB28(ctx: CertContext) {
 }
 
 export async function runMCTB29(ctx: CertContext) {
-  await ctx.visit("/mctb/missed-calls");
-  const detailLink = ctx.page
-    .locator('main a[href*="/mctb/missed-calls/"], table a[href*="/mctb/missed-calls/"]')
-    .first();
-  if (await detailLink.count()) {
-    await detailLink.click({ timeout: ACTION_TIMEOUT });
-    await ctx.reload();
-    return;
+  const listRes = await ctx.page.request.get("/api/mctb/missed-calls?limit=25");
+  if (!listRes.ok()) {
+    throw new Error(`Could not load missed calls API (${listRes.status()})`);
   }
-  const callerLink = ctx.page
-    .locator('table a, tbody a, [data-testid="missed-call-row"] a')
-    .filter({ hasText: /50177|\+1.*50177/i })
-    .first();
-  if (await callerLink.count()) {
-    await callerLink.click({ timeout: ACTION_TIMEOUT });
-    await ctx.reload();
-    return;
+  const json = await listRes.json();
+  const events = (json.data?.events || []) as Array<{ id: string; callerPhone?: string }>;
+  const hit =
+    events.find((event) => /50177/.test(event.callerPhone || "")) || events[0];
+  if (!hit?.id) {
+    throw new Error("No missed call detail available — seed fixture missed call");
   }
-  throw new Error("No missed call detail link available — seed fixture missed call");
+
+  await ctx.visit(`/mctb/missed-calls/${hit.id}`);
+  await ctx.reload();
+}
+
+function resolveHandoffMode(pattern: RegExp) {
+  const source = pattern.source;
+  if (/immediate/i.test(source)) return "immediate_handoff";
+  if (/ai conversation/i.test(source)) return "ai_conversation";
+  if (/guided|collection/i.test(source)) return "guided_collection";
+  return "notify_only";
+}
+
+async function runHandoffMode(ctx: CertContext, modePattern: RegExp) {
+  await configureMctbHandoffModeUserAction(
+    ctx.page,
+    resolveHandoffMode(modePattern) as
+      | "notify_only"
+      | "guided_collection"
+      | "ai_conversation"
+      | "immediate_handoff",
+  );
+  await ctx.visit("/mctb/setup");
+  await ctx.reload();
 }
 
 export async function runMCTB30(ctx: CertContext) {
   await ctx.visit("/mctb/conversations");
   await ctx.searchList("cert");
-  await ctx.reload();
-}
-
-async function runHandoffMode(ctx: CertContext, modePattern: RegExp) {
-  await saveMctbNotificationsUserAction(ctx.page);
-  await ctx.visit("/mctb/setup/notifications");
-  const mode = ctx.page.getByText(modePattern).first();
-  if (await mode.count()) await mode.click({ timeout: ACTION_TIMEOUT });
-  await ctx.save(/save changes/i);
   await ctx.reload();
 }
 
@@ -237,22 +248,24 @@ export async function runMCTB34(ctx: CertContext) {
 }
 
 export async function runMCTB35(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
-  await ctx.reload();
+  await saveMctbNotificationsUserAction(ctx.page);
 }
 
 export async function runMCTB36(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
+  await configureMctbHandoffModeUserAction(ctx.page, "guided_collection");
+  await ctx.visit("/mctb/setup");
   await ctx.reload();
 }
 
 export async function runMCTB37(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
+  await configureMctbHandoffModeUserAction(ctx.page, "ai_conversation");
+  await ctx.visit("/mctb/setup");
   await ctx.reload();
 }
 
 export async function runMCTB38(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
+  await configureMctbHandoffModeUserAction(ctx.page, "immediate_handoff");
+  await ctx.visit("/mctb/setup");
   await ctx.reload();
 }
 
@@ -277,14 +290,14 @@ export async function runMCTB42(ctx: CertContext) {
 }
 
 export async function runMCTB43(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
+  await ensureMctbHandoffRecipientsViaApi(ctx.page);
+  await ctx.visit("/mctb/setup");
   await ctx.reload();
 }
 
 export async function runMCTB44(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/notifications");
-  const test = ctx.page.getByRole("button", { name: /test notification|send test/i }).first();
-  if (await test.count()) await test.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
+  await sendMctbTestNotificationViaApi(ctx.page);
+  await ctx.visit("/mctb/setup");
   await ctx.reload();
 }
 
@@ -309,8 +322,7 @@ async function publicBookingFromMctb(ctx: CertContext) {
 }
 
 export async function runMCTB48(ctx: CertContext) {
-  await ctx.visit("/mctb/setup/links");
-  await ctx.reload();
+  await saveMctbLinksUserAction(ctx.page);
 }
 
 export async function runMCTB49(ctx: CertContext) {

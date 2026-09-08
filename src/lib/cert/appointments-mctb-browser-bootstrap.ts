@@ -46,7 +46,7 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
   await grantWorkspaceProductFeature(workspaceId, "visual_voicemail", "active");
   await grantWorkspaceProductFeature(workspaceId, "ai_notetaker", "active");
 
-  await saveNotetakerConfig(workspaceId, { enabled: true, autoJoin: true });
+  await saveNotetakerConfig(workspaceId, { enabled: true });
 
   const staffId = `cert-staff-${workspaceId.slice(0, 8)}`;
   const locationId = `cert-location-${workspaceId.slice(0, 8)}`;

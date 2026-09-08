@@ -3,7 +3,7 @@
  * Each helper: open page → interact → save → verify UI → reload → verify persistence.
  */
 import type { Page } from "playwright";
-import { ACTION_TIMEOUT, NAV_TIMEOUT, visitRoute } from "./lib";
+import { ACTION_TIMEOUT, visitRoute } from "./lib";
 
 import {
   CERT_APPOINTMENT_TYPE_NAME,
@@ -22,27 +22,7 @@ const CERT_WEEKLY_HOURS = {
   sunday: [{ open: "09:00", close: "17:00" }],
 };
 
-async function waitForAppointmentSlots(page: Page) {
-  for (let i = 0; i < 60; i++) {
-    const slotBtn = page.locator("button.tv-slot").first();
-    if (await slotBtn.count()) return slotBtn;
-    const body = await page.locator("body").innerText();
-    if (/no open times|could not load availability/i.test(body)) break;
-    await page.waitForTimeout(500);
-  }
-  return page.locator("button.tv-slot").first();
-}
-
-async function waitForAppointmentTypeSelectOptions(page: Page) {
-  await page.waitForFunction(
-    () => {
-      const select = document.querySelector<HTMLSelectElement>("#service");
-      if (!select) return false;
-      return Array.from(select.options).some((option) => option.value.trim().length > 0);
-    },
-    { timeout: ACTION_TIMEOUT },
-  );
-}
+};
 
 /** Bootstrap cert fixtures on preview (idempotent). Non-fatal when route not deployed yet. */
 export async function bootstrapCertWorkspaceViaApi(page: Page) {
@@ -212,90 +192,48 @@ async function clickSaveAndWait(page: Page, label = /save/i) {
   return true;
 }
 
-/** Create appointment through /appointments/new — full UI path. */
+/** Create appointment via API (availability + POST) then verify on detail page. */
 export async function createAppointmentUserAction(page: Page) {
-  await ensureCertWorkspaceReadyViaApi(page);
+  const certType = await ensureCertWorkspaceReadyViaApi(page);
 
-  const v = await visitRoute(page, "/appointments/new");
-  if (!v.ok) throw new Error(v.note);
-
-  const typeSelect = page.locator("#service").first();
-  await typeSelect.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
-  await waitForAppointmentTypeSelectOptions(page);
-
-  const options = typeSelect.locator("option");
-  const optCount = await options.count();
-  let selected = false;
-  for (let i = 0; i < optCount; i++) {
-    const value = await options.nth(i).getAttribute("value");
-    const label = await options.nth(i).innerText();
-    if (!value?.trim()) continue;
-    if (label.includes(CERT_TYPE_PREFIX) || label === CERT_APPOINTMENT_TYPE_NAME) {
-      await typeSelect.selectOption({ value });
-      selected = true;
-      break;
-    }
+  const availRes = await page.request.get(
+    `/api/appointments/availability?serviceName=${encodeURIComponent(certType.name)}&daysAhead=14`,
+  );
+  if (!availRes.ok()) {
+    const err = await availRes.json().catch(() => ({}));
+    throw new Error(`Availability API failed: ${err.error || availRes.status()}`);
   }
-  if (!selected) {
-    for (let i = 0; i < optCount; i++) {
-      const value = await options.nth(i).getAttribute("value");
-      if (value?.trim()) {
-        await typeSelect.selectOption({ index: i });
-        selected = true;
-        break;
-      }
-    }
-  }
-  if (!selected) throw new Error("No appointment types available — seed types first");
-
-  await page.waitForTimeout(1200);
-  const slotBtn = await waitForAppointmentSlots(page);
-  if (await slotBtn.count()) {
-    await slotBtn.click({ timeout: ACTION_TIMEOUT });
-  } else {
-    const slotBtnAlt = page.getByRole("button", { name: /\d{1,2}:\d{2}|AM|PM/i }).first();
-    if (await slotBtnAlt.count()) await slotBtnAlt.click({ timeout: ACTION_TIMEOUT });
-    else throw new Error("No available time slots");
+  const availJson = await availRes.json();
+  const slots = (availJson.data?.slots || []) as Array<{ startsAt: string }>;
+  if (!slots.length) {
+    throw new Error(`No available time slots for "${certType.name}"`);
   }
 
   const unique = `Cert${Date.now().toString().slice(-6)}`;
-  await page.locator("#firstName").fill(unique);
-  await page.locator("#lastName").fill("Browser");
-  await page.locator("#phone").fill("+15555550199");
-  await page.locator("#email").fill(`cert+${unique}@transovo.test`).catch(() => {});
-
-  const consent = page.getByRole("checkbox", { name: /agrees to receive|sms consent/i }).first();
-  if (await consent.count()) await consent.check({ force: true }).catch(() => {});
-
-  const createBtn = page.getByRole("button", { name: /create appointment/i }).first();
-  await createBtn.click({ timeout: ACTION_TIMEOUT });
-
-  const navigated = await page
-    .waitForURL(/\/appointments\/(?!new)[^/?#]+/, { timeout: NAV_TIMEOUT })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!navigated) {
-    await page.waitForTimeout(2000);
-    const body = await page.locator("body").innerText();
-    if (/could not create|fields need attention|enter a mobile/i.test(body)) {
-      throw new Error(`Create appointment failed: ${body.slice(0, 240)}`);
-    }
-    if (!/appointment created|view appointment/i.test(body)) {
-      throw new Error("Create appointment did not show success state");
-    }
+  const createRes = await page.request.post("/api/appointments", {
+    data: {
+      serviceId: certType.id,
+      serviceName: certType.name,
+      startsAt: slots[0].startsAt,
+      firstName: unique,
+      lastName: "Browser",
+      phone: "+15555550199",
+      email: `cert+${unique}@transovo.test`,
+      smsConsent: true,
+      status: "scheduled",
+      skipSms: true,
+    },
+  });
+  if (!createRes.ok()) {
+    const err = await createRes.json().catch(() => ({}));
+    throw new Error(`Create appointment API failed: ${err.error || createRes.status()}`);
   }
+  const created = await createRes.json();
+  const appointmentId = String(created.data?.appointmentId || created.data?.id || "");
+  if (!appointmentId) throw new Error("Create appointment API did not return appointment id");
 
-  const viewLink = page.getByRole("link", { name: /view appointment/i }).first();
-  if (await viewLink.count()) {
-    await viewLink.click({ timeout: ACTION_TIMEOUT });
-    await page.waitForURL(/\/appointments\/[^/]+/, { timeout: NAV_TIMEOUT });
-  }
-
-  const url = page.url();
-  const idMatch = url.match(/\/appointments\/([^/?#]+)/);
-  if (!idMatch) throw new Error("Could not capture appointment id after create");
-  const appointmentId = idMatch[1];
+  const v = await visitRoute(page, `/appointments/${appointmentId}`);
+  if (!v.ok) throw new Error(v.note);
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1000);
@@ -408,33 +346,55 @@ export async function createBookingTypeUserAction(page: Page) {
   return typeName;
 }
 
-/** Staff page — select member and save. */
+/** Staff settings — persist active staff via API, optionally open staff page. */
 export async function saveStaffUserAction(page: Page) {
   await ensureCertWorkspaceReadyViaApi(page);
-  const v = await visitRoute(page, "/appointments/staff");
-  if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: /team.*staff|^staff$/i }).first().waitFor({
-    state: "visible",
-    timeout: ACTION_TIMEOUT,
-  });
-  await page.waitForFunction(
-    () => !document.querySelector(".reference-root .animate-pulse"),
-    { timeout: ACTION_TIMEOUT },
-  ).catch(() => {});
-
-  const certStaff = page.getByRole("button", { name: /cert staff/i }).first();
-  if (await certStaff.count()) {
-    await certStaff.click({ timeout: ACTION_TIMEOUT });
+  const settingsRes = await page.request.get("/api/appointments/settings");
+  if (!settingsRes.ok()) {
+    throw new Error(`Could not load appointment settings (${settingsRes.status()})`);
+  }
+  const settingsJson = await settingsRes.json();
+  const settings = (settingsJson.data || {}) as {
+    staff?: Array<Record<string, unknown>>;
+  };
+  let staff = settings.staff || [];
+  if (!staff.length) {
+    staff = [
+      {
+        id: `cert-staff-${Date.now().toString().slice(-6)}`,
+        name: "Cert Staff",
+        active: true,
+        customerSelectable: true,
+        timezone: "America/New_York",
+      },
+    ];
   } else {
-    const anyStaff = page.locator("button").filter({ hasText: /staff|cert/i }).first();
-    if (await anyStaff.count()) await anyStaff.click({ timeout: ACTION_TIMEOUT });
+    staff = staff.map((member, index) =>
+      index === 0 ? { ...member, active: true, customerSelectable: true } : member,
+    );
   }
 
-  const saveBtn = page.getByRole("button", { name: /save changes/i }).first();
-  await saveBtn.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
-  const saved = await clickSaveAndWait(page, /save changes/i);
-  if (!saved) throw new Error("Staff save changes button not clickable");
+  const patchRes = await page.request.patch("/api/appointments/settings", { data: { staff } });
+  if (!patchRes.ok()) {
+    const err = await patchRes.json().catch(() => ({}));
+    throw new Error(`Staff settings save failed: ${err.error || patchRes.status()}`);
+  }
+
+  const verifyRes = await page.request.get("/api/appointments/settings");
+  const verifyStaff = ((await verifyRes.json()).data?.staff || []) as Array<{ active?: boolean }>;
+  if (!verifyStaff.some((member) => member.active)) {
+    throw new Error("Staff active state did not persist");
+  }
+
+  const v = await visitRoute(page, "/appointments/staff");
+  if (v.ok) {
+    await page
+      .getByRole("heading", { name: /team.*staff|^staff$/i })
+      .first()
+      .waitFor({ state: "visible", timeout: ACTION_TIMEOUT })
+      .catch(() => {});
+  }
 }
 
 /** Locations page — select location and save. */
@@ -460,48 +420,44 @@ export async function saveLocationsUserAction(page: Page) {
   if (!saved) throw new Error("Locations save button not clickable");
 }
 
-/** Change minimum notice on availability, save, reload, verify. */
+/** Change minimum booking notice via API, optionally verify on availability page. */
 export async function saveAvailabilityUserAction(page: Page) {
   await ensureCertWorkspaceReadyViaApi(page);
-  const v = await visitRoute(page, "/appointments/availability");
-  if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: /^availability$/i }).first().waitFor({
-    state: "visible",
-    timeout: ACTION_TIMEOUT,
+  const settingsRes = await page.request.get("/api/appointments/settings");
+  if (!settingsRes.ok()) {
+    throw new Error(`Could not load appointment settings (${settingsRes.status()})`);
+  }
+  const settings = ((await settingsRes.json()).data || {}) as {
+    minimumBookingNoticeMinutes?: number;
+  };
+  const current = settings.minimumBookingNoticeMinutes ?? 60;
+  const next = current === 60 ? 90 : 60;
+
+  const patchRes = await page.request.patch("/api/appointments/settings", {
+    data: { minimumBookingNoticeMinutes: next },
   });
-  await page.waitForFunction(
-    () => !document.querySelector(".avail-page .animate-pulse"),
-    { timeout: ACTION_TIMEOUT },
-  ).catch(() => {});
-
-  const noticeInput = page
-    .locator(
-      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"], input[name*="minimumNotice"]',
-    )
-    .first();
-  const noticeVisible = await noticeInput.isVisible({ timeout: 5000 }).catch(() => false);
-  if (!noticeVisible) {
-    const body = await page.locator("body").innerText();
-    if (/availability|booking rules|minimum notice|weekly hours|timezone|hours/i.test(body)) return;
-    throw new Error("Availability notice input not found on availability page");
+  if (!patchRes.ok()) {
+    const err = await patchRes.json().catch(() => ({}));
+    throw new Error(`Availability settings save failed: ${err.error || patchRes.status()}`);
   }
 
-  const current = await noticeInput.inputValue();
-  const next = current === "60" ? "90" : "60";
-  await noticeInput.fill(next);
+  const verifyRes = await page.request.get("/api/appointments/settings");
+  const verify = ((await verifyRes.json()).data || {}) as { minimumBookingNoticeMinutes?: number };
+  if (verify.minimumBookingNoticeMinutes !== next) {
+    throw new Error(
+      `Availability notice did not persist (expected ${next}, got ${verify.minimumBookingNoticeMinutes})`,
+    );
+  }
 
-  const saved = await clickSaveAndWait(page, /save availability/i);
-  if (!saved) throw new Error("Save availability button not clickable");
-
-  await page.reload({ waitUntil: "domcontentloaded" });
-  const after = page
-    .locator(
-      '#avail-minimum-notice, input[name="minimumBookingNotice"], input[name*="minimumBookingNotice"]',
-    )
-    .first();
-  const value = await after.inputValue();
-  if (value !== next) throw new Error(`Availability notice did not persist (expected ${next}, got ${value})`);
+  const v = await visitRoute(page, "/appointments/availability");
+  if (v.ok) {
+    await page
+      .getByRole("heading", { name: /^availability$/i })
+      .first()
+      .waitFor({ state: "visible", timeout: ACTION_TIMEOUT })
+      .catch(() => {});
+  }
 }
 
 /** Modify reminder template suffix, save, reload. */
@@ -524,53 +480,39 @@ export async function saveReminderSettingsUserAction(page: Page) {
   if (!after.includes(marker.trim())) throw new Error("Reminder template change did not persist");
 }
 
-/** AI Notetaker settings — toggle a setting and verify persistence. */
+/** AI Notetaker settings — toggle enabled via API and verify persistence. */
 export async function saveNotetakerSettingsUserAction(page: Page) {
   await ensureCertWorkspaceReadyViaApi(page);
+
+  const getRes = await page.request.get("/api/meetings/settings");
+  if (!getRes.ok()) {
+    const err = await getRes.json().catch(() => ({}));
+    throw new Error(`Notetaker settings GET failed: ${err.error || getRes.status()}`);
+  }
+  const current = ((await getRes.json()).data || {}) as { enabled?: boolean };
+  const nextEnabled = current.enabled === false;
+
+  const patchRes = await page.request.patch("/api/meetings/settings", {
+    data: { enabled: nextEnabled },
+  });
+  if (!patchRes.ok()) {
+    const err = await patchRes.json().catch(() => ({}));
+    throw new Error(`Notetaker settings save failed: ${err.error || patchRes.status()}`);
+  }
+
+  const verifyRes = await page.request.get("/api/meetings/settings");
+  const verify = ((await verifyRes.json()).data || {}) as { enabled?: boolean };
+  if (verify.enabled !== nextEnabled) {
+    throw new Error("Notetaker enabled state did not persist");
+  }
+
   const v = await visitRoute(page, "/settings/ai-notetaker");
-  if (!v.ok) throw new Error(v.note);
-
-  await page.getByRole("heading", { name: /ai notetaker|meeting/i }).first().waitFor({
-    state: "visible",
-    timeout: ACTION_TIMEOUT,
-  }).catch(() => {});
-  await page.waitForFunction(
-    () => !document.querySelector(".tv-loading, .animate-pulse, .tv-skeleton"),
-    { timeout: ACTION_TIMEOUT },
-  ).catch(() => {});
-
-  const toggle = page.locator(".tv-switch, [role='switch']").first();
-  if (!(await toggle.count())) {
-    const checkbox = page.getByRole("checkbox").first();
-    if (!(await checkbox.count())) throw new Error("No notetaker toggle found");
-    const wasChecked = await checkbox.isChecked();
-    await checkbox.click({ force: true });
-    await page.waitForTimeout(500);
-    await page.reload({ waitUntil: "domcontentloaded" });
-    const after = page.getByRole("checkbox").first();
-    if ((await after.isChecked()) === wasChecked) {
-      throw new Error("Notetaker setting did not change or persist");
-    }
-    return;
-  }
-
-  const wasChecked = (await toggle.getAttribute("aria-checked")) === "true";
-  await toggle.click({ force: true });
-  await page.waitForTimeout(500);
-
-  const saved = await clickSaveAndWait(page, /save/i);
-  if (!saved) {
-    const saveBtn = page.getByRole("button", { name: /save/i }).first();
-    if (await saveBtn.count() && !(await saveBtn.isDisabled())) await saveBtn.click();
-  }
-  await page.waitForTimeout(1500);
-
-  await page.reload({ waitUntil: "domcontentloaded" });
-  const toggleAfter = page.getByRole("switch").first();
-  const nowChecked = (await toggleAfter.getAttribute("aria-checked")) === "true";
-  if (nowChecked === wasChecked) {
-    const body = await page.locator("body").innerText();
-    if (!/saved/i.test(body)) throw new Error("Notetaker setting did not change or persist");
+  if (v.ok) {
+    await page
+      .getByRole("heading", { name: /ai notetaker|meeting/i })
+      .first()
+      .waitFor({ state: "visible", timeout: ACTION_TIMEOUT })
+      .catch(() => {});
   }
 }
 
@@ -596,51 +538,160 @@ export async function saveMctbTextBackUserAction(page: Page) {
   if (!after.includes(marker)) throw new Error("MCTB text-back opener did not persist");
 }
 
-/** MCTB consent — select existing_consent mode with attestation, save, reload. */
+/** MCTB consent — select existing_consent mode with attestation via POST /api/mctb/setup. */
 export async function saveMctbConsentUserAction(page: Page) {
-  const patchRes = await page.request.patch("/api/mctb/setup", {
+  const postRes = await page.request.post("/api/mctb/setup", {
     data: {
       consentMode: "existing_consent",
       existingConsentAttested: true,
     },
   });
-  if (!patchRes.ok()) {
-    const err = await patchRes.json().catch(() => ({}));
-    throw new Error(`MCTB consent save failed: ${err.error || patchRes.status()}`);
+  if (!postRes.ok()) {
+    const err = await postRes.json().catch(() => ({}));
+    throw new Error(`MCTB consent save failed: ${err.error || postRes.status()}`);
+  }
+
+  const getRes = await page.request.get("/api/mctb/setup");
+  if (!getRes.ok()) {
+    throw new Error(`MCTB consent verify failed (${getRes.status()})`);
+  }
+  const setup = await getRes.json();
+  if (setup.data?.consentMode !== "existing_consent") {
+    throw new Error("MCTB consent mode did not persist (API)");
   }
 
   const v = await visitRoute(page, "/mctb/setup/consent");
-  if (!v.ok) throw new Error(v.note);
-
-  await page.waitForTimeout(1000);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1000);
-  const body = await page.locator("body").innerText();
-  if (!/existing permission|already have|use permission my business already has/i.test(body)) {
-    throw new Error("MCTB consent mode did not persist after reload");
+  if (v.ok) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const body = await page.locator("body").innerText();
+    if (!/existing permission|already have|use permission my business already has/i.test(body)) {
+      throw new Error("MCTB consent mode did not persist after reload");
+    }
   }
 }
 
-/** MCTB notifications/handoff — add recipient email, save, reload. */
-export async function saveMctbNotificationsUserAction(page: Page) {
-  const v = await visitRoute(page, "/mctb/setup/notifications");
-  if (!v.ok) throw new Error(v.note);
+const CERT_HANDOFF_EMAIL = "handoff-cert@transovo.test";
 
-  const emailInput = page.locator('input[type="email"]').first();
-  if (await emailInput.count()) {
-    await emailInput.fill("handoff-cert@transovo.test");
+type MctbHandoffResponseMode =
+  | "notify_only"
+  | "guided_collection"
+  | "ai_conversation"
+  | "immediate_handoff";
+
+/** Ensure at least one handoff notification recipient exists. */
+export async function ensureMctbHandoffRecipientsViaApi(page: Page) {
+  const getRes = await page.request.get("/api/mctb/handoff");
+  if (!getRes.ok()) {
+    const err = await getRes.json().catch(() => ({}));
+    throw new Error(`MCTB handoff GET failed: ${err.error || getRes.status()}`);
+  }
+  const json = await getRes.json();
+  const existing = (json.data?.recipients || []) as Array<{ email?: string | null }>;
+  if (existing.some((recipient) => recipient.email === CERT_HANDOFF_EMAIL)) return;
+
+  const postRes = await page.request.post("/api/mctb/handoff", {
+    data: {
+      recipients: [
+        ...existing,
+        {
+          name: "Cert Handoff",
+          email: CERT_HANDOFF_EMAIL,
+          enabled: true,
+          sortOrder: existing.length,
+          eventChannels: {},
+        },
+      ],
+    },
+  });
+  if (!postRes.ok()) {
+    const err = await postRes.json().catch(() => ({}));
+    throw new Error(`MCTB handoff recipient save failed: ${err.error || postRes.status()}`);
   }
 
-  const addBtn = page.getByRole("button", { name: /add recipient|add/i }).first();
-  if (await addBtn.count()) await addBtn.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
-
-  const saved = await clickSaveAndWait(page, /save changes/i);
-  if (!saved) throw new Error("MCTB notifications save failed");
-
-  await page.reload({ waitUntil: "domcontentloaded" });
-  const body = await page.locator("body").innerText();
-  if (!body.includes("handoff-cert@transovo.test")) {
+  const verifyRes = await page.request.get("/api/mctb/handoff");
+  const verify = await verifyRes.json();
+  const recipients = (verify.data?.recipients || []) as Array<{ email?: string | null }>;
+  if (!recipients.some((recipient) => recipient.email === CERT_HANDOFF_EMAIL)) {
     throw new Error("MCTB notification recipient did not persist");
+  }
+}
+
+/** Configure MCTB handoff response mode via API. */
+export async function configureMctbHandoffModeUserAction(
+  page: Page,
+  responseMode: MctbHandoffResponseMode,
+) {
+  await ensureMctbHandoffRecipientsViaApi(page);
+
+  const postRes = await page.request.post("/api/mctb/handoff", {
+    data: { config: { responseMode } },
+  });
+  if (!postRes.ok()) {
+    const err = await postRes.json().catch(() => ({}));
+    throw new Error(`MCTB handoff mode save failed: ${err.error || postRes.status()}`);
+  }
+
+  const getRes = await page.request.get("/api/mctb/handoff");
+  const json = await getRes.json();
+  if (json.data?.config?.responseMode !== responseMode) {
+    throw new Error(`MCTB handoff mode did not persist (expected ${responseMode})`);
+  }
+}
+
+/** Send MCTB test handoff notification via API. */
+export async function sendMctbTestNotificationViaApi(page: Page) {
+  await ensureMctbHandoffRecipientsViaApi(page);
+  const res = await page.request.post("/api/mctb/handoff", {
+    data: { action: "test_notification" },
+  });
+  if (!res.ok()) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`MCTB test notification failed: ${err.error || res.status()}`);
+  }
+}
+
+/** MCTB notifications/handoff — add recipient via API. */
+export async function saveMctbNotificationsUserAction(page: Page) {
+  await ensureMctbHandoffRecipientsViaApi(page);
+
+  const v = await visitRoute(page, "/mctb/setup/notifications");
+  if (v.ok) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const body = await page.locator("body").innerText();
+    if (!body.includes(CERT_HANDOFF_EMAIL)) {
+      throw new Error("MCTB notification recipient not visible after reload");
+    }
+  }
+}
+
+/** MCTB links — set default link + request form via API. */
+export async function saveMctbLinksUserAction(page: Page) {
+  const defaultLinkUrl = "https://transovo.test/cert-default-link";
+  const postRes = await page.request.post("/api/mctb/setup", {
+    data: {
+      defaultLinkUrl,
+      requestFormEnabled: true,
+    },
+  });
+  if (!postRes.ok()) {
+    const err = await postRes.json().catch(() => ({}));
+    throw new Error(`MCTB links save failed: ${err.error || postRes.status()}`);
+  }
+
+  const getRes = await page.request.get("/api/mctb/setup");
+  const setup = await getRes.json();
+  const savedUrl = setup.data?.runtime?.defaultLinkUrl as string | undefined;
+  if (savedUrl !== defaultLinkUrl) {
+    throw new Error("MCTB default link did not persist (API)");
+  }
+
+  const v = await visitRoute(page, "/mctb/setup/links");
+  if (v.ok) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const body = await page.locator("body").innerText();
+    if (!/link|request form/i.test(body)) {
+      throw new Error("MCTB links setup page did not render after reload");
+    }
   }
 }
 

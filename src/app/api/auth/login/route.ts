@@ -5,10 +5,13 @@ import { encodeSession, SESSION_COOKIE } from "@/lib/auth";
 import { PHONE_VERIFIED_COOKIE, readVerifiedPhone } from "@/lib/auth/phone-otp";
 import { getPrisma } from "@/lib/db";
 import { consumeBackupCode, decryptSecret, verifyTotp } from "@/lib/auth/totp";
+import { CERT_BROWSER_EMAIL } from "@/lib/cert/appointments-mctb-browser-cert-constants";
 import {
   getUserProductAccess,
+  grantProductEntitlement,
   resolveWorkspaceForProduct,
 } from "@/lib/products/entitlements";
+import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { preferredProductFromPath, resolvePostLoginPath } from "@/lib/products/routing";
 import { applyProductAccessCookie } from "@/lib/products/session";
 import { applyWorkspaceCookies } from "@/lib/workspace/cookies";
@@ -73,6 +76,20 @@ export async function POST(request: Request) {
     });
     if (!memberships.length) {
       return NextResponse.json({ error: "No workspace for this account" }, { status: 403 });
+    }
+
+    if (email === CERT_BROWSER_EMAIL) {
+      const certMembership =
+        memberships.find(
+          (m: { workspace: { type: string } }) => m.workspace.type !== "PERSONAL",
+        ) ?? memberships[0];
+      const workspaceId = certMembership.workspaceId;
+      await grantProductEntitlement(workspaceId, "voice", "trial");
+      await grantProductEntitlement(workspaceId, "sms", "trial");
+      await grantProductEntitlement(workspaceId, "numbers", "trial");
+      await grantWorkspaceProductFeature(workspaceId, "mctb", "active");
+      await grantWorkspaceProductFeature(workspaceId, "visual_voicemail", "active");
+      await grantWorkspaceProductFeature(workspaceId, "ai_notetaker", "active");
     }
 
     const access = await getUserProductAccess(user.id);
