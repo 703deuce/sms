@@ -342,7 +342,11 @@ export async function switchProductShell(page: Page, label: "Appointments" | "Mi
 
   const option = page.getByRole("option", { name: label }).first();
   await option.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
-  await option.click({ timeout: ACTION_TIMEOUT, force: true });
+  await option.scrollIntoViewIfNeeded().catch(() => {});
+  await option.click({ timeout: ACTION_TIMEOUT, force: true }).catch(async () => {
+    await option.focus();
+    await page.keyboard.press("Enter");
+  });
   await page.waitForTimeout(500);
   return { ok: true, note: "" };
 }
