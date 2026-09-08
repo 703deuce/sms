@@ -17,12 +17,17 @@ import {
   typesSaveReload,
 } from "./flow-helpers";
 import { visitRoute } from "./lib";
+import { USER_ACTION_BATCH, USER_ACTION_FLOWS } from "./behavioral-flows";
+
+export type BrowserFlowTier = "reachability" | "user-action";
 
 export type BrowserFlow = {
   id: string;
   batchId: string;
   title?: string;
   force?: boolean;
+  /** reachability = route/render/redirect; user-action = full acceptance standard */
+  tier?: BrowserFlowTier;
   /** No browser — backend/static certification only */
   static?: { status: CertStatus; detail: string };
   /** Max ~3–5 UI actions; fresh browser per invocation */
@@ -33,6 +38,7 @@ function routeFlow(batchId: string, id: string, path: string, opts?: { allow404?
   return {
     id,
     batchId,
+    tier: "reachability",
     run: async (page) => assertRoute(page, path, opts),
   };
 }
@@ -355,7 +361,13 @@ export const ALL_FLOWS: BrowserFlow[] = [
   routeFlow(B14, "APT-69-business", "/settings/business"),
   routeFlow(B14, "APT-69-messaging", "/settings/messaging"),
   routeFlow(B14, "APT-69-calendar", "/settings/calendar"),
+
+  // BATCH-UA — true user-action acceptance (supplements reachability flows above)
+  ...USER_ACTION_FLOWS,
 ];
+
+/** Reachability/static flows only (189 baseline). */
+export const REACHABILITY_FLOWS = ALL_FLOWS.filter((f) => f.tier !== "user-action");
 
 export const BATCHES = [
   { id: "BATCH-01", title: "Appointments navigation + Home" },
@@ -372,6 +384,7 @@ export const BATCHES = [
   { id: "BATCH-12", title: "Voicemail + Analytics" },
   { id: "BATCH-13", title: "Cross-product" },
   { id: "BATCH-14", title: "Remaining Appointments IDs" },
+  USER_ACTION_BATCH,
 ] as const;
 
 export function flowsForBatch(batchId: string): BrowserFlow[] {

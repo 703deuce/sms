@@ -1,0 +1,1964 @@
+{
+  "generatedAt": "2026-09-08T00:06:21.932Z",
+  "totals": {
+    "baseline": 189,
+    "userAction": 12,
+    "all": 201
+  },
+  "byClassification": {
+    "TRUE_USER_ACTION": 12,
+    "ROUTE_RENDER": 105,
+    "BACKEND_STATIC": 84
+  },
+  "passByClassification": {
+    "TRUE_USER_ACTION": 0,
+    "ROUTE_RENDER": 97,
+    "BACKEND_STATIC": 73
+  },
+  "customerOperable": 161,
+  "needsUserActionFlow": 136,
+  "userActionImplemented": 12,
+  "userActionMissing": [
+    "UA-APT-03-calendar",
+    "UA-APT-04-list",
+    "UA-APT-22-waitlist",
+    "UA-APT-12-booking-pages",
+    "UA-APT-20-routing-forms",
+    "UA-APT-17-staff",
+    "UA-APT-18-locations",
+    "UA-APT-49-guest-join",
+    "UA-APT-52-notetaker-appt",
+    "UA-APT-59-recap",
+    "UA-MCTB-28-missed-calls",
+    "UA-MCTB-30-conversations",
+    "UA-MCTB-51-voicemail",
+    "UA-MCTB-04-setup",
+    "UA-MCTB-29-detail",
+    "UA-MCTB-06-rules",
+    "UA-MCTB-13-links",
+    "UA-MCTB-19-recovery",
+    "UA-MCTB-22-exclusions",
+    "UA-MCTB-49-voicemail-setup",
+    "UA-MCTB-54-test",
+    "UA-MCTB-03-wizard",
+    "UA-MCTB-11-consent-log",
+    "UA-MCTB-14-public-form",
+    "UA-CROSS-02-mctb-booking",
+    "UA-APT-06-detail",
+    "UA-APT-08-reschedule",
+    "UA-APT-10-status"
+  ],
+  "rows": [
+    {
+      "id": "APT-01",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Shell smoke"
+    },
+    {
+      "id": "APT-01-ai-booking",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-analytics",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-analytics-automations",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-analytics-booking",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-analytics-reminders",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-analytics-reports",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-availability",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-16-availability",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-booking-pages",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-12-booking-pages",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-browser-back",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Back nav context"
+    },
+    {
+      "id": "APT-01-calendar",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-03-calendar",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-contacts",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-conversations",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-getting-started",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-home",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-integrations",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-list",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-04-list",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-meetings",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-mobile-nav",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Viewport only"
+    },
+    {
+      "id": "APT-01-polls",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-recalls",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-reminders",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-33-reminders",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-routing-forms",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-20-routing-forms",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-settings",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-types",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-11-types",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-video",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-waitlist",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-22-waitlist",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-wf-activity",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-wf-templates",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-01-workflows",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-02",
+      "batchId": "BATCH-01",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-03",
+      "batchId": "BATCH-02",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-03-calendar",
+      "lastStatus": "PASS",
+      "notes": "Today/Next clicks only — no persistence"
+    },
+    {
+      "id": "APT-04",
+      "batchId": "BATCH-02",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-04-list",
+      "lastStatus": "PASS",
+      "notes": "Search fill only — no filter persist"
+    },
+    {
+      "id": "APT-05",
+      "batchId": "BATCH-02",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-05-create",
+      "lastStatus": "PASS",
+      "notes": "Form visible — does not create"
+    },
+    {
+      "id": "APT-06",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-06-detail",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-07",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-07-edit",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-08",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-08-reschedule",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-09",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-09-cancel",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-10",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-10-status",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-11",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-11-types",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-11-save-reload",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-11-types",
+      "lastStatus": "PASS",
+      "notes": "Focus save + reload — no actual save"
+    },
+    {
+      "id": "APT-12",
+      "batchId": "BATCH-04",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-12-booking-pages",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-13-full-flow",
+      "batchId": "BATCH-04",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-13-public-book",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-13-invalid-slug",
+      "batchId": "BATCH-04",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Public error state"
+    },
+    {
+      "id": "APT-14",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-15",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-16",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-16-availability",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-17",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-17-staff",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-18",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-18-locations",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-19",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE EXTERNAL PROVIDER",
+      "notes": "BLOCKED — LIVE EXTERNAL PROVIDER"
+    },
+    {
+      "id": "APT-20",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-20-routing-forms",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-21",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-22",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-22-waitlist",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-23",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-24",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-25",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-26",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-27",
+      "batchId": "BATCH-03",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-28",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-29",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-30",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-31",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-32",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-33",
+      "batchId": "BATCH-05",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-33-reminders",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-34",
+      "batchId": "BATCH-05",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE PSTN",
+      "notes": "BLOCKED — LIVE PSTN"
+    },
+    {
+      "id": "APT-34-ui",
+      "batchId": "BATCH-05",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Load-only; PSTN blocked"
+    },
+    {
+      "id": "APT-35",
+      "batchId": "BATCH-05",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-36",
+      "batchId": "BATCH-05",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-37",
+      "batchId": "BATCH-05",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-38",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-39",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-40",
+      "batchId": "BATCH-06",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-41",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-42",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-43",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-44",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-45",
+      "batchId": "BATCH-06",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE PSTN",
+      "notes": "BLOCKED — LIVE PSTN"
+    },
+    {
+      "id": "APT-46",
+      "batchId": "BATCH-07",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-47",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-05-create",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-48",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE MEDIA",
+      "notes": "BLOCKED — LIVE MEDIA"
+    },
+    {
+      "id": "APT-49",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-49-guest-join",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-49-invalid-token",
+      "batchId": "BATCH-07",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-50",
+      "batchId": "BATCH-07",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-50-notetaker",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-51",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-11-types",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-52",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-52-notetaker-appt",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-53",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-54",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-50-notetaker",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-55",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE EXTERNAL PROVIDER",
+      "notes": "BLOCKED — LIVE EXTERNAL PROVIDER"
+    },
+    {
+      "id": "APT-56",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-57",
+      "batchId": "BATCH-07",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-58",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "NOT IMPLEMENTED"
+    },
+    {
+      "id": "APT-59",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-59-recap",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-59-invalid",
+      "batchId": "BATCH-07",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-60",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-APT-50-notetaker",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-61",
+      "batchId": "BATCH-07",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "NOT IMPLEMENTED",
+      "notes": "NOT IMPLEMENTED"
+    },
+    {
+      "id": "APT-62",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-63",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-64",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-65",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-66",
+      "batchId": "BATCH-14",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-67",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-68",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-69-business",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-69-calendar",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "APT-69-messaging",
+      "batchId": "BATCH-14",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-01-appointments",
+      "batchId": "BATCH-13",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Product shell"
+    },
+    {
+      "id": "CROSS-01-back",
+      "batchId": "BATCH-13",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Product shell"
+    },
+    {
+      "id": "CROSS-01-mctb",
+      "batchId": "BATCH-13",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Product shell"
+    },
+    {
+      "id": "CROSS-02",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-CROSS-02-mctb-booking",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-03",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-04",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-05",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-06",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-07",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "CROSS-08",
+      "batchId": "BATCH-13",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Product shell switch"
+    },
+    {
+      "id": "MCTB-01-analytics",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-conversations",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-30-conversations",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-home",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-missed-calls",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-28-missed-calls",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-numbers",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-setup",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-04-setup",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-01-voicemail",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-51-voicemail",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-02",
+      "batchId": "BATCH-08",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-03",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-03-wizard",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-04",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-04-setup",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-05",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-05-phone",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-05-live-verify",
+      "batchId": "BATCH-10",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "BLOCKED — LIVE PSTN",
+      "notes": "BLOCKED — LIVE PSTN"
+    },
+    {
+      "id": "MCTB-06",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-06-rules",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-07",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-07-consent",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-08",
+      "batchId": "BATCH-10",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Press-1 runtime — backend certified"
+    },
+    {
+      "id": "MCTB-09",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-07-consent",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-10",
+      "batchId": "BATCH-10",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Existing consent runtime — backend certified"
+    },
+    {
+      "id": "MCTB-11",
+      "batchId": "BATCH-10",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-11-consent-log",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-11-ui",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-11-consent-log",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-12",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-12-textback",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-13",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-13-links",
+      "lastStatus": "FAIL"
+    },
+    {
+      "id": "MCTB-14",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-14-public-form",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-14-invalid",
+      "batchId": "BATCH-11",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-15",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-16",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-17",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "INTENTIONALLY DEFERRED",
+      "notes": "INTENTIONALLY DEFERRED"
+    },
+    {
+      "id": "MCTB-18",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "INTENTIONALLY DEFERRED",
+      "notes": "INTENTIONALLY DEFERRED"
+    },
+    {
+      "id": "MCTB-19",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-19-recovery",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-20",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-21",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "lastStatus": "INTENTIONALLY DEFERRED",
+      "notes": "INTENTIONALLY DEFERRED"
+    },
+    {
+      "id": "MCTB-22",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-22-exclusions",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-23",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-24",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-25",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-26",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-27",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-28",
+      "batchId": "BATCH-09",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-28-missed-calls",
+      "lastStatus": "PASS",
+      "notes": "List/table presence only"
+    },
+    {
+      "id": "MCTB-29",
+      "batchId": "BATCH-09",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-29-detail",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-30",
+      "batchId": "BATCH-09",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-30-conversations",
+      "lastStatus": "PASS",
+      "notes": "Inbox body text only"
+    },
+    {
+      "id": "MCTB-31",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-32",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-33",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-34",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-35",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-36",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-37",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-38",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-39",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-40",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-41",
+      "batchId": "BATCH-11",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-41-notifications",
+      "lastStatus": "FAIL"
+    },
+    {
+      "id": "MCTB-42",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-43",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-44",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-45",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-46",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-47",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-48",
+      "batchId": "BATCH-11",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-49",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-49-voicemail-setup",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-50",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-49-voicemail-setup",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-51",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-51-voicemail",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-52",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-51-voicemail",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-53",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-54",
+      "batchId": "BATCH-10",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-54-test",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-55",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": true,
+      "needsUserActionFlow": true,
+      "userActionFlowId": "UA-MCTB-54-test",
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-56",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "MCTB-57-business-hours",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-follow-up",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-schedule",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-voice-analytics",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-voice-conversations",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "FAIL",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-voice-missed",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-57-voice-setup",
+      "batchId": "BATCH-12",
+      "classification": "ROUTE_RENDER",
+      "tier": "reachability",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS",
+      "notes": "Legacy redirect"
+    },
+    {
+      "id": "MCTB-58",
+      "batchId": "BATCH-12",
+      "classification": "BACKEND_STATIC",
+      "tier": "static",
+      "customerOperable": false,
+      "needsUserActionFlow": false,
+      "lastStatus": "PASS"
+    },
+    {
+      "id": "UA-APT-05-create",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Create appointment through UI"
+    },
+    {
+      "id": "UA-APT-07-edit",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Edit appointment notes and verify persistence"
+    },
+    {
+      "id": "UA-APT-09-cancel",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Cancel appointment through UI"
+    },
+    {
+      "id": "UA-APT-11-types",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Create booking type and verify persistence"
+    },
+    {
+      "id": "UA-APT-13-public-book",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Complete public booking through UI"
+    },
+    {
+      "id": "UA-APT-16-availability",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Change availability hours and verify persistence"
+    },
+    {
+      "id": "UA-APT-33-reminders",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Edit reminder template and verify persistence"
+    },
+    {
+      "id": "UA-APT-50-notetaker",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "Change AI Notetaker setting and verify persistence"
+    },
+    {
+      "id": "UA-MCTB-05-phone",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "MCTB Phone & Forwarding save and reload"
+    },
+    {
+      "id": "UA-MCTB-07-consent",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "MCTB Consent mode save and reload"
+    },
+    {
+      "id": "UA-MCTB-12-textback",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "MCTB Text Back opener save and reload"
+    },
+    {
+      "id": "UA-MCTB-41-notifications",
+      "batchId": "BATCH-UA",
+      "classification": "TRUE_USER_ACTION",
+      "tier": "user-action",
+      "customerOperable": true,
+      "needsUserActionFlow": false,
+      "notes": "MCTB Notifications & Handoff save and reload"
+    }
+  ]
+}

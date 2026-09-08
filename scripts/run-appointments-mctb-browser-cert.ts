@@ -12,7 +12,8 @@
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_FLOWS, BATCHES, resolveFlows } from "./browser-cert/flows";
+import { ALL_FLOWS, BATCHES, REACHABILITY_FLOWS, resolveFlows } from "./browser-cert/flows";
+import { USER_ACTION_FLOWS } from "./browser-cert/behavioral-flows";
 import { BROWSER_CERT_CONFIG } from "./browser-cert/browser-cert.config";
 import { writeProvenance } from "./browser-cert/provenance";
 import {
@@ -113,7 +114,8 @@ async function runDisposableCert() {
   console.log(`  base URL:   ${baseUrl}`);
   console.log(`  git SHA:    ${provenance.gitCommitSha}`);
   console.log(`  deploy SHA: ${provenance.deployCommitSha}`);
-  console.log(`  flows:      ${ALL_FLOWS.length} total (one Chromium per flow)`);
+  console.log(`  flows:      ${ALL_FLOWS.length} total (${REACHABILITY_FLOWS.length} reachability + ${USER_ACTION_FLOWS.length} user-action)`);
+  console.log(`  mode:       one Chromium per flow`);
 
   if (!waitForDeployedApp(baseUrl)) {
     console.error(`Deployed application not reachable at ${baseUrl}`);

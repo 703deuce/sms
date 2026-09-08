@@ -415,6 +415,12 @@ export async function visitRoutesBatch(
 
 export function generateResultsMarkdown(state: BrowserCertState): string {
   const counts: Record<string, number> = {};
+  const uaPass = Object.values(state.results).filter(
+    (r) => r.status === "PASS" && r.id.startsWith("UA-"),
+  ).length;
+  const reachPass = Object.values(state.results).filter(
+    (r) => r.status === "PASS" && !r.id.startsWith("UA-"),
+  ).length;
   for (const r of Object.values(state.results)) {
     counts[r.status] = (counts[r.status] || 0) + 1;
   }
@@ -435,6 +441,15 @@ export function generateResultsMarkdown(state: BrowserCertState): string {
     ...Object.entries(counts)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([s, n]) => `| ${s} | ${n} |`),
+    "",
+    "### Certification tiers",
+    "",
+    "| Tier | PASS count | Notes |",
+    "|------|------------|-------|",
+    `| Reachability (BATCH-01–14) | ${reachPass} | Route/render — not sufficient alone for operable features |`,
+    `| User-action (BATCH-UA) | ${uaPass} | True click/type/save/reload journeys |`,
+    "",
+    "See `docs/certification/BROWSER_CERT_USER_ACTION_STANDARD.md` and `BROWSER_FLOW_CLASSIFICATION_AUDIT.md`.",
     "",
     "## Results by ID",
     "",
