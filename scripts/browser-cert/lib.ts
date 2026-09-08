@@ -264,6 +264,28 @@ export async function authenticate(baseUrl: string): Promise<{
   return { ok: false, storageState: emptyState, email: stableEmail };
 }
 
+/** Idempotent preview bootstrap for cert workspace (appointment types, MCTB fixtures). */
+export async function bootstrapCertWorkspaceOnPreview(
+  baseUrl: string,
+  storageState: Awaited<ReturnType<BrowserContext["storageState"]>>,
+): Promise<boolean> {
+  const api = await request.newContext({
+    baseURL: baseUrl,
+    storageState,
+    timeout: Number(process.env.BROWSER_CERT_API_TIMEOUT_MS || 120_000),
+  });
+  const res = await api.post("/api/cert/appointments-mctb/bootstrap");
+  await api.dispose();
+  if (res.ok()) return true;
+  if (res.status() === 404) {
+    console.warn("Cert bootstrap API not deployed yet — using per-flow API ensure helpers");
+    return false;
+  }
+  const body = await res.json().catch(() => ({}));
+  console.warn(`Cert bootstrap returned ${res.status()}: ${body.error || "unknown"}`);
+  return false;
+}
+
 export async function visitRoute(
   page: Page,
   path: string,

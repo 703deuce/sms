@@ -5,27 +5,123 @@
 import type { Page } from "playwright";
 import { ACTION_TIMEOUT, NAV_TIMEOUT, visitRoute } from "./lib";
 
+import {
+  CERT_APPOINTMENT_TYPE_NAME,
+  CERT_TYPE_PREFIX,
+} from "../../src/lib/cert/appointments-mctb-browser-bootstrap";
+
 export const CERT_PUBLIC_BOOK_SLUG = "appt-mctb-browser-cert";
 
-const CERT_TYPE_PREFIX = "Browser Cert";
+async function waitForAppointmentTypeSelectOptions(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const select = document.querySelector<HTMLSelectElement>("#service");
+      if (!select) return false;
+      return Array.from(select.options).some((option) => option.value.trim().length > 0);
+    },
+    { timeout: ACTION_TIMEOUT },
+  );
+}
+
+/** Bootstrap cert fixtures on preview (idempotent). Non-fatal when route not deployed yet. */
+export async function bootstrapCertWorkspaceViaApi(page: Page) {
+  const res = await page.request.post("/api/cert/appointments-mctb/bootstrap");
+  if (res.ok()) return;
+  const body = await res.json().catch(() => ({}));
+  if (res.status() === 404) return;
+  throw new Error(`Cert bootstrap failed (${res.status()}): ${body.error || "unknown"}`);
+}
+
+/** Ensure platform settings + appointment types exist via authenticated preview API. */
+export async function ensureCertWorkspaceReadyViaApi(page: Page) {
+  await bootstrapCertWorkspaceViaApi(page).catch(() => {});
+
+  const settingsRes = await page.request.get("/api/appointments/settings");
+  let settings: Record<string, unknown> = {};
+  if (settingsRes.ok()) {
+    const settingsJson = await settingsRes.json();
+    settings = (settingsJson.data || {}) as Record<string, unknown>;
+  }
+
+  const staff = (settings.staff as Array<{ id: string; name: string }>) || [];
+  const locations = (settings.locations as Array<{ id: string; name: string }>) || [];
+  const staffId = staff[0]?.id || `cert-staff-${Date.now().toString().slice(-6)}`;
+  const locationId = locations[0]?.id || `cert-location-${Date.now().toString().slice(-6)}`;
+
+  if (!staff.length || !locations.length || settings.bookingEnabled !== true) {
+    const patchRes = await page.request.patch("/api/appointments/settings", {
+      data: {
+        bookingEnabled: true,
+        timezone: (settings.timezone as string) || "America/New_York",
+        minimumBookingNoticeMinutes: (settings.minimumBookingNoticeMinutes as number) ?? 60,
+        maximumBookingDaysAhead: (settings.maximumBookingDaysAhead as number) ?? 30,
+        staff: staff.length
+          ? staff
+          : [
+              {
+                id: staffId,
+                name: "Cert Staff",
+                active: true,
+                customerSelectable: true,
+                timezone: "America/New_York",
+              },
+            ],
+        locations: locations.length
+          ? locations
+          : [{ id: locationId, name: "Cert Office", active: true }],
+      },
+    });
+    if (!patchRes.ok()) {
+      const err = await patchRes.json().catch(() => ({}));
+      throw new Error(`Could not patch cert platform settings: ${err.error || patchRes.status()}`);
+    }
+  }
+
+  return ensureCertAppointmentTypesViaApi(page, staffId, locationId);
+}
 
 /** Ensure at least one appointment type exists via authenticated preview API. */
-export async function ensureCertAppointmentTypesViaApi(page: Page) {
+export async function ensureCertAppointmentTypesViaApi(
+  page: Page,
+  staffId?: string,
+  locationId?: string,
+) {
   const listRes = await page.request.get("/api/appointments/types");
   if (listRes.ok()) {
     const listJson = await listRes.json();
     const existing = (listJson.data || []) as Array<{ id: string; name: string }>;
-    const certType = existing.find((t) => t.name.includes(CERT_TYPE_PREFIX));
+    const certType = existing.find(
+      (t) => t.name.includes(CERT_TYPE_PREFIX) || t.name === CERT_APPOINTMENT_TYPE_NAME,
+    );
     if (certType) return certType;
     if (existing.length > 0) return existing[0];
   }
 
-  const typeName = `${CERT_TYPE_PREFIX} ${Date.now().toString().slice(-6)}`;
+  if (!staffId || !locationId) {
+    const settingsRes = await page.request.get("/api/appointments/settings");
+    if (settingsRes.ok()) {
+      const settingsJson = await settingsRes.json();
+      const data = settingsJson.data || {};
+      staffId = staffId || data.staff?.[0]?.id;
+      locationId = locationId || data.locations?.[0]?.id;
+    }
+  }
+
+  const typeName = CERT_APPOINTMENT_TYPE_NAME;
   const createRes = await page.request.post("/api/appointments/types", {
     data: {
       name: typeName,
       durationMinutes: 30,
-      config: { enabled: true, visibility: "public" },
+      config: {
+        enabled: true,
+        visibility: "public",
+        managed: true,
+        staffAssignment: "any_eligible",
+        staffIds: staffId ? [staffId] : [],
+        locationIds: locationId ? [locationId] : [],
+        minimumBookingNoticeMinutes: 60,
+        maximumBookingDaysAhead: 30,
+      },
     },
   });
   if (!createRes.ok()) {
@@ -51,13 +147,15 @@ async function clickSaveAndWait(page: Page, label = /save/i) {
 
 /** Create appointment through /appointments/new — full UI path. */
 export async function createAppointmentUserAction(page: Page) {
-  await ensureCertAppointmentTypesViaApi(page);
+  await ensureCertWorkspaceReadyViaApi(page);
 
   const v = await visitRoute(page, "/appointments/new");
   if (!v.ok) throw new Error(v.note);
 
   const typeSelect = page.locator("#service").first();
   await typeSelect.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
+  await waitForAppointmentTypeSelectOptions(page);
+
   const options = typeSelect.locator("option");
   const optCount = await options.count();
   let selected = false;
@@ -199,7 +297,7 @@ export async function createBookingTypeUserAction(page: Page) {
   const typeName = `Cert Type ${Date.now().toString().slice(-6)}`;
   const nameInput = page.locator("#appointment-type-name, input[name='name']").first();
   if (!(await nameInput.isVisible().catch(() => false))) {
-    await ensureCertAppointmentTypesViaApi(page);
+    await ensureCertWorkspaceReadyViaApi(page);
     await page.reload({ waitUntil: "domcontentloaded" });
     const body = await page.locator("body").innerText();
     if (!body.includes(CERT_TYPE_PREFIX)) {
@@ -221,10 +319,72 @@ export async function createBookingTypeUserAction(page: Page) {
   return typeName;
 }
 
+/** Staff page — select member and save. */
+export async function saveStaffUserAction(page: Page) {
+  await ensureCertWorkspaceReadyViaApi(page);
+  const v = await visitRoute(page, "/appointments/staff");
+  if (!v.ok) throw new Error(v.note);
+
+  await page.getByRole("heading", { name: /^staff$/i }).first().waitFor({
+    state: "visible",
+    timeout: ACTION_TIMEOUT,
+  });
+  await page.waitForFunction(
+    () => !document.querySelector(".reference-root .animate-pulse"),
+    { timeout: ACTION_TIMEOUT },
+  ).catch(() => {});
+
+  const certStaff = page.getByRole("button", { name: /cert staff/i }).first();
+  if (await certStaff.count()) {
+    await certStaff.click({ timeout: ACTION_TIMEOUT });
+  } else {
+    const anyStaff = page.locator("button").filter({ hasText: /staff|cert/i }).first();
+    if (await anyStaff.count()) await anyStaff.click({ timeout: ACTION_TIMEOUT });
+  }
+
+  const saveBtn = page.getByRole("button", { name: /save changes/i }).first();
+  await saveBtn.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
+  const saved = await clickSaveAndWait(page, /save changes/i);
+  if (!saved) throw new Error("Staff save changes button not clickable");
+}
+
+/** Locations page — select location and save. */
+export async function saveLocationsUserAction(page: Page) {
+  await ensureCertWorkspaceReadyViaApi(page);
+  const v = await visitRoute(page, "/appointments/locations");
+  if (!v.ok) throw new Error(v.note);
+
+  await page.getByRole("heading", { name: /^locations$/i }).first().waitFor({
+    state: "visible",
+    timeout: ACTION_TIMEOUT,
+  });
+
+  const certOffice = page.getByRole("button", { name: /cert office/i }).first();
+  if (await certOffice.count()) {
+    await certOffice.click({ timeout: ACTION_TIMEOUT });
+  } else {
+    const anyLocation = page.locator("button").filter({ hasText: /office|location/i }).first();
+    if (await anyLocation.count()) await anyLocation.click({ timeout: ACTION_TIMEOUT });
+  }
+
+  const saved = await clickSaveAndWait(page, /^save$/i);
+  if (!saved) throw new Error("Locations save button not clickable");
+}
+
 /** Change minimum notice on availability, save, reload, verify. */
 export async function saveAvailabilityUserAction(page: Page) {
+  await ensureCertWorkspaceReadyViaApi(page);
   const v = await visitRoute(page, "/appointments/availability");
   if (!v.ok) throw new Error(v.note);
+
+  await page.getByRole("heading", { name: /^availability$/i }).first().waitFor({
+    state: "visible",
+    timeout: ACTION_TIMEOUT,
+  });
+  await page.waitForFunction(
+    () => !document.querySelector(".avail-page .animate-pulse"),
+    { timeout: ACTION_TIMEOUT },
+  ).catch(() => {});
 
   const noticeInput = page
     .locator(

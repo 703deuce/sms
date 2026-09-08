@@ -10,8 +10,10 @@ import {
   editAppointmentNotesUserAction,
   publicBookingUserAction,
   saveAvailabilityUserAction,
+  saveLocationsUserAction,
   saveNotetakerSettingsUserAction,
   saveReminderSettingsUserAction,
+  saveStaffUserAction,
   waitForPublicErrorText,
 } from "../../behavioral-flow-helpers";
 import { calendarNavActions, listSearchAction, switchToAppointments, switchToMctb } from "../../flow-helpers";
@@ -167,20 +169,12 @@ export async function runAPT16(ctx: CertContext) {
 }
 
 export async function runAPT17(ctx: CertContext) {
-  await ctx.visit("/appointments/staff");
-  await ctx.waitForHeading(/staff/i);
-  const firstStaff = ctx.page.locator('[data-staff-id], button, [role="button"]').filter({ hasText: /cert staff|staff/i }).first();
-  if (await firstStaff.count()) await firstStaff.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
-  await ctx.save(/save changes/i);
+  await saveStaffUserAction(ctx.page);
   await ctx.reload();
 }
 
 export async function runAPT18(ctx: CertContext) {
-  await ctx.visit("/appointments/locations");
-  await ctx.waitForHeading(/location/i);
-  const firstLocation = ctx.page.getByText(/cert office|office/i).first();
-  if (await firstLocation.count()) await firstLocation.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
-  await ctx.save(/^save$/i);
+  await saveLocationsUserAction(ctx.page);
   await ctx.reload();
 }
 

@@ -53,6 +53,15 @@ const nextConfig: NextConfig = {
       { source: "/kimi/:path*", destination: "/transovo/kimi/:path*", permanent: false },
       { source: "/kimmy", destination: "/transovo/kimi", permanent: false },
       { source: "/kimmy/:path*", destination: "/transovo/kimi/:path*", permanent: false },
+      { source: "/voice/conversations", destination: "/mctb/conversations", permanent: false },
+      { source: "/voice/conversations/:path*", destination: "/mctb/conversations/:path*", permanent: false },
+      { source: "/voice/missed-calls", destination: "/mctb/missed-calls", permanent: false },
+      { source: "/voice/missed-calls/:path*", destination: "/mctb/missed-calls/:path*", permanent: false },
+      { source: "/voice/setup", destination: "/mctb/setup", permanent: false },
+      { source: "/voice/analytics", destination: "/mctb/analytics", permanent: false },
+      { source: "/mctb/setup/business-hours", destination: "/mctb/setup/recovery", permanent: false },
+      { source: "/mctb/setup/follow-up", destination: "/mctb/setup/recovery", permanent: false },
+      { source: "/mctb/setup/schedule", destination: "/mctb/setup/recovery", permanent: false },
     ];
   },
   // BullMQ pulls Node builtins (net, child_process) — keep external when webpack is used.

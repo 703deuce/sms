@@ -30,6 +30,7 @@ import {
 } from "./browser-cert/server-guard";
 import {
   authenticate,
+  bootstrapCertWorkspaceOnPreview,
   browserCertPreflight,
   generateResultsMarkdown,
   loadState,
@@ -196,6 +197,11 @@ async function runDisposableCert() {
     process.exit(1);
   }
   console.log(`Authenticated as ${auth.email}`);
+
+  const bootstrapped = await bootstrapCertWorkspaceOnPreview(baseUrl, auth.storageState);
+  if (bootstrapped) {
+    console.log("Cert workspace bootstrap complete");
+  }
 
   let flows = resolveFlows({ only: certGroup ?? only, from, flowId, retest });
   if (certGroup && flows.length === 0) {
