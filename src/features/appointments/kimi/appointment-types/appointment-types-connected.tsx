@@ -78,16 +78,24 @@ export function AppointmentTypesConnected() {
   const [teamGroupOptions, setTeamGroupOptions] = useState<
     Array<{ id: string; name: string }>
   >([]);
+  const [resourceOptions, setResourceOptions] = useState<
+    Array<{ id: string; name: string; quantity?: number }>
+  >([]);
+  const [addOnOptions, setAddOnOptions] = useState<
+    Array<{ id: string; name: string; priceCents?: number }>
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes, paymentsRes, groupsRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
         fetch("/api/merchant-payments/status"),
         fetch("/api/appointments/team-pages?kind=groups"),
+        fetch("/api/appointments/service-booking/resources"),
+        fetch("/api/appointments/service-booking/add-ons"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -108,6 +116,22 @@ export function AppointmentTypesConnected() {
             id: g.id,
             name: g.name,
           })),
+        );
+      }
+      if (resourcesRes.ok) {
+        const resourcesJson = await resourcesRes.json();
+        setResourceOptions(
+          ((resourcesJson.data || []) as Array<{ id: string; name: string; quantity?: number; active?: boolean }>)
+            .filter((r) => r.active !== false)
+            .map((r) => ({ id: r.id, name: r.name, quantity: r.quantity })),
+        );
+      }
+      if (addOnsRes.ok) {
+        const addOnsJson = await addOnsRes.json();
+        setAddOnOptions(
+          ((addOnsJson.data || []) as Array<{ id: string; name: string; priceCents?: number; active?: boolean }>)
+            .filter((a) => a.active !== false)
+            .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents })),
         );
       }
       const staff = (settingsJson.data?.staff || []) as Array<{ id: string; name: string; active?: boolean }>;
@@ -321,6 +345,7 @@ export function AppointmentTypesConnected() {
         }
       : {
           id: "new",
+          kind: form.bookingTypeKind,
           name: preview.name,
           durationMin: preview.durationMin,
           price: preview.price,
@@ -358,6 +383,8 @@ export function AppointmentTypesConnected() {
       connectedPaymentProviders,
       namedScheduleOptions,
       teamGroupOptions,
+      resourceOptions,
+      addOnOptions,
     };
   }, [
     bookingBaseUrl,
@@ -375,6 +402,8 @@ export function AppointmentTypesConnected() {
     connectedPaymentProviders,
     namedScheduleOptions,
     teamGroupOptions,
+    resourceOptions,
+    addOnOptions,
     types,
     visibleTypes,
     workspaceSlug,

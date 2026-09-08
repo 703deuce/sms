@@ -14,6 +14,7 @@ import {
   getManageAppointmentPaymentSummary,
 } from "@/lib/appointments/service-booking/manage-payments";
 import { buildPublicAppointmentCustomerPreview } from "@/lib/appointments";
+import { loadAppointmentResourceLabels } from "@/lib/appointments/service-booking/resource-availability";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -34,9 +35,17 @@ export async function GET(_request: Request, { params }: Params) {
         : Promise.resolve([]),
     ]);
 
+    const meta = (resolved.appointment.metadata || {}) as { resourceIds?: string[] };
+    const resourceLabels = await loadAppointmentResourceLabels(
+      workspaceId,
+      meta.resourceIds || [],
+    );
+    const preview = buildPublicAppointmentCustomerPreview(resolved.appointment);
+    if (resourceLabels.length) preview.resources = resourceLabels;
+
     return NextResponse.json({
       data: {
-        ...buildPublicAppointmentCustomerPreview(resolved.appointment),
+        ...preview,
         permissions,
         payment,
         intakeForms,

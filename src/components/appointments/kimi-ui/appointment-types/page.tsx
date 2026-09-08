@@ -76,6 +76,8 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               connectedPaymentProviders={model.connectedPaymentProviders}
               namedScheduleOptions={model.namedScheduleOptions}
               teamGroupOptions={model.teamGroupOptions}
+              resourceOptions={model.resourceOptions}
+              addOnOptions={model.addOnOptions}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}

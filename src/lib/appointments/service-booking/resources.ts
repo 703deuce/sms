@@ -50,15 +50,10 @@ export async function countResourceUsage(
       resourceIds: { has: resourceId },
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
+      ...(excludeAppointmentId ? { appointmentId: { not: excludeAppointmentId } } : {}),
     },
   });
-  const filtered = excludeAppointmentId
-    ? lines.filter((l) => {
-        const meta = l.metadata as { appointmentId?: string } | null;
-        return meta?.appointmentId !== excludeAppointmentId;
-      })
-    : lines;
-  return filtered.length;
+  return lines.length;
 }
 
 export async function assertResourcesAvailable(

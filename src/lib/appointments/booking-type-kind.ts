@@ -12,9 +12,12 @@ export const BOOKING_TYPE_KIND_LABELS: Record<BookingTypeKind, string> = {
 };
 
 export const BOOKING_TYPE_KIND_DESCRIPTIONS: Record<BookingTypeKind, string> = {
-  MEETING: "Simple 1:1 scheduling — name, duration, location, availability.",
-  SERVICE: "Paid or bookable services with payments, packages, recurrence, and resources.",
-  CLASS: "Group sessions with capacity, roster, series enrollment, and waitlist.",
+  MEETING:
+    "Lightweight scheduling by default — name, duration, location, availability, host. Advanced options available.",
+  SERVICE:
+    "Service-business defaults — price, recurrence, packages, resources, add-ons, and more in advanced settings.",
+  CLASS:
+    "Group defaults — capacity, provider, schedule, enrollment. Payments, resources, add-ons, and intake remain available.",
 };
 
 /** Resolve kind from config; legacy types without kind default to SERVICE. */
@@ -24,6 +27,51 @@ export function resolveBookingTypeKind(config?: AppointmentTypeConfig | null): B
   return "SERVICE";
 }
 
+/**
+ * Editor layout defaults — archetype controls default visibility only.
+ * All general-purpose capabilities remain available in Advanced settings.
+ */
+export type BookingTypeKindEditorDefaults = {
+  /** Whether the Advanced settings panel starts expanded in the editor. */
+  advancedExpandedByDefault: boolean;
+  /** Suggested form defaults when creating a new type of this kind. */
+  suggestPayment: boolean;
+  suggestRecurring: boolean;
+  suggestGroupCapacity: boolean;
+  /** Copy hints for the primary (non-advanced) editor sections. */
+  primaryFocus: string;
+};
+
+export function editorDefaultsForBookingTypeKind(kind: BookingTypeKind): BookingTypeKindEditorDefaults {
+  switch (kind) {
+    case "MEETING":
+      return {
+        advancedExpandedByDefault: false,
+        suggestPayment: false,
+        suggestRecurring: false,
+        suggestGroupCapacity: false,
+        primaryFocus: "name, duration, location, availability, host/team",
+      };
+    case "SERVICE":
+      return {
+        advancedExpandedByDefault: true,
+        suggestPayment: true,
+        suggestRecurring: true,
+        suggestGroupCapacity: false,
+        primaryFocus: "name, duration, location, price, availability",
+      };
+    case "CLASS":
+      return {
+        advancedExpandedByDefault: true,
+        suggestPayment: true,
+        suggestRecurring: true,
+        suggestGroupCapacity: true,
+        primaryFocus: "name, duration, provider, capacity, schedule, location",
+      };
+  }
+}
+
+/** @deprecated Use editorDefaultsForBookingTypeKind — all capabilities stay available in Advanced. */
 export type BookingTypeKindFeatures = {
   showPayment: boolean;
   showRecurring: boolean;
@@ -35,53 +83,28 @@ export type BookingTypeKindFeatures = {
   showClassEnrollment: boolean;
 };
 
-/** Progressive disclosure — which editor sections apply per archetype. */
+/** @deprecated All features are available; defaults only affect initial expansion. */
 export function featuresForBookingTypeKind(kind: BookingTypeKind): BookingTypeKindFeatures {
-  switch (kind) {
-    case "MEETING":
-      return {
-        showPayment: false,
-        showRecurring: false,
-        showGroupCapacity: false,
-        showResources: false,
-        showAddOns: false,
-        showServicePhases: false,
-        showPackageEligibility: false,
-        showClassEnrollment: false,
-      };
-    case "SERVICE":
-      return {
-        showPayment: true,
-        showRecurring: true,
-        showGroupCapacity: true,
-        showResources: true,
-        showAddOns: true,
-        showServicePhases: true,
-        showPackageEligibility: true,
-        showClassEnrollment: false,
-      };
-    case "CLASS":
-      return {
-        showPayment: true,
-        showRecurring: true,
-        showGroupCapacity: true,
-        showResources: false,
-        showAddOns: false,
-        showServicePhases: false,
-        showPackageEligibility: true,
-        showClassEnrollment: true,
-      };
-  }
+  const d = editorDefaultsForBookingTypeKind(kind);
+  return {
+    showPayment: true,
+    showRecurring: true,
+    showGroupCapacity: true,
+    showResources: true,
+    showAddOns: true,
+    showServicePhases: true,
+    showPackageEligibility: true,
+    showClassEnrollment: kind === "CLASS" || d.suggestGroupCapacity,
+  };
 }
 
-/** Sensible defaults when switching kind during create. */
+/** Sensible defaults when switching kind during create — does not remove capabilities. */
 export function defaultConfigPatchForKind(kind: BookingTypeKind): Partial<AppointmentTypeConfig> {
   const base: Partial<AppointmentTypeConfig> = { bookingTypeKind: kind };
   if (kind === "CLASS") {
     return {
       ...base,
       groupBooking: { enabled: true, capacity: 10 },
-      groupCapacity: 10,
     };
   }
   if (kind === "MEETING") {

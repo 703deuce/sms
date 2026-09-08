@@ -560,6 +560,42 @@ We **ARE** trying to become:
 
 ---
 
+## Execution rules (code pass — updated 2026-09-08)
+
+**Phases are sequencing, not checkpoints.** Continue automatically through Phases 1–17 in one continuous run. Do not stop after a phase or ask what to do next.
+
+### Archetype correction (Phase 1)
+
+`MEETING`, `SERVICE`, and `CLASS` control **default UX and progressive disclosure only**. They do **not** hard-disable general-purpose capabilities. Payment, intake, resources, add-ons, packages, and memberships remain available in Advanced settings for all archetypes.
+
+### Primary goal (this pass)
+
+**CODE_COMPLETE + WIRED IN SOURCE** — full-stack (admin UI + API + persistence + public/customer UI + manage/portal where applicable).
+
+### Status vocabulary
+
+| Status | Meaning |
+|--------|---------|
+| `CODE_COMPLETE` | Full source path implemented |
+| `CODE_COMPLETE + UA_PENDING` | Wired in source; browser certification deferred |
+| `PARTIAL` | Some layers missing |
+| `EXISTS_BUT_NOT_WIRED` | Backend only |
+| `MISSING` | Not implemented |
+| `PROVIDER_BLOCKED` | External dependency |
+| `UA_PENDING` | Awaiting runtime/browser certification |
+
+### Deferred (Phase 18)
+
+Do **not** run `next dev`, `next build`, Playwright, browser automation, or full UA certification in this environment. Certification runs later on stable preview/staging.
+
+### Allowed
+
+- Edit source, models, APIs, components, migrations (without running app)
+- Narrow unit scripts that do not boot Next.js (`npx tsx scripts/test-*.ts`)
+- Update `docs/GENERAL-APPOINTMENT-PARITY-MATRIX.md`
+
+---
+
 ## Related documents
 
 | Document | Role |

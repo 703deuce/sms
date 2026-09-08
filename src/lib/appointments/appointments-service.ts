@@ -223,6 +223,8 @@ export type PublicAppointmentCustomerPreview = {
   meetingLink?: string | null;
   isTransovoVideo?: boolean;
   locationLabel?: string | null;
+  resources?: Array<{ id: string; name: string }>;
+  addOns?: Array<{ id: string; name: string; quantity?: number }>;
 };
 
 export function buildPublicAppointmentCustomerPreview(row: {
@@ -253,5 +255,11 @@ export function buildPublicAppointmentCustomerPreview(row: {
     meetingLink,
     isTransovoVideo,
     locationLabel,
+    resources: Array.isArray(meta.resourceLabels)
+      ? (meta.resourceLabels as Array<{ id: string; name: string }>)
+      : undefined,
+    addOns: Array.isArray(meta.addOnLabels)
+      ? (meta.addOnLabels as Array<{ id: string; name: string; quantity?: number }>)
+      : undefined,
   };
 }

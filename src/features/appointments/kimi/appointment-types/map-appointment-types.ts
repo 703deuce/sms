@@ -112,6 +112,9 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   confirmationCtaUrl: "",
   namedScheduleId: "",
   ownerTeamId: "",
+  resourceIds: [],
+  intakeFormIds: [],
+  addOnIds: [],
   permissions: [],
 };
 
@@ -250,6 +253,9 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     maxBookingsPerMonth: cfg.bookingLimits?.maxBookingsPerMonth,
     namedScheduleId: cfg.namedScheduleId || "",
     ownerTeamId: cfg.ownerTeamId || "",
+    resourceIds: cfg.resourceIds || [],
+    intakeFormIds: cfg.intakeFormIds || [],
+    addOnIds: cfg.addOnIds || [],
     permissions: (cfg.permissions || []).map((p) => ({ ...p })),
   };
 }
@@ -380,6 +386,9 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
           summaryTemplate: (form.notetakerSummaryTemplate || "general") as import("@/lib/meeting-assistant/types").SummaryTemplateId,
         }
       : undefined,
+    resourceIds: form.resourceIds.length ? form.resourceIds : undefined,
+    intakeFormIds: form.intakeFormIds.length ? form.intakeFormIds : undefined,
+    addOnIds: form.addOnIds.length ? form.addOnIds : undefined,
   };
 
   return {

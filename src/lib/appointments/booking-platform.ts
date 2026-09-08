@@ -30,6 +30,7 @@ export async function getAvailability(
   input: Record<string, unknown>,
 ): Promise<{ slots: Array<{ startsAt: string; endsAt: string }> }> {
   const serviceName = String(input.serviceName || input.service || "Appointment");
+  const serviceId = input.serviceId ? String(input.serviceId) : undefined;
   const daysAhead = Number(input.daysAhead || 14);
   const timezone = input.timezone ? String(input.timezone) : undefined;
   const staffId = input.staffId ? String(input.staffId) : undefined;
@@ -39,13 +40,34 @@ export async function getAvailability(
     : undefined;
   const result = await generateNativeSlots(workspaceId, {
     serviceName,
+    serviceId,
     daysAhead,
     timezone,
     staffId,
     durationMinutes,
     excludeAppointmentId,
   });
-  return { slots: result.slots };
+  let slots = result.slots;
+  if (serviceId || serviceName) {
+    const types = await listAppointmentTypes(workspaceId);
+    const typeRow = serviceId
+      ? types.find((t: DbRow) => t.id === serviceId)
+      : types.find((t: DbRow) => t.name === serviceName);
+    const cfg = (typeRow?.config || {}) as AppointmentTypeConfig;
+    const { resolveResourceIdsForBookingType, filterSlotsByResourceAvailability } = await import(
+      "@/lib/appointments/service-booking/resource-availability"
+    );
+    const resourceIds = await resolveResourceIdsForBookingType(workspaceId, cfg);
+    if (resourceIds.length) {
+      slots = await filterSlotsByResourceAvailability(
+        workspaceId,
+        resourceIds,
+        slots,
+        excludeAppointmentId,
+      );
+    }
+  }
+  return { slots };
 }
 
 export async function listAppointmentTypes(
@@ -205,6 +227,9 @@ export async function createPlatformAppointment(
     emailOtpVerified?: boolean;
     extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
     skipApproval?: boolean;
+    resourceIds?: string[];
+    addOnIds?: string[];
+    addOnSelections?: Array<{ addOnId: string; quantity?: number }>;
   },
 ) {
   const prisma = getPrisma();
@@ -255,6 +280,19 @@ export async function createPlatformAppointment(
 
   const startsAtDate = new Date(input.startsAt);
   const endsAtDate = new Date(startsAtDate.getTime() + durationMinutes * 60_000);
+
+  const { resolveResourceIdsForBookingType, persistAppointmentResources } = await import(
+    "@/lib/appointments/service-booking/resource-availability"
+  );
+  const resolvedResourceIds = await resolveResourceIdsForBookingType(
+    workspaceId,
+    svcCfg,
+    input.resourceIds,
+  );
+  if (resolvedResourceIds.length) {
+    const { assertResourcesAvailable } = await import("@/lib/appointments/service-booking/resources");
+    await assertResourcesAvailable(workspaceId, resolvedResourceIds, startsAtDate, endsAtDate);
+  }
 
   if (!input.staffId || !input.staffName) {
     const { loadSchedulingContext, resolveStaffForBooking } = await import(
@@ -384,6 +422,8 @@ export async function createPlatformAppointment(
       extraRecipients: input.extraRecipients,
       emailOtpVerified: input.emailOtpVerified,
       pendingApproval: needsApproval,
+      resourceIds: resolvedResourceIds.length ? resolvedResourceIds : undefined,
+      addOnIds: input.addOnIds?.length ? input.addOnIds : undefined,
       confirmUrl: publicActionUrl("confirm", confirmToken),
       cancelUrl: publicActionUrl("cancel", cancelToken),
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
@@ -401,6 +441,35 @@ export async function createPlatformAppointment(
       metadata: metadata as object,
     },
   });
+
+  try {
+    await persistAppointmentResources(workspaceId, {
+      appointmentId,
+      appointmentTypeId: input.serviceId,
+      serviceName,
+      staffId: input.staffId,
+      resourceIds: resolvedResourceIds,
+      startsAt: startsAtDate,
+      endsAt: endsAtDate,
+      priceCents: svcCfg.payment?.priceCents,
+    });
+    if (resolvedResourceIds.length) {
+      const labels = await (
+        await import("@/lib/appointments/service-booking/resource-availability")
+      ).loadAppointmentResourceLabels(workspaceId, resolvedResourceIds);
+      await prisma.voiceAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          metadata: {
+            ...(metadata as object),
+            resourceLabels: labels,
+          } as object,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn("[appointments] resource persistence failed", err);
+  }
 
   try {
     const { ensureManageAppointmentToken, manageAppointmentUrl } = await import(

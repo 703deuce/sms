@@ -57,6 +57,17 @@ export type PublicBookingWorkspace = {
   waitlistEnabled?: boolean;
 };
 
+export type PublicBookingAddOn = {
+  id: string;
+  name: string;
+  description?: string | null;
+  priceCents: number;
+  durationDeltaMinutes: number;
+  quantityMax: number;
+  required: boolean;
+  eligibleTypeIds: string[];
+};
+
 export type PublicBookingFlowOptions = {
   slug: string;
   initialServiceId?: string;

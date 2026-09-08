@@ -3,7 +3,6 @@
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 import type { CancellationPolicy, ReschedulePolicy } from "@/lib/appointments/types";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
-import type { BookingTypeKindFeatures } from "@/lib/appointments/booking-type-kind";
 import {
   newBookingQuestion,
   QUESTION_TYPE_OPTIONS,
@@ -12,7 +11,6 @@ import {
 
 type Props = {
   form: AppointmentTypeFormState;
-  kindFeatures: BookingTypeKindFeatures;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
@@ -24,7 +22,6 @@ type Props = {
 
 export default function TypeAdvancedSections({
   form,
-  kindFeatures,
   staffOptions,
   locationOptions,
   connectedPaymentProviders,
@@ -324,7 +321,6 @@ export default function TypeAdvancedSections({
       </section>
 
       {/* Payment */}
-      {kindFeatures.showPayment ? (
       <section>
         <h3 className="text-[14px] font-semibold mb-4">Payment</h3>
         <div className="grid grid-cols-2 gap-4">
@@ -411,16 +407,11 @@ export default function TypeAdvancedSections({
           </div>
         ) : null}
       </section>
-      ) : null}
 
       {/* Group & recurring */}
-      {kindFeatures.showGroupCapacity || kindFeatures.showRecurring ? (
       <section>
-        <h3 className="text-[14px] font-semibold mb-4">
-          {kindFeatures.showClassEnrollment ? "Class capacity & series" : "Group & recurring"}
-        </h3>
+        <h3 className="text-[14px] font-semibold mb-4">Group & recurring</h3>
         <div className="space-y-4">
-          {kindFeatures.showGroupCapacity ? (
           <label className="flex items-center gap-2 text-[13px]">
             <input
               type="checkbox"
@@ -428,16 +419,11 @@ export default function TypeAdvancedSections({
               checked={form.groupBookingEnabled}
               onChange={(e) => onFormChange("groupBookingEnabled", e.target.checked)}
             />
-            {kindFeatures.showClassEnrollment
-              ? "Class / group session (capacity per slot)"
-              : "Group appointment (multiple attendees per slot)"}
+            Group appointment or class (multiple attendees per slot)
           </label>
-          ) : null}
-          {form.groupBookingEnabled && kindFeatures.showGroupCapacity ? (
+          {form.groupBookingEnabled ? (
             <div className="flex items-center gap-2">
-              <label className="label mb-0">
-                {kindFeatures.showClassEnrollment ? "Class capacity" : "Max attendees"}
-              </label>
+              <label className="label mb-0">Capacity / max attendees</label>
               <input
                 className="input w-20"
                 type="number"
@@ -447,7 +433,6 @@ export default function TypeAdvancedSections({
               />
             </div>
           ) : null}
-          {kindFeatures.showRecurring ? (
           <label className="flex items-center gap-2 text-[13px]">
             <input
               type="checkbox"
@@ -457,10 +442,8 @@ export default function TypeAdvancedSections({
             />
             Allow recurring bookings
           </label>
-          ) : null}
         </div>
       </section>
-      ) : null}
 
       {/* Booking limits */}
       <section>

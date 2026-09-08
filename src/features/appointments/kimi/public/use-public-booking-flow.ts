@@ -111,6 +111,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [giftCertificateCode, setGiftCertificateCode] = useState("");
   const [useSavedCard, setUseSavedCard] = useState(false);
   const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+  const [addOnCatalog, setAddOnCatalog] = useState<import("./types").PublicBookingAddOn[]>([]);
+  const [selectedAddOns, setSelectedAddOns] = useState<Record<string, number>>({});
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -155,6 +157,16 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     if (!ids?.length) return locationOptions;
     return locationOptions.filter((l) => ids.includes(l.id));
   }, [selectedType, locationOptions]);
+
+  const eligibleAddOns = useMemo(() => {
+    if (!selectedType) return [];
+    const typeAddOnIds = (selectedType.config as { addOnIds?: string[] } | undefined)?.addOnIds;
+    return addOnCatalog.filter((a) => {
+      if (typeAddOnIds?.length) return typeAddOnIds.includes(a.id);
+      if (!a.eligibleTypeIds?.length) return true;
+      return a.eligibleTypeIds.includes(selectedType.id);
+    });
+  }, [addOnCatalog, selectedType]);
 
   const showStaffPicker =
     selectedType?.config?.staffAssignment === "customer_chooses" && eligibleStaff.length > 0;
@@ -322,6 +334,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         const list = (json.data.types || []) as PublicBookingType[];
         setTypes(list);
         setCategories(json.data.categories || []);
+        setAddOnCatalog(json.data.addOns || []);
         setStaffOptions(json.data.staff || []);
         setLocationOptions(json.data.locations || []);
         if (deepLinkStaffId) setSelectedStaffId(deepLinkStaffId);
@@ -560,6 +573,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     if (useSavedCard && entitlements?.hasSavedCard) {
       payload.useSavedCard = true;
     }
+    const addOnSelections = Object.entries(selectedAddOns)
+      .filter(([, qty]) => qty > 0)
+      .map(([addOnId, quantity]) => ({ addOnId, quantity }));
+    if (addOnSelections.length) {
+      payload.addOnSelections = addOnSelections;
+    }
     const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -786,6 +805,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     useSavedCard,
     setUseSavedCard,
     lookupEntitlements,
+    eligibleAddOns,
+    selectedAddOns,
+    setSelectedAddOns,
   };
 }
 

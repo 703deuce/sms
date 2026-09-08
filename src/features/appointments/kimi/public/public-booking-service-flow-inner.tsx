@@ -137,6 +137,9 @@ export function PublicBookingServiceFlowInner({
               onGiftCertificateCodeChange={flow.setGiftCertificateCode}
               onUseSavedCardChange={flow.setUseSavedCard}
               onLookupEntitlements={(phone, email) => void flow.lookupEntitlements(phone, email)}
+              eligibleAddOns={flow.eligibleAddOns}
+              selectedAddOns={flow.selectedAddOns}
+              onSelectedAddOnsChange={flow.setSelectedAddOns}
               onBack={() => flow.setStep("datetime")}
               onBook={(payload) => {
                 flow.setFirstName(payload.firstName);

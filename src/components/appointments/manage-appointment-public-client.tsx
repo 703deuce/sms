@@ -40,6 +40,7 @@ type ManageData = {
   };
   intakeForms?: IntakeForm[];
   contactId?: string | null;
+  resources?: Array<{ id: string; name: string }>;
 };
 
 function formatMoney(cents: number) {
@@ -182,6 +183,12 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Location</dt>
               <dd className="text-right">{data.locationLabel}</dd>
+            </div>
+          ) : null}
+          {data.resources && data.resources.length > 0 ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Resources</dt>
+              <dd className="text-right">{data.resources.map((r) => r.name).join(", ")}</dd>
             </div>
           ) : null}
           <div className="flex justify-between gap-4">

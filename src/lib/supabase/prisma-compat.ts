@@ -142,6 +142,10 @@ const MODEL_TO_TABLE: Record<string, string> = {
   videoChatMessage: "video_chat_messages",
   appointmentSlotHold: "appointment_slot_holds",
   bookingCategory: "booking_categories",
+  bookingAddOn: "booking_add_ons",
+  schedulingResource: "scheduling_resources",
+  appointmentServiceLine: "appointment_service_lines",
+  servicePhaseTemplate: "service_phase_templates",
   manageAppointmentToken: "manage_appointment_tokens",
   packageProduct: "package_products",
   packageBalance: "package_balances",
@@ -571,6 +575,18 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
     executions: { table: "appointment_workflow_executions", fk: "workflowId", pk: "id" },
   },
   bookingCategory: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  bookingAddOn: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  schedulingResource: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  appointmentServiceLine: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  servicePhaseTemplate: {
     workspace: { table: "Workspace", fk: "workspaceId" },
   },
   manageAppointmentToken: {

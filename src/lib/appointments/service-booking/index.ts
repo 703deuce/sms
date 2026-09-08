@@ -14,6 +14,7 @@ export * from "./memberships";
 export * from "./coupons";
 export * from "./add-ons";
 export * from "./resources";
+export * from "./resource-availability";
 export * from "./classes";
 export * from "./household";
 export * from "./client-restrictions";

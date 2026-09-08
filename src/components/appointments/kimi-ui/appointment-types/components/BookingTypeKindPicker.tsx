@@ -5,7 +5,7 @@ import {
   BOOKING_TYPE_KIND_DESCRIPTIONS,
   BOOKING_TYPE_KIND_LABELS,
   defaultConfigPatchForKind,
-  featuresForBookingTypeKind,
+  editorDefaultsForBookingTypeKind,
   type BookingTypeKind,
 } from "@/lib/appointments/booking-type-kind";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
@@ -20,19 +20,24 @@ type Props = {
 };
 
 export function BookingTypeKindPicker({ form, isCreating, onFormChange }: Props) {
-  const features = featuresForBookingTypeKind(form.bookingTypeKind);
+  const defaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
   function selectKind(kind: BookingTypeKind) {
     onFormChange("bookingTypeKind", kind);
     const patch = defaultConfigPatchForKind(kind);
+    const nextDefaults = editorDefaultsForBookingTypeKind(kind);
     if (kind === "CLASS") {
       onFormChange("groupBookingEnabled", true);
-      onFormChange("groupCapacity", patch.groupCapacity ?? 10);
-    }
-    if (kind === "MEETING") {
+      onFormChange("groupCapacity", patch.groupBooking?.capacity ?? 10);
+    } else if (kind === "MEETING") {
       onFormChange("paymentMode", "none");
       onFormChange("recurringEnabled", false);
       onFormChange("groupBookingEnabled", false);
+    } else {
+      onFormChange("groupBookingEnabled", false);
+    }
+    if (nextDefaults.suggestPayment && kind === "SERVICE") {
+      onFormChange("showPriceOnBooking", true);
     }
   }
 
@@ -42,7 +47,9 @@ export function BookingTypeKindPicker({ form, isCreating, onFormChange }: Props)
         Booking type
       </h3>
       <p className="text-[12.5px] text-[#8a8fa3] mb-4">
-        Choose the archetype that matches how customers book. Advanced settings appear based on type.
+        Archetypes set <strong className="font-medium text-[#3f4254]">defaults and progressive disclosure</strong> —
+        not limits. Payment, intake, resources, add-ons, and packages remain available in Advanced settings for all
+        types.
       </p>
       <div
         className="grid gap-2 sm:grid-cols-3"
@@ -82,28 +89,15 @@ export function BookingTypeKindPicker({ form, isCreating, onFormChange }: Props)
       </div>
       {!isCreating ? (
         <p className="mt-2 text-[11.5px] text-[#8a8fa3]">
-          Archetype is locked after creation to avoid breaking existing bookings. Duplicate this type to
-          change archetype.
+          Archetype is locked after creation to avoid breaking existing bookings. Duplicate this type to use a
+          different archetype.
         </p>
       ) : null}
       <p className="mt-3 text-[11.5px] text-[#6b6f82]">
-        {form.bookingTypeKind === "MEETING"
-          ? "Minimal flow: name → duration → location → availability."
-          : form.bookingTypeKind === "SERVICE"
-            ? "Includes payments, packages, recurrence, resources, and add-ons when configured."
-            : "Includes capacity, roster, series enrollment, and waitlist when configured."}
-        {!features.showPayment && !features.showClassEnrollment ? null : (
-          <span className="block mt-1 text-[#8a8fa3]">
-            {[
-              features.showPayment && "payments",
-              features.showRecurring && "recurrence",
-              features.showResources && "resources",
-              features.showClassEnrollment && "class enrollment",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        )}
+        Primary focus for {BOOKING_TYPE_KIND_LABELS[form.bookingTypeKind]}: {defaults.primaryFocus}.
+        {defaults.advancedExpandedByDefault
+          ? " Advanced settings are expanded by default."
+          : " Open Advanced settings below for payment, intake, resources, and more."}
       </p>
     </section>
   );

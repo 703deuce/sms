@@ -33,6 +33,9 @@ export function InfoStep({
   onGiftCertificateCodeChange,
   onUseSavedCardChange,
   onLookupEntitlements,
+  eligibleAddOns = [],
+  selectedAddOns = {},
+  onSelectedAddOnsChange,
   onBack,
   onBook,
 }: {
@@ -52,6 +55,16 @@ export function InfoStep({
   onGiftCertificateCodeChange?: (code: string) => void;
   onUseSavedCardChange?: (value: boolean) => void;
   onLookupEntitlements?: (phone: string, email?: string) => void;
+  eligibleAddOns?: Array<{
+    id: string;
+    name: string;
+    priceCents: number;
+    durationDeltaMinutes: number;
+    quantityMax: number;
+    required: boolean;
+  }>;
+  selectedAddOns?: Record<string, number>;
+  onSelectedAddOnsChange?: (next: Record<string, number>) => void;
   onBack: () => void;
   onBook: (payload: {
     firstName: string;
@@ -227,6 +240,69 @@ export function InfoStep({
               </span>
             </span>
           </label>
+        </div>
+      ) : null}
+
+      {eligibleAddOns.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-border p-4">
+          <p className="text-[13px] font-semibold text-foreground mb-3">Add-ons</p>
+          <ul className="space-y-2">
+            {eligibleAddOns.map((addOn) => {
+              const qty = selectedAddOns[addOn.id] || 0;
+              const checked = addOn.required || qty > 0;
+              return (
+                <li key={addOn.id}>
+                  <label className="flex items-start justify-between gap-3 text-[13px]">
+                    <span className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                        checked={checked}
+                        disabled={addOn.required}
+                        onChange={(e) => {
+                          if (!onSelectedAddOnsChange) return;
+                          const next = { ...selectedAddOns };
+                          if (e.target.checked) next[addOn.id] = 1;
+                          else delete next[addOn.id];
+                          onSelectedAddOnsChange(next);
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium">{addOn.name}</span>
+                        {addOn.required ? (
+                          <span className="ml-1 text-[11px] text-muted-foreground">(required)</span>
+                        ) : null}
+                      </span>
+                    </span>
+                    {addOn.priceCents > 0 ? (
+                      <span className="text-muted-foreground shrink-0">+{formatMoney(addOn.priceCents)}</span>
+                    ) : null}
+                  </label>
+                  {checked && addOn.quantityMax > 1 ? (
+                    <div className="mt-2 ml-6">
+                      <Label htmlFor={`addon-qty-${addOn.id}`}>Quantity</Label>
+                      <select
+                        id={`addon-qty-${addOn.id}`}
+                        className="mt-1 h-9 rounded-lg border border-border bg-card px-3 text-[13px]"
+                        value={qty || 1}
+                        onChange={(e) => {
+                          if (!onSelectedAddOnsChange) return;
+                          onSelectedAddOnsChange({
+                            ...selectedAddOns,
+                            [addOn.id]: Number(e.target.value),
+                          });
+                        }}
+                      >
+                        {Array.from({ length: addOn.quantityMax }, (_, i) => i + 1).map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
 

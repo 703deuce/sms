@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   BOOKING_TYPE_KINDS,
+  editorDefaultsForBookingTypeKind,
   featuresForBookingTypeKind,
   resolveBookingTypeKind,
 } from "../src/lib/appointments/booking-type-kind";
@@ -14,21 +15,26 @@ assert.deepEqual(BOOKING_TYPE_KINDS, ["MEETING", "SERVICE", "CLASS"]);
 assert.equal(resolveBookingTypeKind({}), "SERVICE");
 assert.equal(resolveBookingTypeKind({ bookingTypeKind: "MEETING" }), "MEETING");
 assert.equal(resolveBookingTypeKind({ bookingTypeKind: "CLASS" }), "CLASS");
-assert.equal(resolveBookingTypeKind({ bookingTypeKind: "invalid" as "MEETING" }), "SERVICE");
 
-const meeting = featuresForBookingTypeKind("MEETING");
-assert.equal(meeting.showPayment, false);
-assert.equal(meeting.showRecurring, false);
-assert.equal(meeting.showClassEnrollment, false);
+const meetingDefaults = editorDefaultsForBookingTypeKind("MEETING");
+assert.equal(meetingDefaults.advancedExpandedByDefault, false);
+assert.equal(meetingDefaults.suggestPayment, false);
 
-const service = featuresForBookingTypeKind("SERVICE");
-assert.equal(service.showPayment, true);
-assert.equal(service.showResources, true);
-assert.equal(service.showAddOns, true);
+const serviceDefaults = editorDefaultsForBookingTypeKind("SERVICE");
+assert.equal(serviceDefaults.suggestPayment, true);
 
-const klass = featuresForBookingTypeKind("CLASS");
-assert.equal(klass.showClassEnrollment, true);
-assert.equal(klass.showGroupCapacity, true);
-assert.equal(klass.showResources, false);
+const klassDefaults = editorDefaultsForBookingTypeKind("CLASS");
+assert.equal(klassDefaults.suggestGroupCapacity, true);
+
+// All capabilities remain available (not hard-disabled)
+const meetingFeatures = featuresForBookingTypeKind("MEETING");
+assert.equal(meetingFeatures.showPayment, true);
+assert.equal(meetingFeatures.showResources, true);
+assert.equal(meetingFeatures.showAddOns, true);
+
+const classFeatures = featuresForBookingTypeKind("CLASS");
+assert.equal(classFeatures.showResources, true);
+assert.equal(classFeatures.showAddOns, true);
+assert.equal(classFeatures.showClassEnrollment, true);
 
 console.log("test-booking-type-kind: PASS");

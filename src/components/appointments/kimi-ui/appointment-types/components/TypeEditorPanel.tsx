@@ -4,10 +4,12 @@ import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
 import TypePublishingSections from "./TypePublishingSections";
 import { BookingTypeKindPicker } from "./BookingTypeKindPicker";
+import { TypeResourcesSection } from "./TypeResourcesSection";
+import { TypeAddOnsSection } from "./TypeAddOnsSection";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
 import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
-import { featuresForBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import { editorDefaultsForBookingTypeKind } from "@/lib/appointments/booking-type-kind";
 
 interface Props {
   form: AppointmentTypeFormState;
@@ -19,6 +21,8 @@ interface Props {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions?: Array<{ id: string; name: string }>;
   teamGroupOptions?: Array<{ id: string; name: string }>;
+  resourceOptions?: Array<{ id: string; name: string; quantity?: number }>;
+  addOnOptions?: Array<{ id: string; name: string; priceCents?: number }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -41,6 +45,8 @@ export default function TypeEditorPanel({
   connectedPaymentProviders,
   namedScheduleOptions,
   teamGroupOptions,
+  resourceOptions = [],
+  addOnOptions = [],
   onFormChange,
   onSave,
   onCancel,
@@ -49,7 +55,7 @@ export default function TypeEditorPanel({
   onManageStaff,
   onManageLocations,
 }: Props) {
-  const kindFeatures = featuresForBookingTypeKind(form.bookingTypeKind);
+  const kindDefaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
   return (
     <div className="card flex-1 min-w-[440px] overflow-hidden flex flex-col">
@@ -147,7 +153,6 @@ export default function TypeEditorPanel({
             </div>
             <div>
               <label className="label">Price (optional)</label>
-              {kindFeatures.showPayment ? (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[13px] text-[#8a8fa3]">$</span>
@@ -168,11 +173,6 @@ export default function TypeEditorPanel({
                   Show price on booking page
                 </label>
               </div>
-              ) : (
-                <p className="text-[12px] text-[#8a8fa3] mt-1">
-                  Meetings stay free by default. Switch to Service or Class for paid checkout.
-                </p>
-              )}
             </div>
           </div>
           <div>
@@ -283,14 +283,35 @@ export default function TypeEditorPanel({
           onFormChange={onFormChange}
         />
 
+        <TypeResourcesSection
+          form={form}
+          resourceOptions={resourceOptions}
+          onFormChange={onFormChange}
+        />
+
+        <TypeAddOnsSection form={form} addOnOptions={addOnOptions} onFormChange={onFormChange} />
+
+        <details
+          className="rounded-xl border border-[#ecedf2] bg-[#fafbfc]/50"
+          open={kindDefaults.advancedExpandedByDefault}
+        >
+          <summary className="cursor-pointer px-5 py-3.5 text-[14px] font-semibold text-[#1a1d29] list-none [&::-webkit-details-marker]:hidden">
+            Advanced settings
+            <span className="block text-[12px] font-normal text-[#8a8fa3] mt-0.5">
+              Payment, recurrence, intake questions, policies, packages, add-ons, and more — available for every
+              archetype.
+            </span>
+          </summary>
+          <div className="px-5 pb-5 pt-2 space-y-8 border-t border-[#ecedf2]">
         <TypeAdvancedSections
           form={form}
-          kindFeatures={kindFeatures}
           staffOptions={staffOptions}
           locationOptions={locationOptions}
           connectedPaymentProviders={connectedPaymentProviders}
           onFormChange={onFormChange}
         />
+          </div>
+        </details>
 
         {error ? (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/15">

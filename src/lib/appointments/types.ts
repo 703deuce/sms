@@ -287,6 +287,8 @@ export type AppointmentTypeConfig = {
   extendedReschedulePolicy?: import("@/lib/appointments/service-booking/types").ExtendedReschedulePolicy;
   addOnIds?: string[];
   resourceIds?: string[];
+  /** Intake forms assigned to this booking type */
+  intakeFormIds?: string[];
   /** AI Notetaker defaults for this appointment type */
   notetaker?: import("@/lib/meeting-assistant/types").EventTypeNotetakerConfig;
   /** Transovo Video defaults for this appointment type */

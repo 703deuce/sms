@@ -20,6 +20,7 @@ import {
 import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
 import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
 import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import { listBookingAddOns, listSchedulingResources } from "@/lib/appointments/service-booking";
 import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
 import {
   loadSchedulingContext,
@@ -169,6 +170,29 @@ export async function GET(_request: Request, { params }: Params) {
         }),
       );
     const schedulerTheme = await loadSchedulerTheme(workspace.id);
+    const allResources = await listSchedulingResources(workspace.id);
+    const allAddOns = await listBookingAddOns(workspace.id);
+    const resources = allResources
+      .filter((r) => r.active)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        quantity: r.quantity,
+        description: r.description,
+        eligibleTypeIds: r.eligibleTypeIds,
+      }));
+    const addOns = allAddOns
+      .filter((a) => a.active)
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        priceCents: a.priceCents,
+        durationDeltaMinutes: a.durationDeltaMinutes,
+        quantityMax: a.quantityMax,
+        required: a.required,
+        eligibleTypeIds: a.eligibleTypeIds,
+      }));
     return NextResponse.json({
       data: {
         workspace: {
@@ -186,6 +210,8 @@ export async function GET(_request: Request, { params }: Params) {
         privacyUrl: config.privacyUrl,
         types,
         categories,
+        resources,
+        addOns,
         schedulerTheme,
         staff,
         locations,
@@ -247,7 +273,10 @@ export async function POST(request: Request, { params }: Params) {
 
     if (action === "availability") {
       const data = await getAvailability(workspace.id, {
+        serviceId: body.serviceId ? String(body.serviceId) : undefined,
         serviceName: body.serviceName ? String(body.serviceName) : undefined,
+        staffId: body.staffId ? String(body.staffId) : undefined,
+        durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
         daysAhead: Number(body.daysAhead || 14),
       });
       const typeInfo = await resolveTypeConfig(
@@ -354,6 +383,13 @@ export async function POST(request: Request, { params }: Params) {
     const recurring = body.recurring as
       | { frequency?: string; occurrences?: number }
       | undefined;
+    const resourceIds = Array.isArray(body.resourceIds)
+      ? (body.resourceIds as string[]).map(String).filter(Boolean)
+      : undefined;
+    const addOnSelections = Array.isArray(body.addOnSelections)
+      ? (body.addOnSelections as Array<{ addOnId: string; quantity?: number }>)
+      : undefined;
+    const addOnIds = addOnSelections?.map((s) => s.addOnId) || undefined;
 
     const risk = await evaluatePublicBookingRisk({
       workspaceId: workspace.id,
@@ -491,6 +527,9 @@ export async function POST(request: Request, { params }: Params) {
       emailOtpVerified: body.emailOtpVerified === true,
       singleUseToken: body.singleUseToken ? String(body.singleUseToken) : undefined,
       extraRecipients,
+      resourceIds,
+      addOnIds,
+      addOnSelections,
     };
 
     if (

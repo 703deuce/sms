@@ -96,6 +96,9 @@ export type AppointmentTypeFormState = {
   maxBookingsPerMonth?: number;
   namedScheduleId: string;
   ownerTeamId: string;
+  resourceIds: string[];
+  intakeFormIds: string[];
+  addOnIds: string[];
   permissions: Array<{
     role: "owner" | "admin" | "scheduler" | "viewer";
     userId?: string;
@@ -126,6 +129,8 @@ export type AppointmentTypesPageModel = {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions: Array<{ id: string; name: string }>;
   teamGroupOptions: Array<{ id: string; name: string }>;
+  resourceOptions: Array<{ id: string; name: string; quantity?: number }>;
+  addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
 };
 
 export type AppointmentTypesPageActions = {
