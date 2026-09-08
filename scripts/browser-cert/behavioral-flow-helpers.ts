@@ -8,9 +8,30 @@ import { ACTION_TIMEOUT, NAV_TIMEOUT, visitRoute } from "./lib";
 import {
   CERT_APPOINTMENT_TYPE_NAME,
   CERT_TYPE_PREFIX,
-} from "../../src/lib/cert/appointments-mctb-browser-bootstrap";
+} from "../../src/lib/cert/appointments-mctb-browser-cert-constants";
 
 export const CERT_PUBLIC_BOOK_SLUG = "appt-mctb-browser-cert";
+
+const CERT_WEEKLY_HOURS = {
+  monday: [{ open: "09:00", close: "17:00" }],
+  tuesday: [{ open: "09:00", close: "17:00" }],
+  wednesday: [{ open: "09:00", close: "17:00" }],
+  thursday: [{ open: "09:00", close: "17:00" }],
+  friday: [{ open: "09:00", close: "17:00" }],
+  saturday: [{ open: "09:00", close: "17:00" }],
+  sunday: [{ open: "09:00", close: "17:00" }],
+};
+
+async function waitForAppointmentSlots(page: Page) {
+  for (let i = 0; i < 60; i++) {
+    const slotBtn = page.locator("button.tv-slot").first();
+    if (await slotBtn.count()) return slotBtn;
+    const body = await page.locator("body").innerText();
+    if (/no open times|could not load availability/i.test(body)) break;
+    await page.waitForTimeout(500);
+  }
+  return page.locator("button.tv-slot").first();
+}
 
 async function waitForAppointmentTypeSelectOptions(page: Page) {
   await page.waitForFunction(
@@ -48,36 +69,82 @@ export async function ensureCertWorkspaceReadyViaApi(page: Page) {
   const staffId = staff[0]?.id || `cert-staff-${Date.now().toString().slice(-6)}`;
   const locationId = locations[0]?.id || `cert-location-${Date.now().toString().slice(-6)}`;
 
-  if (!staff.length || !locations.length || settings.bookingEnabled !== true) {
-    const patchRes = await page.request.patch("/api/appointments/settings", {
-      data: {
-        bookingEnabled: true,
-        timezone: (settings.timezone as string) || "America/New_York",
-        minimumBookingNoticeMinutes: (settings.minimumBookingNoticeMinutes as number) ?? 60,
-        maximumBookingDaysAhead: (settings.maximumBookingDaysAhead as number) ?? 30,
-        staff: staff.length
-          ? staff
-          : [
-              {
-                id: staffId,
-                name: "Cert Staff",
-                active: true,
-                customerSelectable: true,
-                timezone: "America/New_York",
-              },
-            ],
-        locations: locations.length
-          ? locations
-          : [{ id: locationId, name: "Cert Office", active: true }],
-      },
-    });
-    if (!patchRes.ok()) {
-      const err = await patchRes.json().catch(() => ({}));
-      throw new Error(`Could not patch cert platform settings: ${err.error || patchRes.status()}`);
-    }
+  const weeklyHours =
+    settings.weeklyHours && Object.keys(settings.weeklyHours as object).length
+      ? (settings.weeklyHours as object)
+      : CERT_WEEKLY_HOURS;
+
+  const patchRes = await page.request.patch("/api/appointments/settings", {
+    data: {
+      bookingEnabled: true,
+      timezone: (settings.timezone as string) || "America/New_York",
+      minimumBookingNoticeMinutes: 0,
+      maximumBookingDaysAhead: (settings.maximumBookingDaysAhead as number) ?? 30,
+      weeklyHours,
+      staff: staff.length
+        ? staff
+        : [
+            {
+              id: staffId,
+              name: "Cert Staff",
+              active: true,
+              customerSelectable: true,
+              timezone: "America/New_York",
+            },
+          ],
+      locations: locations.length
+        ? locations
+        : [{ id: locationId, name: "Cert Office", active: true }],
+    },
+  });
+  if (!patchRes.ok()) {
+    const err = await patchRes.json().catch(() => ({}));
+    throw new Error(`Could not patch cert platform settings: ${err.error || patchRes.status()}`);
   }
 
-  return ensureCertAppointmentTypesViaApi(page, staffId, locationId);
+  const certType = await ensureCertAppointmentTypesViaApi(page, staffId, locationId);
+  await ensureCertTypeAvailabilityViaApi(page, certType, staffId, locationId);
+  return certType;
+}
+
+/** Patch cert appointment type + verify availability API returns slots. */
+async function ensureCertTypeAvailabilityViaApi(
+  page: Page,
+  certType: { id: string; name: string },
+  staffId: string,
+  locationId: string,
+) {
+  await page.request.patch(`/api/appointments/types/${certType.id}`, {
+    data: {
+      name: certType.name,
+      config: {
+        enabled: true,
+        visibility: "public",
+        managed: true,
+        staffAssignment: "any_eligible",
+        staffIds: staffId ? [staffId] : [],
+        locationIds: locationId ? [locationId] : [],
+        minimumBookingNoticeMinutes: 0,
+        maximumBookingDaysAhead: 30,
+      },
+    },
+  });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const availRes = await page.request.get(
+      `/api/appointments/availability?serviceName=${encodeURIComponent(certType.name)}&daysAhead=14`,
+    );
+    if (availRes.ok()) {
+      const availJson = await availRes.json();
+      const slots = (availJson.data?.slots || []) as Array<{ startsAt: string }>;
+      if (slots.length > 0) return;
+    }
+    await page.waitForTimeout(800);
+  }
+
+  throw new Error(
+    `Cert availability API returned no slots for "${certType.name}" — check weekly hours and staff assignment`,
+  );
 }
 
 /** Ensure at least one appointment type exists via authenticated preview API. */
@@ -119,7 +186,7 @@ export async function ensureCertAppointmentTypesViaApi(
         staffAssignment: "any_eligible",
         staffIds: staffId ? [staffId] : [],
         locationIds: locationId ? [locationId] : [],
-        minimumBookingNoticeMinutes: 60,
+        minimumBookingNoticeMinutes: 0,
         maximumBookingDaysAhead: 30,
       },
     },
@@ -161,21 +228,33 @@ export async function createAppointmentUserAction(page: Page) {
   let selected = false;
   for (let i = 0; i < optCount; i++) {
     const value = await options.nth(i).getAttribute("value");
-    if (value?.trim()) {
-      await typeSelect.selectOption({ index: i });
+    const label = await options.nth(i).innerText();
+    if (!value?.trim()) continue;
+    if (label.includes(CERT_TYPE_PREFIX) || label === CERT_APPOINTMENT_TYPE_NAME) {
+      await typeSelect.selectOption({ value });
       selected = true;
       break;
     }
   }
+  if (!selected) {
+    for (let i = 0; i < optCount; i++) {
+      const value = await options.nth(i).getAttribute("value");
+      if (value?.trim()) {
+        await typeSelect.selectOption({ index: i });
+        selected = true;
+        break;
+      }
+    }
+  }
   if (!selected) throw new Error("No appointment types available — seed types first");
 
-  await page.waitForTimeout(800);
-  const slot = page.locator('[role="radio"], button[data-slot], .slot-picker button').first();
-  if (await slot.count()) {
-    await slot.click({ timeout: ACTION_TIMEOUT }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const slotBtn = await waitForAppointmentSlots(page);
+  if (await slotBtn.count()) {
+    await slotBtn.click({ timeout: ACTION_TIMEOUT });
   } else {
-    const slotBtn = page.getByRole("button", { name: /\d{1,2}:\d{2}|AM|PM/i }).first();
-    if (await slotBtn.count()) await slotBtn.click({ timeout: ACTION_TIMEOUT });
+    const slotBtnAlt = page.getByRole("button", { name: /\d{1,2}:\d{2}|AM|PM/i }).first();
+    if (await slotBtnAlt.count()) await slotBtnAlt.click({ timeout: ACTION_TIMEOUT });
     else throw new Error("No available time slots");
   }
 
@@ -284,7 +363,7 @@ export async function createBookingTypeUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/types");
   if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: "Appointment Types", exact: true }).waitFor({
+  await page.locator("h1").filter({ hasText: /^appointment types$/i }).first().waitFor({
     state: "visible",
     timeout: ACTION_TIMEOUT,
   });

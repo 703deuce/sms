@@ -1,7 +1,13 @@
 /**
  * Global certification passes (UI quality, public tokens, timezone, duplicates).
  */
-import { CERT_PUBLIC_BOOK_SLUG, waitForPublicErrorText } from "../../behavioral-flow-helpers";
+import type { CertContext } from "../../cert-context";
+import { ACTION_TIMEOUT } from "../../lib";
+import {
+  CERT_PUBLIC_BOOK_SLUG,
+  ensureCertWorkspaceReadyViaApi,
+  waitForPublicErrorText,
+} from "../../behavioral-flow-helpers";
 
 const PUBLIC_ROUTES = [
   `/book/${CERT_PUBLIC_BOOK_SLUG}`,
@@ -43,6 +49,7 @@ export async function runGLOBAL02(ctx: CertContext) {
 }
 
 export async function runGLOBAL03(ctx: CertContext) {
+  await ensureCertWorkspaceReadyViaApi(ctx.page);
   await ctx.visit("/appointments/availability");
   const notice = ctx.page.locator("#avail-minimum-notice").first();
   await notice.waitFor({ state: "visible", timeout: ACTION_TIMEOUT }).catch(async () => {

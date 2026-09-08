@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { jsonError, requireSession } from "@/lib/api-auth";
+import { CERT_BROWSER_EMAIL } from "@/lib/cert/appointments-mctb-browser-cert-constants";
 import {
   bootstrapAppointmentsMctbBrowserCertWorkspace,
-  CERT_BROWSER_EMAIL,
 } from "@/lib/cert/appointments-mctb-browser-bootstrap";
 
 /**

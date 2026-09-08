@@ -10,12 +10,23 @@ import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlement
 import { saveNotetakerConfig } from "@/lib/meeting-assistant/settings";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 
-export const CERT_BROWSER_EMAIL = "appt-mctb-browser@transovo.test";
-export const CERT_WORKSPACE_SLUG = "appt-mctb-browser-cert";
-export const CERT_APPOINTMENT_TYPE_NAME = "Browser Cert Consultation";
-export const CERT_TYPE_PREFIX = "Browser Cert";
-export const CERT_BUSINESS_LINE = "+15555550188";
-export const CERT_FORWARD_E164 = "+18885550199";
+import {
+  CERT_APPOINTMENT_TYPE_NAME,
+  CERT_BROWSER_EMAIL,
+  CERT_BUSINESS_LINE,
+  CERT_FORWARD_E164,
+  CERT_TYPE_PREFIX,
+  CERT_WORKSPACE_SLUG,
+} from "./appointments-mctb-browser-cert-constants";
+
+export {
+  CERT_APPOINTMENT_TYPE_NAME,
+  CERT_BROWSER_EMAIL,
+  CERT_BUSINESS_LINE,
+  CERT_FORWARD_E164,
+  CERT_TYPE_PREFIX,
+  CERT_WORKSPACE_SLUG,
+} from "./appointments-mctb-browser-cert-constants";
 
 export type CertBootstrapResult = {
   workspaceId: string;
@@ -43,8 +54,17 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
   await saveAppointmentPlatformConfig(workspaceId, {
     bookingEnabled: true,
     timezone: "America/New_York",
-    minimumBookingNoticeMinutes: 60,
+    minimumBookingNoticeMinutes: 0,
     maximumBookingDaysAhead: 30,
+    weeklyHours: {
+      monday: [{ open: "09:00", close: "17:00" }],
+      tuesday: [{ open: "09:00", close: "17:00" }],
+      wednesday: [{ open: "09:00", close: "17:00" }],
+      thursday: [{ open: "09:00", close: "17:00" }],
+      friday: [{ open: "09:00", close: "17:00" }],
+      saturday: [{ open: "09:00", close: "17:00" }],
+      sunday: [{ open: "09:00", close: "17:00" }],
+    },
     staff: [
       {
         id: staffId,
@@ -78,7 +98,7 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
       staffAssignment: "any_eligible",
       staffIds: [staffId],
       locationIds: [locationId],
-      minimumBookingNoticeMinutes: 60,
+      minimumBookingNoticeMinutes: 0,
       maximumBookingDaysAhead: 30,
     },
   });
