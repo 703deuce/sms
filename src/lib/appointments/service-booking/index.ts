@@ -4,6 +4,7 @@ export * from "./scheduling-limits";
 export * from "./minimize-gaps";
 export * from "./manage-appointment";
 export * from "./entitlements";
+export * from "./booking-entitlements";
 export * from "./booking-category";
 export * from "./packages";
 export * from "./gift-certificates";

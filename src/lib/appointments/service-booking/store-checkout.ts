@@ -14,6 +14,7 @@ import { purchasePackageForContact } from "./packages";
 import { startMembershipSubscription } from "./memberships";
 
 export const STORE_PURCHASE_TRANSACTION_TYPE = "service_booking_store_purchase";
+export const STORE_MEMBERSHIP_SUBSCRIPTION_TYPE = "service_booking_membership_subscription";
 
 export type StoreProductKind = "package" | "gift" | "membership";
 
@@ -185,6 +186,8 @@ export async function createStoreCheckoutSession(input: {
   amountCents: number;
   description: string;
   fulfillment: Record<string, string | undefined>;
+  billingInterval?: string | null;
+  stripePriceId?: string | null;
 }) {
   const stripe = getStripe();
   if (!stripe) {
@@ -208,24 +211,45 @@ export async function createStoreCheckoutSession(input: {
 
   const base = getAppBaseUrl();
   const fulfillmentId = createId();
+  const isMembership = input.kind === "membership";
+
+  let membershipPriceId = input.stripePriceId || undefined;
+  if (isMembership && !membershipPriceId) {
+    const interval = input.billingInterval === "year" ? "year" : "month";
+    const price = await stripe.prices.create(
+      {
+        unit_amount: input.amountCents,
+        currency: "usd",
+        recurring: { interval },
+        product_data: { name: input.description },
+      },
+      { stripeAccount: refreshed.merchantAccountId! },
+    );
+    membershipPriceId = price.id;
+  }
+
   const session = await stripe.checkout.sessions.create(
     {
-      mode: "payment",
+      mode: isMembership ? "subscription" : "payment",
       success_url: `${base}/book/${encodeURIComponent(input.workspaceSlug)}/store?success=1&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/book/${encodeURIComponent(input.workspaceSlug)}/store?canceled=1`,
       ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: input.amountCents,
-            product_data: { name: input.description },
-          },
-        },
-      ],
+      line_items: isMembership
+        ? [{ quantity: 1, price: membershipPriceId! }]
+        : [
+            {
+              quantity: 1,
+              price_data: {
+                currency: "usd",
+                unit_amount: input.amountCents,
+                product_data: { name: input.description },
+              },
+            },
+          ],
       metadata: {
-        transaction_type: STORE_PURCHASE_TRANSACTION_TYPE,
+        transaction_type: isMembership
+          ? STORE_MEMBERSHIP_SUBSCRIPTION_TYPE
+          : STORE_PURCHASE_TRANSACTION_TYPE,
         workspaceId: input.workspaceId,
         fulfillmentId,
         kind: input.kind,
@@ -234,6 +258,18 @@ export async function createStoreCheckoutSession(input: {
         amountCents: String(input.amountCents),
         ...input.fulfillment,
       },
+      ...(isMembership
+        ? {
+            subscription_data: {
+              metadata: {
+                transaction_type: STORE_MEMBERSHIP_SUBSCRIPTION_TYPE,
+                workspaceId: input.workspaceId,
+                productId: input.productId,
+                contactId: input.contactId,
+              },
+            },
+          }
+        : {}),
     },
     { stripeAccount: refreshed.merchantAccountId! },
   );
@@ -252,9 +288,35 @@ const fulfilledSessions = new Set<string>();
 export async function handleStoreCheckoutCompleted(session: {
   id: string;
   metadata?: Record<string, string | null | undefined> | null;
+  subscription?: string | null;
+  mode?: string | null;
 }) {
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
-  if (metadata.transaction_type !== STORE_PURCHASE_TRANSACTION_TYPE) {
+  const txType = metadata.transaction_type;
+
+  if (txType === STORE_MEMBERSHIP_SUBSCRIPTION_TYPE) {
+    const workspaceId = metadata.workspaceId;
+    const productId = metadata.productId;
+    const contactId = metadata.contactId;
+    const stripeSubscriptionId =
+      typeof session.subscription === "string" ? session.subscription : undefined;
+    if (!workspaceId || !productId || !contactId || !stripeSubscriptionId) {
+      return { handled: false, skipped: true };
+    }
+    if (fulfilledSessions.has(session.id)) {
+      return { handled: true, duplicate: true };
+    }
+    const sub = await startMembershipSubscription(
+      workspaceId,
+      productId,
+      contactId,
+      stripeSubscriptionId,
+    );
+    fulfilledSessions.add(session.id);
+    return { handled: true, result: { kind: "membership", subscriptionId: sub.id } };
+  }
+
+  if (txType !== STORE_PURCHASE_TRANSACTION_TYPE) {
     return { handled: false, skipped: true };
   }
 
@@ -326,6 +388,36 @@ export async function processStoreCheckout(input: {
     if (!product) throw new Error("Membership not found");
     priceCents = product.priceCents;
     description = product.name;
+
+    if (priceCents > 0) {
+      const checkout = await createStoreCheckoutSession({
+        workspaceSlug: input.workspaceSlug,
+        workspaceId: input.workspaceId,
+        kind: input.kind,
+        productId: input.productId,
+        contactId,
+        customerEmail: input.email,
+        amountCents: priceCents,
+        description,
+        billingInterval: product.billingInterval,
+        stripePriceId: product.stripePriceId,
+        fulfillment: {
+          recipientName: input.recipientName,
+          recipientEmail: input.recipientEmail,
+          giftMessage: input.giftMessage,
+        },
+      });
+
+      if (!checkout.configured || !checkout.checkoutUrl) {
+        throw new Error(checkout.error || "Unable to start checkout");
+      }
+
+      return {
+        paymentRequired: true,
+        checkoutUrl: checkout.checkoutUrl,
+        sessionId: checkout.sessionId,
+      };
+    }
   }
 
   if (priceCents <= 0) {
@@ -382,10 +474,18 @@ export async function fulfillStoreCheckoutBySessionId(workspaceId: string, sessi
     { stripeAccount: connection.merchantAccountId },
   );
 
-  if (session.payment_status !== "paid") {
-    return { fulfilled: false, status: session.payment_status };
+  if (session.payment_status !== "paid" && session.status !== "complete") {
+    return { fulfilled: false, status: session.payment_status || session.status };
   }
 
-  const outcome = await handleStoreCheckoutCompleted(session);
+  const outcome = await handleStoreCheckoutCompleted({
+    id: session.id,
+    metadata: session.metadata,
+    subscription:
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id || null,
+    mode: session.mode,
+  });
   return { fulfilled: outcome.handled, result: outcome };
 }

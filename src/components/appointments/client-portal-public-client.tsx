@@ -52,6 +52,8 @@ function formatDate(value?: string) {
 export default function ClientPortalPublicClient({ token }: { token: string }) {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasSavedCard, setHasSavedCard] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void fetch(`/api/public/portal/${token}`)
@@ -67,6 +69,13 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
         });
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
+
+    void fetch(`/api/public/portal/${token}/payment-methods`)
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) setHasSavedCard(Boolean(json.data?.hasSavedCard));
+      })
+      .catch(() => undefined);
   }, [token]);
 
   const upcoming = useMemo(() => {
@@ -147,6 +156,21 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
             ))
           )}
         </ul>
+      </section>
+
+      <section aria-labelledby="payment-heading">
+        <h2 id="payment-heading" className="text-lg font-medium">Payment methods</h2>
+        <div className="mt-3 rounded-lg border p-4 text-sm">
+          {hasSavedCard ? (
+            <p className="text-muted-foreground">A card is saved for faster checkout on your next booking.</p>
+          ) : (
+            <p className="text-muted-foreground">
+              No card on file yet. Save a card during your next paid booking, or ask the business to send a
+              payment link from your appointment.
+            </p>
+          )}
+          {paymentMessage ? <p className="mt-2 text-primary">{paymentMessage}</p> : null}
+        </div>
       </section>
 
       <section aria-labelledby="packages-heading">

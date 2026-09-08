@@ -6,6 +6,7 @@ import type { ManageAppointmentPermissions } from "./types";
 import { evaluateExtendedCancellationPolicy, evaluateExtendedReschedulePolicy } from "./scheduling-limits";
 import type { ExtendedCancellationPolicy, ExtendedReschedulePolicy } from "./types";
 import { transferAppointmentEntitlements } from "./entitlements";
+import { restoreBookingEntitlements } from "./booking-entitlements";
 
 const DEFAULT_PERMISSIONS: ManageAppointmentPermissions = {
   view: true,
@@ -129,8 +130,12 @@ export async function manageAppointmentCancel(
     throw new Error(evalResult.reason || "Cancellation not allowed");
   }
 
-  return prisma.voiceAppointment.update({
+  const updated = await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: { status: "canceled" },
   });
+
+  await restoreBookingEntitlements(workspaceId, appointmentId);
+
+  return updated;
 }

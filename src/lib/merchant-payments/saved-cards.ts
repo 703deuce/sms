@@ -138,3 +138,116 @@ export async function getSavedPaymentMethodForContact(workspaceId: string, conta
   if (!contact) return null;
   return readPaymentMeta(contact.customFields);
 }
+
+export async function chargeSavedCardForAppointment(input: {
+  workspaceId: string;
+  appointmentId: string;
+  contactId: string;
+  payment: import("@/lib/appointments/types").PaymentRequirement;
+  customerEmail?: string;
+  description?: string;
+}): Promise<{
+  succeeded: boolean;
+  configured: boolean;
+  checkoutUrl: string | null;
+  error: string | null;
+}> {
+  const meta = await getSavedPaymentMethodForContact(input.workspaceId, input.contactId);
+  if (!meta?.stripeCustomerId || !meta.defaultPaymentMethodId) {
+    return {
+      succeeded: false,
+      configured: true,
+      checkoutUrl: null,
+      error: "No saved card on file",
+    };
+  }
+
+  const stripe = getStripe();
+  if (!stripe) {
+    return { succeeded: false, configured: false, checkoutUrl: null, error: "Stripe is not configured" };
+  }
+
+  const connection = await getMerchantConnection(input.workspaceId, "STRIPE");
+  if (!connection?.merchantAccountId) {
+    return { succeeded: false, configured: false, checkoutUrl: null, error: "Stripe is not connected" };
+  }
+
+  const { calculatePaymentAmounts } = await import("./amounts");
+  const amounts = calculatePaymentAmounts({
+    mode: input.payment.mode as "deposit" | "full",
+    priceCents: input.payment.priceCents,
+    depositCents: input.payment.depositCents,
+    depositPercent: input.payment.depositPercent,
+    currency: input.payment.currency,
+    provider: "stripe",
+  });
+
+  if (amounts.amountDueCents <= 0) {
+    return { succeeded: true, configured: true, checkoutUrl: null, error: null };
+  }
+
+  const refreshed = await refreshStripeConnectAccount(input.workspaceId, connection);
+  if (!refreshed.chargesEnabled) {
+    return {
+      succeeded: false,
+      configured: false,
+      checkoutUrl: null,
+      error: "Stripe account cannot accept payments yet",
+    };
+  }
+
+  try {
+    const intent = await stripe.paymentIntents.create(
+      {
+        amount: amounts.amountDueCents,
+        currency: amounts.currency,
+        customer: meta.stripeCustomerId,
+        payment_method: meta.defaultPaymentMethodId,
+        off_session: true,
+        confirm: true,
+        description: input.description || "Appointment payment",
+        metadata: {
+          workspaceId: input.workspaceId,
+          appointmentId: input.appointmentId,
+          contactId: input.contactId,
+          transaction_type: "merchant_appointment_payment",
+        },
+      },
+      { stripeAccount: refreshed.merchantAccountId! },
+    );
+
+    if (intent.status === "succeeded") {
+      const { markAppointmentPaid } = await import("@/lib/appointments/payment-checkout");
+      await markAppointmentPaid(
+        input.workspaceId,
+        input.appointmentId,
+        amounts.amountDueCents,
+        intent.id,
+      );
+      return { succeeded: true, configured: true, checkoutUrl: null, error: null };
+    }
+
+    return {
+      succeeded: false,
+      configured: true,
+      checkoutUrl: null,
+      error: `Payment status: ${intent.status}`,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Saved card charge failed";
+    const { createAppointmentCheckoutSession } = await import("@/lib/appointments/payment-checkout");
+    const checkout = await createAppointmentCheckoutSession({
+      workspaceId: input.workspaceId,
+      appointmentId: input.appointmentId,
+      payment: input.payment,
+      customerEmail: input.customerEmail,
+      description: input.description,
+    });
+    return {
+      succeeded: false,
+      configured: checkout.configured,
+      checkoutUrl: checkout.url,
+      error: message,
+    };
+  }
+}

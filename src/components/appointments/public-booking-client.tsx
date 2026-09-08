@@ -208,6 +208,15 @@ export function PublicBookingClient({
   const [extraRecipients, setExtraRecipients] = useState<
     Array<{ name: string; email: string; phone: string }>
   >([]);
+  const [eligiblePackages, setEligiblePackages] = useState<
+    Array<{ id: string; productName: string; creditsRemaining: number }>
+  >([]);
+  const [eligibleGifts, setEligibleGifts] = useState<
+    Array<{ id: string; code?: string; balanceCents: number }>
+  >([]);
+  const [entitlementMethod, setEntitlementMethod] = useState<"none" | "package" | "gift">("none");
+  const [packageBalanceId, setPackageBalanceId] = useState("");
+  const [giftCertificateCode, setGiftCertificateCode] = useState("");
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
 
@@ -302,6 +311,35 @@ export function PublicBookingClient({
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [slug, initialServiceId, preselectTypeId]);
+
+  useEffect(() => {
+    if (!phone.trim() || !selectedType?.id) {
+      setEligiblePackages([]);
+      setEligibleGifts([]);
+      return;
+    }
+    void fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "entitlements",
+        phone,
+        email: email || undefined,
+        serviceId: selectedType.id,
+        serviceName: selectedType.name,
+      }),
+    })
+      .then(async (r) => {
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) return;
+        setEligiblePackages(json.data?.packages || []);
+        setEligibleGifts(json.data?.gifts || []);
+      })
+      .catch(() => {
+        setEligiblePackages([]);
+        setEligibleGifts([]);
+      });
+  }, [slug, phone, email, selectedType?.id, selectedType?.name]);
 
   async function sendOtp() {
     if (!email.trim()) {
@@ -560,6 +598,13 @@ export function PublicBookingClient({
         frequency: recurringMode,
         occurrences: recurringOccurrences,
       };
+    }
+    if (entitlementMethod === "package" && packageBalanceId) {
+      payload.entitlementMethod = "package";
+      payload.packageBalanceId = packageBalanceId;
+    } else if (entitlementMethod === "gift" && giftCertificateCode.trim()) {
+      payload.entitlementMethod = "gift";
+      payload.giftCertificateCode = giftCertificateCode.trim();
     }
     const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
       method: "POST",
@@ -1095,6 +1140,53 @@ export function PublicBookingClient({
                     ))}
                   </ul>
                 </div>
+              ) : null}
+              {paymentLabel && (eligiblePackages.length > 0 || eligibleGifts.length > 0) ? (
+                <fieldset className="space-y-3 rounded-xl border border-border bg-muted/20 px-3.5 py-3">
+                  <legend className="text-[13px] font-medium">Apply credit</legend>
+                  <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                    <input
+                      type="radio"
+                      name="entitlement"
+                      checked={entitlementMethod === "none"}
+                      onChange={() => setEntitlementMethod("none")}
+                    />
+                    Pay at checkout
+                  </label>
+                  {eligiblePackages.map((pkg) => (
+                    <label key={pkg.id} className="flex cursor-pointer items-center gap-2 text-[13px]">
+                      <input
+                        type="radio"
+                        name="entitlement"
+                        checked={entitlementMethod === "package" && packageBalanceId === pkg.id}
+                        onChange={() => {
+                          setEntitlementMethod("package");
+                          setPackageBalanceId(pkg.id);
+                        }}
+                      />
+                      Use package: {pkg.productName} ({pkg.creditsRemaining} credits left)
+                    </label>
+                  ))}
+                  {eligibleGifts.length > 0 ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                      <input
+                        type="radio"
+                        name="entitlement"
+                        checked={entitlementMethod === "gift"}
+                        onChange={() => setEntitlementMethod("gift")}
+                      />
+                      Apply gift certificate
+                    </label>
+                  ) : null}
+                  {entitlementMethod === "gift" ? (
+                    <Input
+                      placeholder="Gift certificate code"
+                      value={giftCertificateCode}
+                      onChange={(e) => setGiftCertificateCode(e.target.value)}
+                      aria-label="Gift certificate code"
+                    />
+                  ) : null}
+                </fieldset>
               ) : null}
               {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{error}</p> : null}
               <Button size="lg" className="w-full" disabled={submitting || paymentPending} onClick={book}>

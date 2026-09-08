@@ -4,9 +4,31 @@ import { resolveClientPortalSession } from "@/lib/appointments/service-booking";
 import {
   attachSavedPaymentMethod,
   createSavedCardSetupIntent,
+  getSavedPaymentMethodForContact,
 } from "@/lib/merchant-payments/saved-cards";
 
 type Params = { params: Promise<{ token: string }> };
+
+export async function GET(_request: Request, { params }: Params) {
+  try {
+    const { token } = await params;
+    const resolved = await resolveClientPortalSession(token);
+    if (!resolved) return NextResponse.json({ error: "Invalid or expired portal session" }, { status: 404 });
+
+    const saved = await getSavedPaymentMethodForContact(
+      resolved.session.workspaceId,
+      resolved.session.contactId,
+    );
+    return NextResponse.json({
+      data: {
+        hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
+        paymentMethodId: saved?.defaultPaymentMethodId || null,
+      },
+    });
+  } catch (err) {
+    return jsonError(err, 400);
+  }
+}
 
 export async function POST(request: Request, { params }: Params) {
   try {

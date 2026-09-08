@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 /**
- * Service-booking UA smoke — package purchase → book → redeem → reload.
- * Requires DEV_AUTH_BYPASS or seeded workspace with Stripe Connect in test mode.
+ * Service-booking UA smoke — routes + entitlement API certification.
  *
  * Usage:
  *   node scripts/cert-service-booking-ua-smoke.mjs
  */
-import { execSync } from "node:child_process";
-
 const base = process.env.UI_AGENT_BASE_URL || process.env.APP_URL || "http://localhost:3000";
 
 function fail(msg) {
@@ -29,8 +26,19 @@ async function main() {
     console.log(`OK  ${check.name} (${res.status})`);
   }
 
-  console.log("\nNOTE: Full UA certification (purchase → balance → book → reload) requires seeded workspace + Stripe test mode.");
-  console.log("PASS criteria: customer journey works after hard refresh, not merely API 200.");
+  console.log("\nRunning entitlement API certification…");
+  const { execSync } = await import("node:child_process");
+  try {
+    execSync("npx tsx scripts/cert-service-booking-entitlements.ts", {
+      stdio: "inherit",
+      env: process.env,
+    });
+  } catch {
+    fail("entitlement API certification failed");
+  }
+
+  console.log("\nPASS service-booking UA smoke (routes + entitlement API)");
+  console.log("NOTE: Full browser PASS still requires Stripe test checkout + hard refresh verification.");
 }
 
 main().catch((err) => {

@@ -21,13 +21,25 @@ export async function transferAppointmentEntitlements(
 
 export async function listEligibleEntitlementsForContact(workspaceId: string, contactId: string) {
   const prisma = getPrisma();
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, workspaceId },
+    select: { email: true },
+  });
   const [packages, gifts, memberships] = await Promise.all([
     prisma.packageBalance.findMany({
       where: { workspaceId, contactId, status: "active" },
       include: { product: true },
     }),
     prisma.giftCertificateBalance.findMany({
-      where: { workspaceId, status: "active", balanceCents: { gt: 0 } },
+      where: {
+        workspaceId,
+        status: "active",
+        balanceCents: { gt: 0 },
+        OR: [
+          { purchaserContactId: contactId },
+          ...(contact?.email ? [{ recipientEmail: contact.email }] : []),
+        ],
+      },
     }),
     prisma.serviceMembershipSubscription.findMany({
       where: { workspaceId, contactId, status: { in: ["active", "past_due"] } },

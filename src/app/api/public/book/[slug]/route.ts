@@ -11,6 +11,14 @@ import { evaluatePublicBookingRisk, recordSuspiciousBooking } from "@/lib/appoin
 import { createAppointmentCheckoutSession } from "@/lib/appointments/payment-checkout";
 import { createRecurringAppointments } from "@/lib/appointments/recurring";
 import {
+  applyBookingEntitlement,
+  lookupBookingEntitlements,
+  markAppointmentPaidByEntitlement,
+  resolveContactIdByPhone,
+  type BookingEntitlementSelection,
+} from "@/lib/appointments/service-booking/booking-entitlements";
+import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
+import {
   loadSchedulingContext,
   resolveRoutingDestination,
   resolveStaffForBooking,
@@ -177,6 +185,27 @@ export async function POST(request: Request, { params }: Params) {
 
     const body = (await request.json()) as Record<string, unknown>;
     const action = String(body.action || "book");
+
+    if (action === "entitlements") {
+      const phone = String(body.phone || "").trim();
+      const email = body.email ? String(body.email) : undefined;
+      const serviceId = body.serviceId ? String(body.serviceId) : undefined;
+      const serviceName = body.serviceName ? String(body.serviceName) : undefined;
+      if (!phone) {
+        return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
+      }
+      const contactId = await resolveContactIdByPhone(workspace.id, phone, email);
+      if (!contactId) {
+        return NextResponse.json({ data: { packages: [], gifts: [], memberships: [] } });
+      }
+      const entitlements = await lookupBookingEntitlements({
+        workspaceId: workspace.id,
+        contactId,
+        bookingTypeId: serviceId,
+        serviceName,
+      });
+      return NextResponse.json({ data: entitlements });
+    }
 
     if (action === "availability") {
       const data = await getAvailability(workspace.id, {
@@ -474,6 +503,43 @@ export async function POST(request: Request, { params }: Params) {
 
     const result = await createPlatformAppointment(workspace.id, bookInput);
     const appointmentId = String(result.appointmentId || "");
+    const contactId = String(result.contactId || "");
+
+    let entitlementOutcome: Awaited<ReturnType<typeof applyBookingEntitlement>> | null = null;
+    const entitlementMethod = body.entitlementMethod
+      ? String(body.entitlementMethod)
+      : "none";
+    if (appointmentId && contactId && entitlementMethod !== "none") {
+      let selection: BookingEntitlementSelection = { method: "none" };
+      if (entitlementMethod === "package" && body.packageBalanceId) {
+        selection = { method: "package", packageBalanceId: String(body.packageBalanceId) };
+      } else if (entitlementMethod === "gift" && body.giftCertificateCode) {
+        selection = {
+          method: "gift",
+          giftCertificateCode: String(body.giftCertificateCode),
+        };
+      }
+      if (selection.method !== "none") {
+        entitlementOutcome = await applyBookingEntitlement({
+          workspaceId: workspace.id,
+          appointmentId,
+          contactId,
+          bookingTypeId: resolvedType?.id || serviceId,
+          serviceName: resolvedServiceName,
+          payment,
+          selection,
+        });
+        if (entitlementOutcome.paymentWaived && entitlementOutcome.method !== "none") {
+          await markAppointmentPaidByEntitlement(workspace.id, appointmentId, {
+            method: entitlementOutcome.method,
+            amountCentsWaived: entitlementOutcome.amountCentsWaived,
+            packageBalanceId: entitlementOutcome.packageBalanceId,
+            giftBalanceId: entitlementOutcome.giftBalanceId,
+            giftCode: entitlementOutcome.giftCode,
+          });
+        }
+      }
+    }
 
     let paymentInfo: {
       paymentRequired: boolean;
@@ -490,14 +556,51 @@ export async function POST(request: Request, { params }: Params) {
       };
       appointmentId?: string;
     } = { paymentRequired: false, checkoutUrl: null, checkoutConfigured: true };
-    if (appointmentId && payment?.mode && payment.mode !== "none") {
-      paymentInfo = await attachPaymentCheckout(
-        workspace.id,
-        appointmentId,
-        payment,
-        body.email ? String(body.email) : undefined,
-        `${resolvedServiceName} appointment`,
-      );
+    const paymentWaivedByEntitlement = Boolean(entitlementOutcome?.paymentWaived);
+    let paymentHandled = paymentWaivedByEntitlement;
+
+    if (appointmentId && payment?.mode && payment.mode !== "none" && !paymentHandled) {
+      const useSavedCard = body.useSavedCard === true;
+      if (useSavedCard && contactId) {
+        const charged = await chargeSavedCardForAppointment({
+          workspaceId: workspace.id,
+          appointmentId,
+          contactId,
+          payment,
+          customerEmail: body.email ? String(body.email) : undefined,
+          description: `${resolvedServiceName} appointment`,
+        });
+        if (charged.succeeded) {
+          paymentHandled = true;
+          paymentInfo = {
+            paymentRequired: false,
+            checkoutUrl: null,
+            checkoutConfigured: true,
+            appointmentId,
+          };
+        } else if (charged.checkoutUrl) {
+          paymentHandled = true;
+          paymentInfo = {
+            paymentRequired: true,
+            checkoutUrl: charged.checkoutUrl,
+            checkoutConfigured: charged.configured,
+            checkoutError: charged.error,
+            provider: "stripe",
+            appointmentId,
+          };
+        }
+      }
+
+      if (!paymentHandled) {
+        paymentInfo = await attachPaymentCheckout(
+          workspace.id,
+          appointmentId,
+          payment,
+          body.email ? String(body.email) : undefined,
+          `${resolvedServiceName} appointment`,
+        );
+      }
+
       if (paymentInfo.paymentRequired && !paymentInfo.checkoutConfigured) {
         await getPrisma().voiceAppointment.update({
           where: { id: appointmentId },
@@ -521,7 +624,15 @@ export async function POST(request: Request, { params }: Params) {
     });
 
     return NextResponse.json(
-      { data: { ...result, appointmentId, ...paymentInfo, returningInviteeCookie: returningCookie } },
+      {
+        data: {
+          ...result,
+          appointmentId,
+          entitlement: entitlementOutcome,
+          ...paymentInfo,
+          returningInviteeCookie: returningCookie,
+        },
+      },
       { status: 201 },
     );
   } catch (err) {

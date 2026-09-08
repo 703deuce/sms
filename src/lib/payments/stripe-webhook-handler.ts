@@ -76,10 +76,12 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     await handleBillingCheckoutSessionCompleted(session);
     return { subsystem: "saas_billing" as const };
   }
-  const { STORE_PURCHASE_TRANSACTION_TYPE, handleStoreCheckoutCompleted } = await import(
-    "@/lib/appointments/service-booking/store-checkout"
-  );
-  if (metadata.transaction_type === STORE_PURCHASE_TRANSACTION_TYPE) {
+  const { STORE_PURCHASE_TRANSACTION_TYPE, STORE_MEMBERSHIP_SUBSCRIPTION_TYPE, handleStoreCheckoutCompleted } =
+    await import("@/lib/appointments/service-booking/store-checkout");
+  if (
+    metadata.transaction_type === STORE_PURCHASE_TRANSACTION_TYPE ||
+    metadata.transaction_type === STORE_MEMBERSHIP_SUBSCRIPTION_TYPE
+  ) {
     return handleStoreCheckoutCompleted(session);
   }
   const { isAppointmentCheckoutMetadata, handleAppointmentCheckoutCompleted } = await import(
