@@ -10,6 +10,7 @@ import QuickActions from "./components/QuickActions";
 import type { OverviewPageActions, OverviewPageModel } from "@/features/appointments/kimi/overview/types";
 import { RefDecoPageHeader } from "../shared/ref-deco-patterns";
 import "./reference.css";
+/* Must load after reference.css so charcoal/teal wins over purple ref-deco */
 import "./appointments-overview-pilot.css";
 
 type Props = {

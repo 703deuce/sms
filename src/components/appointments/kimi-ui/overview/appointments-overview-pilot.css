@@ -49,8 +49,9 @@
 }
 
 .appt-overview-pilot.ref-root::before {
-  opacity: 0.22;
-  background-image: radial-gradient(circle at 1px 1px, rgba(31, 35, 41, 0.05) 1px, transparent 0);
+  opacity: 0.22 !important;
+  background-image: radial-gradient(circle at 1px 1px, rgba(31, 35, 41, 0.05) 1px, transparent 0) !important;
+  background-size: 28px 28px !important;
 }
 
 /* Typography */
@@ -434,4 +435,114 @@
 
 .appt-overview-pilot .appt-pilot-filter-btn:hover {
   background: var(--surface-muted);
+}
+
+/* ========== Force pilot palette over shared ref-deco (import order safe) ========== */
+.appt-overview-pilot.ref-root {
+  --brand: #147d74 !important;
+  --deco-brand: #147d74 !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi,
+.appt-overview-pilot.ref-root .ref-deco-kpi {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.03) !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi:hover,
+.appt-overview-pilot.ref-root .ref-deco-kpi:hover {
+  border-color: #d1d5db !important;
+  box-shadow: 0 2px 8px rgba(16, 20, 24, 0.05) !important;
+  transform: none !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi::before,
+.appt-overview-pilot .ref-deco-kpi--purple::before,
+.appt-overview-pilot .ref-deco-kpi--blue::before,
+.appt-overview-pilot .ref-deco-kpi--green::before,
+.appt-overview-pilot .ref-deco-kpi--amber::before,
+.appt-overview-pilot .ref-deco-kpi--red::before {
+  background: var(--brand-primary) !important;
+  opacity: 0.28 !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi--highlight::before,
+.appt-overview-pilot .ref-deco-kpi:first-child::before {
+  background: var(--brand-accent) !important;
+  opacity: 1 !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi--highlight {
+  box-shadow:
+    0 0 0 1px rgba(20, 125, 116, 0.06),
+    0 4px 14px rgba(20, 125, 116, 0.06) !important;
+}
+
+.appt-overview-pilot .ref-deco-icon-ring,
+.appt-overview-pilot .ref-deco-icon-ring--purple,
+.appt-overview-pilot .ref-deco-icon-ring--blue,
+.appt-overview-pilot .ref-deco-icon-ring--green,
+.appt-overview-pilot .ref-deco-icon-ring--amber,
+.appt-overview-pilot .ref-deco-icon-ring--red {
+  background: var(--surface-muted) !important;
+  color: var(--brand-primary) !important;
+  box-shadow: inset 0 0 0 1px var(--border) !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi:first-child .ref-deco-icon-ring,
+.appt-overview-pilot .ref-deco-kpi--highlight .ref-deco-icon-ring {
+  background: var(--brand-accent-soft) !important;
+  color: var(--brand-accent) !important;
+  box-shadow: none !important;
+}
+
+.appt-overview-pilot .ref-deco-section,
+.appt-overview-pilot .ref-deco-section--tint-purple,
+.appt-overview-pilot .ref-deco-section--tint-blue,
+.appt-overview-pilot .ref-deco-section--tint-amber {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.02) !important;
+}
+
+.appt-overview-pilot .ref-deco-section-head {
+  background: var(--surface) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+.appt-overview-pilot .ref-deco-section-accent,
+.appt-overview-pilot .ref-deco-section-accent--purple,
+.appt-overview-pilot .ref-deco-section-accent--blue,
+.appt-overview-pilot .ref-deco-section-accent--green,
+.appt-overview-pilot .ref-deco-section-accent--amber {
+  background: var(--brand-accent) !important;
+}
+
+.appt-overview-pilot .ref-deco-page-head {
+  background: linear-gradient(90deg, rgba(20, 125, 116, 0.04), transparent 42%) !important;
+  border-bottom-color: var(--border) !important;
+}
+
+.appt-overview-pilot.ref-root .qa-btn,
+.appt-overview-pilot .qa-btn {
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--brand-primary) !important;
+}
+
+.appt-overview-pilot.ref-root .qa-btn:hover,
+.appt-overview-pilot .qa-btn:hover {
+  border-color: rgba(20, 125, 116, 0.35) !important;
+  background: var(--brand-accent-soft) !important;
+  color: var(--brand-accent) !important;
+  box-shadow: 0 4px 12px rgba(20, 125, 116, 0.08) !important;
+  transform: none !important;
+}
+
+.appt-overview-pilot .pill-purple,
+.appt-overview-pilot .pill-blue,
+.appt-overview-pilot .pill-indigo {
+  background: var(--surface-muted) !important;
+  color: var(--text-secondary) !important;
 }
