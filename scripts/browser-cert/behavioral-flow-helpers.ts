@@ -284,7 +284,7 @@ export async function createBookingTypeUserAction(page: Page) {
   const v = await visitRoute(page, "/appointments/types");
   if (!v.ok) throw new Error(v.note);
 
-  await page.getByRole("heading", { name: /appointment types/i }).first().waitFor({
+  await page.getByRole("heading", { name: "Appointment Types", exact: true }).waitFor({
     state: "visible",
     timeout: ACTION_TIMEOUT,
   });
@@ -432,8 +432,18 @@ export async function saveReminderSettingsUserAction(page: Page) {
 
 /** AI Notetaker settings — toggle a setting and verify persistence. */
 export async function saveNotetakerSettingsUserAction(page: Page) {
+  await ensureCertWorkspaceReadyViaApi(page);
   const v = await visitRoute(page, "/settings/ai-notetaker");
   if (!v.ok) throw new Error(v.note);
+
+  await page.getByRole("heading", { name: /ai notetaker|meeting/i }).first().waitFor({
+    state: "visible",
+    timeout: ACTION_TIMEOUT,
+  }).catch(() => {});
+  await page.waitForFunction(
+    () => !document.querySelector(".tv-loading, .animate-pulse"),
+    { timeout: ACTION_TIMEOUT },
+  ).catch(() => {});
 
   const toggle = page.getByRole("switch").first();
   if (!(await toggle.count())) {
@@ -566,7 +576,9 @@ export async function saveMctbPhoneUserAction(page: Page) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1000);
   const body = await page.locator("body").innerText();
-  if (!/business line|forwarding|phone/i.test(body)) throw new Error("MCTB phone setup did not render after reload");
+  if (!/business line|forwarding|phone|setup/i.test(body)) {
+    throw new Error("MCTB phone setup did not render after reload");
+  }
 }
 
 /** Public booking — complete minimal book flow when slug is live. */

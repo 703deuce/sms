@@ -172,7 +172,7 @@ export const CERT_GROUP_MANIFEST: CertGroupManifest[] = [
   cross("05", "MCTB Booking → Appointment Reminder Lifecycle"),
   cross("06", "Appointment → AI Notetaker → Recap"),
   cross("07", "Transovo Video → AI Notetaker"),
-  cross("08", "External Video → AI Notetaker", "BLOCKED — LIVE EXTERNAL PROVIDER"),
+  cross("08", "External Video → AI Notetaker", undefined, "BLOCKED — LIVE EXTERNAL PROVIDER"),
 
   global("01", "Global frontend UI quality pass"),
   global("02", "Public token / link safety"),

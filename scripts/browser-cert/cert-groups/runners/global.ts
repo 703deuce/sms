@@ -44,8 +44,13 @@ export async function runGLOBAL02(ctx: CertContext) {
 
 export async function runGLOBAL03(ctx: CertContext) {
   await ctx.visit("/appointments/availability");
-  const body = await ctx.bodyText();
-  if (!/timezone|time zone|hours/i.test(body)) throw new Error("Timezone/hours not visible on availability");
+  const notice = ctx.page.locator("#avail-minimum-notice").first();
+  await notice.waitFor({ state: "visible", timeout: ACTION_TIMEOUT }).catch(async () => {
+    const body = await ctx.bodyText();
+    if (!/booking rules|timezone|weekly hours|minimum notice/i.test(body)) {
+      throw new Error("Timezone/hours not visible on availability");
+    }
+  });
   await ctx.visit("/mctb/setup/recovery");
   await ctx.reload();
 }

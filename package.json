@@ -115,6 +115,7 @@
     "cert:appointments-mctb-staged": "tsx scripts/run-appointments-mctb-cert-staged.ts",
     "cert:appointments-mctb-browser": "tsx scripts/run-appointments-mctb-browser-cert.ts",
     "cert:appointments-mctb-browser:preflight": "tsx scripts/browser-cert-preflight.ts",
+    "cert:appointments-mctb-browser:retest-fails": "bash scripts/cert-retest-fails-batched.sh",
     "cert:audit-browser-flow-classification": "tsx scripts/audit-browser-flow-classification.ts",
     "cert:reclassify-browser-oom": "tsx scripts/reclassify-browser-cert-oom-results.ts",
     "seed:appointments-mctb-browser-cert": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/seed-appointments-mctb-browser-cert.ts",

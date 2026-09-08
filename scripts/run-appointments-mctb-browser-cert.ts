@@ -60,7 +60,8 @@ function parseArgs() {
   const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 0;
   const certIdx = args.indexOf("--cert");
   const certGroup = certIdx >= 0 ? String(args[certIdx + 1]) : null;
-  return { from, only, flowId, certGroup, fresh, retest, seed, continueOnFail, preflight, limit };
+  const retestFails = args.includes("--retest-fails");
+  return { from, only, flowId, certGroup, fresh, retest, retestFails, seed, continueOnFail, preflight, limit };
 }
 
 function markEnvironmentBlocked(state: BrowserCertState, batchId: string, reason: string) {
@@ -86,7 +87,7 @@ function syncBatchCheckpoints(state: BrowserCertState) {
 }
 
 async function runDisposableCert() {
-  const { from, only, flowId, certGroup, fresh, retest, seed, continueOnFail, preflight, limit } = parseArgs();
+  const { from, only, flowId, certGroup, fresh, retest, retestFails, seed, continueOnFail, preflight, limit } = parseArgs();
 
   if (preflight) {
     const r = await browserCertPreflight();
@@ -204,6 +205,16 @@ async function runDisposableCert() {
   }
 
   let flows = resolveFlows({ only: certGroup ?? only, from, flowId, retest });
+  if (retestFails) {
+    const prior = loadState();
+    const failIds = new Set(
+      Object.values(prior.results)
+        .filter((r) => r.status === "FAIL" || r.status === "TIMEOUT")
+        .map((r) => r.id),
+    );
+    flows = flows.filter((f) => failIds.has(f.id));
+    console.log(`\n--retest-fails: ${flows.length} flows with prior FAIL/TIMEOUT`);
+  }
   if (certGroup && flows.length === 0) {
     console.error(`Unknown --cert group: ${certGroup}`);
     console.error(`Valid cert IDs: ${CERT_GROUP_MANIFEST.map((g) => g.id).join(", ")}`);

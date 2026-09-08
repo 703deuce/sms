@@ -4,13 +4,27 @@
 
 | What | Where |
 |------|--------|
-| Preview/staging URL | `scripts/browser-cert/browser-cert.config.ts` → `previewBaseUrl` |
+| Preview/staging URL | `scripts/browser-cert/browser-cert.config.ts` → `previewBaseUrl` **or** `BROWSER_CERT_PREVIEW_URL` env |
 | Cert test email | `browser-cert.config.ts` → `certEmail` |
 | Timeouts, pauses, circuit breakers | `browser-cert.config.ts` |
 | Deploy SHA | **Auto** — `/api/health` on preview vs `git rev-parse HEAD` |
 | Cert password | **Secret** — `CERT_BROWSER_PASSWORD` env var only |
 
-Update `previewBaseUrl` once for your Coolify deployment. No `BROWSER_CERT_BASE_URL` or `BROWSER_CERT_DEPLOY_SHA` required.
+Update `previewBaseUrl` once for your Coolify deployment, or set `BROWSER_CERT_PREVIEW_URL` for CI/agents without committing the URL.
+
+### Memory safety (Cloud Agent / low-RAM VMs)
+
+- **Never** run `next dev` and Playwright cert on the same VM — Next.js + headless Chrome can OOM-kill the dev server.
+- Cert hits **preview only**; one disposable Chromium per flow (already the default).
+- Retest failures in batches instead of one 198-flow marathon:
+
+```bash
+export CERT_BROWSER_PASSWORD='…'
+export BROWSER_CERT_PREVIEW_URL='https://your-preview.example.com'
+./scripts/cert-retest-fails-batched.sh
+# or single batch:
+npm run cert:appointments-mctb-browser -- --only CERT-APT --retest --retest-fails --continue-on-fail
+```
 
 ### Coolify deploy requirement
 

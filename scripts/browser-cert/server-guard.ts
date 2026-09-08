@@ -91,7 +91,8 @@ export function getServerGuard(): ServerGuard | null {
 }
 
 export function resolveCertBaseUrl(): string {
-  const baseUrl = BROWSER_CERT_CONFIG.previewBaseUrl.replace(/\/$/, "");
+  const fromEnv = process.env.BROWSER_CERT_PREVIEW_URL?.trim();
+  const baseUrl = (fromEnv || BROWSER_CERT_CONFIG.previewBaseUrl).replace(/\/$/, "");
   if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl)) {
     throw new Error(
       `browser-cert.config.ts previewBaseUrl must not be localhost (${baseUrl}). Set your Coolify preview/staging URL.`,

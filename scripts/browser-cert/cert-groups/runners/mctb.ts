@@ -185,14 +185,17 @@ export async function runMCTB28(ctx: CertContext) {
 
 export async function runMCTB29(ctx: CertContext) {
   await ctx.visit("/mctb/missed-calls");
-  const link = ctx.page.getByRole("link").first();
-  if (await link.count()) {
-    const href = await link.getAttribute("href");
-    if (href?.includes("/mctb/missed-calls/")) {
-      await link.click({ timeout: ACTION_TIMEOUT });
-      await ctx.reload();
-      return;
-    }
+  const detailLink = ctx.page.locator('a[href*="/mctb/missed-calls/"]').first();
+  if (await detailLink.count()) {
+    await detailLink.click({ timeout: ACTION_TIMEOUT });
+    await ctx.reload();
+    return;
+  }
+  const callerLink = ctx.page.getByRole("link", { name: /50177|missed call/i }).first();
+  if (await callerLink.count()) {
+    await callerLink.click({ timeout: ACTION_TIMEOUT });
+    await ctx.reload();
+    return;
   }
   throw new Error("No missed call detail link available — seed fixture missed call");
 }

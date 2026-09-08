@@ -41,6 +41,10 @@ async function fallbackRunner(ctx: CertContext, group: CertGroupManifest) {
 
 function buildRun(group: CertGroupManifest): (page: Page) => Promise<void> {
   return async (page) => {
+    if (!group.blocked) {
+      const { bootstrapCertWorkspaceViaApi } = await import("../behavioral-flow-helpers");
+      await bootstrapCertWorkspaceViaApi(page).catch(() => {});
+    }
     const ctx = new CertContext(page);
     const runner = ALL_RUNNERS[group.id];
     if (runner) await runner(ctx);
