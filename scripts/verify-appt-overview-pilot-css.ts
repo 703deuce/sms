@@ -62,6 +62,18 @@ const checks: Array<{ name: string; ok: boolean; detail?: string }> = [
     ok: pilot.includes("html.appt-overview-pilot-active .transovo-nav-item[data-active=\"true\"]"),
   },
   {
+    name: "page title scale is 26px (not marketing size)",
+    ok: pilot.includes("--type-page-title: 1.625rem"),
+  },
+  {
+    name: "KPI stat scale is 22-28px range",
+    ok: pilot.includes("--type-stat: 1.625rem"),
+  },
+  {
+    name: "Geist applied on html pilot root",
+    ok: pilot.includes("html.appt-overview-pilot-active") && pilot.includes("--font-appt-overview-pilot"),
+  },
+  {
     name: "shell logo indigo override present",
     ok: pilot.includes("html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600"),
   },

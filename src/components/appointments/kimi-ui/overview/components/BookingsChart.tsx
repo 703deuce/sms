@@ -23,14 +23,14 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
       action={
         <button
           type="button"
-          className="appt-pilot-filter-btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium"
+          className="appt-pilot-filter-btn flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-medium"
         >
           This week <ChevronDown size={14} aria-hidden />
         </button>
       }
       bodyClassName="ref-deco-chart !p-4 flex flex-col"
     >
-      <div className="appt-pilot-chart-total font-bold">{chart.total}</div>
+      <div className="appt-pilot-chart-total">{chart.total}</div>
       <div className="appt-pilot-chart-label mt-1">Total appointments</div>
       <div className="appt-pilot-chart-delta text-green-600">{chart.deltaLabel}</div>
       <div className="mt-3 -mx-1">

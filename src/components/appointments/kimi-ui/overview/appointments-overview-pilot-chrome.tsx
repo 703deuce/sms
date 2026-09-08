@@ -4,14 +4,18 @@ import { useEffect } from "react";
 
 const PILOT_HTML_CLASS = "appt-overview-pilot-active";
 
-/** Overview pilot only — toggles full-page charcoal/teal shell while on /appointments/overview. */
+/** Overview pilot only — full-page charcoal/teal + Geist on shell and content. */
 export function AppointmentsOverviewPilotChrome({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+  fontVariableClass,
+}: Readonly<{ children: React.ReactNode; fontVariableClass: string }>) {
   useEffect(() => {
-    document.documentElement.classList.add(PILOT_HTML_CLASS);
-    return () => document.documentElement.classList.remove(PILOT_HTML_CLASS);
-  }, []);
+    const root = document.documentElement;
+    root.classList.add(PILOT_HTML_CLASS, fontVariableClass);
+    return () => {
+      root.classList.remove(PILOT_HTML_CLASS, fontVariableClass);
+    };
+  }, [fontVariableClass]);
 
   return children;
 }

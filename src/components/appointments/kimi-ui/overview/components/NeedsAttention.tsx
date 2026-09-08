@@ -42,7 +42,7 @@ export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props
       <button
         type="button"
         onClick={onReviewAll}
-        className="appt-pilot-muted-link mt-3 flex items-center gap-1.5 text-[13px]"
+        className="appt-pilot-muted-link mt-3 flex items-center gap-1.5"
       >
         Review all issues <ArrowRight size={14} aria-hidden />
       </button>

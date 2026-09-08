@@ -19,7 +19,7 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
           <button
             type="button"
             onClick={onViewCalendar}
-            className="appt-pilot-muted-link flex items-center gap-1 text-[12.5px]"
+            className="appt-pilot-muted-link flex items-center gap-1"
           >
             View calendar <ExternalLink size={13} aria-hidden />
           </button>
@@ -65,7 +65,7 @@ export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpen
         <button
           type="button"
           onClick={onViewCalendar}
-          className="appt-pilot-muted-link mt-1 text-[13px]"
+          className="appt-pilot-muted-link mt-1"
         >
           + {total - schedule.length} more appointments
         </button>

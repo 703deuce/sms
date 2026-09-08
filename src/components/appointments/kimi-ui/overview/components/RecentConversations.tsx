@@ -16,7 +16,7 @@ export default function RecentConversations({ conversations, onOpenConversation,
         <button
           type="button"
           onClick={onViewAll}
-          className="appt-pilot-muted-link text-[12.5px]"
+          className="appt-pilot-muted-link"
         >
           View all
         </button>
@@ -49,7 +49,7 @@ export default function RecentConversations({ conversations, onOpenConversation,
       <button
         type="button"
         onClick={onViewAll}
-        className="appt-pilot-muted-link mt-2 flex items-center gap-1.5 text-[13px]"
+        className="appt-pilot-muted-link mt-2 flex items-center gap-1.5"
       >
         Go to conversations <ArrowRight size={14} aria-hidden />
       </button>
