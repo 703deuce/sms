@@ -19,6 +19,7 @@ import {
 } from "@/lib/appointments/service-booking/booking-entitlements";
 import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
 import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
+import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
 import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
 import {
   loadSchedulingContext,
@@ -126,6 +127,7 @@ export async function GET(_request: Request, { params }: Params) {
         id: t.id,
         name: t.name,
         durationMinutes: t.durationMinutes,
+        bookingTypeKind: resolveBookingTypeKind(t.config),
         durationOptions: t.config?.durationOptions,
         confirmationPage: t.config?.confirmationPage,
         config: t.config,

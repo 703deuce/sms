@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./booking-type-kind";
 export {
   loadAppointmentPlatformConfig,
   saveAppointmentPlatformConfig,

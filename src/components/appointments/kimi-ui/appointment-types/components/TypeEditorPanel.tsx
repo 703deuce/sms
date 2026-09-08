@@ -3,9 +3,11 @@
 import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
 import TypePublishingSections from "./TypePublishingSections";
+import { BookingTypeKindPicker } from "./BookingTypeKindPicker";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
 import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
+import { featuresForBookingTypeKind } from "@/lib/appointments/booking-type-kind";
 
 interface Props {
   form: AppointmentTypeFormState;
@@ -47,6 +49,7 @@ export default function TypeEditorPanel({
   onManageStaff,
   onManageLocations,
 }: Props) {
+  const kindFeatures = featuresForBookingTypeKind(form.bookingTypeKind);
 
   return (
     <div className="card flex-1 min-w-[440px] overflow-hidden flex flex-col">
@@ -61,6 +64,12 @@ export default function TypeEditorPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+        <BookingTypeKindPicker
+          form={form}
+          isCreating={isCreating}
+          onFormChange={onFormChange}
+        />
+
         <section>
           <h3 className="text-[14px] font-semibold mb-4">Basic details</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
@@ -138,6 +147,7 @@ export default function TypeEditorPanel({
             </div>
             <div>
               <label className="label">Price (optional)</label>
+              {kindFeatures.showPayment ? (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[13px] text-[#8a8fa3]">$</span>
@@ -158,6 +168,11 @@ export default function TypeEditorPanel({
                   Show price on booking page
                 </label>
               </div>
+              ) : (
+                <p className="text-[12px] text-[#8a8fa3] mt-1">
+                  Meetings stay free by default. Switch to Service or Class for paid checkout.
+                </p>
+              )}
             </div>
           </div>
           <div>
@@ -270,6 +285,7 @@ export default function TypeEditorPanel({
 
         <TypeAdvancedSections
           form={form}
+          kindFeatures={kindFeatures}
           staffOptions={staffOptions}
           locationOptions={locationOptions}
           connectedPaymentProviders={connectedPaymentProviders}

@@ -4,6 +4,7 @@ import type {
   ReschedulePolicy,
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
+import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
 
 export type AppointmentTypeQuestion = {
   id: string;
@@ -15,6 +16,7 @@ export type AppointmentTypeQuestion = {
 export type AppointmentTypeItem = {
   id: string;
   name: string;
+  kind: BookingTypeKind;
   durationMin: number;
   price: number | null;
   free: boolean;
@@ -32,6 +34,7 @@ export type AppointmentTypeItem = {
 };
 
 export type AppointmentTypeFormState = {
+  bookingTypeKind: BookingTypeKind;
   name: string;
   durationMinutes: number;
   bufferMinutes: number;

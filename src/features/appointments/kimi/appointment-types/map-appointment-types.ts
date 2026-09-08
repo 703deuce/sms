@@ -6,6 +6,10 @@ import type {
   ReschedulePolicy,
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
+import {
+  resolveBookingTypeKind,
+  type BookingTypeKind,
+} from "@/lib/appointments/booking-type-kind";
 import type {
   AppointmentTypeFormState,
   AppointmentTypeItem,
@@ -47,6 +51,7 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 };
 
 export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
+  bookingTypeKind: "SERVICE",
   name: "",
   durationMinutes: 30,
   bufferMinutes: 0,
@@ -149,6 +154,7 @@ export function mapApiTypeToItem(
   return {
     id: type.id,
     name: type.name,
+    kind: resolveBookingTypeKind(type.config),
     durationMin: type.durationMinutes,
     price,
     free,
@@ -177,6 +183,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
   const cfg = type.config;
   const payment = cfg.payment;
   return {
+    bookingTypeKind: resolveBookingTypeKind(cfg),
     name: type.name,
     durationMinutes: type.durationMinutes,
     bufferMinutes: type.bufferMinutes,
@@ -292,6 +299,7 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
     }));
 
   const config: AppointmentTypeConfig = {
+    bookingTypeKind: form.bookingTypeKind,
     description: form.description,
     location: form.location,
     locationId: form.locationId || undefined,

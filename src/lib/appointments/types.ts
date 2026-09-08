@@ -239,7 +239,12 @@ export type AppointmentPlatformConfig = {
   voiceReminders?: VoiceRemindersPlatformConfig;
 };
 
+/** Booking archetype — MEETING (minimal), SERVICE (commerce/recurrence), CLASS (group/capacity). */
+export type BookingTypeKind = "MEETING" | "SERVICE" | "CLASS";
+
 export type AppointmentTypeConfig = {
+  /** Canonical archetype; defaults to SERVICE when unset (legacy types). */
+  bookingTypeKind?: BookingTypeKind;
   enabled?: boolean;
   description?: string;
   location?: string;

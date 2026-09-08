@@ -2,6 +2,10 @@
 
 import { Search, MoreHorizontal, CalendarDays, ChevronUp, ChevronDown } from "lucide-react";
 import type { AppointmentTypeItem } from "@/features/appointments/kimi/appointment-types/types";
+import {
+  BOOKING_TYPE_KIND_LABELS,
+  bookingTypeKindBadgeClass,
+} from "@/lib/appointments/booking-type-kind";
 
 interface Props {
   types: AppointmentTypeItem[];
@@ -87,7 +91,14 @@ export default function TypeListPanel({
                   <CalendarDays size={16} />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="block text-[13px] font-semibold truncate">{t.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="block text-[13px] font-semibold truncate">{t.name}</span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ring-inset ${bookingTypeKindBadgeClass(t.kind)}`}
+                    >
+                      {BOOKING_TYPE_KIND_LABELS[t.kind]}
+                    </span>
+                  </span>
                   <span className="block text-[11.5px] text-[#8a8fa3]">
                     {t.durationMin} min • {t.free ? "Free" : `$${t.price}`}
                   </span>
