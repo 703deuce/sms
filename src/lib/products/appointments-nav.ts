@@ -11,7 +11,7 @@ import {
   Users,
   Workflow,
   HelpCircle,
-  ShoppingBag,
+  Clock,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import {
@@ -24,10 +24,10 @@ export type AppointmentsNavOptions = {
   conversationsBadge?: number;
 };
 
-function appointmentsChildren(): NavItem["children"] {
+function calendarChildren(): NavItem["children"] {
   return [
     { label: "Calendar", href: "/appointments/calendar" },
-    { label: "List", href: "/appointments" },
+    { label: "Appointments", href: "/appointments" },
     { label: "Waitlist", href: "/appointments/waitlist" },
     { label: "Recalls", href: "/appointments/recalls" },
   ];
@@ -37,31 +37,31 @@ function bookingChildren(): NavItem["children"] {
   return [
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
-    { label: "Availability", href: "/appointments/availability" },
-    { label: "Commerce", href: "/appointments/commerce" },
-    { label: "Categories", href: "/appointments/categories" },
-    { label: "AI Booking", href: "/appointments/ai-booking" },
+    { label: "Packages & Memberships", href: "/appointments/commerce" },
     { label: "Routing", href: "/appointments/routing-forms" },
+    { label: "Team Booking", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
+    { label: "AI Booking", href: "/appointments/ai-booking" },
   ];
 }
 
-function operationsChildren(): NavItem["children"] {
+function availabilityChildren(): NavItem["children"] {
   return [
+    { label: "Schedules", href: "/appointments/availability" },
     { label: "Resources", href: "/appointments/resources" },
-    { label: "Classes", href: "/appointments/classes" },
-    { label: "Client restrictions", href: "/appointments/client-restrictions" },
-    { label: "Service booking reports", href: "/appointments/reports/service-booking" },
   ];
 }
 
-function automationsChildren(): NavItem["children"] {
+function remindersChildren(): NavItem["children"] {
   return [
     { label: "Reminder Sequences", href: "/appointments/reminders" },
-    { label: "Workflows", href: "/appointments/workflows" },
     { label: "Templates", href: "/appointments/automations/templates" },
     { label: "Activity", href: "/appointments/automations/activity" },
   ];
+}
+
+function workflowsChildren(): NavItem["children"] {
+  return [{ label: "Workflows", href: "/appointments/workflows" }];
 }
 
 function meetingsChildren(): NavItem["children"] {
@@ -78,6 +78,7 @@ function analyticsChildren(): NavItem["children"] {
     { label: "Reminders", href: "/appointments/analytics/reminders" },
     { label: "Automations", href: "/appointments/analytics/automations" },
     { label: "Reports", href: "/appointments/analytics/reports" },
+    { label: "Service booking", href: "/appointments/reports/service-booking" },
   ];
 }
 
@@ -101,8 +102,8 @@ function settingsChildren(): NavItem["children"] {
 }
 
 /**
- * Appointments platform sidebar — ten work domains + Home, Integrations, and Settings.
- * Legacy SMS marketing, Grow, AI receptionist, and unrelated telephony surfaces are excluded.
+ * Appointments platform sidebar — booking-first hierarchy with progressive disclosure.
+ * Advanced config routes (categories, restrictions, classes) live inside their parent surfaces.
  */
 export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
@@ -114,22 +115,22 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       matchExact: true,
     },
     {
-      label: "Appointments",
-      href: "/appointments/calendar",
-      icon: Calendar,
-      children: appointmentsChildren(),
-    },
-    {
       label: "Booking",
       href: "/appointments/types",
       icon: Globe,
       children: bookingChildren(),
     },
     {
-      label: "Commerce",
-      href: "/appointments/commerce",
-      icon: ShoppingBag,
-      children: operationsChildren(),
+      label: "Calendar",
+      href: "/appointments/calendar",
+      icon: Calendar,
+      children: calendarChildren(),
+    },
+    {
+      label: "Availability",
+      href: "/appointments/availability",
+      icon: Clock,
+      children: availabilityChildren(),
     },
   ];
 
@@ -153,10 +154,16 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
 
   items.push(
     {
-      label: "Automations",
+      label: "Reminders",
       href: "/appointments/reminders",
       icon: Workflow,
-      children: automationsChildren(),
+      children: remindersChildren(),
+    },
+    {
+      label: "Workflows",
+      href: "/appointments/workflows",
+      icon: Workflow,
+      children: workflowsChildren(),
     },
     {
       label: "Meetings",
@@ -234,7 +241,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
-  if (pathname.startsWith("/appointments/commerce")) return "Commerce";
+  if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/resources")) return "Resources";
   if (pathname.startsWith("/appointments/classes")) return "Classes";
@@ -244,20 +251,20 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
   if (pathname.startsWith("/appointments/routing")) return "Routing";
-  if (pathname.startsWith("/appointments/team-pages")) return "Booking Pages";
+  if (pathname.startsWith("/appointments/team-pages")) return "Team Booking";
+  if (pathname.startsWith("/appointments/booking")) return "Booking Pages";
   if (pathname.startsWith("/appointments/waitlist")) return "Waitlist";
   if (pathname.startsWith("/appointments/polls")) return "Meeting Polls";
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/recall-campaigns")) return "Recall campaigns";
   if (pathname.startsWith("/appointments/no-show-recovery")) return "No-show recovery";
-  if (pathname.startsWith("/appointments/reminders")) return "Reminder Sequences";
-  if (pathname.startsWith("/appointments/voice-reminders")) return "Reminder Sequences";
+  if (pathname.startsWith("/appointments/reminders")) return "Reminders";
+  if (pathname.startsWith("/appointments/voice-reminders")) return "Reminders";
   if (pathname.startsWith("/appointments/automations/templates")) return "Templates";
   if (pathname.startsWith("/appointments/automations/activity")) return "Activity";
   if (pathname.startsWith("/appointments/workflows/setup/")) return "Set up workflow";
   if (pathname.startsWith("/appointments/workflows")) return "Workflows";
   if (pathname.startsWith("/appointments/setup")) return "Get Started";
-  if (pathname.startsWith("/appointments/booking")) return "Booking Pages";
   if (pathname.startsWith("/appointments/ai-booking")) return "AI Booking";
   if (pathname.startsWith("/appointments/analytics/booking")) return "Booking analytics";
   if (pathname.startsWith("/appointments/analytics/reminders")) return "Reminder analytics";

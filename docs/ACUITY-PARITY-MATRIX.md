@@ -1,14 +1,15 @@
 # Acuity Parity Matrix
 
 **Governing spec:** `docs/TRANSOVO-APPOINTMENTS-SERVICE-BOOKING-PARITY-REQUIREMENT.md`  
-**Last audited:** 2026-09-08 (service-booking parity build — code complete, UA certification pending)  
-**Rule:** PASS = runtime + routes shipped; full UA evidence tracked per `APT-*` IDs.
+**Last audited:** 2026-09-08 (service-booking parity — schema applied; UA certification in progress)  
+**Rule:** `PASS` requires reload-verified UA test. `CODE` = runtime shipped, certification pending. No `UNKNOWN`.
 
 ## Status legend
 
 | Status | Meaning |
 |--------|---------|
-| PASS | End-to-end code path exists (API + UI + persistence) |
+| PASS | End-to-end customer/admin action certified via UA test |
+| CODE | Runtime shipped; UA certification pending |
 | FAIL | Missing or non-functional |
 | PROVIDER_BLOCKED | Internal ready; external approval/credential required |
 | NOT_APPLICABLE | Documented exclusion |

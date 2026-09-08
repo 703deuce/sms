@@ -70,6 +70,20 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!stepExecutionId) throw new Error("stepExecutionId required");
       return processAppointmentWorkflowStep({ stepExecutionId });
     }
+    case "appointment_webhook_deliver": {
+      const { deliverAppointmentWebhook } = await import(
+        "@/lib/appointments/service-booking/webhook-delivery"
+      );
+      const deliveryId = String(payload.deliveryId || "");
+      if (!deliveryId) throw new Error("deliveryId required");
+      return deliverAppointmentWebhook(deliveryId);
+    }
+    case "appointment_webhook_sweep": {
+      const { sweepPendingWebhookDeliveries } = await import(
+        "@/lib/appointments/service-booking/webhook-delivery"
+      );
+      return sweepPendingWebhookDeliveries(40);
+    }
     case "appointment_voice_reminder_retry": {
       const { processVoiceReminderRetry } = await import(
         "@/lib/appointment-voice-reminders/service"
@@ -1152,6 +1166,12 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { hourKey, limit: 50 },
     idempotencyKey: `mctb-trial-lifecycle:${hourKey}`,
+  });
+  await enqueueJob({
+    jobType: "appointment_webhook_sweep",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `appointment-webhook-sweep:${minuteKey}`,
   });
 
   await enqueueJob({

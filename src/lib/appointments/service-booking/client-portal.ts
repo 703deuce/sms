@@ -26,7 +26,7 @@ export async function resolveClientPortalSession(token: string) {
   });
   if (!session || session.expiresAt < new Date()) return null;
 
-  const [appointments, entitlements, waitlist] = await Promise.all([
+  const [appointments, entitlements, waitlist, workspace] = await Promise.all([
     prisma.voiceAppointment.findMany({
       where: { workspaceId: session.workspaceId, contactId: session.contactId },
       orderBy: { startsAt: "desc" },
@@ -37,6 +37,10 @@ export async function resolveClientPortalSession(token: string) {
       where: { workspaceId: session.workspaceId, contactId: session.contactId },
       orderBy: { createdAt: "desc" },
     }),
+    prisma.workspace.findUnique({
+      where: { id: session.workspaceId },
+      select: { slug: true },
+    }),
   ]);
 
   await prisma.clientPortalSession.update({
@@ -44,7 +48,19 @@ export async function resolveClientPortalSession(token: string) {
     data: { lastUsedAt: new Date() },
   });
 
-  return { session, appointments, entitlements, waitlist };
+  return {
+    session,
+    workspaceSlug: workspace?.slug,
+    appointments: appointments.map((a: (typeof appointments)[number]) => ({
+      id: a.id,
+      serviceName: a.serviceName,
+      startsAt: a.startsAt.toISOString(),
+      status: a.status,
+      metadata: a.metadata as { manageAppointmentUrl?: string },
+    })),
+    entitlements,
+    waitlist,
+  };
 }
 
 export function clientPortalUrl(baseUrl: string, token: string) {

@@ -2,8 +2,10 @@ import "server-only";
 
 import { createHmac } from "crypto";
 import { getPrisma } from "@/lib/db";
+import { encryptSecret } from "@/lib/messaging/crypto";
 import { generateSecureToken, hashToken } from "./crypto";
 import type { AppointmentWebhookEvent } from "./types";
+import { enqueueWebhookDelivery } from "./webhook-delivery";
 
 export async function listWebhookEndpoints(workspaceId: string) {
   const prisma = getPrisma();
@@ -19,15 +21,17 @@ export async function createWebhookEndpoint(
 ) {
   const prisma = getPrisma();
   const secret = generateSecureToken(24);
-  return prisma.appointmentWebhookEndpoint.create({
+  const endpoint = await prisma.appointmentWebhookEndpoint.create({
     data: {
       workspaceId,
       url: input.url,
       secretHash: hashToken(secret),
       events: input.events,
       active: true,
+      metadata: { signingSecretEnc: encryptSecret(secret) },
     },
   });
+  return { endpoint, signingSecret: secret };
 }
 
 export function signWebhookPayload(secret: string, body: string, timestamp: string) {
@@ -55,7 +59,7 @@ export async function dispatchAppointmentWebhook(
       },
     });
     deliveries.push(delivery);
-    // Async worker would POST to endpoint.url with signed payload
+    await enqueueWebhookDelivery(delivery.id, workspaceId);
   }
   return deliveries;
 }
