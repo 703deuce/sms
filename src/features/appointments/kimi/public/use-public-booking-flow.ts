@@ -78,6 +78,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [notes, setNotes] = useState("");
   const [bookingAnswers, setBookingAnswers] = useState<Record<string, string>>({});
   const [smsConsent, setSmsConsent] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [humanVerification, setHumanVerification] = useState(false);
   const [challengeRequired, setChallengeRequired] = useState(false);
   const [formStartedAt] = useState(() => Date.now());
@@ -411,6 +412,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
           businessAddress: json.data.businessAddress || "",
           consentText: json.data.consentText || "",
           termsUrl: json.data.termsUrl || "/terms",
+          termsVersion: json.data.termsVersion,
           privacyUrl: json.data.privacyUrl || "/privacy",
           aiBookingEnabled: json.data.aiBookingEnabled !== false,
           waitlistEnabled: json.data.waitlistEnabled !== false,
@@ -610,6 +612,10 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setError("Please select a location.");
       return;
     }
+    if (workspace?.termsVersion && !termsAccepted) {
+      setError("Please accept the terms and conditions to complete your booking.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     setBookingConflicts([]);
@@ -624,6 +630,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       notes: bookNotes,
       bookingAnswers: Object.keys(bookAnswers).length ? bookAnswers : undefined,
       smsConsent: bookSmsConsent,
+      termsAccepted: termsAccepted || undefined,
+      termsVersion: workspace?.termsVersion,
       humanVerification: challengeRequired ? humanVerification : undefined,
       formStartedAt,
       website: honeypot,
@@ -688,6 +696,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         return {
           appointmentTypeId: svc.id,
           serviceName: svc.name,
+          staffId: (svc as { assignedStaffId?: string }).assignedStaffId || selectedStaffId || undefined,
           startsAt: lineStart.toISOString(),
           endsAt: lineEnd.toISOString(),
           displayOrder: index + 1,
@@ -853,6 +862,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     setBookingAnswers,
     smsConsent,
     setSmsConsent,
+    termsAccepted,
+    setTermsAccepted,
     humanVerification,
     setHumanVerification,
     challengeRequired,

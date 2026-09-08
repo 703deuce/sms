@@ -30,6 +30,16 @@ export type ExtendedReschedulePolicy = {
   preserveEntitlements?: boolean;
 };
 
+export type FixedStartTimesConfig = {
+  enabled: boolean;
+  /** Allowed wall-clock starts in workspace timezone, e.g. ["09:00", "11:00", "13:30"] */
+  times: string[];
+  /** Optional per weekday overrides (monday … sunday) */
+  perWeekday?: Partial<Record<string, string[]>>;
+};
+
+export type ClassCapacityDisplayMode = "exact" | "limited" | "hidden";
+
 export type SchedulingLimitsConfig = {
   minimumBookingNoticeMinutes?: number;
   maximumBookingDaysAhead?: number;
@@ -41,6 +51,10 @@ export type SchedulingLimitsConfig = {
   intakeEditCutoff?: SchedulingCutoff;
   customStartIntervalMinutes?: number;
   appointmentDerivedIntervals?: boolean;
+  /** Only allow booking at explicit start times (SimplyBook fixed-time mode). */
+  fixedStartTimes?: FixedStartTimesConfig;
+  /** Hide a percentage of otherwise-valid slots (“Make Me Look Busy”). 0–90. */
+  availabilityDensityHidePercent?: number;
   minimizeGapsMode?: "off" | "prefer_compact";
   simultaneousAppointments?: number;
   maxAppointmentsPerDay?: number;
@@ -52,6 +66,8 @@ export type SchedulingLimitsConfig = {
   };
   bufferBeforeMinutes?: number;
   bufferAfterMinutes?: number;
+  /** Public class/group capacity label mode */
+  classCapacityDisplay?: ClassCapacityDisplayMode;
 };
 
 export type PayWhatYouWantConfig = {
@@ -91,8 +107,18 @@ export type ExtendedPaymentRequirement = {
 export type PackageCreditRule = {
   bookingTypeId?: string;
   serviceName?: string;
+  classSeriesId?: string;
+  addOnId?: string;
+  productId?: string;
   quantity: number;
   label?: string;
+};
+
+export type PackageLifecyclePolicy = {
+  restoreCreditsOnCancel?: boolean;
+  restoreCreditsOnLateCancel?: boolean;
+  restoreCreditsOnNoShow?: boolean;
+  validFromDaysAfterPurchase?: number;
 };
 
 export type MembershipBenefits = {
@@ -131,6 +157,22 @@ export type ManageAppointmentPermissions = {
   viewLocation?: boolean;
 };
 
+export type BookingTerminologyConfig = {
+  staffLabel?: string;
+  serviceLabel?: string;
+  appointmentLabel?: string;
+  bookButtonLabel?: string;
+  locale?: string;
+};
+
+export type BookingChannelIntegrationStatus = {
+  provider: "google_reserve" | "facebook" | "instagram" | "icloud_calendar";
+  status: "not_connected" | "pending" | "active" | "error";
+  externalId?: string;
+  lastSyncedAt?: string;
+  errorMessage?: string;
+};
+
 export type SchedulerThemeConfig = {
   primaryColor?: string;
   backgroundColor?: string;
@@ -138,6 +180,27 @@ export type SchedulerThemeConfig = {
   logoUrl?: string;
   confirmationMessage?: string;
   noIndex?: boolean;
+  /** Hosted booking custom domain, e.g. book.example.com */
+  customDomain?: string;
+  /** Advanced booking-page CSS (SimplyBook / Acuity parity) */
+  customCss?: string;
+  terminology?: BookingTerminologyConfig;
+  bookingChannels?: BookingChannelIntegrationStatus[];
+};
+
+export type CalendarColorConfig = {
+  staffColors?: Record<string, string>;
+  serviceColors?: Record<string, string>;
+  defaultStaffColor?: string;
+  defaultServiceColor?: string;
+};
+
+export type TermsAcceptanceSnapshot = {
+  accepted: boolean;
+  acceptedAt: string;
+  termsVersion: string;
+  termsTextHash: string;
+  termsUrl?: string;
 };
 
 export type ServicePhaseKind = "active_staff" | "processing";
@@ -155,7 +218,9 @@ export type IntakeFieldType =
   | "date"
   | "info"
   | "agreement"
-  | "signature";
+  | "signature"
+  | "file"
+  | "image";
 
 export type IntakeField = {
   id: string;

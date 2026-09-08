@@ -319,6 +319,12 @@ model Workspace {
   appointmentWebhookEndpoints AppointmentWebhookEndpoint[]
   clientPortalSessions ClientPortalSession[]
   appointmentImportBatches AppointmentImportBatch[]
+  bookingContractTemplates BookingContractTemplate[]
+  signedBookingContracts SignedBookingContract[]
+  bookingInvoices BookingInvoice[]
+  bookingProducts BookingProduct[]
+  schedulingResourceGroups SchedulingResourceGroup[]
+  classAdmissionTickets ClassAdmissionTicket[]
   contactMergeAudits ContactMergeAudit[]
   customerFieldDefinitions CustomerFieldDefinition[]
   clientWalletAccounts ClientWalletAccount[]
@@ -6598,5 +6604,148 @@ model ClassCheckIn {
   @@index([workspaceId, occurrenceId])
   @@index([workspaceId, contactId])
   @@map("class_check_ins")
+}
+
+model BookingContractTemplate {
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  name                String
+  bodyHtml            String
+  version             String
+  requireBeforePayment Boolean  @default(false)
+  eligibleTypeIds     String[] @default([])
+  active              Boolean  @default(true)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contracts           SignedBookingContract[]
+
+  @@index([workspaceId, active])
+  @@map("booking_contract_templates")
+}
+
+model SignedBookingContract {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  templateId        String
+  appointmentId     String?
+  contactId         String?
+  templateVersion   String
+  bodySnapshot      String
+  status            String   @default("unsigned")
+  signerName        String?
+  signatureDataUrl  String?
+  signedAt          DateTime?
+  signTokenHash     String?  @unique
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  template          BookingContractTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, appointmentId])
+  @@index([workspaceId, contactId])
+  @@map("signed_booking_contracts")
+}
+
+model BookingInvoice {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  contactId        String
+  appointmentIds   String[] @default([])
+  status           String   @default("open")
+  subtotalCents    Int      @default(0)
+  taxCents         Int      @default(0)
+  discountCents    Int      @default(0)
+  totalCents       Int      @default(0)
+  depositPaidCents Int      @default(0)
+  balanceDueCents  Int      @default(0)
+  currency         String   @default("usd")
+  dueAt            DateTime?
+  paidAt           DateTime?
+  note             String?
+  payTokenHash     String?  @unique
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lineItems        BookingInvoiceLineItem[]
+
+  @@index([workspaceId, contactId, status])
+  @@map("booking_invoices")
+}
+
+model BookingInvoiceLineItem {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  description     String
+  quantity        Int      @default(1)
+  unitPriceCents  Int      @default(0)
+  appointmentId   String?
+  metadata        Json?
+  invoice         BookingInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("booking_invoice_line_items")
+}
+
+model BookingProduct {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  name              String
+  description       String?
+  sku               String?
+  priceCents        Int      @default(0)
+  currency          String   @default("usd")
+  quantityAvailable Int?
+  sellStandalone    Boolean  @default(true)
+  eligibleTypeIds   String[] @default([])
+  active            Boolean  @default(true)
+  displayOrder      Int      @default(0)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("booking_products")
+}
+
+model SchedulingResourceGroup {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  resourceIds    String[] @default([])
+  selectionMode  String   @default("any_one")
+  active         Boolean  @default(true)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@map("scheduling_resource_groups")
+}
+
+model ClassAdmissionTicket {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  enrollmentId  String
+  occurrenceId  String
+  contactId     String
+  attendeeName  String?
+  ticketCode    String
+  qrToken       String   @unique
+  status        String   @default("issued")
+  checkedInAt   DateTime?
+  redeemedAt    DateTime?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, occurrenceId])
+  @@index([workspaceId, contactId])
+  @@map("class_admission_tickets")
 }
 

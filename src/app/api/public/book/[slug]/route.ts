@@ -212,6 +212,7 @@ export async function GET(_request: Request, { params }: Params) {
         consentText: config.consentText,
         consentVersion: config.consentVersion || "v1",
         termsUrl: config.termsUrl,
+        termsVersion: config.termsVersion,
         privacyUrl: config.privacyUrl,
         types,
         categories,
@@ -636,6 +637,8 @@ export async function POST(request: Request, { params }: Params) {
       notes: body.notes ? String(body.notes) : undefined,
       bookingAnswers,
       smsConsent,
+      termsAccepted: body.termsAccepted === true,
+      termsVersion: body.termsVersion ? String(body.termsVersion) : undefined,
       source: "public_booking" as const,
       status:
         payment?.mode && payment.mode !== "none" ? "pending_payment" : "awaiting_confirmation",

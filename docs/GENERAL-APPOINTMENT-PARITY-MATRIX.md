@@ -38,6 +38,34 @@ Status values: `CODE_COMPLETE`, `CODE_COMPLETE + UA_PENDING`, `PARTIAL`, `EXISTS
 | Global search, webhooks, imports | 16 | CODE_COMPLETE + UA_PENDING | overview search | — | global-search API | `AppointmentsGlobalSearch` on overview |
 | Progressive disclosure nav | 17 | CODE_COMPLETE + UA_PENDING | product nav | — | `scheduling-modules.ts` | `buildAppointmentsV1Nav({ modules })` |
 
+## Phase 18 — Clean general-platform parity gaps (Acuity / SimplyBook / Square)
+
+**Authority:** `docs/GENERAL-APPOINTMENT-CLEAN-PARITY-GAPS.md`  
+**Test:** `npx tsx scripts/test-clean-parity-gaps.ts`
+
+| Capability | Status | Notes |
+|------------|--------|-------|
+| Multi-staff per service line | CODE_COMPLETE + UA_PENDING | `staffId` on `multiServiceLines` in public book |
+| Provider-release processing phases | CODE_COMPLETE | `staffRequired` + `staff-phase-occupancy.ts` |
+| Fixed start times | CODE_COMPLETE | `fixed-start-times.ts` + availability engine |
+| Formal contracts + e-sign | CODE_COMPLETE + UA_PENDING | Prisma + `booking-contracts.ts` + API |
+| Intake file/image field type | CODE_COMPLETE | `file`/`image` on `IntakeFieldType` |
+| Booking QR generator | CODE_COMPLETE + UA_PENDING | Share hub + `/api/appointments/booking/qr` |
+| Reserve with Google / Facebook / Instagram | PROVIDER_BLOCKED | `booking-channel-integrations.ts` stubs |
+| Custom domain + custom CSS | CODE_COMPLETE | `SchedulerThemeConfig` fields |
+| Invoice system | CODE_COMPLETE + UA_PENDING | Prisma + `booking-invoices.ts` + API |
+| Products for sale | CODE_COMPLETE + UA_PENDING | Prisma + `booking-products.ts` + API |
+| iCloud calendar sync | PROVIDER_BLOCKED | Channel stub |
+| Event tickets + QR admission | CODE_COMPLETE + UA_PENDING | `event-tickets.ts` + Prisma |
+| Make Me Look Busy | CODE_COMPLETE | `availability-density.ts` |
+| Package lifecycle depth | CODE_COMPLETE | `package-lifecycle.ts` + cancel restore |
+| Membership lifecycle depth | CODE_COMPLETE | `membership-lifecycle.ts` |
+| Unified portal history | CODE_COMPLETE + UA_PENDING | Portal API enriched |
+| Terms versioned acceptance | CODE_COMPLETE + UA_PENDING | Public book + metadata snapshot |
+| Refunds + wallet credit | CODE_COMPLETE | `appointment-refunds.ts` |
+| Resource pools | CODE_COMPLETE | `resource-pools.ts` + Prisma groups |
+| Class capacity display | CODE_COMPLETE | `class-capacity-display.ts` |
+
 ## UA_PENDING queue (certify on stable deployment)
 
 1. Resource booking end-to-end with reload verification

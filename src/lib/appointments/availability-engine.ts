@@ -104,6 +104,15 @@ export async function generateNativeSlots(
   const bufferBefore = ctx.bufferBeforeMinutes * 60_000;
   const bufferAfter = ctx.bufferAfterMinutes * 60_000;
   const noticeMs = ctx.minimumNoticeMinutes * 60_000;
+  const slotStep = (await import("@/lib/appointments/service-booking/fixed-start-times")).slotStepMinutes(
+    durationMinutes,
+    svcCfg.schedulingLimits?.customStartIntervalMinutes ?? svcCfg.customStartIntervalMinutes,
+  );
+  const fixedStartConfig =
+    svcCfg.schedulingLimits?.fixedStartTimes ?? svcCfg.fixedStartTimes;
+  const densityHidePercent =
+    svcCfg.schedulingLimits?.availabilityDensityHidePercent ??
+    svcCfg.availabilityDensityHidePercent;
   const now = new Date();
   const prisma = getPrisma();
   const slots: AvailabilitySlot[] = [];
@@ -182,7 +191,7 @@ export async function generateNativeSlots(
       for (
         let slotStart = openMin;
         slotStart + durationMinutes <= closeMin;
-        slotStart += durationMinutes
+        slotStart += slotStep
       ) {
         const hour = Math.floor(slotStart / 60);
         const minute = slotStart % 60;
@@ -278,10 +287,19 @@ export async function generateNativeSlots(
       existing.map((r) => r.startsAt),
       "prefer_compact",
     );
-    return { slots: ranked, staffBySlot };
+    slots.splice(0, slots.length, ...ranked);
   }
 
-  return { slots, staffBySlot };
+  const { filterSlotsToFixedStartTimes } = await import(
+    "@/lib/appointments/service-booking/fixed-start-times"
+  );
+  const { applyAvailabilityDensityHide } = await import(
+    "@/lib/appointments/service-booking/availability-density"
+  );
+  let finalSlots = filterSlotsToFixedStartTimes(slots, fixedStartConfig, tz);
+  finalSlots = applyAvailabilityDensityHide(finalSlots, densityHidePercent, workspaceId);
+
+  return { slots: finalSlots, staffBySlot };
 }
 
 /** Explain which staff members are available at a specific slot. */

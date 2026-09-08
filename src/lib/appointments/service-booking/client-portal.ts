@@ -26,7 +26,7 @@ export async function resolveClientPortalSession(token: string) {
   });
   if (!session || session.expiresAt < new Date()) return null;
 
-  const [appointments, entitlements, waitlist, workspace] = await Promise.all([
+  const [appointments, entitlements, waitlist, workspace, packageLedgers] = await Promise.all([
     prisma.voiceAppointment.findMany({
       where: { workspaceId: session.workspaceId, contactId: session.contactId },
       orderBy: { startsAt: "desc" },
@@ -40,6 +40,14 @@ export async function resolveClientPortalSession(token: string) {
     prisma.workspace.findUnique({
       where: { id: session.workspaceId },
       select: { slug: true },
+    }),
+    prisma.packageLedgerEntry.findMany({
+      where: {
+        balance: { workspaceId: session.workspaceId, contactId: session.contactId },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { balance: { include: { product: true } } },
     }),
   ]);
 
@@ -55,10 +63,29 @@ export async function resolveClientPortalSession(token: string) {
       id: a.id,
       serviceName: a.serviceName,
       startsAt: a.startsAt.toISOString(),
+      endsAt: a.endsAt?.toISOString(),
       status: a.status,
       metadata: a.metadata as { manageAppointmentUrl?: string },
     })),
+    upcomingAppointments: appointments
+      .filter((a) => a.startsAt > new Date() && !["canceled", "cancelled", "completed", "no_show"].includes(a.status))
+      .map((a) => ({
+        id: a.id,
+        serviceName: a.serviceName,
+        startsAt: a.startsAt.toISOString(),
+        status: a.status,
+      })),
+    pastAppointments: appointments
+      .filter((a) => a.startsAt <= new Date() || ["completed", "no_show", "canceled", "cancelled"].includes(a.status))
+      .map((a) => ({
+        id: a.id,
+        serviceName: a.serviceName,
+        startsAt: a.startsAt.toISOString(),
+        status: a.status,
+      })),
     entitlements,
+    packagePurchaseHistory: packageLedgers.filter((e) => e.kind === "purchase"),
+    packageUsageHistory: packageLedgers.filter((e) => e.kind === "redeem" || e.kind === "adjustment"),
     waitlist,
   };
 }

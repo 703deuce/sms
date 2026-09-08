@@ -53,6 +53,7 @@ export type PublicBookingWorkspace = {
   businessAddress: string;
   consentText: string;
   termsUrl: string;
+  termsVersion?: string;
   privacyUrl: string;
   aiBookingEnabled?: boolean;
   waitlistEnabled?: boolean;

@@ -177,6 +177,10 @@ export function PublicBookingServiceFlowInner({
               recurringPreviewLoading={flow.recurringPreviewLoading}
               sessionLineCount={flow.sessionLines.length}
               onCheckoutSession={() => void flow.checkoutSession()}
+              termsRequired={Boolean(ws.termsVersion)}
+              termsUrl={ws.termsUrl}
+              termsAccepted={flow.termsAccepted}
+              onTermsAcceptedChange={flow.setTermsAccepted}
             />
           ) : null}
 

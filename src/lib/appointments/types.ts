@@ -184,6 +184,8 @@ export type AppointmentPlatformConfig = {
   consentText?: string;
   consentVersion?: string;
   termsUrl?: string;
+  termsVersion?: string;
+  termsText?: string;
   privacyUrl?: string;
   onboardingComplete?: boolean;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;

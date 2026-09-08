@@ -226,6 +226,8 @@ export async function createPlatformAppointment(
     notes?: string;
     bookingAnswers?: Record<string, string>;
     smsConsent?: boolean;
+    termsAccepted?: boolean;
+    termsVersion?: string;
     source?: "admin" | "public_booking" | "waitlist";
     status?: string;
     skipSms?: boolean;
@@ -263,6 +265,16 @@ export async function createPlatformAppointment(
     where: { id: workspaceId },
     select: { slug: true, displayName: true, name: true },
   });
+
+  if (input.source === "public_booking" && platform.termsVersion) {
+    const { validateTermsAcceptance, buildTermsAcceptanceSnapshot } = await import(
+      "@/lib/appointments/service-booking/terms-acceptance"
+    );
+    validateTermsAcceptance(
+      { termsAccepted: input.termsAccepted, termsVersion: input.termsVersion },
+      platform.termsVersion,
+    );
+  }
 
   let serviceName = input.serviceName;
   let svcCfg: AppointmentTypeConfig = {};
@@ -430,6 +442,18 @@ export async function createPlatformAppointment(
     ? "awaiting_confirmation"
     : input.status || "awaiting_confirmation";
 
+  let termsAcceptanceSnapshot: import("@/lib/appointments/service-booking/types").TermsAcceptanceSnapshot | undefined;
+  if (input.termsAccepted && platform.termsVersion) {
+    const { buildTermsAcceptanceSnapshot } = await import(
+      "@/lib/appointments/service-booking/terms-acceptance"
+    );
+    termsAcceptanceSnapshot = buildTermsAcceptanceSnapshot({
+      termsVersion: platform.termsVersion,
+      termsText: platform.termsText || platform.termsVersion,
+      termsUrl: platform.termsUrl,
+    });
+  }
+
   const metadata = appendTimeline(
     resetAppointmentReminders({
       source: input.source || "admin",
@@ -440,6 +464,7 @@ export async function createPlatformAppointment(
       smsConsentAt: input.smsConsent ? new Date().toISOString() : undefined,
       smsConsentVersion: input.smsConsent ? platform.consentVersion || "v1" : undefined,
       smsConsentText: input.smsConsent ? platform.consentText : undefined,
+      termsAcceptance: termsAcceptanceSnapshot,
       confirmToken,
       cancelToken,
       rescheduleToken,
@@ -829,6 +854,15 @@ export async function cancelPlatformAppointment(
     } catch (err) {
       console.warn("[appointments] auto-refund on cancel failed", err);
     }
+  }
+
+  try {
+    const { restorePackageCreditsForAppointment } = await import(
+      "@/lib/appointments/service-booking/package-lifecycle"
+    );
+    await restorePackageCreditsForAppointment(workspaceId, appointmentId, "cancel");
+  } catch (err) {
+    console.warn("[appointments] package credit restore on cancel failed", err);
   }
 
   try {

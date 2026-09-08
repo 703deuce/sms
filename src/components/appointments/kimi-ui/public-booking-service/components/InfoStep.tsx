@@ -48,6 +48,10 @@ export function InfoStep({
   recurringPreviewLoading,
   sessionLineCount = 0,
   onCheckoutSession,
+  termsRequired = false,
+  termsUrl = "/terms",
+  termsAccepted = false,
+  onTermsAcceptedChange,
 }: {
   type: BookingType;
   startsAt: string;
@@ -108,6 +112,10 @@ export function InfoStep({
   recurringPreviewLoading?: boolean;
   sessionLineCount?: number;
   onCheckoutSession?: () => void;
+  termsRequired?: boolean;
+  termsUrl?: string;
+  termsAccepted?: boolean;
+  onTermsAcceptedChange?: (value: boolean) => void;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -499,6 +507,26 @@ export function InfoStep({
         <Label htmlFor="notes">Notes for the office — optional</Label>
         <Textarea id="notes" rows={2} placeholder="Anything else we should know?" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
+
+      {termsRequired ? (
+      <div className="mt-5 rounded-xl border border-border bg-muted/40 p-4">
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(e) => onTermsAcceptedChange?.(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            required={termsRequired}
+          />
+          <span className="text-[12px] leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground">I agree to the terms and conditions.</span>{" "}
+            <a href={termsUrl} className="font-semibold text-primary hover:underline" target="_blank" rel="noreferrer">
+              Read terms
+            </a>
+          </span>
+        </label>
+      </div>
+      ) : null}
 
       <div className="mt-5 rounded-xl border border-border bg-muted/40 p-4">
         <label className="flex items-start gap-3">
