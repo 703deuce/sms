@@ -269,11 +269,21 @@ export async function createAppointmentUserAction(page: Page) {
 
   const createBtn = page.getByRole("button", { name: /create appointment/i }).first();
   await createBtn.click({ timeout: ACTION_TIMEOUT });
-  await page.waitForTimeout(2000);
 
-  const body = await page.locator("body").innerText();
-  if (!/appointment created|view appointment/i.test(body)) {
-    throw new Error("Create appointment did not show success state");
+  const navigated = await page
+    .waitForURL(/\/appointments\/(?!new)[^/?#]+/, { timeout: NAV_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!navigated) {
+    await page.waitForTimeout(2000);
+    const body = await page.locator("body").innerText();
+    if (/could not create|fields need attention|enter a mobile/i.test(body)) {
+      throw new Error(`Create appointment failed: ${body.slice(0, 240)}`);
+    }
+    if (!/appointment created|view appointment/i.test(body)) {
+      throw new Error("Create appointment did not show success state");
+    }
   }
 
   const viewLink = page.getByRole("link", { name: /view appointment/i }).first();
