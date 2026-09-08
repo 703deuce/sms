@@ -141,6 +141,19 @@ const MODEL_TO_TABLE: Record<string, string> = {
   videoParticipant: "video_participants",
   videoChatMessage: "video_chat_messages",
   appointmentSlotHold: "appointment_slot_holds",
+  bookingCategory: "booking_categories",
+  manageAppointmentToken: "manage_appointment_tokens",
+  packageProduct: "package_products",
+  packageBalance: "package_balances",
+  packageLedgerEntry: "package_ledger_entries",
+  giftCertificateProduct: "gift_certificate_products",
+  giftCertificateBalance: "gift_certificate_balances",
+  giftCertificateLedgerEntry: "gift_certificate_ledger_entries",
+  intakeForm: "intake_forms",
+  intakeFormResponse: "intake_form_responses",
+  clientPortalSession: "client_portal_sessions",
+  clientWalletAccount: "client_wallet_accounts",
+  clientWalletLedgerEntry: "client_wallet_ledger_entries",
   appointmentAiMutationRecord: "appointment_ai_mutation_records",
   appointmentWorkflow: "appointment_workflows",
   appointmentWorkflowExecution: "appointment_workflow_executions",
@@ -556,6 +569,43 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   appointmentWorkflow: {
     workspace: { table: "Workspace", fk: "workspaceId" },
     executions: { table: "appointment_workflow_executions", fk: "workflowId", pk: "id" },
+  },
+  bookingCategory: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  manageAppointmentToken: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  packageProduct: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  packageBalance: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    product: { table: "package_products", fk: "productId" },
+  },
+  packageLedgerEntry: {
+    balance: { table: "package_balances", fk: "balanceId" },
+  },
+  giftCertificateBalance: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  intakeForm: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  intakeFormResponse: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    form: { table: "intake_forms", fk: "formId" },
+  },
+  clientPortalSession: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    contact: { table: "Contact", fk: "contactId" },
+  },
+  clientWalletAccount: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    ledger: { table: "client_wallet_ledger_entries", fk: "accountId", pk: "id" },
+  },
+  clientWalletLedgerEntry: {
+    account: { table: "client_wallet_accounts", fk: "accountId" },
   },
   appointmentWorkflowExecution: {
     workspace: { table: "Workspace", fk: "workspaceId" },
