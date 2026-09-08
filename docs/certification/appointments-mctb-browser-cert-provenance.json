@@ -1,8 +1,8 @@
 {
-  "recordedAt": "2026-09-07T23:31:48.868Z",
-  "certificationStartedAt": "2026-09-07T23:31:48.868Z",
-  "baseUrl": "[preview — see browser-cert.config.ts]",
-  "gitCommitSha": "50f5ffcbb467bac877ef3315b2bcaaec373781fb",
+  "recordedAt": "2026-09-08T00:28:35.209Z",
+  "certificationStartedAt": "2026-09-08T00:28:35.209Z",
+  "baseUrl": "see scripts/browser-cert/browser-cert.config.ts",
+  "gitCommitSha": "2a0de8d749930686ba18b80205b49de80e3abdd3",
   "deployCommitSha": "unknown",
   "provenanceVerified": false
 }

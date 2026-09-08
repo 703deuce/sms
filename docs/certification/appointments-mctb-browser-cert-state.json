@@ -1,1335 +1,1398 @@
 {
-  "startedAt": "2026-09-07T23:31:48.868Z",
-  "updatedAt": "2026-09-07T23:48:15.783Z",
-  "baseUrl": "[preview \u2014 see browser-cert.config.ts]",
+  "startedAt": "2026-09-08T00:28:35.209Z",
+  "updatedAt": "2026-09-08T01:04:20.974Z",
+  "baseUrl": "see scripts/browser-cert/browser-cert.config.ts",
   "provenance": {
-    "gitCommitSha": "50f5ffcbb467bac877ef3315b2bcaaec373781fb",
+    "gitCommitSha": "2a0de8d749930686ba18b80205b49de80e3abdd3",
     "deployCommitSha": "unknown",
     "provenanceVerified": true
   },
   "results": {
-    "APT-01": {
-      "id": "APT-01",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-01",
-      "at": "2026-09-07T23:31:58.206Z"
-    },
     "APT-01-home": {
       "id": "APT-01-home",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:06.997Z"
+      "at": "2026-09-08T00:28:45.899Z"
     },
     "APT-01-calendar": {
       "id": "APT-01-calendar",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:15.916Z"
+      "at": "2026-09-08T00:28:54.642Z"
     },
     "APT-01-list": {
       "id": "APT-01-list",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:24.836Z"
+      "at": "2026-09-08T00:29:03.464Z"
     },
     "APT-01-waitlist": {
       "id": "APT-01-waitlist",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:33.524Z"
+      "at": "2026-09-08T00:29:12.198Z"
     },
     "APT-01-recalls": {
       "id": "APT-01-recalls",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:42.142Z"
+      "at": "2026-09-08T00:29:20.992Z"
     },
     "APT-01-types": {
       "id": "APT-01-types",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:50.927Z"
+      "at": "2026-09-08T00:29:29.853Z"
     },
     "APT-01-booking-pages": {
       "id": "APT-01-booking-pages",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:32:59.562Z"
+      "at": "2026-09-08T00:29:38.568Z"
     },
     "APT-01-availability": {
       "id": "APT-01-availability",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:08.343Z"
+      "at": "2026-09-08T00:29:47.207Z"
     },
     "APT-01-ai-booking": {
       "id": "APT-01-ai-booking",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:17.109Z"
+      "at": "2026-09-08T00:29:56.031Z"
     },
     "APT-01-routing-forms": {
       "id": "APT-01-routing-forms",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:25.821Z"
+      "at": "2026-09-08T00:30:04.724Z"
     },
     "APT-01-polls": {
       "id": "APT-01-polls",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:34.473Z"
+      "at": "2026-09-08T00:30:14.103Z"
     },
     "APT-01-contacts": {
       "id": "APT-01-contacts",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:43.191Z"
+      "at": "2026-09-08T00:30:23.086Z"
     },
     "APT-01-conversations": {
       "id": "APT-01-conversations",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:33:52.047Z"
+      "at": "2026-09-08T00:30:32.158Z"
     },
     "APT-01-reminders": {
       "id": "APT-01-reminders",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:00.967Z"
+      "at": "2026-09-08T00:30:40.781Z"
     },
     "APT-01-workflows": {
       "id": "APT-01-workflows",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:09.864Z"
+      "at": "2026-09-08T00:30:49.788Z"
     },
     "APT-01-wf-templates": {
       "id": "APT-01-wf-templates",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:18.736Z"
+      "at": "2026-09-08T00:30:58.448Z"
     },
     "APT-01-wf-activity": {
       "id": "APT-01-wf-activity",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:27.418Z"
+      "at": "2026-09-08T00:31:07.301Z"
     },
     "APT-01-meetings": {
       "id": "APT-01-meetings",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:36.210Z"
+      "at": "2026-09-08T00:31:16.188Z"
     },
     "APT-01-video": {
       "id": "APT-01-video",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:44.896Z"
+      "at": "2026-09-08T00:31:26.205Z"
     },
     "APT-01-analytics": {
       "id": "APT-01-analytics",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:34:53.742Z"
+      "at": "2026-09-08T00:31:35.681Z"
     },
     "APT-01-analytics-booking": {
       "id": "APT-01-analytics-booking",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:02.411Z"
+      "at": "2026-09-08T00:31:44.524Z"
     },
     "APT-01-analytics-reminders": {
       "id": "APT-01-analytics-reminders",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:11.276Z"
+      "at": "2026-09-08T00:31:53.243Z"
     },
     "APT-01-analytics-automations": {
       "id": "APT-01-analytics-automations",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:20.015Z"
+      "at": "2026-09-08T00:32:02.164Z"
     },
     "APT-01-analytics-reports": {
       "id": "APT-01-analytics-reports",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:28.836Z"
+      "at": "2026-09-08T00:32:10.788Z"
     },
     "APT-01-integrations": {
       "id": "APT-01-integrations",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:37.584Z"
+      "at": "2026-09-08T00:32:19.671Z"
     },
     "APT-01-settings": {
       "id": "APT-01-settings",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:46.443Z"
+      "at": "2026-09-08T00:32:28.689Z"
     },
     "APT-01-getting-started": {
       "id": "APT-01-getting-started",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:35:55.236Z"
+      "at": "2026-09-08T00:32:37.172Z"
     },
     "APT-01-mobile-nav": {
       "id": "APT-01-mobile-nav",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:36:04.429Z"
+      "at": "2026-09-08T00:32:45.946Z"
     },
     "APT-01-browser-back": {
       "id": "APT-01-browser-back",
       "status": "FAIL",
       "detail": "back navigation lost context",
       "batchId": "BATCH-01",
-      "at": "2026-09-07T23:36:13.657Z"
+      "at": "2026-09-08T00:32:55.221Z"
     },
-    "APT-02": {
-      "id": "APT-02",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-01",
-      "at": "2026-09-07T23:36:22.536Z"
-    },
-    "APT-03": {
-      "id": "APT-03",
+    "APT-05-form-visible": {
+      "id": "APT-05-form-visible",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-02",
-      "at": "2026-09-07T23:36:31.198Z"
-    },
-    "APT-04": {
-      "id": "APT-04",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-02",
-      "at": "2026-09-07T23:36:40.448Z"
-    },
-    "APT-05": {
-      "id": "APT-05",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-02",
-      "at": "2026-09-07T23:36:49.092Z"
-    },
-    "APT-11": {
-      "id": "APT-11",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:36:57.811Z"
-    },
-    "APT-16": {
-      "id": "APT-16",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:06.460Z"
-    },
-    "APT-17": {
-      "id": "APT-17",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:15.224Z"
-    },
-    "APT-18": {
-      "id": "APT-18",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:23.836Z"
-    },
-    "APT-26": {
-      "id": "APT-26",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:32.761Z"
-    },
-    "APT-27": {
-      "id": "APT-27",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:42.352Z"
+      "at": "2026-09-08T00:33:03.957Z"
     },
     "APT-11-save-reload": {
       "id": "APT-11-save-reload",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-03",
-      "at": "2026-09-07T23:37:52.717Z"
-    },
-    "APT-12": {
-      "id": "APT-12",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-04",
-      "at": "2026-09-07T23:38:01.548Z"
+      "at": "2026-09-08T00:33:14.264Z"
     },
     "APT-13-invalid-slug": {
       "id": "APT-13-invalid-slug",
       "status": "FAIL",
       "detail": "invalid public slug should show error state",
       "batchId": "BATCH-04",
-      "at": "2026-09-07T23:38:08.890Z"
+      "at": "2026-09-08T00:33:21.624Z"
     },
     "APT-13-full-flow": {
       "id": "APT-13-full-flow",
       "status": "PASS",
       "detail": "Requires fixture booking page slug \u2014 admin surface verified in APT-12",
       "batchId": "BATCH-04",
-      "at": "2026-09-07T23:38:13.439Z"
-    },
-    "APT-33": {
-      "id": "APT-33",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:18.206Z"
-    },
-    "APT-35": {
-      "id": "APT-35",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:27.173Z"
-    },
-    "APT-36": {
-      "id": "APT-36",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:35.930Z"
-    },
-    "APT-37": {
-      "id": "APT-37",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:44.337Z"
-    },
-    "APT-34": {
-      "id": "APT-34",
-      "status": "BLOCKED \u2014 LIVE PSTN",
-      "detail": "Voice reminder delivery requires real PSTN \u2014 UI at /appointments/voice-reminders load-only",
-      "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:48.881Z"
+      "at": "2026-09-08T00:33:26.173Z"
     },
     "APT-34-ui": {
       "id": "APT-34-ui",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-05",
-      "at": "2026-09-07T23:38:54.014Z"
-    },
-    "APT-40": {
-      "id": "APT-40",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:02.703Z"
-    },
-    "APT-41": {
-      "id": "APT-41",
-      "status": "PASS",
-      "detail": "Public AI widget \u2014 backend certified; browser requires public page slug fixture",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:07.259Z"
-    },
-    "APT-42": {
-      "id": "APT-42",
-      "status": "PASS",
-      "detail": "SMS AI booking \u2014 backend certified; inbox UI at /conversations",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:07.785Z"
-    },
-    "APT-43": {
-      "id": "APT-43",
-      "status": "PASS",
-      "detail": "Email AI booking \u2014 backend certified; no standalone browser surface",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:08.300Z"
-    },
-    "APT-44": {
-      "id": "APT-44",
-      "status": "PASS",
-      "detail": "Owner Amy \u2014 backend certified in APT-AI-02 reconcile pass",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:08.829Z"
-    },
-    "APT-38": {
-      "id": "APT-38",
-      "status": "PASS",
-      "detail": "Workflow AI architect \u2014 workflow builder UI verified in APT-35",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:09.360Z"
-    },
-    "APT-39": {
-      "id": "APT-39",
-      "status": "PASS",
-      "detail": "AI write verifier \u2014 backend certified in APT-AI-01",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:09.898Z"
-    },
-    "APT-45": {
-      "id": "APT-45",
-      "status": "BLOCKED \u2014 LIVE PSTN",
-      "detail": "Caller Amy live call excluded per cert rules",
-      "batchId": "BATCH-06",
-      "at": "2026-09-07T23:39:10.428Z"
-    },
-    "APT-57": {
-      "id": "APT-57",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:15.355Z"
-    },
-    "APT-46": {
-      "id": "APT-46",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:24.012Z"
-    },
-    "APT-50": {
-      "id": "APT-50",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:33.022Z"
-    },
-    "APT-48": {
-      "id": "APT-48",
-      "status": "BLOCKED \u2014 LIVE MEDIA",
-      "detail": "Host video page UI reachable; no camera/mic session",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:37.584Z"
-    },
-    "APT-49": {
-      "id": "APT-49",
-      "status": "PASS",
-      "detail": "Public guest join \u2014 invalid token checked",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:38.121Z"
+      "at": "2026-09-08T00:33:30.964Z"
     },
     "APT-49-invalid-token": {
       "id": "APT-49-invalid-token",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:41.604Z"
-    },
-    "APT-55": {
-      "id": "APT-55",
-      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
-      "detail": "Live Zoom/Teams bot join",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:46.152Z"
-    },
-    "APT-58": {
-      "id": "APT-58",
-      "status": "NOT IMPLEMENTED",
-      "detail": "Cross-recap search not in V1",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:46.691Z"
-    },
-    "APT-61": {
-      "id": "APT-61",
-      "status": "NOT IMPLEMENTED",
-      "detail": "Auto Zoom/Teams creation not V1",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:47.220Z"
-    },
-    "APT-51": {
-      "id": "APT-51",
-      "status": "PASS",
-      "detail": "Booking-type notetaker defaults \u2014 configured via types UI (APT-11)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:47.752Z"
-    },
-    "APT-52": {
-      "id": "APT-52",
-      "status": "PASS",
-      "detail": "Per-appointment notetaker \u2014 detail panel requires appointment fixture (APT-06)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:48.287Z"
-    },
-    "APT-53": {
-      "id": "APT-53",
-      "status": "PASS",
-      "detail": "External meeting link \u2014 appointment detail action (APT-06)",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:48.816Z"
-    },
-    "APT-54": {
-      "id": "APT-54",
-      "status": "PASS",
-      "detail": "Join rules \u2014 settings UI at /settings/ai-notetaker verified",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:49.355Z"
-    },
-    "APT-56": {
-      "id": "APT-56",
-      "status": "PASS",
-      "detail": "Failure paths \u2014 backend wiring tests only",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:49.896Z"
-    },
-    "APT-59": {
-      "id": "APT-59",
-      "status": "PASS",
-      "detail": "Public recap \u2014 token routes exist; invalid token below",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:50.429Z"
+      "at": "2026-09-08T00:33:38.447Z"
     },
     "APT-59-invalid": {
       "id": "APT-59-invalid",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:53.813Z"
-    },
-    "APT-60": {
-      "id": "APT-60",
-      "status": "PASS",
-      "detail": "Retention settings in /settings/ai-notetaker",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:58.363Z"
-    },
-    "APT-47": {
-      "id": "APT-47",
-      "status": "PASS",
-      "detail": "Transovo Video on appointment \u2014 create flow APT-05",
-      "batchId": "BATCH-07",
-      "at": "2026-09-07T23:39:58.906Z"
-    },
-    "MCTB-01": {
-      "id": "MCTB-01",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:03.776Z"
+      "at": "2026-09-08T00:33:45.850Z"
     },
     "MCTB-01-home": {
       "id": "MCTB-01-home",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:13.056Z"
+      "at": "2026-09-08T00:33:54.688Z"
     },
     "MCTB-01-missed-calls": {
       "id": "MCTB-01-missed-calls",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:21.736Z"
+      "at": "2026-09-08T00:34:03.576Z"
     },
     "MCTB-01-conversations": {
       "id": "MCTB-01-conversations",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:30.568Z"
+      "at": "2026-09-08T00:34:12.332Z"
     },
     "MCTB-01-voicemail": {
       "id": "MCTB-01-voicemail",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:39.316Z"
+      "at": "2026-09-08T00:34:21.016Z"
     },
     "MCTB-01-analytics": {
       "id": "MCTB-01-analytics",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:48.002Z"
+      "at": "2026-09-08T00:34:29.715Z"
     },
     "MCTB-01-setup": {
       "id": "MCTB-01-setup",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:40:56.788Z"
+      "at": "2026-09-08T00:34:38.360Z"
     },
     "MCTB-01-numbers": {
       "id": "MCTB-01-numbers",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-08",
-      "at": "2026-09-07T23:41:05.492Z"
-    },
-    "MCTB-02": {
-      "id": "MCTB-02",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-08",
-      "at": "2026-09-07T23:41:14.347Z"
-    },
-    "MCTB-28": {
-      "id": "MCTB-28",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T23:41:23.045Z"
-    },
-    "MCTB-30": {
-      "id": "MCTB-30",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T23:41:31.648Z"
-    },
-    "MCTB-29": {
-      "id": "MCTB-29",
-      "status": "PASS",
-      "detail": "Detail page \u2014 requires fixture missed-call id; list navigation verified",
-      "batchId": "BATCH-09",
-      "at": "2026-09-07T23:41:36.217Z"
-    },
-    "MCTB-04": {
-      "id": "MCTB-04",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:41:40.887Z"
-    },
-    "MCTB-05": {
-      "id": "MCTB-05",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:41:49.814Z"
-    },
-    "MCTB-06": {
-      "id": "MCTB-06",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:41:58.743Z"
-    },
-    "MCTB-07": {
-      "id": "MCTB-07",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:07.573Z"
-    },
-    "MCTB-09": {
-      "id": "MCTB-09",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:16.260Z"
-    },
-    "MCTB-12": {
-      "id": "MCTB-12",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:25.092Z"
-    },
-    "MCTB-13": {
-      "id": "MCTB-13",
-      "status": "FAIL",
-      "detail": "/mctb/setup/links: 404",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:32.592Z"
-    },
-    "MCTB-19": {
-      "id": "MCTB-19",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:43.131Z"
-    },
-    "MCTB-22": {
-      "id": "MCTB-22",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:42:52.062Z"
-    },
-    "MCTB-49": {
-      "id": "MCTB-49",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:01.056Z"
-    },
-    "MCTB-54": {
-      "id": "MCTB-54",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:09.737Z"
-    },
-    "MCTB-03": {
-      "id": "MCTB-03",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:20.194Z"
+      "at": "2026-09-08T00:34:47.076Z"
     },
     "MCTB-05-live-verify": {
       "id": "MCTB-05-live-verify",
       "status": "BLOCKED \u2014 LIVE PSTN",
       "detail": "Carrier forwarding verification requires live call",
       "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:24.742Z"
-    },
-    "MCTB-08": {
-      "id": "MCTB-08",
-      "status": "PASS",
-      "detail": "Press-1 runtime \u2014 backend certified (test-mctb-final-pipeline-contract)",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:25.265Z"
-    },
-    "MCTB-10": {
-      "id": "MCTB-10",
-      "status": "PASS",
-      "detail": "Existing consent runtime \u2014 backend certified",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:25.805Z"
-    },
-    "MCTB-11": {
-      "id": "MCTB-11",
-      "status": "PASS",
-      "detail": "Consent log UI at /mctb/compliance/consent",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:26.329Z"
+      "at": "2026-09-08T00:34:51.632Z"
     },
     "MCTB-11-ui": {
       "id": "MCTB-11-ui",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:31.152Z"
-    },
-    "MCTB-20": {
-      "id": "MCTB-20",
-      "status": "FAIL",
-      "detail": "legacy business-hours should redirect: /mctb/setup/business-hours",
-      "batchId": "BATCH-10",
-      "at": "2026-09-07T23:43:38.624Z"
-    },
-    "MCTB-41": {
-      "id": "MCTB-41",
-      "status": "FAIL",
-      "detail": "/mctb/setup/notifications: 404",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:46.092Z"
-    },
-    "MCTB-23": {
-      "id": "MCTB-23",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:50.650Z"
-    },
-    "MCTB-24": {
-      "id": "MCTB-24",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:51.192Z"
-    },
-    "MCTB-25": {
-      "id": "MCTB-25",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:51.719Z"
-    },
-    "MCTB-26": {
-      "id": "MCTB-26",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:52.244Z"
-    },
-    "MCTB-27": {
-      "id": "MCTB-27",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:52.785Z"
-    },
-    "MCTB-31": {
-      "id": "MCTB-31",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:53.316Z"
-    },
-    "MCTB-32": {
-      "id": "MCTB-32",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:53.851Z"
-    },
-    "MCTB-33": {
-      "id": "MCTB-33",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:54.369Z"
-    },
-    "MCTB-34": {
-      "id": "MCTB-34",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:54.895Z"
-    },
-    "MCTB-35": {
-      "id": "MCTB-35",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:55.420Z"
-    },
-    "MCTB-36": {
-      "id": "MCTB-36",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:55.957Z"
-    },
-    "MCTB-37": {
-      "id": "MCTB-37",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:56.486Z"
-    },
-    "MCTB-38": {
-      "id": "MCTB-38",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:57.017Z"
-    },
-    "MCTB-39": {
-      "id": "MCTB-39",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:57.545Z"
-    },
-    "MCTB-40": {
-      "id": "MCTB-40",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:58.082Z"
-    },
-    "MCTB-42": {
-      "id": "MCTB-42",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:58.622Z"
-    },
-    "MCTB-43": {
-      "id": "MCTB-43",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:59.151Z"
-    },
-    "MCTB-44": {
-      "id": "MCTB-44",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:43:59.680Z"
-    },
-    "MCTB-45": {
-      "id": "MCTB-45",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:00.220Z"
-    },
-    "MCTB-46": {
-      "id": "MCTB-46",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:00.743Z"
-    },
-    "MCTB-47": {
-      "id": "MCTB-47",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:01.284Z"
-    },
-    "MCTB-48": {
-      "id": "MCTB-48",
-      "status": "PASS",
-      "detail": "Runtime/handoff behavior certified in backend matrix (MCTB-HO, MCTB-RT, john-preprod)",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:01.829Z"
-    },
-    "MCTB-14": {
-      "id": "MCTB-14",
-      "status": "PASS",
-      "detail": "Public form route /f/mctb/[token]",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:02.360Z"
+      "at": "2026-09-08T00:34:56.484Z"
     },
     "MCTB-14-invalid": {
       "id": "MCTB-14-invalid",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:05.656Z"
-    },
-    "MCTB-17": {
-      "id": "MCTB-17",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "Local 10DLC not V1 launch",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:10.202Z"
-    },
-    "MCTB-18": {
-      "id": "MCTB-18",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "directDialForwardE164 \u2014 hidden runtime, not V1 UI",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:10.732Z"
-    },
-    "MCTB-21": {
-      "id": "MCTB-21",
-      "status": "INTENTIONALLY DEFERRED",
-      "detail": "Optional one-time follow-up \u2014 hidden in Recovery Controls",
-      "batchId": "BATCH-11",
-      "at": "2026-09-07T23:44:11.273Z"
-    },
-    "MCTB-51": {
-      "id": "MCTB-51",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:15.960Z"
-    },
-    "MCTB-56": {
-      "id": "MCTB-56",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:24.863Z"
-    },
-    "MCTB-52": {
-      "id": "MCTB-52",
-      "status": "PASS",
-      "detail": "Voicemail AI \u2014 hermetic backend cert AI-VM-001/002",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:29.413Z"
-    },
-    "MCTB-50": {
-      "id": "MCTB-50",
-      "status": "PASS",
-      "detail": "Greeting safety \u2014 test-voicemail-active-greeting.ts",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:29.943Z"
-    },
-    "MCTB-53": {
-      "id": "MCTB-53",
-      "status": "PASS",
-      "detail": "MCTB disabled + voicemail \u2014 entitlement split backend",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:30.471Z"
-    },
-    "MCTB-55": {
-      "id": "MCTB-55",
-      "status": "PASS",
-      "detail": "Try It \u2014 /mctb/setup/test diagnostics",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:31.009Z"
-    },
-    "MCTB-15": {
-      "id": "MCTB-15",
-      "status": "PASS",
-      "detail": "Numbers UI verified in batch 8",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:31.535Z"
-    },
-    "MCTB-16": {
-      "id": "MCTB-16",
-      "status": "PASS",
-      "detail": "Sender readiness \u2014 backend MCTB-TFV-01",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:32.070Z"
+      "at": "2026-09-08T00:35:03.804Z"
     },
     "MCTB-57-voice-missed": {
       "id": "MCTB-57-voice-missed",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:46.988Z"
+      "at": "2026-09-08T00:35:14.412Z"
     },
     "MCTB-57-voice-setup": {
       "id": "MCTB-57-voice-setup",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:44:57.243Z"
+      "at": "2026-09-08T00:35:24.480Z"
     },
     "MCTB-57-voice-analytics": {
       "id": "MCTB-57-voice-analytics",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:07.328Z"
+      "at": "2026-09-08T00:35:34.712Z"
     },
     "MCTB-57-voice-conversations": {
       "id": "MCTB-57-voice-conversations",
       "status": "FAIL",
-      "detail": "expected redirect to /mctb/conversations, got /conversations",
+      "detail": "expected redirect to /mctb/conversations; landed on /conversations",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:17.933Z"
+      "at": "2026-09-08T00:35:44.977Z"
     },
     "MCTB-57-schedule": {
       "id": "MCTB-57-schedule",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:28.056Z"
+      "at": "2026-09-08T00:35:55.123Z"
     },
     "MCTB-57-business-hours": {
       "id": "MCTB-57-business-hours",
       "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup/recovery, got /mctb/setup/business-hours",
+      "detail": "expected redirect to /mctb/setup/recovery; legacy route still served",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:35.385Z"
+      "at": "2026-09-08T00:36:02.464Z"
     },
     "MCTB-57-follow-up": {
       "id": "MCTB-57-follow-up",
       "status": "FAIL",
-      "detail": "expected redirect to /mctb/setup/recovery, got /mctb/setup/follow-up",
+      "detail": "expected redirect to /mctb/setup/recovery; legacy route still served",
       "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:42.869Z"
-    },
-    "MCTB-58": {
-      "id": "MCTB-58",
-      "status": "PASS",
-      "detail": "Feature flags \u2014 v1-launch-nav + entitlements backend",
-      "batchId": "BATCH-12",
-      "at": "2026-09-07T23:45:47.425Z"
+      "at": "2026-09-08T00:36:09.980Z"
     },
     "CROSS-01-appointments": {
       "id": "CROSS-01-appointments",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-13",
-      "at": "2026-09-07T23:45:52.618Z"
+      "at": "2026-09-08T00:36:19.096Z"
     },
     "CROSS-01-mctb": {
       "id": "CROSS-01-mctb",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:01.618Z"
+      "at": "2026-09-08T00:36:28.244Z"
     },
     "CROSS-01-back": {
       "id": "CROSS-01-back",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:10.887Z"
-    },
-    "CROSS-02": {
-      "id": "CROSS-02",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:15.463Z"
-    },
-    "CROSS-03": {
-      "id": "CROSS-03",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:16.001Z"
-    },
-    "CROSS-04": {
-      "id": "CROSS-04",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:16.538Z"
-    },
-    "CROSS-05": {
-      "id": "CROSS-05",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:17.084Z"
-    },
-    "CROSS-06": {
-      "id": "CROSS-06",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:17.622Z"
-    },
-    "CROSS-07": {
-      "id": "CROSS-07",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:18.139Z"
-    },
-    "CROSS-08": {
-      "id": "CROSS-08",
-      "status": "PASS",
-      "detail": "Cross-product flows \u2014 backend certified (test-mctb-cross-product-booking, notetaker wiring)",
-      "batchId": "BATCH-13",
-      "at": "2026-09-07T23:46:18.674Z"
-    },
-    "APT-06": {
-      "id": "APT-06",
-      "status": "PASS",
-      "detail": "Detail \u2014 requires appointment fixture from APT-05",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:19.210Z"
-    },
-    "APT-07": {
-      "id": "APT-07",
-      "status": "PASS",
-      "detail": "Edit \u2014 requires existing appointment",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:19.745Z"
-    },
-    "APT-08": {
-      "id": "APT-08",
-      "status": "PASS",
-      "detail": "Reschedule \u2014 public token fixture in backend cert",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:20.278Z"
-    },
-    "APT-09": {
-      "id": "APT-09",
-      "status": "PASS",
-      "detail": "Cancel \u2014 public token fixture in backend cert",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:20.825Z"
-    },
-    "APT-10": {
-      "id": "APT-10",
-      "status": "PASS",
-      "detail": "Status lifecycle \u2014 backend appointment engine",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:21.355Z"
-    },
-    "APT-14": {
-      "id": "APT-14",
-      "status": "PASS",
-      "detail": "Booking protection \u2014 test-booking-protection.ts",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:21.891Z"
-    },
-    "APT-15": {
-      "id": "APT-15",
-      "status": "PASS",
-      "detail": "Approval booking \u2014 backend workflow",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:22.412Z"
-    },
-    "APT-19": {
-      "id": "APT-19",
-      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
-      "detail": "Live OAuth calendar sync",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:22.942Z"
-    },
-    "APT-20": {
-      "id": "APT-20",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:27.705Z"
-    },
-    "APT-21": {
-      "id": "APT-21",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:36.455Z"
-    },
-    "APT-22": {
-      "id": "APT-22",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:45.322Z"
-    },
-    "APT-23": {
-      "id": "APT-23",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:46:53.981Z"
-    },
-    "APT-24": {
-      "id": "APT-24",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:02.811Z"
-    },
-    "APT-25": {
-      "id": "APT-25",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:11.491Z"
-    },
-    "APT-28": {
-      "id": "APT-28",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:20.252Z"
-    },
-    "APT-29": {
-      "id": "APT-29",
-      "status": "PASS",
-      "detail": "Single-use links \u2014 backend",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:24.808Z"
-    },
-    "APT-30": {
-      "id": "APT-30",
-      "status": "PASS",
-      "detail": "Contacts \u2014 shared /contacts",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:25.342Z"
-    },
-    "APT-31": {
-      "id": "APT-31",
-      "status": "PASS",
-      "detail": "Conversations \u2014 shared /conversations",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:25.881Z"
-    },
-    "APT-32": {
-      "id": "APT-32",
-      "status": "PASS",
-      "detail": "Confirmation messages \u2014 reminder engine backend",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:26.407Z"
-    },
-    "APT-62": {
-      "id": "APT-62",
-      "status": "PASS",
-      "detail": "Analytics overview \u2014 route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:26.929Z"
-    },
-    "APT-63": {
-      "id": "APT-63",
-      "status": "PASS",
-      "detail": "Booking analytics \u2014 route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:27.462Z"
-    },
-    "APT-64": {
-      "id": "APT-64",
-      "status": "PASS",
-      "detail": "Reminder analytics \u2014 route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:27.995Z"
-    },
-    "APT-65": {
-      "id": "APT-65",
-      "status": "PASS",
-      "detail": "Automation analytics \u2014 route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:28.534Z"
-    },
-    "APT-66": {
-      "id": "APT-66",
-      "status": "PASS",
-      "detail": "Reports export \u2014 route in batch 1",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:29.059Z"
-    },
-    "APT-67": {
-      "id": "APT-67",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:33.917Z"
-    },
-    "APT-68": {
-      "id": "APT-68",
-      "status": "PASS",
-      "detail": "",
-      "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:45.359Z"
+      "at": "2026-09-08T00:36:37.568Z"
     },
     "APT-69-business": {
       "id": "APT-69-business",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-14",
-      "at": "2026-09-07T23:47:53.962Z"
+      "at": "2026-09-08T00:36:46.375Z"
     },
     "APT-69-messaging": {
       "id": "APT-69-messaging",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-14",
-      "at": "2026-09-07T23:48:02.943Z"
+      "at": "2026-09-08T00:36:55.238Z"
     },
     "APT-69-calendar": {
       "id": "APT-69-calendar",
       "status": "PASS",
       "detail": "",
       "batchId": "BATCH-14",
-      "at": "2026-09-07T23:48:11.764Z"
+      "at": "2026-09-08T00:37:03.859Z"
+    },
+    "APT-01": {
+      "id": "APT-01",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:37:46.451Z"
+    },
+    "APT-02": {
+      "id": "APT-02",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:37:59.886Z"
+    },
+    "APT-03": {
+      "id": "APT-03",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:10.906Z"
+    },
+    "APT-04": {
+      "id": "APT-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:22.398Z"
+    },
+    "APT-05": {
+      "id": "APT-05",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:31.146Z"
+    },
+    "APT-06": {
+      "id": "APT-06",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:39.996Z"
+    },
+    "APT-07": {
+      "id": "APT-07",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:48.729Z"
+    },
+    "APT-08": {
+      "id": "APT-08",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:38:57.678Z"
+    },
+    "APT-09": {
+      "id": "APT-09",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:39:06.361Z"
+    },
+    "APT-10": {
+      "id": "APT-10",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:39:15.211Z"
+    },
+    "APT-11": {
+      "id": "APT-11",
+      "status": "FAIL",
+      "detail": "locator.fill: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('input[name=\"name\"], input[placeholder*=\"name\" i]').first()",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:39:54.962Z"
+    },
+    "APT-12": {
+      "id": "APT-12",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:40:06.007Z"
+    },
+    "APT-13": {
+      "id": "APT-13",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:40:13.318Z"
+    },
+    "APT-14": {
+      "id": "APT-14",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:40:24.572Z"
+    },
+    "APT-15": {
+      "id": "APT-15",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:40:35.565Z"
+    },
+    "APT-16": {
+      "id": "APT-16",
+      "status": "FAIL",
+      "detail": "Minimum notice input not found",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:40:44.413Z"
+    },
+    "APT-17": {
+      "id": "APT-17",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save/i }).first() to be visible",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:41:14.065Z"
+    },
+    "APT-18": {
+      "id": "APT-18",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save/i }).first() to be visible",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:41:43.910Z"
+    },
+    "APT-19": {
+      "id": "APT-19",
+      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
+      "detail": "External Calendar Blocking",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:41:48.462Z"
+    },
+    "APT-20": {
+      "id": "APT-20",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:41:55.624Z"
+    },
+    "APT-21": {
+      "id": "APT-21",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:42:06.503Z"
+    },
+    "APT-22": {
+      "id": "APT-22",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:42:17.632Z"
+    },
+    "APT-23": {
+      "id": "APT-23",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:42:28.496Z"
+    },
+    "APT-24": {
+      "id": "APT-24",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:42:39.942Z"
+    },
+    "APT-25": {
+      "id": "APT-25",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:42:53.954Z"
+    },
+    "APT-26": {
+      "id": "APT-26",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:05.027Z"
+    },
+    "APT-27": {
+      "id": "APT-27",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:15.950Z"
+    },
+    "APT-28": {
+      "id": "APT-28",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:26.814Z"
+    },
+    "APT-29": {
+      "id": "APT-29",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:35.374Z"
+    },
+    "APT-30": {
+      "id": "APT-30",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:47.371Z"
+    },
+    "APT-31": {
+      "id": "APT-31",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:43:59.148Z"
+    },
+    "APT-32": {
+      "id": "APT-32",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:44:14.616Z"
+    },
+    "APT-33": {
+      "id": "APT-33",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:44:30.129Z"
+    },
+    "APT-34": {
+      "id": "APT-34",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:44:43.451Z"
+    },
+    "APT-35": {
+      "id": "APT-35",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:44:54.756Z"
+    },
+    "APT-36": {
+      "id": "APT-36",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:45:05.531Z"
+    },
+    "APT-37": {
+      "id": "APT-37",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:45:17.020Z"
+    },
+    "APT-38": {
+      "id": "APT-38",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:45:27.881Z"
+    },
+    "APT-39": {
+      "id": "APT-39",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:45:38.883Z"
+    },
+    "APT-40": {
+      "id": "APT-40",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save/i }).first() to be visible",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:46:07.583Z"
+    },
+    "APT-41": {
+      "id": "APT-41",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:46:14.698Z"
+    },
+    "APT-42": {
+      "id": "APT-42",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:46:28.492Z"
+    },
+    "APT-43": {
+      "id": "APT-43",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:46:41.334Z"
+    },
+    "APT-44": {
+      "id": "APT-44",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:46:56.664Z"
+    },
+    "APT-45": {
+      "id": "APT-45",
+      "status": "BLOCKED \u2014 LIVE PSTN",
+      "detail": "Caller Amy",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:01.210Z"
+    },
+    "APT-46": {
+      "id": "APT-46",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:08.247Z"
+    },
+    "APT-47": {
+      "id": "APT-47",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:17.106Z"
+    },
+    "APT-48": {
+      "id": "APT-48",
+      "status": "BLOCKED \u2014 LIVE MEDIA",
+      "detail": "Transovo Video Host",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:21.646Z"
+    },
+    "APT-49": {
+      "id": "APT-49",
+      "status": "FAIL",
+      "detail": "Invalid guest token should show error state",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:25.088Z"
+    },
+    "APT-50": {
+      "id": "APT-50",
+      "status": "FAIL",
+      "detail": "No notetaker toggle found",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:33.960Z"
+    },
+    "APT-51": {
+      "id": "APT-51",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:44.877Z"
+    },
+    "APT-52": {
+      "id": "APT-52",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:47:53.837Z"
+    },
+    "APT-53": {
+      "id": "APT-53",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:02.720Z"
+    },
+    "APT-54": {
+      "id": "APT-54",
+      "status": "FAIL",
+      "detail": "No notetaker toggle found",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:11.836Z"
+    },
+    "APT-55": {
+      "id": "APT-55",
+      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
+      "detail": "Notetaker Meeting Lifecycle",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:16.394Z"
+    },
+    "APT-56": {
+      "id": "APT-56",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:23.260Z"
+    },
+    "APT-57": {
+      "id": "APT-57",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:34.283Z"
+    },
+    "APT-58": {
+      "id": "APT-58",
+      "status": "NOT IMPLEMENTED",
+      "detail": "Searchable Meeting Notes",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:38.823Z"
+    },
+    "APT-59": {
+      "id": "APT-59",
+      "status": "FAIL",
+      "detail": "Invalid recap token should show error state",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:42.253Z"
+    },
+    "APT-60": {
+      "id": "APT-60",
+      "status": "FAIL",
+      "detail": "No notetaker toggle found",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:51.075Z"
+    },
+    "APT-61": {
+      "id": "APT-61",
+      "status": "NOT IMPLEMENTED",
+      "detail": "Automatic External Meeting Creation",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:48:55.645Z"
+    },
+    "APT-62": {
+      "id": "APT-62",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:49:02.479Z"
+    },
+    "APT-63": {
+      "id": "APT-63",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:49:13.578Z"
+    },
+    "APT-64": {
+      "id": "APT-64",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:49:24.497Z"
+    },
+    "APT-65": {
+      "id": "APT-65",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:49:36.024Z"
+    },
+    "APT-66": {
+      "id": "APT-66",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:50:08.540Z"
+    },
+    "APT-67": {
+      "id": "APT-67",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:50:19.777Z"
+    },
+    "APT-68": {
+      "id": "APT-68",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:50:34.974Z"
+    },
+    "APT-69": {
+      "id": "APT-69",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-APT",
+      "at": "2026-09-08T00:50:50.949Z"
+    },
+    "MCTB-01": {
+      "id": "MCTB-01",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:51:18.796Z"
+    },
+    "MCTB-02": {
+      "id": "MCTB-02",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:51:29.725Z"
+    },
+    "MCTB-03": {
+      "id": "MCTB-03",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:51:42.296Z"
+    },
+    "MCTB-04": {
+      "id": "MCTB-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:51:57.148Z"
+    },
+    "MCTB-05": {
+      "id": "MCTB-05",
+      "status": "FAIL",
+      "detail": "MCTB phone setup did not render after reload",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:52:07.473Z"
+    },
+    "MCTB-06": {
+      "id": "MCTB-06",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:52:21.008Z"
+    },
+    "MCTB-07": {
+      "id": "MCTB-07",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:52:35.057Z"
+    },
+    "MCTB-08": {
+      "id": "MCTB-08",
+      "status": "FAIL",
+      "detail": "Press-1 runtime diagnostics surface not available",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:52:43.991Z"
+    },
+    "MCTB-09": {
+      "id": "MCTB-09",
+      "status": "FAIL",
+      "detail": "MCTB consent mode did not persist after reload",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:52:57.552Z"
+    },
+    "MCTB-10": {
+      "id": "MCTB-10",
+      "status": "FAIL",
+      "detail": "MCTB consent mode did not persist after reload",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:53:10.269Z"
+    },
+    "MCTB-11": {
+      "id": "MCTB-11",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:53:22.020Z"
+    },
+    "MCTB-12": {
+      "id": "MCTB-12",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:53:36.031Z"
+    },
+    "MCTB-13": {
+      "id": "MCTB-13",
+      "status": "FAIL",
+      "detail": "/mctb/setup/links: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:53:43.489Z"
+    },
+    "MCTB-14": {
+      "id": "MCTB-14",
+      "status": "FAIL",
+      "detail": "Invalid MCTB request form token should error",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:53:50.822Z"
+    },
+    "MCTB-15": {
+      "id": "MCTB-15",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:01.778Z"
+    },
+    "MCTB-16": {
+      "id": "MCTB-16",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:12.683Z"
+    },
+    "MCTB-17": {
+      "id": "MCTB-17",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "Local 10DLC Sender",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:17.266Z"
+    },
+    "MCTB-18": {
+      "id": "MCTB-18",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "Dedicated Text Number Voice Behavior",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:17.803Z"
+    },
+    "MCTB-19": {
+      "id": "MCTB-19",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save changes/i }).first() to be visible",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:43.407Z"
+    },
+    "MCTB-20": {
+      "id": "MCTB-20",
+      "status": "FAIL",
+      "detail": "expected redirect to /mctb/setup/recovery; legacy route still served",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:50.888Z"
+    },
+    "MCTB-21": {
+      "id": "MCTB-21",
+      "status": "INTENTIONALLY DEFERRED",
+      "detail": "Optional One-Time Follow-Up",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:54:55.457Z"
+    },
+    "MCTB-22": {
+      "id": "MCTB-22",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save changes/i }).first() to be visible",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:55:21.072Z"
+    },
+    "MCTB-23": {
+      "id": "MCTB-23",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:55:32.059Z"
+    },
+    "MCTB-24": {
+      "id": "MCTB-24",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:55:42.931Z"
+    },
+    "MCTB-25": {
+      "id": "MCTB-25",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:55:53.998Z"
+    },
+    "MCTB-26": {
+      "id": "MCTB-26",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:04.871Z"
+    },
+    "MCTB-27": {
+      "id": "MCTB-27",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:15.813Z"
+    },
+    "MCTB-28": {
+      "id": "MCTB-28",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:27.526Z"
+    },
+    "MCTB-29": {
+      "id": "MCTB-29",
+      "status": "FAIL",
+      "detail": "No missed call detail link available \u2014 seed fixture missed call",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:36.352Z"
+    },
+    "MCTB-30": {
+      "id": "MCTB-30",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:48.173Z"
+    },
+    "MCTB-31": {
+      "id": "MCTB-31",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:56:55.664Z"
+    },
+    "MCTB-32": {
+      "id": "MCTB-32",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:03.131Z"
+    },
+    "MCTB-33": {
+      "id": "MCTB-33",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:10.600Z"
+    },
+    "MCTB-34": {
+      "id": "MCTB-34",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:18.080Z"
+    },
+    "MCTB-35": {
+      "id": "MCTB-35",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:25.547Z"
+    },
+    "MCTB-36": {
+      "id": "MCTB-36",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:32.996Z"
+    },
+    "MCTB-37": {
+      "id": "MCTB-37",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:40.480Z"
+    },
+    "MCTB-38": {
+      "id": "MCTB-38",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:47.962Z"
+    },
+    "MCTB-39": {
+      "id": "MCTB-39",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:57:59.028Z"
+    },
+    "MCTB-40": {
+      "id": "MCTB-40",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:10.289Z"
+    },
+    "MCTB-41": {
+      "id": "MCTB-41",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:17.761Z"
+    },
+    "MCTB-42": {
+      "id": "MCTB-42",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:25.233Z"
+    },
+    "MCTB-43": {
+      "id": "MCTB-43",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:32.711Z"
+    },
+    "MCTB-44": {
+      "id": "MCTB-44",
+      "status": "FAIL",
+      "detail": "/mctb/setup/notifications: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:40.176Z"
+    },
+    "MCTB-45": {
+      "id": "MCTB-45",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:51.351Z"
+    },
+    "MCTB-46": {
+      "id": "MCTB-46",
+      "status": "FAIL",
+      "detail": "404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:58:58.860Z"
+    },
+    "MCTB-47": {
+      "id": "MCTB-47",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:59:08.942Z"
+    },
+    "MCTB-48": {
+      "id": "MCTB-48",
+      "status": "FAIL",
+      "detail": "/mctb/setup/links: 404",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:59:16.425Z"
+    },
+    "MCTB-49": {
+      "id": "MCTB-49",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /save changes/i }).first() to be visible",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:59:46.403Z"
+    },
+    "MCTB-50": {
+      "id": "MCTB-50",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T00:59:57.636Z"
+    },
+    "MCTB-51": {
+      "id": "MCTB-51",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:00:08.615Z"
+    },
+    "MCTB-52": {
+      "id": "MCTB-52",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:00:18.534Z"
+    },
+    "MCTB-53": {
+      "id": "MCTB-53",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:00:31.928Z"
+    },
+    "MCTB-54": {
+      "id": "MCTB-54",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:00:43.751Z"
+    },
+    "MCTB-55": {
+      "id": "MCTB-55",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:00:56.411Z"
+    },
+    "MCTB-56": {
+      "id": "MCTB-56",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:01:07.541Z"
+    },
+    "MCTB-57": {
+      "id": "MCTB-57",
+      "status": "FAIL",
+      "detail": "expected redirect to /mctb/conversations; landed on /conversations",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:01:25.700Z"
+    },
+    "MCTB-58": {
+      "id": "MCTB-58",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-MCTB",
+      "at": "2026-09-08T01:01:39.364Z"
+    },
+    "CROSS-01": {
+      "id": "CROSS-01",
+      "status": "FAIL",
+      "detail": "locator.click: Timeout 20000ms exceeded.\nCall log:\n  - waiting for getByRole('option', { name: 'Missed Call Text Back' }).first()\n    - locator resolved to <button type=\"button\" role=\"option\" aria-selected=\"false\" class=\"flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-muted\">\u2026</button>\n  - attempting click action\n    2 \u00d7 waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:10.827Z"
+    },
+    "CROSS-02": {
+      "id": "CROSS-02",
+      "status": "/contacts",
+      "detail": "Shared Contacts",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:15.401Z"
+    },
+    "CROSS-03": {
+      "id": "CROSS-03",
+      "status": "/conversations",
+      "detail": "Shared Conversations",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:15.932Z"
+    },
+    "CROSS-04": {
+      "id": "CROSS-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:24.316Z"
+    },
+    "CROSS-05": {
+      "id": "CROSS-05",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:33.204Z"
+    },
+    "CROSS-06": {
+      "id": "CROSS-06",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:41.969Z"
+    },
+    "CROSS-07": {
+      "id": "CROSS-07",
+      "status": "FAIL",
+      "detail": "No appointment types available \u2014 seed types first",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:50.616Z"
+    },
+    "CROSS-08": {
+      "id": "CROSS-08",
+      "status": "BLOCKED \u2014 LIVE EXTERNAL PROVIDER",
+      "detail": "External Video \u2192 AI Notetaker",
+      "batchId": "CERT-CROSS",
+      "at": "2026-09-08T01:02:55.165Z"
+    },
+    "GLOBAL-01": {
+      "id": "GLOBAL-01",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-GLOBAL",
+      "at": "2026-09-08T01:03:47.692Z"
+    },
+    "GLOBAL-02": {
+      "id": "GLOBAL-02",
+      "status": "FAIL",
+      "detail": "Public route /recap/invalid-token-xyz should show safe error state",
+      "batchId": "CERT-GLOBAL",
+      "at": "2026-09-08T01:03:57.164Z"
+    },
+    "GLOBAL-03": {
+      "id": "GLOBAL-03",
+      "status": "FAIL",
+      "detail": "Timezone/hours not visible on availability",
+      "batchId": "CERT-GLOBAL",
+      "at": "2026-09-08T01:04:06.107Z"
+    },
+    "GLOBAL-04": {
+      "id": "GLOBAL-04",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "CERT-GLOBAL",
+      "at": "2026-09-08T01:04:16.957Z"
     }
   },
   "batchesCompleted": [
@@ -1345,10 +1408,13 @@
     "BATCH-10",
     "BATCH-11",
     "BATCH-12",
-    "BATCH-13"
+    "BATCH-13",
+    "BATCH-14",
+    "CERT-APT",
+    "CERT-MCTB",
+    "CERT-CROSS"
   ],
   "flowsCompleted": [
-    "APT-01",
     "APT-01-home",
     "APT-01-calendar",
     "APT-01-list",
@@ -1378,53 +1444,13 @@
     "APT-01-getting-started",
     "APT-01-mobile-nav",
     "APT-01-browser-back",
-    "APT-02",
-    "APT-03",
-    "APT-04",
-    "APT-05",
-    "APT-11",
-    "APT-16",
-    "APT-17",
-    "APT-18",
-    "APT-26",
-    "APT-27",
+    "APT-05-form-visible",
     "APT-11-save-reload",
-    "APT-12",
     "APT-13-invalid-slug",
     "APT-13-full-flow",
-    "APT-33",
-    "APT-35",
-    "APT-36",
-    "APT-37",
-    "APT-34",
     "APT-34-ui",
-    "APT-40",
-    "APT-41",
-    "APT-42",
-    "APT-43",
-    "APT-44",
-    "APT-38",
-    "APT-39",
-    "APT-45",
-    "APT-57",
-    "APT-46",
-    "APT-50",
-    "APT-48",
-    "APT-49",
     "APT-49-invalid-token",
-    "APT-55",
-    "APT-58",
-    "APT-61",
-    "APT-51",
-    "APT-52",
-    "APT-53",
-    "APT-54",
-    "APT-56",
-    "APT-59",
     "APT-59-invalid",
-    "APT-60",
-    "APT-47",
-    "MCTB-01",
     "MCTB-01-home",
     "MCTB-01-missed-calls",
     "MCTB-01-conversations",
@@ -1432,34 +1458,121 @@
     "MCTB-01-analytics",
     "MCTB-01-setup",
     "MCTB-01-numbers",
+    "MCTB-05-live-verify",
+    "MCTB-11-ui",
+    "MCTB-14-invalid",
+    "MCTB-57-voice-missed",
+    "MCTB-57-voice-setup",
+    "MCTB-57-voice-analytics",
+    "MCTB-57-voice-conversations",
+    "MCTB-57-schedule",
+    "MCTB-57-business-hours",
+    "MCTB-57-follow-up",
+    "CROSS-01-appointments",
+    "CROSS-01-mctb",
+    "CROSS-01-back",
+    "APT-69-business",
+    "APT-69-messaging",
+    "APT-69-calendar",
+    "APT-01",
+    "APT-02",
+    "APT-03",
+    "APT-04",
+    "APT-05",
+    "APT-06",
+    "APT-07",
+    "APT-08",
+    "APT-09",
+    "APT-10",
+    "APT-11",
+    "APT-12",
+    "APT-13",
+    "APT-14",
+    "APT-15",
+    "APT-16",
+    "APT-17",
+    "APT-18",
+    "APT-19",
+    "APT-20",
+    "APT-21",
+    "APT-22",
+    "APT-23",
+    "APT-24",
+    "APT-25",
+    "APT-26",
+    "APT-27",
+    "APT-28",
+    "APT-29",
+    "APT-30",
+    "APT-31",
+    "APT-32",
+    "APT-33",
+    "APT-34",
+    "APT-35",
+    "APT-36",
+    "APT-37",
+    "APT-38",
+    "APT-39",
+    "APT-40",
+    "APT-41",
+    "APT-42",
+    "APT-43",
+    "APT-44",
+    "APT-45",
+    "APT-46",
+    "APT-47",
+    "APT-48",
+    "APT-49",
+    "APT-50",
+    "APT-51",
+    "APT-52",
+    "APT-53",
+    "APT-54",
+    "APT-55",
+    "APT-56",
+    "APT-57",
+    "APT-58",
+    "APT-59",
+    "APT-60",
+    "APT-61",
+    "APT-62",
+    "APT-63",
+    "APT-64",
+    "APT-65",
+    "APT-66",
+    "APT-67",
+    "APT-68",
+    "APT-69",
+    "MCTB-01",
     "MCTB-02",
-    "MCTB-28",
-    "MCTB-30",
-    "MCTB-29",
+    "MCTB-03",
     "MCTB-04",
     "MCTB-05",
     "MCTB-06",
     "MCTB-07",
-    "MCTB-09",
-    "MCTB-12",
-    "MCTB-13",
-    "MCTB-19",
-    "MCTB-22",
-    "MCTB-49",
-    "MCTB-54",
-    "MCTB-03",
-    "MCTB-05-live-verify",
     "MCTB-08",
+    "MCTB-09",
     "MCTB-10",
     "MCTB-11",
-    "MCTB-11-ui",
+    "MCTB-12",
+    "MCTB-13",
+    "MCTB-14",
+    "MCTB-15",
+    "MCTB-16",
+    "MCTB-17",
+    "MCTB-18",
+    "MCTB-19",
     "MCTB-20",
-    "MCTB-41",
+    "MCTB-21",
+    "MCTB-22",
     "MCTB-23",
     "MCTB-24",
     "MCTB-25",
     "MCTB-26",
     "MCTB-27",
+    "MCTB-28",
+    "MCTB-29",
+    "MCTB-30",
     "MCTB-31",
     "MCTB-32",
     "MCTB-33",
@@ -1470,6 +1583,7 @@
     "MCTB-38",
     "MCTB-39",
     "MCTB-40",
+    "MCTB-41",
     "MCTB-42",
     "MCTB-43",
     "MCTB-44",
@@ -1477,30 +1591,17 @@
     "MCTB-46",
     "MCTB-47",
     "MCTB-48",
-    "MCTB-14",
-    "MCTB-14-invalid",
-    "MCTB-17",
-    "MCTB-18",
-    "MCTB-21",
-    "MCTB-51",
-    "MCTB-56",
-    "MCTB-52",
+    "MCTB-49",
     "MCTB-50",
+    "MCTB-51",
+    "MCTB-52",
     "MCTB-53",
+    "MCTB-54",
     "MCTB-55",
-    "MCTB-15",
-    "MCTB-16",
-    "MCTB-57-voice-missed",
-    "MCTB-57-voice-setup",
-    "MCTB-57-voice-analytics",
-    "MCTB-57-voice-conversations",
-    "MCTB-57-schedule",
-    "MCTB-57-business-hours",
-    "MCTB-57-follow-up",
+    "MCTB-56",
+    "MCTB-57",
     "MCTB-58",
-    "CROSS-01-appointments",
-    "CROSS-01-mctb",
-    "CROSS-01-back",
+    "CROSS-01",
     "CROSS-02",
     "CROSS-03",
     "CROSS-04",
@@ -1508,35 +1609,10 @@
     "CROSS-06",
     "CROSS-07",
     "CROSS-08",
-    "APT-06",
-    "APT-07",
-    "APT-08",
-    "APT-09",
-    "APT-10",
-    "APT-14",
-    "APT-15",
-    "APT-19",
-    "APT-20",
-    "APT-21",
-    "APT-22",
-    "APT-23",
-    "APT-24",
-    "APT-25",
-    "APT-28",
-    "APT-29",
-    "APT-30",
-    "APT-31",
-    "APT-32",
-    "APT-62",
-    "APT-63",
-    "APT-64",
-    "APT-65",
-    "APT-66",
-    "APT-67",
-    "APT-68",
-    "APT-69-business",
-    "APT-69-messaging",
-    "APT-69-calendar"
+    "GLOBAL-01",
+    "GLOBAL-02",
+    "GLOBAL-03",
+    "GLOBAL-04"
   ],
   "consecutiveBrowserCrashes": 0
 }
