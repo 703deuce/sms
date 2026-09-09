@@ -1,5 +1,5 @@
-import { BookingTypesKindListConnected } from "@/components/appointments/booking-types/booking-types-kind-list-connected";
+import { MeetingsListConnected } from "@/components/appointments/meetings/meetings-list-connected";
 
-export default function BookingTypesMeetingsPage() {
-  return <BookingTypesKindListConnected segmentId="meetings" />;
+export default function MeetingsListPage() {
+  return <MeetingsListConnected />;
 }

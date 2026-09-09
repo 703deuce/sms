@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { AppointmentTypesConnected } from "@/features/appointments/kimi/appointment-types/appointment-types-connected";
 import type { BookingTypesSegmentId } from "@/lib/appointments/booking-types-segments";
@@ -15,10 +16,31 @@ function parseSegment(raw: string | null): BookingTypesSegmentId | undefined {
 }
 
 export function BookingTypesEditorClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const segmentId = parseSegment(searchParams.get("segment"));
   const initialTypeId = searchParams.get("id");
   const initialCreate = searchParams.get("create") === "1";
+
+  useEffect(() => {
+    if (segmentId === "meetings") {
+      if (initialCreate) {
+        router.replace("/appointments/types/meetings/new");
+        return;
+      }
+      if (initialTypeId) {
+        router.replace(`/appointments/types/meetings/${encodeURIComponent(initialTypeId)}`);
+      }
+    }
+  }, [initialCreate, initialTypeId, router, segmentId]);
+
+  if (segmentId === "meetings") {
+    return (
+      <div className="appt-overview-pilot ref-root min-h-full px-6 py-12 flex items-center justify-center">
+        <p className="appt-pilot-text-helper" aria-busy="true">Opening meeting editor…</p>
+      </div>
+    );
+  }
 
   const backHref = segmentId ? segmentById(segmentId).listHref : "/appointments/types";
   const backLabel = segmentId ? segmentById(segmentId).title : "Booking Types";

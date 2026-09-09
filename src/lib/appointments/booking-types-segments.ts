@@ -35,7 +35,7 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
       "Schedule calls, consultations, demos, interviews, and other one-on-one or team meetings.",
     examples: "Discovery call · Sales demo · Interview · Consultation",
     listHref: "/appointments/types/meetings",
-    createHref: "/appointments/types/editor?segment=meetings&create=1",
+    createHref: "/appointments/types/meetings/new",
     bookingTypeKind: "MEETING",
   },
   {
