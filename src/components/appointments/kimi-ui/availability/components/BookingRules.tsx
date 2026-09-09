@@ -57,7 +57,9 @@ export default function BookingRules({
             />
             <span className="text-[#8a87a0]">{rules.minimumNoticeUnit}</span>
           </div>
-          <p className="text-[12px] text-[#8a87a0] mt-2">How far ahead bookings must be made.</p>
+          <p className="text-[12px] text-[#8a87a0] mt-2">
+            Times inside this notice window will not be offered to customers.
+          </p>
         </div>
 
         <div>
@@ -72,7 +74,9 @@ export default function BookingRules({
             />
             <span className="text-[#8a87a0]">{rules.bookingHorizonUnit}</span>
           </div>
-          <p className="text-[12px] text-[#8a87a0] mt-2">Farthest date customers can book.</p>
+          <p className="text-[12px] text-[#8a87a0] mt-2">
+            Dates beyond this window won&apos;t be available on your booking page.
+          </p>
         </div>
       </div>
     </section>

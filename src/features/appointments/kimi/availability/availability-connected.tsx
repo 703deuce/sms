@@ -18,6 +18,7 @@ import type {
 } from "@/features/appointments/kimi/availability/types";
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 import { SchedulingRulesSection } from "@/features/appointments/kimi/availability/SchedulingRulesSection";
+import { SlotDiagnosticsPanel } from "@/features/appointments/kimi/availability/SlotDiagnosticsPanel";
 
 function AvailabilityLoading() {
   return (
@@ -407,6 +408,7 @@ export function AvailabilityConnected() {
             </Button>
           </div>
         </div>
+        <SlotDiagnosticsPanel />
         <CalendarIntegrationsCard />
       </div>
     </div>

@@ -15,6 +15,11 @@ export function BookingHubLinksCard() {
       description: "Colors, logo, terminology, and advanced booking page styling.",
     },
     {
+      href: "/appointments/booking/contracts",
+      title: "Contracts",
+      description: "Service agreements customers sign after booking.",
+    },
+    {
       href: "/payments/invoices",
       title: "Invoices",
       description: "Bill customers and send payment links.",

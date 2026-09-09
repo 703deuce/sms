@@ -53,7 +53,7 @@ export async function issueContractForAppointment(
   if (!template) throw new Error("Contract template not found");
 
   const rawToken = generateSecureToken();
-  return prisma.signedBookingContract.create({
+  const contract = await prisma.signedBookingContract.create({
     data: {
       workspaceId,
       templateId: template.id,
@@ -65,6 +65,32 @@ export async function issueContractForAppointment(
       signTokenHash: hashToken(rawToken),
     },
   });
+  return { contract, signToken: rawToken };
+}
+
+export function contractPublicSignUrl(baseUrl: string, signToken: string) {
+  return `${baseUrl.replace(/\/$/, "")}/contracts/sign/${signToken}`;
+}
+
+export async function getContractBySignToken(signToken: string) {
+  const prisma = getPrisma();
+  const contract = await prisma.signedBookingContract.findFirst({
+    where: { signTokenHash: hashToken(signToken) },
+  });
+  if (!contract) return null;
+
+  const [workspace, template] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { id: contract.workspaceId },
+      select: { name: true },
+    }),
+    prisma.bookingContractTemplate.findFirst({
+      where: { id: contract.templateId, workspaceId: contract.workspaceId },
+      select: { name: true },
+    }),
+  ]);
+
+  return { contract, workspace, templateName: template?.name || "Service agreement" };
 }
 
 export async function signContract(

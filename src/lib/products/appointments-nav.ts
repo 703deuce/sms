@@ -293,6 +293,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
   if (pathname.startsWith("/appointments/routing")) return "Routing";
   if (pathname.startsWith("/appointments/team-pages")) return "Team Booking";
+  if (pathname.startsWith("/appointments/booking/contracts")) return "Contracts";
   if (pathname.startsWith("/appointments/booking/branding")) return "Booking appearance";
   if (pathname.startsWith("/appointments/booking")) return "Booking Pages";
   if (pathname.startsWith("/appointments/waitlist")) return "Waitlist";
