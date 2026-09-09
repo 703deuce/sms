@@ -17,6 +17,24 @@ type Props = {
   segmentId: BookingTypesSegmentId;
 };
 
+function createLabelForSegment(segmentId: BookingTypesSegmentId, title: string): string {
+  if (segmentId === "workshops") return "Create workshop or event";
+  return `Create ${title.toLowerCase().replace(/s$/, "")}`;
+}
+
+function emptyTitleForSegment(segmentId: BookingTypesSegmentId): string {
+  switch (segmentId) {
+    case "meetings":
+      return "Create your first meeting";
+    case "services":
+      return "Create your first service";
+    case "classes":
+      return "Create your first class";
+    case "workshops":
+      return "Create your first workshop or event";
+  }
+}
+
 export function BookingTypesKindListConnected({ segmentId }: Props) {
   const segment = segmentById(segmentId);
   const [rows, setRows] = useState<ApiTypeRow[]>([]);
@@ -48,34 +66,32 @@ export function BookingTypesKindListConnected({ segmentId }: Props) {
   );
 
   const activeCount = filtered.filter((r) => r.config?.enabled !== false && r.active !== false).length;
+  const createLabel = createLabelForSegment(segmentId, segment.title);
 
   if (loading) {
     return (
-      <div className="ref-root min-h-full bg-[#f7f8fb] px-6 pb-8 pt-5 font-sans animate-pulse">
+      <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5 animate-pulse">
         <div className="h-8 w-64 rounded bg-gray-200" />
-        <div className="mt-6 h-64 rounded-xl bg-white border border-[#ecedf2]" />
+        <div className="mt-6 h-64 rounded-xl border border-[var(--border)] bg-white" />
       </div>
     );
   }
 
   if (failed) {
     return (
-      <div className="ref-root min-h-full bg-[#f7f8fb] px-6 py-12 font-sans flex items-center justify-center">
-        <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-          <AlertTriangle className="mx-auto h-5 w-5 text-indigo-600" />
-          <p className="mt-3 text-sm font-semibold text-gray-900">Could not load {segment.title.toLowerCase()}</p>
-          <Button size="sm" className="mt-5" onClick={load}>Try again</Button>
+      <div className="appt-overview-pilot ref-root min-h-full px-6 py-12 flex items-center justify-center">
+        <div className="max-w-md text-center rounded-xl border border-dashed border-[var(--border)] bg-white px-6 py-12">
+          <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
+          <p className="mt-3 appt-pilot-text-section">Could not load {segment.title.toLowerCase()}</p>
+          <Button size="sm" className="mt-5 appt-pilot-primary-btn" onClick={load}>Try again</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="ref-root min-h-full bg-[#f7f8fb] px-6 pb-10 pt-5 font-sans">
-      <Link
-        href="/appointments/types"
-        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#5b4bff] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b4bff]"
-      >
+    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-10 pt-5">
+      <Link href="/appointments/types" className="appt-pilot-back-link">
         <ArrowLeft size={14} aria-hidden />
         Booking Types
       </Link>
@@ -84,47 +100,33 @@ export function BookingTypesKindListConnected({ segmentId }: Props) {
         title={segment.title}
         description={segment.description}
         action={
-          <Link
-            href={segment.createHref}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#5b4bff] px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-[#4f41e6]"
-          >
+          <Link href={segment.createHref} className="appt-pilot-primary-btn">
             <Plus size={15} strokeWidth={2.5} aria-hidden />
-            {segmentId === "workshops" ? "Create workshop or event" : `Create ${segment.title.toLowerCase().replace(/s$/, "")}`}
+            {createLabel}
           </Link>
         }
       />
 
       {filtered.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed border-[#e4e6ee] bg-white px-6 py-12 text-center">
-          <h2 className="text-[15px] font-semibold text-[#1a1d29]">
-            {segmentId === "meetings"
-              ? "Create your first meeting"
-              : segmentId === "services"
-                ? "Create your first service"
-                : segmentId === "classes"
-                  ? "Create your first class"
-                  : "Create your first workshop or event"}
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[#6b7280]">{segment.description}</p>
-          <Link
-            href={segment.createHref}
-            className="mt-5 inline-flex h-9 items-center rounded-lg bg-[#5b4bff] px-4 text-[13px] font-semibold text-white"
-          >
-            {segmentId === "workshops" ? "Create workshop or event" : `Create ${segment.title.toLowerCase().replace(/s$/, "")}`}
+        <div className="appt-pilot-empty-state">
+          <h2 className="appt-pilot-text-section">{emptyTitleForSegment(segmentId)}</h2>
+          <p className="mx-auto mt-2 max-w-md appt-pilot-text-body text-[var(--text-secondary)]">{segment.description}</p>
+          <Link href={segment.createHref} className="appt-pilot-primary-btn mt-5">
+            {createLabel}
           </Link>
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border border-[#e8eaef] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <div className="border-b border-[#f0f1f5] px-4 py-3 text-[12px] font-medium text-[#8a8fa3]">
+        <div className="appt-pilot-data-table-wrap">
+          <div className="appt-pilot-data-table-meta">
             {activeCount} active · {filtered.length} total
           </div>
-          <table className="w-full text-left text-[13px]">
+          <table className="appt-pilot-data-table">
             <thead>
-              <tr className="border-b border-[#f0f1f5] text-[12px] text-[#8a8fa3]">
-                <th scope="col" className="px-4 py-3 font-medium">Name</th>
-                <th scope="col" className="px-4 py-3 font-medium">Duration</th>
-                <th scope="col" className="px-4 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3 font-medium text-right">Actions</th>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -132,18 +134,18 @@ export function BookingTypesKindListConnected({ segmentId }: Props) {
                 const duration = row.durationMinutes;
                 const active = row.config?.enabled !== false && row.active !== false;
                 return (
-                  <tr key={row.id} className="border-b border-[#f0f1f5] last:border-0">
-                    <td className="px-4 py-3 font-medium text-[#1a1d29]">{row.name}</td>
-                    <td className="px-4 py-3 text-[#6b7280]">{duration ? `${duration} min` : "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={active ? "text-emerald-700" : "text-[#8a8fa3]"}>
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>{duration ? `${duration} min` : "—"}</td>
+                    <td>
+                      <span className={active ? "appt-pilot-status-active" : "appt-pilot-status-inactive"}>
                         {active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="text-right">
                       <Link
                         href={`/appointments/types/editor?id=${encodeURIComponent(row.id)}`}
-                        className="font-medium text-[#5b4bff] hover:underline"
+                        className="appt-pilot-muted-link"
                       >
                         Edit
                       </Link>
@@ -156,7 +158,7 @@ export function BookingTypesKindListConnected({ segmentId }: Props) {
         </div>
       )}
 
-      <p className="mt-4 text-[12px] text-[#8a8fa3]">
+      <p className="mt-4 appt-pilot-text-helper">
         Transitional list — focused {segment.title.toLowerCase()} editor ships in the next batch.
       </p>
     </div>

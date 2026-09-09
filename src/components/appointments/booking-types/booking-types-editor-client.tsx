@@ -24,16 +24,13 @@ export function BookingTypesEditorClient() {
   const backLabel = segmentId ? segmentById(segmentId).title : "Booking Types";
 
   return (
-    <div className="min-h-full">
-      <div className="border-b border-[#ecedf2] bg-white px-6 py-3">
-        <Link
-          href={backHref}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#5b4bff] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b4bff]"
-        >
+    <div className="appt-overview-pilot min-h-full">
+      <div className="appt-pilot-subheader-bar">
+        <Link href={backHref} className="appt-pilot-back-link !mb-0">
           <ArrowLeft size={14} aria-hidden />
           {backLabel}
         </Link>
-        <p className="mt-1 text-[12px] text-[#8a8fa3]">
+        <p className="mt-1 appt-pilot-text-helper">
           Transitional editor — focused {segmentId ? segmentById(segmentId).title.toLowerCase() : "booking type"} editor ships in the next batch.
         </p>
       </div>

@@ -21,13 +21,6 @@ const SEGMENT_ICONS = {
   workshops: PartyPopper,
 } as const;
 
-const SEGMENT_ACCENTS = {
-  meetings: "blue",
-  services: "purple",
-  classes: "green",
-  workshops: "amber",
-} as const;
-
 const CREATE_LABELS = {
   meetings: "Create meeting",
   services: "Create service",
@@ -44,11 +37,11 @@ const VIEW_LABELS = {
 
 function LandingLoading() {
   return (
-    <div className="ref-root min-h-full bg-[#f7f8fb] px-6 pb-8 pt-5 font-sans animate-pulse">
+    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5 animate-pulse">
       <div className="h-8 w-48 rounded bg-gray-200" />
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-56 rounded-xl bg-white border border-[#ecedf2]" />
+          <div key={i} className="h-56 rounded-xl border border-[var(--border)] bg-white" />
         ))}
       </div>
     </div>
@@ -57,14 +50,14 @@ function LandingLoading() {
 
 function LandingError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="ref-root min-h-full bg-[#f7f8fb] px-6 py-12 font-sans flex items-center justify-center">
-      <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+    <div className="appt-overview-pilot ref-root min-h-full px-6 py-12 flex items-center justify-center">
+      <div className="max-w-md text-center rounded-xl border border-dashed border-[var(--border)] bg-white px-6 py-12">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]">
           <AlertTriangle className="h-5 w-5" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load booking types</h3>
-        <p className="mt-1.5 text-[13px] text-gray-500">Check your connection and try again.</p>
-        <Button size="sm" className="mt-5" onClick={onRetry}>Try again</Button>
+        <h3 className="appt-pilot-text-section">We couldn&apos;t load booking types</h3>
+        <p className="mt-1.5 appt-pilot-text-body text-[var(--text-secondary)]">Check your connection and try again.</p>
+        <Button size="sm" className="mt-5 appt-pilot-primary-btn" onClick={onRetry}>Try again</Button>
       </div>
     </div>
   );
@@ -109,14 +102,14 @@ export function BookingTypesLandingConnected() {
   );
 
   return (
-    <div className="ref-root min-h-full bg-[#f7f8fb] px-6 pb-10 pt-5 font-sans">
+    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-10 pt-5">
       <RefDecoPageHeader
         title="Booking Types"
         description="Choose what customers can schedule with your business."
       />
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4" role="list" aria-label="Booking type categories">
-        {BOOKING_TYPES_SEGMENTS.map((segment) => {
+        {BOOKING_TYPES_SEGMENTS.map((segment, index) => {
           const count = countActiveInSegment(rows, segment.id);
           const Icon = SEGMENT_ICONS[segment.id];
           return (
@@ -131,7 +124,7 @@ export function BookingTypesLandingConnected() {
                 createLabel={CREATE_LABELS[segment.id]}
                 viewLabel={VIEW_LABELS[segment.id]}
                 icon={Icon}
-                accent={SEGMENT_ACCENTS[segment.id]}
+                accent={index === 0}
               />
             </div>
           );
@@ -139,33 +132,33 @@ export function BookingTypesLandingConnected() {
       </div>
 
       {totalActive > 0 && recent.length > 0 ? (
-        <section className="mt-8 rounded-xl border border-[#e8eaef] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]" aria-labelledby="recent-booking-types-heading">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="recent-booking-types-heading" className="text-[14px] font-semibold text-[#1a1d29]">
-              Your booking types
-            </h2>
-            <span className="text-[12px] text-[#8a8fa3]">{totalActive} active</span>
+        <section className="ref-deco-section mt-8" aria-labelledby="recent-booking-types-heading">
+          <div className="ref-deco-section-head flex items-center justify-between gap-3">
+            <h2 id="recent-booking-types-heading">Your booking types</h2>
+            <span className="appt-pilot-text-helper">{totalActive} active</span>
           </div>
-          <ul className="mt-3 divide-y divide-[#f0f1f5]">
-            {recent.map((row) => (
-              <li key={row.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                <span className="text-[13px] font-medium text-[#3c4257] truncate">{row.name}</span>
-                <Link
-                  href={`/appointments/types/editor?id=${encodeURIComponent(row.id)}`}
-                  className="shrink-0 text-[12.5px] font-medium text-[#5b4bff] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5b4bff]"
-                >
-                  Manage
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <div className="ref-deco-section-body">
+            <ul className="divide-y divide-[var(--border)]">
+              {recent.map((row) => (
+                <li key={row.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <span className="appt-pilot-text-list font-medium text-[var(--text-primary)] truncate">{row.name}</span>
+                  <Link
+                    href={`/appointments/types/editor?id=${encodeURIComponent(row.id)}`}
+                    className="appt-pilot-muted-link shrink-0"
+                  >
+                    Manage
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
       ) : null}
 
-      <p className="mt-8 text-center text-[12.5px] text-[#8a8fa3]">
+      <p className="mt-8 text-center appt-pilot-text-helper">
         <CalendarDays className="inline-block mr-1.5 -mt-0.5" size={14} aria-hidden />
         Packages, memberships, and gift cards live under{" "}
-        <Link href="/appointments/commerce" className="font-medium text-[#5b4bff] hover:underline">
+        <Link href="/appointments/commerce" className="appt-pilot-muted-link">
           Packages &amp; Sales
         </Link>
         .
