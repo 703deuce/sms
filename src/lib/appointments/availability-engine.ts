@@ -106,13 +106,10 @@ export async function generateNativeSlots(
   const noticeMs = ctx.minimumNoticeMinutes * 60_000;
   const slotStep = (await import("@/lib/appointments/service-booking/fixed-start-times")).slotStepMinutes(
     durationMinutes,
-    svcCfg.schedulingLimits?.customStartIntervalMinutes ?? svcCfg.customStartIntervalMinutes,
+    svcCfg.schedulingLimits?.customStartIntervalMinutes,
   );
-  const fixedStartConfig =
-    svcCfg.schedulingLimits?.fixedStartTimes ?? svcCfg.fixedStartTimes;
-  const densityHidePercent =
-    svcCfg.schedulingLimits?.availabilityDensityHidePercent ??
-    svcCfg.availabilityDensityHidePercent;
+  const fixedStartConfig = svcCfg.schedulingLimits?.fixedStartTimes;
+  const densityHidePercent = svcCfg.schedulingLimits?.availabilityDensityHidePercent;
   const now = new Date();
   const prisma = getPrisma();
   const slots: AvailabilitySlot[] = [];
@@ -272,11 +269,11 @@ export async function generateNativeSlots(
     const prisma = getPrisma();
     const dayStart = new Date();
     dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart.getTime() + input.daysAhead * 86_400_000);
+    const dayEnd = new Date(dayStart.getTime() + days * 86_400_000);
     const existing = await prisma.voiceAppointment.findMany({
       where: {
         workspaceId,
-        serviceName,
+        serviceName: input.serviceName,
         startsAt: { gte: dayStart, lte: dayEnd },
         status: { notIn: ["canceled", "cancelled"] },
       },
@@ -284,7 +281,7 @@ export async function generateNativeSlots(
     });
     const ranked = rankSlotsByScheduleDensity(
       slots,
-      existing.map((r) => r.startsAt),
+      existing.map((r: { startsAt: Date }) => r.startsAt),
       "prefer_compact",
     );
     slots.splice(0, slots.length, ...ranked);

@@ -15,7 +15,7 @@ export default async function BookingShareHubPage() {
     <BookingShareHubClient
       workspaceSlug={ws?.slug || ""}
       workspaceName={ws?.displayName || ws?.name || "Your business"}
-      types={types.map((t) => ({
+      types={types.map((t: { id: string; name: string }) => ({
         id: t.id,
         name: t.name,
       }))}

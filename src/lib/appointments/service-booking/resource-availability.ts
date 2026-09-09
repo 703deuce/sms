@@ -32,7 +32,7 @@ export async function areResourcesAvailableForSlot(
         excludeAppointmentId,
       );
       const resources = await listSchedulingResources(workspaceId);
-      const resource = resources.find((r) => r.id === resourceId);
+      const resource = resources.find((r: (typeof resources)[number]) => r.id === resourceId);
       if (!resource || !resource.active) return false;
       if (used >= (resource.quantity ?? 1)) return false;
     }
@@ -125,7 +125,7 @@ export async function loadAppointmentResourceLabels(
   const resources = await listSchedulingResources(workspaceId);
   return resourceIds
     .map((id) => {
-      const row = resources.find((r) => r.id === id);
+      const row = resources.find((r: (typeof resources)[number]) => r.id === id);
       return row ? { id, name: row.name } : null;
     })
     .filter(Boolean) as Array<{ id: string; name: string }>;

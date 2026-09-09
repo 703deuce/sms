@@ -68,24 +68,24 @@ export async function resolveClientPortalSession(token: string) {
       metadata: a.metadata as { manageAppointmentUrl?: string },
     })),
     upcomingAppointments: appointments
-      .filter((a) => a.startsAt > new Date() && !["canceled", "cancelled", "completed", "no_show"].includes(a.status))
-      .map((a) => ({
+      .filter((a: (typeof appointments)[number]) => a.startsAt > new Date() && !["canceled", "cancelled", "completed", "no_show"].includes(a.status))
+      .map((a: (typeof appointments)[number]) => ({
         id: a.id,
         serviceName: a.serviceName,
         startsAt: a.startsAt.toISOString(),
         status: a.status,
       })),
     pastAppointments: appointments
-      .filter((a) => a.startsAt <= new Date() || ["completed", "no_show", "canceled", "cancelled"].includes(a.status))
-      .map((a) => ({
+      .filter((a: (typeof appointments)[number]) => a.startsAt <= new Date() || ["completed", "no_show", "canceled", "cancelled"].includes(a.status))
+      .map((a: (typeof appointments)[number]) => ({
         id: a.id,
         serviceName: a.serviceName,
         startsAt: a.startsAt.toISOString(),
         status: a.status,
       })),
     entitlements,
-    packagePurchaseHistory: packageLedgers.filter((e) => e.kind === "purchase"),
-    packageUsageHistory: packageLedgers.filter((e) => e.kind === "redeem" || e.kind === "adjustment"),
+    packagePurchaseHistory: packageLedgers.filter((e: (typeof packageLedgers)[number]) => e.kind === "purchase"),
+    packageUsageHistory: packageLedgers.filter((e: (typeof packageLedgers)[number]) => e.kind === "redeem" || e.kind === "adjustment"),
     waitlist,
   };
 }

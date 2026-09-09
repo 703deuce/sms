@@ -53,7 +53,6 @@ export async function getAvailability(
 
   const result = await generateNativeSlots(workspaceId, {
     serviceName,
-    serviceId,
     daysAhead,
     timezone,
     staffId,

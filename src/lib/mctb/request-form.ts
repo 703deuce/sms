@@ -1,22 +1,17 @@
+import "server-only";
+
 import { randomBytes } from "node:crypto";
 import { getPrisma } from "@/lib/db";
 import { createId } from "@/lib/supabase/id";
 import { getAppBaseUrl } from "@/lib/messaging/twilio-config";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  DEFAULT_MCTB_REQUEST_FORM_FIELDS,
+  type MctbRequestFormField,
+} from "@/lib/mctb/request-form-shared";
 
-export type MctbRequestFormField = {
-  id: string;
-  label: string;
-  type: "text" | "email" | "phone" | "textarea";
-  required?: boolean;
-  placeholder?: string;
-};
-
-export const DEFAULT_MCTB_REQUEST_FORM_FIELDS: MctbRequestFormField[] = [
-  { id: "name", label: "Your name", type: "text", required: true },
-  { id: "phone", label: "Phone number", type: "phone", required: true },
-  { id: "message", label: "How can we help?", type: "textarea", required: false },
-];
+export type { MctbRequestFormField } from "@/lib/mctb/request-form-shared";
+export { DEFAULT_MCTB_REQUEST_FORM_FIELDS } from "@/lib/mctb/request-form-shared";
 
 export function generateMctbRequestFormToken(): string {
   return randomBytes(24).toString("base64url");

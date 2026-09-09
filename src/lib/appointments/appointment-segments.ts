@@ -35,7 +35,7 @@ export async function resolveAppointmentSegment(
       where: { workspaceId, startsAt: { gte: start, lt: end } },
       select: { contactId: true },
     });
-    const ids = [...new Set(rows.map((r) => r.contactId).filter(Boolean))] as string[];
+    const ids = [...new Set(rows.map((r: { contactId: string | null }) => r.contactId).filter(Boolean))] as string[];
     if (!ids.length) return [];
     return prisma.contact.findMany({
       where: { workspaceId, id: { in: ids } },
@@ -48,7 +48,7 @@ export async function resolveAppointmentSegment(
       where: { workspaceId, status: "active" },
       select: { contactId: true },
     });
-    const ids = [...new Set(subs.map((s) => s.contactId))];
+    const ids = [...new Set(subs.map((s: { contactId: string }) => s.contactId))];
     if (!ids.length) return [];
     return prisma.contact.findMany({
       where: { workspaceId, id: { in: ids } },
@@ -61,12 +61,12 @@ export async function resolveAppointmentSegment(
       where: { workspaceId, status: "active" },
     });
     const lowIds = balances
-      .filter((b) => {
+      .filter((b: { remainingCredits: unknown; contactId: string }) => {
         const credits = (b.remainingCredits || {}) as Record<string, number>;
         const total = Object.values(credits).reduce((s, n) => s + (n || 0), 0);
         return total > 0 && total < 2;
       })
-      .map((b) => b.contactId);
+      .map((b: { contactId: string }) => b.contactId);
     if (!lowIds.length) return [];
     return prisma.contact.findMany({
       where: { workspaceId, id: { in: lowIds } },
@@ -80,13 +80,13 @@ export async function resolveAppointmentSegment(
       where: { workspaceId, startsAt: { gte: cutoff } },
       select: { contactId: true },
     });
-    const activeIds = new Set(recent.map((r) => r.contactId).filter(Boolean));
+    const activeIds = new Set(recent.map((r: { contactId: string | null }) => r.contactId).filter(Boolean));
     const contacts = await prisma.contact.findMany({
       where: { workspaceId, phone: { not: null } },
       select: { id: true, firstName: true, lastName: true, phone: true, email: true },
       take: 500,
     });
-    return contacts.filter((c) => !activeIds.has(c.id));
+    return contacts.filter((c: { id: string }) => !activeIds.has(c.id));
   }
 
   if (preset === "booking_type" && (opts?.bookingTypeName || opts?.bookingTypeId)) {
@@ -98,7 +98,7 @@ export async function resolveAppointmentSegment(
       select: { contactId: true },
       take: 500,
     });
-    const ids = [...new Set(rows.map((r) => r.contactId).filter(Boolean))] as string[];
+    const ids = [...new Set(rows.map((r: { contactId: string | null }) => r.contactId).filter(Boolean))] as string[];
     if (!ids.length) return [];
     return prisma.contact.findMany({
       where: { workspaceId, id: { in: ids } },

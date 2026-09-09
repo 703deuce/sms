@@ -59,7 +59,7 @@ export async function exportClientsCsv(workspaceId: string) {
   const contacts = await prisma.contact.findMany({ where: { workspaceId }, take: 10_000 });
   const header = "firstName,lastName,email,phone";
   const lines = contacts.map(
-    (c) =>
+    (c: { firstName: string | null; lastName: string | null; email: string | null; phone: string | null }) =>
       `"${(c.firstName || "").replace(/"/g, '""')}","${(c.lastName || "").replace(/"/g, '""')}","${c.email || ""}","${c.phone || ""}"`,
   );
   return [header, ...lines].join("\n");
@@ -74,7 +74,7 @@ export async function exportAppointmentsCsv(workspaceId: string) {
   });
   const header = "id,serviceName,startsAt,endsAt,status,contactId";
   const lines = rows.map(
-    (r) =>
+    (r: { id: string; serviceName: string | null; startsAt: Date; endsAt: Date | null; status: string; contactId: string | null }) =>
       `${r.id},"${(r.serviceName || "").replace(/"/g, '""')}",${r.startsAt.toISOString()},${r.endsAt?.toISOString() || ""},${r.status},${r.contactId || ""}`,
   );
   return [header, ...lines].join("\n");

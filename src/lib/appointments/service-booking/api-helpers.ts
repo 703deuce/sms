@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
+import type { AppointmentPermission } from "@/lib/appointments/org-permissions";
 
 export async function withAppointmentsAuth<T>(
-  permission: string,
+  permission: AppointmentPermission,
   handler: (ctx: { workspaceId: string; userId: string }) => Promise<T>,
 ) {
   try {

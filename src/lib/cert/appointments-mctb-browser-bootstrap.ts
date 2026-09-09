@@ -71,7 +71,6 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
         name: "Cert Staff",
         active: true,
         customerSelectable: true,
-        timezone: "America/New_York",
       },
     ],
     locations: [
@@ -142,7 +141,6 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
     phoneNumberId: phone.id,
     firstMessage: "Sorry we missed your call — reply here when you have a moment.",
     initialDelaySeconds: 30,
-    consentMode: "press_1",
     activate: false,
   });
 

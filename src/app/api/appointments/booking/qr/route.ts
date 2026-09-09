@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     }
 
     const png = await QRCode.toBuffer(targetUrl, { type: "png", margin: 1, width: 512 });
-    return new NextResponse(png, {
+    return new NextResponse(new Uint8Array(png), {
       headers: { "Content-Type": "image/png", "Cache-Control": "private, max-age=300" },
     });
   } catch (err) {

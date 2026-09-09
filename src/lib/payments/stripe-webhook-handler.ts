@@ -82,7 +82,15 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     metadata.transaction_type === STORE_PURCHASE_TRANSACTION_TYPE ||
     metadata.transaction_type === STORE_MEMBERSHIP_SUBSCRIPTION_TYPE
   ) {
-    return handleStoreCheckoutCompleted(session);
+    return handleStoreCheckoutCompleted({
+      id: session.id,
+      metadata: session.metadata,
+      subscription:
+        typeof session.subscription === "string"
+          ? session.subscription
+          : session.subscription?.id || null,
+      mode: session.mode,
+    });
   }
   const { isAppointmentCheckoutMetadata, handleAppointmentCheckoutCompleted } = await import(
     "@/lib/appointments/payment-checkout"

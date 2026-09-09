@@ -1,5 +1,14 @@
 export * from "./types";
-export * from "./booking-type-kind";
+export {
+  BOOKING_TYPE_KINDS,
+  BOOKING_TYPE_KIND_DESCRIPTIONS,
+  BOOKING_TYPE_KIND_LABELS,
+  resolveBookingTypeKind,
+  defaultConfigPatchForKind,
+  featuresForBookingTypeKind,
+  editorDefaultsForBookingTypeKind,
+  bookingTypeKindBadgeClass,
+} from "./booking-type-kind";
 export {
   loadAppointmentPlatformConfig,
   saveAppointmentPlatformConfig,

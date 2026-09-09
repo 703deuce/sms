@@ -54,7 +54,7 @@ export type AppointmentTypeFormState = {
   collectiveStaffIds: string[];
   cancellationPolicy: CancellationPolicy;
   reschedulePolicy: ReschedulePolicy;
-  paymentMode: "none" | "deposit" | "full";
+  paymentMode: "none" | "deposit" | "full" | "optional" | "deposit_fixed" | "deposit_percent" | "customer_choice" | "pay_what_you_want" | "save_card";
   paymentProvider: "stripe" | "square" | "";
   paymentPriceCents: number;
   paymentDepositCents: number;

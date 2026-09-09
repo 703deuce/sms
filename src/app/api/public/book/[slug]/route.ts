@@ -178,8 +178,8 @@ export async function GET(_request: Request, { params }: Params) {
     const intakeForms = await listIntakeForms(workspace.id, "appointment");
     const customFieldDefinitions = await listCustomerFieldDefinitions(workspace.id);
     const resources = allResources
-      .filter((r) => r.active)
-      .map((r) => ({
+      .filter((r: { active: boolean }) => r.active)
+      .map((r: { id: string; name: string; quantity: number; description: string | null; eligibleTypeIds: string[] }) => ({
         id: r.id,
         name: r.name,
         quantity: r.quantity,
@@ -187,8 +187,17 @@ export async function GET(_request: Request, { params }: Params) {
         eligibleTypeIds: r.eligibleTypeIds,
       }));
     const addOns = allAddOns
-      .filter((a) => a.active)
-      .map((a) => ({
+      .filter((a: { active: boolean }) => a.active)
+      .map((a: {
+        id: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        durationDeltaMinutes: number;
+        quantityMax: number | null;
+        required: boolean;
+        eligibleTypeIds: string[];
+      }) => ({
         id: a.id,
         name: a.name,
         description: a.description,
@@ -731,7 +740,7 @@ export async function POST(request: Request, { params }: Params) {
           contactId,
           bookingTypeId: resolvedType?.id || serviceId,
           serviceName: resolvedServiceName,
-          payment: paymentDue,
+          payment: effectivePayment,
           selection,
         });
         if (entitlementOutcome.paymentWaived && entitlementOutcome.method !== "none") {
@@ -774,8 +783,8 @@ export async function POST(request: Request, { params }: Params) {
           referenceId: appointmentId,
           note: "Applied to booking checkout",
         });
-        paymentDue = { ...paymentDue, priceCents: paymentDue.priceCents - applied };
-        if (paymentDue.priceCents <= 0) paymentHandled = true;
+        paymentDue = { ...paymentDue, priceCents: (paymentDue.priceCents ?? 0) - applied };
+        if ((paymentDue.priceCents ?? 0) <= 0) paymentHandled = true;
       } catch {
         // Wallet debit failed — continue with full payment due
       }
@@ -783,7 +792,7 @@ export async function POST(request: Request, { params }: Params) {
 
     if (appointmentId && payment?.mode && payment.mode !== "none" && !paymentHandled) {
       const useSavedCard = body.useSavedCard === true;
-      if (useSavedCard && contactId) {
+      if (useSavedCard && contactId && paymentDue) {
         const charged = await chargeSavedCardForAppointment({
           workspaceId: workspace.id,
           appointmentId,

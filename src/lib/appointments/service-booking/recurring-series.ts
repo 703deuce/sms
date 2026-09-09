@@ -22,7 +22,7 @@ export async function editRecurringSeries(
   const all = await prisma.voiceAppointment.findMany({
     where: { workspaceId },
   });
-  const inSeries = all.filter((row) => {
+  const inSeries = all.filter((row: (typeof all)[number]) => {
     const m = (row.metadata || {}) as { recurringSeriesId?: string };
     return m.recurringSeriesId === seriesId;
   });
@@ -30,15 +30,15 @@ export async function editRecurringSeries(
   const anchorIndex = meta.recurringOccurrenceIndex ?? 0;
   const targets =
     scope === "this_only"
-      ? inSeries.filter((r) => r.id === anchorAppointmentId)
+      ? inSeries.filter((r: (typeof inSeries)[number]) => r.id === anchorAppointmentId)
       : scope === "this_and_future"
-        ? inSeries.filter((r) => {
+        ? inSeries.filter((r: (typeof inSeries)[number]) => {
             const idx = ((r.metadata || {}) as { recurringOccurrenceIndex?: number }).recurringOccurrenceIndex ?? 0;
             return idx >= anchorIndex;
           })
         : inSeries;
 
-  const preview = targets.map((t) => ({
+  const preview = targets.map((t: (typeof targets)[number]) => ({
     id: t.id,
     from: t.startsAt,
     to: patch.startsAt ? new Date(patch.startsAt) : t.startsAt,
@@ -72,9 +72,9 @@ export async function previewHolidaySeriesImpact(
 ) {
   const prisma = getPrisma();
   const appointments = await prisma.voiceAppointment.findMany({ where: { workspaceId } });
-  const affected = appointments.filter((a) => {
+  const affected = appointments.filter((a: (typeof appointments)[number]) => {
     const day = a.startsAt.toISOString().slice(0, 10);
     return holidayDates.includes(day);
   });
-  return { count: affected.length, appointments: affected.map((a) => ({ id: a.id, startsAt: a.startsAt })) };
+  return { count: affected.length, appointments: affected.map((a: (typeof affected)[number]) => ({ id: a.id, startsAt: a.startsAt })) };
 }

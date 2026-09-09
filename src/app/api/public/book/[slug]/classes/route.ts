@@ -35,17 +35,30 @@ export async function GET(_request: Request, { params }: Params) {
       where: { workspaceId: workspace.id, status: "enrolled" },
       _count: { occurrenceId: true },
     });
-    const countMap = new Map(enrollmentCounts.map((e) => [e.occurrenceId, e._count.occurrenceId]));
+    const countMap = new Map(
+      enrollmentCounts.map((e: { occurrenceId: string; _count: { occurrenceId: number } }) => [
+        e.occurrenceId,
+        e._count.occurrenceId,
+      ]),
+    );
 
-    const publicOccurrences = occurrences.map((occ) => ({
+    const publicOccurrences = occurrences.map(
+      (occ: {
+        id: string;
+        seriesId: string;
+        startsAt: Date;
+        endsAt: Date;
+        capacity: number | null;
+      }) => ({
       id: occ.id,
       seriesId: occ.seriesId,
       startsAt: occ.startsAt.toISOString(),
       endsAt: occ.endsAt.toISOString(),
       capacity: occ.capacity,
-      enrolled: countMap.get(occ.id) || 0,
-      remaining: Math.max(0, (occ.capacity || 0) - (countMap.get(occ.id) || 0)),
-    }));
+      enrolled: Number(countMap.get(occ.id) ?? 0),
+      remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
+    }),
+    );
 
     return NextResponse.json({
       data: {
@@ -98,6 +111,10 @@ export async function POST(request: Request, { params }: Params) {
         },
       });
       contactId = created.id;
+    }
+
+    if (!contactId) {
+      return NextResponse.json({ error: "Contact required" }, { status: 400 });
     }
 
     const enrollment = await enrollInClass(workspace.id, {

@@ -154,18 +154,19 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
   const isRecurring = Boolean(data.recurringSeriesId);
 
   function downloadIcs() {
-    if (!data.startsAt || !data.serviceName) return;
+    if (!data?.startsAt || !data?.serviceName) return;
     const start = new Date(data.startsAt);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
     const fmt = (d: Date) =>
       d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const serviceName = data.serviceName;
     const body = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
       "BEGIN:VEVENT",
       `DTSTART:${fmt(start)}`,
       `DTEND:${fmt(end)}`,
-      `SUMMARY:${data.serviceName}`,
+      `SUMMARY:${serviceName}`,
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n");

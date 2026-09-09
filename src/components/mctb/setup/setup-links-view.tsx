@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
 import {
   DEFAULT_MCTB_REQUEST_FORM_FIELDS,
+  mctbRequestFormPublicPath,
   type MctbRequestFormField,
-} from "@/lib/mctb/request-form";
+} from "@/lib/mctb/request-form-shared";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { ExternalLink, Link2 } from "lucide-react";
 import Link from "next/link";
@@ -53,8 +54,7 @@ export function MctbSetupLinksView() {
         : DEFAULT_MCTB_REQUEST_FORM_FIELDS;
       setFields(loadedFields);
       if (r.requestFormToken) {
-        const path = `/f/mctb/${encodeURIComponent(r.requestFormToken)}`;
-        setRequestFormUrl(path);
+        setRequestFormUrl(mctbRequestFormPublicPath(r.requestFormToken));
       } else {
         setRequestFormUrl(null);
       }

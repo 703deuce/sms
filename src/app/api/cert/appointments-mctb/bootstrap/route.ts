@@ -12,12 +12,15 @@ import {
 export async function POST() {
   try {
     const auth = await requireSession();
+    if (!auth.session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     if (!auth.workspaceId) {
       return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
     }
     const email = auth.session.email?.toLowerCase() || "";
     const allowed =
-      email === CERT_BROWSER_EMAIL.toLowerCase() || Boolean(auth.session.isPlatformAdmin);
+      email === CERT_BROWSER_EMAIL.toLowerCase() || Boolean(auth.session.isAdmin);
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

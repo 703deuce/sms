@@ -16,7 +16,7 @@ export async function loadAcuityStyleReports(
     },
   });
 
-  const filtered = appointments.filter((a) => {
+  const filtered = appointments.filter((a: (typeof appointments)[number]) => {
     const meta = (a.metadata || {}) as { staffId?: string; appointmentTypeId?: string };
     if (filters?.staffId && meta.staffId !== filters.staffId) return false;
     if (filters?.bookingTypeId && meta.appointmentTypeId !== filters.bookingTypeId) return false;
@@ -48,9 +48,9 @@ export async function loadAcuityStyleReports(
   });
 
   const revenue = {
-    appointmentPaymentsCents: payments.reduce((s, p) => s + p.amountPaidCents, 0),
-    depositsCents: payments.filter((p) => p.paymentMode === "deposit").reduce((s, p) => s + p.amountPaidCents, 0),
-    tipsCents: payments.reduce((s, p) => {
+    appointmentPaymentsCents: payments.reduce((s: number, p: (typeof payments)[number]) => s + p.amountPaidCents, 0),
+    depositsCents: payments.filter((p: (typeof payments)[number]) => p.paymentMode === "deposit").reduce((s: number, p: (typeof payments)[number]) => s + p.amountPaidCents, 0),
+    tipsCents: payments.reduce((s: number, p: (typeof payments)[number]) => {
       const meta = (p.metadata || {}) as { tipCents?: number };
       return s + (meta.tipCents || 0);
     }, 0),
