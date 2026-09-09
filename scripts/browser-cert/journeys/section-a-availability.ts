@@ -23,7 +23,7 @@ import {
   setStartIntervalMinutes,
   slotLabelMatches,
 } from "../master-uat-helpers";
-import { MASTER_UAT_SERVICE_NAME as SERVICE } from "../master-uat-config";
+import { MASTER_UAT_SERVICE_NAME as SERVICE, MASTER_UAT_SLUG } from "../master-uat-config";
 
 function flow(id: string, title: string, run: (page: Page) => Promise<void>): MasterUatFlow {
   return { id, section: "A", title, run };
@@ -96,7 +96,7 @@ async function journey03(page: Page) {
     }
   }
 
-  const apiAfter = await fetchPublicSlotCount(page, SERVICE);
+  const apiAfter = await fetchAvailabilitySlotCount(page, SERVICE);
   if (apiBefore > 1 && apiAfter >= apiBefore) {
     throw new MasterUatAssertionError(
       `Limit visible availability should reduce slot count. Before=${apiBefore} apiAfter=${apiAfter}`,
@@ -330,23 +330,38 @@ async function journey14(page: Page) {
   await openDynamicPricingAdmin(page);
 
   const ruleName = `UAT Saturday +20 ${Date.now().toString().slice(-5)}`;
-  await page.locator('input').filter({ has: page.locator('xpath=ancestor::label[contains(.,"Rule name")]') }).first().fill(ruleName).catch(async () => {
-    await page.locator('label:has-text("Rule name") input, label:has-text("Rule name") ~ input').first().fill(ruleName);
-  });
-  const nameInput = page.getByText("Rule name").locator("..").locator("input").first();
-  if (await nameInput.count()) await nameInput.fill(ruleName);
+  await page.getByText("Rule name").locator("..").locator("input").first().fill(ruleName);
+  await page.getByRole("button", { name: /^Add rule$/i }).click();
+  await page.waitForTimeout(2000);
 
-  const addBtn = page.getByRole("button", { name: /^Add rule$/i });
-  if (await addBtn.count()) {
-    await addBtn.click();
-    await page.waitForTimeout(1500);
+  const adminBody = await page.locator("body").innerText();
+  if (!adminBody.includes(ruleName)) {
+    throw new MasterUatAssertionError("Dynamic pricing rule did not appear after save");
   }
 
-  await openPublicBooking(page);
-  await selectPublicService(page, SERVICE);
-  const body = await page.locator("body").innerText();
-  if (!/\$|price|total/i.test(body)) {
-    throw new MasterUatAssertionError("Public booking did not show price after dynamic pricing rule setup");
+  const typesRes = await page.request.get("/api/appointments/types");
+  if (!typesRes.ok()) throw new MasterUatAssertionError("Could not load appointment types for pricing check");
+  const types = ((await typesRes.json()).data || []) as Array<{ id: string; name: string }>;
+  const service = types.find((t) => t.name === SERVICE) || types[0];
+  if (!service) throw new MasterUatAssertionError("No appointment type available for dynamic pricing check");
+
+  const startsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const priceRes = await page.request.post(`/api/public/book/${MASTER_UAT_SLUG}`, {
+    timeout: 120_000,
+    data: {
+      action: "evaluate_price",
+      serviceId: service.id,
+      serviceName: service.name,
+      startsAt,
+    },
+  });
+  if (!priceRes.ok()) {
+    const err = await priceRes.json().catch(() => ({}));
+    throw new MasterUatAssertionError(`evaluate_price failed: ${err.error || priceRes.status()}`);
+  }
+  const priceJson = await priceRes.json();
+  if (priceJson.data?.finalPriceCents == null && priceJson.data?.basePriceCents == null) {
+    throw new MasterUatAssertionError("Dynamic pricing evaluate_price returned no price data");
   }
 }
 
