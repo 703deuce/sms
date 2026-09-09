@@ -43,7 +43,7 @@
 | 2 | Custom start interval | Availability → Advanced | PARTIAL → **IN PROGRESS** | Preset + custom + example copy |
 | 3 | Visible availability density | Availability → Advanced | PARTIAL → **IN PROGRESS** | Business-language toggle + % select |
 | 4 | Minimize gaps | Availability → Advanced | PARTIAL → **IN PROGRESS** | Radio + helper text |
-| 5 | Service phases | Booking Types → Duration | PARTIAL | Type editor exists; DELETE + timeline pending |
+| 5 | Service phases | Booking Types → Duration | **GOOD** | DELETE API + UI; phase kinds match runtime |
 | 6 | Multi-service booking | Public scheduler | PARTIAL | Summary wired; per-line staff pending |
 | 7 | Multi-staff per line | Public + appointment detail | PARTIAL | |
 | 8 | Locations management | Availability → Locations | PARTIAL → **IN PROGRESS** | Nav discoverability |
@@ -62,7 +62,7 @@
 | 21 | Custom domain | Booking Pages → Appearance | THIN | Backend field; UI pending wave A |
 | 22 | Custom CSS | Booking Pages → Advanced | THIN | |
 | 23 | Custom terminology | Booking Pages → Language | THIN | |
-| 24–32 | Commerce / POS | Payments / Booking commerce | PARTIAL | POS needs contact picker |
+| 24–32 | Commerce / POS | Payments / Booking commerce | PARTIAL | POS contact picker shipped; Kimi shell pending |
 | 33 | Invoices | Payments → Invoices | PARTIAL | Admin page + public pay; Stripe link when appointment linked |
 | 34 | Refunds | Payments → Transaction detail | PARTIAL | Refund modal exists |
 | 35–41 | Classes / waitlist / tickets | Appointments / Classes | PARTIAL | |
@@ -80,7 +80,7 @@
 |-------|--------|----------------|----------------|
 | 49–55 | Weekly hours, notice, horizon, overrides, blackouts, holidays, limits | **GOOD/PARTIAL** | `/appointments/availability` — Kimi weekly hours + booking rules + limits panels exist |
 | 56 | External calendar blocking | **PARTIAL** | Integrations → Calendars + availability context card |
-| 57 | Slot diagnostics | **PARTIAL → IN PROGRESS** | Availability → Diagnose panel wired to `/api/appointments/diagnostics/slots` |
+| 57 | Slot diagnostics | **GOOD** | Availability → Diagnose panel wired to `/api/appointments/diagnostics/slots` |
 | 58 | Dynamic pricing | **THIN** | Booking type → Payments advanced |
 | 59–62 | Staff, assignment modes, round robin, groups | **PARTIAL** | `/appointments/types` TypeEditorPanel + staff routes |
 | 63–71 | Categories, images, visibility, order, durations, questions, confirmation, booking pages | **PARTIAL** | `/appointments/types`, `/appointments/booking` |
