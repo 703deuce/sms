@@ -597,7 +597,11 @@ Update each row to **PASS** only when the journey that covers it has been signed
 
 | Document | Purpose |
 |----------|---------|
+| `docs/TRANSOVO-APPOINTMENTS-FINAL-PAGE-MANIFEST-IA-DIRECTIVE.md` | **IA reorganization authority** — preservation rules, target nav, parity migration |
+| `docs/APPOINTMENTS-PAGE-CLASSIFICATION-MANIFEST.md` | Per-route KEEP/EXTEND/SPLIT/MERGE classification (Batch 0) |
+| `docs/appointments-page-blueprints/` | Required blueprints before non-KEEP page implementation |
 | `docs/APPOINTMENTS-PLATFORM-FEATURE-INVENTORY.md` | Narrative feature inventory (routes & APIs) |
+| `docs/APPOINTMENTS-FEATURE-SPLIT-ORIGINAL-VS-PARITY.md` | Original V1 vs parity feature split |
 | `docs/GENERAL-APPOINTMENT-CLEAN-PARITY-GAPS.md` | Acuity / SB / SQ gap closure list |
 | `docs/GENERAL-APPOINTMENT-PARITY-MATRIX.md` | Phase 1–18 implementation matrix |
 | `docs/GENERAL-APPOINTMENT-GAP-CLOSURE-DIRECTIVE.md` | Build order & scope rules |

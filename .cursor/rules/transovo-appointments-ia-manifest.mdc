@@ -1,0 +1,40 @@
+---
+description: MANDATORY for Appointments IA reorganization — page manifest, preservation rules, batched page work. Read before any Appointments nav, route, or UI migration.
+globs:
+  - src/app/(app)/appointments/**
+  - src/components/appointments/**
+  - src/features/appointments/**
+  - src/lib/products/appointments-nav.ts
+alwaysApply: false
+---
+
+# MANDATORY: TRANSOVO APPOINTMENTS — Final Page Manifest & IA Reorganization
+
+**Source of truth:** `docs/TRANSOVO-APPOINTMENTS-FINAL-PAGE-MANIFEST-IA-DIRECTIVE.md`  
+**Classification ledger:** `docs/APPOINTMENTS-PAGE-CLASSIFICATION-MANIFEST.md`  
+**Feature inventory:** `docs/APPOINTMENTS-MASTER-FEATURE-INVENTORY.md`
+
+## When this rule activates
+
+Before **any** Appointments product work that touches navigation, routing, page placement, splitting/merging parity UI, or new admin surfaces under `/appointments/*`.
+
+## Hard requirements
+
+1. **Read the full directive first** — preservation rules are non-negotiable.
+2. **Classify every page** (KEEP / EXTEND / REORGANIZE / SPLIT / MERGE / RETIRE / NEW) before editing UI.
+3. **KEEP = hands off** — no restyle, refactor, typography, or "cleanup" on polished pages not in scope.
+4. **Home (`/appointments/overview`) is art direction only** — not a layout template for every page.
+5. **No "Commerce" in customer-facing nav** — use **Packages & Sales**.
+6. **No mega conditional editors** — split Booking Types into Meetings / Services / Classes / Workshops & Events.
+7. **Contextual create** — never "go create X elsewhere first" without in-flow quick create.
+8. **Page blueprint required** before coding any non-KEEP page (`docs/appointments-page-blueprints/`).
+9. **Work page-by-page in batches** — not one giant IA pass across the whole app.
+10. **Preserve backend/runtime** — UI migration only; no duplicate engines.
+
+## First implementation blueprint
+
+**Booking Types landing** — `docs/appointments-page-blueprints/01-booking-types-landing.md` — before any archetype editor.
+
+## On conflict
+
+This directive wins for Appointments page placement over screenshots, parity temp routes, and convenience shortcuts. Global Transovo IA guide (#3) still applies for terminology and one canonical home.
