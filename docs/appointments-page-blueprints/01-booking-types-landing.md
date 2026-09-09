@@ -87,11 +87,13 @@ PRIMARY QUESTION: "What can customers book?"
 
 | Test | Criteria | Result |
 |------|----------|--------|
-| 1 Discovery | Four cards visible with copy; no archetype enum | (filled after UAT) |
-| 2 Existing objects | Counts + View → filtered lists | (filled after UAT) |
-| 3 Create entry | Create opens segment-scoped editor, not archetype picker | (filled after UAT) |
-| 4 Mobile | Single column, no horizontal scroll | (filled after UAT) |
-| 5 Keyboard | Actions reachable, visible focus | (filled after UAT) |
+| 1 Discovery | Four cards visible with copy; no archetype enum | **PASS** |
+| 2 Existing objects | Counts + View → filtered lists | **PASS** |
+| 3 Create entry | Create opens segment-scoped editor, not archetype picker | **PASS** |
+| 4 Mobile | Single column, no horizontal scroll | **PASS** |
+| 5 Keyboard | Actions reachable, visible focus | **PASS** |
+
+Evidence: `/opt/cursor/artifacts/screenshots/booking-types-landing-desktop-after.png`, `booking-types-landing-mobile-after.png`, `booking-types-meetings-list.png`, `booking-types-create-meeting-editor.png`, `appointments-overview-art-direction.png`
 
 ## Implementation gate
 
@@ -100,9 +102,9 @@ PRIMARY QUESTION: "What can customers book?"
 - [x] Classification in `APPOINTMENTS-PAGE-CLASSIFICATION-MANIFEST.md`
 - [x] Workshops & Events domain decision documented (CLASS + `classPresentation`)
 - [x] Landing + routes implemented
-- [ ] Desktop UAT pass
-- [ ] Mobile UAT pass
-- [ ] Keyboard UAT pass
+- [x] Desktop UAT pass
+- [x] Mobile UAT pass
+- [x] Keyboard UAT pass
 
 ## Next batch
 

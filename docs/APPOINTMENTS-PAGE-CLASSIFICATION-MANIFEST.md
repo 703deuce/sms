@@ -234,7 +234,7 @@ Before implementing Meetings/Services/Classes/Workshops editors:
 - [x] Feature rows mapped from master inventory §2
 - [x] Old editor route strategy: landing at `/appointments/types`; transitional editor at `/appointments/types/editor`; per-segment lists at `/appointments/types/{meetings,services,classes,workshops}`
 - [x] Workshops domain: CLASS engine + `classPresentation` (`recurring_class` \| `workshop_event`) — no duplicate backend
-- [ ] Browser UAT pass (desktop, mobile, keyboard)
+- [x] Browser UAT pass (desktop, mobile, keyboard) — 2026-09-09
 
 ---
 
