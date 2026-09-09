@@ -20,6 +20,93 @@ type PosSession = {
 
 type CatalogItem = { id: string; name: string; priceCents: number; kind: string };
 
+type ContactOption = { id: string; name: string; phone: string };
+
+function ContactSearchField({
+  selected,
+  onSelect,
+}: {
+  selected: ContactOption | null;
+  onSelect: (contact: ContactOption | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState<ContactOption[]>([]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setOptions([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ take: "12", q });
+      void fetch(`/api/contacts?${params}`)
+        .then((r) => r.json())
+        .then((json) => {
+          setOptions(
+            (json.data || []).map((c: { id: string; firstName?: string; lastName?: string; phone: string }) => ({
+              id: c.id,
+              name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone,
+              phone: c.phone,
+            })),
+          );
+        })
+        .catch(() => setOptions([]));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div className="relative">
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Customer</span>
+        <input
+          className="rounded border px-3 py-2"
+          value={selected ? selected.name : query}
+          onChange={(e) => {
+            onSelect(null);
+            setQuery(e.target.value);
+          }}
+          placeholder="Search by name or phone"
+          autoComplete="off"
+        />
+      </label>
+      {selected ? (
+        <button
+          type="button"
+          className="mt-1 text-xs text-muted-foreground underline"
+          onClick={() => {
+            onSelect(null);
+            setQuery("");
+          }}
+        >
+          Clear selection
+        </button>
+      ) : null}
+      {!selected && options.length > 0 ? (
+        <ul className="absolute z-10 mt-1 w-full rounded-md border bg-white shadow-md max-h-48 overflow-auto">
+          {options.map((opt) => (
+            <li key={opt.id}>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                onClick={() => {
+                  onSelect(opt);
+                  setQuery(opt.name);
+                  setOptions([]);
+                }}
+              >
+                <span className="font-medium">{opt.name}</span>
+                <span className="block text-xs text-gray-500">{opt.phone}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 const LINE_KINDS = [
   { value: "custom", label: "Custom line" },
   { value: "service", label: "Service / appointment type" },
@@ -39,11 +126,14 @@ export function PosCartAdminClient() {
   const [catalogId, setCatalogId] = useState("");
   const [description, setDescription] = useState("");
   const [priceDollars, setPriceDollars] = useState("");
-  const [contactId, setContactId] = useState("");
+  const [selectedContact, setSelectedContact] = useState<ContactOption | null>(null);
   const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const contactId = selectedContact?.id ?? "";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,9 +209,27 @@ export function PosCartAdminClient() {
     }
   }, [selectedCatalog]);
 
+  useEffect(() => {
+    if (active?.contactId && !selectedContact) {
+      void fetch(`/api/contacts/${active.contactId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (!json?.data) return;
+          const c = json.data as { id: string; firstName?: string; lastName?: string; phone: string };
+          setSelectedContact({
+            id: c.id,
+            name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone,
+            phone: c.phone,
+          });
+        })
+        .catch(() => undefined);
+    }
+  }, [active?.contactId, selectedContact]);
+
   async function startSession() {
     setBusy(true);
     setError(null);
+    setSuccess(null);
     const res = await fetch("/api/appointments/service-booking/pos-cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -196,7 +304,13 @@ export function PosCartAdminClient() {
 
   async function checkout() {
     if (!activeId) return;
+    if (!contactId) {
+      setError("Select a customer before checkout — required for packages, memberships, and entitlements.");
+      return;
+    }
     setBusy(true);
+    setError(null);
+    setSuccess(null);
     const res = await fetch("/api/appointments/service-booking/pos-cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,7 +327,13 @@ export function PosCartAdminClient() {
       setError(json.error || "Checkout failed");
       return;
     }
+    const json = await res.json().catch(() => ({}));
     setActiveId(null);
+    setSuccess(
+      json.data?.paymentId
+        ? `Checkout complete — payment recorded.`
+        : "Checkout complete.",
+    );
     await load();
   }
 
@@ -250,15 +370,7 @@ export function PosCartAdminClient() {
       </header>
 
       <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Contact ID (required for packages, gifts, memberships, products)</span>
-          <input
-            className="rounded border px-3 py-2 font-mono text-xs"
-            value={contactId}
-            onChange={(e) => setContactId(e.target.value)}
-            placeholder="contact_…"
-          />
-        </label>
+        <ContactSearchField selected={selectedContact} onSelect={setSelectedContact} />
         <label className="flex flex-col gap-1 text-sm">
           <span>Referral code (optional)</span>
           <input
@@ -269,6 +381,12 @@ export function PosCartAdminClient() {
           />
         </label>
       </div>
+
+      {success ? (
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {success}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

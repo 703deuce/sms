@@ -12,6 +12,19 @@ export async function listServicePhaseTemplates(workspaceId: string, appointment
   });
 }
 
+export async function deleteServicePhaseTemplate(workspaceId: string, id: string) {
+  const prisma = getPrisma();
+  const existing = await prisma.servicePhaseTemplate.findFirst({
+    where: { id, workspaceId },
+    select: { id: true },
+  });
+  if (!existing) {
+    throw new Error("Phase not found");
+  }
+  await prisma.servicePhaseTemplate.delete({ where: { id, workspaceId } });
+  return { id };
+}
+
 export async function upsertServicePhaseTemplate(
   workspaceId: string,
   input: {

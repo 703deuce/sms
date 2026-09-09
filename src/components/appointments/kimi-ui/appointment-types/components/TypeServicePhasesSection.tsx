@@ -6,7 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 type PhaseRow = {
   id?: string;
   name: string;
-  phaseKind: "active_staff" | "passive" | "buffer";
+  phaseKind: "active_staff" | "processing";
   durationMinutes: number;
   staffRequired: boolean;
   displayOrder: number;
@@ -14,8 +14,7 @@ type PhaseRow = {
 
 const PHASE_KINDS: Array<{ value: PhaseRow["phaseKind"]; label: string }> = [
   { value: "active_staff", label: "Active (staff required)" },
-  { value: "passive", label: "Passive (room / processing)" },
-  { value: "buffer", label: "Buffer / cleanup" },
+  { value: "processing", label: "Processing (room / passive)" },
 ];
 
 type Props = {
@@ -115,7 +114,25 @@ export function TypeServicePhasesSection({ appointmentTypeId, isCreating }: Prop
     setPhases((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   }
 
-  function removePhase(index: number) {
+  async function removePhase(index: number) {
+    const phase = phases[index];
+    if (phase?.id) {
+      setSaving(true);
+      setMessage("");
+      try {
+        const res = await fetch(
+          `/api/appointments/service-booking/service-phases/${encodeURIComponent(phase.id)}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) throw new Error("delete failed");
+        setMessage("Phase removed");
+      } catch {
+        setMessage("Could not remove phase");
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
     setPhases((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -208,7 +225,12 @@ export function TypeServicePhasesSection({ appointmentTypeId, isCreating }: Prop
                 </label>
               </div>
               <div className="col-span-1 flex justify-end pb-1">
-                <button type="button" className="text-[#a0a3b5] hover:text-rose-600" onClick={() => removePhase(index)}>
+                <button
+                  type="button"
+                  className="text-[#a0a3b5] hover:text-rose-600 disabled:opacity-40"
+                  disabled={saving}
+                  onClick={() => void removePhase(index)}
+                >
                   <Trash2 size={15} />
                 </button>
               </div>
