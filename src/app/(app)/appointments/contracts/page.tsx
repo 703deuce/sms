@@ -1,5 +1,5 @@
-import { ContractsAdminClient } from "@/components/appointments/contracts-admin-client";
+import { redirect } from "next/navigation";
 
-export default function AppointmentsContractsPage() {
-  return <ContractsAdminClient />;
+export default function AppointmentsContractsRedirectPage() {
+  redirect("/appointments/forms-documents?tab=contracts");
 }

@@ -439,7 +439,7 @@ export function ClassCustomerInfoSection({
         <PilotLabel>Intake form</PilotLabel>
         {intakeFormOptions.length === 0 ? (
           <p className="appt-pilot-text-helper">
-            <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Create intake form</ContextLink>
+            <ContextLink href="/appointments/forms-documents?tab=intake" onPersistDraft={onPersistDraft}>Create intake form</ContextLink>
           </p>
         ) : (
           <ul className="space-y-2">

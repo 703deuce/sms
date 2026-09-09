@@ -9,7 +9,14 @@ export type StaffListItem = {
   locationCount: number;
 };
 
-export type StaffEditorTab = "details" | "availability" | "assignments";
+export type StaffEditorTab =
+  | "details"
+  | "assignments"
+  | "availability"
+  | "locations"
+  | "calendar"
+  | "scheduling"
+  | "calendarDisplay";
 
 export type StaffDayRow = {
   key: string;

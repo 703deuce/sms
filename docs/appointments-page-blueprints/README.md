@@ -28,3 +28,11 @@ Batch 3 UAT evidence: `BATCH-3-UAT.md`
 | 15 | Products & Offers hub | `15-products-offers-hub.md` — Batch 4 |
 
 Batch 4 UAT evidence: `BATCH-4-UAT.md`
+
+| 16 | Rooms & Equipment | `16-rooms-equipment.md` — Batch 5 |
+| 17 | Forms & Documents | `17-forms-documents.md` — Batch 5 |
+| 18 | Locations extension | `18-locations-extension.md` — Batch 5 |
+| 19 | Staff extension | `19-staff-extension.md` — Batch 5 |
+| 20 | Booking Pages extension | `20-booking-pages-extension.md` — Batch 5 |
+
+Batch 5 UAT evidence: `BATCH-5-UAT.md`

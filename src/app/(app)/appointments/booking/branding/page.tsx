@@ -1,7 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { redirect } from "next/navigation";
 
-export default function BookingBrandingPage() {
-  return (
-    <ServiceBookingAdminClient initialSection="theme" title="Booking appearance" />
-  );
+export default function BookingBrandingRedirectPage() {
+  redirect("/appointments/booking?section=branding");
 }

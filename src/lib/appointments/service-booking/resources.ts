@@ -19,35 +19,43 @@ export async function upsertSchedulingResource(
     description?: string;
     eligibleTypeIds?: string[];
     locationIds?: string[];
+    kind?: "room" | "equipment" | "other";
     active?: boolean;
   },
 ) {
   const prisma = getPrisma();
-  const metadata =
-    input.locationIds != null ? { locationIds: input.locationIds.filter(Boolean) } : undefined;
+  const metadataPatch: Record<string, unknown> = {};
+  if (input.locationIds != null) {
+    metadataPatch.locationIds = input.locationIds.filter(Boolean);
+  }
+  if (input.kind != null) {
+    metadataPatch.kind = input.kind;
+  }
   const data = {
     name: input.name.trim(),
     quantity: input.quantity ?? 1,
     description: input.description,
     eligibleTypeIds: input.eligibleTypeIds || [],
     active: input.active ?? true,
-    ...(metadata ? { metadata } : {}),
   };
   if (input.id) {
     const existing = await prisma.schedulingResource.findFirst({
       where: { id: input.id, workspaceId },
     });
     if (!existing) throw new Error("Resource not found");
-    const mergedMetadata =
-      metadata != null
-        ? { ...((existing.metadata as Record<string, unknown>) || {}), ...metadata }
-        : undefined;
+    const mergedMetadata = {
+      ...((existing.metadata as Record<string, unknown>) || {}),
+      ...metadataPatch,
+    };
     return prisma.schedulingResource.update({
       where: { id: input.id, workspaceId },
-      data: mergedMetadata ? { ...data, metadata: mergedMetadata } : data,
+      data: { ...data, metadata: mergedMetadata },
     });
   }
-  return prisma.schedulingResource.create({ data: { workspaceId, ...data } });
+  const createMetadata = Object.keys(metadataPatch).length ? metadataPatch : undefined;
+  return prisma.schedulingResource.create({
+    data: { workspaceId, ...data, ...(createMetadata ? { metadata: createMetadata } : {}) },
+  });
 }
 
 /** Count concurrent usage of a resource in a time window. */

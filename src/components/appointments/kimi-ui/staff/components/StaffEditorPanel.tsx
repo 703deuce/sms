@@ -30,9 +30,13 @@ type Props = {
 };
 
 const TABS: Array<{ id: StaffEditorTab; label: string }> = [
-  { id: "details", label: "Details" },
+  { id: "details", label: "Profile" },
+  { id: "assignments", label: "Services" },
   { id: "availability", label: "Availability" },
-  { id: "assignments", label: "Assigned services" },
+  { id: "locations", label: "Locations" },
+  { id: "calendar", label: "Calendar" },
+  { id: "scheduling", label: "Scheduling" },
+  { id: "calendarDisplay", label: "Calendar Display" },
 ];
 
 export default function StaffEditorPanel({
@@ -120,9 +124,10 @@ export default function StaffEditorPanel({
 
         {tab === "assignments" ? (
           <>
+            <p className="text-[12.5px] text-[#8a8fa3] mb-2">What can this person provide?</p>
             {appointmentTypes.length > 0 ? (
               <div>
-                <label className="label">Appointment types</label>
+                <label className="label">Meetings, services, and classes</label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {appointmentTypes.map((t) => {
                     const selected = selectedTypeIds.includes(t.id);
@@ -144,8 +149,14 @@ export default function StaffEditorPanel({
                 </div>
               </div>
             ) : (
-              <p className="text-[13px] text-[#8a8fa3]">Create appointment types before assigning staff.</p>
+              <p className="text-[13px] text-[#8a8fa3]">Create booking types before assigning staff.</p>
             )}
+          </>
+        ) : null}
+
+        {tab === "locations" ? (
+          <>
+            <p className="text-[12.5px] text-[#8a8fa3] mb-2">Where does this person work?</p>
             {locations.length > 0 ? (
               <div>
                 <label className="label">Locations</label>
@@ -169,8 +180,48 @@ export default function StaffEditorPanel({
                   })}
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <p className="text-[13px] text-[#8a8fa3]">
+                No locations yet.{" "}
+                <a href="/appointments/locations" className="text-[#5b4bff] font-medium">Add a location</a>
+              </p>
+            )}
           </>
+        ) : null}
+
+        {tab === "calendar" ? (
+          <div className="space-y-3">
+            <p className="text-[12.5px] text-[#8a8fa3]">
+              Which calendars should block or receive appointments?
+            </p>
+            <a
+              href="/integrations/calendars"
+              className="inline-flex rounded-lg border px-4 py-2 text-[13px] font-medium text-[#5b4bff]"
+            >
+              Connect Google Calendar or Outlook
+            </a>
+          </div>
+        ) : null}
+
+        {tab === "scheduling" ? (
+          <div className="space-y-2 text-[13px] text-[#6b6f82]">
+            <p>Round robin and team scheduling use workspace routing rules.</p>
+            <a href="/appointments/availability" className="text-[#5b4bff] font-medium">
+              Manage availability schedules
+            </a>
+          </div>
+        ) : null}
+
+        {tab === "calendarDisplay" ? (
+          <div className="space-y-2">
+            <p className="text-[12.5px] text-[#8a8fa3]">
+              Staff color appears on the calendar when color-by-staff is enabled.
+            </p>
+            <label className="flex flex-col gap-1 text-[13px]">
+              <span className="label">Calendar color</span>
+              <input type="color" className="h-10 w-20 rounded border" defaultValue="#5b4bff" aria-label="Calendar color" />
+            </label>
+          </div>
         ) : null}
 
         {tab === "availability" ? (

@@ -440,7 +440,7 @@ export function ServiceStaffLocationsSection({
         {resourceOptions.length === 0 ? (
           <p className="appt-pilot-text-helper rounded-lg border border-dashed border-[var(--border)] px-3 py-3">
             No rooms or equipment yet.{" "}
-            <ContextLink href="/appointments/resources" onPersistDraft={onPersistDraft}>Add room or equipment</ContextLink>
+            <ContextLink href="/appointments/rooms-equipment/new" onPersistDraft={onPersistDraft}>Add room or equipment</ContextLink>
           </p>
         ) : (
           <ul className="space-y-2">
@@ -560,7 +560,7 @@ export function ServiceCustomerInfoSection({
         {activeForms.length === 0 ? (
           <p className="appt-pilot-text-helper rounded-lg border border-dashed border-[var(--border)] px-3 py-3">
             No intake forms yet.{" "}
-            <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Create intake form</ContextLink>
+            <ContextLink href="/appointments/forms-documents?tab=intake" onPersistDraft={onPersistDraft}>Create intake form</ContextLink>
           </p>
         ) : (
           <ul className="space-y-2">
@@ -816,7 +816,7 @@ export function ServicePoliciesSection({
             Assign terms or contract templates customers must accept or sign.{" "}
             <ContextLink href="/appointments/policies" onPersistDraft={onPersistDraft}>Manage policies</ContextLink>
             {" · "}
-            <ContextLink href="/appointments/contracts" onPersistDraft={onPersistDraft}>Manage contracts</ContextLink>
+            <ContextLink href="/appointments/forms-documents?tab=contracts" onPersistDraft={onPersistDraft}>Manage contracts</ContextLink>
           </p>
           <p className="text-[var(--text-secondary)]">
             Per-service terms/contract picker ships with the Contracts focused batch; use transitional policy settings until then.
