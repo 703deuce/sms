@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { redirect } from "next/navigation";
 
-export default function SchedulingResourcesPage() {
-  return <ServiceBookingAdminClient initialSection="resources" />;
+export default function SchedulingResourcesRedirectPage() {
+  redirect("/appointments/rooms-equipment");
 }

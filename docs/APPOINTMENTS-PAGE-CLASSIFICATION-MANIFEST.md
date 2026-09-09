@@ -224,15 +224,24 @@ When a batch completes, update `src/lib/products/appointments-nav.ts`:
 
 ---
 
+## Batch 2A gate: Meetings list + editor
+
+- [x] Blueprints: `02-meetings-list.md`, `03-meeting-editor.md`
+- [x] Routes: `/appointments/types/meetings`, `/meetings/new`, `/meetings/[id]`
+- [x] Legacy editor redirect for `segment=meetings`
+- [ ] Browser UAT (Tests 1–9)
+
 ## Batch 1 gate: Booking Types landing
 
 Before implementing Meetings/Services/Classes/Workshops editors:
 
-- [ ] Blueprint approved: `docs/appointments-page-blueprints/01-booking-types-landing.md`
-- [ ] Screenshot baseline: current `/appointments/types`
-- [ ] Screenshot reference: `/appointments/overview`
-- [ ] Feature rows mapped from master inventory §2
-- [ ] Old editor route strategy documented (redirect vs parallel)
+- [x] Blueprint finalized: `docs/appointments-page-blueprints/01-booking-types-landing.md`
+- [x] Screenshot baseline: legacy mega-editor at `/appointments/types` (pre-split)
+- [x] Screenshot reference: `/appointments/overview`
+- [x] Feature rows mapped from master inventory §2
+- [x] Old editor route strategy: landing at `/appointments/types`; transitional editor at `/appointments/types/editor`; per-segment lists at `/appointments/types/{meetings,services,classes,workshops}`
+- [x] Workshops domain: CLASS engine + `classPresentation` (`recurring_class` \| `workshop_event`) — no duplicate backend
+- [x] Browser UAT pass (desktop, mobile, keyboard) — 2026-09-09
 
 ---
 

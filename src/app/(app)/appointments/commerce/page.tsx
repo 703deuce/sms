@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { CommerceTransitionalClient } from "@/components/appointments/commerce/commerce-transitional-client";
 
 export default function ServiceBookingCommercePage() {
-  return <ServiceBookingAdminClient initialSection="packages" title="Packages & Memberships" />;
+  return <CommerceTransitionalClient />;
 }

@@ -25,10 +25,10 @@ export default function StaffView({ model, actions }: Props) {
             </span>
             <div>
               <h1 className="text-[24px] leading-[30px] font-bold tracking-tight text-[#1a1d29]">
-                Team / Staff
+                Staff
               </h1>
               <p className="text-[13.5px] leading-[20px] text-[#8a8fa3] mt-1">
-                Manage bookable staff, their services, locations, and availability overrides.
+                Manage the people who provide meetings, services, and classes.
               </p>
             </div>
           </div>

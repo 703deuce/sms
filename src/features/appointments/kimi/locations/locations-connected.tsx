@@ -26,12 +26,24 @@ const WEEKDAYS = [
   { key: "sunday", label: "Sunday" },
 ] as const;
 
+type LocationEditorTab = "general" | "hours" | "services" | "staff" | "rooms" | "public";
+
+const LOCATION_TABS: Array<{ id: LocationEditorTab; label: string }> = [
+  { id: "general", label: "General" },
+  { id: "hours", label: "Hours" },
+  { id: "services", label: "Services" },
+  { id: "staff", label: "Staff" },
+  { id: "rooms", label: "Rooms & Equipment" },
+  { id: "public", label: "Public Details" },
+];
+
 export function LocationsConnected() {
   const [locations, setLocations] = useState<AppointmentLocation[]>([]);
   const [staffOptions, setStaffOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [typeOptions, setTypeOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [resourceOptions, setResourceOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editorTab, setEditorTab] = useState<LocationEditorTab>("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -163,7 +175,26 @@ export function LocationsConnected() {
           </div>
 
           {selected ? (
-            <div className="flex-1 rounded-xl border bg-white p-6 space-y-4">
+            <div className="flex-1 rounded-xl border bg-white">
+              <div className="px-6 pt-4 border-b border-[#ecedf2] flex flex-wrap gap-2">
+                {LOCATION_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`rounded-lg px-3 py-1.5 text-[12px] font-medium ${
+                      editorTab === tab.id
+                        ? "bg-[#f7f8fb] text-[#1a1d29] ring-1 ring-[#e4e6ee]"
+                        : "text-[#8a8fa3]"
+                    }`}
+                    onClick={() => setEditorTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div className="p-6 space-y-4">
+              {editorTab === "general" ? (
+              <>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1" htmlFor="location-name">
@@ -215,7 +246,12 @@ export function LocationsConnected() {
                 />
                 Active
               </label>
+              </>
+              ) : null}
+
+              {editorTab === "staff" ? (
               <div>
+                <p className="text-[13px] text-[#8a8fa3] mb-3">Who works at this location?</p>
                 <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">Staff at this location</label>
                 {staffOptions.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -240,11 +276,16 @@ export function LocationsConnected() {
                   </div>
                 ) : (
                   <p className="text-[12px] text-[#8a8fa3]">
-                    No staff configured yet. Add team members under Appointments settings.
+                    No staff yet.{" "}
+                    <a href="/appointments/staff" className="text-[#5b4bff]">Add staff</a>
                   </p>
                 )}
               </div>
+              ) : null}
+
+              {editorTab === "services" ? (
               <div>
+                <p className="text-[13px] text-[#8a8fa3] mb-3">Which services are offered here?</p>
                 <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">Services at this location</label>
                 {typeOptions.length > 0 ? (
                   <>
@@ -274,9 +315,13 @@ export function LocationsConnected() {
                   <p className="text-[12px] text-[#8a8fa3]">No booking types yet.</p>
                 )}
               </div>
+              ) : null}
+
+              {editorTab === "rooms" ? (
               <div>
+                <p className="text-[13px] text-[#8a8fa3] mb-3">What rooms or equipment are available here?</p>
                 <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">
-                  Resources at this location
+                  Rooms & equipment at this location
                 </label>
                 {resourceOptions.length > 0 ? (
                   <>
@@ -304,10 +349,31 @@ export function LocationsConnected() {
                   </>
                 ) : (
                   <p className="text-[12px] text-[#8a8fa3]">
-                    No resources yet. Add resources under Commerce → Resources.
+                    No rooms or equipment yet.{" "}
+                    <a href="/appointments/rooms-equipment" className="text-[#5b4bff]">Add room or equipment</a>
                   </p>
                 )}
               </div>
+              ) : null}
+
+              {editorTab === "public" ? (
+              <div className="space-y-4">
+                <p className="text-[13px] text-[#8a8fa3]">Customer-facing details shown on your booking page.</p>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">Display address</label>
+                  <input
+                    className="w-full rounded-lg border border-[#e4e6ee] px-3 py-2 text-[13px]"
+                    value={selected.address || ""}
+                    onChange={(e) => updateSelected({ address: e.target.value })}
+                  />
+                </div>
+                <p className="text-[12px] text-[#8a8fa3]">
+                  Directions, parking, and map visibility use the address and location type from General.
+                </p>
+              </div>
+              ) : null}
+
+              {editorTab === "hours" ? (
               <div className="rounded-lg border border-[#eceaf3] p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -354,6 +420,8 @@ export function LocationsConnected() {
                   <p className="text-[12px] text-[#8a8fa3]">Using workspace default availability hours.</p>
                 )}
               </div>
+              ) : null}
+
               <div className="flex justify-between pt-4 border-t">
                 <button
                   type="button"
@@ -368,6 +436,7 @@ export function LocationsConnected() {
                     {saving ? "Saving…" : "Save"}
                   </Button>
                 </div>
+              </div>
               </div>
             </div>
           ) : (

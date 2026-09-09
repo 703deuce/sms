@@ -39,12 +39,14 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   const children = [
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
-    { label: "Share & embed", href: "/appointments/booking/share" },
+    { label: "Forms & Documents", href: "/appointments/forms-documents" },
   ];
   if (modules.commerce) {
-    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
+    children.push({ label: "Products & Offers", href: "/appointments/products-offers" });
+    children.push({ label: "Packages", href: "/appointments/packages" });
+    children.push({ label: "Memberships", href: "/appointments/memberships" });
+    children.push({ label: "Point of Sale", href: "/appointments/pos" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
-    children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
   if (modules.classes) {
     children.push({ label: "Classes", href: "/appointments/classes" });
@@ -62,8 +64,9 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Staff", href: "/appointments/staff" },
     { label: "Locations", href: "/appointments/locations" },
-    { label: "Resources", href: "/appointments/resources" },
+    { label: "Rooms & Equipment", href: "/appointments/rooms-equipment" },
   ];
 }
 
@@ -281,10 +284,18 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
-  if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
+  if (pathname.startsWith("/appointments/products-offers")) return "Products & Offers";
+  if (pathname.startsWith("/appointments/packages")) return "Packages";
+  if (pathname.startsWith("/appointments/memberships")) return "Memberships";
+  if (pathname.startsWith("/appointments/gift-cards")) return "Gift Cards";
+  if (pathname.startsWith("/appointments/discounts")) return "Discounts";
+  if (pathname.startsWith("/appointments/products") && !pathname.startsWith("/appointments/products-offers")) return "Products";
+  if (pathname.startsWith("/appointments/commerce")) return "Commerce (transitional)";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
-  if (pathname.startsWith("/appointments/resources")) return "Resources";
+  if (pathname.startsWith("/appointments/rooms-equipment")) return "Rooms & Equipment";
+  if (pathname.startsWith("/appointments/resources")) return "Rooms & Equipment";
+  if (pathname.startsWith("/appointments/forms-documents")) return "Forms & Documents";
   if (pathname.startsWith("/payments/invoices")) return "Invoices";
   if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
@@ -316,7 +327,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/analytics/reports")) return "Reports";
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";
   if (pathname.startsWith("/appointments/enterprise")) return "Team";
-  if (pathname.startsWith("/appointments/staff")) return "Team";
+  if (pathname.startsWith("/appointments/staff")) return "Staff";
   if (pathname.startsWith("/appointments/new")) return "New Appointment";
   if (pathname.match(/\/appointments\/[^/]+$/)) return "Appointment";
   if (pathname.startsWith("/appointments")) return "Appointments";
