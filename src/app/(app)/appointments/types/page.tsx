@@ -1,5 +1,5 @@
-import { AppointmentTypesClient } from "@/components/appointments/types-client";
+import { BookingTypesLandingConnected } from "@/components/appointments/booking-types/booking-types-landing-connected";
 
 export default function AppointmentTypesPage() {
-  return <AppointmentTypesClient />;
+  return <BookingTypesLandingConnected />;
 }

@@ -29,6 +29,7 @@ interface Props {
   categoryOptions?: Array<{ id: string; name: string }>;
   intakeFormOptions?: Array<{ id: string; name: string; active?: boolean }>;
   appointmentTypeId?: string | null;
+  hideKindPicker?: boolean;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -56,6 +57,7 @@ export default function TypeEditorPanel({
   categoryOptions = [],
   intakeFormOptions = [],
   appointmentTypeId = null,
+  hideKindPicker = false,
   onFormChange,
   onSave,
   onCancel,
@@ -79,11 +81,13 @@ export default function TypeEditorPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-        <BookingTypeKindPicker
-          form={form}
-          isCreating={isCreating}
-          onFormChange={onFormChange}
-        />
+        {hideKindPicker ? null : (
+          <BookingTypeKindPicker
+            form={form}
+            isCreating={isCreating}
+            onFormChange={onFormChange}
+          />
+        )}
 
         <section>
           <h3 className="text-[14px] font-semibold mb-4">Basic details</h3>
