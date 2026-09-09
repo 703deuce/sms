@@ -311,8 +311,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
             serviceName: type.name,
             daysAhead: 14,
             durationMinutes,
-            staffId: overrides?.staffId ?? selectedStaffId || undefined,
-            locationId: overrides?.locationId ?? selectedLocationId || undefined,
+            staffId: overrides?.staffId ?? (selectedStaffId || undefined),
+            locationId: overrides?.locationId ?? (selectedLocationId || undefined),
           }),
         });
         const json = await res.json();
