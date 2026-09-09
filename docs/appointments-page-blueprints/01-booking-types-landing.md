@@ -1,156 +1,113 @@
 # Page Blueprint — Booking Types Landing
 
-**Status:** DRAFT — implement only after browser inspection + screenshot baseline  
+**Status:** FINAL — Batch 1 implemented  
 **Batch:** 1 (first implementation blueprint)  
-**Directive:** `docs/TRANSOVO-APPOINTMENTS-FINAL-PAGE-MANIFEST-IA-DIRECTIVE.md`
+**Directive:** `docs/TRANSOVO-APPOINTMENTS-FINAL-PAGE-MANIFEST-IA-DIRECTIVE.md`  
+**Branch:** `cursor/booking-types-landing-709b`
 
 ---
 
 ```
 PAGE: Booking Types Landing
-ROUTE: /appointments/types (landing replaces mega-editor as default view)
-CLASSIFICATION: SPLIT (entry surface) — current editor becomes child routes
+ROUTE: /appointments/types (canonical landing; mega-editor moved to child routes)
+CLASSIFICATION: SPLIT — landing + per-segment lists + transitional editor
 PRIMARY USER: Business owner / scheduler admin
 PRIMARY USER JOB: Understand what customers can book and open the right workflow to create or manage it
+PRIMARY QUESTION: "What can customers book?"
 ```
 
-## Source feature rows
+## Page identity
 
-From `docs/APPOINTMENTS-MASTER-FEATURE-INVENTORY.md` §2:
+| Field | Value |
+|-------|-------|
+| User-facing name | Booking Types |
+| Supporting text | Choose what customers can schedule with your business. |
+| Art direction reference | `/appointments/overview` (typography, color, card restraint — **not** dashboard layout) |
 
-- Booking types list & editor
-- Archetypes MEETING / SERVICE / CLASS (split presentation)
-- Display order (per archetype lists)
-- Workshops & Events (new presentation — may map to CLASS variant or distinct kind)
+## Workshops & Events — domain audit (Batch 1 decision)
 
-## Existing UI to preserve
+**Question:** Is there a separate EVENT/WORKSHOP backend model?
 
-- Reuse list/table components from current `/appointments/types` where they fit per-archetype lists
-- Reuse `BookingTypeKindPicker` **concepts** but **not** as inline radio on one editor — use as landing cards instead
-- Do **not** restyle `/appointments/overview`, Calendar, or Contacts
+**Finding:**
 
-## Existing components to reuse
+- No distinct `WORKSHOP` or `EVENT` value in `bookingTypeKind` (`MEETING` \| `SERVICE` \| `CLASS` only).
+- CLASS runtime already supports group capacity, occurrences, waitlists, and event-admission tickets.
+- Reusing CLASS for workshops/events matches user direction: **shared scheduling engine, separate customer-facing UI segment**.
 
-- `src/components/appointments/kimi-ui/appointment-types/*` (selective)
-- Appointments shell + local nav from `appointments-nav.ts`
-- Overview-connected typography tokens / card patterns (art direction only)
+**Implementation (smallest coherent architecture):**
 
-## Primary action
+- Added optional `classPresentation` on `AppointmentTypeConfig`: `recurring_class` \| `workshop_event`.
+- **Classes** segment = `bookingTypeKind: CLASS` + `classPresentation` unset or `recurring_class` (legacy CLASS records default here).
+- **Workshops & Events** segment = `bookingTypeKind: CLASS` + `classPresentation: workshop_event`.
+- Default config on create: workshops disable recurring, higher default capacity; classes enable recurring.
+- **No new scheduling engine.** Editor remains transitional; focused Workshop/Event editor is a later batch.
 
-Create the right booking type (context-dependent card: Create meeting / Create service / etc.)
+## Route strategy
 
-## Secondary actions
+| Segment | List route | Create route | Editor (transitional) |
+|---------|------------|--------------|------------------------|
+| Meetings | `/appointments/types/meetings` | `…/editor?segment=meetings&create=1` | `…/editor?segment=meetings&id=` |
+| Services | `/appointments/types/services` | `…/editor?segment=services&create=1` | `…/editor?segment=services&id=` |
+| Classes | `/appointments/types/classes` | `…/editor?segment=classes&create=1` | `…/editor?segment=classes&id=` |
+| Workshops & Events | `/appointments/types/workshops` | `…/editor?segment=workshops&create=1` | `…/editor?segment=workshops&id=` |
 
-- View all of one kind
-- Link to Booking Pages, Availability, Staff (contextual help links — not primary nav duplication)
+- Canonical landing: `/appointments/types` (unchanged URL — least disruptive).
+- Legacy mega-editor: replaced at landing; full editor UI preserved at `/appointments/types/editor` with segment filter.
+- Deep links to `?id=` on editor continue to work.
 
-## Local nav
+## Page sections (implemented)
 
-None at landing level. Each archetype list/editor gets its own local nav when drilled in.
+1. **Page header** — H1 Booking Types + helper line
+2. **Four type cards** — Meetings, Services, Classes, Workshops & Events (no enum labels)
+3. **Per-card actions** — Create (primary) + View (secondary, always visible)
+4. **Per-card status** — real counts from `GET /api/appointments/types` or empty copy ("No meetings yet")
+5. **Optional summary** — "Your booking types" when any active types exist (secondary; not a combined table)
+6. **Discoverability footnote** — link to Packages & Sales (not on primary chooser)
 
-## Page sections (landing) in order
+**Explicitly omitted from landing:** Programs, Packages, Memberships, Resources, Policies, global "+ New booking type" archetype picker.
 
-1. **Page header** — H1: Booking Types · short helper: "What can customers book?"
-2. **Four choice cards** (not enum labels as primary text):
-   - **Meetings** — calls, consultations, demos, interviews, virtual meetings
-   - **Services** — one-on-one provider work (salon, tutoring, repair, etc.)
-   - **Classes** — multiple customers, same scheduled session
-   - **Workshops & Events** — registrations for limited-run group events
-3. **Per-card actions:** View · Create
-4. **Optional compact summary** — counts per kind (only if real data; no mock zeros)
-5. **Discoverability strip** — links to Packages & Sales, Booking Pages (trial discoverability standard)
+## Components
 
-## Table/list fields
+| File | Role |
+|------|------|
+| `src/lib/appointments/booking-types-segments.ts` | Segment definitions, filtering, defaults |
+| `src/components/appointments/booking-types/booking-types-landing-connected.tsx` | Landing page |
+| `src/components/appointments/booking-types/booking-types-type-card.tsx` | Type card |
+| `src/components/appointments/booking-types/booking-types-kind-list-connected.tsx` | Per-segment list (transitional) |
+| `src/components/appointments/booking-types/booking-types-editor-client.tsx` | Editor shell + back link |
+| `src/features/appointments/kimi/appointment-types/appointment-types-connected.tsx` | Segment-aware transitional editor |
 
-Landing itself: no master table. Each "View" goes to archetype list with columns:
+## Preservation
 
-| Meetings | Services | Classes | Workshops & Events |
-|----------|----------|---------|-------------------|
-| Name | Name | Name | Name |
-| Duration | Duration | Schedule summary | Date/time |
-| Hosts | Staff | Instructor | Location |
-| Status | Status | Capacity | Registration cap |
-| Actions | Actions | Actions | Actions |
+- Global shell, Home, Calendar, Contacts, Messages — unchanged
+- `classPresentation` is additive; existing CLASS/MEETING/SERVICE records unchanged and categorized correctly
+- No Meeting/Service/Class/Workshop **focused editor** rebuild in this batch
 
-## Drawers / modals
+## Browser UAT checklist
 
-- None on landing. Quick-create happens on archetype editors, not landing.
-
-## Empty states (per archetype list)
-
-Example (Services):
-
-> **Create your first service**  
-> Services are one-on-one appointments with a provider — massage, tutoring, consulting, and more.  
-> [ Create service ]
-
-## Loading / error / success
-
-- Skeleton cards on landing load
-- Per-list skeleton rows
-- Error with retry on failed counts/lists
-
-## Dependencies
-
-- `GET /api/appointments/types` filtered by `bookingTypeKind` (or equivalent)
-- Nav update deferred until child list routes exist
-
-## Contextual create actions
-
-Landing only routes to create flows — does not host full editors.
-
-## Public/portal counterpart
-
-Public book `/book/[slug]` — unchanged; landing is admin-only.
-
-## Responsive behavior
-
-- Four cards: 1 col mobile → 2 col tablet → 4 col desktop
-- Touch targets per interaction standards
-
-## Accessibility
-
-- Cards are keyboard-focusable; each action reachable
-- Headings hierarchy: H1 page · H2 card titles
-- Do not use color alone for status
-
-## Backend already present
-
-- `bookingTypeKind` on type config
-- Types CRUD APIs
-- `editorDefaultsForBookingTypeKind()` in `booking-type-kind.ts`
-
-## Backend gaps
-
-- Workshops & Events may need kind enum or mapping decision (document before editor blueprint)
-- Aggregated counts endpoint optional (can derive client-side from types list)
-
-## Browser UAT
-
-- Owner opens Booking Types → sees four clear choices without reading docs
-- Create meeting → lands in **meeting-only** editor (not generic form)
-- View services → list shows only services
-- Returning from create preserves landing context
-
-## Old routes to merge/retire
-
-- Default `/appointments/types` mega-editor → split to `/appointments/types/meetings`, `/services`, `/classes`, `/events` (exact paths TBD in editor blueprints)
-- `/appointments/classes` admin tab shell → merge into Classes archetype home
-
-## Art direction notes
-
-- Inspect `/appointments/overview` for typography, card radius, shadow restraint, button hierarchy
-- **Do not** use overview dashboard grid on this page — use choice cards + optional summary only
-- Match overview **tone**, not overview **layout**
+| Test | Criteria | Result |
+|------|----------|--------|
+| 1 Discovery | Four cards visible with copy; no archetype enum | (filled after UAT) |
+| 2 Existing objects | Counts + View → filtered lists | (filled after UAT) |
+| 3 Create entry | Create opens segment-scoped editor, not archetype picker | (filled after UAT) |
+| 4 Mobile | Single column, no horizontal scroll | (filled after UAT) |
+| 5 Keyboard | Actions reachable, visible focus | (filled after UAT) |
 
 ## Implementation gate
 
-- [ ] Screenshot: current types page
-- [ ] Screenshot: overview reference
-- [ ] Classification signed off in `APPOINTMENTS-PAGE-CLASSIFICATION-MANIFEST.md`
-- [ ] Product confirms Workshops & Events vs Class relationship
-- [ ] Then code
+- [x] Screenshot baseline captured (before: legacy mega-editor at `/appointments/types`)
+- [x] Overview art-direction reference captured
+- [x] Classification in `APPOINTMENTS-PAGE-CLASSIFICATION-MANIFEST.md`
+- [x] Workshops & Events domain decision documented (CLASS + `classPresentation`)
+- [x] Landing + routes implemented
+- [ ] Desktop UAT pass
+- [ ] Mobile UAT pass
+- [ ] Keyboard UAT pass
+
+## Next batch
+
+**02 — Meetings list + editor** (`docs/appointments-page-blueprints/02-meetings-list-editor.md` — to be drafted). Simplest focused editor; reference for split editors.
 
 ---
 
-*Next blueprint after approval: 02-meetings-list-editor.md*
+*Batch 1 stops here. Do not implement Meeting/Service/Class/Workshop focused editors until Batch 2+.*
