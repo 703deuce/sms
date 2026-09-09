@@ -6,6 +6,7 @@ import type {
 } from "@/lib/appointments/types";
 import type { ExtendedCancellationPolicy } from "@/lib/appointments/service-booking/types";
 import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import type { ClassPresentation } from "@/lib/appointments/booking-types-segments";
 
 export type AppointmentTypeQuestion = {
   id: string;
@@ -36,6 +37,8 @@ export type AppointmentTypeItem = {
 
 export type AppointmentTypeFormState = {
   bookingTypeKind: BookingTypeKind;
+  /** CLASS-only — recurring class vs workshop/event UI segment */
+  classPresentation: ClassPresentation;
   name: string;
   durationMinutes: number;
   bufferMinutes: number;
@@ -137,6 +140,9 @@ export type AppointmentTypesPageModel = {
   addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
   categoryOptions: Array<{ id: string; name: string }>;
   intakeFormOptions: Array<{ id: string; name: string; active?: boolean }>;
+  /** When set, kind is fixed by Booking Types segment — hide archetype picker */
+  segmentLocked: boolean;
+  segmentTitle?: string;
 };
 
 export type AppointmentTypesPageActions = {

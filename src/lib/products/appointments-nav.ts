@@ -50,7 +50,6 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     children.push({ label: "Classes", href: "/appointments/classes" });
   }
   children.push(
-    { label: "Segments", href: "/appointments/segments" },
     { label: "Routing", href: "/appointments/routing-forms" },
     { label: "Team Booking", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
@@ -67,16 +66,20 @@ function availabilityChildren(): NavItem["children"] {
   ];
 }
 
-function remindersChildren(): NavItem["children"] {
-  return [
-    { label: "Reminder Sequences", href: "/appointments/reminders" },
+function automationsChildren(modules: SchedulingModuleFlags): NavItem["children"] {
+  const children: NavItem["children"] = [
+    { label: "Reminders", href: "/appointments/reminders" },
+  ];
+  if (modules.workflows) {
+    children.push({ label: "Workflows", href: "/appointments/workflows" });
+  }
+  children.push(
     { label: "Templates", href: "/appointments/automations/templates" },
     { label: "Activity", href: "/appointments/automations/activity" },
-  ];
-}
-
-function workflowsChildren(): NavItem["children"] {
-  return [{ label: "Workflows", href: "/appointments/workflows" }];
+    { label: "Recall automation", href: "/appointments/automations/recall" },
+    { label: "No-show follow-up", href: "/appointments/automations/no-show" },
+  );
+  return children;
 }
 
 function meetingsChildren(): NavItem["children"] {
@@ -92,8 +95,17 @@ function analyticsChildren(): NavItem["children"] {
     { label: "Booking", href: "/appointments/analytics/booking" },
     { label: "Reminders", href: "/appointments/analytics/reminders" },
     { label: "Automations", href: "/appointments/analytics/automations" },
+    { label: "Revenue", href: "/appointments/analytics/revenue" },
     { label: "Reports", href: "/appointments/analytics/reports" },
-    { label: "Service booking", href: "/appointments/reports/service-booking" },
+  ];
+}
+
+function contactsChildren(): NavItem["children"] {
+  return [
+    { label: "All contacts", href: "/contacts" },
+    { label: "Segments", href: "/contacts/segments" },
+    { label: "Customer fields", href: "/contacts/fields" },
+    { label: "Import", href: "/contacts/imports" },
   ];
 }
 
@@ -164,6 +176,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Contacts",
       href: "/contacts",
       icon: Users,
+      children: contactsChildren(),
     });
   }
 
@@ -177,23 +190,12 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
     });
   }
 
-  items.push(
-    {
-      label: "Reminders",
-      href: "/appointments/reminders",
-      icon: Workflow,
-      children: remindersChildren(),
-    },
-  );
-
-  if (modules.workflows) {
-    items.push({
-      label: "Workflows",
-      href: "/appointments/workflows",
-      icon: Workflow,
-      children: workflowsChildren(),
-    });
-  }
+  items.push({
+    label: "Automations",
+    href: "/appointments/reminders",
+    icon: Workflow,
+    children: automationsChildren(modules),
+  });
 
   if (modules.meetings) {
     items.push({
@@ -289,6 +291,8 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
   if (pathname.startsWith("/appointments/reports/service-booking")) return "Service booking reports";
+  if (pathname.startsWith("/appointments/automations/recall")) return "Recall automation";
+  if (pathname.startsWith("/appointments/automations/no-show")) return "No-show follow-up";
   if (pathname.startsWith("/appointments/types")) return "Booking Types";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
@@ -302,6 +306,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/integrations")) return "Integrations";
   if (pathname.startsWith("/appointments/recall-campaigns")) return "Recall campaigns";
   if (pathname.startsWith("/appointments/no-show-recovery")) return "No-show recovery";
+  if (pathname.startsWith("/appointments/automations")) return "Automations";
   if (pathname.startsWith("/appointments/reminders")) return "Reminders";
   if (pathname.startsWith("/appointments/voice-reminders")) return "Reminders";
   if (pathname.startsWith("/appointments/automations/templates")) return "Templates";
@@ -313,7 +318,10 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/analytics/booking")) return "Booking analytics";
   if (pathname.startsWith("/appointments/analytics/reminders")) return "Reminder analytics";
   if (pathname.startsWith("/appointments/analytics/automations")) return "Automation analytics";
+  if (pathname.startsWith("/appointments/analytics/revenue")) return "Revenue analytics";
   if (pathname.startsWith("/appointments/analytics/reports")) return "Reports";
+  if (pathname.startsWith("/contacts/fields")) return "Customer fields";
+  if (pathname.startsWith("/contacts/imports")) return "Import";
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";
   if (pathname.startsWith("/appointments/enterprise")) return "Team";
   if (pathname.startsWith("/appointments/staff")) return "Team";
