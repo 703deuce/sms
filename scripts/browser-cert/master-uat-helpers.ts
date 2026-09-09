@@ -129,17 +129,17 @@ export async function openPublicBooking(page: Page) {
   await page.waitForTimeout(2000);
 }
 
-export async function fetchPublicSlotCount(page: Page, serviceName = MASTER_UAT_SERVICE_NAME): Promise<number> {
-  const res = await page.request.post(`/api/public/book/${MASTER_UAT_SLUG}`, {
-    data: {
-      action: "availability",
-      serviceName,
-      daysAhead: 14,
-    },
-  });
+export async function fetchAvailabilitySlotCount(
+  page: Page,
+  serviceName = MASTER_UAT_SERVICE_NAME,
+): Promise<number> {
+  const res = await page.request.get(
+    `/api/appointments/availability?serviceName=${encodeURIComponent(serviceName)}&daysAhead=14`,
+    { timeout: 120_000 },
+  );
   if (!res.ok()) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`Public availability API failed: ${err.error || res.status()}`);
+    throw new Error(`Availability API failed: ${err.error || res.status()}`);
   }
   const json = await res.json();
   const slots = (json.data?.slots || []) as unknown[];

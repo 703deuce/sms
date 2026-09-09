@@ -5,7 +5,7 @@ import type { Page } from "playwright";
 import type { MasterUatFlow } from "../appointments-master-uat-catalog";
 import {
   collectPublicSlotLabels,
-  fetchPublicSlotCount,
+  fetchAvailabilitySlotCount,
   MasterUatAssertionError,
   openAvailabilityAdmin,
   openDynamicPricingAdmin,
@@ -82,7 +82,7 @@ async function journey03(page: Page) {
   await openAvailabilityAdmin(page);
   await setAutomaticStartMode(page);
   await setStartIntervalMinutes(page, 15);
-  const apiBefore = await fetchPublicSlotCount(page, SERVICE);
+  const apiBefore = await fetchAvailabilitySlotCount(page, SERVICE);
 
   await openAvailabilityAdmin(page);
   await setLimitVisibleAvailability(page, 50);
