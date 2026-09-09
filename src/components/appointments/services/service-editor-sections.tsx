@@ -726,9 +726,11 @@ export function ServicePricingAccessSection({
             Customers can use packages and member benefits when booking this service. Full package and membership management lives under Packages & Sales.
           </p>
           <p>
-            <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Manage packages</ContextLink>
+            <ContextLink href="/appointments/packages" onPersistDraft={onPersistDraft}>Manage packages</ContextLink>
             {" · "}
-            <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Manage memberships</ContextLink>
+            <ContextLink href="/appointments/memberships" onPersistDraft={onPersistDraft}>Manage memberships</ContextLink>
+            {" · "}
+            <ContextLink href="/appointments/packages/new" onPersistDraft={onPersistDraft}>Create package</ContextLink>
           </p>
           <p className="text-[var(--text-secondary)]">
             Per-service package eligibility assignment is deferred to the Packages focused batch.

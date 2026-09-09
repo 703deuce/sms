@@ -20,3 +20,11 @@ One markdown file per page **before** implementation. Use the required blueprint
 | 10 | Workshop/Event editor | `10-workshop-event-editor.md` — Batch 3 |
 
 Batch 3 UAT evidence: `BATCH-3-UAT.md`
+
+| 11 | Packages list | `11-packages-list.md` — Batch 4 |
+| 12 | Package editor | `12-package-editor.md` — Batch 4 |
+| 13 | Memberships list | `13-memberships-list.md` — Batch 4 |
+| 14 | Membership editor | `14-membership-editor.md` — Batch 4 |
+| 15 | Products & Offers hub | `15-products-offers-hub.md` — Batch 4 |
+
+Batch 4 UAT evidence: `BATCH-4-UAT.md`

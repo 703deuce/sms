@@ -1,7 +1,8 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import type { PackageCreditRule } from "./types";
+import type { PackageCreditRule, PackageLifecyclePolicy } from "./types";
+import { packageBalanceSummary } from "./package-lifecycle";
 
 export async function listPackageProducts(workspaceId: string) {
   const prisma = getPrisma();
@@ -24,6 +25,7 @@ export async function upsertPackageProduct(
     categoryId?: string;
     active?: boolean;
     standingSlotPolicy?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
@@ -43,6 +45,7 @@ export async function upsertPackageProduct(
     categoryId: input.categoryId,
     active: input.active ?? true,
     standingSlotPolicy: input.standingSlotPolicy,
+    ...(input.metadata != null ? { metadata: input.metadata } : {}),
   };
   if (input.id) {
     return prisma.packageProduct.update({ where: { id: input.id, workspaceId }, data });
@@ -101,4 +104,58 @@ export async function purchasePackageForContact(
 
 export function packagePurchaseUrl(baseUrl: string, workspaceSlug: string, packageSlug: string) {
   return `${baseUrl.replace(/\/$/, "")}/book/${workspaceSlug}/packages/${packageSlug}`;
+}
+
+export function readPackageLifecyclePolicy(
+  metadata: Record<string, unknown> | null | undefined,
+): PackageLifecyclePolicy {
+  const policy = metadata?.lifecyclePolicy;
+  if (policy && typeof policy === "object") {
+    return policy as PackageLifecyclePolicy;
+  }
+  return {
+    restoreCreditsOnCancel: true,
+    restoreCreditsOnLateCancel: false,
+    restoreCreditsOnNoShow: false,
+  };
+}
+
+export async function getPackageProductDetail(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const product = await prisma.packageProduct.findFirst({
+    where: { id: productId, workspaceId },
+  });
+  if (!product) return null;
+
+  const balances = await prisma.packageBalance.findMany({
+    where: { workspaceId, productId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  const contactIds = [...new Set(balances.map((b) => b.contactId))];
+  const contacts = contactIds.length
+    ? await prisma.contact.findMany({
+        where: { workspaceId, id: { in: contactIds } },
+        select: { id: true, firstName: true, lastName: true, phone: true, email: true },
+      })
+    : [];
+  const contactMap = new Map(contacts.map((c) => [c.id, c]));
+
+  const activeCustomerCount = balances.filter((b) => b.status === "active").length;
+
+  return {
+    product,
+    lifecyclePolicy: readPackageLifecyclePolicy(product.metadata as Record<string, unknown>),
+    balances: balances.map((b) => {
+      const remaining = (b.remainingCredits || {}) as Record<string, number>;
+      const summary = packageBalanceSummary(remaining);
+      return {
+        ...b,
+        contact: contactMap.get(b.contactId) || null,
+        creditsRemaining: summary.totalRemaining,
+      };
+    }),
+    activeCustomerCount,
+  };
 }

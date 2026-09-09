@@ -385,9 +385,11 @@ export function ClassPricingSection({
       <details className="rounded-xl border border-[var(--border)] px-4 py-3">
         <summary className="cursor-pointer appt-pilot-text-list font-medium">Packages & memberships</summary>
         <p className="mt-2 appt-pilot-text-helper">
-          <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Manage packages</ContextLink>
+          <ContextLink href="/appointments/packages" onPersistDraft={onPersistDraft}>Manage packages</ContextLink>
           {" · "}
-          <ContextLink href="/appointments/commerce" onPersistDraft={onPersistDraft}>Manage memberships</ContextLink>
+          <ContextLink href="/appointments/memberships/new" onPersistDraft={onPersistDraft}>Create membership</ContextLink>
+          {" · "}
+          <ContextLink href="/appointments/packages/new" onPersistDraft={onPersistDraft}>Create package</ContextLink>
         </p>
       </details>
     </SectionCard>

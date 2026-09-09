@@ -42,9 +42,11 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
   if (modules.commerce) {
-    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
+    children.push({ label: "Products & Offers", href: "/appointments/products-offers" });
+    children.push({ label: "Packages", href: "/appointments/packages" });
+    children.push({ label: "Memberships", href: "/appointments/memberships" });
+    children.push({ label: "Point of Sale", href: "/appointments/pos" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
-    children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
   if (modules.classes) {
     children.push({ label: "Classes", href: "/appointments/classes" });
@@ -281,7 +283,13 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
-  if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
+  if (pathname.startsWith("/appointments/products-offers")) return "Products & Offers";
+  if (pathname.startsWith("/appointments/packages")) return "Packages";
+  if (pathname.startsWith("/appointments/memberships")) return "Memberships";
+  if (pathname.startsWith("/appointments/gift-cards")) return "Gift Cards";
+  if (pathname.startsWith("/appointments/discounts")) return "Discounts";
+  if (pathname.startsWith("/appointments/products") && !pathname.startsWith("/appointments/products-offers")) return "Products";
+  if (pathname.startsWith("/appointments/commerce")) return "Commerce (transitional)";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
   if (pathname.startsWith("/appointments/resources")) return "Resources";

@@ -23,6 +23,7 @@ export async function upsertMembershipProduct(
     benefits?: MembershipBenefits;
     stripePriceId?: string;
     active?: boolean;
+    metadata?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
@@ -41,11 +42,46 @@ export async function upsertMembershipProduct(
     benefits: input.benefits || {},
     stripePriceId: input.stripePriceId,
     active: input.active ?? true,
+    ...(input.metadata != null ? { metadata: input.metadata } : {}),
   };
   if (input.id) {
     return prisma.serviceMembershipProduct.update({ where: { id: input.id, workspaceId }, data });
   }
   return prisma.serviceMembershipProduct.create({ data: { workspaceId, ...data } });
+}
+
+export async function getMembershipProductDetail(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const product = await prisma.serviceMembershipProduct.findFirst({
+    where: { id: productId, workspaceId },
+  });
+  if (!product) return null;
+
+  const subscriptions = await prisma.serviceMembershipSubscription.findMany({
+    where: { workspaceId, productId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  const contactIds = [...new Set(subscriptions.map((s) => s.contactId))];
+  const contacts = contactIds.length
+    ? await prisma.contact.findMany({
+        where: { workspaceId, id: { in: contactIds } },
+        select: { id: true, firstName: true, lastName: true, phone: true, email: true },
+      })
+    : [];
+  const contactMap = new Map(contacts.map((c) => [c.id, c]));
+
+  const activeMemberCount = subscriptions.filter((s) => s.status === "active").length;
+
+  return {
+    product,
+    subscriptions: subscriptions.map((s) => ({
+      ...s,
+      contact: contactMap.get(s.contactId) || null,
+    })),
+    activeMemberCount,
+  };
 }
 
 export async function startMembershipSubscription(
