@@ -44,7 +44,7 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
     description:
       "Book provider-based appointments such as training, tutoring, salon services, massage, inspections, repairs, photography, and private sessions.",
     listHref: "/appointments/types/services",
-    createHref: "/appointments/types/editor?segment=services&create=1",
+    createHref: "/appointments/types/services/new",
     bookingTypeKind: "SERVICE",
   },
   {

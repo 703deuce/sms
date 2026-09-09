@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Copy, MoreHorizontal, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Copy, ExternalLink, MoreHorizontal, Pencil, Plus } from "lucide-react";
 import { RefDecoPageHeader } from "@/components/appointments/kimi-ui/shared/ref-deco-patterns";
 import { typeBelongsToSegment, type ApiTypeRow } from "@/lib/appointments/booking-types-segments";
 import {
@@ -10,6 +10,7 @@ import {
   meetingIsActive,
   meetingMethodLabel,
 } from "@/lib/appointments/meetings/meeting-display";
+import { visibilityLabel } from "@/lib/appointments/services/service-display";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 
 export function MeetingsListConnected() {
@@ -60,10 +61,27 @@ export function MeetingsListConnected() {
 
   const activeCount = meetings.filter(meetingIsActive).length;
 
+  const bookingUrl = useCallback(
+    (id: string) => {
+      if (!workspaceSlug) return null;
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      return `${origin}/book/${encodeURIComponent(workspaceSlug)}/${encodeURIComponent(id)}`;
+    },
+    [workspaceSlug],
+  );
+
+  const previewLink = useCallback(
+    (id: string) => {
+      const url = bookingUrl(id);
+      if (url) window.open(url, "_blank");
+    },
+    [bookingUrl],
+  );
+
   const copyLink = useCallback(
     async (id: string) => {
-      if (!workspaceSlug) return;
-      const url = `${typeof window !== "undefined" ? window.location.origin : ""}/book/${encodeURIComponent(workspaceSlug)}/${encodeURIComponent(id)}`;
+      const url = bookingUrl(id);
+      if (!url) return;
       try {
         await navigator.clipboard.writeText(url);
         setCopiedId(id);
@@ -72,7 +90,7 @@ export function MeetingsListConnected() {
         // ignore
       }
     },
-    [workspaceSlug],
+    [bookingUrl],
   );
 
   const duplicateMeeting = useCallback(
@@ -170,6 +188,7 @@ export function MeetingsListConnected() {
                 <th scope="col">Duration</th>
                 <th scope="col">Hosts</th>
                 <th scope="col">Method</th>
+                <th scope="col">Visibility</th>
                 <th scope="col">Status</th>
                 <th scope="col" className="text-right">Actions</th>
               </tr>
@@ -190,6 +209,7 @@ export function MeetingsListConnected() {
                     <td>{row.durationMinutes ? `${row.durationMinutes} min` : "—"}</td>
                     <td>{hostAssignmentLabel(row.config, staffNames)}</td>
                     <td>{meetingMethodLabel(row.config)}</td>
+                    <td>{visibilityLabel(row.config)}</td>
                     <td>
                       <span className={active ? "appt-pilot-status-active" : "appt-pilot-status-inactive"}>
                         {active ? "Active" : "Inactive"}
@@ -204,6 +224,14 @@ export function MeetingsListConnected() {
                         >
                           <Pencil size={14} aria-hidden />
                         </Link>
+                        <button
+                          type="button"
+                          className="appt-pilot-outline-btn !min-h-8 !px-2"
+                          aria-label={`Preview ${row.name}`}
+                          onClick={() => previewLink(row.id)}
+                        >
+                          <ExternalLink size={14} aria-hidden />
+                        </button>
                         <button
                           type="button"
                           className="appt-pilot-outline-btn !min-h-8 !px-2"

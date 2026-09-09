@@ -26,7 +26,7 @@ type EditorOptions = {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
 };
 
-function SectionCard({
+export function SectionCard({
   id,
   title,
   description,
@@ -53,7 +53,7 @@ function SectionCard({
   );
 }
 
-function PilotLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+export function PilotLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
     <label className="label block appt-pilot-text-list font-medium text-[var(--text-primary)] mb-1.5" htmlFor={htmlFor}>
       {children}
@@ -61,15 +61,15 @@ function PilotLabel({ children, htmlFor }: { children: React.ReactNode; htmlFor?
   );
 }
 
-function PilotInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function PilotInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`input w-full appt-pilot-text-list ${props.className || ""}`} />;
 }
 
-function PilotSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function PilotSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={`input w-full appt-pilot-text-list ${props.className || ""}`} />;
 }
 
-function PilotTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function PilotTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...props} className={`input w-full resize-none appt-pilot-text-list ${props.className || ""}`} />;
 }
 

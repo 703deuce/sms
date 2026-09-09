@@ -224,6 +224,13 @@ When a batch completes, update `src/lib/products/appointments-nav.ts`:
 
 ---
 
+## Batch 2A gate: Meetings list + editor
+
+- [x] Blueprints: `02-meetings-list.md`, `03-meeting-editor.md`
+- [x] Routes: `/appointments/types/meetings`, `/meetings/new`, `/meetings/[id]`
+- [x] Legacy editor redirect for `segment=meetings`
+- [ ] Browser UAT (Tests 1–9)
+
 ## Batch 1 gate: Booking Types landing
 
 Before implementing Meetings/Services/Classes/Workshops editors:

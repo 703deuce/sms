@@ -1,56 +1,46 @@
 # Page Blueprint — Meetings List
 
-**Status:** FINAL — Batch 2A  
-**Route:** `/appointments/types/meetings`  
-**Parent:** Booking Types landing (`01-booking-types-landing.md`)  
-**Batch boundary:** Meetings only — not Services/Classes/Workshops
+**Status:** FINAL — Batch 2  
+**Route:** `/appointments/types/meetings`
 
 ---
 
 ```
 PAGE: Meetings
 ROUTE: /appointments/types/meetings
-CLASSIFICATION: SPLIT — focused list (replaces transitional segment table)
+CLASSIFICATION: SPLIT — focused list
+PRIMARY USER: Business owner / scheduler admin
 PRIMARY USER JOB: Show me the meeting types customers can schedule
 ```
 
-## Header
+## PRIMARY ACTION
 
-- **H1:** Meetings
-- **Supporting:** Create simple meeting types for calls, consultations, demos, interviews, and virtual or in-person meetings.
-- **Primary CTA:** Create meeting → `/appointments/types/meetings/new`
+Create meeting → `/appointments/types/meetings/new`
 
-## List columns
+## SECONDARY ACTIONS
 
-| Column | Source |
-|--------|--------|
-| Meeting name | `name` — link to editor |
-| Duration | `durationMinutes` |
-| Host / assignment | `staffAssignment` + `staffIds` (plain language) |
-| Meeting method | `config.location` |
-| Status | `config.enabled` / `active` |
-| Actions | Edit, Copy link, Duplicate, Enable/Disable |
+Row: Edit, Preview, Copy link, Duplicate, Enable/Disable
 
-No fake analytics. Restrained counts only if real (`N active`).
+## TABLE/LIST FIELDS
 
-## Empty state
+Meeting name | Duration | Hosts | Method | Visibility | Status | Actions
 
-Headline intent: *Schedule calls without the back-and-forth*  
-Body: Meetings are ideal for consultations, demos, interviews, and other appointments where customers simply choose a time.  
-CTA: Create your first meeting
+## EMPTY STATE
 
-## Backend
+*Schedule calls without the back-and-forth* + Create your first meeting
 
-- `GET /api/appointments/types` filtered client-side: `bookingTypeKind === MEETING`
-- No new list API
-- **Delete:** not supported — use Disable (`config.enabled: false`)
-- **Duplicate:** client POST with copied config (no duplicate API)
+## EXISTING COMPONENTS
 
-## Art direction
+`MeetingsListConnected`, overview pilot chrome, `appt-pilot-data-table`
 
-- Overview pilot (`appt-overview-pilot`) — same as Booking Types landing
-- Semantic table per Guide #7
+## BACKEND
 
-## UAT
+`GET /api/appointments/types` filtered `bookingTypeKind === MEETING`
 
-See `03-meeting-editor.md` Tests 1, 7, 8, 9 (list portions)
+## OLD ROUTES
+
+Transitional segment list retired for meetings; generic editor redirects here
+
+## BROWSER UAT
+
+M1, M5, M6; no archetype picker on create

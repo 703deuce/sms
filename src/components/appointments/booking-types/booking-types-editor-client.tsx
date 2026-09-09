@@ -31,13 +31,23 @@ export function BookingTypesEditorClient() {
       if (initialTypeId) {
         router.replace(`/appointments/types/meetings/${encodeURIComponent(initialTypeId)}`);
       }
+      return;
+    }
+    if (segmentId === "services") {
+      if (initialCreate) {
+        router.replace("/appointments/types/services/new");
+        return;
+      }
+      if (initialTypeId) {
+        router.replace(`/appointments/types/services/${encodeURIComponent(initialTypeId)}`);
+      }
     }
   }, [initialCreate, initialTypeId, router, segmentId]);
 
-  if (segmentId === "meetings") {
+  if (segmentId === "meetings" || segmentId === "services") {
     return (
       <div className="appt-overview-pilot ref-root min-h-full px-6 py-12 flex items-center justify-center">
-        <p className="appt-pilot-text-helper" aria-busy="true">Opening meeting editor…</p>
+        <p className="appt-pilot-text-helper" aria-busy="true">Opening editor…</p>
       </div>
     );
   }
