@@ -18,7 +18,14 @@ export type BookingEntitlements = {
   packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
   gifts: Array<{ id: string; code: string; balanceCents: number }>;
   memberships: Array<{ id: string; productName: string; status: string }>;
+  loyaltyPrograms?: Array<{
+    programId: string;
+    programName: string;
+    pointsBalance: number;
+    redeemRateCents: number;
+  }>;
   hasSavedCard?: boolean;
+  walletBalanceCents?: number;
 };
 
 import type { PaymentRequirement } from "@/lib/appointments/types";
@@ -119,6 +126,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [packageBalanceId, setPackageBalanceId] = useState("");
   const [giftCertificateCode, setGiftCertificateCode] = useState("");
   const [useSavedCard, setUseSavedCard] = useState(false);
+  const [walletApplyCents, setWalletApplyCents] = useState(0);
+  const [couponCode, setCouponCode] = useState("");
+  const [lineStaffIds, setLineStaffIds] = useState<Record<string, string>>({});
+  const [dynamicPriceCents, setDynamicPriceCents] = useState<number | null>(null);
+  const [loyaltyProgramId, setLoyaltyProgramId] = useState("");
+  const [loyaltyRedeemPoints, setLoyaltyRedeemPoints] = useState(0);
   const [entitlementsLoading, setEntitlementsLoading] = useState(false);
   const [addOnCatalog, setAddOnCatalog] = useState<import("./types").PublicBookingAddOn[]>([]);
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, number>>({});
@@ -353,6 +366,29 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         });
         const json = await res.json();
         if (res.ok && json.data?.holdId) setSlotHoldId(String(json.data.holdId));
+        const baseCents = selectedType.config?.payment?.priceCents;
+        if (baseCents && baseCents > 0) {
+          const priceRes = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "evaluate_price",
+              serviceId: selectedType.id,
+              serviceName: selectedType.name,
+              startsAt: iso,
+              staffId: selectedStaffId || undefined,
+              locationId: selectedLocationId || undefined,
+            }),
+          });
+          const priceJson = await priceRes.json().catch(() => ({}));
+          if (priceRes.ok && priceJson.data?.finalPriceCents != null) {
+            setDynamicPriceCents(Number(priceJson.data.finalPriceCents));
+          } else {
+            setDynamicPriceCents(null);
+          }
+        } else {
+          setDynamicPriceCents(null);
+        }
       } catch {
         // Hold is best-effort; booking still validates slot at checkout
       }
@@ -422,6 +458,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         setPackageBalanceId("");
         setGiftCertificateCode("");
         setUseSavedCard(false);
+        setWalletApplyCents(0);
+        setLoyaltyProgramId("");
+        setLoyaltyRedeemPoints(0);
         return;
       }
       setEntitlementsLoading(true);
@@ -670,6 +709,23 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         return;
       }
     }
+    for (const form of activeIntakeForms) {
+      const fields = (form.fields || []) as Array<{ id: string; label: string; required?: boolean }>;
+      for (const field of fields) {
+        if (!field.required) continue;
+        const val = (intakeAnswers[form.id]?.[field.id] || "").trim();
+        if (!val) {
+          setError(`Please complete required field: ${field.label}`);
+          return;
+        }
+      }
+    }
+    for (const svc of additionalServices) {
+      if (svc.config?.staffAssignment === "customer_chooses" && !lineStaffIds[svc.id]) {
+        setError(`Please select staff for ${svc.name}.`);
+        return;
+      }
+    }
     if (!selectedType || !startsAt || !bookPhone.trim() || !bookFirstName.trim()) {
       setError("Please complete all required fields.");
       return;
@@ -739,6 +795,16 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     if (useSavedCard && entitlements?.hasSavedCard) {
       payload.useSavedCard = true;
     }
+    if (walletApplyCents > 0) {
+      payload.walletApplyCents = walletApplyCents;
+    }
+    if (loyaltyRedeemPoints > 0 && loyaltyProgramId) {
+      payload.loyaltyProgramId = loyaltyProgramId;
+      payload.loyaltyRedeemPoints = loyaltyRedeemPoints;
+    }
+    if (couponCode.trim()) {
+      payload.couponCode = couponCode.trim();
+    }
     const addOnSelections = Object.entries(selectedAddOns)
       .filter(([, qty]) => qty > 0)
       .map(([addOnId, quantity]) => ({ addOnId, quantity }));
@@ -758,21 +824,33 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       if (responses.length) payload.intakeResponses = responses;
     }
     if (additionalServices.length && startsAt) {
-      let cursor = new Date(startsAt).getTime() + effectiveDurationMinutes * 60_000;
-      payload.multiServiceLines = additionalServices.map((svc, index) => {
-        const dur = svc.durationMinutes || 30;
-        const lineStart = new Date(cursor);
-        const lineEnd = new Date(cursor + dur * 60_000);
-        cursor = lineEnd.getTime();
-        return {
-          appointmentTypeId: svc.id,
-          serviceName: svc.name,
-          staffId: (svc as { assignedStaffId?: string }).assignedStaffId || selectedStaffId || undefined,
-          startsAt: lineStart.toISOString(),
-          endsAt: lineEnd.toISOString(),
-          displayOrder: index + 1,
-        };
-      });
+      const primaryStart = new Date(startsAt);
+      const primaryEnd = new Date(primaryStart.getTime() + effectiveDurationMinutes * 60_000);
+      let cursor = primaryEnd.getTime();
+      payload.multiServiceLines = [
+        {
+          appointmentTypeId: selectedType.id,
+          serviceName: selectedType.name,
+          staffId: selectedStaffId || undefined,
+          startsAt: primaryStart.toISOString(),
+          endsAt: primaryEnd.toISOString(),
+          displayOrder: 0,
+        },
+        ...additionalServices.map((svc, index) => {
+          const dur = svc.durationMinutes || 30;
+          const lineStart = new Date(cursor);
+          const lineEnd = new Date(cursor + dur * 60_000);
+          cursor = lineEnd.getTime();
+          return {
+            appointmentTypeId: svc.id,
+            serviceName: svc.name,
+            staffId: lineStaffIds[svc.id] || selectedStaffId || undefined,
+            startsAt: lineStart.toISOString(),
+            endsAt: lineEnd.toISOString(),
+            displayOrder: index + 1,
+          };
+        }),
+      ];
     }
     const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
       method: "POST",
@@ -866,8 +944,13 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     activeIntakeForms,
     intakeAnswers,
     additionalServices,
+    lineStaffIds,
     selectedAddOns,
     slotHoldId,
+    termsAccepted,
+    workspace,
+    loyaltyProgramId,
+    loyaltyRedeemPoints,
   ]);
 
   const onPaymentSuccess = useCallback(async () => {
@@ -1008,6 +1091,19 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     setGiftCertificateCode,
     useSavedCard,
     setUseSavedCard,
+    walletApplyCents,
+    setWalletApplyCents,
+    loyaltyProgramId,
+    setLoyaltyProgramId,
+    loyaltyRedeemPoints,
+    setLoyaltyRedeemPoints,
+    couponCode,
+    setCouponCode,
+    lineStaffIds,
+    setLineStaffId: (serviceId: string, staffId: string) => {
+      setLineStaffIds((prev) => ({ ...prev, [serviceId]: staffId }));
+    },
+    dynamicPriceCents,
     lookupEntitlements,
     eligibleAddOns,
     selectedAddOns,

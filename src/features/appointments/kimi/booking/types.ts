@@ -45,6 +45,8 @@ export type BookingPageModel = {
     wording: string;
     termsUrl: string;
     privacyUrl: string;
+    termsText: string;
+    termsVersion: string;
   };
   protectionMode: BookingProtectionMode;
   protectionOptions: BookingProtectionOption[];
@@ -62,7 +64,10 @@ export type BookingPageActions = {
     value: string,
   ) => void;
   onSaveBusinessInfo: () => void;
-  onConsentFieldChange: (field: keyof BookingPageModel["smsConsent"], value: string) => void;
+  onConsentFieldChange: (
+    field: keyof BookingPageModel["smsConsent"],
+    value: string,
+  ) => void;
   onSaveConsent: () => void;
   onProtectionModeChange: (mode: BookingProtectionMode) => void;
   onRetry: () => void;

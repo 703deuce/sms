@@ -9,8 +9,20 @@ import { ArrowLeft, CalendarCheck, Clock, MapPin, ShieldCheck } from "lucide-rea
 type EntitlementOption = {
   packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
   gifts: Array<{ id: string; code: string; balanceCents: number }>;
+  loyaltyPrograms?: Array<{
+    programId: string;
+    programName: string;
+    pointsBalance: number;
+    redeemRateCents: number;
+  }>;
   hasSavedCard?: boolean;
+  walletBalanceCents?: number;
 };
+
+function loyaltyValueCents(points: number, redeemRateCents: number) {
+  if (!points || !redeemRateCents) return 0;
+  return Math.floor((points / redeemRateCents) * 100);
+}
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
@@ -32,6 +44,14 @@ export function InfoStep({
   onPackageBalanceIdChange,
   onGiftCertificateCodeChange,
   onUseSavedCardChange,
+  walletApplyCents = 0,
+  onWalletApplyCentsChange,
+  loyaltyProgramId = "",
+  loyaltyRedeemPoints = 0,
+  onLoyaltyProgramIdChange,
+  onLoyaltyRedeemPointsChange,
+  couponCode = "",
+  onCouponCodeChange,
   onLookupEntitlements,
   eligibleAddOns = [],
   selectedAddOns = {},
@@ -48,6 +68,7 @@ export function InfoStep({
   recurringPreviewLoading,
   sessionLineCount = 0,
   additionalServiceNames = [],
+  dynamicPriceCents = null,
   onCheckoutSession,
   termsRequired = false,
   termsUrl = "/terms",
@@ -70,6 +91,14 @@ export function InfoStep({
   onPackageBalanceIdChange?: (id: string) => void;
   onGiftCertificateCodeChange?: (code: string) => void;
   onUseSavedCardChange?: (value: boolean) => void;
+  walletApplyCents?: number;
+  onWalletApplyCentsChange?: (cents: number) => void;
+  loyaltyProgramId?: string;
+  loyaltyRedeemPoints?: number;
+  onLoyaltyProgramIdChange?: (id: string) => void;
+  onLoyaltyRedeemPointsChange?: (points: number) => void;
+  couponCode?: string;
+  onCouponCodeChange?: (code: string) => void;
   onLookupEntitlements?: (phone: string, email?: string) => void;
   eligibleAddOns?: Array<{
     id: string;
@@ -114,6 +143,7 @@ export function InfoStep({
   recurringPreviewLoading?: boolean;
   sessionLineCount?: number;
   additionalServiceNames?: string[];
+  dynamicPriceCents?: number | null;
   onCheckoutSession?: () => void;
   termsRequired?: boolean;
   termsUrl?: string;
@@ -171,6 +201,12 @@ export function InfoStep({
   const hasEntitlements =
     Boolean(entitlements?.packages?.length) || Boolean(entitlements?.gifts?.length);
   const paymentRequired = type.config?.payment && type.config.payment.mode !== "none";
+  const basePriceCents = type.config?.payment?.priceCents || 0;
+  const showDynamicPrice =
+    paymentRequired &&
+    dynamicPriceCents != null &&
+    basePriceCents > 0 &&
+    dynamicPriceCents !== basePriceCents;
 
   function validate() {
     const next: Record<string, string> = {};
@@ -290,6 +326,101 @@ export function InfoStep({
               </label>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {showDynamicPrice ? (
+        <p className="mt-4 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-[13px] text-foreground">
+          Price for this time: <strong>{formatMoney(dynamicPriceCents!)}</strong>
+          <span className="text-muted-foreground"> (standard {formatMoney(basePriceCents)})</span>
+        </p>
+      ) : null}
+
+      {paymentRequired && entitlementMethod === "none" ? (
+        <div className="mt-4 rounded-xl border border-border p-4 space-y-4">
+          <div>
+            <Label htmlFor="coupon-code">Promo code</Label>
+            <div className="mt-1.5 flex gap-2">
+              <Input
+                id="coupon-code"
+                value={couponCode}
+                onChange={(e) => onCouponCodeChange?.(e.target.value)}
+                placeholder="SUMMER20"
+                className="flex-1"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Applied when you book if valid.</p>
+          </div>
+          {(entitlements?.loyaltyPrograms || []).length > 0 ? (
+            <div className="space-y-2">
+              <Label>Loyalty points</Label>
+              {(entitlements?.loyaltyPrograms || []).map((program) => {
+                const selected = loyaltyProgramId === program.programId;
+                const maxPoints = program.pointsBalance;
+                const appliedPoints = selected ? loyaltyRedeemPoints : 0;
+                const valueCents = loyaltyValueCents(appliedPoints, program.redeemRateCents);
+                return (
+                  <label key={program.programId} className="flex items-start gap-3 text-[13px]">
+                    <input
+                      type="radio"
+                      name="loyalty-program"
+                      className="mt-0.5"
+                      checked={selected && appliedPoints > 0}
+                      onChange={() => {
+                        onLoyaltyProgramIdChange?.(program.programId);
+                        onLoyaltyRedeemPointsChange?.(maxPoints);
+                      }}
+                    />
+                    <span>
+                      <span className="font-semibold text-foreground">{program.programName}</span>
+                      <span className="mt-0.5 block text-muted-foreground">
+                        {maxPoints} points available
+                        {appliedPoints > 0 ? ` · redeeming ${appliedPoints} (${formatMoney(valueCents)} off)` : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {loyaltyProgramId ? (
+                <label className="flex flex-col gap-1 text-[13px]">
+                  <span className="text-muted-foreground">Points to redeem</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={
+                      entitlements?.loyaltyPrograms?.find((p) => p.programId === loyaltyProgramId)
+                        ?.pointsBalance || 0
+                    }
+                    value={loyaltyRedeemPoints || ""}
+                    onChange={(e) =>
+                      onLoyaltyRedeemPointsChange?.(Math.max(0, Number(e.target.value) || 0))
+                    }
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+          {(entitlements?.walletBalanceCents || 0) > 0 ? (
+            <label className="flex items-start gap-3 text-[13px]">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-primary"
+                checked={walletApplyCents > 0}
+                onChange={(e) =>
+                  onWalletApplyCentsChange?.(
+                    e.target.checked ? Math.min(entitlements?.walletBalanceCents || 0, type.config?.payment?.priceCents || entitlements?.walletBalanceCents || 0) : 0,
+                  )
+                }
+              />
+              <span>
+                <span className="font-semibold text-foreground">Use wallet credit</span>
+                <span className="mt-0.5 block text-muted-foreground">
+                  {formatMoney(entitlements?.walletBalanceCents || 0)} available
+                  {walletApplyCents > 0 ? ` · applying ${formatMoney(walletApplyCents)}` : ""}
+                </span>
+              </span>
+            </label>
+          ) : null}
         </div>
       ) : null}
 
@@ -540,10 +671,31 @@ export function InfoStep({
                         </p>
                       ) : null}
                     </div>
+                  ) : field.type === "textarea" ? (
+                    <Textarea
+                      id={`intake-${form.id}-${field.id}`}
+                      className="mt-1.5"
+                      rows={3}
+                      value={intakeAnswers[form.id]?.[field.id] || ""}
+                      onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
+                    />
+                  ) : field.type === "select" && field.options?.length ? (
+                    <select
+                      id={`intake-${form.id}-${field.id}`}
+                      className="mt-1.5 w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                      value={intakeAnswers[form.id]?.[field.id] || ""}
+                      onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {field.options.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                   ) : (
                     <Input
                       id={`intake-${form.id}-${field.id}`}
                       className="mt-1.5"
+                      type={field.type === "email" ? "email" : field.type === "phone" ? "tel" : "text"}
                       value={intakeAnswers[form.id]?.[field.id] || ""}
                       onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
                     />

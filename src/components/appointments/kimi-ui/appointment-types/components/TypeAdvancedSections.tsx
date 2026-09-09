@@ -318,6 +318,44 @@ export default function TypeAdvancedSections({
             />
           </div>
         </div>
+        <div className="mt-6 rounded-xl border border-[#ecedf2] p-4">
+          <p className="text-[12px] font-semibold text-[#6b6f82] mb-2">Policy fees</p>
+          <p className="text-[12px] text-[#8a8fa3] mb-3">
+            Applies to late cancellations (after cutoff) and no-shows when a saved card is on file.
+          </p>
+          <label className="flex items-center gap-2 text-[12px] mb-2">
+            <input
+              type="checkbox"
+              className="checkbox"
+              checked={(form.extendedCancellationPolicy?.lateFeeCents || 0) > 0}
+              onChange={(e) =>
+                onFormChange("extendedCancellationPolicy", {
+                  ...form.extendedCancellationPolicy,
+                  lateFeeCents: e.target.checked ? form.extendedCancellationPolicy?.lateFeeCents || 2500 : 0,
+                })
+              }
+            />
+            Charge policy fee
+          </label>
+          {(form.extendedCancellationPolicy?.lateFeeCents || 0) > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[12px]">$</span>
+              <input
+                className="input w-28"
+                type="number"
+                min={0}
+                step={0.01}
+                value={((form.extendedCancellationPolicy?.lateFeeCents || 0) / 100).toFixed(2)}
+                onChange={(e) =>
+                  onFormChange("extendedCancellationPolicy", {
+                    ...form.extendedCancellationPolicy,
+                    lateFeeCents: Math.round(Number(e.target.value || 0) * 100),
+                  })
+                }
+              />
+            </div>
+          ) : null}
+        </div>
       </section>
 
       {/* Payment */}
@@ -331,9 +369,15 @@ export default function TypeAdvancedSections({
               value={form.paymentMode}
               onChange={(e) => onFormChange("paymentMode", e.target.value as typeof form.paymentMode)}
             >
-              <option value="none">No payment</option>
-              <option value="deposit">Deposit required</option>
-              <option value="full">Full payment required</option>
+              <option value="none">No payment required</option>
+              <option value="full">Pay full amount when booking</option>
+              <option value="deposit">Pay a deposit</option>
+              <option value="deposit_fixed">Deposit — fixed amount</option>
+              <option value="deposit_percent">Deposit — percentage</option>
+              <option value="optional">Pay later (optional at booking)</option>
+              <option value="customer_choice">Customer chooses pay now or later</option>
+              <option value="pay_what_you_want">Pay what you want</option>
+              <option value="save_card">Save card on file</option>
             </select>
           </div>
           {form.paymentMode !== "none" ? (

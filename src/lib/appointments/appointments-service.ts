@@ -153,7 +153,53 @@ export async function getAppointment(workspaceId: string, id: string) {
         select: { id: true, firstName: true, lastName: true, phone: true, email: true },
       })
     : null;
-  return mapAppointmentRow({ ...row, contact });
+  const [serviceLines, contracts, contractTemplates] = await Promise.all([
+    prisma.appointmentServiceLine.findMany({
+      where: { appointmentId: id, workspaceId },
+      orderBy: { displayOrder: "asc" },
+    }),
+    prisma.signedBookingContract.findMany({
+      where: { appointmentId: id, workspaceId },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.bookingContractTemplate.findMany({
+      where: { workspaceId, active: true },
+      select: { id: true, name: true, version: true },
+    }),
+  ]);
+  const base = mapAppointmentRow({ ...row, contact });
+  return {
+    ...base,
+    serviceLines: serviceLines.map((line: {
+      id: string;
+      serviceName: string;
+      staffId: string | null;
+      startsAt: Date;
+      endsAt: Date;
+      displayOrder: number;
+    }) => ({
+      id: line.id,
+      serviceName: line.serviceName,
+      staffId: line.staffId,
+      startsAt: line.startsAt.toISOString(),
+      endsAt: line.endsAt.toISOString(),
+      displayOrder: line.displayOrder,
+    })),
+    contracts: contracts.map((c: {
+      id: string;
+      status: string;
+      templateVersion: string | null;
+      signedAt: Date | null;
+      createdAt: Date;
+    }) => ({
+      id: c.id,
+      status: c.status,
+      templateVersion: c.templateVersion,
+      signedAt: c.signedAt?.toISOString() || null,
+      createdAt: c.createdAt.toISOString(),
+    })),
+    contractTemplates,
+  };
 }
 
 export function renderAppointmentTemplate(

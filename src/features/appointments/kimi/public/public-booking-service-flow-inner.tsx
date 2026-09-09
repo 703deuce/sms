@@ -101,6 +101,14 @@ export function PublicBookingServiceFlowInner({
               externalLoadingSlots={flow.loadingSlots}
               onAddAnotherService={flow.addAdditionalService}
               additionalServiceNames={flow.additionalServices.map((s) => s.name)}
+              additionalServices={flow.additionalServices.map((s) => ({
+                id: s.id,
+                name: s.name,
+                staffAssignment: s.config?.staffAssignment,
+                staffIds: s.config?.staffIds,
+              }))}
+              lineStaffIds={flow.lineStaffIds}
+              onLineStaffChange={flow.setLineStaffId}
               onAddToSessionCart={flow.addToSessionCart}
               sessionLineCount={flow.sessionLines.length}
             />
@@ -141,6 +149,14 @@ export function PublicBookingServiceFlowInner({
               onPackageBalanceIdChange={flow.setPackageBalanceId}
               onGiftCertificateCodeChange={flow.setGiftCertificateCode}
               onUseSavedCardChange={flow.setUseSavedCard}
+              walletApplyCents={flow.walletApplyCents}
+              onWalletApplyCentsChange={flow.setWalletApplyCents}
+              loyaltyProgramId={flow.loyaltyProgramId}
+              loyaltyRedeemPoints={flow.loyaltyRedeemPoints}
+              onLoyaltyProgramIdChange={flow.setLoyaltyProgramId}
+              onLoyaltyRedeemPointsChange={flow.setLoyaltyRedeemPoints}
+              couponCode={flow.couponCode}
+              onCouponCodeChange={flow.setCouponCode}
               onLookupEntitlements={(phone, email) => void flow.lookupEntitlements(phone, email)}
               eligibleAddOns={flow.eligibleAddOns}
               selectedAddOns={flow.selectedAddOns}
@@ -177,6 +193,7 @@ export function PublicBookingServiceFlowInner({
               recurringPreviewLoading={flow.recurringPreviewLoading}
               sessionLineCount={flow.sessionLines.length}
               additionalServiceNames={flow.additionalServices.map((s) => s.name)}
+              dynamicPriceCents={flow.dynamicPriceCents}
               onCheckoutSession={() => void flow.checkoutSession()}
               termsRequired={Boolean(ws.termsVersion)}
               termsUrl={ws.termsUrl}

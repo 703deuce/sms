@@ -161,7 +161,9 @@ export async function checkoutPosSession(
   if (session.lineItems.length === 0) throw new Error("Cannot checkout empty cart");
 
   const contactId = input?.contactId || session.contactId || undefined;
-  const needsContact = session.lineItems.some((line) => FULFILLMENT_KINDS.has(line.kind));
+  const needsContact = session.lineItems.some((line: { kind: string }) =>
+    FULFILLMENT_KINDS.has(line.kind),
+  );
   if (needsContact && !contactId) {
     throw new Error("A contact is required to fulfill package, gift, membership, or product lines");
   }

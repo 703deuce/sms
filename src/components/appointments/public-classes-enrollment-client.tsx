@@ -11,6 +11,24 @@ type ClassOccurrence = {
   capacity: number;
   enrolled: number;
   remaining: number;
+  seatMapId?: string | null;
+  seatMapName?: string | null;
+  requiresSeatSelection?: boolean;
+};
+
+type SeatCell = {
+  rowIndex: number;
+  colIndex: number;
+  label: string;
+  status: "available" | "reserved" | "blocked";
+};
+
+type SeatMapData = {
+  id: string;
+  name: string;
+  rows: number;
+  columns: number;
+  seats: SeatCell[];
 };
 
 export function PublicClassesEnrollmentClient({
@@ -30,6 +48,11 @@ export function PublicClassesEnrollmentClient({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [seatPickerOpen, setSeatPickerOpen] = useState(false);
+  const [pendingOccurrence, setPendingOccurrence] = useState<ClassOccurrence | null>(null);
+  const [seatMap, setSeatMap] = useState<SeatMapData | null>(null);
+  const [seatMapLoading, setSeatMapLoading] = useState(false);
+  const [selectedSeat, setSelectedSeat] = useState<SeatCell | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,7 +74,36 @@ export function PublicClassesEnrollmentClient({
     void load();
   }, [load]);
 
-  async function enroll(occurrenceId: string) {
+  async function openSeatPicker(occ: ClassOccurrence) {
+    if (!firstName.trim() || !phone.trim()) {
+      setError("First name and phone are required before choosing a seat.");
+      return;
+    }
+    setError(null);
+    setPendingOccurrence(occ);
+    setSelectedSeat(null);
+    setSeatPickerOpen(true);
+    setSeatMapLoading(true);
+    try {
+      const res = await fetch(
+        `/api/public/book/${slug}/classes/seats?occurrenceId=${encodeURIComponent(occ.id)}`,
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not load seat map");
+      setSeatMap(json.data as SeatMapData | null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Seat map unavailable");
+      setSeatPickerOpen(false);
+      setPendingOccurrence(null);
+    } finally {
+      setSeatMapLoading(false);
+    }
+  }
+
+  async function enroll(
+    occurrenceId: string,
+    seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string },
+  ) {
     if (!firstName.trim() || !phone.trim()) {
       setError("First name and phone are required.");
       return;
@@ -69,11 +121,20 @@ export function PublicClassesEnrollmentClient({
           lastName,
           phone,
           email: email || undefined,
+          seatMapId: seat?.seatMapId,
+          rowIndex: seat?.rowIndex,
+          colIndex: seat?.colIndex,
+          seatLabel: seat?.seatLabel,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Enrollment failed");
-      setMessage("You are enrolled. We will send a confirmation if messaging is enabled.");
+      const seatLabel = seat?.seatLabel ? ` Seat ${seat.seatLabel} reserved.` : "";
+      setMessage(`You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`);
+      setSeatPickerOpen(false);
+      setPendingOccurrence(null);
+      setSelectedSeat(null);
+      setSeatMap(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enrollment failed");
@@ -134,6 +195,84 @@ export function PublicClassesEnrollmentClient({
         </p>
       ) : null}
 
+      {seatPickerOpen && pendingOccurrence ? (
+        <section className="rounded-lg border p-4 space-y-4" aria-label="Choose your seat">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Choose your seat</h2>
+              <p className="text-xs text-muted-foreground">
+                {seriesMap.get(pendingOccurrence.seriesId)?.name} · {formatWhen(pendingOccurrence.startsAt)}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-sm text-muted-foreground underline"
+              onClick={() => {
+                setSeatPickerOpen(false);
+                setPendingOccurrence(null);
+                setSelectedSeat(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+          {seatMapLoading ? (
+            <p className="text-sm text-muted-foreground">Loading seat map…</p>
+          ) : !seatMap ? (
+            <p className="text-sm text-muted-foreground">No seat map configured for this session.</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">{seatMap.name}</p>
+              <div
+                className="inline-grid gap-1.5"
+                style={{ gridTemplateColumns: `repeat(${seatMap.columns}, minmax(2.5rem, 1fr))` }}
+              >
+                {seatMap.seats.map((seat) => {
+                  const selected =
+                    selectedSeat?.rowIndex === seat.rowIndex && selectedSeat?.colIndex === seat.colIndex;
+                  const disabled = seat.status !== "available";
+                  return (
+                    <button
+                      key={`${seat.rowIndex}-${seat.colIndex}`}
+                      type="button"
+                      disabled={disabled}
+                      aria-pressed={selected}
+                      title={seat.status}
+                      className={`rounded border px-2 py-2 text-xs font-medium ${
+                        disabled
+                          ? "cursor-not-allowed border-muted bg-muted text-muted-foreground"
+                          : selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card hover:border-primary"
+                      }`}
+                      onClick={() => setSelectedSeat(seat)}
+                    >
+                      {seat.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                disabled={busy || !selectedSeat}
+                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                onClick={() => {
+                  if (!selectedSeat || !pendingOccurrence.seatMapId) return;
+                  void enroll(pendingOccurrence.id, {
+                    seatMapId: pendingOccurrence.seatMapId,
+                    rowIndex: selectedSeat.rowIndex,
+                    colIndex: selectedSeat.colIndex,
+                    seatLabel: selectedSeat.label,
+                  });
+                }}
+              >
+                {busy ? "Enrolling…" : selectedSeat ? `Enroll in seat ${selectedSeat.label}` : "Select a seat"}
+              </button>
+            </>
+          )}
+        </section>
+      ) : null}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading upcoming classes…</p>
       ) : occurrences.length === 0 ? (
@@ -150,15 +289,22 @@ export function PublicClassesEnrollmentClient({
                   <p className="text-sm text-muted-foreground">{formatWhen(occ.startsAt)}</p>
                   <p className="text-xs text-muted-foreground">
                     {full ? "Full" : `${occ.remaining} spot${occ.remaining === 1 ? "" : "s"} left`}
+                    {occ.requiresSeatSelection ? " · Seat selection required" : ""}
                   </p>
                 </div>
                 <button
                   type="button"
                   disabled={busy || full}
                   className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-                  onClick={() => void enroll(occ.id)}
+                  onClick={() => {
+                    if (occ.requiresSeatSelection && occ.seatMapId) {
+                      void openSeatPicker(occ);
+                      return;
+                    }
+                    void enroll(occ.id);
+                  }}
                 >
-                  Enroll
+                  {occ.requiresSeatSelection ? "Choose seat" : "Enroll"}
                 </button>
               </li>
             );

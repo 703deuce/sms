@@ -119,7 +119,11 @@ export function serializePublicInvoice(
     businessName: workspace?.name || "Your business",
     customerName,
     customerEmail: contact?.email || null,
-    lineItems: invoice.lineItems.map((line) => ({
+    lineItems: invoice.lineItems.map((line: {
+      description: string;
+      quantity: number;
+      unitPriceCents: number;
+    }) => ({
       description: line.description,
       quantity: line.quantity,
       unitPriceCents: line.unitPriceCents,

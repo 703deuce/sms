@@ -50,6 +50,22 @@ export default function SmsConsentCard({
         </p>
       </div>
 
+      <div style={{ marginTop: 16 }}>
+        <label className="booking-label">Terms &amp; conditions text</label>
+        <textarea
+          className="booking-input"
+          style={{ height: "auto", padding: "10px 12px", resize: "vertical", lineHeight: 1.5 }}
+          rows={4}
+          value={smsConsent.termsText}
+          onChange={(e) => onFieldChange("termsText", e.target.value)}
+          placeholder="Enter the terms customers must accept when booking..."
+        />
+        <p style={{ fontSize: 11.5, color: "#9b99a8", margin: "6px 0 0" }}>
+          Current version: <strong>{smsConsent.termsVersion || "v1"}</strong>. Saving changed text bumps the version
+          so prior acceptances stay tied to the old terms.
+        </p>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
         <div>
           <label className="booking-label">Terms of service URL</label>

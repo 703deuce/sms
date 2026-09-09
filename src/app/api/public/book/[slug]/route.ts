@@ -331,12 +331,43 @@ export async function POST(request: Request, { params }: Params) {
           walletBalanceCents = 0;
         }
       }
+      let loyaltyPrograms: Array<{
+        programId: string;
+        programName: string;
+        pointsBalance: number;
+        redeemRateCents: number;
+      }> = [];
+      if (contactId) {
+        try {
+          const { listLoyaltyPrograms, getLoyaltyBalance } = await import(
+            "@/lib/appointments/service-booking/phase2/loyalty"
+          );
+          const programs = await listLoyaltyPrograms(workspace.id);
+          loyaltyPrograms = await Promise.all(
+            programs
+              .filter((p: { active: boolean }) => p.active)
+              .map(async (p: { id: string; name: string; redeemRateCents: number }) => {
+                const balance = await getLoyaltyBalance(workspace.id, p.id, contactId);
+                return {
+                  programId: p.id,
+                  programName: p.name,
+                  pointsBalance: balance.pointsBalance,
+                  redeemRateCents: p.redeemRateCents,
+                };
+              }),
+          );
+          loyaltyPrograms = loyaltyPrograms.filter((p) => p.pointsBalance > 0);
+        } catch {
+          loyaltyPrograms = [];
+        }
+      }
       return NextResponse.json({
         data: {
           ...entitlements,
           hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
           autoSuggestion,
           walletBalanceCents,
+          loyaltyPrograms,
         },
       });
     }
@@ -405,6 +436,30 @@ export async function POST(request: Request, { params }: Params) {
         return NextResponse.json({ data: { slots: slotsWithCapacity } });
       }
       return NextResponse.json({ data });
+    }
+
+    if (action === "evaluate_price") {
+      const typeInfo = await resolveTypeConfig(
+        workspace.id,
+        body.serviceId ? String(body.serviceId) : undefined,
+        body.serviceName ? String(body.serviceName) : undefined,
+      );
+      const basePriceCents = typeInfo?.config?.payment?.priceCents || 0;
+      const startsAtRaw = String(body.startsAt || "");
+      if (!startsAtRaw) {
+        return NextResponse.json({ error: "startsAt is required" }, { status: 400 });
+      }
+      const { evaluateSlotPrice } = await import(
+        "@/lib/appointments/service-booking/phase2/dynamic-pricing"
+      );
+      const priced = await evaluateSlotPrice(workspace.id, {
+        basePriceCents,
+        startsAt: startsAtRaw,
+        appointmentTypeId: typeInfo?.id,
+        staffId: body.staffId ? String(body.staffId) : undefined,
+        locationId: body.locationId ? String(body.locationId) : undefined,
+      });
+      return NextResponse.json({ data: priced });
     }
 
     if (action === "hold_slot") {
@@ -644,6 +699,32 @@ export async function POST(request: Request, { params }: Params) {
     const startsAtDate = new Date(startsAt);
     const endsAtDate = new Date(startsAtDate.getTime() + effectiveDuration * 60_000);
 
+    const contactIdBeforeBook = await resolveContactIdByPhone(
+      workspace.id,
+      phone,
+      body.email ? String(body.email) : undefined,
+    );
+    try {
+      const { assertMemberAccessForBookingType } = await import(
+        "@/lib/appointments/service-booking/membership-lifecycle"
+      );
+      await assertMemberAccessForBookingType(
+        workspace.id,
+        contactIdBeforeBook,
+        resolvedType?.id || serviceId,
+      );
+    } catch (memberErr) {
+      return NextResponse.json(
+        {
+          error:
+            memberErr instanceof Error
+              ? memberErr.message
+              : "An active membership is required to book this service.",
+        },
+        { status: 403 },
+      );
+    }
+
     const schedulingCtx = await loadSchedulingContext(workspace.id, resolvedServiceName);
     const assignedStaff = await resolveStaffForBooking(schedulingCtx, {
       preferredStaffId: staffId,
@@ -656,6 +737,29 @@ export async function POST(request: Request, { params }: Params) {
 
     const payment = resolvedType?.config.payment;
     let effectivePayment = payment ? { ...payment } : undefined;
+    if (effectivePayment?.priceCents && startsAt) {
+      try {
+        const { evaluateSlotPrice } = await import(
+          "@/lib/appointments/service-booking/phase2/dynamic-pricing"
+        );
+        const priced = await evaluateSlotPrice(workspace.id, {
+          basePriceCents: effectivePayment.priceCents,
+          startsAt: startsAtDate,
+          appointmentTypeId: resolvedType?.id || serviceId,
+          locationId,
+          staffId,
+        });
+        if (priced.finalPriceCents !== priced.basePriceCents) {
+          effectivePayment = {
+            ...effectivePayment,
+            priceCents: priced.finalPriceCents,
+            dynamicPricing: priced,
+          };
+        }
+      } catch {
+        // Dynamic pricing optional — base price stands
+      }
+    }
     if (effectivePayment && effectivePayment.mode !== "none" && addOnSelections?.length) {
       const catalog = await listBookingAddOns(workspace.id);
       const selectedAddOnRows = addOnSelections
@@ -675,6 +779,36 @@ export async function POST(request: Request, { params }: Params) {
           ...effectivePayment,
           priceCents: (effectivePayment.priceCents || 0) + addOnTotals.priceCents,
         };
+      }
+    }
+
+    const couponCode = body.couponCode ? String(body.couponCode).trim() : "";
+    if (couponCode && effectivePayment?.priceCents) {
+      try {
+        const { validateAndApplyCoupon } = await import(
+          "@/lib/appointments/service-booking/coupons"
+        );
+        const couponResult = await validateAndApplyCoupon(workspace.id, couponCode, {
+          baseCents: effectivePayment.priceCents,
+          contactId: contactIdBeforeBook ?? undefined,
+          targetKind: "booking_type",
+          targetId: resolvedType?.id || serviceId,
+        });
+        effectivePayment = {
+          ...effectivePayment,
+          priceCents: couponResult.totalCents,
+          couponCode,
+          couponDiscountCents: couponResult.discountCents,
+          couponRedemptionId: couponResult.redemptionId,
+        };
+      } catch (couponErr) {
+        return NextResponse.json(
+          {
+            error:
+              couponErr instanceof Error ? couponErr.message : "This promo code is invalid or expired.",
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -826,6 +960,36 @@ export async function POST(request: Request, { params }: Params) {
     const paymentWaivedByEntitlement = Boolean(entitlementOutcome?.paymentWaived);
     let paymentHandled = paymentWaivedByEntitlement;
     let paymentDue = effectivePayment ? { ...effectivePayment } : undefined;
+    const loyaltyRedeemPoints = Math.max(0, Math.floor(Number(body.loyaltyRedeemPoints || 0)));
+    const loyaltyProgramId = body.loyaltyProgramId ? String(body.loyaltyProgramId) : undefined;
+    if (loyaltyRedeemPoints > 0 && loyaltyProgramId && contactId && paymentDue?.priceCents) {
+      try {
+        const { redeemLoyaltyPoints, loyaltyRedeemValueCents } = await import(
+          "@/lib/appointments/service-booking/phase2/loyalty"
+        );
+        const prisma = getPrisma();
+        const program = await prisma.loyaltyProgram.findFirst({
+          where: { id: loyaltyProgramId, workspaceId: workspace.id, active: true },
+        });
+        if (!program) throw new Error("Loyalty program not found");
+        await redeemLoyaltyPoints(workspace.id, loyaltyProgramId, contactId, loyaltyRedeemPoints, {
+          appointmentId,
+          note: "Redeemed at booking checkout",
+        });
+        const discountCents = loyaltyRedeemValueCents(program, loyaltyRedeemPoints);
+        paymentDue = { ...paymentDue, priceCents: Math.max(0, (paymentDue.priceCents ?? 0) - discountCents) };
+        if ((paymentDue.priceCents ?? 0) <= 0) paymentHandled = true;
+      } catch (loyaltyErr) {
+        return NextResponse.json(
+          {
+            error:
+              loyaltyErr instanceof Error ? loyaltyErr.message : "Could not apply loyalty points",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const walletApplyCents = Math.max(0, Number(body.walletApplyCents || 0));
     if (walletApplyCents > 0 && contactId && paymentDue?.priceCents) {
       try {
@@ -896,6 +1060,25 @@ export async function POST(request: Request, { params }: Params) {
             } as object,
           },
         });
+      }
+    }
+
+    if (contactId && appointmentId && effectivePayment?.priceCents) {
+      try {
+        const { listLoyaltyPrograms, earnLoyaltyPoints } = await import(
+          "@/lib/appointments/service-booking/phase2/loyalty"
+        );
+        const programs = await listLoyaltyPrograms(workspace.id);
+        const activeProgram = programs.find((p: { active: boolean }) => p.active);
+        if (activeProgram) {
+          await earnLoyaltyPoints(workspace.id, activeProgram.id, contactId, {
+            spendCents: effectivePayment.priceCents,
+            appointmentId,
+            note: "Earned from booking",
+          });
+        }
+      } catch {
+        // Loyalty earn is best-effort
       }
     }
 

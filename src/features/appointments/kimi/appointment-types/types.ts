@@ -4,6 +4,7 @@ import type {
   ReschedulePolicy,
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
+import type { ExtendedCancellationPolicy } from "@/lib/appointments/service-booking/types";
 import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
 
 export type AppointmentTypeQuestion = {
@@ -54,6 +55,7 @@ export type AppointmentTypeFormState = {
   collectiveStaffIds: string[];
   cancellationPolicy: CancellationPolicy;
   reschedulePolicy: ReschedulePolicy;
+  extendedCancellationPolicy: ExtendedCancellationPolicy;
   paymentMode: "none" | "deposit" | "full" | "optional" | "deposit_fixed" | "deposit_percent" | "customer_choice" | "pay_what_you_want" | "save_card";
   paymentProvider: "stripe" | "square" | "";
   paymentPriceCents: number;

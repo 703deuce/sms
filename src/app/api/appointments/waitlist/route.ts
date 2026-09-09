@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
 import { processWaitlistNotification } from "@/lib/appointments/waitlist";
+import { rankWaitlistEntries } from "@/lib/appointments/service-booking/phase2/waitlist-priority";
 
 export async function GET() {
   try {
@@ -10,10 +11,22 @@ export async function GET() {
     const prisma = getPrisma();
     const entries = await prisma.appointmentWaitlistEntry.findMany({
       where: { workspaceId: auth.workspaceId },
-      orderBy: { createdAt: "desc" },
       take: 200,
     });
-    return NextResponse.json({ data: entries });
+    const ranked = await rankWaitlistEntries(auth.workspaceId);
+    const rankMap = new Map(ranked.map((r, i) => [r.entryId, { rank: i + 1, score: r.score }]));
+    const sorted = [...entries].sort((a, b) => {
+      const ar = rankMap.get(a.id)?.rank ?? 9999;
+      const br = rankMap.get(b.id)?.rank ?? 9999;
+      if (ar !== br) return ar - br;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    const withRank = sorted.map((e) => ({
+      ...e,
+      priorityRank: rankMap.get(e.id)?.rank ?? null,
+      priorityScore: rankMap.get(e.id)?.score ?? null,
+    }));
+    return NextResponse.json({ data: withRank });
   } catch (err) {
     return jsonError(err, 500);
   }

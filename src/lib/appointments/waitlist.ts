@@ -228,15 +228,26 @@ export async function autoFillWaitlistSlot(input: {
   const autoFill = (platform as { waitlistAutoFill?: boolean }).waitlistAutoFill !== false;
   if (!autoFill || !input.autoBook) return null;
 
-  const entry = await prisma.appointmentWaitlistEntry.findFirst({
-    where: {
-      workspaceId: input.workspaceId,
-      status: "active",
-      OR: [{ serviceName: input.serviceName }, { serviceName: null }],
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!entry || !entry.phone) return null;
+  const { rankWaitlistEntries } = await import(
+    "@/lib/appointments/service-booking/phase2/waitlist-priority"
+  );
+  const ranked = await rankWaitlistEntries(input.workspaceId);
+  let entry = null;
+  for (const row of ranked) {
+    const candidate = await prisma.appointmentWaitlistEntry.findFirst({
+      where: {
+        id: row.entryId,
+        workspaceId: input.workspaceId,
+        status: "active",
+        OR: [{ serviceName: input.serviceName }, { serviceName: null }],
+      },
+    });
+    if (candidate?.phone) {
+      entry = candidate;
+      break;
+    }
+  }
+  if (!entry) return null;
 
   const { createPlatformAppointment } = await import("@/lib/appointments/booking-platform");
   const result = await createPlatformAppointment(input.workspaceId, {

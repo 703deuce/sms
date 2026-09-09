@@ -29,6 +29,15 @@ type Membership = {
   product?: { name?: string; billingInterval?: string };
 };
 
+type LedgerEntry = {
+  id?: string;
+  kind?: string;
+  delta?: number;
+  note?: string;
+  createdAt?: string;
+  productName?: string;
+};
+
 type PortalData = {
   workspaceSlug?: string;
   appointments: AppointmentRow[];
@@ -37,6 +46,17 @@ type PortalData = {
     gifts?: GiftBalance[];
     memberships?: Membership[];
   };
+  packageUsageHistory?: LedgerEntry[];
+  packagePurchaseHistory?: LedgerEntry[];
+  paymentHistory?: Array<{
+    id: string;
+    amountCents?: number;
+    status?: string;
+    createdAt?: string;
+    description?: string;
+    provider?: string;
+    appointmentId?: string;
+  }>;
   waitlist?: Array<{ id: string; serviceName?: string; status?: string }>;
 };
 
@@ -66,6 +86,9 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
           workspaceSlug: resolved.workspaceSlug,
           appointments: resolved.appointments || [],
           entitlements: resolved.entitlements || {},
+          packageUsageHistory: resolved.packageUsageHistory || [],
+          packagePurchaseHistory: resolved.packagePurchaseHistory || [],
+          paymentHistory: resolved.paymentHistory || [],
           waitlist: resolved.waitlist || [],
         });
       })
@@ -213,6 +236,44 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
                 </li>
               );
             })
+          )}
+        </ul>
+        {(data.packageUsageHistory || []).length > 0 ? (
+          <div className="mt-4">
+            <h3 className="text-sm font-medium">Package usage</h3>
+            <ul className="mt-2 divide-y rounded-lg border text-sm">
+              {data.packageUsageHistory!.map((entry, i) => (
+                <li key={entry.id || i} className="flex justify-between gap-4 p-3">
+                  <span>
+                    {formatDate(entry.createdAt)}
+                    {entry.productName ? ` · ${entry.productName}` : ""}
+                  </span>
+                  <span className="text-muted-foreground capitalize">{entry.kind || "adjustment"}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
+      <section aria-labelledby="payments-history-heading">
+        <h2 id="payments-history-heading" className="text-lg font-medium">Payments &amp; purchases</h2>
+        <ul className="mt-3 divide-y rounded-lg border">
+          {(data.paymentHistory || []).length === 0 ? (
+            <li className="p-4 text-sm text-muted-foreground">No payment history yet.</li>
+          ) : (
+            data.paymentHistory!.map((p) => (
+              <li key={p.id} className="flex justify-between gap-4 p-4 text-sm">
+                <span>
+                  {formatDate(p.createdAt)}
+                  {p.provider ? ` · ${p.provider}` : ""}
+                </span>
+                <span className="font-medium">
+                  {formatMoney(p.amountCents || 0)}
+                  {p.status ? ` · ${p.status}` : ""}
+                </span>
+              </li>
+            ))
           )}
         </ul>
       </section>

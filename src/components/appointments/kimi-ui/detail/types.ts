@@ -52,6 +52,32 @@ export type Appointment = {
   /** Integration availability flags (drive disconnected/unavailable states) */
   paymentsConnected: boolean;
   videoProvisioned: boolean;
+  externalId?: string | null;
+  policySnapshot?: {
+    capturedAt?: string;
+    cancellation?: { allowed?: string; cutoffHours?: number; policyText?: string };
+    reschedule?: { allowed?: string; cutoffHours?: number; policyText?: string };
+    extendedCancellation?: { lateFeeCents?: number };
+    paymentMode?: string;
+  } | null;
+  smsConsentAt?: string | null;
+  smsConsentText?: string | null;
+  serviceLines?: Array<{
+    id: string;
+    serviceName: string;
+    staffId?: string | null;
+    startsAt: string;
+    endsAt: string;
+    displayOrder: number;
+  }>;
+  contracts?: Array<{
+    id: string;
+    status: string;
+    templateVersion?: string | null;
+    signedAt?: string | null;
+    createdAt: string;
+  }>;
+  contractTemplates?: Array<{ id: string; name: string; version: string }>;
 };
 
 export const appointment: Appointment = {

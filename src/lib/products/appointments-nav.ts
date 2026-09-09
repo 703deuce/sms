@@ -43,6 +43,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   ];
   if (modules.commerce) {
     children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
+    children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
   if (modules.classes) {

@@ -23,7 +23,10 @@ type Section =
   | "theme"
   | "phases"
   | "households"
-  | "invoices";
+  | "invoices"
+  | "dynamicPricing"
+  | "loyalty"
+  | "seatMaps";
 
 const SECTION_API: Record<Section, string> = {
   categories: "/api/appointments/service-booking/categories",
@@ -45,6 +48,9 @@ const SECTION_API: Record<Section, string> = {
   phases: "/api/appointments/service-booking/service-phases",
   households: "/api/appointments/service-booking/households",
   invoices: "/api/appointments/service-booking/invoices",
+  dynamicPricing: "/api/appointments/service-booking/dynamic-pricing",
+  loyalty: "/api/appointments/service-booking/loyalty",
+  seatMaps: "/api/appointments/service-booking/seat-selection",
 };
 
 function slugify(value: string) {
@@ -186,9 +192,12 @@ export function ServiceBookingAdminClient({
     { id: "gifts", label: "Gift certificates" },
     { id: "memberships", label: "Memberships" },
     { id: "coupons", label: "Coupons" },
+    { id: "dynamicPricing", label: "Dynamic pricing" },
+    { id: "loyalty", label: "Loyalty" },
     { id: "addons", label: "Add-ons" },
     { id: "resources", label: "Resources" },
     { id: "classes", label: "Classes" },
+    { id: "seatMaps", label: "Seat maps" },
     { id: "programs", label: "Programs" },
     { id: "paymentPlans", label: "Payment plans" },
     { id: "phases", label: "Processing phases" },
@@ -228,7 +237,15 @@ export function ServiceBookingAdminClient({
         ))}
       </nav>
 
-      {section !== "reports" && section !== "theme" && section !== "import" && section !== "invoices" && (
+      {section !== "reports" &&
+        section !== "theme" &&
+        section !== "import" &&
+        section !== "invoices" &&
+        section !== "webhooks" &&
+        section !== "households" &&
+        section !== "dynamicPricing" &&
+        section !== "loyalty" &&
+        section !== "seatMaps" && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
           <label className="flex flex-col gap-1 text-sm">
             <span>Name</span>
@@ -281,6 +298,16 @@ export function ServiceBookingAdminClient({
         <ResourcesPanel items={items} onReload={() => void load()} />
       ) : section === "invoices" ? (
         <InvoicesPanel items={items} onReload={() => void load()} />
+      ) : section === "webhooks" ? (
+        <WebhooksPanel items={items} onReload={() => void load()} />
+      ) : section === "households" ? (
+        <HouseholdsPanel items={items} onReload={() => void load()} />
+      ) : section === "dynamicPricing" ? (
+        <DynamicPricingPanel items={items} onReload={() => void load()} />
+      ) : section === "loyalty" ? (
+        <LoyaltyPanel items={items} onReload={() => void load()} />
+      ) : section === "seatMaps" ? (
+        <SeatMapsPanel items={items} onReload={() => void load()} />
       ) : (
         <ul className="divide-y rounded-lg border">
           {items.length === 0 ? (
@@ -697,6 +724,379 @@ function InvoicesPanel({
               </div>
             </li>
           ))
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function WebhooksPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [url, setUrl] = useState("https://");
+  const [events, setEvents] = useState("appointment.created,appointment.canceled");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function create() {
+    if (!url.trim()) return;
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/appointments/service-booking/webhooks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: url.trim(),
+        events: events.split(",").map((e) => e.trim()).filter(Boolean),
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok) {
+      setMessage(json.error || "Create failed");
+      return;
+    }
+    setMessage(json.data?.signingSecret ? "Created — copy signing secret from server response." : "Created");
+    onReload();
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Endpoint URL</span>
+        <input className="rounded border px-3 py-2" value={url} onChange={(e) => setUrl(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Events (comma-separated)</span>
+        <input className="rounded border px-3 py-2" value={events} onChange={(e) => setEvents(e.target.value)} />
+      </label>
+      <button
+        type="button"
+        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+        disabled={saving}
+        onClick={() => void create()}
+      >
+        {saving ? "Saving…" : "Add webhook"}
+      </button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      <ul className="divide-y rounded-lg border">
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No webhooks yet.</li>
+        ) : (
+          items.map((item) => {
+            const row = item as Record<string, unknown> & { id: string; url?: string; events?: string[] };
+            return (
+              <li key={row.id} className="p-4 text-sm">
+                <div className="font-medium">{row.url}</div>
+                <div className="text-muted-foreground">{Array.isArray(row.events) ? row.events.join(", ") : ""}</div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function HouseholdsPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [householdName, setHouseholdName] = useState("");
+  const [memberHouseholdId, setMemberHouseholdId] = useState("");
+  const [memberContactId, setMemberContactId] = useState("");
+  const [memberDisplayName, setMemberDisplayName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function createHousehold() {
+    if (!householdName.trim()) return;
+    setSaving(true);
+    const res = await fetch("/api/appointments/service-booking/households", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_named", name: householdName.trim() }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Create failed");
+      return;
+    }
+    setHouseholdName("");
+    setMessage("Household created");
+    onReload();
+  }
+
+  async function addMember() {
+    if (!memberHouseholdId || !memberContactId) return;
+    setSaving(true);
+    const res = await fetch("/api/appointments/service-booking/households", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_member",
+        householdId: memberHouseholdId,
+        contactId: memberContactId,
+        displayName: memberDisplayName.trim() || undefined,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Add member failed");
+      return;
+    }
+    setMemberContactId("");
+    setMemberDisplayName("");
+    setMessage("Member added");
+    onReload();
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Create household</h3>
+        <input className="w-full rounded border px-3 py-2 text-sm" placeholder="Household name" value={householdName} onChange={(e) => setHouseholdName(e.target.value)} />
+        <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" disabled={saving} onClick={() => void createHousehold()}>Create</button>
+      </div>
+      <div className="rounded-lg border p-4 space-y-3">
+        <h3 className="text-sm font-semibold">Add member</h3>
+        <input className="w-full rounded border px-3 py-2 text-sm" placeholder="Household ID" value={memberHouseholdId} onChange={(e) => setMemberHouseholdId(e.target.value)} />
+        <input className="w-full rounded border px-3 py-2 text-sm" placeholder="Contact ID" value={memberContactId} onChange={(e) => setMemberContactId(e.target.value)} />
+        <input className="w-full rounded border px-3 py-2 text-sm" placeholder="Display name (optional)" value={memberDisplayName} onChange={(e) => setMemberDisplayName(e.target.value)} />
+        <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" disabled={saving} onClick={() => void addMember()}>Add member</button>
+      </div>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      <ul className="divide-y rounded-lg border">
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No households yet.</li>
+        ) : (
+          items.map((item) => {
+            const row = item as Record<string, unknown> & { id: string; name?: string; members?: unknown[] };
+            return (
+              <li key={row.id} className="p-4 text-sm">
+                <div className="font-medium">{row.name || row.id}</div>
+                <div className="text-muted-foreground">{Array.isArray(row.members) ? `${row.members.length} member(s)` : ""}</div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function DynamicPricingPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [ruleName, setRuleName] = useState("");
+  const [ruleType, setRuleType] = useState("last_minute");
+  const [adjustmentType, setAdjustmentType] = useState<"percent" | "fixed">("percent");
+  const [adjustmentValue, setAdjustmentValue] = useState(10);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!ruleName.trim()) return;
+    setSaving(true);
+    const res = await fetch("/api/appointments/service-booking/dynamic-pricing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: ruleName.trim(),
+        ruleType,
+        adjustmentType,
+        adjustmentValue,
+        conditions: ruleType === "last_minute" ? { maxHoursAhead: 24 } : {},
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setRuleName("");
+      onReload();
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border p-4 grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          <span>Rule name</span>
+          <input className="rounded border px-3 py-2" value={ruleName} onChange={(e) => setRuleName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Rule type</span>
+          <select className="rounded border px-3 py-2" value={ruleType} onChange={(e) => setRuleType(e.target.value)}>
+            <option value="last_minute">Last-minute (within 24h)</option>
+            <option value="off_peak">Off-peak</option>
+            <option value="peak">Peak</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Adjustment</span>
+          <div className="flex gap-2">
+            <select className="rounded border px-2 py-2" value={adjustmentType} onChange={(e) => setAdjustmentType(e.target.value as "percent" | "fixed")}>
+              <option value="percent">Percent</option>
+              <option value="fixed">Fixed cents</option>
+            </select>
+            <input type="number" className="flex-1 rounded border px-3 py-2" value={adjustmentValue} onChange={(e) => setAdjustmentValue(Number(e.target.value))} />
+          </div>
+        </label>
+        <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground sm:col-span-2" disabled={saving} onClick={() => void save()}>Add rule</button>
+      </div>
+      <ul className="divide-y rounded-lg border">
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No pricing rules yet.</li>
+        ) : (
+          items.map((item) => {
+            const row = item as Record<string, unknown> & { id: string; name?: string; ruleType?: string; adjustmentType?: string; adjustmentValue?: number };
+            return (
+              <li key={row.id} className="flex justify-between gap-4 p-4 text-sm">
+                <span className="font-medium">{row.name}</span>
+                <span className="text-muted-foreground">{row.ruleType} · {row.adjustmentType} {row.adjustmentValue}</span>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function LoyaltyPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [programName, setProgramName] = useState("");
+  const [pointsPerDollar, setPointsPerDollar] = useState(1);
+  const [redeemRateCents, setRedeemRateCents] = useState(100);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!programName.trim()) return;
+    setSaving(true);
+    const res = await fetch("/api/appointments/service-booking/loyalty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: programName.trim(), pointsPerDollar, redeemRateCents }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setProgramName("");
+      onReload();
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border p-4 grid gap-3 sm:grid-cols-3">
+        <label className="flex flex-col gap-1 text-sm sm:col-span-3">
+          <span>Program name</span>
+          <input className="rounded border px-3 py-2" value={programName} onChange={(e) => setProgramName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Points per dollar</span>
+          <input type="number" className="rounded border px-3 py-2" value={pointsPerDollar} onChange={(e) => setPointsPerDollar(Number(e.target.value))} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          <span>Redeem rate (cents per point)</span>
+          <input type="number" className="rounded border px-3 py-2" value={redeemRateCents} onChange={(e) => setRedeemRateCents(Number(e.target.value))} />
+        </label>
+        <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground sm:col-span-3" disabled={saving} onClick={() => void save()}>Add program</button>
+      </div>
+      <ul className="divide-y rounded-lg border">
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No loyalty programs yet.</li>
+        ) : (
+          items.map((item) => {
+            const row = item as Record<string, unknown> & { id: string; name?: string; pointsPerDollar?: number };
+            return (
+              <li key={row.id} className="flex justify-between gap-4 p-4 text-sm">
+                <span className="font-medium">{row.name}</span>
+                <span className="text-muted-foreground">{row.pointsPerDollar} pts/$</span>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function SeatMapsPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [mapName, setMapName] = useState("");
+  const [rows, setRows] = useState(4);
+  const [cols, setCols] = useState(6);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!mapName.trim()) return;
+    setSaving(true);
+    const seats = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        seats.push({ id: `r${r}c${c}`, label: `${r + 1}-${c + 1}`, row: r, col: c });
+      }
+    }
+    const res = await fetch("/api/appointments/service-booking/seat-selection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: mapName.trim(), seats, layout: { rows, cols } }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setMapName("");
+      onReload();
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border p-4 grid gap-3 sm:grid-cols-3">
+        <label className="flex flex-col gap-1 text-sm sm:col-span-3">
+          <span>Map name</span>
+          <input className="rounded border px-3 py-2" value={mapName} onChange={(e) => setMapName(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Rows</span>
+          <input type="number" min={1} className="rounded border px-3 py-2" value={rows} onChange={(e) => setRows(Number(e.target.value))} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Columns</span>
+          <input type="number" min={1} className="rounded border px-3 py-2" value={cols} onChange={(e) => setCols(Number(e.target.value))} />
+        </label>
+        <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground sm:col-span-3" disabled={saving} onClick={() => void save()}>Create seat map</button>
+      </div>
+      <ul className="divide-y rounded-lg border">
+        {items.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No seat maps yet.</li>
+        ) : (
+          items.map((item) => {
+            const row = item as Record<string, unknown> & { id: string; name?: string };
+            return (
+              <li key={row.id} className="p-4 text-sm font-medium">{row.name || row.id}</li>
+            );
+          })
         )}
       </ul>
     </div>

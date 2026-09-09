@@ -86,6 +86,47 @@ export function isMemberOnlyType(
   return ids.includes(typeId);
 }
 
+export async function listMemberOnlyBookingTypeIds(workspaceId: string): Promise<Set<string>> {
+  const prisma = getPrisma();
+  const products = await prisma.serviceMembershipProduct.findMany({
+    where: { workspaceId, active: true },
+    select: { benefits: true },
+  });
+  const ids = new Set<string>();
+  for (const product of products) {
+    const benefits = (product.benefits || {}) as MembershipBenefits;
+    for (const typeId of benefits.memberOnlyTypeIds || []) {
+      ids.add(typeId);
+    }
+  }
+  return ids;
+}
+
+/** Throws when a booking type is member-restricted and contact lacks active membership. */
+export async function assertMemberAccessForBookingType(
+  workspaceId: string,
+  contactId: string | null | undefined,
+  bookingTypeId: string | undefined,
+): Promise<void> {
+  if (!bookingTypeId) return;
+  const memberOnlyIds = await listMemberOnlyBookingTypeIds(workspaceId);
+  if (!memberOnlyIds.has(bookingTypeId)) return;
+  if (!contactId) {
+    throw new Error("An active membership is required to book this service.");
+  }
+  const prisma = getPrisma();
+  const subscriptions = await prisma.serviceMembershipSubscription.findMany({
+    where: { workspaceId, contactId, status: "active" },
+    include: { product: true },
+  });
+  const allowed = subscriptions.some((sub: (typeof subscriptions)[number]) =>
+    isMemberOnlyType((sub.product?.benefits || {}) as MembershipBenefits, bookingTypeId),
+  );
+  if (!allowed) {
+    throw new Error("An active membership is required to book this service.");
+  }
+}
+
 export async function listMembershipHistoryForContact(workspaceId: string, contactId: string) {
   const prisma = getPrisma();
   return prisma.serviceMembershipSubscription.findMany({

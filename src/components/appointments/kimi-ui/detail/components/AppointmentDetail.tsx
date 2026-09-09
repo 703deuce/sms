@@ -196,6 +196,34 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
     }
   }
 
+  async function issueContract(templateId: string) {
+    if (!appt?.contactId) {
+      showToast("Link a contact before issuing a contract.");
+      return;
+    }
+    setActing(true);
+    try {
+      const res = await fetch("/api/appointments/service-booking/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "issue",
+          templateId,
+          appointmentId: appt.id,
+          contactId: appt.contactId,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "issue failed");
+      await fetchAppt();
+      showToast("Contract issued for signature.");
+    } catch {
+      showToast("Could not issue contract.");
+    } finally {
+      setActing(false);
+    }
+  }
+
   async function loadSlotDiagnostic() {
     if (!appt?.serviceName || !appt.startsAt) return;
     const res = await fetch(
@@ -318,13 +346,31 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                 <span className="info-label"><Calendar size={13} /> Date &amp; time</span>
                 <span className="info-value">
                   {fmtDateTime(appt.startsAt, appt.timezone)} – {fmtDateTime(appt.endsAt, appt.timezone).split(", ").pop()}
-                  <span className="sub">Eastern Time (America/New_York) · {appt.durationMinutes} minutes</span>
+                  <span className="sub">{appt.timezone} · {appt.durationMinutes} minutes</span>
                 </span>
               </div>
               <div className="info-row">
                 <span className="info-label"><Users size={13} /> Staff</span>
                 <span className="info-value">{appt.staffName}</span>
               </div>
+              {appt.serviceLines && appt.serviceLines.length > 0 ? (
+                <div className="info-row">
+                  <span className="info-label"><Calendar size={13} /> Service lines</span>
+                  <span className="info-value">
+                    <ol style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.serviceLines.map((line) => (
+                        <li key={line.id}>
+                          {line.serviceName}
+                          <span className="sub">
+                            {fmtDateTime(line.startsAt, appt.timezone)} –{" "}
+                            {fmtDateTime(line.endsAt, appt.timezone).split(", ").pop()}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </span>
+                </div>
+              ) : null}
               <div className="info-row">
                 <span className="info-label"><MapPin size={13} /> Location</span>
                 <span className="info-value">{appt.location}</span>
@@ -333,6 +379,48 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                 <span className="info-label"><Clock size={13} /> Source</span>
                 <span className="info-value">{appt.source}</span>
               </div>
+              <div className="info-row">
+                <span className="info-label"><RefreshCcw size={13} /> Calendar sync</span>
+                <span className="info-value">
+                  {appt.externalId ? (
+                    <>
+                      Synced to connected calendar
+                      <span className="sub">External event linked</span>
+                    </>
+                  ) : (
+                    <>
+                      Not synced
+                      <span className="sub">No external calendar event on file. Check Integrations → Calendars if sync was expected.</span>
+                    </>
+                  )}
+                </span>
+              </div>
+              {appt.policySnapshot ? (
+                <div className="info-row">
+                  <span className="info-label"><FileQuestion size={13} /> Policy at booking</span>
+                  <span className="info-value">
+                    {appt.policySnapshot.cancellation?.allowed === "until_hours_before"
+                      ? `Cancel until ${appt.policySnapshot.cancellation.cutoffHours || 0}h before`
+                      : appt.policySnapshot.cancellation?.allowed === "disabled"
+                        ? "No online cancellation"
+                        : "Cancel anytime"}
+                    {" · "}
+                    {appt.policySnapshot.reschedule?.allowed === "until_hours_before"
+                      ? `Reschedule until ${appt.policySnapshot.reschedule.cutoffHours || 0}h before`
+                      : appt.policySnapshot.reschedule?.allowed === "disabled"
+                        ? "No online reschedule"
+                        : "Reschedule anytime"}
+                    {(appt.policySnapshot.extendedCancellation?.lateFeeCents || 0) > 0 ? (
+                      <span className="sub">
+                        Late cancel / no-show fee: {money(appt.policySnapshot.extendedCancellation!.lateFeeCents!)}
+                      </span>
+                    ) : null}
+                    {appt.policySnapshot.capturedAt ? (
+                      <span className="sub">Snapshot · {fmtDateTime(appt.policySnapshot.capturedAt, appt.timezone)}</span>
+                    ) : null}
+                  </span>
+                </div>
+              ) : null}
               <div className="info-row">
                 <span className="info-label"><CreditCard size={13} /> Payment</span>
                 <span className="info-value" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -354,7 +442,12 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                   {appt.smsConsent ? (
                     <>
                       Captured — appointment reminder texts
-                      <span className="sub">Booking page checkbox · Sep 7, 2026 at 10:03 AM</span>
+                      {appt.smsConsentAt ? (
+                        <span className="sub">
+                          {fmtDateTime(appt.smsConsentAt, appt.timezone)}
+                          {appt.smsConsentText ? ` · ${appt.smsConsentText.slice(0, 80)}${appt.smsConsentText.length > 80 ? "…" : ""}` : ""}
+                        </span>
+                      ) : null}
                     </>
                   ) : (
                     <>
@@ -400,6 +493,41 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
             </button>
             {diagnostic ? <p className="muted small" style={{ margin: "8px 0 0" }}>{diagnostic}</p> : null}
           </Card>
+
+          {(appt.contracts?.length || appt.contractTemplates?.length) ? (
+            <Card title="Contracts">
+              {appt.contracts && appt.contracts.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5 }}>
+                  {appt.contracts.map((c) => (
+                    <li key={c.id}>
+                      {c.status === "signed" ? "Signed" : c.status === "unsigned" ? "Awaiting signature" : c.status}
+                      {c.templateVersion ? ` · ${c.templateVersion}` : ""}
+                      {c.signedAt ? (
+                        <span className="sub"> · {fmtDateTime(c.signedAt, appt.timezone)}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted small" style={{ margin: 0 }}>No contract issued yet.</p>
+              )}
+              {!isTerminal && appt.contractTemplates && appt.contractTemplates.length > 0 ? (
+                <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {appt.contractTemplates.map((t) => (
+                    <Button
+                      key={t.id}
+                      size="sm"
+                      variant="outline"
+                      disabled={acting}
+                      onClick={() => void issueContract(t.id)}
+                    >
+                      Issue {t.name}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
 
           <ReminderSchedule
             steps={appt.reminderSchedule}

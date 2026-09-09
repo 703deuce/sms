@@ -151,6 +151,20 @@ export type PaymentRequirement = {
     allowCustom?: boolean;
   };
   allowSavedCard?: boolean;
+  dynamicPricing?: {
+    basePriceCents: number;
+    finalPriceCents: number;
+    adjustments: Array<{
+      ruleId: string;
+      ruleName: string;
+      adjustmentType: string;
+      adjustmentValue: number;
+      deltaCents: number;
+    }>;
+  };
+  couponCode?: string;
+  couponDiscountCents?: number;
+  couponRedemptionId?: string;
 };
 
 export type RoutingRule = {

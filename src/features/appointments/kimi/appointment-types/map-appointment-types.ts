@@ -71,6 +71,7 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   collectiveStaffIds: [],
   cancellationPolicy: { allowed: "anytime" },
   reschedulePolicy: { allowed: "anytime" },
+  extendedCancellationPolicy: { allowed: "anytime" },
   paymentMode: "none",
   paymentProvider: "",
   paymentPriceCents: 0,
@@ -208,6 +209,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     collectiveStaffIds: cfg.collectiveStaffIds || [],
     cancellationPolicy: cfg.cancellationPolicy || { allowed: "anytime" },
     reschedulePolicy: cfg.reschedulePolicy || { allowed: "anytime" },
+    extendedCancellationPolicy: cfg.extendedCancellationPolicy || { allowed: "anytime" },
     paymentMode: payment?.mode || "none",
     paymentProvider: (payment?.provider as "stripe" | "square") || "",
     paymentPriceCents: payment?.priceCents || 0,
@@ -325,6 +327,7 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
     collectiveStaffIds: form.collectiveStaffIds.length ? form.collectiveStaffIds : undefined,
     cancellationPolicy: form.cancellationPolicy as CancellationPolicy,
     reschedulePolicy: form.reschedulePolicy as ReschedulePolicy,
+    extendedCancellationPolicy: form.extendedCancellationPolicy,
     payment: buildPaymentConfig(form),
     groupBooking: form.groupBookingEnabled
       ? { enabled: true, capacity: Math.max(2, form.groupCapacity) }

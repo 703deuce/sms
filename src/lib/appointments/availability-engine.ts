@@ -110,11 +110,22 @@ export async function generateNativeSlots(
           await import("@/lib/appointments/service-booking/location-scheduling")
         ).resolveLocationTimezone(platform, input.locationId)
       : ctx.timezone);
+  const { resolveNamedSchedule, resolveHolidayEntry } = await import(
+    "@/lib/appointments/staff-availability"
+  );
+  const namedScheduleId = svcCfg.namedScheduleId as string | undefined;
+  const namedSchedule = resolveNamedSchedule(platform, namedScheduleId);
   const weeklyHours = input.locationId
     ? (
         await import("@/lib/appointments/service-booking/location-scheduling")
       ).resolveLocationWeeklyHours(platform, input.locationId)
-    : resolveWeeklyHours(platform);
+    : namedSchedule?.weeklyHours && Object.keys(namedSchedule.weeklyHours).length
+      ? namedSchedule.weeklyHours
+      : resolveWeeklyHours(platform);
+  const bookingLimits: import("@/lib/appointments/types").BookingLimitConfig = {
+    ...platform.bookingLimits,
+    ...svcCfg.bookingLimits,
+  };
   const bookingHours = parseBookingHours(svcCfg.bookingHours || undefined);
   const overrides = platform.dateOverrides || [];
   const days = Math.min(
@@ -167,17 +178,23 @@ export async function generateNativeSlots(
     const override = overrides.find((o) => o.date === dateKey);
     if (override?.closed || platform.blackoutDates?.includes(dateKey)) continue;
 
+    const holiday = resolveHolidayEntry(platform, dateKey, namedScheduleId);
+    if (holiday?.closed) continue;
+
     const noon = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, 12, 0);
     const dayName = dayKeyInTimezone(noon.toISOString(), tz);
     if (bookingHours?.weekdaysOnly && (dayName === "saturday" || dayName === "sunday")) {
       continue;
     }
 
-    let windows =
-      override?.windows ||
-      weeklyHours[dayName] ||
-      weeklyHours[dayName.toLowerCase()] ||
-      [];
+    let windows: Array<{ open: string; close: string }> =
+      override?.windows?.length
+        ? override.windows
+        : holiday?.windows?.length
+          ? holiday.windows
+          : weeklyHours[dayName] ||
+            weeklyHours[dayName.toLowerCase()] ||
+            [];
 
     if (bookingHours) {
       const bookingOpen = `${String(bookingHours.startHour).padStart(2, "0")}:00`;
@@ -247,6 +264,15 @@ export async function generateNativeSlots(
         }
 
         if (overlapsExternalBusy(start, end)) continue;
+
+        const { checkBookingLimits } = await import("@/lib/appointments/scheduling-domain");
+        const limitCheck = await checkBookingLimits(
+          workspaceId,
+          input.serviceName,
+          start,
+          bookingLimits,
+        );
+        if (!limitCheck.allowed) continue;
 
         if (needsStaffCheck && eligibleStaff.length) {
           const mode = staffAssignment === "collective" ? "all" : "any";

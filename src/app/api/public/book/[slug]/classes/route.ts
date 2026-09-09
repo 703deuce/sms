@@ -42,6 +42,22 @@ export async function GET(_request: Request, { params }: Params) {
       ]),
     );
 
+    const occurrenceIds = occurrences.map((occ: { id: string }) => occ.id);
+    const seatMaps = occurrenceIds.length
+      ? await prisma.classSeatMap.findMany({
+          where: { workspaceId: workspace.id, occurrenceId: { in: occurrenceIds }, active: true },
+          select: { id: true, occurrenceId: true, name: true },
+        })
+      : [];
+    const seatMapByOccurrence = new Map<string, { id: string; name: string }>(
+      seatMaps
+        .filter((m: { occurrenceId: string | null }) => Boolean(m.occurrenceId))
+        .map((m: { id: string; occurrenceId: string | null; name: string }) => [
+          String(m.occurrenceId),
+          { id: m.id, name: m.name },
+        ]),
+    );
+
     const publicOccurrences = occurrences.map(
       (occ: {
         id: string;
@@ -49,15 +65,21 @@ export async function GET(_request: Request, { params }: Params) {
         startsAt: Date;
         endsAt: Date;
         capacity: number | null;
-      }) => ({
-      id: occ.id,
-      seriesId: occ.seriesId,
-      startsAt: occ.startsAt.toISOString(),
-      endsAt: occ.endsAt.toISOString(),
-      capacity: occ.capacity,
-      enrolled: Number(countMap.get(occ.id) ?? 0),
-      remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
-    }),
+      }) => {
+        const seatMap = seatMapByOccurrence.get(occ.id);
+        return {
+          id: occ.id,
+          seriesId: occ.seriesId,
+          startsAt: occ.startsAt.toISOString(),
+          endsAt: occ.endsAt.toISOString(),
+          capacity: occ.capacity,
+          enrolled: Number(countMap.get(occ.id) ?? 0),
+          remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
+          seatMapId: seatMap?.id ?? null,
+          seatMapName: seatMap?.name ?? null,
+          requiresSeatSelection: Boolean(seatMap?.id),
+        };
+      },
     );
 
     return NextResponse.json({
@@ -117,14 +139,44 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Contact required" }, { status: 400 });
     }
 
+    const occurrenceId = body.occurrenceId ? String(body.occurrenceId) : undefined;
+    const seatMapId = body.seatMapId ? String(body.seatMapId) : undefined;
+    const rowIndex = body.rowIndex != null ? Number(body.rowIndex) : undefined;
+    const colIndex = body.colIndex != null ? Number(body.colIndex) : undefined;
+
+    if (occurrenceId) {
+      const seatMap = await prisma.classSeatMap.findFirst({
+        where: { workspaceId: workspace.id, occurrenceId, active: true },
+      });
+      if (seatMap && (!seatMapId || rowIndex == null || colIndex == null)) {
+        return NextResponse.json(
+          { error: "This class requires seat selection before enrollment." },
+          { status: 400 },
+        );
+      }
+    }
+
     const enrollment = await enrollInClass(workspace.id, {
       contactId,
-      occurrenceId: body.occurrenceId ? String(body.occurrenceId) : undefined,
+      occurrenceId,
       seriesId: body.seriesId ? String(body.seriesId) : undefined,
       enrollFullSeries: body.enrollFullSeries === true,
     });
 
-    return NextResponse.json({ data: { enrollment } }, { status: 201 });
+    let seatReservation = null;
+    if (seatMapId && rowIndex != null && colIndex != null && contactId) {
+      const { reserveSeat } = await import("@/lib/appointments/service-booking/phase2/seat-selection");
+      const enrollmentId = Array.isArray(enrollment) ? enrollment[0]?.id : enrollment?.id;
+      seatReservation = await reserveSeat(workspace.id, seatMapId, {
+        contactId,
+        rowIndex,
+        colIndex,
+        enrollmentId,
+        seatLabel: body.seatLabel ? String(body.seatLabel) : undefined,
+      });
+    }
+
+    return NextResponse.json({ data: { enrollment, seatReservation } }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);
   }

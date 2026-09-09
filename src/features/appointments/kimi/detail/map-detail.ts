@@ -1,4 +1,5 @@
 import type { Appointment, InternalNote, ReminderStep, TimelineEvent } from "@/components/appointments/kimi-ui/detail/types";
+import { readPolicySnapshot } from "@/lib/appointments/policy-snapshot";
 
 type ApiAppointment = {
   id: string;
@@ -8,6 +9,7 @@ type ApiAppointment = {
   endsAt: string | null;
   timezone: string | null;
   status: string;
+  externalId?: string | null;
   inviteeName: string | null;
   inviteeEmail: string | null;
   inviteePhone: string | null;
@@ -24,6 +26,9 @@ type ApiAppointment = {
     timeline?: Array<Record<string, unknown>>;
     notes?: string;
     smsConsent?: boolean;
+    smsConsentAt?: string;
+    smsConsentText?: string;
+    policySnapshot?: Record<string, unknown>;
     bookingAnswers?: Record<string, string>;
     internalNotes?: InternalNote[];
     paymentStatus?: string;
@@ -36,6 +41,22 @@ type ApiAppointment = {
     source?: string;
   };
   contact?: { id: string } | null;
+  serviceLines?: Array<{
+    id: string;
+    serviceName: string;
+    staffId?: string | null;
+    startsAt: string;
+    endsAt: string;
+    displayOrder?: number;
+  }>;
+  contracts?: Array<{
+    id: string;
+    status: string;
+    templateVersion?: string | null;
+    signedAt?: string | null;
+    createdAt: string;
+  }>;
+  contractTemplates?: Array<{ id: string; name: string; version: string }>;
 };
 
 export function mapApiAppointment(data: ApiAppointment): Appointment {
@@ -92,5 +113,25 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     contactId: data.contact?.id || "",
     paymentsConnected: true,
     videoProvisioned: true,
+    externalId: data.externalId || null,
+    policySnapshot: readPolicySnapshot(meta as Record<string, unknown>),
+    smsConsentAt: meta.smsConsentAt || null,
+    smsConsentText: meta.smsConsentText || null,
+    serviceLines: (data.serviceLines || []).map((line) => ({
+      id: line.id,
+      serviceName: line.serviceName,
+      staffId: line.staffId || null,
+      startsAt: line.startsAt,
+      endsAt: line.endsAt,
+      displayOrder: line.displayOrder ?? 0,
+    })),
+    contracts: (data.contracts || []).map((c) => ({
+      id: c.id,
+      status: c.status,
+      templateVersion: c.templateVersion || null,
+      signedAt: c.signedAt || null,
+      createdAt: c.createdAt,
+    })),
+    contractTemplates: data.contractTemplates || [],
   };
 }

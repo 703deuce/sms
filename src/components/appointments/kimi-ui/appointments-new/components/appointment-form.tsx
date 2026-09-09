@@ -69,16 +69,18 @@ export function AppointmentForm({
   createdId,
   onCreated,
   onReset,
+  initialStartsAt,
 }: {
   createdId: string | null;
   onCreated: (id: string) => void;
   onReset: () => void;
+  initialStartsAt?: string;
 }) {
   const [view, setView] = useState<View>("form");
   const [types, setTypes] = useState<AppointmentType[]>([]);
   const [serviceId, setServiceId] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [startsAt, setStartsAt] = useState("");
+  const [startsAt, setStartsAt] = useState(initialStartsAt || "");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");

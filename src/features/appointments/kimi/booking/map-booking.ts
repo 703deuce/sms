@@ -96,6 +96,8 @@ export function buildBookingPageModel(input: {
       wording: settings.consentText || DEFAULT_SMS_CONSENT_TEXT,
       termsUrl: settings.termsUrl || "/terms",
       privacyUrl: settings.privacyUrl || "/privacy",
+      termsText: settings.termsText || "",
+      termsVersion: settings.termsVersion || "v1",
     },
     protectionMode: settings.bookingProtection?.mode || "standard",
     protectionOptions: PROTECTION_OPTIONS,
@@ -114,10 +116,21 @@ export function businessInfoPatch(model: BookingPageModel) {
   };
 }
 
-export function consentPatch(model: BookingPageModel) {
+export function consentPatch(
+  model: BookingPageModel,
+  priorTermsText?: string,
+) {
+  const termsText = model.smsConsent.termsText.trim();
+  const bumped =
+    priorTermsText !== undefined && termsText !== (priorTermsText || "").trim();
+  const termsVersion = bumped
+    ? `v${Date.now()}`
+    : model.smsConsent.termsVersion || "v1";
   return {
     consentText: model.smsConsent.wording,
     termsUrl: model.smsConsent.termsUrl,
     privacyUrl: model.smsConsent.privacyUrl,
+    termsText: termsText || undefined,
+    termsVersion,
   };
 }

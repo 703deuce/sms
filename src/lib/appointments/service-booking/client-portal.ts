@@ -26,12 +26,14 @@ export async function resolveClientPortalSession(token: string) {
   });
   if (!session || session.expiresAt < new Date()) return null;
 
-  const [appointments, entitlements, waitlist, workspace, packageLedgers] = await Promise.all([
-    prisma.voiceAppointment.findMany({
-      where: { workspaceId: session.workspaceId, contactId: session.contactId },
-      orderBy: { startsAt: "desc" },
-      take: 50,
-    }),
+  const appointments = await prisma.voiceAppointment.findMany({
+    where: { workspaceId: session.workspaceId, contactId: session.contactId },
+    orderBy: { startsAt: "desc" },
+    take: 50,
+  });
+  const appointmentIds = appointments.map((a: (typeof appointments)[number]) => a.id);
+
+  const [entitlements, waitlist, workspace, packageLedgers, payments] = await Promise.all([
     listEligibleEntitlementsForContact(session.workspaceId, session.contactId),
     prisma.appointmentWaitlistEntry.findMany({
       where: { workspaceId: session.workspaceId, contactId: session.contactId },
@@ -49,6 +51,24 @@ export async function resolveClientPortalSession(token: string) {
       take: 50,
       include: { balance: { include: { product: true } } },
     }),
+    appointmentIds.length
+      ? prisma.appointmentMerchantPayment.findMany({
+          where: {
+            workspaceId: session.workspaceId,
+            appointmentId: { in: appointmentIds },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          select: {
+            id: true,
+            amountPaidCents: true,
+            status: true,
+            createdAt: true,
+            provider: true,
+            appointmentId: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   await prisma.clientPortalSession.update({
@@ -84,8 +104,37 @@ export async function resolveClientPortalSession(token: string) {
         status: a.status,
       })),
     entitlements,
-    packagePurchaseHistory: packageLedgers.filter((e: (typeof packageLedgers)[number]) => e.kind === "purchase"),
-    packageUsageHistory: packageLedgers.filter((e: (typeof packageLedgers)[number]) => e.kind === "redeem" || e.kind === "adjustment"),
+    packagePurchaseHistory: packageLedgers
+      .filter((e: (typeof packageLedgers)[number]) => e.kind === "purchase")
+      .map((e: (typeof packageLedgers)[number]) => ({
+        id: e.id,
+        kind: e.kind,
+        delta: e.delta,
+        note: e.note,
+        createdAt: e.createdAt.toISOString(),
+        productName: e.balance?.product?.name,
+      })),
+    packageUsageHistory: packageLedgers
+      .filter(
+        (e: (typeof packageLedgers)[number]) =>
+          e.kind === "redeem" || e.kind === "adjustment" || e.kind === "restore",
+      )
+      .map((e: (typeof packageLedgers)[number]) => ({
+        id: e.id,
+        kind: e.kind,
+        delta: e.delta,
+        note: e.note,
+        createdAt: e.createdAt.toISOString(),
+        productName: e.balance?.product?.name,
+      })),
+    paymentHistory: payments.map((p: (typeof payments)[number]) => ({
+      id: p.id,
+      amountCents: p.amountPaidCents,
+      status: p.status,
+      createdAt: p.createdAt.toISOString(),
+      provider: p.provider,
+      appointmentId: p.appointmentId,
+    })),
     waitlist,
   };
 }

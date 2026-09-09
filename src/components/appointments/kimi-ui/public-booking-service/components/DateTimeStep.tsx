@@ -26,6 +26,9 @@ export function DateTimeStep({
   externalLoadingSlots,
   onAddAnotherService,
   additionalServiceNames = [],
+  additionalServices = [],
+  lineStaffIds = {},
+  onLineStaffChange,
   onAddToSessionCart,
   sessionLineCount = 0,
 }: {
@@ -49,6 +52,14 @@ export function DateTimeStep({
   externalLoadingSlots?: boolean;
   onAddAnotherService?: () => void;
   additionalServiceNames?: string[];
+  additionalServices?: Array<{
+    id: string;
+    name: string;
+    staffAssignment?: string;
+    staffIds?: string[];
+  }>;
+  lineStaffIds?: Record<string, string>;
+  onLineStaffChange?: (serviceId: string, staffId: string) => void;
   onAddToSessionCart?: () => void;
   sessionLineCount?: number;
 }) {
@@ -61,7 +72,7 @@ export function DateTimeStep({
   const [duration, setDuration] = useState<DurationOption | null>(
     (type.durationOptions || []).find((d) => d.active) || (type.durationOptions || [])[0] || null,
   );
-  const staffMode = type.config?.staffAssignment;
+  const staffMode = type.config?.staffAssignment as string | undefined;
   const showStaff =
     (staffMode === "customer_chooses" || staffMode === "customer_choice") && staffOptions.length > 0;
   const showLocations =
@@ -164,6 +175,44 @@ export function DateTimeStep({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {additionalServices.length > 0 ? (
+        <div className="mt-5 rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-[13px] font-semibold text-foreground">Additional services</p>
+          <ul className="mt-2 space-y-3">
+            {additionalServices.map((svc) => (
+              <li key={svc.id} className="text-sm">
+                <div className="font-medium text-foreground">{svc.name}</div>
+                {(svc.staffAssignment === "customer_chooses" || svc.staffAssignment === "customer_choice") &&
+                onLineStaffChange ? (
+                  <label className="mt-1 flex flex-col gap-1 text-xs">
+                    <span className="text-muted-foreground">Staff for this service</span>
+                    <select
+                      className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
+                      value={lineStaffIds[svc.id] || ""}
+                      onChange={(e) => onLineStaffChange(svc.id, e.target.value)}
+                    >
+                      <option value="">Select staff</option>
+                      {(svc.staffIds?.length
+                        ? staffOptions.filter((s) => svc.staffIds!.includes(s.id))
+                        : staffOptions
+                      ).map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : additionalServiceNames.length > 0 ? (
+        <p className="mt-4 text-[13px] text-muted-foreground">
+          Also booking: {additionalServiceNames.join(", ")}
+        </p>
       ) : null}
 
       {showLocations ? (

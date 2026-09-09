@@ -148,8 +148,17 @@ export function BookingConnected({ workspaceSlug, workspaceName }: Props) {
         );
       },
       onSaveConsent: () => {
-        if (!draft) return;
-        void savePatch(consentPatch(draft));
+        if (!draft || !settings) return;
+        const patch = consentPatch(draft, settings.termsText);
+        void savePatch(patch).then(() => {
+          if (patch.termsVersion) {
+            setDraft((d) =>
+              d
+                ? { ...d, smsConsent: { ...d.smsConsent, termsVersion: patch.termsVersion as string } }
+                : d,
+            );
+          }
+        });
       },
       onProtectionModeChange: (mode: BookingProtectionMode) => {
         setDraft((d) => (d ? { ...d, protectionMode: mode } : d));
