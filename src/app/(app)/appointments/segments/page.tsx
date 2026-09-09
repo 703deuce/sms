@@ -1,5 +1,5 @@
-import { AppointmentSegmentsClient } from "@/components/appointments/appointment-segments-client";
+import { redirect } from "next/navigation";
 
 export default function AppointmentSegmentsPage() {
-  return <AppointmentSegmentsClient />;
+  redirect("/contacts/segments");
 }

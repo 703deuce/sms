@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { IntakeField, IntakeFieldType } from "@/lib/appointments/service-booking/types";
 import { createId } from "@/lib/supabase/id";
@@ -308,6 +309,13 @@ export function ServiceBookingAdminClient({
         <ThemeEditor extra={extra} onSaved={() => void load()} />
       ) : section === "import" ? (
         <div className="flex flex-col gap-3 text-sm">
+          <p className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-foreground">
+            Customer import now lives under{" "}
+            <Link className="font-semibold text-primary underline" href="/contacts/imports">
+              Contacts → Import
+            </Link>
+            . Export links below remain available during migration.
+          </p>
           <a className="text-primary underline" href="/api/appointments/service-booking/import-export?kind=clients">
             Export clients CSV
           </a>
