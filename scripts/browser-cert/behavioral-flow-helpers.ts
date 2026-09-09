@@ -395,9 +395,21 @@ export async function saveStaffUserAction(page: Page) {
   }
 }
 
-/** Locations page — select location and save. */
+/** Locations page — ensure at least one active location exists for public booking. */
 export async function saveLocationsUserAction(page: Page) {
-  await ensureCertWorkspaceReadyViaApi(page);
+  const settingsRes = await page.request.get("/api/appointments/settings");
+  const settings = settingsRes.ok()
+    ? (((await settingsRes.json()).data || {}) as { locations?: Array<{ id: string; name: string }> })
+    : { locations: [] };
+  if (!settings.locations?.length) {
+    const id = `uat-loc-${Date.now().toString().slice(-6)}`;
+    await page.request.patch("/api/appointments/settings", {
+      data: {
+        locations: [{ id, name: "UAT Main Location", active: true, kind: "office" }],
+      },
+    });
+  }
+
   const v = await visitRoute(page, "/appointments/locations");
   if (!v.ok) throw new Error(v.note);
 
@@ -406,12 +418,9 @@ export async function saveLocationsUserAction(page: Page) {
     timeout: ACTION_TIMEOUT,
   });
 
-  const certOffice = page.getByRole("button", { name: /cert office/i }).first();
-  if (await certOffice.count()) {
-    await certOffice.click({ timeout: ACTION_TIMEOUT });
-  } else {
-    const anyLocation = page.locator("button").filter({ hasText: /office|location/i }).first();
-    if (await anyLocation.count()) await anyLocation.click({ timeout: ACTION_TIMEOUT });
+  const firstLocation = page.locator("button").filter({ hasText: /location|office|main|harbor|uat/i }).first();
+  if (await firstLocation.count()) {
+    await firstLocation.click({ timeout: ACTION_TIMEOUT });
   }
 
   const saved = await clickSaveAndWait(page, /^save$/i);

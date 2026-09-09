@@ -49,6 +49,16 @@ export function KimiContactsConnected({
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [listLoading, setListLoading] = useState(false);
   const [serverFiltered, setServerFiltered] = useState(false);
+  const householdBanner = (
+    <div className="mx-6 mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">Household &amp; family accounts</span>
+      {" — "}
+      Link dependents and family members for shared booking, packages, and appointment history.
+      <a href="/appointments/commerce" className="ml-2 text-primary underline">
+        Manage households
+      </a>
+    </div>
+  );
   const retainInitialContactsRef = useRef(initialContacts.length > 0);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFilterRef = useRef<{ q: string; status: OptInStatus | "all" }>({
@@ -178,6 +188,7 @@ export function KimiContactsConnected({
             </button>
           </div>
         )}
+        {householdBanner}
         {view === "list" && (
           <ContactsList
             contacts={contacts}

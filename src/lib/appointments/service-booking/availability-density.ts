@@ -10,10 +10,21 @@ export function applyAvailabilityDensityHide(
   if (!pct || slots.length < 2) return slots;
 
   const keepRatio = 1 - pct / 100;
-  return slots.filter((slot, index) => {
+  const targetKeep = Math.max(1, Math.floor(slots.length * keepRatio));
+  if (targetKeep >= slots.length) {
+    return slots.slice(0, Math.max(1, slots.length - 1));
+  }
+  const filtered = slots.filter((slot, index) => {
     const hash = simpleHash(`${seed}:${slot.startsAt}:${index}`);
     return hash % 100 < keepRatio * 100;
   });
+  if (filtered.length > targetKeep) {
+    return filtered.slice(0, targetKeep);
+  }
+  if (filtered.length < targetKeep) {
+    return slots.slice(0, targetKeep);
+  }
+  return filtered.length < slots.length ? filtered : slots.slice(0, targetKeep);
 }
 
 function simpleHash(input: string): number {

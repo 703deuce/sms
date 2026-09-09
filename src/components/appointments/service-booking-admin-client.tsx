@@ -7,6 +7,7 @@ import { createId } from "@/lib/supabase/id";
 type Section =
   | "categories"
   | "packages"
+  | "products"
   | "gifts"
   | "memberships"
   | "coupons"
@@ -17,6 +18,9 @@ type Section =
   | "paymentPlans"
   | "restrictions"
   | "intake"
+  | "terms"
+  | "wallet"
+  | "referral"
   | "webhooks"
   | "reports"
   | "import"
@@ -31,6 +35,7 @@ type Section =
 const SECTION_API: Record<Section, string> = {
   categories: "/api/appointments/service-booking/categories",
   packages: "/api/appointments/service-booking/packages",
+  products: "/api/appointments/service-booking/products",
   gifts: "/api/appointments/service-booking/gift-certificates",
   memberships: "/api/appointments/service-booking/memberships",
   coupons: "/api/appointments/service-booking/coupons",
@@ -41,6 +46,9 @@ const SECTION_API: Record<Section, string> = {
   paymentPlans: "/api/appointments/service-booking/payment-plans",
   restrictions: "/api/appointments/service-booking/client-restrictions",
   intake: "/api/appointments/service-booking/intake-forms",
+  terms: "/api/appointments/settings",
+  wallet: "/api/appointments/service-booking/client-wallet",
+  referral: "/api/appointments/service-booking/loyalty",
   webhooks: "/api/appointments/service-booking/webhooks",
   reports: "/api/appointments/service-booking/reports",
   import: "/api/appointments/service-booking/import-export",
@@ -82,6 +90,12 @@ function buildCreateBody(section: Section, name: string): Record<string, unknown
     ];
   }
   if (section === "gifts") body.fixedAmountCents = 5000;
+  if (section === "packages" || section === "products") {
+    body.priceCents = 5000;
+    body.creditRules = section === "packages" ? [{ quantity: 1, serviceName: "default" }] : undefined;
+  }
+  if (section === "resources") body.quantity = 1;
+  if (section === "intake") body.fields = [];
   if (section === "coupons") {
     body.code = slugify(trimmed).replace(/-/g, "").slice(0, 20).toUpperCase() || `UAT${Date.now().toString().slice(-6)}`;
     body.discountType = "percent";
@@ -142,9 +156,12 @@ export function ServiceBookingAdminClient({
           links: data.links,
         });
         setItems([]);
-      } else if (section === "reports") {
+      } else if (section === "reports" || section === "terms") {
         setExtra(json.data || {});
         setItems([]);
+      } else if (section === "wallet") {
+        setItems([]);
+        setExtra({});
       } else {
         setItems(Array.isArray(json.data) ? json.data : []);
         setExtra({});
@@ -189,6 +206,7 @@ export function ServiceBookingAdminClient({
   const nav: Array<{ id: Section; label: string }> = [
     { id: "categories", label: "Categories" },
     { id: "packages", label: "Packages" },
+    { id: "products", label: "Products" },
     { id: "gifts", label: "Gift certificates" },
     { id: "memberships", label: "Memberships" },
     { id: "coupons", label: "Coupons" },
@@ -204,6 +222,9 @@ export function ServiceBookingAdminClient({
     { id: "households", label: "Households" },
     { id: "restrictions", label: "Client restrictions" },
     { id: "intake", label: "Intake forms" },
+    { id: "terms", label: "Terms & consent" },
+    { id: "wallet", label: "Wallet" },
+    { id: "referral", label: "Referral program" },
     { id: "webhooks", label: "Webhooks" },
     { id: "theme", label: "Scheduler branding" },
     { id: "reports", label: "Reports" },
@@ -245,7 +266,10 @@ export function ServiceBookingAdminClient({
         section !== "households" &&
         section !== "dynamicPricing" &&
         section !== "loyalty" &&
-        section !== "seatMaps" && (
+        section !== "seatMaps" &&
+        section !== "terms" &&
+        section !== "wallet" &&
+        section !== "referral" && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
           <label className="flex flex-col gap-1 text-sm">
             <span>Name</span>
@@ -254,6 +278,8 @@ export function ServiceBookingAdminClient({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={`New ${section} name`}
+              aria-label="Name"
+              data-testid="commerce-name-input"
             />
           </label>
           <button
@@ -306,6 +332,12 @@ export function ServiceBookingAdminClient({
         <DynamicPricingPanel items={items} onReload={() => void load()} />
       ) : section === "loyalty" ? (
         <LoyaltyPanel items={items} onReload={() => void load()} />
+      ) : section === "terms" ? (
+        <TermsConsentPanel />
+      ) : section === "wallet" ? (
+        <WalletAdminPanel />
+      ) : section === "referral" ? (
+        <ReferralProgramPanel items={items} onReload={() => void load()} />
       ) : section === "seatMaps" ? (
         <SeatMapsPanel items={items} onReload={() => void load()} />
       ) : (
@@ -1249,6 +1281,166 @@ function ThemeEditor({
         onClick={() => void save()}
       >
         {saving ? "Saving…" : "Save appearance"}
+      </button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+function TermsConsentPanel() {
+  const [termsVersion, setTermsVersion] = useState("1.0");
+  const [termsText, setTermsText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/appointments/settings")
+      .then((r) => r.json())
+      .then((json) => {
+        const data = json.data || {};
+        setTermsVersion(String(data.termsVersion || "1.0"));
+        setTermsText(String(data.termsText || data.termsAcceptanceText || ""));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/appointments/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ termsVersion, termsText, termsAcceptanceText: termsText }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Save failed");
+      return;
+    }
+    setMessage("Terms acceptance settings saved");
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <h3 className="text-sm font-semibold">Terms acceptance</h3>
+      <p className="text-sm text-muted-foreground">
+        Customers must accept these terms during public booking when a version is set.
+      </p>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Terms version</span>
+        <input className="rounded border px-3 py-2" value={termsVersion} onChange={(e) => setTermsVersion(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Terms text</span>
+        <textarea className="min-h-[120px] rounded border px-3 py-2" value={termsText} onChange={(e) => setTermsText(e.target.value)} />
+      </label>
+      <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" disabled={saving} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save terms"}
+      </button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+function WalletAdminPanel() {
+  const [contactId, setContactId] = useState("");
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function lookup() {
+    setMessage(null);
+    setBalanceCents(null);
+    if (!contactId.trim()) {
+      setMessage("Enter a contact ID to view wallet balance");
+      return;
+    }
+    const res = await fetch(
+      `/api/appointments/service-booking/client-wallet?contactId=${encodeURIComponent(contactId.trim())}`,
+    );
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(json.error || "Could not load wallet balance");
+      return;
+    }
+    setBalanceCents(Number(json.data?.balanceCents ?? 0));
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <h3 className="text-sm font-semibold">Client wallet balance</h3>
+      <p className="text-sm text-muted-foreground">
+        Look up stored wallet balance for refunds, credits, and package adjustments.
+      </p>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Contact ID</span>
+        <input className="rounded border px-3 py-2" value={contactId} onChange={(e) => setContactId(e.target.value)} />
+      </label>
+      <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" onClick={() => void lookup()}>
+        View balance
+      </button>
+      {balanceCents != null && (
+        <p className="text-sm font-medium">Wallet balance: ${(balanceCents / 100).toFixed(2)}</p>
+      )}
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+function ReferralProgramPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const [enabled, setEnabled] = useState(true);
+  const [rewardCents, setRewardCents] = useState(1000);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const row = (items[0] || {}) as { enabled?: boolean; referralRewardCents?: number };
+    if (items.length) {
+      setEnabled(row.enabled ?? true);
+      setRewardCents(Number(row.referralRewardCents ?? 1000));
+    }
+  }, [items]);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/appointments/service-booking/loyalty", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, referralRewardCents: rewardCents, referralProgramEnabled: true }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Save failed");
+      return;
+    }
+    setMessage("Referral program saved");
+    onReload();
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <h3 className="text-sm font-semibold">Referral program</h3>
+      <p className="text-sm text-muted-foreground">
+        Configure referral rewards and redemption rules for new customer bookings.
+      </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        Enable referral program
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Referral reward (cents)</span>
+        <input type="number" min={0} className="rounded border px-3 py-2" value={rewardCents} onChange={(e) => setRewardCents(Number(e.target.value) || 0)} />
+      </label>
+      <button type="button" className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground" disabled={saving} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save referral settings"}
       </button>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </div>

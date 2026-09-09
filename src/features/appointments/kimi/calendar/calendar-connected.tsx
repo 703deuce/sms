@@ -203,5 +203,23 @@ export function CalendarConnected() {
   if (loading) return <CalendarLoading />;
   if (failed || !model) return <CalendarError onRetry={load} />;
 
-  return <CalendarView model={model} actions={actions} />;
+  return (
+    <div>
+      <div className="cal-page border-b border-gray-200 bg-white px-10 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-gray-600">
+            Recurring appointment series — schedule repeat visits and edit the full series from one place.
+          </p>
+          <button
+            type="button"
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
+            onClick={() => router.push("/appointments/new?recurring=1")}
+          >
+            New recurring series
+          </button>
+        </div>
+      </div>
+      <CalendarView model={model} actions={actions} />
+    </div>
+  );
 }

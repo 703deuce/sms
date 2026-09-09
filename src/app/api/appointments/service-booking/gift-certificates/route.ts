@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       issueGiftCertificate(workspaceId, body),
     );
   }
-  return withAppointmentsAuth("appointments.types.manage", async ({ workspaceId }) =>
+  return withAppointmentsAuth("appointments.write", async ({ workspaceId }) =>
     upsertGiftCertificateProduct(workspaceId, body),
   );
 }

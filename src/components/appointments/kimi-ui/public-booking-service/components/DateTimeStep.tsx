@@ -76,10 +76,11 @@ export function DateTimeStep({
   const showStaff =
     (staffMode === "customer_chooses" || staffMode === "customer_choice") && staffOptions.length > 0;
   const showLocations =
-    locationOptions.length > 1 &&
+    locationOptions.length >= 1 &&
     Boolean(
       (type.config as { locationIds?: string[] } | undefined)?.locationIds?.length ||
-        type.config?.location,
+        type.config?.location ||
+        locationOptions.length > 0,
     );
   const showDurations = (type.durationOptions || []).length > 1;
 

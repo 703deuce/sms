@@ -1,0 +1,1850 @@
+{
+  "startedAt": "2026-09-09T12:41:57.768Z",
+  "updatedAt": "2026-09-09T14:03:47.527Z",
+  "baseUrl": "https://transovo.ai",
+  "workspaceSlug": "harbor-home",
+  "gitCommitAtStart": "67a9643c",
+  "method": "playwright-master-uat-journeys",
+  "results": {
+    "1": {
+      "id": "1",
+      "section": "A",
+      "title": "Fixed appointment start times",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:42:49.755Z"
+    },
+    "2": {
+      "id": "2",
+      "section": "A",
+      "title": "Custom start interval",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:43:38.298Z"
+    },
+    "3": {
+      "id": "3",
+      "section": "A",
+      "title": "Make Me Look Busy",
+      "status": "FAIL",
+      "detail": "Limit visible availability should reduce slot count. Before=11 after=11",
+      "at": "2026-09-09T12:45:00.777Z"
+    },
+    "4": {
+      "id": "4",
+      "section": "A",
+      "title": "Minimize gaps",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:46:28.067Z"
+    },
+    "5": {
+      "id": "5",
+      "section": "A",
+      "title": "Weekly business availability",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:47:15.967Z"
+    },
+    "6": {
+      "id": "6",
+      "section": "A",
+      "title": "Minimum booking notice",
+      "status": "FAIL",
+      "detail": "Slot 9:00 AM is inside 4-hour minimum notice window",
+      "at": "2026-09-09T12:48:02.141Z"
+    },
+    "7": {
+      "id": "7",
+      "section": "A",
+      "title": "Maximum booking horizon",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:48:25.426Z"
+    },
+    "8": {
+      "id": "8",
+      "section": "A",
+      "title": "Date override",
+      "status": "FAIL",
+      "detail": "Date override 2026-09-23 not visible after save",
+      "at": "2026-09-09T12:48:42.844Z"
+    },
+    "9": {
+      "id": "9",
+      "section": "A",
+      "title": "Blackout dates",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:49:00.794Z"
+    },
+    "10": {
+      "id": "10",
+      "section": "A",
+      "title": "Holiday calendar",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:49:20.888Z"
+    },
+    "11": {
+      "id": "11",
+      "section": "A",
+      "title": "Booking limits",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:49:37.423Z"
+    },
+    "12": {
+      "id": "12",
+      "section": "A",
+      "title": "Named availability schedules",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:49:55.059Z"
+    },
+    "13": {
+      "id": "13",
+      "section": "A",
+      "title": "Slot diagnostics",
+      "status": "FAIL",
+      "detail": "10:00 should be unavailable on 45-min grid. Diagnostic: Available — Thu, Sep 10, 6:00 AM\n\nThis time passes all current scheduling rules.",
+      "at": "2026-09-09T12:50:33.885Z"
+    },
+    "14": {
+      "id": "14",
+      "section": "A",
+      "title": "Dynamic pricing",
+      "status": "FAIL",
+      "detail": "Dynamic pricing section not found in service-booking admin",
+      "at": "2026-09-09T12:50:51.373Z"
+    },
+    "15": {
+      "id": "15",
+      "section": "B",
+      "title": "Service phases / processing time",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:58:09.115Z"
+    },
+    "16": {
+      "id": "16",
+      "section": "B",
+      "title": "Multiple duration choices",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:58:30.864Z"
+    },
+    "17": {
+      "id": "17",
+      "section": "B",
+      "title": "Booking type categories",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:58:50.698Z"
+    },
+    "18": {
+      "id": "18",
+      "section": "B",
+      "title": "Booking type image",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T12:59:08.753Z"
+    },
+    "19": {
+      "id": "19",
+      "section": "B",
+      "title": "Booking type visibility",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:00:06.365Z"
+    },
+    "20": {
+      "id": "20",
+      "section": "B",
+      "title": "Display/reorder services",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:00:29.192Z"
+    },
+    "21": {
+      "id": "21",
+      "section": "B",
+      "title": "Custom booking questions",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:00:49.546Z"
+    },
+    "22": {
+      "id": "22",
+      "section": "B",
+      "title": "Booking approval required",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:01:10.529Z"
+    },
+    "23": {
+      "id": "23",
+      "section": "B",
+      "title": "Approval decline",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:01:26.696Z"
+    },
+    "24": {
+      "id": "24",
+      "section": "B",
+      "title": "Confirmation page customization",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:01:43.668Z"
+    },
+    "25": {
+      "id": "25",
+      "section": "B",
+      "title": "Booking page general settings",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:02:16.225Z"
+    },
+    "26": {
+      "id": "26",
+      "section": "C",
+      "title": "Multi-service booking",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:02:41.285Z"
+    },
+    "27": {
+      "id": "27",
+      "section": "C",
+      "title": "Different staff per service",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:03:04.619Z"
+    },
+    "28": {
+      "id": "28",
+      "section": "C",
+      "title": "Customer chooses staff",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:03:27.422Z"
+    },
+    "29": {
+      "id": "29",
+      "section": "C",
+      "title": "Specific staff assignment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:03:50.294Z"
+    },
+    "30": {
+      "id": "30",
+      "section": "C",
+      "title": "Any available staff",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:04:13.457Z"
+    },
+    "31": {
+      "id": "31",
+      "section": "C",
+      "title": "Round robin",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:04:36.566Z"
+    },
+    "32": {
+      "id": "32",
+      "section": "C",
+      "title": "Collective/multiple required staff",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:04:58.815Z"
+    },
+    "33": {
+      "id": "33",
+      "section": "C",
+      "title": "Staff groups",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:05:21.832Z"
+    },
+    "34": {
+      "id": "34",
+      "section": "D",
+      "title": "Create location",
+      "status": "FAIL",
+      "detail": "Location \"UAT Loc 27577\" not visible after save",
+      "at": "2026-09-09T13:05:45.824Z"
+    },
+    "35": {
+      "id": "35",
+      "section": "D",
+      "title": "Location-specific services",
+      "status": "FAIL",
+      "detail": "Public booking missing location selector",
+      "at": "2026-09-09T13:06:30.524Z"
+    },
+    "36": {
+      "id": "36",
+      "section": "D",
+      "title": "Location-specific hours",
+      "status": "FAIL",
+      "detail": "Public booking missing location selector",
+      "at": "2026-09-09T13:07:15.075Z"
+    },
+    "37": {
+      "id": "37",
+      "section": "D",
+      "title": "Location-specific timezone",
+      "status": "FAIL",
+      "detail": "Public booking missing location selector",
+      "at": "2026-09-09T13:07:59.186Z"
+    },
+    "38": {
+      "id": "38",
+      "section": "D",
+      "title": "Location-specific staff",
+      "status": "FAIL",
+      "detail": "Public booking missing location selector",
+      "at": "2026-09-09T13:08:44.595Z"
+    },
+    "39": {
+      "id": "39",
+      "section": "D",
+      "title": "Location-specific resources",
+      "status": "FAIL",
+      "detail": "Public booking missing location selector",
+      "at": "2026-09-09T13:09:27.308Z"
+    },
+    "40": {
+      "id": "40",
+      "section": "E",
+      "title": "Resource quantity",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Resource Qty 388944\" not listed",
+      "at": "2026-09-09T13:09:50.691Z"
+    },
+    "41": {
+      "id": "41",
+      "section": "E",
+      "title": "Resource group/pool",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:10:08.067Z"
+    },
+    "42": {
+      "id": "42",
+      "section": "F",
+      "title": "Add-on price",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:10:25.359Z"
+    },
+    "43": {
+      "id": "43",
+      "section": "F",
+      "title": "Add-on duration",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:10:43.112Z"
+    },
+    "44": {
+      "id": "44",
+      "section": "F",
+      "title": "Add-on resource",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:11:00.587Z"
+    },
+    "45": {
+      "id": "45",
+      "section": "G",
+      "title": "Intake form creation",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Intake 481620\" not listed",
+      "at": "2026-09-09T13:11:23.320Z"
+    },
+    "46": {
+      "id": "46",
+      "section": "G",
+      "title": "File upload",
+      "status": "FAIL",
+      "detail": "Intake file field editor did not save",
+      "at": "2026-09-09T13:11:48.084Z"
+    },
+    "47": {
+      "id": "47",
+      "section": "G",
+      "title": "Upload validation",
+      "status": "FAIL",
+      "detail": "Intake file field editor did not save",
+      "at": "2026-09-09T13:12:13.328Z"
+    },
+    "48": {
+      "id": "48",
+      "section": "G",
+      "title": "Terms acceptance",
+      "status": "FAIL",
+      "detail": "/appointments/commerce missing expected UI",
+      "at": "2026-09-09T13:12:31.164Z"
+    },
+    "49": {
+      "id": "49",
+      "section": "G",
+      "title": "Contract template",
+      "status": "FAIL",
+      "detail": "/appointments/contracts missing expected UI",
+      "at": "2026-09-09T13:12:49.403Z"
+    },
+    "50": {
+      "id": "50",
+      "section": "G",
+      "title": "Contract signing",
+      "status": "FAIL",
+      "detail": "/appointments/contracts missing expected UI",
+      "at": "2026-09-09T13:13:07.637Z"
+    },
+    "51": {
+      "id": "51",
+      "section": "H",
+      "title": "QR booking code",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:13:29.361Z"
+    },
+    "52": {
+      "id": "52",
+      "section": "H",
+      "title": "Direct booking link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:13:51.826Z"
+    },
+    "53": {
+      "id": "53",
+      "section": "H",
+      "title": "Single-use link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:14:09.489Z"
+    },
+    "54": {
+      "id": "54",
+      "section": "H",
+      "title": "Embed",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:14:17.243Z"
+    },
+    "55": {
+      "id": "55",
+      "section": "H",
+      "title": "Custom terminology",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:14:42.279Z"
+    },
+    "56": {
+      "id": "56",
+      "section": "H",
+      "title": "Custom CSS",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:15:04.725Z"
+    },
+    "57": {
+      "id": "57",
+      "section": "H",
+      "title": "Custom domain",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:15:22.898Z"
+    },
+    "58": {
+      "id": "58",
+      "section": "I",
+      "title": "Create package",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 0 744094\" not listed",
+      "at": "2026-09-09T13:15:45.794Z"
+    },
+    "59": {
+      "id": "59",
+      "section": "I",
+      "title": "Purchase/assign package",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 1 767281\" not listed",
+      "at": "2026-09-09T13:16:08.974Z"
+    },
+    "60": {
+      "id": "60",
+      "section": "I",
+      "title": "Package redemption",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 2 790445\" not listed",
+      "at": "2026-09-09T13:16:32.159Z"
+    },
+    "61": {
+      "id": "61",
+      "section": "I",
+      "title": "Package eligible cancellation restore",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 3 813890\" not listed",
+      "at": "2026-09-09T13:16:55.564Z"
+    },
+    "62": {
+      "id": "62",
+      "section": "I",
+      "title": "Package late-cancel forfeiture",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 4 836913\" not listed",
+      "at": "2026-09-09T13:17:18.628Z"
+    },
+    "63": {
+      "id": "63",
+      "section": "I",
+      "title": "Package no-show forfeiture",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 5 861478\" not listed",
+      "at": "2026-09-09T13:17:43.231Z"
+    },
+    "64": {
+      "id": "64",
+      "section": "I",
+      "title": "Mixed-content package",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 6 884792\" not listed",
+      "at": "2026-09-09T13:18:06.533Z"
+    },
+    "65": {
+      "id": "65",
+      "section": "I",
+      "title": "Package manual adjustment",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 7 907890\" not listed",
+      "at": "2026-09-09T13:18:29.587Z"
+    },
+    "66": {
+      "id": "66",
+      "section": "I",
+      "title": "Package expiration",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Pkg 8 930454\" not listed",
+      "at": "2026-09-09T13:18:52.155Z"
+    },
+    "67": {
+      "id": "67",
+      "section": "J",
+      "title": "Create membership",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:19:14.213Z"
+    },
+    "68": {
+      "id": "68",
+      "section": "J",
+      "title": "Subscribe customer",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:19:35.913Z"
+    },
+    "69": {
+      "id": "69",
+      "section": "J",
+      "title": "Member-only service",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:20:00.966Z"
+    },
+    "70": {
+      "id": "70",
+      "section": "J",
+      "title": "Member-only class",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:20:25.886Z"
+    },
+    "71": {
+      "id": "71",
+      "section": "J",
+      "title": "Membership credit consumption",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:20:48.588Z"
+    },
+    "72": {
+      "id": "72",
+      "section": "J",
+      "title": "Membership recurring credit replenishment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:21:10.484Z"
+    },
+    "73": {
+      "id": "73",
+      "section": "J",
+      "title": "Membership rollover",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:21:31.602Z"
+    },
+    "74": {
+      "id": "74",
+      "section": "J",
+      "title": "Membership pause/resume",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:21:52.951Z"
+    },
+    "75": {
+      "id": "75",
+      "section": "J",
+      "title": "Cancel immediately",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:22:14.187Z"
+    },
+    "76": {
+      "id": "76",
+      "section": "J",
+      "title": "Cancel at period end",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:22:36.111Z"
+    },
+    "77": {
+      "id": "77",
+      "section": "J",
+      "title": "Failed membership payment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:22:58.324Z"
+    },
+    "78": {
+      "id": "78",
+      "section": "J",
+      "title": "Payment recovery",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:23:29.406Z"
+    },
+    "79": {
+      "id": "79",
+      "section": "K",
+      "title": "Create/issue gift certificate",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Gift 230519\" not listed",
+      "at": "2026-09-09T13:23:52.220Z"
+    },
+    "80": {
+      "id": "80",
+      "section": "K",
+      "title": "Redeem gift",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:24:04.695Z"
+    },
+    "81": {
+      "id": "81",
+      "section": "K",
+      "title": "Wallet balance",
+      "status": "FAIL",
+      "detail": "/appointments/commerce missing expected UI",
+      "at": "2026-09-09T13:24:22.930Z"
+    },
+    "82": {
+      "id": "82",
+      "section": "K",
+      "title": "Loyalty",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:24:39.485Z"
+    },
+    "83": {
+      "id": "83",
+      "section": "L",
+      "title": "Stripe connection",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Stripe Connect OAuth — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:44.668Z"
+    },
+    "84": {
+      "id": "84",
+      "section": "L",
+      "title": "Square connection",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Square OAuth — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:45.313Z"
+    },
+    "85": {
+      "id": "85",
+      "section": "L",
+      "title": "Full payment booking",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:45.929Z"
+    },
+    "86": {
+      "id": "86",
+      "section": "L",
+      "title": "Deposit booking",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:46.550Z"
+    },
+    "87": {
+      "id": "87",
+      "section": "L",
+      "title": "Pay later",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:47.168Z"
+    },
+    "88": {
+      "id": "88",
+      "section": "L",
+      "title": "Pay what you want",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:47.789Z"
+    },
+    "89": {
+      "id": "89",
+      "section": "L",
+      "title": "Tips",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:48.414Z"
+    },
+    "90": {
+      "id": "90",
+      "section": "L",
+      "title": "Saved card",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:49.007Z"
+    },
+    "91": {
+      "id": "91",
+      "section": "L",
+      "title": "Customer pays remaining balance",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:24:49.682Z"
+    },
+    "92": {
+      "id": "92",
+      "section": "L",
+      "title": "Product creation",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Product 306321\" not listed",
+      "at": "2026-09-09T13:25:08.012Z"
+    },
+    "93": {
+      "id": "93",
+      "section": "L",
+      "title": "Coupon",
+      "status": "FAIL",
+      "detail": "/appointments/coupons missing expected UI",
+      "at": "2026-09-09T13:25:25.784Z"
+    },
+    "94": {
+      "id": "94",
+      "section": "L",
+      "title": "Invalid coupon",
+      "status": "FAIL",
+      "detail": "/appointments/coupons missing expected UI",
+      "at": "2026-09-09T13:25:43.936Z"
+    },
+    "95": {
+      "id": "95",
+      "section": "L",
+      "title": "POS mixed checkout",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:26:11.484Z"
+    },
+    "96": {
+      "id": "96",
+      "section": "L",
+      "title": "Invoice creation",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:26:29.279Z"
+    },
+    "97": {
+      "id": "97",
+      "section": "L",
+      "title": "Send invoice",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:26:46.589Z"
+    },
+    "98": {
+      "id": "98",
+      "section": "L",
+      "title": "Pay invoice",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:27:03.878Z"
+    },
+    "99": {
+      "id": "99",
+      "section": "L",
+      "title": "Partial refund",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:27:09.469Z"
+    },
+    "100": {
+      "id": "100",
+      "section": "L",
+      "title": "Full refund",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:27:10.106Z"
+    },
+    "101": {
+      "id": "101",
+      "section": "L",
+      "title": "Refund to wallet",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live payment provider (Stripe/Square/checkout) — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:27:10.749Z"
+    },
+    "102": {
+      "id": "102",
+      "section": "L",
+      "title": "Payment plan/installments",
+      "status": "FAIL",
+      "detail": "/appointments/payments missing expected UI",
+      "at": "2026-09-09T13:27:24.686Z"
+    },
+    "103": {
+      "id": "103",
+      "section": "L",
+      "title": "Payments transaction ledger",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:27:41.847Z"
+    },
+    "104": {
+      "id": "104",
+      "section": "L",
+      "title": "SMS payment link",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live SMS payment link delivery — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:27:47.095Z"
+    },
+    "105": {
+      "id": "105",
+      "section": "M",
+      "title": "Create class series",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:27:59.374Z"
+    },
+    "106": {
+      "id": "106",
+      "section": "M",
+      "title": "Class schedule / occurrences",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:28:16.556Z"
+    },
+    "107": {
+      "id": "107",
+      "section": "M",
+      "title": "Class capacity limits",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:28:33.452Z"
+    },
+    "108": {
+      "id": "108",
+      "section": "M",
+      "title": "Class enrollment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:28:51.762Z"
+    },
+    "109": {
+      "id": "109",
+      "section": "M",
+      "title": "Class waitlist join",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:29:10.034Z"
+    },
+    "110": {
+      "id": "110",
+      "section": "M",
+      "title": "Class check-in",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:29:27.594Z"
+    },
+    "111": {
+      "id": "111",
+      "section": "M",
+      "title": "Class cancellation",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:29:44.357Z"
+    },
+    "112": {
+      "id": "112",
+      "section": "M",
+      "title": "Recurring class series",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:30:01.448Z"
+    },
+    "113": {
+      "id": "113",
+      "section": "M",
+      "title": "Class instructor assignment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:30:19.034Z"
+    },
+    "114": {
+      "id": "114",
+      "section": "M",
+      "title": "Class at location",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:30:36.629Z"
+    },
+    "115": {
+      "id": "115",
+      "section": "M",
+      "title": "Online class link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:30:54.730Z"
+    },
+    "116": {
+      "id": "116",
+      "section": "M",
+      "title": "Class package redemption",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:31:13.934Z"
+    },
+    "117": {
+      "id": "117",
+      "section": "N",
+      "title": "Join waitlist",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:31:35.177Z"
+    },
+    "118": {
+      "id": "118",
+      "section": "N",
+      "title": "Waitlist priority rules",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:31:56.182Z"
+    },
+    "119": {
+      "id": "119",
+      "section": "N",
+      "title": "Waitlist promotion",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:32:17.195Z"
+    },
+    "120": {
+      "id": "120",
+      "section": "N",
+      "title": "Waitlist notification",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:32:38.095Z"
+    },
+    "121": {
+      "id": "121",
+      "section": "N",
+      "title": "Waitlist expiry",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:32:59.343Z"
+    },
+    "122": {
+      "id": "122",
+      "section": "N",
+      "title": "Waitlist cancel",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:33:19.677Z"
+    },
+    "123": {
+      "id": "123",
+      "section": "N",
+      "title": "Waitlist admin view",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:33:40.650Z"
+    },
+    "124": {
+      "id": "124",
+      "section": "O",
+      "title": "Client portal login",
+      "status": "FAIL",
+      "detail": "Client portal surface not available",
+      "at": "2026-09-09T13:33:48.028Z"
+    },
+    "125": {
+      "id": "125",
+      "section": "O",
+      "title": "Portal appointment list",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:33:55.487Z"
+    },
+    "126": {
+      "id": "126",
+      "section": "O",
+      "title": "Portal reschedule",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:34:03.623Z"
+    },
+    "127": {
+      "id": "127",
+      "section": "O",
+      "title": "Portal cancel",
+      "status": "FAIL",
+      "detail": "Client portal surface not available",
+      "at": "2026-09-09T13:34:11.078Z"
+    },
+    "128": {
+      "id": "128",
+      "section": "O",
+      "title": "Portal payment history",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:34:18.550Z"
+    },
+    "129": {
+      "id": "129",
+      "section": "O",
+      "title": "Portal package balance",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:34:25.836Z"
+    },
+    "130": {
+      "id": "130",
+      "section": "O",
+      "title": "Portal membership status",
+      "status": "FAIL",
+      "detail": "Client portal surface not available",
+      "at": "2026-09-09T13:34:33.282Z"
+    },
+    "131": {
+      "id": "131",
+      "section": "O",
+      "title": "Portal profile update",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:34:40.927Z"
+    },
+    "132": {
+      "id": "132",
+      "section": "O",
+      "title": "Manage appointment link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:34:57.569Z"
+    },
+    "133": {
+      "id": "133",
+      "section": "O",
+      "title": "Manage link reschedule",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:35:04.904Z"
+    },
+    "134": {
+      "id": "134",
+      "section": "O",
+      "title": "Manage link cancel",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:35:12.260Z"
+    },
+    "135": {
+      "id": "135",
+      "section": "O",
+      "title": "Invalid manage link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:35:20.715Z"
+    },
+    "136": {
+      "id": "136",
+      "section": "P",
+      "title": "Staff calendar view",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:35:38.432Z"
+    },
+    "137": {
+      "id": "137",
+      "section": "P",
+      "title": "Create appointment (staff)",
+      "status": "FAIL",
+      "detail": "apiRequestContext.post: Timeout 30000ms exceeded.\nCall log:\n  - → POST https://transovo.ai/api/appointments\n    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36\n    - accept: */*\n    - accept-encoding: gzip,deflate,br\n    - content-type: application/json\n    - content-length: 284\n    - cookie: transovo_session=%257B%2522userId%2522%253A%2522cms8b2ivb2r1b00136a573l61%2522%252C%2522email%2522%253A%2522alex%254",
+      "at": "2026-09-09T13:37:16.392Z"
+    },
+    "138": {
+      "id": "138",
+      "section": "P",
+      "title": "Edit appointment notes",
+      "status": "FAIL",
+      "detail": "editAppointmentNotesUserAction requires appointmentId or open detail page",
+      "at": "2026-09-09T13:37:21.609Z"
+    },
+    "139": {
+      "id": "139",
+      "section": "P",
+      "title": "Cancel appointment (staff)",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:37:38.535Z"
+    },
+    "140": {
+      "id": "140",
+      "section": "P",
+      "title": "Reschedule (staff)",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:37:55.851Z"
+    },
+    "141": {
+      "id": "141",
+      "section": "P",
+      "title": "Block time",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:38:13.468Z"
+    },
+    "142": {
+      "id": "142",
+      "section": "P",
+      "title": "Staff availability override",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:38:33.078Z"
+    },
+    "143": {
+      "id": "143",
+      "section": "P",
+      "title": "Appointment status workflow",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:38:50.874Z"
+    },
+    "144": {
+      "id": "144",
+      "section": "P",
+      "title": "Internal notes",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:39:08.344Z"
+    },
+    "145": {
+      "id": "145",
+      "section": "P",
+      "title": "Staff assignment change",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:40:03.873Z"
+    },
+    "146": {
+      "id": "146",
+      "section": "Q",
+      "title": "Reminder template",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:40:24.825Z"
+    },
+    "147": {
+      "id": "147",
+      "section": "Q",
+      "title": "Reminder timing",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:40:45.864Z"
+    },
+    "148": {
+      "id": "148",
+      "section": "Q",
+      "title": "Reminder preview",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:41:07.070Z"
+    },
+    "149": {
+      "id": "149",
+      "section": "Q",
+      "title": "SMS reminder channel",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live SMS delivery — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:41:12.035Z"
+    },
+    "150": {
+      "id": "150",
+      "section": "Q",
+      "title": "Email reminder channel",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Live email delivery — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:41:12.647Z"
+    },
+    "151": {
+      "id": "151",
+      "section": "Q",
+      "title": "Reminder for class",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:41:28.283Z"
+    },
+    "152": {
+      "id": "152",
+      "section": "R",
+      "title": "Booking workflow trigger",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:41:45.863Z"
+    },
+    "153": {
+      "id": "153",
+      "section": "R",
+      "title": "Workflow on cancel",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:42:06.351Z"
+    },
+    "154": {
+      "id": "154",
+      "section": "R",
+      "title": "Workflow on no-show",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:42:23.714Z"
+    },
+    "155": {
+      "id": "155",
+      "section": "R",
+      "title": "Workflow SMS action",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:42:44.028Z"
+    },
+    "156": {
+      "id": "156",
+      "section": "R",
+      "title": "Workflow email action",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:43:01.441Z"
+    },
+    "157": {
+      "id": "157",
+      "section": "R",
+      "title": "Workflow tag contact",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:43:20.129Z"
+    },
+    "158": {
+      "id": "158",
+      "section": "R",
+      "title": "Workflow internal task",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:43:38.052Z"
+    },
+    "159": {
+      "id": "159",
+      "section": "R",
+      "title": "Workflow delay step",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:43:55.526Z"
+    },
+    "160": {
+      "id": "160",
+      "section": "S",
+      "title": "Appointments overview KPIs",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:44:25.301Z"
+    },
+    "161": {
+      "id": "161",
+      "section": "S",
+      "title": "Revenue report",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:44:54.464Z"
+    },
+    "162": {
+      "id": "162",
+      "section": "S",
+      "title": "Booking funnel",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:45:24.776Z"
+    },
+    "163": {
+      "id": "163",
+      "section": "S",
+      "title": "No-show rate",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:45:54.778Z"
+    },
+    "164": {
+      "id": "164",
+      "section": "S",
+      "title": "Cancellation rate",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:46:24.287Z"
+    },
+    "165": {
+      "id": "165",
+      "section": "S",
+      "title": "Staff utilization",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:46:54.544Z"
+    },
+    "166": {
+      "id": "166",
+      "section": "S",
+      "title": "Service popularity",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:47:24.535Z"
+    },
+    "167": {
+      "id": "167",
+      "section": "S",
+      "title": "Export analytics",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:47:53.140Z"
+    },
+    "168": {
+      "id": "168",
+      "section": "T",
+      "title": "Calendar day view",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:48:10.388Z"
+    },
+    "169": {
+      "id": "169",
+      "section": "T",
+      "title": "Calendar week view",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:48:27.037Z"
+    },
+    "170": {
+      "id": "170",
+      "section": "T",
+      "title": "Calendar month view",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:48:44.449Z"
+    },
+    "171": {
+      "id": "171",
+      "section": "T",
+      "title": "Calendar filter by staff",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:49:01.962Z"
+    },
+    "172": {
+      "id": "172",
+      "section": "U",
+      "title": "Contact from booking",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:49:19.333Z"
+    },
+    "173": {
+      "id": "173",
+      "section": "U",
+      "title": "Contact appointment history",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:49:36.368Z"
+    },
+    "174": {
+      "id": "174",
+      "section": "U",
+      "title": "Contact notes",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:49:53.705Z"
+    },
+    "175": {
+      "id": "175",
+      "section": "U",
+      "title": "Contact segments",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:50:15.163Z"
+    },
+    "176": {
+      "id": "176",
+      "section": "U",
+      "title": "Contact merge",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:50:32.788Z"
+    },
+    "177": {
+      "id": "177",
+      "section": "V",
+      "title": "Conversation from appointment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:50:49.488Z"
+    },
+    "178": {
+      "id": "178",
+      "section": "V",
+      "title": "SMS thread context",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:51:08.644Z"
+    },
+    "179": {
+      "id": "179",
+      "section": "V",
+      "title": "Send message from appointment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:51:26.580Z"
+    },
+    "180": {
+      "id": "180",
+      "section": "V",
+      "title": "MCTB handoff link",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:51:39.823Z"
+    },
+    "181": {
+      "id": "181",
+      "section": "W",
+      "title": "Smart routing overview",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:51:50.871Z"
+    },
+    "182": {
+      "id": "182",
+      "section": "W",
+      "title": "Routing rules list",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:01.547Z"
+    },
+    "183": {
+      "id": "183",
+      "section": "W",
+      "title": "Create routing rule",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:12.571Z"
+    },
+    "184": {
+      "id": "184",
+      "section": "W",
+      "title": "MCTB fallback routing",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:23.138Z"
+    },
+    "185": {
+      "id": "185",
+      "section": "W",
+      "title": "Business hours routing",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:34.132Z"
+    },
+    "186": {
+      "id": "186",
+      "section": "W",
+      "title": "Ring group",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:45.977Z"
+    },
+    "187": {
+      "id": "187",
+      "section": "W",
+      "title": "Voicemail fallback",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:52:57.346Z"
+    },
+    "188": {
+      "id": "188",
+      "section": "W",
+      "title": "Routing activity log",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:53:08.918Z"
+    },
+    "189": {
+      "id": "189",
+      "section": "X",
+      "title": "Video meeting link on appointment",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:53:26.246Z"
+    },
+    "190": {
+      "id": "190",
+      "section": "X",
+      "title": "Video provider settings",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:53:43.676Z"
+    },
+    "191": {
+      "id": "191",
+      "section": "Y",
+      "title": "Webhook endpoint config",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:54:04.604Z"
+    },
+    "192": {
+      "id": "192",
+      "section": "Y",
+      "title": "Webhook delivery log",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:54:25.976Z"
+    },
+    "193": {
+      "id": "193",
+      "section": "Y",
+      "title": "Webhook retry",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:54:46.969Z"
+    },
+    "194": {
+      "id": "194",
+      "section": "Z",
+      "title": "Recurring appointment series",
+      "status": "FAIL",
+      "detail": "/appointments/calendar missing expected UI",
+      "at": "2026-09-09T13:55:04.082Z"
+    },
+    "195": {
+      "id": "195",
+      "section": "Z",
+      "title": "Recurring series edit",
+      "status": "FAIL",
+      "detail": "/appointments/calendar missing expected UI",
+      "at": "2026-09-09T13:55:21.658Z"
+    },
+    "196": {
+      "id": "196",
+      "section": "AA",
+      "title": "Cancellation policy",
+      "status": "FAIL",
+      "detail": "/appointments/policies missing expected UI",
+      "at": "2026-09-09T13:55:39.222Z"
+    },
+    "197": {
+      "id": "197",
+      "section": "AA",
+      "title": "No-show policy",
+      "status": "FAIL",
+      "detail": "/appointments/policies missing expected UI",
+      "at": "2026-09-09T13:55:57.121Z"
+    },
+    "198": {
+      "id": "198",
+      "section": "AA",
+      "title": "Late cancel policy",
+      "status": "FAIL",
+      "detail": "/appointments/policies missing expected UI",
+      "at": "2026-09-09T13:56:14.807Z"
+    },
+    "199": {
+      "id": "199",
+      "section": "AA",
+      "title": "Policy on public book",
+      "status": "FAIL",
+      "detail": "/appointments/policies missing expected UI",
+      "at": "2026-09-09T13:56:33.535Z"
+    },
+    "200": {
+      "id": "200",
+      "section": "AB",
+      "title": "Calendar color by service",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:56:52.900Z"
+    },
+    "201": {
+      "id": "201",
+      "section": "AB",
+      "title": "Calendar color by staff",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:57:09.912Z"
+    },
+    "202": {
+      "id": "202",
+      "section": "AC",
+      "title": "Client booking restrictions",
+      "status": "FAIL",
+      "detail": "/appointments/restrictions missing expected UI",
+      "at": "2026-09-09T13:57:27.779Z"
+    },
+    "203": {
+      "id": "203",
+      "section": "AC",
+      "title": "Restriction on public book",
+      "status": "FAIL",
+      "detail": "/appointments/restrictions missing expected UI",
+      "at": "2026-09-09T13:57:44.838Z"
+    },
+    "204": {
+      "id": "204",
+      "section": "AD",
+      "title": "Loyalty / rewards program",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:58:02.337Z"
+    },
+    "205": {
+      "id": "205",
+      "section": "AE",
+      "title": "OTP / magic link portal auth",
+      "status": "FAIL",
+      "detail": "OTP portal auth not surfaced",
+      "at": "2026-09-09T13:58:10.087Z"
+    },
+    "206": {
+      "id": "206",
+      "section": "AF",
+      "title": "Referral program config",
+      "status": "FAIL",
+      "detail": "/appointments/commerce missing expected UI",
+      "at": "2026-09-09T13:58:27.218Z"
+    },
+    "207": {
+      "id": "207",
+      "section": "AF",
+      "title": "Referral redemption",
+      "status": "FAIL",
+      "detail": "/appointments/commerce missing expected UI",
+      "at": "2026-09-09T13:58:43.957Z"
+    },
+    "208": {
+      "id": "208",
+      "section": "AG",
+      "title": "Household / family accounts",
+      "status": "FAIL",
+      "detail": "/contacts missing expected UI",
+      "at": "2026-09-09T13:59:01.905Z"
+    },
+    "209": {
+      "id": "209",
+      "section": "AH",
+      "title": "Treatment / service history record",
+      "status": "FAIL",
+      "detail": "/appointments/scheduled missing expected UI",
+      "at": "2026-09-09T13:59:19.537Z"
+    },
+    "210": {
+      "id": "210",
+      "section": "AI",
+      "title": "Reserve with Google",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Google Reserve OAuth — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:24.387Z"
+    },
+    "211": {
+      "id": "211",
+      "section": "AI",
+      "title": "Facebook booking",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Facebook integration — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:25.013Z"
+    },
+    "212": {
+      "id": "212",
+      "section": "AI",
+      "title": "Instagram booking",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Instagram integration — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:25.625Z"
+    },
+    "213": {
+      "id": "213",
+      "section": "AI",
+      "title": "iCloud calendar sync",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Apple iCloud OAuth — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:26.259Z"
+    },
+    "214": {
+      "id": "214",
+      "section": "AI",
+      "title": "SAML SSO",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Enterprise SAML IdP — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:26.884Z"
+    },
+    "215": {
+      "id": "215",
+      "section": "AI",
+      "title": "SCIM provisioning",
+      "status": "PROVIDER_BLOCKED",
+      "detail": "Enterprise SCIM — live provider credentials not available in UAT environment",
+      "at": "2026-09-09T13:59:27.516Z"
+    },
+    "216": {
+      "id": "216",
+      "section": "AJ",
+      "title": "Mobile calendar reflow",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T13:59:43.711Z"
+    },
+    "217": {
+      "id": "217",
+      "section": "AJ",
+      "title": "Mobile public book reflow",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:00:04.564Z"
+    },
+    "218": {
+      "id": "218",
+      "section": "AJ",
+      "title": "200% zoom primary task",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:00:26.309Z"
+    },
+    "219": {
+      "id": "219",
+      "section": "AJ",
+      "title": "Keyboard calendar navigation",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:00:47.524Z"
+    },
+    "220": {
+      "id": "220",
+      "section": "AK",
+      "title": "Book → manage → reschedule",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:00:57.438Z"
+    },
+    "221": {
+      "id": "221",
+      "section": "AK",
+      "title": "Book → cancel → wallet credit",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:01:07.644Z"
+    },
+    "222": {
+      "id": "222",
+      "section": "AK",
+      "title": "Package purchase → redeem booking",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:01:16.949Z"
+    },
+    "223": {
+      "id": "223",
+      "section": "AK",
+      "title": "Membership book member-only",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:01:26.388Z"
+    },
+    "224": {
+      "id": "224",
+      "section": "AK",
+      "title": "Class enroll → check-in",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:01:36.525Z"
+    },
+    "225": {
+      "id": "225",
+      "section": "AK",
+      "title": "Waitlist join → promote → book",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:01:45.851Z"
+    },
+    "226": {
+      "id": "226",
+      "section": "AK",
+      "title": "Staff create → reminder preview",
+      "status": "FAIL",
+      "detail": "apiRequestContext.post: Timeout 30000ms exceeded.\nCall log:\n  - → POST https://transovo.ai/api/appointments\n    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36\n    - accept: */*\n    - accept-encoding: gzip,deflate,br\n    - content-type: application/json\n    - content-length: 284\n    - cookie: transovo_session=%257B%2522userId%2522%253A%2522cms8b2ivb2r1b00136a573l61%2522%252C%2522email%2522%253A%2522alex%254",
+      "at": "2026-09-09T14:03:14.110Z"
+    },
+    "227": {
+      "id": "227",
+      "section": "AK",
+      "title": "Multi-service book journey",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:03:23.629Z"
+    },
+    "228": {
+      "id": "228",
+      "section": "AK",
+      "title": "Portal login → history",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:03:30.768Z"
+    },
+    "229": {
+      "id": "229",
+      "section": "AK",
+      "title": "End-to-end POS mixed checkout",
+      "status": "BROWSER_PASS",
+      "detail": "Full user journey completed in browser",
+      "at": "2026-09-09T14:03:47.527Z"
+    }
+  },
+  "summary": {
+    "BROWSER_PASS": 156,
+    "LIVE_PASS": 0,
+    "FAIL": 52,
+    "PROVIDER_BLOCKED": 21,
+    "NOT_APPLICABLE": 0,
+    "NOT_RUN": 0
+  }
+}

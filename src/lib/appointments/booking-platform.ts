@@ -376,6 +376,8 @@ export async function createPlatformAppointment(
     }
   }
 
+  const isStaffQuickCreate = input.source === "admin" && input.skipSms === true;
+
   const contactId = await resolveOrCreateContact(workspaceId, {
     firstName: input.firstName,
     lastName: input.lastName,
@@ -429,7 +431,7 @@ export async function createPlatformAppointment(
           ? "webex"
           : undefined;
 
-  if (locationKind === "microsoft_teams") {
+  if (!isStaffQuickCreate && locationKind === "microsoft_teams") {
     try {
       const msConn = await prisma.voiceCalendarConnection.findFirst({
         where: { workspaceId, provider: "microsoft", status: "connected" },
@@ -615,13 +617,15 @@ export async function createPlatformAppointment(
     await requestBookingApproval(workspaceId, appointmentId);
   }
 
-  try {
-    const { autoProvisionTransovoVideoForAppointment } = await import(
-      "@/lib/transovo-video/workflow-triggers"
-    );
-    await autoProvisionTransovoVideoForAppointment(workspaceId, appointmentId);
-  } catch (err) {
-    console.warn("[appointments] transovo video auto-provision failed", err);
+  if (!isStaffQuickCreate) {
+    try {
+      const { autoProvisionTransovoVideoForAppointment } = await import(
+        "@/lib/transovo-video/workflow-triggers"
+      );
+      await autoProvisionTransovoVideoForAppointment(workspaceId, appointmentId);
+    } catch (err) {
+      console.warn("[appointments] transovo video auto-provision failed", err);
+    }
   }
 
   const appointmentRow = await prisma.voiceAppointment.findFirst({
@@ -706,18 +710,20 @@ export async function createPlatformAppointment(
     }
   }
 
-  try {
-    const { onAppointmentBooked } = await import("@/lib/appointment-workflows/triggers");
-    await onAppointmentBooked(workspaceId, appointmentId, contactId);
-  } catch (err) {
-    console.warn("[appointments] workflow trigger failed on book", err);
-  }
+  if (!isStaffQuickCreate) {
+    try {
+      const { onAppointmentBooked } = await import("@/lib/appointment-workflows/triggers");
+      await onAppointmentBooked(workspaceId, appointmentId, contactId);
+    } catch (err) {
+      console.warn("[appointments] workflow trigger failed on book", err);
+    }
 
-  try {
-    const { autoEnableNotetakerForAppointment } = await import("@/lib/meeting-assistant/workflow-triggers");
-    await autoEnableNotetakerForAppointment(workspaceId, appointmentId);
-  } catch (err) {
-    console.warn("[appointments] notetaker auto-enable failed", err);
+    try {
+      const { autoEnableNotetakerForAppointment } = await import("@/lib/meeting-assistant/workflow-triggers");
+      await autoEnableNotetakerForAppointment(workspaceId, appointmentId);
+    } catch (err) {
+      console.warn("[appointments] notetaker auto-enable failed", err);
+    }
   }
 
   return {

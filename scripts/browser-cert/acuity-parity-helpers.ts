@@ -29,7 +29,7 @@ export async function adminLocationsCreateAndSave(page: Page, name: string) {
   await page.waitForTimeout(1200);
   const addBtn = page.getByRole("button", { name: /add location/i }).first();
   await addBtn.click({ timeout: ACTION_TIMEOUT });
-  const nameInput = page.locator('input[class*="rounded"]').first();
+  const nameInput = page.getByLabel(/^Name$/i).first();
   await nameInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
   await nameInput.fill(name);
   const saveBtn = page.getByRole("button", { name: /^Save$/i }).first();

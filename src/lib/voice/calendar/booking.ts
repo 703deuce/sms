@@ -785,7 +785,11 @@ export async function bookAppointment(
   const calendarId =
     (args.calendarId as string | undefined) || service?.calendarId || undefined;
   const cal = await resolveCalendarConnection(workspaceId, calendarId);
-  if (cal && (cal.provider === "google" || cal.provider === "microsoft")) {
+  const skipExternalCalendar =
+    source === "admin" ||
+    args.skipExternalCalendarSync === true ||
+    args.skipSms === true;
+  if (cal && !skipExternalCalendar && (cal.provider === "google" || cal.provider === "microsoft")) {
     const config = (cal.config || {}) as CalendarConfig;
     if (hasOAuthTokens(config)) {
       try {

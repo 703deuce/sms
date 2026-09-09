@@ -69,7 +69,123 @@ function formatDate(value?: string) {
   return new Date(value).toLocaleString();
 }
 
+function isWorkspaceSlugToken(token: string) {
+  return token.length < 48 && /[a-z]/i.test(token) && !/^[a-f0-9]{32,}$/i.test(token);
+}
+
+function PortalSlugLogin({ slug }: { slug: string }) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function sendCode() {
+    setLoading(true);
+    setMessage(null);
+    const res = await fetch(`/api/public/portal/login/${encodeURIComponent(slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    setLoading(false);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(json.error || "Could not send verification code");
+      return;
+    }
+    setOtpSent(true);
+    setMessage("Verification code sent — check your email for the magic link OTP.");
+  }
+
+  async function verifyCode() {
+    setLoading(true);
+    setMessage(null);
+    const res = await fetch(`/api/public/portal/login/${encodeURIComponent(slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "verify", email, code }),
+    });
+    setLoading(false);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(json.error || "Invalid verification code");
+      return;
+    }
+    const portalToken = String(json.data?.portalToken || "");
+    if (!portalToken) {
+      setMessage("Portal session could not be created");
+      return;
+    }
+    window.location.href = `/portal/${portalToken}`;
+  }
+
+  return (
+    <main className="mx-auto max-w-md space-y-6 p-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold">Client portal</h1>
+        <p className="text-sm text-muted-foreground">
+          Sign in with your email. We&apos;ll send a one-time verification code (OTP) or magic link.
+        </p>
+      </header>
+      <div className="space-y-4 rounded-lg border p-4">
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Email</span>
+          <input
+            type="email"
+            className="rounded border px-3 py-2"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+        </label>
+        {otpSent ? (
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Verification code</span>
+            <input
+              className="rounded border px-3 py-2"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+          </label>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {!otpSent ? (
+            <button
+              type="button"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              disabled={loading || !email.trim()}
+              onClick={() => void sendCode()}
+            >
+              {loading ? "Sending…" : "Send verification code"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              disabled={loading || !code.trim()}
+              onClick={() => void verifyCode()}
+            >
+              {loading ? "Verifying…" : "Sign in to portal"}
+            </button>
+          )}
+        </div>
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+      </div>
+    </main>
+  );
+}
+
 export default function ClientPortalPublicClient({ token }: { token: string }) {
+  if (isWorkspaceSlugToken(token)) {
+    return <PortalSlugLogin slug={token} />;
+  }
+  return <ClientPortalTokenView token={token} />;
+}
+
+function ClientPortalTokenView({ token }: { token: string }) {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);

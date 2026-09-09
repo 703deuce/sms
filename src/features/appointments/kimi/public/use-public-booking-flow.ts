@@ -201,7 +201,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
 
   const showStaffPicker =
     selectedType?.config?.staffAssignment === "customer_chooses" && eligibleStaff.length > 0;
-  const showLocationPicker = eligibleLocations.length > 1;
+  const showLocationPicker = eligibleLocations.length >= 1;
   const groupEnabled = Boolean(selectedType?.config?.groupBooking?.enabled);
   const groupCapacity = selectedType?.config?.groupBooking?.capacity || 1;
   const recurringEnabled = Boolean(selectedType?.config?.recurring?.enabled);

@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  return withAppointmentsAuth("appointments.types.manage", async ({ workspaceId }) =>
+  return withAppointmentsAuth("appointments.write", async ({ workspaceId }) =>
     upsertSchedulingResource(workspaceId, body),
   );
 }

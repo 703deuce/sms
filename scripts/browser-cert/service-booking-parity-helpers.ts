@@ -72,7 +72,7 @@ export async function commerceCreateItem(
   const tab = page.getByRole("button", { name: tabLabel }).first();
   if (await tab.count()) await tab.click({ timeout: ACTION_TIMEOUT });
   const unique = `${namePrefix} ${Date.now().toString().slice(-6)}`;
-  const nameInput = page.locator('input[placeholder*="name" i], label:has-text("Name") ~ input, input.rounded.border').first();
+  const nameInput = page.locator('[data-testid="commerce-name-input"], input[aria-label="Name"], input[placeholder*="name" i]').first();
   await nameInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
   await nameInput.fill(unique);
   await page.getByRole("button", { name: /^Add$/i }).click({ timeout: ACTION_TIMEOUT });

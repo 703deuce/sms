@@ -21,6 +21,7 @@ const REASON_LABELS: Record<string, string> = {
   existing_appointment: "Another appointment occupies this time",
   weekend_closed: "Weekends are not bookable",
   off_hours: "Outside allowed booking hours",
+  invalid_start_interval: "Not on the allowed start-time grid",
 };
 
 export function SlotDiagnosticsPanel() {

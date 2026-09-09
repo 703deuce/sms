@@ -114,7 +114,10 @@ export default function DateOverrides({
                     <div className="text-[9.5px] font-bold tracking-wider text-[#8a87a0]">{o.month}</div>
                     <div className="text-[15px] font-bold text-[#1c1a2e] leading-tight">{o.dayNum}</div>
                   </div>
-                  <span className="text-[13px] font-medium text-[#1c1a2e]">{o.date}</span>
+                  <span className="text-[13px] font-medium text-[#1c1a2e]" data-iso-date={o.isoDate}>
+                    {o.date}
+                    <span className="ml-2 text-[11px] font-normal text-[#8a87a0]">{o.isoDate}</span>
+                  </span>
                 </div>
                 <div>
                   <span className={`avail-pill ${o.type === "custom" ? "avail-pill-custom" : "avail-pill-rose"}`}>

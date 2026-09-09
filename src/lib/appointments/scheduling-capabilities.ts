@@ -240,7 +240,8 @@ export type SlotUnavailabilityReason =
   | "capacity_full"
   | "existing_appointment"
   | "weekend_closed"
-  | "off_hours";
+  | "off_hours"
+  | "invalid_start_interval";
 
 export type SlotDiagnostic = {
   startsAt: string;

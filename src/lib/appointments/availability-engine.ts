@@ -47,8 +47,12 @@ export async function loadAvailabilityContext(workspaceId: string, serviceName: 
     service,
     svcCfg,
     timezone: svcCfg.timezone || platform.timezone,
-    minimumNoticeMinutes:
-      svcCfg.minimumBookingNoticeMinutes ?? platform.minimumBookingNoticeMinutes ?? 60,
+    minimumNoticeMinutes: (() => {
+      const platformNotice = platform.minimumBookingNoticeMinutes ?? 60;
+      const serviceNotice = svcCfg.minimumBookingNoticeMinutes;
+      if (serviceNotice == null || serviceNotice <= 0) return platformNotice;
+      return Math.max(platformNotice, serviceNotice);
+    })(),
     maximumDaysAhead: svcCfg.maximumBookingDaysAhead ?? platform.maximumBookingDaysAhead ?? 14,
     bufferBeforeMinutes: svcCfg.bufferBeforeMinutes ?? 0,
     bufferAfterMinutes: svcCfg.bufferAfterMinutes ?? service?.bufferMinutes ?? 0,
@@ -84,6 +88,13 @@ export async function generateNativeSlots(
     ...(platform.schedulingLimits || {}),
     ...(svcCfg.schedulingLimits || {}),
   };
+  if (
+    (svcCfg.schedulingLimits?.availabilityDensityHidePercent ?? 0) <= 0 &&
+    (platform.schedulingLimits?.availabilityDensityHidePercent ?? 0) > 0
+  ) {
+    schedulingLimits.availabilityDensityHidePercent =
+      platform.schedulingLimits!.availabilityDensityHidePercent;
+  }
   if (!service || svcCfg.enabled === false) return { slots: [] };
 
   const schedulingCtx = await loadSchedulingContext(workspaceId, input.serviceName);

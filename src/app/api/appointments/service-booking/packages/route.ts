@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       purchasePackageForContact(workspaceId, body.productId, body.contactId),
     );
   }
-  return withAppointmentsAuth("appointments.types.manage", async ({ workspaceId }) =>
+  return withAppointmentsAuth("appointments.write", async ({ workspaceId }) =>
     upsertPackageProduct(workspaceId, body),
   );
 }

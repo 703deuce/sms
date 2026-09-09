@@ -13,6 +13,22 @@ import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import type { SlotDiagnostic, SlotUnavailabilityReason } from "@/lib/appointments/scheduling-capabilities";
 import { getPrisma } from "@/lib/db";
 
+async function parseSlotStartsAt(
+  workspaceId: string,
+  serviceName: string,
+  raw: string,
+): Promise<Date> {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) {
+    const ctx = await loadAvailabilityContext(workspaceId, serviceName);
+    const { wallTimeInZoneToUtc } = await import("@/lib/voice/calendar/timezone-slots");
+    const [datePart, timePart] = raw.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour, minute] = timePart.split(":").map(Number);
+    return wallTimeInZoneToUtc(ctx.timezone, year, month, day, hour, minute);
+  }
+  return new Date(raw);
+}
+
 export async function diagnoseSlotAvailability(
   workspaceId: string,
   input: {
@@ -22,7 +38,7 @@ export async function diagnoseSlotAvailability(
     attendeeCount?: number;
   },
 ): Promise<SlotDiagnostic> {
-  const startsAt = new Date(input.startsAt);
+  const startsAt = await parseSlotStartsAt(workspaceId, input.serviceName, input.startsAt);
   const ctx = await loadAvailabilityContext(workspaceId, input.serviceName);
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const scheduling = await loadSchedulingContext(workspaceId, input.serviceName);
@@ -95,6 +111,28 @@ export async function diagnoseSlotAvailability(
     reasons.push("external_calendar_busy");
   }
 
+  const schedulingLimits = {
+    ...(platform.schedulingLimits || {}),
+    ...(ctx.svcCfg.schedulingLimits || {}),
+  };
+  const { slotStepMinutes, resolveAllowedStartMinutes } = await import(
+    "@/lib/appointments/service-booking/fixed-start-times"
+  );
+  const step = slotStepMinutes(ctx.durationMinutes || 30, schedulingLimits.customStartIntervalMinutes);
+  const { minutesInTimezone } = await import("@/lib/appointments/availability-engine-policy");
+  const startMin = minutesInTimezone(startsAt.toISOString(), ctx.timezone);
+  if (startMin != null && startMin % step !== 0) {
+    reasons.push("invalid_start_interval");
+  }
+  const fixedAllowed = resolveAllowedStartMinutes(
+    schedulingLimits.fixedStartTimes,
+    startsAt.toISOString(),
+    ctx.timezone,
+  );
+  if (fixedAllowed && startMin != null && !fixedAllowed.has(startMin)) {
+    reasons.push("invalid_start_interval");
+  }
+
   if (scheduling.staffAssignment === "collective" && scheduling.svcCfg.collectiveStaffIds?.length) {
     const eligible = resolveEligibleStaff(scheduling).filter((s) =>
       scheduling.svcCfg.collectiveStaffIds!.includes(s.id),
@@ -137,6 +175,7 @@ export async function explainSlotUnavailability(
     existing_appointment: "Another appointment occupies this time",
     weekend_closed: "Weekends are not bookable",
     off_hours: "Outside allowed booking hours",
+    invalid_start_interval: "Not on the allowed start-time grid for this service",
   };
   return diag.reasons.map((r) => labels[r] || r).join("; ");
 }
