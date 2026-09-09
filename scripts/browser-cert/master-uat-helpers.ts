@@ -40,6 +40,10 @@ export async function saveSchedulingRules(page: Page) {
   const btn = page.getByRole("button", { name: /^Save scheduling rules$/i });
   await btn.click({ timeout: ACTION_TIMEOUT });
   await page.waitForTimeout(2500);
+  const body = await page.locator("body").innerText();
+  if (!/saved/i.test(body)) {
+    throw new MasterUatAssertionError("Save scheduling rules did not show confirmation");
+  }
 }
 
 export async function setAutomaticStartMode(page: Page) {
@@ -120,9 +124,26 @@ export async function setDayWindows(page: Page, dayLabel: string, windows: Array
 }
 
 export async function openPublicBooking(page: Page) {
-  const v = await visitRoute(page, `/book/${MASTER_UAT_SLUG}`);
+  const v = await visitRoute(page, `/book/${MASTER_UAT_SLUG}?_=${Date.now()}`);
   if (!v.ok) throw new Error(`Public booking: ${v.note}`);
   await page.waitForTimeout(2000);
+}
+
+export async function fetchPublicSlotCount(page: Page, serviceName = MASTER_UAT_SERVICE_NAME): Promise<number> {
+  const res = await page.request.post(`/api/public/book/${MASTER_UAT_SLUG}`, {
+    data: {
+      action: "availability",
+      serviceName,
+      daysAhead: 14,
+    },
+  });
+  if (!res.ok()) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Public availability API failed: ${err.error || res.status()}`);
+  }
+  const json = await res.json();
+  const slots = (json.data?.slots || []) as unknown[];
+  return slots.length;
 }
 
 export async function selectPublicService(page: Page, serviceName = MASTER_UAT_SERVICE_NAME) {

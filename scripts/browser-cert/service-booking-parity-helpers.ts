@@ -75,8 +75,17 @@ export async function commerceCreateItem(
   const nameInput = page.locator('[data-testid="commerce-name-input"], input[aria-label="Name"], input[placeholder*="name" i]').first();
   await nameInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
   await nameInput.fill(unique);
+  const addRes = page.waitForResponse(
+    (res) => res.request().method() === "POST" && res.url().includes("/api/appointments/service-booking"),
+    { timeout: ACTION_TIMEOUT },
+  );
   await page.getByRole("button", { name: /^Add$/i }).click({ timeout: ACTION_TIMEOUT });
-  await page.waitForTimeout(1500);
+  const response = await addRes.catch(() => null);
+  if (response && !response.ok()) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(`Commerce create API failed — ${err.error || response.status()}`);
+  }
+  await page.waitForTimeout(2000);
   const body = await page.locator("body").innerText();
   if (!body.includes(unique)) {
     throw new Error(`Commerce create failed — "${unique}" not listed`);

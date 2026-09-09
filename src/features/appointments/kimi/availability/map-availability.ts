@@ -273,20 +273,24 @@ export function buildSettingsPatch(form: AvailabilityFormState) {
     .split(/[,;\n]+/)
     .map((t) => t.trim())
     .filter(Boolean);
-  const schedulingLimits =
-    form.customStartIntervalMinutes ||
+  const hasSchedulingRules =
+    form.customStartIntervalMinutes != null ||
     form.fixedStartTimesEnabled ||
-    form.availabilityDensityHidePercent ||
-    form.minimizeGapsMode !== "off"
-      ? {
-          customStartIntervalMinutes: form.customStartIntervalMinutes || undefined,
-          fixedStartTimes: form.fixedStartTimesEnabled
-            ? { enabled: true, times: fixedTimes }
+    form.availabilityDensityHidePercent != null ||
+    form.minimizeGapsMode !== "off";
+  const schedulingLimits = hasSchedulingRules
+    ? {
+        customStartIntervalMinutes: form.customStartIntervalMinutes || undefined,
+        fixedStartTimes: form.fixedStartTimesEnabled
+          ? { enabled: true, times: fixedTimes }
+          : undefined,
+        availabilityDensityHidePercent:
+          form.availabilityDensityHidePercent && form.availabilityDensityHidePercent > 0
+            ? form.availabilityDensityHidePercent
             : undefined,
-          availabilityDensityHidePercent: form.availabilityDensityHidePercent || undefined,
-          minimizeGapsMode: form.minimizeGapsMode,
-        }
-      : undefined;
+        minimizeGapsMode: form.minimizeGapsMode,
+      }
+    : undefined;
 
   return {
     weeklyHours: form.weeklyHours,

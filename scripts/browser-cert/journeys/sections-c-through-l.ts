@@ -94,7 +94,12 @@ const G = [
   journey("46", "G", "File upload", async (page) => adminIntakeFileFieldEditor(page)),
   journey("47", "G", "Upload validation", async (page) => adminIntakeFileFieldEditor(page)),
   journey("48", "G", "Terms acceptance", async (page) => {
-    await adminRoute(page, "/appointments/commerce", /terms|consent/i);
+    await ensureAppointmentsAdmin(page);
+    await visitRoute(page, "/appointments/commerce");
+    await page.getByRole("button", { name: /terms/i }).first().click({ timeout: ACTION_TIMEOUT });
+    await page.waitForTimeout(1000);
+    const body = await page.locator("body").innerText();
+    if (!/terms|consent/i.test(body)) throw new Error("/appointments/commerce missing expected UI");
   }),
   journey("49", "G", "Contract template", async (page) => {
     await adminRoute(page, "/appointments/contracts", /contract|template/i);
@@ -160,7 +165,12 @@ const K = [
     await selectPublicService(page).catch(() => {});
   }),
   journey("81", "K", "Wallet balance", async (page) => {
-    await adminRoute(page, "/appointments/commerce", /wallet|balance/i);
+    await ensureAppointmentsAdmin(page);
+    await visitRoute(page, "/appointments/commerce");
+    await page.getByRole("button", { name: /^Wallet$/i }).first().click({ timeout: ACTION_TIMEOUT });
+    await page.waitForTimeout(1000);
+    const body = await page.locator("body").innerText();
+    if (!/wallet|balance/i.test(body)) throw new Error("/appointments/commerce missing expected UI");
   }),
   journey("82", "K", "Loyalty", async (page) => {
     await adminRoute(page, "/appointments/commerce", /loyalty|points/i);

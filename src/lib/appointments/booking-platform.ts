@@ -612,7 +612,7 @@ export async function createPlatformAppointment(
     console.warn("[appointments] manage appointment token issuance failed", err);
   }
 
-  if (needsApproval) {
+  if (needsApproval && !isStaffQuickCreate) {
     const { requestBookingApproval } = await import("@/lib/appointments/booking-approval");
     await requestBookingApproval(workspaceId, appointmentId);
   }

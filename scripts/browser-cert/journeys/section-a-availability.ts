@@ -5,8 +5,10 @@ import type { Page } from "playwright";
 import type { MasterUatFlow } from "../appointments-master-uat-catalog";
 import {
   collectPublicSlotLabels,
+  fetchPublicSlotCount,
   MasterUatAssertionError,
   openAvailabilityAdmin,
+  openDynamicPricingAdmin,
   openPublicBooking,
   parseSlotMinutes,
   runSlotDiagnostics,
@@ -80,19 +82,33 @@ async function journey03(page: Page) {
   await openAvailabilityAdmin(page);
   await setAutomaticStartMode(page);
   await setStartIntervalMinutes(page, 15);
-  await openPublicBooking(page);
-  await selectPublicService(page, SERVICE);
-  const before = await collectPublicSlotLabels(page);
+  const apiBefore = await fetchPublicSlotCount(page, SERVICE);
 
   await openAvailabilityAdmin(page);
   await setLimitVisibleAvailability(page, 50);
+
+  const settingsRes = await page.request.get("/api/appointments/settings");
+  if (settingsRes.ok()) {
+    const settingsJson = await settingsRes.json();
+    const density = settingsJson.data?.schedulingLimits?.availabilityDensityHidePercent;
+    if (!density || density < 25) {
+      throw new MasterUatAssertionError(`Density hide percent did not persist (got ${density ?? "none"})`);
+    }
+  }
+
+  const apiAfter = await fetchPublicSlotCount(page, SERVICE);
+  if (apiBefore > 1 && apiAfter >= apiBefore) {
+    throw new MasterUatAssertionError(
+      `Limit visible availability should reduce slot count. Before=${apiBefore} apiAfter=${apiAfter}`,
+    );
+  }
+
   await openPublicBooking(page);
   await selectPublicService(page, SERVICE);
   const after = await collectPublicSlotLabels(page);
-
-  if (before.length > 0 && after.length >= before.length) {
+  if (apiBefore > 1 && after.length >= apiBefore) {
     throw new MasterUatAssertionError(
-      `Limit visible availability should reduce slot count. Before=${before.length} after=${after.length}`,
+      `Limit visible availability should reduce public slot count. Before=${apiBefore} after=${after.length}`,
     );
   }
 }
@@ -151,19 +167,27 @@ async function journey05(page: Page) {
 async function journey06(page: Page) {
   await openAvailabilityAdmin(page);
   await setMinimumNoticeMinutes(page, 240);
+
+  const availRes = await page.request.get(
+    `/api/appointments/availability?serviceName=${encodeURIComponent(SERVICE)}&daysAhead=14`,
+  );
+  if (!availRes.ok()) throw new MasterUatAssertionError("Availability API failed after setting minimum notice");
+  const availJson = await availRes.json();
+  const apiSlots = (availJson.data?.slots || []) as Array<{ startsAt: string }>;
+  const cutoff = Date.now() + 4 * 60 * 60 * 1000;
+  for (const slot of apiSlots) {
+    if (new Date(slot.startsAt).getTime() < cutoff) {
+      throw new MasterUatAssertionError(
+        `Slot ${slot.startsAt} is inside 4-hour minimum notice window`,
+      );
+    }
+  }
+
   await openPublicBooking(page);
   await selectPublicService(page, SERVICE);
   const slots = await collectPublicSlotLabels(page);
-  const now = new Date();
-  const cutoff = now.getTime() + 4 * 60 * 60 * 1000;
-  for (const label of slots) {
-    const mins = parseSlotMinutes(label);
-    if (mins === null) continue;
-    const slotDate = new Date();
-    slotDate.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
-    if (slotDate.getTime() < cutoff) {
-      throw new MasterUatAssertionError(`Slot ${label} is inside 4-hour minimum notice window`);
-    }
+  if (slots.length === 0 && apiSlots.length > 0) {
+    throw new MasterUatAssertionError("Public booking showed no slots while availability API returned slots");
   }
 }
 
@@ -199,8 +223,9 @@ async function journey08(page: Page) {
   await page.getByRole("button", { name: /^Add override$/i }).click();
   await saveAvailability(page);
 
+  const isoLocator = page.locator(`[data-iso-date="${iso}"]`);
   const body = await page.locator("body").innerText();
-  if (!body.includes(iso)) {
+  if (!(await isoLocator.count()) && !body.includes(iso)) {
     throw new MasterUatAssertionError(`Date override ${iso} not visible after save`);
   }
 }
@@ -302,16 +327,7 @@ async function journey13(page: Page) {
 
 /** Test 14 — Dynamic pricing */
 async function journey14(page: Page) {
-  await openAvailabilityAdmin(page);
-  const v = await page.goto("/appointments/service-booking", { waitUntil: "domcontentloaded" });
-  if (!v || v.status() >= 400) throw new Error("Could not open service-booking admin");
-
-  const tab = page.getByRole("button", { name: /Dynamic pricing/i });
-  if (!(await tab.count())) {
-    throw new MasterUatAssertionError("Dynamic pricing section not found in service-booking admin");
-  }
-  await tab.click();
-  await page.waitForTimeout(1000);
+  await openDynamicPricingAdmin(page);
 
   const ruleName = `UAT Saturday +20 ${Date.now().toString().slice(-5)}`;
   await page.locator('input').filter({ has: page.locator('xpath=ancestor::label[contains(.,"Rule name")]') }).first().fill(ruleName).catch(async () => {

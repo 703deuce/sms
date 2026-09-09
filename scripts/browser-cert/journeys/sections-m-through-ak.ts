@@ -2,7 +2,7 @@
  * Sections M–AK (tests 105–229).
  */
 import type { Page } from "playwright";
-import { visitRoute } from "../lib";
+import { ACTION_TIMEOUT, visitRoute } from "../lib";
 import {
   editAppointmentNotesUserAction,
   saveReminderSettingsUserAction,
@@ -325,7 +325,12 @@ const AF = sectionJourneys(
   "AF",
   ["Referral program config", "Referral redemption"],
   async (page) => {
-    await adminRoute(page, "/appointments/commerce", /referral/i);
+    await ensureAppointmentsAdmin(page);
+    await visitRoute(page, "/appointments/commerce");
+    await page.getByRole("button", { name: /referral/i }).first().click({ timeout: ACTION_TIMEOUT });
+    await page.waitForTimeout(1000);
+    const body = await page.locator("body").innerText();
+    if (!/referral/i.test(body)) throw new Error("/appointments/commerce missing referral UI");
   },
 );
 

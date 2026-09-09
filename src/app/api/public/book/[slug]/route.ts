@@ -435,7 +435,10 @@ export async function POST(request: Request, { params }: Params) {
         );
         return NextResponse.json({ data: { slots: slotsWithCapacity } });
       }
-      return NextResponse.json({ data });
+      return NextResponse.json(
+        { data },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     if (action === "evaluate_price") {
