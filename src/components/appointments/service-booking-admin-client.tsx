@@ -627,6 +627,10 @@ function InvoicesPanel({
 
   return (
     <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        For the full invoices workspace, open{" "}
+        <a href="/payments/invoices" className="text-primary underline">Payments → Invoices</a>.
+      </p>
       <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           <span>Contact ID</span>
@@ -706,16 +710,29 @@ function ThemeEditor({
   extra: Record<string, unknown>;
   onSaved: () => void;
 }) {
+  const terminology = (extra.terminology || {}) as Record<string, string>;
   const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#5b4bff"));
   const [logoUrl, setLogoUrl] = useState(String(extra.logoUrl || ""));
   const [noIndex, setNoIndex] = useState(extra.noIndex === true);
+  const [customDomain, setCustomDomain] = useState(String(extra.customDomain || ""));
+  const [customCss, setCustomCss] = useState(String(extra.customCss || ""));
+  const [serviceLabel, setServiceLabel] = useState(String(terminology.serviceLabel || "Service"));
+  const [staffLabel, setStaffLabel] = useState(String(terminology.staffLabel || "Staff member"));
+  const [bookButtonLabel, setBookButtonLabel] = useState(String(terminology.bookButtonLabel || "Book now"));
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const t = (extra.terminology || {}) as Record<string, string>;
     setPrimaryColor(String(extra.primaryColor || "#5b4bff"));
     setLogoUrl(String(extra.logoUrl || ""));
     setNoIndex(extra.noIndex === true);
+    setCustomDomain(String(extra.customDomain || ""));
+    setCustomCss(String(extra.customCss || ""));
+    setServiceLabel(String(t.serviceLabel || "Service"));
+    setStaffLabel(String(t.staffLabel || "Staff member"));
+    setBookButtonLabel(String(t.bookButtonLabel || "Book now"));
   }, [extra]);
 
   async function save() {
@@ -724,7 +741,18 @@ function ThemeEditor({
     const res = await fetch(SECTION_API.theme, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ primaryColor, logoUrl: logoUrl || undefined, noIndex }),
+      body: JSON.stringify({
+        primaryColor,
+        logoUrl: logoUrl || undefined,
+        noIndex,
+        customDomain: customDomain.trim() || undefined,
+        customCss: customCss.trim() || undefined,
+        terminology: {
+          serviceLabel: serviceLabel.trim() || undefined,
+          staffLabel: staffLabel.trim() || undefined,
+          bookButtonLabel: bookButtonLabel.trim() || undefined,
+        },
+      }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -737,26 +765,90 @@ function ThemeEditor({
   }
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
-      <label className="flex flex-col gap-1 text-sm">
-        <span>Primary color</span>
-        <input className="rounded border px-3 py-2" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        <span>Logo URL</span>
-        <input className="rounded border px-3 py-2" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={noIndex} onChange={(e) => setNoIndex(e.target.checked)} />
-        Hide booking page from search engines (noindex)
-      </label>
+    <div className="space-y-6 rounded-lg border p-4">
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold">Branding</h3>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Primary color</span>
+          <input className="rounded border px-3 py-2" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Logo URL</span>
+          <input className="rounded border px-3 py-2" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={noIndex} onChange={(e) => setNoIndex(e.target.checked)} />
+          Hide booking page from search engines (noindex)
+        </label>
+      </div>
+
+      <div className="space-y-4 border-t pt-4">
+        <h3 className="text-sm font-semibold">Customer-facing terminology</h3>
+        <p className="text-xs text-muted-foreground">
+          Preview: &ldquo;{bookButtonLabel} a {serviceLabel.toLowerCase()} with a {staffLabel.toLowerCase()}&rdquo;
+        </p>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Booking type label</span>
+          <input className="rounded border px-3 py-2" value={serviceLabel} onChange={(e) => setServiceLabel(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Staff label</span>
+          <input className="rounded border px-3 py-2" value={staffLabel} onChange={(e) => setStaffLabel(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Book action label</span>
+          <input className="rounded border px-3 py-2" value={bookButtonLabel} onChange={(e) => setBookButtonLabel(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="space-y-3 border-t pt-4">
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Custom domain</span>
+          <input
+            className="rounded border px-3 py-2"
+            placeholder="book.example.com"
+            value={customDomain}
+            onChange={(e) => setCustomDomain(e.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">
+            Point a CNAME to your Transovo booking host, then save the domain here.
+          </span>
+        </label>
+      </div>
+
+      <div className="border-t pt-4">
+        <button
+          type="button"
+          className="text-sm font-medium text-foreground underline"
+          onClick={() => setShowAdvanced((v) => !v)}
+        >
+          {showAdvanced ? "Hide advanced customization" : "Advanced customization"}
+        </button>
+        {showAdvanced ? (
+          <div className="mt-3 space-y-2">
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Custom CSS</span>
+              <textarea
+                className="rounded border px-3 py-2 font-mono text-xs min-h-[120px]"
+                value={customCss}
+                onChange={(e) => setCustomCss(e.target.value)}
+                placeholder=".booking-header { ... }"
+              />
+            </label>
+            <p className="text-xs text-amber-800 bg-amber-50 rounded px-2 py-1">
+              Invalid CSS can affect how your booking page appears. Clear the field to reset.
+            </p>
+          </div>
+        ) : null}
+      </div>
+
       <button
         type="button"
         className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
         disabled={saving}
         onClick={() => void save()}
       >
-        {saving ? "Saving…" : "Save branding"}
+        {saving ? "Saving…" : "Save appearance"}
       </button>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </div>

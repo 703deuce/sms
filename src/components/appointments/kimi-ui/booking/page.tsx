@@ -8,6 +8,7 @@ import SmsConsentCard from "./components/SmsConsentCard";
 import AiProtectionCard from "./components/AiProtectionCard";
 import LivePreview from "./components/LivePreview";
 import { BookingAdvancedPanel } from "@/components/appointments/booking-advanced-panel";
+import { BookingHubLinksCard } from "@/components/appointments/booking-hub-links-card";
 import type { BookingPageActions, BookingPageModel } from "@/features/appointments/kimi/booking/types";
 import "./reference.css";
 
@@ -42,6 +43,7 @@ export default function BookingView({ model, actions, saving = false, saved = fa
             onCopy={actions.onCopyLink}
             onOpen={actions.onOpenBooking}
           />
+          <BookingHubLinksCard />
           <BusinessInfoCard
             businessInfo={model.businessInfo}
             saving={saving}

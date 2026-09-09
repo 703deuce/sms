@@ -74,3 +74,57 @@ export async function createInvoice(
 export function invoicePublicPayUrl(baseUrl: string, payToken: string) {
   return `${baseUrl.replace(/\/$/, "")}/pay/invoice/${payToken}`;
 }
+
+export async function getInvoiceByPayToken(payToken: string) {
+  const prisma = getPrisma();
+  const invoice = await prisma.bookingInvoice.findFirst({
+    where: { payTokenHash: hashToken(payToken) },
+    include: { lineItems: true },
+  });
+  if (!invoice) return null;
+
+  const [workspace, contact] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { id: invoice.workspaceId },
+      select: { name: true, slug: true },
+    }),
+    prisma.contact.findFirst({
+      where: { id: invoice.contactId, workspaceId: invoice.workspaceId },
+      select: { firstName: true, lastName: true, email: true },
+    }),
+  ]);
+
+  return { invoice, workspace, contact };
+}
+
+export function serializePublicInvoice(
+  row: Awaited<ReturnType<typeof getInvoiceByPayToken>>,
+) {
+  if (!row) return null;
+  const { invoice, workspace, contact } = row;
+  const customerName = [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "Customer";
+  return {
+    id: invoice.id,
+    status: invoice.status,
+    currency: invoice.currency,
+    subtotalCents: invoice.subtotalCents,
+    taxCents: invoice.taxCents,
+    discountCents: invoice.discountCents,
+    totalCents: invoice.totalCents,
+    depositPaidCents: invoice.depositPaidCents,
+    balanceDueCents: invoice.balanceDueCents,
+    dueAt: invoice.dueAt?.toISOString() ?? null,
+    note: invoice.note,
+    createdAt: invoice.createdAt.toISOString(),
+    businessName: workspace?.name || "Your business",
+    customerName,
+    customerEmail: contact?.email || null,
+    lineItems: invoice.lineItems.map((line) => ({
+      description: line.description,
+      quantity: line.quantity,
+      unitPriceCents: line.unitPriceCents,
+      totalCents: line.quantity * line.unitPriceCents,
+    })),
+    canPayOnline: invoice.balanceDueCents > 0 && invoice.status !== "paid",
+  };
+}

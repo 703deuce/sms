@@ -61,6 +61,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Locations", href: "/appointments/locations" },
     { label: "Resources", href: "/appointments/resources" },
   ];
 }
@@ -207,7 +208,10 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Payments",
       href: "/payments/transactions",
       icon: CreditCard,
-      children: [{ label: "Transactions", href: "/payments/transactions" }],
+      children: [
+        { label: "Transactions", href: "/payments/transactions" },
+        { label: "Invoices", href: "/payments/invoices" },
+      ],
     });
   }
 
@@ -278,7 +282,9 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
   if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
+  if (pathname.startsWith("/appointments/locations")) return "Locations";
   if (pathname.startsWith("/appointments/resources")) return "Resources";
+  if (pathname.startsWith("/payments/invoices")) return "Invoices";
   if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
   if (pathname.startsWith("/appointments/reports/service-booking")) return "Service booking reports";
@@ -287,6 +293,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
   if (pathname.startsWith("/appointments/routing")) return "Routing";
   if (pathname.startsWith("/appointments/team-pages")) return "Team Booking";
+  if (pathname.startsWith("/appointments/booking/branding")) return "Booking appearance";
   if (pathname.startsWith("/appointments/booking")) return "Booking Pages";
   if (pathname.startsWith("/appointments/waitlist")) return "Waitlist";
   if (pathname.startsWith("/appointments/polls")) return "Meeting Polls";
