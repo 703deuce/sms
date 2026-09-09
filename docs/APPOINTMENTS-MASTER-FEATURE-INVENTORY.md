@@ -1,9 +1,12 @@
 # Appointments Platform — Master Feature Inventory
 
 **Generated:** 2026-09-09  
+**Updated:** 2026-09-09 (certification-phase tightening)  
 **Branch:** `cursor/appt-full-parity-build-709b`  
 **Scope:** General-purpose appointments / service-booking (excludes MCTB, Mass SMS, Smart Routing, Fax)  
 **Competitor baseline:** Acuity Scheduling (**A**) · SimplyBook.me (**SB**) · Square Appointments (**SQ**)
+
+> **Canonical source of truth.** This ledger is the master inventory for appointments parity and certification. Feature discovery is complete; remaining work is certification, closing **PARTIAL** rows, and provider-blocked external access — not broad feature addition unless a true omission is found here.
 
 ---
 
@@ -54,6 +57,55 @@
 
 ---
 
+## Master ledger governance
+
+### Phase status
+
+| Phase | Status |
+|-------|--------|
+| Competitor parity discovery (A / SB / SQ) | **Complete** |
+| Implementation breadth (Phases 1–18) | **Complete** |
+| Implicit sub-capability visibility | **This pass** — explicit rows added below |
+| **PARTIAL** depth closure | **In progress** — see priority queue |
+| Journey-based UAT (UA_PENDING → PASS) | **Next bottleneck** |
+| Provider-blocked channels | **Scaffold only** — separate from code gaps |
+
+### PARTIAL vs PROVIDER_BLOCKED vs UA_PENDING
+
+| Status | Launch meaning |
+|--------|----------------|
+| **PARTIAL** | Competitor-equivalent capability is **not fully represented** in product — code/UI depth still required |
+| **UA_PENDING** | Implementation exists; needs browser + live-runtime certification |
+| **PROVIDER_BLOCKED** | Scaffold exists; **Transovo cannot certify live parity** until external OAuth / partner credentials |
+| **PASS** | Automated tests + prior certification evidence |
+
+**Do not mix PROVIDER_BLOCKED with unfinished code** in launch planning. Provider-blocked items (Reserve with Google, Facebook Book Now, Instagram booking, iCloud sync, SAML/SCIM) stay in a separate track until access exists.
+
+### PARTIAL priority queue (immediate)
+
+| Feature row | Gap |
+|-------------|-----|
+| Intake file / image upload | Field types exist; storage upload API + UI wiring incomplete |
+| Locations | Admin surface shallow vs platform `locations` JSON |
+| Location-specific hours / services / staff / timezone | Per-location config not fully wired |
+| POS cart (base) | Session + line items exist |
+| POS mixed checkout breadth | Service + package + membership + gift + product + discount + tip in one cart — see explicit row |
+
+### Certification method (UA_PENDING → PASS)
+
+Certify by **real customer journeys**, not isolated row-by-row checks. One journey validates 10–20 ledger rows.
+
+| Journey | Certifies (examples) |
+|---------|----------------------|
+| **Trainer package** | Packages, entitlements, recurring booking, portal, payments, reminders, self-service, policy handling, package ledger, cancel/reschedule credit restore **and forfeiture** |
+| **Membership** | Subscribe, entitlement activation, member-only types, monthly credit provision, booking consumption, failed payment → suspension → recovery |
+| **Class + waitlist** | Class series, capacity display, enrollment, fill → waitlist → cancel opens seat → offer → atomic accept → QR check-in |
+| **Multi-service** | Service A + B, per-line staff, processing-time release, resource reservation, single payment, single appointment record |
+
+Update each row to **PASS** only when the journey that covers it has been signed off in browser + live runtime.
+
+---
+
 ## 1. Product shell & navigation
 
 | Feature | Competitor(s) | Transovo implementation | Route / UI | API / runtime | Database model | Automated test | UAT status | External dependency |
@@ -90,6 +142,7 @@
 | Images on type | SB | `imageUrl` | Type + public Service step | public GET types | `VoiceService.config` | — | UA_PENDING | — |
 | Required resources on type | SQ, SB | `resources.ts` | Type editor | `resourceIds` | `SchedulingResource` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Add-ons on type | All | `add-ons.ts` | Type + commerce | `addOnIds` | `BookingAddOn` | `test-phase2-wiring.ts` | UA_PENDING | — |
+| Add-on duration & resource effects | All | `add-ons.ts` | Type + public Info | `durationDeltaMinutes`, `resourceIds` on selection | `BookingAddOn` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Intake forms on type | A, SB | `intake-forms.ts` | Type + public Info | `intakeResponses` POST | `IntakeForm`, `IntakeFormResponse` | `test-booking-intake.ts` | UA_PENDING | — |
 | Intake file / image upload | SB | `IntakeFieldType` file/image | Public Info (field type) | intake POST + storage | `IntakeFormResponse` | — | PARTIAL | Object storage (S3/Supabase) |
 | Service phases (multi-phase duration) | SQ | `service-phases.ts` | Type editor phases | `ServicePhaseTemplate` API | `ServicePhaseTemplate` | `test-phase2-wiring.ts` | UA_PENDING | — |
@@ -154,6 +207,9 @@
 | Any employee / round-robin | All, SB | `scheduling-domain.ts` | Public staff picker | staff assignment modes | platform JSON | `test-appointments-double-booking.ts` | PASS | — |
 | Locations | All, SQ | platform `locations` | `/appointments/locations` | type `locationIds` | platform JSON | — | PARTIAL | — |
 | Location-specific hours/services | SQ | — | Locations | per-location config | platform JSON | — | PARTIAL | — |
+| Location-specific timezone | SQ | platform `locations` | Locations | per-location `timezone` | platform JSON | — | PARTIAL | — |
+| Location-specific staff assignment | SQ | platform `locations` | Locations + type editor | `locationIds` + staff config | platform JSON | — | PARTIAL | — |
+| Location-specific resource assignment | SQ | `resources.ts` | Locations / resources | `locationId` on resource | `SchedulingResource` | `test-phase2-wiring.ts` | PARTIAL | — |
 | Resources (rooms, equipment) | SQ, SB | `resources.ts` | `/appointments/resources` | `resources` API | `SchedulingResource` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Resource quantity / capacity | SB | `SchedulingResource.quantity` | Resources admin | `countResourceUsage` | `SchedulingResource` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Resource pools (any-one-in-group) | SB | `resource-pools.ts` | — | `resource-groups` API | `SchedulingResourceGroup` | — | UA_PENDING | — |
@@ -247,6 +303,7 @@
 | Portal: memberships | A | entitlements | Portal UI | portal GET | `ServiceMembershipSubscription` | — | UA_PENDING | — |
 | Portal: gift balances | A | entitlements | Portal UI | portal GET | `GiftCertificateBalance` | — | UA_PENDING | — |
 | Portal: package usage history | A | portal API | Portal UI | ledger entries | `PackageLedgerEntry` | — | UA_PENDING | — |
+| Portal: purchase & payment history | A, SQ | `client-portal.ts` + payments | Portal UI | portal GET + merchant payments | `AppointmentMerchantPayment`, commerce purchases | — | UA_PENDING | Stripe / Square |
 | Portal wallet | — | `client-wallet.ts` | Portal UI | `portal/…/wallet` | `ClientWalletAccount` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Portal saved payment methods | SQ | merchant payments | Portal UI | `portal/…/payment-methods` | Stripe | — | UA_PENDING | Stripe |
 | Legacy confirm / cancel / reschedule tokens | A | legacy routes | `/appointments/confirm|cancel|reschedule/[token]` | public token APIs | metadata tokens | — | UA_PENDING | — |
@@ -263,23 +320,33 @@
 | Package purchase | All | `purchasePackageForContact` | Commerce admin | purchase action | `PackageBalance` | — | UA_PENDING | Stripe |
 | Package credits & ledger | All | `packages.ts` | Portal / book | redeem | `PackageLedgerEntry` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Package lifecycle (restore on cancel) | SB | `package-lifecycle.ts` | — | cancel hook | `PackageLedgerEntry` | `test-clean-parity-gaps.ts` | UA_PENDING | — |
+| Package credit forfeiture (late cancel / no-show) | SB | `package-lifecycle.ts` | — | `restoreCreditsOnLateCancel` / `restoreCreditsOnNoShow` policy (default: forfeit) | `PackageLedgerEntry` | `test-clean-parity-gaps.ts` | UA_PENDING | — |
 | Mixed-content package entitlements | SB | `PackageCreditRule` | Commerce config | credit rules | `PackageProduct.creditRules` | — | UA_PENDING | — |
 | Membership products | All | `memberships.ts` | Commerce admin | `memberships` API | `ServiceMembershipProduct` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Membership subscriptions | All | `memberships.ts` | Commerce / portal | subscribe | `ServiceMembershipSubscription` | — | UA_PENDING | Stripe Billing |
 | Membership lifecycle (pause/cancel/past_due) | SB, A | `membership-lifecycle.ts` | — | status transitions | subscription status | — | UA_PENDING | Stripe webhooks |
+| Membership failed-payment suspension | SB, A | `membership-lifecycle.ts` | — | `suspendMembershipForFailedPayment` | `ServiceMembershipSubscription.status` | — | UA_PENDING | Stripe webhooks |
+| Membership payment recovery / entitlement restore | SB, A | `membership-lifecycle.ts` | — | `restoreMembershipAfterPaymentRecovery` | subscription status | — | UA_PENDING | Stripe webhooks |
+| Membership-only booking types / classes | A, SB | `membership-lifecycle.ts` | Type editor + public | `isMemberOnlyType`, `memberOnlyTypeIds` | `MembershipBenefits` on product | — | UA_PENDING | — |
+| Recurring membership credit replenishment | SB | `MembershipBenefits.includedCredits` | Commerce config | subscription renewal hook | `PackageBalance` / ledger | — | UA_PENDING | Stripe Billing |
 | Gift certificates | All | `gift-certificates.ts` | Commerce admin | `gift-certificates` API | `GiftCertificateProduct`, balances | `test-phase2-wiring.ts` | UA_PENDING | — |
+| Gift balance redemption at checkout | All | `gift-certificates.ts` | Public Info / POS | `redeemGiftCertificate` | `GiftCertificateLedgerEntry` | `test-phase2-wiring.ts` | UA_PENDING | — |
+| Gift balance redemption history | A | `gift-certificates.ts` | Portal / commerce | ledger entries | `GiftCertificateLedgerEntry` | — | UA_PENDING | — |
 | Coupons / discounts | All | `coupons.ts` | Commerce admin | `coupons` API | `AppointmentCoupon` | — | UA_PENDING | — |
 | Programs (multi-visit bundles) | — | `programs.ts` | Commerce admin | `programs` API | metadata / packages | `test-phases-3-17-wiring.ts` | UA_PENDING | — |
 | Payment plans (installments) | A | `payment-plans.ts` | Commerce admin | `payment-plans` API | product metadata | `test-phases-3-17-wiring.ts` | UA_PENDING | Stripe |
 | Client wallet | — | `client-wallet.ts` | Commerce / portal | `client-wallet` API | `ClientWalletAccount` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Loyalty programs | — | `loyalty.ts` | Commerce admin | `loyalty` API | `LoyaltyProgram` | `test-phase2-wiring.ts` | UA_PENDING | — |
-| POS cart | SB | `pos-cart.ts` | Commerce admin | `pos-cart` API | `PosSession`, `PosLineItem` | `test-phase2-wiring.ts` | PARTIAL | — |
+| POS cart (session + line items) | SB | `pos-cart.ts` | Commerce admin | `pos-cart` API | `PosSession`, `PosLineItem` | `test-phase2-wiring.ts` | PARTIAL | — |
+| POS mixed checkout (service + package + membership + gift + product + discount + tip) | SB, SQ | `pos-cart.ts` | Commerce admin | `addPosLineItem` kinds + checkout | `PosLineItem.kind`, metadata | `test-phase2-wiring.ts` | PARTIAL | Stripe |
 | Products for sale | SB | `booking-products.ts` | Commerce admin | `products` API | `BookingProduct` | — | UA_PENDING | — |
 | Pay-what-you-want / tipping | SQ | `payments-extended.ts` | Type + public | PWYW config | type config | — | UA_PENDING | — |
 | Invoices | A, SQ | `booking-invoices.ts` | — (API-first) | `invoices` API | `BookingInvoice`, line items | — | UA_PENDING | Email for send |
 | Deposits & full payment | All | merchant payments | Public payment | checkout | `AppointmentMerchantPayment` | — | UA_PENDING | Stripe / Square |
 | Saved cards | SQ | merchant payments | Portal / book | saved-cards API | Stripe | — | UA_PENDING | Stripe |
 | Refunds (full / partial / wallet) | SQ | `appointment-refunds.ts` | Payments UI | `merchant-payments/refund` | payment + wallet ledger | — | UA_PENDING | Stripe / Square |
+| Refund to original payment method | SQ | `appointment-refunds.ts` | Payments UI | `refundMerchantAppointmentPayment` (default) | `AppointmentMerchantPayment` | — | UA_PENDING | Stripe / Square |
+| Refund to client wallet (store credit) | SQ | `appointment-refunds.ts` | Payments UI | `refundToWallet` + `creditWallet` | `ClientWalletAccount` | — | UA_PENDING | — |
 | Policy fees (late cancel / no-show) | SQ | `policy-fees.ts` | — | on cancel/no-show | metadata + charges | `test-phases-3-17-wiring.ts` | UA_PENDING | Stripe |
 | Payment transaction ledger | SQ | merchant payments | `/payments/transactions` | payments API | `AppointmentMerchantPayment` | — | UA_PENDING | — |
 | SMS payment links | — | messaging payments | `/messaging/payments` | public payment links | — | — | UA_PENDING | Telnyx / Twilio |
@@ -299,6 +366,7 @@
 | Event admission tickets | SB | `event-tickets.ts` | — | ticket issue/redeem | `ClassAdmissionTicket` | — | UA_PENDING | — |
 | Group capacity on types | SB | `groupBooking` | Public | `checkGroupCapacity` | config + appointments | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Remaining spaces display | SB | `class-capacity-display.ts` | Public classes | capacity labels | config | `test-clean-parity-gaps.ts` | UA_PENDING | — |
+| Class waitlist (capacity-full join) | SQ, SB | `waitlist.ts` + `classes.ts` | Public classes | waitlist on full occurrence | `AppointmentWaitlistEntry` + `ClassOccurrence` | — | UA_PENDING | SMS (optional) |
 
 ---
 
@@ -312,6 +380,7 @@
 | Waitlist slot notification | SQ | `waitlist.ts` | — | `appointment_waitlist_notify` job | — | — | UA_PENDING | SMS provider |
 | Waitlist offer + atomic accept | SQ | `waitlist.ts` | `/waitlist/accept/[token]` | claim token | entry status | `test-phases-3-17-wiring.ts` | UA_PENDING | — |
 | Waitlist auto-fill on cancel | SQ | `autoFillWaitlistSlot` | — | cancel hook | — | — | UA_PENDING | — |
+| Waitlist party size (group / class) | SB | `groupBooking` + waitlist model | Public waitlist | `attendeeCount` on entry (when supported) | waitlist + type config | — | UA_PENDING | — |
 | Waitlist priority rules | — | `waitlist-priority.ts` | Commerce admin | `waitlist-priority` API | `WaitlistPriorityRule` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Recalls hub | A | `recalls-hub.ts` | `/appointments/recalls` | `recalls/hub` API | — | — | UA_PENDING | — |
 | Recall campaigns | A | `recall-campaigns.ts` | `/appointments/recall-campaigns` | `recall-campaigns` API | — | — | UA_PENDING | SMS |
@@ -496,12 +565,23 @@
 
 | UAT status | Feature rows (approx.) |
 |------------|------------------------|
-| **PASS** | 12 |
-| **UA_PENDING** | 195 |
+| **PASS** | 21 |
+| **UA_PENDING** | ~265 |
 | **PARTIAL** | 8 |
-| **PROVIDER_BLOCKED** | 9 |
-| **N/A** | 6 |
-| **Total** | **~230** |
+| **PROVIDER_BLOCKED** | 6 |
+| **N/A** | 7 |
+| **Total** | **~307** |
+
+### Provider-blocked track (separate from code gaps)
+
+| Feature | External dependency |
+|---------|---------------------|
+| Reserve with Google / GBP | Google Reserve partner program |
+| Facebook Book Now action | Meta Business OAuth |
+| Instagram booking action | Meta Business OAuth |
+| iCloud / Apple Calendar sync | Apple CalDAV credentials |
+| SAML SSO | Customer IdP |
+| SCIM provisioning | Customer IdP |
 
 | External dependency (top) | Feature count |
 |---------------------------|---------------|
@@ -527,7 +607,8 @@
 | `docs/GENERAL-APPOINTMENT-CLEAN-PARITY-GAPS.md` | Acuity / SB / SQ gap closure list |
 | `docs/GENERAL-APPOINTMENT-PARITY-MATRIX.md` | Phase 1–18 implementation matrix |
 | `docs/GENERAL-APPOINTMENT-GAP-CLOSURE-DIRECTIVE.md` | Build order & scope rules |
+| `docs/V1-PRODUCTION-CERTIFICATION.md` | Production certification gate |
 
 ---
 
-*End of master inventory. Regenerate after major parity passes or certification sign-off.*
+*End of master inventory. Update row UAT status as journey certification completes; add rows only for true omissions.*
