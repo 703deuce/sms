@@ -228,11 +228,13 @@ When a batch completes, update `src/lib/products/appointments-nav.ts`:
 
 Before implementing Meetings/Services/Classes/Workshops editors:
 
-- [ ] Blueprint approved: `docs/appointments-page-blueprints/01-booking-types-landing.md`
-- [ ] Screenshot baseline: current `/appointments/types`
-- [ ] Screenshot reference: `/appointments/overview`
-- [ ] Feature rows mapped from master inventory §2
-- [ ] Old editor route strategy documented (redirect vs parallel)
+- [x] Blueprint finalized: `docs/appointments-page-blueprints/01-booking-types-landing.md`
+- [x] Screenshot baseline: legacy mega-editor at `/appointments/types` (pre-split)
+- [x] Screenshot reference: `/appointments/overview`
+- [x] Feature rows mapped from master inventory §2
+- [x] Old editor route strategy: landing at `/appointments/types`; transitional editor at `/appointments/types/editor`; per-segment lists at `/appointments/types/{meetings,services,classes,workshops}`
+- [x] Workshops domain: CLASS engine + `classPresentation` (`recurring_class` \| `workshop_event`) — no duplicate backend
+- [ ] Browser UAT pass (desktop, mobile, keyboard)
 
 ---
 
