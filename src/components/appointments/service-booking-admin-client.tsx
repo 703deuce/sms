@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { IntakeField, IntakeFieldType } from "@/lib/appointments/service-booking/types";
+import { createId } from "@/lib/supabase/id";
 
 type Section =
   | "categories"
@@ -43,6 +45,67 @@ const SECTION_API: Record<Section, string> = {
   households: "/api/appointments/service-booking/households",
 };
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function buildCreateBody(section: Section, name: string): Record<string, unknown> {
+  const trimmed = name.trim();
+  const body: Record<string, unknown> = { name: trimmed };
+
+  if (section === "memberships") {
+    body.priceCents = 9900;
+    body.billingInterval = "month";
+  }
+  if (section === "programs") {
+    body.priceCents = 49900;
+    body.currency = "usd";
+    body.steps = [];
+  }
+  if (section === "paymentPlans") {
+    body.totalCents = 49900;
+    body.currency = "usd";
+    body.installments = [
+      { id: "i1", label: "Deposit", amountCents: 19900, dueDaysFromStart: 0 },
+      { id: "i2", label: "Balance", amountCents: 30000, dueDaysFromStart: 30 },
+    ];
+  }
+  if (section === "gifts") body.fixedAmountCents = 5000;
+  if (section === "coupons") {
+    body.code = slugify(trimmed).replace(/-/g, "").slice(0, 20).toUpperCase() || `UAT${Date.now().toString().slice(-6)}`;
+    body.discountType = "percent";
+    body.discountValue = 10;
+  }
+  if (section === "phases") {
+    body.phaseKind = "active_staff";
+    body.durationMinutes = 30;
+  }
+  if (section === "restrictions") {
+    body.reason = trimmed;
+    body.phone = `+1555${Date.now().toString().slice(-7)}`;
+    body.blockPublicBooking = true;
+  }
+  if (section === "households") {
+    body.action = "create_named";
+  }
+  if (section === "categories") {
+    body.displayOrder = 0;
+    body.collapsible = true;
+    body.collapsedByDefault = false;
+  }
+
+  return body;
+}
+
+function rowLabel(item: Record<string, unknown>): string {
+  return (
+    String(item.name || item.code || item.reason || item.slug || item.id || "")
+  );
+}
+
 export function ServiceBookingAdminClient({
   initialSection = "packages",
   title = "Service booking",
@@ -65,7 +128,11 @@ export function ServiceBookingAdminClient({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load");
       if (section === "theme") {
-        setExtra(json.data || {});
+        const data = (json.data || {}) as { theme?: Record<string, unknown>; links?: Record<string, unknown> };
+        setExtra({
+          ...(data.theme && typeof data.theme === "object" ? data.theme : {}),
+          links: data.links,
+        });
         setItems([]);
       } else if (section === "reports") {
         setExtra(json.data || {});
@@ -87,34 +154,25 @@ export function ServiceBookingAdminClient({
 
   async function createItem() {
     if (!name.trim()) return;
-    const body: Record<string, unknown> = { name: name.trim() };
-    if (section === "memberships") {
-      body.priceCents = 9900;
-      body.billingInterval = "month";
-    }
-    if (section === "programs") {
-      body.priceCents = 49900;
-      body.currency = "usd";
-      body.steps = [];
-    }
-    if (section === "paymentPlans") {
-      body.totalCents = 49900;
-      body.currency = "usd";
-      body.installments = [
-        { id: "i1", label: "Deposit", amountCents: 19900, dueDaysFromStart: 0 },
-        { id: "i2", label: "Balance", amountCents: 30000, dueDaysFromStart: 30 },
-      ];
-    }
-    if (section === "gifts") body.fixedAmountCents = 5000;
+    setError(null);
+    const body = buildCreateBody(section, name);
     const res = await fetch(SECTION_API[section], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const json = await res.json();
       setError(json.error || "Create failed");
       return;
+    }
+    const created = json.data;
+    if (created && typeof created === "object") {
+      setItems((prev) => {
+        const row = created as { id?: string };
+        if (row.id && prev.some((item) => (item as { id?: string }).id === row.id)) return prev;
+        return [created, ...prev];
+      });
     }
     setName("");
     await load();
@@ -201,9 +259,7 @@ export function ServiceBookingAdminClient({
           {JSON.stringify(extra, null, 2)}
         </pre>
       ) : section === "theme" ? (
-        <pre className="overflow-auto rounded-lg border bg-muted/30 p-4 text-xs">
-          {JSON.stringify(extra, null, 2)}
-        </pre>
+        <ThemeEditor extra={extra} onSaved={() => void load()} />
       ) : section === "import" ? (
         <div className="flex flex-col gap-3 text-sm">
           <a className="text-primary underline" href="/api/appointments/service-booking/import-export?kind=clients">
@@ -216,16 +272,18 @@ export function ServiceBookingAdminClient({
             Export reports CSV
           </a>
         </div>
+      ) : section === "intake" ? (
+        <IntakeFormsPanel items={items} onReload={() => void load()} />
       ) : (
         <ul className="divide-y rounded-lg border">
           {items.length === 0 ? (
             <li className="p-4 text-sm text-muted-foreground">No items yet.</li>
           ) : (
             items.map((item) => {
-              const row = item as { id: string; name?: string; code?: string; slug?: string };
+              const row = item as Record<string, unknown> & { id: string };
               return (
                 <li key={row.id} className="flex items-center justify-between gap-4 p-4 text-sm">
-                  <span className="font-medium">{row.name || row.code || row.slug || row.id}</span>
+                  <span className="font-medium">{rowLabel(row)}</span>
                   <span className="text-muted-foreground">{row.id}</span>
                 </li>
               );
@@ -233,6 +291,244 @@ export function ServiceBookingAdminClient({
           )}
         </ul>
       )}
+    </div>
+  );
+}
+
+const INTAKE_FIELD_TYPES: Array<{ value: IntakeFieldType; label: string }> = [
+  { value: "text", label: "Short text" },
+  { value: "textarea", label: "Long text" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "select", label: "Dropdown" },
+  { value: "file", label: "File upload" },
+  { value: "image", label: "Image upload" },
+  { value: "signature", label: "Signature" },
+  { value: "agreement", label: "Agreement" },
+];
+
+function IntakeFormsPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const forms = items as Array<{ id: string; name: string; fields?: IntakeField[] }>;
+  const [selectedId, setSelectedId] = useState<string | null>(forms[0]?.id ?? null);
+  const [fields, setFields] = useState<IntakeField[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const selected = forms.find((f) => f.id === selectedId) || null;
+
+  useEffect(() => {
+    setFields(selected?.fields || []);
+  }, [selected]);
+
+  function addField(type: IntakeFieldType) {
+    setFields((prev) => [
+      ...prev,
+      {
+        id: createId(),
+        label: type === "file" ? "Upload a file" : type === "image" ? "Upload an image" : "New question",
+        type,
+        required: false,
+      },
+    ]);
+  }
+
+  async function saveFields() {
+    if (!selected) return;
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch(SECTION_API.intake, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selected.id, name: selected.name, fields }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Save failed");
+      return;
+    }
+    setMessage("Saved");
+    onReload();
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+      <ul className="divide-y rounded-lg border">
+        {forms.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No intake forms yet.</li>
+        ) : (
+          forms.map((form) => (
+            <li key={form.id}>
+              <button
+                type="button"
+                className={`w-full p-4 text-left text-sm ${selectedId === form.id ? "bg-muted font-medium" : ""}`}
+                onClick={() => setSelectedId(form.id)}
+              >
+                {form.name}
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+
+      {selected ? (
+        <div className="space-y-4 rounded-lg border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">{selected.name}</h2>
+            <div className="flex flex-wrap gap-2">
+              {INTAKE_FIELD_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  className="rounded border px-2 py-1 text-xs"
+                  onClick={() => addField(type.value)}
+                >
+                  + {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <ul className="space-y-3">
+            {fields.length === 0 ? (
+              <li className="text-sm text-muted-foreground">Add fields including file or image upload types.</li>
+            ) : (
+              fields.map((field, index) => (
+                <li key={field.id} className="grid gap-2 rounded border p-3 sm:grid-cols-[1fr_160px_auto]">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span>Label</span>
+                    <input
+                      className="rounded border px-3 py-2"
+                      value={field.label}
+                      onChange={(e) =>
+                        setFields((prev) =>
+                          prev.map((f, i) => (i === index ? { ...f, label: e.target.value } : f)),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span>Type</span>
+                    <select
+                      className="rounded border px-3 py-2"
+                      value={field.type}
+                      onChange={(e) =>
+                        setFields((prev) =>
+                          prev.map((f, i) =>
+                            i === index ? { ...f, type: e.target.value as IntakeFieldType } : f,
+                          ),
+                        )
+                      }
+                    >
+                      {INTAKE_FIELD_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-end gap-2 pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={field.required === true}
+                      onChange={(e) =>
+                        setFields((prev) =>
+                          prev.map((f, i) => (i === index ? { ...f, required: e.target.checked } : f)),
+                        )
+                      }
+                    />
+                    Required
+                  </label>
+                </li>
+              ))
+            )}
+          </ul>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              disabled={saving}
+              onClick={() => void saveFields()}
+            >
+              {saving ? "Saving…" : "Save fields"}
+            </button>
+            {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border p-8 text-sm text-muted-foreground">Select a form to edit fields.</div>
+      )}
+    </div>
+  );
+}
+
+function ThemeEditor({
+  extra,
+  onSaved,
+}: {
+  extra: Record<string, unknown>;
+  onSaved: () => void;
+}) {
+  const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#5b4bff"));
+  const [logoUrl, setLogoUrl] = useState(String(extra.logoUrl || ""));
+  const [noIndex, setNoIndex] = useState(extra.noIndex === true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPrimaryColor(String(extra.primaryColor || "#5b4bff"));
+    setLogoUrl(String(extra.logoUrl || ""));
+    setNoIndex(extra.noIndex === true);
+  }, [extra]);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch(SECTION_API.theme, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ primaryColor, logoUrl: logoUrl || undefined, noIndex }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Save failed");
+      return;
+    }
+    setMessage("Saved");
+    onSaved();
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Primary color</span>
+        <input className="rounded border px-3 py-2" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span>Logo URL</span>
+        <input className="rounded border px-3 py-2" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={noIndex} onChange={(e) => setNoIndex(e.target.checked)} />
+        Hide booking page from search engines (noindex)
+      </label>
+      <button
+        type="button"
+        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+        disabled={saving}
+        onClick={() => void save()}
+      >
+        {saving ? "Saving…" : "Save branding"}
+      </button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </div>
   );
 }

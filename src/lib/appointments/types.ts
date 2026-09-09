@@ -92,6 +92,14 @@ export type AppointmentLocation = {
   timezone?: string;
   kind?: "office" | "store" | "branch" | "customer" | "phone" | "video" | "transovo_video" | "custom";
   active?: boolean;
+  /** Staff who work at this location */
+  staffIds?: string[];
+  /** Appointment types offered here (empty = all) */
+  appointmentTypeIds?: string[];
+  /** Per-location weekly hours override */
+  weeklyHours?: import("@/lib/appointments/availability-engine-policy").WeeklyHours;
+  /** Scheduling resources available at this location (empty = all) */
+  resourceIds?: string[];
 };
 
 export type BookingLimitConfig = {
@@ -216,6 +224,8 @@ export type AppointmentPlatformConfig = {
   routingRules?: RoutingRule[];
   /** Workspace-level booking limits */
   bookingLimits?: BookingLimitConfig;
+  /** Acuity-class slot density / fixed-start controls (workspace default) */
+  schedulingLimits?: import("@/lib/appointments/service-booking/types").SchedulingLimitsConfig;
   /** Round-robin assignment tracking */
   roundRobinState?: Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>;
   /** External calendar blocking */

@@ -69,6 +69,11 @@ export type AvailabilityFormState = {
   overrideOpen: string;
   overrideClose: string;
   blackoutDates: string[];
+  customStartIntervalMinutes?: number;
+  fixedStartTimesEnabled: boolean;
+  fixedStartTimes: string;
+  availabilityDensityHidePercent?: number;
+  minimizeGapsMode: "off" | "prefer_compact";
 };
 
 export type AvailabilityPageModel = {

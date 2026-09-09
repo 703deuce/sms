@@ -158,6 +158,42 @@ const MODEL_TO_TABLE: Record<string, string> = {
   clientPortalSession: "client_portal_sessions",
   clientWalletAccount: "client_wallet_accounts",
   clientWalletLedgerEntry: "client_wallet_ledger_entries",
+  customerFieldDefinition: "customer_field_definitions",
+  loyaltyProgram: "loyalty_programs",
+  loyaltyLedgerEntry: "loyalty_ledger_entries",
+  dynamicPricingRule: "dynamic_pricing_rules",
+  waitlistPriorityRule: "waitlist_priority_rules",
+  appointmentTreatmentRecord: "appointment_treatment_records",
+  posSession: "pos_sessions",
+  posLineItem: "pos_line_items",
+  classSeries: "class_series",
+  classOccurrence: "class_occurrences",
+  classEnrollment: "class_enrollments",
+  classSeatMap: "class_seat_maps",
+  classSeatReservation: "class_seat_reservations",
+  classCheckIn: "class_check_ins",
+  classAdmissionTicket: "class_admission_tickets",
+  serviceMembershipProduct: "service_membership_products",
+  serviceMembershipSubscription: "service_membership_subscriptions",
+  appointmentCoupon: "appointment_coupons",
+  appointmentCouponRedemption: "appointment_coupon_redemptions",
+  appointmentWaitlistEntry: "appointment_waitlist_entries",
+  appointmentRecurringSeries: "appointment_recurring_series",
+  merchantPaymentConnection: "merchant_payment_connections",
+  appointmentMerchantPayment: "appointment_merchant_payments",
+  clientBookingRestriction: "client_booking_restrictions",
+  householdAccount: "household_accounts",
+  householdMember: "household_members",
+  appointmentWebhookEndpoint: "appointment_webhook_endpoints",
+  appointmentWebhookDelivery: "appointment_webhook_deliveries",
+  appointmentImportBatch: "appointment_import_batches",
+  contactMergeAudit: "contact_merge_audits",
+  bookingContractTemplate: "booking_contract_templates",
+  signedBookingContract: "signed_booking_contracts",
+  bookingInvoice: "booking_invoices",
+  bookingInvoiceLineItem: "booking_invoice_line_items",
+  bookingProduct: "booking_products",
+  schedulingResourceGroup: "scheduling_resource_groups",
   appointmentAiMutationRecord: "appointment_ai_mutation_records",
   appointmentWorkflow: "appointment_workflows",
   appointmentWorkflowExecution: "appointment_workflow_executions",
@@ -622,6 +658,129 @@ const RELATIONS: Record<string, Record<string, { table: string; fk: string; pk?:
   },
   clientWalletLedgerEntry: {
     account: { table: "client_wallet_accounts", fk: "accountId" },
+  },
+  customerFieldDefinition: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  loyaltyProgram: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    ledger: { table: "loyalty_ledger_entries", fk: "programId", pk: "id" },
+  },
+  loyaltyLedgerEntry: {
+    program: { table: "loyalty_programs", fk: "programId" },
+  },
+  dynamicPricingRule: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  waitlistPriorityRule: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  appointmentTreatmentRecord: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  posSession: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    lineItems: { table: "pos_line_items", fk: "sessionId", pk: "id" },
+  },
+  posLineItem: {
+    session: { table: "pos_sessions", fk: "sessionId" },
+  },
+  classSeries: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    occurrences: { table: "class_occurrences", fk: "seriesId", pk: "id" },
+  },
+  classOccurrence: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    series: { table: "class_series", fk: "seriesId" },
+    enrollments: { table: "class_enrollments", fk: "occurrenceId", pk: "id" },
+  },
+  classEnrollment: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    occurrence: { table: "class_occurrences", fk: "occurrenceId" },
+  },
+  classSeatMap: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    reservations: { table: "class_seat_reservations", fk: "seatMapId", pk: "id" },
+  },
+  classSeatReservation: {
+    seatMap: { table: "class_seat_maps", fk: "seatMapId" },
+  },
+  classCheckIn: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  classAdmissionTicket: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  serviceMembershipProduct: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    subscriptions: { table: "service_membership_subscriptions", fk: "productId", pk: "id" },
+  },
+  serviceMembershipSubscription: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    product: { table: "service_membership_products", fk: "productId" },
+  },
+  appointmentCoupon: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    redemptions: { table: "appointment_coupon_redemptions", fk: "couponId", pk: "id" },
+  },
+  appointmentCouponRedemption: {
+    coupon: { table: "appointment_coupons", fk: "couponId" },
+  },
+  appointmentWaitlistEntry: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  appointmentRecurringSeries: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  merchantPaymentConnection: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  appointmentMerchantPayment: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  clientBookingRestriction: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  householdAccount: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    members: { table: "household_members", fk: "householdId", pk: "id" },
+  },
+  householdMember: {
+    household: { table: "household_accounts", fk: "householdId" },
+  },
+  appointmentWebhookEndpoint: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    deliveries: { table: "appointment_webhook_deliveries", fk: "endpointId", pk: "id" },
+  },
+  appointmentWebhookDelivery: {
+    endpoint: { table: "appointment_webhook_endpoints", fk: "endpointId" },
+  },
+  appointmentImportBatch: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  contactMergeAudit: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  bookingContractTemplate: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    contracts: { table: "signed_booking_contracts", fk: "templateId", pk: "id" },
+  },
+  signedBookingContract: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    template: { table: "booking_contract_templates", fk: "templateId" },
+  },
+  bookingInvoice: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+    lineItems: { table: "booking_invoice_line_items", fk: "invoiceId", pk: "id" },
+  },
+  bookingInvoiceLineItem: {
+    invoice: { table: "booking_invoices", fk: "invoiceId" },
+  },
+  bookingProduct: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
+  },
+  schedulingResourceGroup: {
+    workspace: { table: "Workspace", fk: "workspaceId" },
   },
   appointmentWorkflowExecution: {
     workspace: { table: "Workspace", fk: "workspaceId" },

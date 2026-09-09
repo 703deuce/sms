@@ -190,6 +190,86 @@ export function AvailabilityConnected() {
       <AvailabilityView model={model} actions={actions} />
       <div className="max-w-[1280px] mx-auto px-10 pb-10 space-y-6">
         <div className="avail-card p-6 space-y-4">
+          <h2 className="text-[15px] font-bold">Slot scheduling (Acuity parity)</h2>
+          <p className="text-[12px] text-[#8a87a0]">
+            Control start times, slot spacing, availability density, and gap minimization for public booking.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label" htmlFor="custom-start-interval">Custom start interval (minutes)</label>
+              <input
+                id="custom-start-interval"
+                type="number"
+                className="input w-full mt-1"
+                min={5}
+                step={5}
+                placeholder="e.g. 15"
+                value={form.customStartIntervalMinutes ?? ""}
+                onChange={(e) =>
+                  patchForm({
+                    customStartIntervalMinutes: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="look-busy-percent">Make me look busy — hide slots (%)</label>
+              <input
+                id="look-busy-percent"
+                type="number"
+                className="input w-full mt-1"
+                min={0}
+                max={90}
+                placeholder="0–90"
+                value={form.availabilityDensityHidePercent ?? ""}
+                onChange={(e) =>
+                  patchForm({
+                    availabilityDensityHidePercent: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={form.fixedStartTimesEnabled}
+                  onChange={(e) => patchForm({ fixedStartTimesEnabled: e.target.checked })}
+                />
+                Fixed start times only
+              </label>
+              {form.fixedStartTimesEnabled ? (
+                <input
+                  className="input w-full mt-2"
+                  placeholder="09:00, 11:00, 13:30"
+                  value={form.fixedStartTimes}
+                  onChange={(e) => patchForm({ fixedStartTimes: e.target.value })}
+                  aria-label="Fixed start times"
+                />
+              ) : null}
+            </div>
+            <div>
+              <label className="label" htmlFor="minimize-gaps">Minimize gaps</label>
+              <select
+                id="minimize-gaps"
+                className="input w-full mt-1"
+                value={form.minimizeGapsMode}
+                onChange={(e) =>
+                  patchForm({ minimizeGapsMode: e.target.value as "off" | "prefer_compact" })
+                }
+              >
+                <option value="off">Off</option>
+                <option value="prefer_compact">Prefer compact scheduling</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : saved ? "Saved" : "Save scheduling rules"}
+            </Button>
+          </div>
+        </div>
+        <div className="avail-card p-6 space-y-4">
           <h2 className="text-[15px] font-bold">Workspace booking limits</h2>
           <p className="text-[12px] text-[#8a87a0]">
             Optional caps applied across all appointment types unless overridden per type.

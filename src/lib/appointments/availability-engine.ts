@@ -63,6 +63,7 @@ export async function generateNativeSlots(
     serviceName: string;
     daysAhead?: number;
     timezone?: string;
+    locationId?: string;
     maxSlots?: number;
     staffId?: string;
     durationMinutes?: number;
@@ -79,6 +80,10 @@ export async function generateNativeSlots(
 
   const ctx = await loadAvailabilityContext(workspaceId, input.serviceName);
   const { platform, service, svcCfg } = ctx;
+  const schedulingLimits = {
+    ...(platform.schedulingLimits || {}),
+    ...(svcCfg.schedulingLimits || {}),
+  };
   if (!service || svcCfg.enabled === false) return { slots: [] };
 
   const schedulingCtx = await loadSchedulingContext(workspaceId, input.serviceName);
@@ -90,9 +95,26 @@ export async function generateNativeSlots(
   if (input.staffId) {
     eligibleStaff = eligibleStaff.filter((s) => s.id === input.staffId);
   }
+  if (input.locationId) {
+    const { filterStaffIdsForLocation, resolveLocationTimezone, resolveLocationWeeklyHours } =
+      await import("@/lib/appointments/service-booking/location-scheduling");
+    const staffIds = eligibleStaff.map((s) => s.id);
+    const filtered = filterStaffIdsForLocation(platform, input.locationId, staffIds);
+    eligibleStaff = eligibleStaff.filter((s) => filtered.includes(s.id));
+  }
 
-  const tz = input.timezone || ctx.timezone;
-  const weeklyHours = resolveWeeklyHours(platform);
+  const tz =
+    input.timezone ||
+    (input.locationId
+      ? (
+          await import("@/lib/appointments/service-booking/location-scheduling")
+        ).resolveLocationTimezone(platform, input.locationId)
+      : ctx.timezone);
+  const weeklyHours = input.locationId
+    ? (
+        await import("@/lib/appointments/service-booking/location-scheduling")
+      ).resolveLocationWeeklyHours(platform, input.locationId)
+    : resolveWeeklyHours(platform);
   const bookingHours = parseBookingHours(svcCfg.bookingHours || undefined);
   const overrides = platform.dateOverrides || [];
   const days = Math.min(
@@ -106,10 +128,10 @@ export async function generateNativeSlots(
   const noticeMs = ctx.minimumNoticeMinutes * 60_000;
   const slotStep = (await import("@/lib/appointments/service-booking/fixed-start-times")).slotStepMinutes(
     durationMinutes,
-    svcCfg.schedulingLimits?.customStartIntervalMinutes,
+    schedulingLimits.customStartIntervalMinutes,
   );
-  const fixedStartConfig = svcCfg.schedulingLimits?.fixedStartTimes;
-  const densityHidePercent = svcCfg.schedulingLimits?.availabilityDensityHidePercent;
+  const fixedStartConfig = schedulingLimits.fixedStartTimes;
+  const densityHidePercent = schedulingLimits.availabilityDensityHidePercent;
   const now = new Date();
   const prisma = getPrisma();
   const slots: AvailabilitySlot[] = [];
@@ -254,12 +276,7 @@ export async function generateNativeSlots(
     }
   }
 
-  const minimizeMode =
-    (svcCfg as { schedulingLimits?: { minimizeGapsMode?: string } }).schedulingLimits
-      ?.minimizeGapsMode ||
-    (platform as { schedulingLimits?: { minimizeGapsMode?: string } }).schedulingLimits
-      ?.minimizeGapsMode ||
-    "off";
+  const minimizeMode = schedulingLimits.minimizeGapsMode || "off";
 
   if (minimizeMode === "prefer_compact" && slots.length > 1) {
     const { getPrisma } = await import("@/lib/db");

@@ -45,6 +45,11 @@ export const EMPTY_AVAILABILITY_FORM: AvailabilityFormState = {
   overrideOpen: "10:00",
   overrideClose: "14:00",
   blackoutDates: [],
+  customStartIntervalMinutes: undefined,
+  fixedStartTimesEnabled: false,
+  fixedStartTimes: "",
+  availabilityDensityHidePercent: undefined,
+  minimizeGapsMode: "off",
 };
 
 export function formStateFromSettings(data: AppointmentPlatformConfig): AvailabilityFormState {
@@ -74,6 +79,11 @@ export function formStateFromSettings(data: AppointmentPlatformConfig): Availabi
       closed: h.closed,
     })),
     blackoutDates: data.blackoutDates || [],
+    customStartIntervalMinutes: data.schedulingLimits?.customStartIntervalMinutes,
+    fixedStartTimesEnabled: data.schedulingLimits?.fixedStartTimes?.enabled ?? false,
+    fixedStartTimes: (data.schedulingLimits?.fixedStartTimes?.times || []).join(", "),
+    availabilityDensityHidePercent: data.schedulingLimits?.availabilityDensityHidePercent,
+    minimizeGapsMode: data.schedulingLimits?.minimizeGapsMode ?? "off",
   };
 }
 
@@ -259,6 +269,25 @@ export function buildSettingsPatch(form: AvailabilityFormState) {
           maxPerTypePerDay: form.maxPerTypePerDay || undefined,
         }
       : undefined;
+  const fixedTimes = form.fixedStartTimes
+    .split(/[,;\n]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const schedulingLimits =
+    form.customStartIntervalMinutes ||
+    form.fixedStartTimesEnabled ||
+    form.availabilityDensityHidePercent ||
+    form.minimizeGapsMode !== "off"
+      ? {
+          customStartIntervalMinutes: form.customStartIntervalMinutes || undefined,
+          fixedStartTimes: form.fixedStartTimesEnabled
+            ? { enabled: true, times: fixedTimes }
+            : undefined,
+          availabilityDensityHidePercent: form.availabilityDensityHidePercent || undefined,
+          minimizeGapsMode: form.minimizeGapsMode,
+        }
+      : undefined;
+
   return {
     weeklyHours: form.weeklyHours,
     dateOverrides: form.dateOverrides,
@@ -266,6 +295,7 @@ export function buildSettingsPatch(form: AvailabilityFormState) {
     minimumBookingNoticeMinutes: form.minimumNotice,
     maximumBookingDaysAhead: form.maximumDays,
     bookingLimits,
+    schedulingLimits,
     namedSchedules: form.namedSchedules,
     holidays: form.holidays,
     blackoutDates: form.blackoutDates,
