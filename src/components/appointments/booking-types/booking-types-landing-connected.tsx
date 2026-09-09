@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarDays, PartyPopper, Users, Video, Wrench } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { RefDecoPageHeader } from "@/components/appointments/kimi-ui/shared/ref-deco-patterns";
 import {
   BOOKING_TYPES_SEGMENTS,
@@ -57,7 +56,7 @@ function LandingError({ onRetry }: { onRetry: () => void }) {
         </div>
         <h3 className="appt-pilot-text-section">We couldn&apos;t load booking types</h3>
         <p className="mt-1.5 appt-pilot-text-body text-[var(--text-secondary)]">Check your connection and try again.</p>
-        <Button size="sm" className="mt-5 appt-pilot-primary-btn" onClick={onRetry}>Try again</Button>
+        <button type="button" className="mt-5 appt-pilot-primary-btn" onClick={onRetry}>Try again</button>
       </div>
     </div>
   );

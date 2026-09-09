@@ -972,3 +972,100 @@ html.appt-overview-pilot-active .appt-overview-pilot h3 {
   font-family: inherit;
 }
 
+/* Transitional appointment-types editor — pilot typography + palette when under /appointments/types */
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root {
+  --brand: #1f2329;
+  --brand-dark: #2c3138;
+  background: var(--surface-muted);
+  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--type-body);
+  line-height: 1.4;
+  letter-spacing: -0.011em;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root h1 {
+  font-size: var(--type-page-title) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.022em !important;
+  color: var(--text-primary) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[24px\] {
+  font-size: var(--type-page-title) !important;
+  font-weight: 600 !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[13\.5px\],
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[13px\] {
+  font-size: var(--type-list) !important;
+  line-height: 1.4 !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[12px\],
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[12\.5px\] {
+  font-size: var(--type-helper) !important;
+  line-height: 1.35 !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-gray-500,
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#8a8fa3\] {
+  color: var(--text-secondary) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-gray-900,
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#1a1d29\],
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#1e1e2d\] {
+  color: var(--text-primary) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .btn-brand,
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .bg-\[\#5b4bff\] {
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .btn-brand:hover,
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .hover\:bg-\[\#4f41e6\]:hover {
+  background-color: #2c3138 !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#5b4bff\] {
+  color: var(--brand-accent) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#a0a3b5\]:hover,
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .hover\:text-\[\#5b4bff\]:hover {
+  color: var(--brand-accent) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .border-\[\#5b4bff\],
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .ring-\[\#dcd9ff\] {
+  border-color: rgba(20, 125, 116, 0.4) !important;
+  --tw-ring-color: rgba(20, 125, 116, 0.2) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .bg-\[\#f7f6ff\],
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .bg-\[\#eef0ff\] {
+  background-color: var(--brand-accent-soft) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#5b4bff\].border-\[\#5b4bff\] {
+  color: var(--brand-accent) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .toggle.on {
+  background: var(--brand-accent) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .input:focus {
+  border-color: rgba(20, 125, 116, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(20, 125, 116, 0.12) !important;
+}
+
+html.appt-overview-pilot-active .appt-overview-pilot .reference-root .checkbox {
+  accent-color: var(--brand-accent) !important;
+}
+

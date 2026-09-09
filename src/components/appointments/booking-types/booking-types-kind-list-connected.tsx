@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { RefDecoPageHeader } from "@/components/appointments/kimi-ui/shared/ref-deco-patterns";
 import {
   segmentById,
@@ -83,7 +82,7 @@ export function BookingTypesKindListConnected({ segmentId }: Props) {
         <div className="max-w-md text-center rounded-xl border border-dashed border-[var(--border)] bg-white px-6 py-12">
           <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
           <p className="mt-3 appt-pilot-text-section">Could not load {segment.title.toLowerCase()}</p>
-          <Button size="sm" className="mt-5 appt-pilot-primary-btn" onClick={load}>Try again</Button>
+          <button type="button" className="mt-5 appt-pilot-primary-btn" onClick={load}>Try again</button>
         </div>
       </div>
     );
