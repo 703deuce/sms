@@ -1,26 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, RefreshCcw, Plus, RotateCw, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { RotateCw, AlertTriangle, Settings2 } from "lucide-react";
 import { RecallStatsRow } from "./RecallStatsRow";
-import { RecallFeatureCard } from "./RecallFeatureCard";
 import { RecallActivityList } from "./RecallActivityList";
 import { RecallActivityModal } from "./RecallActivityModal";
+import { RecallsDueList } from "./RecallsDueList";
 import type { RecallActivity, RecallStat } from "../types";
 
 export function RecallsHub({
   stats,
   activity,
-  recallCampaignsMeta,
-  noShowRecoveryMeta,
   loading = false,
   refreshError = false,
   onRefresh,
 }: {
   stats: RecallStat[];
   activity: RecallActivity[];
-  recallCampaignsMeta: string;
-  noShowRecoveryMeta: string;
+  recallCampaignsMeta?: string;
+  noShowRecoveryMeta?: string;
   loading?: boolean;
   refreshError?: boolean;
   onRefresh: () => void;
@@ -43,39 +42,24 @@ export function RecallsHub({
         <div>
           <h1 className="tv-title">Recalls</h1>
           <p className="tv-subtitle">
-            Re-engage customers without a future appointment and recover missed visits.
-            Recalls use your appointment history and booking types to reach out at the right time.
+            See which customers are due to return and help them rebook. Configure automatic outreach
+            in Automations.
           </p>
         </div>
-        <a className="tv-btn tv-btn-primary" href="/appointments/recall-campaigns">
-          <Plus size={15} />
-          New recall campaign
-        </a>
+        <Link className="tv-btn" href="/appointments/automations/recall">
+          <Settings2 size={15} />
+          Recall automation
+        </Link>
       </header>
 
-      <RecallStatsRow stats={stats} />
-
-      <h2 className="tv-section-title">Recall tools</h2>
-      <div className="tv-cards">
-        <RecallFeatureCard
-          icon={Bell}
-          title="Recall campaigns"
-          description="Target customers with no future appointment by last visit or appointment type. Send an SMS reminder inviting them to book again."
-          meta={recallCampaignsMeta || "Set up recall campaigns"}
-          cta="Open recall campaigns"
-          href="/appointments/recall-campaigns"
-        />
-        <RecallFeatureCard
-          icon={RefreshCcw}
-          title="No-show recovery"
-          description="Automatically follow up after missed appointments and invite customers to rebook. Follow-ups stop when the customer replies or rebooks."
-          meta={noShowRecoveryMeta || "Configure no-show recovery"}
-          cta="Open no-show recovery"
-          href="/appointments/no-show-recovery"
-        />
-      </div>
+      {stats.length > 0 ? <RecallStatsRow stats={stats} /> : null}
 
       <div className="tv-section-head">
+        <h2 className="tv-section-title" style={{ margin: 0 }}>Customers due to return</h2>
+      </div>
+      <RecallsDueList />
+
+      <div className="tv-section-head" style={{ marginTop: 24 }}>
         <h2 className="tv-section-title" style={{ margin: 0 }}>Recent recall activity</h2>
         <button
           type="button"
@@ -106,11 +90,10 @@ export function RecallsHub({
         </div>
       ) : busy && !hasActivity ? (
         <div className="tv-table-wrap" aria-busy="true" aria-label="Loading recall activity">
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2].map((i) => (
             <div className="tv-skel-row" key={i}>
               <span className="tv-skel tv-skel-badge" />
               <span className="tv-skel tv-skel-line" style={{ width: "32%" }} />
-              <span className="tv-skel tv-skel-line" style={{ width: "18%" }} />
             </div>
           ))}
         </div>
@@ -120,23 +103,12 @@ export function RecallsHub({
         </div>
       ) : (
         <div className="tv-table-wrap tv-state-block">
-          <p className="tv-state-title">No recall activity yet</p>
-          <p className="tv-subtitle" style={{ margin: "6px auto 14px", maxWidth: "46ch" }}>
-            When recall campaigns or no-show follow-ups are sent, they&apos;ll appear here so you can track
-            outreach and rebookings in one place.
+          <p className="tv-state-title">No recall outreach yet</p>
+          <p className="tv-subtitle" style={{ margin: "6px auto 0", maxWidth: "46ch" }}>
+            When recall automations send reminders, activity appears here.
           </p>
-          <a className="tv-btn tv-btn-primary" href="/appointments/recall-campaigns">
-            <Plus size={15} />
-            Create your first recall campaign
-          </a>
         </div>
       )}
-
-      {refreshError && hasActivity ? (
-        <div style={{ marginTop: 12, opacity: 0.75 }}>
-          <RecallActivityList items={activity} onSelect={setSelected} />
-        </div>
-      ) : null}
 
       {selected ? (
         <RecallActivityModal activity={selected} onClose={() => setSelected(null)} />

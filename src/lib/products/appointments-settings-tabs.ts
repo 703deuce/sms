@@ -21,6 +21,7 @@ export const appointmentsAnalyticsTabs = [
   { label: "Booking", href: "/appointments/analytics/booking" },
   { label: "Reminders", href: "/appointments/analytics/reminders" },
   { label: "Automations", href: "/appointments/analytics/automations" },
+  { label: "Revenue", href: "/appointments/analytics/revenue" },
   { label: "Reports", href: "/appointments/analytics/reports" },
 ];
 
@@ -29,4 +30,5 @@ export type AppointmentsAnalyticsSection =
   | "booking"
   | "reminders"
   | "automations"
+  | "revenue"
   | "reports";

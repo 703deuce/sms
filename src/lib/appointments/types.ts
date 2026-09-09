@@ -271,6 +271,11 @@ export type BookingTypeKind = "MEETING" | "SERVICE" | "CLASS";
 export type AppointmentTypeConfig = {
   /** Canonical archetype; defaults to SERVICE when unset (legacy types). */
   bookingTypeKind?: BookingTypeKind;
+  /**
+   * CLASS-only UI segment: recurring class series vs one-off workshop/event.
+   * Same scheduling engine; separate customer-facing management in Booking Types.
+   */
+  classPresentation?: "recurring_class" | "workshop_event";
   enabled?: boolean;
   description?: string;
   location?: string;
