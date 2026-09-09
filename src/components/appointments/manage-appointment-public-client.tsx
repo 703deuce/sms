@@ -312,6 +312,39 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
                           }))
                         }
                       />
+                    ) : field.type === "file" || field.type === "image" ? (
+                      <div className="mt-1 space-y-2">
+                        <input
+                          id={`${form.id}-${field.id}`}
+                          type="file"
+                          accept={field.type === "image" ? "image/*" : undefined}
+                          className="block w-full text-sm"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            void (async () => {
+                              const formData = new FormData();
+                              formData.append("file", file);
+                              const res = await fetch(`/api/public/manage/${token}/intake-upload`, {
+                                method: "POST",
+                                body: formData,
+                              });
+                              const json = await res.json();
+                              if (res.ok && json.data?.url) {
+                                setIntakeDrafts((prev) => ({
+                                  ...prev,
+                                  [form.id]: { ...prev[form.id], [field.id]: String(json.data.url) },
+                                }));
+                              }
+                            })();
+                          }}
+                        />
+                        {intakeDrafts[form.id]?.[field.id] ? (
+                          <p className="text-xs text-muted-foreground break-all">
+                            {intakeDrafts[form.id][field.id]}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : (
                       <input
                         id={`${form.id}-${field.id}`}

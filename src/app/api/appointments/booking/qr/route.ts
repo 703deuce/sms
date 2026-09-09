@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
     const links = directLinksForWorkspace(baseUrl, workspace.slug, {
       typeId: body.typeId,
       staffId: body.staffId,

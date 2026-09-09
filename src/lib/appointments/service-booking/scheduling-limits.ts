@@ -97,3 +97,21 @@ export function resolveSchedulingLimits(
     },
   };
 }
+
+export function evaluateIntakeEditCutoff(
+  limits: SchedulingLimitsConfig | undefined,
+  startsAt: Date,
+  now = new Date(),
+): { allowed: boolean; reason?: string } {
+  if (limits?.clientIntakeEditEnabled === false) {
+    return { allowed: false, reason: "Intake editing is disabled for this appointment" };
+  }
+  const ms = cutoffToMs(limits?.intakeEditCutoff);
+  if (ms == null) return { allowed: true };
+  const remaining = startsAt.getTime() - now.getTime();
+  if (remaining >= ms) return { allowed: true };
+  return {
+    allowed: false,
+    reason: "The intake edit cutoff has passed — contact the business to update your forms",
+  };
+}

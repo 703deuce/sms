@@ -22,7 +22,8 @@ type Section =
   | "import"
   | "theme"
   | "phases"
-  | "households";
+  | "households"
+  | "invoices";
 
 const SECTION_API: Record<Section, string> = {
   categories: "/api/appointments/service-booking/categories",
@@ -43,6 +44,7 @@ const SECTION_API: Record<Section, string> = {
   theme: "/api/appointments/service-booking/scheduler-theme",
   phases: "/api/appointments/service-booking/service-phases",
   households: "/api/appointments/service-booking/households",
+  invoices: "/api/appointments/service-booking/invoices",
 };
 
 function slugify(value: string) {
@@ -197,6 +199,7 @@ export function ServiceBookingAdminClient({
     { id: "theme", label: "Scheduler branding" },
     { id: "reports", label: "Reports" },
     { id: "import", label: "Import / export" },
+    { id: "invoices", label: "Invoices" },
   ];
 
   return (
@@ -225,7 +228,7 @@ export function ServiceBookingAdminClient({
         ))}
       </nav>
 
-      {section !== "reports" && section !== "theme" && section !== "import" && (
+      {section !== "reports" && section !== "theme" && section !== "import" && section !== "invoices" && (
         <div className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
           <label className="flex flex-col gap-1 text-sm">
             <span>Name</span>
@@ -274,6 +277,10 @@ export function ServiceBookingAdminClient({
         </div>
       ) : section === "intake" ? (
         <IntakeFormsPanel items={items} onReload={() => void load()} />
+      ) : section === "resources" ? (
+        <ResourcesPanel items={items} onReload={() => void load()} />
+      ) : section === "invoices" ? (
+        <InvoicesPanel items={items} onReload={() => void load()} />
       ) : (
         <ul className="divide-y rounded-lg border">
           {items.length === 0 ? (
@@ -465,6 +472,229 @@ function IntakeFormsPanel({
       ) : (
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">Select a form to edit fields.</div>
       )}
+    </div>
+  );
+}
+
+type ResourceRow = {
+  id: string;
+  name: string;
+  quantity?: number;
+  description?: string | null;
+  active?: boolean;
+};
+
+function ResourcesPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const resources = items as ResourceRow[];
+  const [drafts, setDrafts] = useState<Record<string, number>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next: Record<string, number> = {};
+    for (const row of resources) next[row.id] = row.quantity ?? 1;
+    setDrafts(next);
+  }, [resources]);
+
+  async function saveQuantity(row: ResourceRow) {
+    const quantity = drafts[row.id] ?? row.quantity ?? 1;
+    setSavingId(row.id);
+    setMessage(null);
+    const res = await fetch(SECTION_API.resources, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: row.id, name: row.name, quantity, active: row.active ?? true }),
+    });
+    setSavingId(null);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Could not save resource");
+      return;
+    }
+    setMessage(`Saved ${row.name}`);
+    onReload();
+  }
+
+  if (resources.length === 0) {
+    return <p className="text-sm text-muted-foreground">No resources yet. Add one above.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <ul className="divide-y rounded-lg border">
+        {resources.map((row) => (
+          <li key={row.id} className="flex flex-wrap items-center justify-between gap-4 p-4 text-sm">
+            <div>
+              <p className="font-medium">{row.name}</p>
+              <p className="text-xs text-muted-foreground">{row.id}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <span>Qty</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-20 rounded border px-2 py-1"
+                  value={drafts[row.id] ?? row.quantity ?? 1}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({ ...prev, [row.id]: Math.max(1, Number(e.target.value) || 1) }))
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-1.5 text-sm"
+                disabled={savingId === row.id}
+                onClick={() => void saveQuantity(row)}
+              >
+                {savingId === row.id ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
+
+type InvoiceRow = {
+  id: string;
+  status: string;
+  totalCents: number;
+  balanceDueCents: number;
+  contactId: string;
+  createdAt: string;
+};
+
+function InvoicesPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const invoices = items as InvoiceRow[];
+  const [contactId, setContactId] = useState("");
+  const [description, setDescription] = useState("");
+  const [amountDollars, setAmountDollars] = useState("50");
+  const [creating, setCreating] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null);
+
+  async function createInvoice() {
+    if (!contactId.trim() || !description.trim()) {
+      setMessage("Contact ID and description are required.");
+      return;
+    }
+    const unitPriceCents = Math.round(Number(amountDollars) * 100);
+    if (!Number.isFinite(unitPriceCents) || unitPriceCents <= 0) {
+      setMessage("Enter a valid amount.");
+      return;
+    }
+    setCreating(true);
+    setMessage(null);
+    setLastPayUrl(null);
+    const res = await fetch(SECTION_API.invoices, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contactId: contactId.trim(),
+        lineItems: [{ description: description.trim(), quantity: 1, unitPriceCents }],
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setCreating(false);
+    if (!res.ok) {
+      setMessage(json.error || "Could not create invoice");
+      return;
+    }
+    const payToken = json.data?.payToken as string | undefined;
+    if (payToken) {
+      const base = typeof window !== "undefined" ? window.location.origin : "";
+      setLastPayUrl(`${base}/pay/invoice/${payToken}`);
+    }
+    setMessage("Invoice created.");
+    setDescription("");
+    onReload();
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          <span>Contact ID</span>
+          <input
+            className="rounded border px-3 py-2"
+            value={contactId}
+            onChange={(e) => setContactId(e.target.value)}
+            placeholder="contact_…"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Description</span>
+          <input
+            className="rounded border px-3 py-2"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Service balance"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Amount (USD)</span>
+          <input
+            className="rounded border px-3 py-2"
+            type="number"
+            min={0}
+            step="0.01"
+            value={amountDollars}
+            onChange={(e) => setAmountDollars(e.target.value)}
+          />
+        </label>
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            disabled={creating}
+            onClick={() => void createInvoice()}
+          >
+            {creating ? "Creating…" : "Create invoice"}
+          </button>
+        </div>
+        {message ? <p className="text-sm text-muted-foreground sm:col-span-2">{message}</p> : null}
+        {lastPayUrl ? (
+          <p className="text-sm sm:col-span-2">
+            Pay link:{" "}
+            <a className="text-primary underline break-all" href={lastPayUrl}>{lastPayUrl}</a>
+          </p>
+        ) : null}
+      </div>
+      <ul className="divide-y rounded-lg border">
+        {invoices.length === 0 ? (
+          <li className="p-4 text-sm text-muted-foreground">No invoices yet.</li>
+        ) : (
+          invoices.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+              <div>
+                <p className="font-medium">{row.id}</p>
+                <p className="text-xs text-muted-foreground">
+                  {row.status} · contact {row.contactId}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p>Total ${(row.totalCents / 100).toFixed(2)}</p>
+                <p>Due ${(row.balanceDueCents / 100).toFixed(2)}</p>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   );
 }

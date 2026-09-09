@@ -61,8 +61,15 @@ export function DateTimeStep({
   const [duration, setDuration] = useState<DurationOption | null>(
     (type.durationOptions || []).find((d) => d.active) || (type.durationOptions || [])[0] || null,
   );
-  const showStaff = type.config?.staffAssignment === "customer_choice" && staffOptions.length > 0;
-  const showLocations = locationOptions.length > 1 && type.id === "svc-aligner";
+  const staffMode = type.config?.staffAssignment;
+  const showStaff =
+    (staffMode === "customer_chooses" || staffMode === "customer_choice") && staffOptions.length > 0;
+  const showLocations =
+    locationOptions.length > 1 &&
+    Boolean(
+      (type.config as { locationIds?: string[] } | undefined)?.locationIds?.length ||
+        type.config?.location,
+    );
   const showDurations = (type.durationOptions || []).length > 1;
 
   // Sandbox: simulate availability fetch per selected day

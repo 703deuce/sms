@@ -18,19 +18,34 @@ export async function upsertSchedulingResource(
     quantity?: number;
     description?: string;
     eligibleTypeIds?: string[];
+    locationIds?: string[];
     active?: boolean;
   },
 ) {
   const prisma = getPrisma();
+  const metadata =
+    input.locationIds != null ? { locationIds: input.locationIds.filter(Boolean) } : undefined;
   const data = {
     name: input.name.trim(),
     quantity: input.quantity ?? 1,
     description: input.description,
     eligibleTypeIds: input.eligibleTypeIds || [],
     active: input.active ?? true,
+    ...(metadata ? { metadata } : {}),
   };
   if (input.id) {
-    return prisma.schedulingResource.update({ where: { id: input.id, workspaceId }, data });
+    const existing = await prisma.schedulingResource.findFirst({
+      where: { id: input.id, workspaceId },
+    });
+    if (!existing) throw new Error("Resource not found");
+    const mergedMetadata =
+      metadata != null
+        ? { ...((existing.metadata as Record<string, unknown>) || {}), ...metadata }
+        : undefined;
+    return prisma.schedulingResource.update({
+      where: { id: input.id, workspaceId },
+      data: mergedMetadata ? { ...data, metadata: mergedMetadata } : data,
+    });
   }
   return prisma.schedulingResource.create({ data: { workspaceId, ...data } });
 }

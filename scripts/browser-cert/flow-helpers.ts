@@ -86,10 +86,14 @@ export async function browserBackFromCalendar(page: Page) {
 }
 
 export async function switchToAppointments(page: Page) {
+  const direct = await visitRoute(page, "/appointments/overview");
+  if (direct.ok) {
+    await page.waitForTimeout(300);
+    return;
+  }
   const sw = await switchProductShell(page, "Appointments");
   if (!sw.ok) {
-    const v = await visitRoute(page, "/appointments/overview");
-    if (!v.ok) throw new Error(sw.note || v.note);
+    throw new Error(direct.note || sw.note || "Could not reach Appointments shell");
   }
   await page.waitForTimeout(300);
 }

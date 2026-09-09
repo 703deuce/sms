@@ -92,7 +92,7 @@ export function PublicBookingServiceFlowInner({
               selectedLocationId={flow.selectedLocationId}
               onSelectStaff={flow.setSelectedStaffId}
               onSelectLocation={flow.setSelectedLocationId}
-              onSelectSlot={flow.setStartsAt}
+              onSelectSlot={(iso) => void flow.selectSlot(iso)}
               onContinue={() => flow.setStep("info")}
               onBack={() => flow.setStep("service")}
               onWaitlist={() => flow.setStep("waitlist")}
@@ -176,11 +176,13 @@ export function PublicBookingServiceFlowInner({
               recurringPreview={flow.recurringPreview}
               recurringPreviewLoading={flow.recurringPreviewLoading}
               sessionLineCount={flow.sessionLines.length}
+              additionalServiceNames={flow.additionalServices.map((s) => s.name)}
               onCheckoutSession={() => void flow.checkoutSession()}
               termsRequired={Boolean(ws.termsVersion)}
               termsUrl={ws.termsUrl}
               termsAccepted={flow.termsAccepted}
               onTermsAcceptedChange={flow.setTermsAccepted}
+              uploadSlug={slug}
             />
           ) : null}
 

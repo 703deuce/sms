@@ -130,6 +130,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [intakeAnswers, setIntakeAnswers] = useState<Record<string, Record<string, string>>>({});
   const [additionalServices, setAdditionalServices] = useState<PublicBookingType[]>([]);
   const [addingAdditionalService, setAddingAdditionalService] = useState(false);
+  const [slotHoldId, setSlotHoldId] = useState("");
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -292,6 +293,80 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     else if (theme === "light") document.documentElement.classList.remove("dark");
   }, [theme]);
 
+  const fetchAvailability = useCallback(
+    async (
+      type: PublicBookingType,
+      durationMinutes: number,
+      overrides?: { staffId?: string; locationId?: string },
+    ) => {
+      setLoadingSlots(true);
+      setError("");
+      try {
+        const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "availability",
+            serviceId: type.id,
+            serviceName: type.name,
+            daysAhead: 14,
+            durationMinutes,
+            staffId: overrides?.staffId ?? selectedStaffId || undefined,
+            locationId: overrides?.locationId ?? selectedLocationId || undefined,
+          }),
+        });
+        const json = await res.json();
+        setSlots(json.data?.slots || []);
+      } catch {
+        setSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    },
+    [slug, selectedStaffId, selectedLocationId],
+  );
+
+  useEffect(() => {
+    if (step !== "datetime" || !selectedType) return;
+    void fetchAvailability(selectedType, effectiveDurationMinutes);
+  }, [step, selectedType, selectedStaffId, selectedLocationId, effectiveDurationMinutes, fetchAvailability]);
+
+  const selectSlot = useCallback(
+    async (iso: string) => {
+      setStartsAt(iso);
+      setSlotHoldId("");
+      if (!selectedType || !iso) return;
+      try {
+        const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "hold_slot",
+            serviceId: selectedType.id,
+            serviceName: selectedType.name,
+            startsAt: iso,
+            durationMinutes: effectiveDurationMinutes,
+            staffId: selectedStaffId || undefined,
+            locationId: selectedLocationId || undefined,
+            phone: phone || undefined,
+          }),
+        });
+        const json = await res.json();
+        if (res.ok && json.data?.holdId) setSlotHoldId(String(json.data.holdId));
+      } catch {
+        // Hold is best-effort; booking still validates slot at checkout
+      }
+    },
+    [
+      slug,
+      selectedType,
+      effectiveDurationMinutes,
+      selectedStaffId,
+      selectedLocationId,
+      phone,
+    ],
+  );
+
   const pickType = useCallback(
     async (type: PublicBookingType) => {
       if (addingAdditionalService && selectedType && type.id !== selectedType.id) {
@@ -308,6 +383,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         durationOptions: type.durationOptions || type.config?.durationOptions,
         confirmationPage: type.confirmationPage || type.config?.confirmationPage,
       };
+      setAdditionalServices([]);
       setSelectedType(normalized);
       setStartsAt("");
       setBookingAnswers({});
@@ -318,31 +394,25 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       const opts = (normalized.durationOptions || []).filter((o) => o.active !== false && o.minutes > 0);
       setSelectedDuration(opts[0]?.minutes ?? normalized.durationMinutes);
       setStep("datetime");
-      setLoadingSlots(true);
-      setError("");
-      const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "availability",
-          serviceId: type.id,
-          serviceName: type.name,
-          daysAhead: 14,
-          durationMinutes: opts[0]?.minutes ?? type.durationMinutes,
-        }),
+      setSlotHoldId("");
+      await fetchAvailability(normalized, opts[0]?.minutes ?? normalized.durationMinutes, {
+        staffId: deepLinkStaffId || undefined,
+        locationId: deepLinkLocationId || undefined,
       });
-      const json = await res.json();
-      setSlots(json.data?.slots || []);
-      setLoadingSlots(false);
     },
-    [slug, deepLinkStaffId, deepLinkLocationId, addingAdditionalService, selectedType],
+    [slug, deepLinkStaffId, deepLinkLocationId, addingAdditionalService, selectedType, fetchAvailability],
   );
 
   const activeIntakeForms = useMemo(() => {
-    const ids = (selectedType?.config as { intakeFormIds?: string[] } | undefined)?.intakeFormIds;
-    if (!ids?.length) return [];
-    return intakeCatalog.filter((f) => ids.includes(f.id));
-  }, [intakeCatalog, selectedType]);
+    const ids = new Set<string>();
+    const collect = (cfg?: { intakeFormIds?: string[] }) => {
+      for (const id of cfg?.intakeFormIds || []) ids.add(id);
+    };
+    collect(selectedType?.config);
+    for (const svc of additionalServices) collect(svc.config);
+    if (!ids.size) return [];
+    return intakeCatalog.filter((f) => ids.has(f.id));
+  }, [intakeCatalog, selectedType, additionalServices]);
 
   const lookupEntitlements = useCallback(
     async (phoneValue: string, emailValue?: string) => {
@@ -637,6 +707,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       website: honeypot,
       staffId: selectedStaffId || undefined,
       locationId: selectedLocationId || undefined,
+      holdId: slotHoldId || undefined,
       attendeeCount: groupEnabled ? attendeeCount : undefined,
       durationMinutes: effectiveDurationMinutes,
       utm: Object.keys(utm).length ? utm : undefined,
@@ -796,6 +867,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     intakeAnswers,
     additionalServices,
     selectedAddOns,
+    slotHoldId,
   ]);
 
   const onPaymentSuccess = useCallback(async () => {
@@ -842,6 +914,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     slots,
     startsAt,
     setStartsAt,
+    selectSlot,
     recurringMode,
     setRecurringMode,
     recurringOccurrences,

@@ -35,10 +35,25 @@ export async function getAvailability(
   const daysAhead = Number(input.daysAhead || 14);
   const timezone = input.timezone ? String(input.timezone) : undefined;
   const staffId = input.staffId ? String(input.staffId) : undefined;
+  const locationId = input.locationId ? String(input.locationId) : undefined;
   const durationMinutes = input.durationMinutes ? Number(input.durationMinutes) : undefined;
   const excludeAppointmentId = input.excludeAppointmentId
     ? String(input.excludeAppointmentId)
     : undefined;
+
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const { resolveLocationTimezone, filterStaffIdsForLocation } = await import(
+    "@/lib/appointments/service-booking/location-scheduling"
+  );
+  const effectiveTimezone = locationId
+    ? resolveLocationTimezone(platform, locationId)
+    : timezone;
+
+  let effectiveStaffId = staffId;
+  if (locationId && staffId) {
+    const allowed = filterStaffIdsForLocation(platform, locationId, [staffId]);
+    if (!allowed.includes(staffId)) effectiveStaffId = allowed[0];
+  }
 
   let effectiveDuration = durationMinutes;
   if (serviceId && !effectiveDuration) {
@@ -54,8 +69,9 @@ export async function getAvailability(
   const result = await generateNativeSlots(workspaceId, {
     serviceName,
     daysAhead,
-    timezone,
-    staffId,
+    timezone: effectiveTimezone,
+    locationId,
+    staffId: effectiveStaffId,
     durationMinutes: effectiveDuration,
     excludeAppointmentId,
   });
@@ -69,7 +85,13 @@ export async function getAvailability(
     const { resolveResourceIdsForBookingType, filterSlotsByResourceAvailability } = await import(
       "@/lib/appointments/service-booking/resource-availability"
     );
-    const resourceIds = await resolveResourceIdsForBookingType(workspaceId, cfg);
+    let resourceIds = await resolveResourceIdsForBookingType(workspaceId, cfg);
+    if (locationId && resourceIds.length) {
+      const { filterResourceIdsForLocation } = await import(
+        "@/lib/appointments/service-booking/location-scheduling"
+      );
+      resourceIds = filterResourceIdsForLocation(platform, locationId, resourceIds);
+    }
     if (resourceIds.length) {
       slots = await filterSlotsByResourceAvailability(
         workspaceId,

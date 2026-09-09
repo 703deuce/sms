@@ -18,6 +18,18 @@ export async function POST(request: Request) {
     if (body.action === "add_member") {
       return addHouseholdMember(body.householdId, body.contactId, body);
     }
+    if (body.action === "create_named" || (!body.payerContactId && body.name)) {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const contact = await prisma.contact.create({
+        data: {
+          workspaceId,
+          firstName: String(body.name).trim(),
+          phone: `+1555${Date.now().toString().slice(-7)}`,
+        },
+      });
+      return createHouseholdAccount(workspaceId, contact.id, String(body.name).trim());
+    }
     return createHouseholdAccount(workspaceId, body.payerContactId, body.name);
   });
 }

@@ -3,10 +3,9 @@ import { jsonError } from "@/lib/api-auth";
 import { processAiSchedulingRequest } from "@/lib/appointments/ai-scheduling";
 import { resolveWorkspaceBySlug } from "@/lib/appointments/settings";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments";
+import { enforcePublicBookingAiRateLimit } from "@/lib/appointments/public-booking-rate-limit";
 
 type Params = { params: Promise<{ slug: string }> };
-
-const AI_RATE = new Map<string, number[]>();
 
 function clientIp(request: Request): string {
   return (
@@ -14,15 +13,6 @@ function clientIp(request: Request): string {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
-}
-
-function enforceIpRateLimit(key: string, max = 15): boolean {
-  const now = Date.now();
-  const list = (AI_RATE.get(key) || []).filter((t) => t >= now - 60_000);
-  if (list.length >= max) return false;
-  list.push(now);
-  AI_RATE.set(key, list);
-  return true;
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -37,7 +27,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const ip = clientIp(request);
-    if (!enforceIpRateLimit(`${workspace.id}:${ip}`)) {
+    if (!enforcePublicBookingAiRateLimit(workspace.id, ip)) {
       return NextResponse.json(
         { error: "Too many requests — please wait a moment." },
         { status: 429 },

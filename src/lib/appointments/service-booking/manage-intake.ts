@@ -1,8 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import { listIntakeForms, saveIntakeResponse } from "./intake-forms";
-import type { IntakeField } from "./types";
+import { evaluateIntakeEditCutoff, resolveSchedulingLimits } from "./scheduling-limits";
+import type { IntakeField, SchedulingLimitsConfig } from "./types";
 
 type IntakeFormRow = Awaited<ReturnType<typeof listIntakeForms>>[number];
 type IntakeResponseRow = {
@@ -52,6 +54,21 @@ export async function saveManageAppointmentIntake(
     where: { id: appointmentId, workspaceId },
   });
   if (!appointment) throw new Error("Appointment not found");
+
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const platformLimits = (platform as { schedulingLimits?: SchedulingLimitsConfig }).schedulingLimits;
+  let typeLimits: SchedulingLimitsConfig | undefined;
+  if (appointment.serviceName) {
+    const service = await prisma.voiceService.findFirst({
+      where: { workspaceId, name: appointment.serviceName },
+    });
+    typeLimits = (service?.config as { schedulingLimits?: SchedulingLimitsConfig } | null)?.schedulingLimits;
+  }
+  const limits = resolveSchedulingLimits(platformLimits, typeLimits);
+  const intakeEdit = evaluateIntakeEditCutoff(limits, new Date(appointment.startsAt));
+  if (!intakeEdit.allowed) {
+    throw new Error(intakeEdit.reason || "Intake editing is not allowed");
+  }
 
   const contactId =
     input.contactId ||

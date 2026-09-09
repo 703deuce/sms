@@ -66,6 +66,8 @@ export async function transferAppointmentPaymentOnReschedule(
   fromAppointmentId: string,
   toAppointmentId: string,
 ) {
+  if (fromAppointmentId === toAppointmentId) return { transferred: false };
+
   const prisma = getPrisma();
   const from = await prisma.voiceAppointment.findFirst({
     where: { id: fromAppointmentId, workspaceId },

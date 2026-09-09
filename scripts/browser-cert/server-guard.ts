@@ -93,9 +93,12 @@ export function getServerGuard(): ServerGuard | null {
 export function resolveCertBaseUrl(): string {
   const fromEnv = process.env.BROWSER_CERT_PREVIEW_URL?.trim();
   const baseUrl = (fromEnv || BROWSER_CERT_CONFIG.previewBaseUrl).replace(/\/$/, "");
-  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl)) {
+  const allowLocal =
+    process.env.BROWSER_CERT_ALLOW_LOCALHOST?.trim() === "1" ||
+    process.env.BROWSER_CERT_ALLOW_LOCALHOST?.trim()?.toLowerCase() === "true";
+  if (/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(baseUrl) && !allowLocal) {
     throw new Error(
-      `browser-cert.config.ts previewBaseUrl must not be localhost (${baseUrl}). Set your Coolify preview/staging URL.`,
+      `browser-cert.config.ts previewBaseUrl must not be localhost (${baseUrl}). Set BROWSER_CERT_ALLOW_LOCALHOST=1 for local UAT.`,
     );
   }
   if (!/^https?:\/\//i.test(baseUrl)) {

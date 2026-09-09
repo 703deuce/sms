@@ -1,0 +1,288 @@
+{
+  "startedAt": "2026-09-09T01:39:54.709Z",
+  "updatedAt": "2026-09-09T01:54:13.264Z",
+  "baseUrl": "[REDACTED]",
+  "results": {
+    "SB-01": {
+      "id": "SB-01",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-01",
+      "at": "2026-09-09T01:40:29.767Z"
+    },
+    "SB-02": {
+      "id": "SB-02",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-01",
+      "at": "2026-09-09T01:41:06.728Z"
+    },
+    "SB-03": {
+      "id": "SB-03",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-01",
+      "at": "2026-09-09T01:41:35.475Z"
+    },
+    "SB-04": {
+      "id": "SB-04",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Package 132945\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:42:15.437Z"
+    },
+    "SB-05": {
+      "id": "SB-05",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Membership 162228\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:42:45.277Z"
+    },
+    "SB-06": {
+      "id": "SB-06",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Gift 195385\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:43:17.535Z"
+    },
+    "SB-07": {
+      "id": "SB-07",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Coupon 226533\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:43:48.927Z"
+    },
+    "SB-08": {
+      "id": "SB-08",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Add-on 258949\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:44:20.822Z"
+    },
+    "SB-09": {
+      "id": "SB-09",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Resource 286448\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:44:48.344Z"
+    },
+    "SB-10": {
+      "id": "SB-10",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Class 316814\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:45:18.742Z"
+    },
+    "SB-11": {
+      "id": "SB-11",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Program 342936\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:45:45.002Z"
+    },
+    "SB-12": {
+      "id": "SB-12",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:46:16.953Z"
+    },
+    "SB-13": {
+      "id": "SB-13",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:47:15.775Z"
+    },
+    "SB-14": {
+      "id": "SB-14",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Household 458904\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:47:40.717Z"
+    },
+    "SB-15": {
+      "id": "SB-15",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Restriction 482892\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:48:04.892Z"
+    },
+    "SB-16": {
+      "id": "SB-16",
+      "status": "FAIL",
+      "detail": "Commerce create failed — \"UAT Intake 508185\" not listed",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:48:29.935Z"
+    },
+    "SB-17": {
+      "id": "SB-17",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:48:52.418Z"
+    },
+    "SB-18": {
+      "id": "SB-18",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:49:14.681Z"
+    },
+    "SB-19": {
+      "id": "SB-19",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:49:39.388Z"
+    },
+    "SB-20": {
+      "id": "SB-20",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:50:01.188Z"
+    },
+    "SB-21": {
+      "id": "SB-21",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-02",
+      "at": "2026-09-09T01:50:22.753Z"
+    },
+    "SB-22": {
+      "id": "SB-22",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-03",
+      "at": "2026-09-09T01:50:46.189Z"
+    },
+    "SB-23": {
+      "id": "SB-23",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-03",
+      "at": "2026-09-09T01:51:51.902Z"
+    },
+    "SB-24": {
+      "id": "SB-24",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-03",
+      "at": "2026-09-09T01:52:07.793Z"
+    },
+    "SB-25": {
+      "id": "SB-25",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-03",
+      "at": "2026-09-09T01:52:30.159Z"
+    },
+    "SB-26": {
+      "id": "SB-26",
+      "status": "SKIPPED",
+      "detail": "Fixed start times — config JSON only; availability engine covered by public book flow",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:35.043Z"
+    },
+    "SB-27": {
+      "id": "SB-27",
+      "status": "SKIPPED",
+      "detail": "Make Me Look Busy — API/config only",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:35.683Z"
+    },
+    "SB-28": {
+      "id": "SB-28",
+      "status": "SKIPPED",
+      "detail": "Formal contracts + e-sign — API only",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:36.332Z"
+    },
+    "SB-29": {
+      "id": "SB-29",
+      "status": "SKIPPED",
+      "detail": "Invoices — API only",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:37.042Z"
+    },
+    "SB-30": {
+      "id": "SB-30",
+      "status": "BLOCKED — LIVE EXTERNAL PROVIDER",
+      "detail": "Booking channels (Google/Facebook/Instagram) — OAuth blocked",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:37.691Z"
+    },
+    "SB-31": {
+      "id": "SB-31",
+      "status": "BLOCKED — LIVE EXTERNAL PROVIDER",
+      "detail": "iCloud calendar sync — provider blocked",
+      "batchId": "SB-BATCH-04",
+      "at": "2026-09-09T01:52:38.351Z"
+    },
+    "SB-32": {
+      "id": "SB-32",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-05",
+      "at": "2026-09-09T01:52:56.032Z"
+    },
+    "SB-33": {
+      "id": "SB-33",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-05",
+      "at": "2026-09-09T01:53:20.228Z"
+    },
+    "SB-34": {
+      "id": "SB-34",
+      "status": "PASS",
+      "detail": "",
+      "batchId": "SB-BATCH-06",
+      "at": "2026-09-09T01:54:08.575Z"
+    }
+  },
+  "batchesCompleted": [],
+  "provenance": {
+    "gitCommitSha": "aec7cf1b61023462b1979fac3741366849dd15a7",
+    "deployCommitSha": "aec7cf1b61023462b1979fac3741366849dd15a7",
+    "provenanceVerified": true
+  },
+  "consecutiveBrowserCrashes": 0,
+  "flowsCompleted": [
+    "SB-01",
+    "SB-02",
+    "SB-03",
+    "SB-04",
+    "SB-05",
+    "SB-06",
+    "SB-07",
+    "SB-08",
+    "SB-09",
+    "SB-10",
+    "SB-11",
+    "SB-12",
+    "SB-13",
+    "SB-14",
+    "SB-15",
+    "SB-16",
+    "SB-17",
+    "SB-18",
+    "SB-19",
+    "SB-20",
+    "SB-21",
+    "SB-22",
+    "SB-23",
+    "SB-24",
+    "SB-25",
+    "SB-26",
+    "SB-27",
+    "SB-28",
+    "SB-29",
+    "SB-30",
+    "SB-31",
+    "SB-32",
+    "SB-33",
+    "SB-34"
+  ]
+}

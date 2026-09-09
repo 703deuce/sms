@@ -44,3 +44,38 @@ export async function upsertBookingProduct(
   }
   return prisma.bookingProduct.create({ data: { workspaceId, ...data } });
 }
+
+export async function fulfillBookingProductSale(
+  workspaceId: string,
+  input: {
+    productId: string;
+    contactId: string;
+    quantity?: number;
+  },
+) {
+  const prisma = getPrisma();
+  const quantity = input.quantity ?? 1;
+  if (quantity <= 0) throw new Error("Quantity must be positive");
+
+  const product = await prisma.bookingProduct.findFirst({
+    where: { id: input.productId, workspaceId, active: true },
+  });
+  if (!product) throw new Error("Product not found");
+  if (product.sellStandalone === false) throw new Error("Product is not sold standalone");
+
+  if (product.quantityAvailable != null) {
+    if (product.quantityAvailable < quantity) throw new Error("Insufficient product inventory");
+    await prisma.bookingProduct.update({
+      where: { id: product.id },
+      data: { quantityAvailable: product.quantityAvailable - quantity },
+    });
+  }
+
+  return {
+    productId: product.id,
+    name: product.name,
+    quantity,
+    totalCents: product.priceCents * quantity,
+    contactId: input.contactId,
+  };
+}

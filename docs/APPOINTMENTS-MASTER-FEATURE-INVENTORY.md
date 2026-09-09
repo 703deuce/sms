@@ -66,7 +66,7 @@
 | Competitor parity discovery (A / SB / SQ) | **Complete** |
 | Implementation breadth (Phases 1–18) | **Complete** |
 | Implicit sub-capability visibility | **This pass** — explicit rows added below |
-| **PARTIAL** depth closure | **In progress** — see priority queue |
+| **PARTIAL** depth closure | **Complete** — all queued rows at CODE_COMPLETE; UA certification pending |
 | Journey-based UAT (UA_PENDING → PASS) | **Next bottleneck** |
 | Provider-blocked channels | **Scaffold only** — separate from code gaps |
 
@@ -83,13 +83,7 @@
 
 ### PARTIAL priority queue (immediate)
 
-| Feature row | Gap |
-|-------------|-----|
-| Intake file / image upload | Field types exist; storage upload API + UI wiring incomplete |
-| Locations | Admin surface shallow vs platform `locations` JSON |
-| Location-specific hours / services / staff / timezone | Per-location config not fully wired |
-| POS cart (base) | Session + line items exist |
-| POS mixed checkout breadth | Service + package + membership + gift + product + discount + tip in one cart — see explicit row |
+_All former PARTIAL rows are now **CODE_COMPLETE** (2026-09-08). Next: browser UA journeys on production._
 
 ### Certification method (UA_PENDING → PASS)
 
@@ -144,7 +138,7 @@ Update each row to **PASS** only when the journey that covers it has been signed
 | Add-ons on type | All | `add-ons.ts` | Type + commerce | `addOnIds` | `BookingAddOn` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Add-on duration & resource effects | All | `add-ons.ts` | Type + public Info | `durationDeltaMinutes`, `resourceIds` on selection | `BookingAddOn` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Intake forms on type | A, SB | `intake-forms.ts` | Type + public Info | `intakeResponses` POST | `IntakeForm`, `IntakeFormResponse` | `test-booking-intake.ts` | UA_PENDING | — |
-| Intake file / image upload | SB | `IntakeFieldType` file/image | Public Info (field type) | intake POST + storage | `IntakeFormResponse` | — | PARTIAL | Object storage (S3/Supabase) |
+| Intake file / image upload | SB | `IntakeFieldType` file/image | Public Info (field type) | intake POST + storage | `IntakeFormResponse` | — | CODE_COMPLETE | Object storage (S3/Supabase) |
 | Service phases (multi-phase duration) | SQ | `service-phases.ts` | Type editor phases | `ServicePhaseTemplate` API | `ServicePhaseTemplate` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Provider-release processing time | SQ | `staff-phase-occupancy.ts` | Type phases (`staffRequired`) | `validatePhasedSlot` | `ServicePhaseTemplate.staffRequired` | `test-clean-parity-gaps.ts` | UA_PENDING | — |
 | Confirmation page customization | All | `confirmationPage` | Public Done step | public GET | `VoiceService.config` | — | UA_PENDING | — |
@@ -205,11 +199,11 @@ Update each row to **PASS** only when the journey that covers it has been signed
 |---------|---------------|-------------------------|------------|---------------|----------------|--------------|----------------|---------------------|
 | Staff scheduling config | All | platform `staff[]` | `/appointments/staff` | scheduling-domain | JSON on platform | — | UA_PENDING | — |
 | Any employee / round-robin | All, SB | `scheduling-domain.ts` | Public staff picker | staff assignment modes | platform JSON | `test-appointments-double-booking.ts` | PASS | — |
-| Locations | All, SQ | platform `locations` | `/appointments/locations` | type `locationIds` | platform JSON | — | PARTIAL | — |
-| Location-specific hours/services | SQ | — | Locations | per-location config | platform JSON | — | PARTIAL | — |
-| Location-specific timezone | SQ | platform `locations` | Locations | per-location `timezone` | platform JSON | — | PARTIAL | — |
-| Location-specific staff assignment | SQ | platform `locations` | Locations + type editor | `locationIds` + staff config | platform JSON | — | PARTIAL | — |
-| Location-specific resource assignment | SQ | `resources.ts` | Locations / resources | `locationId` on resource | `SchedulingResource` | `test-phase2-wiring.ts` | PARTIAL | — |
+| Locations | All, SQ | platform `locations` | `/appointments/locations` | type `locationIds` | platform JSON | — | CODE_COMPLETE | — |
+| Location-specific hours/services | SQ | `location-scheduling.ts` | Locations | per-location config | platform JSON | — | CODE_COMPLETE | — |
+| Location-specific timezone | SQ | platform `locations` | Locations | per-location `timezone` | platform JSON | — | CODE_COMPLETE | — |
+| Location-specific staff assignment | SQ | platform `locations` | Locations + type editor | `locationIds` + staff config | platform JSON | — | CODE_COMPLETE | — |
+| Location-specific resource assignment | SQ | `resources.ts` | Locations / resources | `resourceIds` on location | `SchedulingResource` | `test-phase2-wiring.ts` | CODE_COMPLETE | — |
 | Resources (rooms, equipment) | SQ, SB | `resources.ts` | `/appointments/resources` | `resources` API | `SchedulingResource` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Resource quantity / capacity | SB | `SchedulingResource.quantity` | Resources admin | `countResourceUsage` | `SchedulingResource` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Resource pools (any-one-in-group) | SB | `resource-pools.ts` | — | `resource-groups` API | `SchedulingResourceGroup` | — | UA_PENDING | — |
@@ -337,8 +331,8 @@ Update each row to **PASS** only when the journey that covers it has been signed
 | Payment plans (installments) | A | `payment-plans.ts` | Commerce admin | `payment-plans` API | product metadata | `test-phases-3-17-wiring.ts` | UA_PENDING | Stripe |
 | Client wallet | — | `client-wallet.ts` | Commerce / portal | `client-wallet` API | `ClientWalletAccount` | `test-phase2-wiring.ts` | UA_PENDING | — |
 | Loyalty programs | — | `loyalty.ts` | Commerce admin | `loyalty` API | `LoyaltyProgram` | `test-phase2-wiring.ts` | UA_PENDING | — |
-| POS cart (session + line items) | SB | `pos-cart.ts` | Commerce admin | `pos-cart` API | `PosSession`, `PosLineItem` | `test-phase2-wiring.ts` | PARTIAL | — |
-| POS mixed checkout (service + package + membership + gift + product + discount + tip) | SB, SQ | `pos-cart.ts` | Commerce admin | `addPosLineItem` kinds + checkout | `PosLineItem.kind`, metadata | `test-phase2-wiring.ts` | PARTIAL | Stripe |
+| POS cart (session + line items) | SB | `pos-cart.ts` | Commerce admin | `pos-cart` API | `PosSession`, `PosLineItem` | `test-phase2-wiring.ts` | CODE_COMPLETE | — |
+| POS mixed checkout (service + package + membership + gift + product + discount + tip) | SB, SQ | `pos-cart.ts` | Commerce admin | `addPosLineItem` kinds + checkout | `PosLineItem.kind`, metadata | `test-phase2-wiring.ts` | CODE_COMPLETE | Stripe (optional for in-person) |
 | Products for sale | SB | `booking-products.ts` | Commerce admin | `products` API | `BookingProduct` | — | UA_PENDING | — |
 | Pay-what-you-want / tipping | SQ | `payments-extended.ts` | Type + public | PWYW config | type config | — | UA_PENDING | — |
 | Invoices | A, SQ | `booking-invoices.ts` | — (API-first) | `invoices` API | `BookingInvoice`, line items | — | UA_PENDING | Email for send |
@@ -567,7 +561,7 @@ Update each row to **PASS** only when the journey that covers it has been signed
 |------------|------------------------|
 | **PASS** | 21 |
 | **UA_PENDING** | ~265 |
-| **PARTIAL** | 8 |
+| **PARTIAL** | 0 |
 | **PROVIDER_BLOCKED** | 6 |
 | **N/A** | 7 |
 | **Total** | **~307** |

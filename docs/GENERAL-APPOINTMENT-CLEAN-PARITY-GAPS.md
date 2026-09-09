@@ -37,7 +37,7 @@
 | 14 | iCloud / Apple Calendar sync | PROVIDER_BLOCKED | Channel stub (ICS download ≠ sync) |
 | 15 | Event ticket issuance + QR admission | CODE_COMPLETE | `event-tickets.ts` + `ClassAdmissionTicket` model |
 | 16 | “Make Me Look Busy” availability control | CODE_COMPLETE | `availability-density.ts` |
-| 17 | Referral/reward (if not in loyalty) | PARTIAL | Extend `loyalty.ts` referral hooks |
+| 17 | Referral/reward (if not in loyalty) | CODE_COMPLETE | `loyalty.ts` referral codes + POS checkout attribution |
 
 ---
 
@@ -50,7 +50,7 @@
 | 20 | Unified client account history | CODE_COMPLETE | Portal API + UI sections |
 | 21 | Refunds (full/partial/wallet/credit) | CODE_COMPLETE | `appointment-refunds.ts` |
 | 22 | Terms & conditions versioned acceptance | CODE_COMPLETE | Public book + metadata snapshot |
-| 23 | Location-specific hours/services/staff | PARTIAL | Locations exist; per-location config in `location-scheduling.ts` |
+| 23 | Location-specific hours/services/staff | CODE_COMPLETE | Locations admin + `location-scheduling.ts` + availability engine |
 | 24 | Resource pools / quantity resources | HAVE | `quantity` on resources + `resource-pools.ts` groups |
 | 25 | Add-ons alter price/duration/resources | HAVE | `durationDeltaMinutes`, `resourceIds` on add-ons |
 | 26 | Waitlist preferences | HAVE | `AppointmentWaitlistEntry` preference fields |
@@ -58,7 +58,7 @@
 | 28 | Staff/service calendar color coding | CODE_COMPLETE | `calendarColors` on platform config |
 | 29 | Mixed-content package entitlements | CODE_COMPLETE | `PackageCreditRule` supports types + classes |
 | 30 | Custom terminology / localization | CODE_COMPLETE | `bookingTerminology` on scheduler theme |
-| 31 | POS checkout breadth | PARTIAL | `pos-cart.ts` — verify mixed line types at checkout |
+| 31 | POS checkout breadth | CODE_COMPLETE | `checkoutPosSession` fulfills mixed line kinds + POS admin catalog UI |
 | 32 | Class waitlist behavior | HAVE | Existing waitlist + class enrollment |
 | 33 | Customer-visible package/membership/gift balances | CODE_COMPLETE | Portal entitlements panel |
 | 34 | Failed-payment → entitlement suspension | CODE_COMPLETE | `membership-lifecycle.ts` |

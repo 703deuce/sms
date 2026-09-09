@@ -1,0 +1,34 @@
+{
+  "startedAt": "2026-09-09T02:58:03.293Z",
+  "updatedAt": "2026-09-09T03:01:39.860Z",
+  "baseUrl": "[REDACTED]",
+  "results": {
+    "UAT-01": {
+      "id": "UAT-01",
+      "status": "FAIL",
+      "detail": "product switcher not found",
+      "batchId": "UAT-A-AVAIL",
+      "at": "2026-09-09T02:59:23.528Z"
+    },
+    "UAT-02": {
+      "id": "UAT-02",
+      "status": "FAIL",
+      "detail": "locator.innerText: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('body')\n",
+      "batchId": "UAT-A-AVAIL",
+      "at": "2026-09-09T03:01:13.185Z"
+    },
+    "ENV": {
+      "id": "ENV",
+      "status": "BLOCKED — TEST ENVIRONMENT UNAVAILABLE",
+      "detail": "Deployed application unreachable before UAT-03 ([REDACTED] Aborting — not recording product FAILs.",
+      "batchId": "UAT-A-AVAIL",
+      "at": "2026-09-09T03:01:39.857Z"
+    }
+  },
+  "batchesCompleted": [],
+  "consecutiveBrowserCrashes": 0,
+  "flowsCompleted": [
+    "UAT-01",
+    "UAT-02"
+  ]
+}

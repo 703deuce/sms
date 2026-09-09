@@ -65,6 +65,18 @@ export type BrowserCertState = {
 export const CERT_DIR = join(process.cwd(), "docs/certification");
 export const STATE_FILE = join(CERT_DIR, "appointments-mctb-browser-cert-state.json");
 export const RESULTS_MD = join(CERT_DIR, "APPOINTMENTS_MCTB_BROWSER_CERT_RESULTS.md");
+
+function resolveStateFile(): string {
+  const override = process.env.BROWSER_CERT_STATE_FILE?.trim();
+  if (override) return override;
+  if (process.argv[1]?.includes("run-service-booking-browser-uat")) {
+    return join(CERT_DIR, "service-booking-browser-uat-state.json");
+  }
+  if (process.argv[1]?.includes("run-acuity-parity-browser-uat")) {
+    return join(CERT_DIR, "acuity-parity-browser-uat-state.json");
+  }
+  return STATE_FILE;
+}
 export const ARTIFACTS_DIR =
   process.env.BROWSER_CERT_ARTIFACTS_DIR || join(process.cwd(), "artifacts/browser-cert");
 
@@ -82,8 +94,9 @@ export const ERROR_PATTERNS = [
 ];
 
 export function loadState(): BrowserCertState {
-  if (existsSync(STATE_FILE)) {
-    return JSON.parse(readFileSync(STATE_FILE, "utf8")) as BrowserCertState;
+  const stateFile = resolveStateFile();
+  if (existsSync(stateFile)) {
+    return JSON.parse(readFileSync(stateFile, "utf8")) as BrowserCertState;
   }
   return {
     startedAt: new Date().toISOString(),
@@ -109,7 +122,7 @@ export function saveState(state: BrowserCertState) {
   for (const result of Object.values(state.results)) {
     if (result.detail) result.detail = sanitizeCertDetail(result.detail);
   }
-  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  writeFileSync(resolveStateFile(), JSON.stringify(state, null, 2));
 }
 
 /** Results preserved across deploy/environment changes (not re-run automatically). */
@@ -250,31 +263,35 @@ export async function authenticate(baseUrl: string): Promise<{
 
   const stableEmail = BROWSER_CERT_CONFIG.certEmail;
   const stablePassword = process.env.CERT_BROWSER_PASSWORD?.trim();
-  if (!stablePassword) {
+  const smokeEmail = process.env.UI_AGENT_SMOKE_EMAIL?.trim();
+  const smokePassword = process.env.UI_AGENT_SMOKE_PASSWORD?.trim();
+  const loginEmail = stablePassword ? stableEmail : smokeEmail || stableEmail;
+  const loginPassword = stablePassword || smokePassword;
+  if (!loginPassword) {
     await api.dispose();
     return {
       ok: false,
       storageState: await api.storageState(),
-      email: stableEmail,
+      email: loginEmail,
     };
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const login = await api.post("/api/auth/login", {
-      data: { email: stableEmail, password: stablePassword, next: "/appointments/overview" },
+      data: { email: loginEmail, password: loginPassword, next: "/appointments/overview" },
     });
     const loginBody = await login.json().catch(() => ({}));
     if (login.ok() && !loginBody.error) {
       const storageState = await api.storageState();
       await api.dispose();
-      return { ok: true, storageState, email: stableEmail };
+      return { ok: true, storageState, email: loginEmail };
     }
     if (attempt < 1) await new Promise((r) => setTimeout(r, 3000));
   }
 
   const emptyState = { cookies: [] as [], origins: [] as [] };
   await api.dispose();
-  return { ok: false, storageState: emptyState, email: stableEmail };
+  return { ok: false, storageState: emptyState, email: loginEmail };
 }
 
 /** Idempotent preview bootstrap for cert workspace (appointment types, MCTB fixtures). */

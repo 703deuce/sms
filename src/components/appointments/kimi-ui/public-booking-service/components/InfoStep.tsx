@@ -47,11 +47,13 @@ export function InfoStep({
   recurringPreview,
   recurringPreviewLoading,
   sessionLineCount = 0,
+  additionalServiceNames = [],
   onCheckoutSession,
   termsRequired = false,
   termsUrl = "/terms",
   termsAccepted = false,
   onTermsAcceptedChange,
+  uploadSlug,
 }: {
   type: BookingType;
   startsAt: string;
@@ -111,11 +113,13 @@ export function InfoStep({
   recurringPreview?: { dates: string[]; conflicts: Array<{ startsAt: string; reason: string }> } | null;
   recurringPreviewLoading?: boolean;
   sessionLineCount?: number;
+  additionalServiceNames?: string[];
   onCheckoutSession?: () => void;
   termsRequired?: boolean;
   termsUrl?: string;
   termsAccepted?: boolean;
   onTermsAcceptedChange?: (value: boolean) => void;
+  uploadSlug?: string;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -128,6 +132,26 @@ export function InfoStep({
   const [recurringOccurrences, setRecurringOccurrences] = useState(4);
   const [attendeeCount, setAttendeeCount] = useState(1);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  async function uploadIntakeFile(formId: string, fieldId: string, file: File) {
+    if (!uploadSlug) return;
+    const key = `${formId}:${fieldId}`;
+    setUploadingField(key);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/public/book/${encodeURIComponent(uploadSlug)}/intake-upload`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed");
+      onIntakeAnswersChange?.(formId, fieldId, String(json.data?.url || ""));
+    } finally {
+      setUploadingField(null);
+    }
+  }
 
   const questions = type.config?.bookingQuestions || [];
   const recurring = type.config?.recurring?.enabled ? type.config.recurring : null;
@@ -181,6 +205,13 @@ export function InfoStep({
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">{type.name}</p>
+          {additionalServiceNames.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-[12px] text-muted-foreground">
+              {additionalServiceNames.map((name) => (
+                <li key={name}>+ {name} (back-to-back)</li>
+              ))}
+            </ul>
+          ) : null}
           <p className="flex flex-wrap items-center gap-x-2 text-[12px] text-muted-foreground">
             <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />
               {formatFullDate(startsAt, timezone)} · {formatSlotTime(startsAt, timezone)}
@@ -490,12 +521,33 @@ export function InfoStep({
                   <Label htmlFor={`intake-${form.id}-${field.id}`}>
                     {field.label}{field.required ? " *" : ""}
                   </Label>
-                  <Input
-                    id={`intake-${form.id}-${field.id}`}
-                    className="mt-1.5"
-                    value={intakeAnswers[form.id]?.[field.id] || ""}
-                    onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
-                  />
+                  {field.type === "file" || field.type === "image" ? (
+                    <div className="mt-1.5 space-y-2">
+                      <input
+                        id={`intake-${form.id}-${field.id}`}
+                        type="file"
+                        accept={field.type === "image" ? "image/*" : undefined}
+                        className="block w-full text-[13px]"
+                        disabled={uploadingField === `${form.id}:${field.id}`}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void uploadIntakeFile(form.id, field.id, file);
+                        }}
+                      />
+                      {intakeAnswers[form.id]?.[field.id] ? (
+                        <p className="text-[12px] text-muted-foreground break-all">
+                          Uploaded: {intakeAnswers[form.id][field.id]}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <Input
+                      id={`intake-${form.id}-${field.id}`}
+                      className="mt-1.5"
+                      value={intakeAnswers[form.id]?.[field.id] || ""}
+                      onChange={(e) => onIntakeAnswersChange?.(form.id, field.id, e.target.value)}
+                    />
+                  )}
                 </div>
               ))}
             </div>

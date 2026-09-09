@@ -1,6 +1,9 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { fulfillStorePurchase } from "@/lib/appointments/service-booking/store-checkout";
+import { fulfillBookingProductSale } from "@/lib/appointments/service-booking/booking-products";
+import { earnLoyaltyPoints, processReferralOnPosCheckout } from "./loyalty";
 
 export type PosLineItemInput = {
   kind: string;
@@ -10,6 +13,8 @@ export type PosLineItemInput = {
   referenceId?: string;
   metadata?: Record<string, unknown>;
 };
+
+const FULFILLMENT_KINDS = new Set(["package", "gift", "membership", "product"]);
 
 async function recalculateSessionTotals(sessionId: string) {
   const prisma = getPrisma();
@@ -111,7 +116,42 @@ export async function removePosLineItem(workspaceId: string, sessionId: string, 
   return recalculateSessionTotals(sessionId);
 }
 
-export async function checkoutPosSession(workspaceId: string, sessionId: string) {
+async function recordCouponRedemptionIfNeeded(
+  workspaceId: string,
+  line: { kind: string; referenceId: string | null; totalCents: number },
+  contactId: string,
+) {
+  if (line.kind !== "discount" || !line.referenceId) return null;
+  const prisma = getPrisma();
+  const coupon = await prisma.appointmentCoupon.findFirst({
+    where: { id: line.referenceId, workspaceId, active: true },
+  });
+  if (!coupon) return null;
+
+  const existing = await prisma.appointmentCouponRedemption.findFirst({
+    where: { couponId: coupon.id, contactId },
+  });
+  if (existing) return existing.id;
+
+  const redemption = await prisma.appointmentCouponRedemption.create({
+    data: {
+      couponId: coupon.id,
+      contactId,
+      amountCents: Math.abs(line.totalCents),
+    },
+  });
+  return redemption.id;
+}
+
+export async function checkoutPosSession(
+  workspaceId: string,
+  sessionId: string,
+  input?: {
+    contactId?: string;
+    referralCode?: string;
+    loyaltyProgramId?: string;
+  },
+) {
   const prisma = getPrisma();
   const session = await prisma.posSession.findFirst({
     where: { id: sessionId, workspaceId, status: "open" },
@@ -120,9 +160,106 @@ export async function checkoutPosSession(workspaceId: string, sessionId: string)
   if (!session) throw new Error("Open POS session not found");
   if (session.lineItems.length === 0) throw new Error("Cannot checkout empty cart");
 
+  const contactId = input?.contactId || session.contactId || undefined;
+  const needsContact = session.lineItems.some((line) => FULFILLMENT_KINDS.has(line.kind));
+  if (needsContact && !contactId) {
+    throw new Error("A contact is required to fulfill package, gift, membership, or product lines");
+  }
+
+  const fulfillment: Array<Record<string, unknown>> = [];
+
+  for (const line of session.lineItems) {
+    const meta = (line.metadata || {}) as Record<string, unknown>;
+    switch (line.kind) {
+      case "package":
+      case "gift":
+      case "membership": {
+        if (!line.referenceId || !contactId) throw new Error(`Missing reference for ${line.kind} line`);
+        const result = await fulfillStorePurchase({
+          workspaceId,
+          kind: line.kind,
+          productId: line.referenceId,
+          contactId,
+          amountCents: line.totalCents > 0 ? line.totalCents : undefined,
+          recipientName: typeof meta.recipientName === "string" ? meta.recipientName : undefined,
+          recipientEmail: typeof meta.recipientEmail === "string" ? meta.recipientEmail : undefined,
+          giftMessage: typeof meta.giftMessage === "string" ? meta.giftMessage : undefined,
+        });
+        fulfillment.push({ lineId: line.id, kind: line.kind, result });
+        break;
+      }
+      case "product": {
+        if (!line.referenceId || !contactId) throw new Error("Missing product reference");
+        const result = await fulfillBookingProductSale(workspaceId, {
+          productId: line.referenceId,
+          contactId,
+          quantity: line.quantity,
+        });
+        fulfillment.push({ lineId: line.id, kind: line.kind, result });
+        break;
+      }
+      case "discount": {
+        if (contactId) {
+          const redemptionId = await recordCouponRedemptionIfNeeded(workspaceId, line, contactId);
+          fulfillment.push({ lineId: line.id, kind: line.kind, redemptionId });
+        }
+        break;
+      }
+      case "service":
+      case "appointment": {
+        fulfillment.push({
+          lineId: line.id,
+          kind: line.kind,
+          typeId: line.referenceId,
+          totalCents: line.totalCents,
+          recorded: true,
+        });
+        break;
+      }
+      case "tip":
+      case "custom":
+        fulfillment.push({ lineId: line.id, kind: line.kind, totalCents: line.totalCents });
+        break;
+      default:
+        fulfillment.push({ lineId: line.id, kind: line.kind, skipped: true });
+    }
+  }
+
+  if (contactId && input?.referralCode) {
+    await processReferralOnPosCheckout(workspaceId, {
+      referralCode: input.referralCode,
+      referredContactId: contactId,
+      spendCents: Math.max(0, session.totalCents),
+    });
+  }
+
+  if (contactId && input?.loyaltyProgramId && session.totalCents > 0) {
+    await earnLoyaltyPoints(workspaceId, input.loyaltyProgramId, contactId, {
+      spendCents: session.totalCents,
+      note: `POS session ${sessionId}`,
+    });
+  } else if (contactId && session.totalCents > 0) {
+    const program = await prisma.loyaltyProgram.findFirst({
+      where: { workspaceId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (program) {
+      await earnLoyaltyPoints(workspaceId, program.id, contactId, {
+        spendCents: session.totalCents,
+        note: `POS session ${sessionId}`,
+      });
+    }
+  }
+
+  const priorMeta = (session.metadata || {}) as Record<string, unknown>;
   return prisma.posSession.update({
     where: { id: sessionId },
-    data: { status: "checked_out", checkedOutAt: new Date() },
+    data: {
+      status: "checked_out",
+      checkedOutAt: new Date(),
+      contactId: contactId || session.contactId,
+      metadata: { ...priorMeta, fulfillment },
+    },
     include: { lineItems: true },
   });
 }

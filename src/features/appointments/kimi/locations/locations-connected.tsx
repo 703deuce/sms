@@ -5,6 +5,7 @@ import { MapPin, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { newLocation } from "@/features/appointments/kimi/shared/platform-settings-types";
 import type { AppointmentLocation } from "@/lib/appointments/types";
+import { defaultWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 
 const LOCATION_KINDS = [
   { value: "office", label: "Office" },
@@ -15,8 +16,21 @@ const LOCATION_KINDS = [
   { value: "custom", label: "Custom" },
 ] as const;
 
+const WEEKDAYS = [
+  { key: "monday", label: "Monday" },
+  { key: "tuesday", label: "Tuesday" },
+  { key: "wednesday", label: "Wednesday" },
+  { key: "thursday", label: "Thursday" },
+  { key: "friday", label: "Friday" },
+  { key: "saturday", label: "Saturday" },
+  { key: "sunday", label: "Sunday" },
+] as const;
+
 export function LocationsConnected() {
   const [locations, setLocations] = useState<AppointmentLocation[]>([]);
+  const [staffOptions, setStaffOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [typeOptions, setTypeOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [resourceOptions, setResourceOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -25,10 +39,28 @@ export function LocationsConnected() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/appointments/settings");
-      const json = res.ok ? await res.json() : { data: {} };
+      const [settingsRes, typesRes, resourcesRes] = await Promise.all([
+        fetch("/api/appointments/settings"),
+        fetch("/api/appointments/types"),
+        fetch("/api/appointments/service-booking/resources"),
+      ]);
+      const json = settingsRes.ok ? await settingsRes.json() : { data: {} };
+      const typesJson = typesRes.ok ? await typesRes.json() : { data: [] };
+      const resourcesJson = resourcesRes.ok ? await resourcesRes.json() : { data: [] };
       const list = (json.data?.locations || []) as AppointmentLocation[];
       setLocations(list);
+      setStaffOptions((json.data?.staff || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
+      setTypeOptions(
+        (Array.isArray(typesJson.data) ? typesJson.data : []).map((t: { id: string; name: string }) => ({
+          id: t.id,
+          name: t.name,
+        })),
+      );
+      setResourceOptions(
+        (Array.isArray(resourcesJson.data) ? resourcesJson.data : []).map(
+          (r: { id: string; name: string }) => ({ id: r.id, name: r.name }),
+        ),
+      );
       setSelectedId((current) => current ?? (list[0]?.id ?? null));
     } catch {
       setError("Could not load locations");
@@ -46,6 +78,20 @@ export function LocationsConnected() {
   function updateSelected(patch: Partial<AppointmentLocation>) {
     if (!selectedId) return;
     setLocations((prev) => prev.map((l) => (l.id === selectedId ? { ...l, ...patch } : l)));
+  }
+
+  function updateWeeklyHour(day: string, field: "open" | "close", value: string) {
+    if (!selected) return;
+    const hours = { ...(selected.weeklyHours || defaultWeeklyHours()) };
+    const windows = [...(hours[day] || [{ open: "09:00", close: "17:00" }])];
+    windows[0] = { ...windows[0], [field]: value };
+    hours[day] = windows;
+    updateSelected({ weeklyHours: hours });
+  }
+
+  function toggleWeeklyHoursOverride(enabled: boolean) {
+    if (!selected) return;
+    updateSelected({ weeklyHours: enabled ? defaultWeeklyHours() : undefined });
   }
 
   async function save() {
@@ -165,6 +211,145 @@ export function LocationsConnected() {
                 />
                 Active
               </label>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">Staff at this location</label>
+                {staffOptions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {staffOptions.map((s) => {
+                      const checked = (selected.staffIds || []).includes(s.id);
+                      return (
+                        <label key={s.id} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[12px]">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = new Set(selected.staffIds || []);
+                              if (e.target.checked) next.add(s.id);
+                              else next.delete(s.id);
+                              updateSelected({ staffIds: [...next] });
+                            }}
+                          />
+                          {s.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-[#8a8fa3]">
+                    No staff configured yet. Add team members under Appointments settings.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">Services at this location</label>
+                {typeOptions.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {typeOptions.map((t) => {
+                        const checked = (selected.appointmentTypeIds || []).includes(t.id);
+                        return (
+                          <label key={t.id} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[12px]">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = new Set(selected.appointmentTypeIds || []);
+                                if (e.target.checked) next.add(t.id);
+                                else next.delete(t.id);
+                                updateSelected({ appointmentTypeIds: [...next] });
+                              }}
+                            />
+                            {t.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-[#8a8fa3]">Leave empty to offer all booking types here.</p>
+                  </>
+                ) : (
+                  <p className="text-[12px] text-[#8a8fa3]">No booking types yet.</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#6b6f82] mb-1">
+                  Resources at this location
+                </label>
+                {resourceOptions.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {resourceOptions.map((r) => {
+                        const checked = (selected.resourceIds || []).includes(r.id);
+                        return (
+                          <label key={r.id} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[12px]">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = new Set(selected.resourceIds || []);
+                                if (e.target.checked) next.add(r.id);
+                                else next.delete(r.id);
+                                updateSelected({ resourceIds: [...next] });
+                              }}
+                            />
+                            {r.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-[#8a8fa3]">Leave empty to use all resources here.</p>
+                  </>
+                ) : (
+                  <p className="text-[12px] text-[#8a8fa3]">
+                    No resources yet. Add resources under Commerce → Resources.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-lg border border-[#eceaf3] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-[#6b6f82]">Weekly hours</p>
+                    <p className="text-[11px] text-[#8a8fa3]">
+                      Override platform hours for this location, or inherit defaults.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-[12px]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selected.weeklyHours && Object.keys(selected.weeklyHours).length)}
+                      onChange={(e) => toggleWeeklyHoursOverride(e.target.checked)}
+                    />
+                    Custom hours
+                  </label>
+                </div>
+                {selected.weeklyHours && Object.keys(selected.weeklyHours).length ? (
+                  <div className="space-y-2">
+                    {WEEKDAYS.map(({ key, label }) => {
+                      const window = selected.weeklyHours?.[key]?.[0] || { open: "", close: "" };
+                      return (
+                        <div key={key} className="grid grid-cols-[100px_1fr_1fr] gap-2 items-center text-[12px]">
+                          <span className="font-medium text-[#6b6f82]">{label}</span>
+                          <input
+                            type="time"
+                            className="rounded border border-[#e4e6ee] px-2 py-1"
+                            value={window.open}
+                            onChange={(e) => updateWeeklyHour(key, "open", e.target.value)}
+                            aria-label={`${label} open`}
+                          />
+                          <input
+                            type="time"
+                            className="rounded border border-[#e4e6ee] px-2 py-1"
+                            value={window.close}
+                            onChange={(e) => updateWeeklyHour(key, "close", e.target.value)}
+                            aria-label={`${label} close`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-[#8a8fa3]">Using workspace default availability hours.</p>
+                )}
+              </div>
               <div className="flex justify-between pt-4 border-t">
                 <button
                   type="button"

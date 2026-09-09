@@ -33,10 +33,9 @@ import {
 import { SlotTakenError } from "@/lib/appointments/slot-booking";
 import type { AppointmentTypeConfig, PaymentRequirement } from "@/lib/appointments/types";
 import { getPrisma, type DbRow } from "@/lib/db";
+import { enforcePublicBookingRateLimit } from "@/lib/appointments/public-booking-rate-limit";
 
 type Params = { params: Promise<{ slug: string }> };
-
-const PUBLIC_BOOKING_RATE = new Map<string, number[]>();
 
 function clientIp(request: Request): string {
   return (
@@ -46,16 +45,31 @@ function clientIp(request: Request): string {
   );
 }
 
-function enforcePublicRateLimit(workspaceId: string, ip: string): boolean {
-  const key = `${workspaceId}:${ip}`;
-  const now = Date.now();
-  const windowMs = 60_000;
-  const max = 30;
-  const list = (PUBLIC_BOOKING_RATE.get(key) || []).filter((t) => t >= now - windowMs);
-  if (list.length >= max) return false;
-  list.push(now);
-  PUBLIC_BOOKING_RATE.set(key, list);
-  return true;
+function normalizeIntakeFormFields(fields: unknown): Array<{
+  id: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  options?: string[];
+}> {
+  if (!Array.isArray(fields)) return [];
+  return fields
+    .map((field) => {
+      if (!field || typeof field !== "object") return null;
+      const row = field as Record<string, unknown>;
+      const id = String(row.id || "");
+      const label = String(row.label || "");
+      const type = String(row.type || row.fieldType || "text");
+      if (!id || !label) return null;
+      return {
+        id,
+        label,
+        type,
+        required: row.required === true,
+        options: Array.isArray(row.options) ? row.options.map(String) : undefined,
+      };
+    })
+    .filter((field): field is NonNullable<typeof field> => field !== null);
 }
 
 async function resolveTypeConfig(
@@ -232,7 +246,7 @@ export async function GET(_request: Request, { params }: Params) {
           .map((f: { id: string; name: string; fields: unknown }) => ({
             id: f.id,
             name: f.name,
-            fields: f.fields,
+            fields: normalizeIntakeFormFields(f.fields),
           })),
         customFieldDefinitions: customFieldDefinitions
           .filter((d: { active: boolean }) => d.active)
@@ -273,16 +287,16 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Booking page disabled" }, { status: 403 });
     }
 
+    const body = (await request.json()) as Record<string, unknown>;
+    const action = String(body.action || "book");
+
     const ip = clientIp(request);
-    if (!enforcePublicRateLimit(workspace.id, ip)) {
+    if (!enforcePublicBookingRateLimit(workspace.id, ip, action)) {
       return NextResponse.json(
         { error: "Too many requests — please wait a moment and try again." },
         { status: 429 },
       );
     }
-
-    const body = (await request.json()) as Record<string, unknown>;
-    const action = String(body.action || "book");
 
     if (action === "entitlements") {
       const phone = String(body.phone || "").trim();
@@ -365,6 +379,7 @@ export async function POST(request: Request, { params }: Params) {
         serviceId: body.serviceId ? String(body.serviceId) : undefined,
         serviceName: body.serviceName ? String(body.serviceName) : undefined,
         staffId: body.staffId ? String(body.staffId) : undefined,
+        locationId: body.locationId ? String(body.locationId) : undefined,
         durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
         daysAhead: Number(body.daysAhead || 14),
       });
@@ -390,6 +405,34 @@ export async function POST(request: Request, { params }: Params) {
         return NextResponse.json({ data: { slots: slotsWithCapacity } });
       }
       return NextResponse.json({ data });
+    }
+
+    if (action === "hold_slot") {
+      const startsAtRaw = String(body.startsAt || "");
+      const durationMinutes = Number(body.durationMinutes || 30);
+      const startsAt = new Date(startsAtRaw);
+      if (Number.isNaN(startsAt.getTime())) {
+        return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
+      }
+      const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+      const { holdAppointmentSlot } = await import("@/lib/voice/calendar/slot-holds");
+      const hold = await holdAppointmentSlot({
+        workspaceId: workspace.id,
+        phone: body.phone ? String(body.phone) : undefined,
+        serviceName: body.serviceName ? String(body.serviceName) : undefined,
+        startsAt,
+        endsAt,
+        timezone: config.timezone,
+        expiresInSeconds: 300,
+        metadata: {
+          source: "public_booking",
+          staffId: body.staffId ? String(body.staffId) : undefined,
+          locationId: body.locationId ? String(body.locationId) : undefined,
+        },
+      });
+      return NextResponse.json({
+        data: { holdId: hold.id, expiresAt: hold.expiresAt.toISOString() },
+      });
     }
 
     const phone = String(body.phone || "").trim();
@@ -718,6 +761,16 @@ export async function POST(request: Request, { params }: Params) {
     const result = await createPlatformAppointment(workspace.id, bookInput);
     const appointmentId = String(result.appointmentId || "");
     const contactId = String(result.contactId || "");
+
+    if (appointmentId && body.holdId) {
+      const { convertHoldToAppointment } = await import("@/lib/voice/calendar/slot-holds");
+      await convertHoldToAppointment({
+        workspaceId: workspace.id,
+        appointmentId,
+        holdId: String(body.holdId),
+        phone,
+      });
+    }
 
     let entitlementOutcome: Awaited<ReturnType<typeof applyBookingEntitlement>> | null = null;
     const entitlementMethod = body.entitlementMethod

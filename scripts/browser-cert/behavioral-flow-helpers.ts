@@ -22,8 +22,6 @@ const CERT_WEEKLY_HOURS = {
   sunday: [{ open: "09:00", close: "17:00" }],
 };
 
-};
-
 /** Bootstrap cert fixtures on preview (idempotent). Non-fatal when route not deployed yet. */
 export async function bootstrapCertWorkspaceViaApi(page: Page) {
   const res = await page.request.post("/api/cert/appointments-mctb/bootstrap");

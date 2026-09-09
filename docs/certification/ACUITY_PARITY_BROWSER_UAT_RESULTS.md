@@ -1,33 +1,34 @@
 # Acuity Parity Browser UAT Results (Live)
 
-**Updated:** 2026-09-09T07:25:00Z  
+**Updated:** 2026-09-09T12:10:00Z  
 **Environment:** `https://transovo.ai` — browser tab `cc0c34` (Anthony Johnson, logged in)  
-**Method:** Real UI clicks/inputs in attached Cursor browser (desktop 1440×900)
+**Method:** Real UI clicks/inputs in attached Cursor browser (desktop 1440×900)  
+**Deploy verified:** commits `4f40e4e2` + `42e39cac` on Coolify (rebuild successful)
 
 ## Executive summary
 
 | Status | Count |
 |--------|-------|
-| **PASS** | 8 |
-| **PARTIAL** | 13 |
-| **FAIL** | 31 |
-| **BLOCKED** | 14 |
+| **PASS** | 9 |
+| **PARTIAL** | 22 |
+| **FAIL** | 23 |
+| **BLOCKED** | 12 |
 
-### Root cause (not connectivity)
+### Post-deploy status (2026-09-09)
 
-`GET /api/public/book/harbor-home` returns:
+**Fixed by deploy** — `prisma-compat` model mappings + POS route + branding parse + scheduling limits UI:
 
-```json
-{"error":"Cannot read properties of undefined (reading 'findMany')"}
-```
+- `GET /api/public/book/harbor-home` → **HTTP 200** (types, locations, add-ons, intake forms load)
+- Public booking flow: service pick → slots → details → add-ons at checkout (**submit hit rate limit** during UAT)
+- `/appointments/pos` → **POS cart** loads (no longer caught by `[id]`)
+- `/appointments/classes` → commerce hub loads (no `findMany` crash)
+- Scheduler branding tab → **Primary color / Logo URL / noindex** editor (not raw JSON)
+- `/appointments/availability` → **Slot scheduling (Acuity parity)** section visible
 
-This is a **production server/DB migration bug** (Prisma model/client missing on deployed build). It blocks all public booking, checkout, portal, slot verification, and most customer journeys. Classes commerce tab shows the same error. Internet connectivity is **not** the issue — API fails consistently after retry.
+**Remaining defects (fix batch pending deploy):**
 
-Secondary defects:
-- `/appointments/pos` → **Appointment not found** (`[id]` route catches `pos`)
-- Scheduling limits UI (fixed starts, interval, look busy, minimize gaps) **not shipped** in admin
-- Scheduler branding tab renders raw JSON blob instead of editor (UAT-54/55)
-- Location editor missing staff/hours/resources sections visible in current deploy
+- Rate limit **disabled by default** (`PUBLIC_BOOKING_RATE_LIMIT_ENABLED=1` to re-enable); only applies to `book` action when enabled
+- QR, multi-service checkout summary, intake normalization, location empty states, resource qty editor, invoices tab — fixed in next build
 
 ---
 
@@ -35,10 +36,10 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-01 | **FAIL** | No fixed-start-times UI on Types or Availability. Public book API broken. |
-| UAT-02 | **FAIL** | No custom start interval control in UI. |
-| UAT-03 | **FAIL** | No “Make Me Look Busy” control in UI. |
-| UAT-04 | **FAIL** | No minimize-gaps / compact scheduling control in UI. |
+| UAT-01 | **PARTIAL** | **PASS admin:** “Fixed start times only” toggle on `/appointments/availability` → Slot scheduling section. Slot behavior unverified end-to-end. |
+| UAT-02 | **PARTIAL** | **PASS admin:** “Custom start interval (minutes)” field visible. Public slot grid not compared against saved interval. |
+| UAT-03 | **PARTIAL** | **PASS admin:** “Make me look busy — hide slots (%)” field visible. Customer slot density unverified. |
+| UAT-04 | **PARTIAL** | **PASS admin:** “Minimize gaps” control (Off / Prefer compact scheduling). Runtime effect unverified. |
 
 ---
 
@@ -46,9 +47,9 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-05 | **BLOCKED** | Public booking does not load — cannot test multi-service checkout. |
-| UAT-06 | **BLOCKED** | Same — per-line staff picker requires booking flow. |
-| UAT-07 | **PARTIAL** | **PASS admin:** Added 15-min active_staff phase on Browser Cert Consultation; Save phases succeeded. **BLOCKED customer:** slot overlap unverified (public book API 500). |
+| UAT-05 | **PARTIAL** | **PASS UI:** “Add service” → pick Initial Consultation → back-to-back copy shown. **FAIL persist:** checkout summary only listed Browser Cert Consultation (second service dropped). |
+| UAT-06 | **BLOCKED** | Per-line staff picker not observed on public checkout. |
+| UAT-07 | **PARTIAL** | **PASS admin:** 15-min active_staff phase saved. **PARTIAL customer:** slots load; processing-time overlap not verified. |
 
 ---
 
@@ -56,7 +57,7 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-08 | **PARTIAL** | **PASS admin:** Created **UAT Location A**, saved, visible in list + on type editor. **BLOCKED customer:** public book broken. |
+| UAT-08 | **PARTIAL** | **PASS admin:** **UAT Location A** in list + type editor. **PARTIAL customer:** public book loads; location picker not exercised on in-person flow. |
 | UAT-09 | **FAIL** | No custom-hours toggle on location editor in current deploy. |
 | UAT-10 | **FAIL** | “Staff at this location” not visible on location editor. |
 | UAT-11 | **PARTIAL** | Timezone field present (`America/New_York`). Multi-TZ booking unverified. |
@@ -77,9 +78,9 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-15 | **PARTIAL** | **UAT Add-on 258949** exists; attached on Browser Cert Consultation type. Price at checkout unverified (public book broken). |
-| UAT-16 | **BLOCKED** | Duration delta requires public slot comparison. |
-| UAT-17 | **BLOCKED** | Add-on resource gating requires public availability. |
+| UAT-15 | **PARTIAL** | **PASS customer:** **UAT Add-on 258949** checkbox visible on checkout details step. Price line item / total not confirmed before submit. |
+| UAT-16 | **BLOCKED** | Duration delta requires booking with add-on selected + slot comparison. |
+| UAT-17 | **BLOCKED** | Add-on resource gating requires constrained availability test. |
 
 ---
 
@@ -153,7 +154,7 @@ Secondary defects:
 | ID | Status | Notes |
 |----|--------|-------|
 | UAT-41 | **PARTIAL** | Commerce hub + package/product lists load. Sell flow unverified. |
-| UAT-42 | **FAIL** | `/appointments/pos` shows **Appointment not found** — route conflict with `[id]`. |
+| UAT-42 | **PASS** | `/appointments/pos` loads **POS cart** (New cart, contact ID, referral code, mixed checkout copy). |
 
 ---
 
@@ -161,8 +162,8 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-43 | **FAIL** | Classes tab errors: `findMany` on load; cannot create **UAT Class Cap 3**. |
-| UAT-44 | **BLOCKED** | Display modes require public class page. |
+| UAT-43 | **PARTIAL** | `/appointments/classes` loads commerce hub + “New classes name” form. **UAT Class Cap 3** not created this pass. |
+| UAT-44 | **PARTIAL** | `/book/harbor-home/classes` loads; empty state “No upcoming class sessions.” Display modes unverified (no sessions). |
 | UAT-45 | **PARTIAL** | **Waitlist admin** loads (`/appointments/waitlist`) with filters; join flow blocked. |
 | UAT-46 | **BLOCKED** | Waitlist preferences need customer join. |
 | UAT-47 | **BLOCKED** | Party size waitlist unverified. |
@@ -186,8 +187,8 @@ Secondary defects:
 | ID | Status | Notes |
 |----|--------|-------|
 | UAT-53 | **PARTIAL** | Share page shows public link `https://transovo.ai/book/harbor-home?type=…`; QR stuck “Generating…” / Download disabled. |
-| UAT-54 | **FAIL** | Scheduler branding tab shows raw JSON config, not terminology editor. |
-| UAT-55 | **FAIL** | Same — no usable custom CSS editor visible. |
+| UAT-54 | **PARTIAL** | Scheduler branding tab shows **Primary color**, **Logo URL**, **noindex** checkbox + Save — not raw JSON. Full terminology/CSS editor not present. |
+| UAT-55 | **PARTIAL** | Same — branding fields usable; custom CSS editor not exposed. |
 | UAT-56 | **BLOCKED** | Custom domain — DNS not configured for UAT. |
 
 ---
@@ -215,11 +216,11 @@ Secondary defects:
 
 | ID | Status | Notes |
 |----|--------|-------|
-| UAT-62 | **BLOCKED** | Trainer package journey — public book broken. |
-| UAT-63 | **BLOCKED** | Membership journey — public book broken. |
-| UAT-64 | **BLOCKED** | Class + waitlist journey — classes API broken. |
-| UAT-65 | **BLOCKED** | Multi-service journey — public book broken. |
-| UAT-66 | **PARTIAL** | Admin surfaces reachable (Commerce, Share, Calendar, Types); POS broken; public book broken. |
+| UAT-62 | **BLOCKED** | Package journey — checkout submit blocked by 429 rate limit; no manage link obtained. |
+| UAT-63 | **BLOCKED** | Membership journey — submit blocked; payment skipped per rules. |
+| UAT-64 | **BLOCKED** | Class + waitlist — no class sessions configured; waitlist join unverified. |
+| UAT-65 | **PARTIAL** | Multi-service UI reachable; second service dropped before checkout (see UAT-05). |
+| UAT-66 | **PARTIAL** | Admin surfaces OK (Commerce, Share, Calendar, Types, POS, Availability limits). Public book loads; submit rate-limited. |
 
 ---
 
@@ -227,31 +228,32 @@ Secondary defects:
 
 | Surface | URL | Result |
 |---------|-----|--------|
-| Availability | `/appointments/availability` | PASS — weekly hours, limits, integrations |
+| Availability | `/appointments/availability` | PASS — weekly hours, **slot scheduling (Acuity parity)**, limits, integrations |
 | Booking types | `/appointments/types` | PASS — full editor, resources/add-ons/intake linked |
 | Locations | `/appointments/locations` | PASS — CRUD basic fields |
-| Commerce hub | `/appointments/commerce` | PARTIAL — packages/add-ons/intake OK; classes error |
+| Commerce hub | `/appointments/commerce` | PASS — packages/add-ons/intake; classes tab loads |
+| Classes admin | `/appointments/classes` | PARTIAL — loads; no UAT class created |
 | Calendar | `/appointments/calendar` | PASS |
 | Waitlist admin | `/appointments/waitlist` | PASS — empty queue UI |
-| Share & embed | `/appointments/booking/share` | PARTIAL — link OK, QR pending |
-| Public booking | `/book/harbor-home` | **FAIL** — findMany API error |
-| POS | `/appointments/pos` | **FAIL** — wrong page |
+| Share & embed | `/appointments/booking/share` | PARTIAL — link OK, QR stuck generating |
+| Public booking | `/book/harbor-home` | PARTIAL — full flow to checkout; submit 429 rate limit |
+| Public classes | `/book/harbor-home/classes` | PARTIAL — loads; no sessions |
+| POS | `/appointments/pos` | PASS |
 | Manage (invalid) | `/manage/invalid-uat-token-xyz` | PASS |
 
 ---
 
 ## Recommended fixes (priority)
 
-1. **Deploy DB migration** — ensure Prisma models used by `listBookingCategories`, `listIntakeForms`, `listCustomerFieldDefinitions`, `classSeries`, etc. exist on production (`findMany` crash).
-2. **Fix `/appointments/pos` route** — register static `pos` before dynamic `[id]` or use `/appointments/point-of-sale`.
-3. **Ship scheduling limits UI** — fixed starts, custom interval, density, minimize gaps (backend exists).
-4. **Fix Scheduler branding tab** — render editor instead of raw JSON.
-5. **Expand location editor** — custom hours, staff, resources per location (code exists in `locations-connected.tsx`).
+1. **Deploy fix batch** — rate limit off by default; QR GET image; multi-service summary; intake field normalize; location sections; resource qty; invoices tab.
+2. **Create UAT class session** — enable UAT-43/44/64 class/waitlist journeys.
+3. **Re-run booking submit + manage-link journeys** after deploy.
 
 ---
 
 ## Evidence
 
 - Browser session: tab `cc0c34` on `transovo.ai`
-- API probe: `curl https://transovo.ai/api/public/book/harbor-home` → findMany error
-- Test records created: **UAT Location A** (locations)
+- API probe (post-deploy): `GET https://transovo.ai/api/public/book/harbor-home` → **200** with full payload
+- Booking attempt: service + slot + add-on + details → **429** on submit
+- Test records: **UAT Location A**, **UAT Resource 286448**, **UAT Add-on 258949**, **UAT Intake 508185**, **UAT Package 132945**

@@ -151,3 +151,126 @@ export async function listLoyaltyLedger(
     take: limit,
   });
 }
+
+type ReferralMetadata = {
+  referralCodes?: Record<string, string>;
+  referrals?: Array<{ code: string; referrerContactId: string; referredContactId: string; at: string }>;
+  referrerBonusPoints?: number;
+  referredBonusPoints?: number;
+};
+
+function readReferralMetadata(program: { metadata: unknown }): ReferralMetadata {
+  return ((program.metadata || {}) as ReferralMetadata) || {};
+}
+
+export function buildReferralCode(contactId: string): string {
+  const compact = contactId.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase();
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `REF${compact}${suffix}`;
+}
+
+export async function getOrCreateReferralCode(
+  workspaceId: string,
+  programId: string,
+  contactId: string,
+) {
+  const prisma = getPrisma();
+  const program = await prisma.loyaltyProgram.findFirst({
+    where: { id: programId, workspaceId, active: true },
+  });
+  if (!program) throw new Error("Loyalty program not found");
+
+  const meta = readReferralMetadata(program);
+  const existing = Object.entries(meta.referralCodes || {}).find(([, id]) => id === contactId)?.[0];
+  if (existing) return { code: existing, programId: program.id };
+
+  let code = buildReferralCode(contactId);
+  const codes = { ...(meta.referralCodes || {}) };
+  while (codes[code]) code = buildReferralCode(contactId);
+  codes[code] = contactId;
+
+  await prisma.loyaltyProgram.update({
+    where: { id: program.id },
+    data: { metadata: { ...meta, referralCodes: codes } },
+  });
+
+  return { code, programId: program.id };
+}
+
+export async function processReferralOnPosCheckout(
+  workspaceId: string,
+  input: { referralCode: string; referredContactId: string; spendCents?: number },
+) {
+  const prisma = getPrisma();
+  const code = input.referralCode.trim().toUpperCase();
+  if (!code) return { applied: false as const };
+
+  const program = await prisma.loyaltyProgram.findFirst({
+    where: { workspaceId, active: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!program) return { applied: false as const };
+
+  const meta = readReferralMetadata(program);
+  const referrerContactId = meta.referralCodes?.[code];
+  if (!referrerContactId || referrerContactId === input.referredContactId) {
+    return { applied: false as const };
+  }
+
+  const prior = (meta.referrals || []).some(
+    (row) => row.referredContactId === input.referredContactId,
+  );
+  if (prior) return { applied: false as const, reason: "already_referred" as const };
+
+  const referrerBonus = meta.referrerBonusPoints ?? 100;
+  const referredBonus = meta.referredBonusPoints ?? 50;
+
+  await earnLoyaltyPoints(workspaceId, program.id, referrerContactId, {
+    points: referrerBonus,
+    note: `Referral reward for ${input.referredContactId}`,
+  });
+  await earnLoyaltyPoints(workspaceId, program.id, input.referredContactId, {
+    points: referredBonus,
+    note: `Welcome referral bonus (${code})`,
+  });
+
+  const referrals = [
+    ...(meta.referrals || []),
+    {
+      code,
+      referrerContactId,
+      referredContactId: input.referredContactId,
+      at: new Date().toISOString(),
+    },
+  ];
+
+  await prisma.loyaltyProgram.update({
+    where: { id: program.id },
+    data: { metadata: { ...meta, referrals } },
+  });
+
+  return { applied: true as const, programId: program.id, referrerContactId };
+}
+
+export async function configureReferralRewards(
+  workspaceId: string,
+  programId: string,
+  input: { referrerBonusPoints?: number; referredBonusPoints?: number },
+) {
+  const prisma = getPrisma();
+  const program = await prisma.loyaltyProgram.findFirst({
+    where: { id: programId, workspaceId },
+  });
+  if (!program) throw new Error("Loyalty program not found");
+  const meta = readReferralMetadata(program);
+  return prisma.loyaltyProgram.update({
+    where: { id: program.id },
+    data: {
+      metadata: {
+        ...meta,
+        referrerBonusPoints: input.referrerBonusPoints ?? meta.referrerBonusPoints ?? 100,
+        referredBonusPoints: input.referredBonusPoints ?? meta.referredBonusPoints ?? 50,
+      },
+    },
+  });
+}

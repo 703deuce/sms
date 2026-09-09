@@ -34,7 +34,11 @@ export async function POST(request: Request) {
       case "remove_line":
         return removePosLineItem(workspaceId, body.sessionId, body.lineItemId);
       case "checkout":
-        return checkoutPosSession(workspaceId, body.sessionId);
+        return checkoutPosSession(workspaceId, body.sessionId, {
+          contactId: body.contactId,
+          referralCode: body.referralCode,
+          loyaltyProgramId: body.loyaltyProgramId,
+        });
       case "void":
         return voidPosSession(workspaceId, body.sessionId);
       default:

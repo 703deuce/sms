@@ -5,6 +5,8 @@ import {
   earnLoyaltyPoints,
   redeemLoyaltyPoints,
   listLoyaltyLedger,
+  getOrCreateReferralCode,
+  configureReferralRewards,
 } from "@/lib/appointments/service-booking/phase2";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 
@@ -38,6 +40,10 @@ export async function POST(request: Request) {
           body.points,
           body,
         );
+      case "referral_code":
+        return getOrCreateReferralCode(workspaceId, body.programId, body.contactId);
+      case "configure_referrals":
+        return configureReferralRewards(workspaceId, body.programId, body);
       default:
         return upsertLoyaltyProgram(workspaceId, body);
     }

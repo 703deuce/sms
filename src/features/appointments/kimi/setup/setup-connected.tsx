@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SetupView from "@/components/appointments/kimi-ui/get-started/page";
+import { AppointmentsSettingsSearch } from "@/components/appointments/appointments-settings-search";
 import {
   buildSetupPageModel,
   deriveSetupApiStatus,
@@ -134,6 +135,7 @@ export function SetupConnected() {
       actions={actions}
       saving={saving}
       copied={copied}
+      settingsSearch={<AppointmentsSettingsSearch className="max-w-md" />}
     />
   );
 }

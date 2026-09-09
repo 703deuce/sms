@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import SetupProgressCard from "./components/SetupProgressCard";
 import StepList from "./components/StepList";
 import AllSetBanner from "./components/AllSetBanner";
@@ -14,9 +15,10 @@ type Props = {
   actions: SetupPageActions;
   saving?: boolean;
   copied?: boolean;
+  settingsSearch?: ReactNode;
 };
 
-export default function SetupView({ model, actions, saving = false, copied = false }: Props) {
+export default function SetupView({ model, actions, saving = false, copied = false, settingsSearch }: Props) {
   return (
     <div className="setup-page" style={{ background: "#f7f7fa", minHeight: "100%" }}>
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 32px 56px" }}>
@@ -38,6 +40,7 @@ export default function SetupView({ model, actions, saving = false, copied = fal
           <p style={{ fontSize: 13, color: "#8a8aa3", margin: "5px 0 0" }}>
             Set up your booking system and start taking appointments.
           </p>
+          {settingsSearch ? <div style={{ marginTop: 16 }}>{settingsSearch}</div> : null}
         </div>
 
         <div
