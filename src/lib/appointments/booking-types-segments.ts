@@ -53,7 +53,7 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
     description:
       "Let multiple customers enroll in the same scheduled class with capacity, attendance, and waitlist options.",
     listHref: "/appointments/types/classes",
-    createHref: "/appointments/types/editor?segment=classes&create=1",
+    createHref: "/appointments/types/classes/new",
     bookingTypeKind: "CLASS",
     classPresentation: "recurring_class",
   },
@@ -63,7 +63,7 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
     description:
       "Take registrations for workshops, seminars, special events, and limited-run group sessions.",
     listHref: "/appointments/types/workshops",
-    createHref: "/appointments/types/editor?segment=workshops&create=1",
+    createHref: "/appointments/types/workshops/new",
     bookingTypeKind: "CLASS",
     classPresentation: "workshop_event",
   },

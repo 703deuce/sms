@@ -41,10 +41,30 @@ export function BookingTypesEditorClient() {
       if (initialTypeId) {
         router.replace(`/appointments/types/services/${encodeURIComponent(initialTypeId)}`);
       }
+      return;
+    }
+    if (segmentId === "classes") {
+      if (initialCreate) {
+        router.replace("/appointments/types/classes/new");
+        return;
+      }
+      if (initialTypeId) {
+        router.replace(`/appointments/types/classes/${encodeURIComponent(initialTypeId)}`);
+      }
+      return;
+    }
+    if (segmentId === "workshops") {
+      if (initialCreate) {
+        router.replace("/appointments/types/workshops/new");
+        return;
+      }
+      if (initialTypeId) {
+        router.replace(`/appointments/types/workshops/${encodeURIComponent(initialTypeId)}`);
+      }
     }
   }, [initialCreate, initialTypeId, router, segmentId]);
 
-  if (segmentId === "meetings" || segmentId === "services") {
+  if (segmentId === "meetings" || segmentId === "services" || segmentId === "classes" || segmentId === "workshops") {
     return (
       <div className="appt-overview-pilot ref-root min-h-full px-6 py-12 flex items-center justify-center">
         <p className="appt-pilot-text-helper" aria-busy="true">Opening editor…</p>
