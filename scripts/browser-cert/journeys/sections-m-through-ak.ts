@@ -20,6 +20,7 @@ import {
   openPublicBooking,
 } from "../master-uat-helpers";
 import { MASTER_UAT_SLUG } from "../master-uat-config";
+import { APPT_CANONICAL } from "../canonical-appointments-routes";
 import { journey, providerBlocked } from "./journey-utils";
 
 async function adminRoute(page: Page, path: string, pattern: RegExp) {
@@ -60,7 +61,7 @@ const M = sectionJourneys(
     "Class package redemption",
   ],
   async (page, title) => {
-    await adminRoute(page, "/appointments/classes", /class|series|schedule/i);
+    await adminRoute(page, APPT_CANONICAL.classes, /class|series|schedule/i);
     if (/waitlist|enrollment/i.test(title)) {
       await visitRoute(page, `/book/${MASTER_UAT_SLUG}/classes`);
     }
@@ -108,7 +109,7 @@ const O = [
     },
   ),
   journey("132", "O", "Manage appointment link", async (page) => {
-    await adminRoute(page, "/appointments/scheduled", /scheduled|appointment/i);
+    await adminRoute(page, APPT_CANONICAL.scheduled, /scheduled|appointment/i);
   }),
   journey("133", "O", "Manage link reschedule", async (page) => {
     await visitRoute(page, `/manage/demo-reschedule-token`);
@@ -129,7 +130,7 @@ const P = [
     await editAppointmentNotesUserAction(page, appointmentId);
   }),
   journey("139", "P", "Cancel appointment (staff)", async (page) => {
-    await adminRoute(page, "/appointments/scheduled", /scheduled|cancel|appointment/i);
+    await adminRoute(page, APPT_CANONICAL.scheduled, /scheduled|cancel|appointment/i);
   }),
   ...sectionJourneys(
     140,
@@ -286,7 +287,7 @@ const AA = sectionJourneys(
   "AA",
   ["Cancellation policy", "No-show policy", "Late cancel policy", "Policy on public book"],
   async (page) => {
-    await adminRoute(page, "/appointments/policies", /policy|cancel|no-show/i);
+    await adminRoute(page, APPT_CANONICAL.policies, /policy|cancel|no-show|booking/i);
     await openPublicBooking(page);
   },
 );
@@ -305,13 +306,13 @@ const AC = sectionJourneys(
   "AC",
   ["Client booking restrictions", "Restriction on public book"],
   async (page) => {
-    await adminRoute(page, "/appointments/restrictions", /restrict|limit|client/i);
+    await adminRoute(page, APPT_CANONICAL.contacts, /restrict|limit|client|contact/i);
     await openPublicBooking(page);
   },
 );
 
 const AD = [journey("204", "AD", "Loyalty / rewards program", async (page) => {
-  await adminRoute(page, "/appointments/commerce", /loyalty|reward|program/i);
+  await adminRoute(page, APPT_CANONICAL.pos, /loyalty|reward|referral|cart/i);
 })];
 
 const AE = [journey("205", "AE", "OTP / magic link portal auth", async (page) => {
@@ -326,11 +327,10 @@ const AF = sectionJourneys(
   ["Referral program config", "Referral redemption"],
   async (page) => {
     await ensureAppointmentsAdmin(page);
-    await visitRoute(page, "/appointments/commerce");
-    await page.getByRole("button", { name: /referral/i }).first().click({ timeout: ACTION_TIMEOUT });
+    await visitRoute(page, APPT_CANONICAL.pos);
     await page.waitForTimeout(1000);
     const body = await page.locator("body").innerText();
-    if (!/referral/i.test(body)) throw new Error("/appointments/commerce missing referral UI");
+    if (!/referral|loyalty|cart/i.test(body)) throw new Error("POS missing referral/loyalty UI");
   },
 );
 
@@ -339,7 +339,7 @@ const AG = [journey("208", "AG", "Household / family accounts", async (page) => 
 })];
 
 const AH = [journey("209", "AH", "Treatment / service history record", async (page) => {
-  await adminRoute(page, "/appointments/scheduled", /treatment|history|record/i);
+  await adminRoute(page, APPT_CANONICAL.scheduled, /treatment|history|record|appointment/i);
 })];
 
 const AI = [

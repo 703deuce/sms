@@ -6,6 +6,7 @@ import type { Page } from "playwright";
 import { ACTION_TIMEOUT, visitRoute } from "./lib";
 import { switchToAppointments } from "./flow-helpers";
 import { ensureCertWorkspaceReadyViaApi } from "./behavioral-flow-helpers";
+import { APPT_CANONICAL } from "./canonical-appointments-routes";
 
 export async function ensureAppointmentsShell(page: Page) {
   await switchToAppointments(page);
@@ -60,6 +61,23 @@ export async function typeEditorSectionsVisible(page: Page) {
   }
 }
 
+async function createViaBrowserPrompt(
+  page: Page,
+  namePrefix: string,
+  triggerCreate: () => Promise<void>,
+) {
+  const unique = `${namePrefix} ${Date.now().toString().slice(-6)}`;
+  page.once("dialog", async (dialog) => {
+    await dialog.accept(unique);
+  });
+  await triggerCreate();
+  await page.waitForTimeout(2500);
+  const body = await page.locator("body").innerText();
+  if (!body.includes(unique)) {
+    throw new Error(`Create failed — "${unique}" not listed after prompt flow`);
+  }
+}
+
 export async function commerceCreateItem(
   page: Page,
   route: string,
@@ -69,10 +87,54 @@ export async function commerceCreateItem(
   await ensureAppointmentsShell(page);
   await visitRoute(page, route);
   await page.waitForTimeout(800);
+
+  const unique = `${namePrefix} ${Date.now().toString().slice(-6)}`;
+
+  if (route.startsWith(APPT_CANONICAL.packages)) {
+    await createViaBrowserPrompt(page, namePrefix, async () => {
+      await page.getByRole("button", { name: /^Create$/i }).click({ timeout: ACTION_TIMEOUT });
+    });
+    return;
+  }
+
+  if (route.startsWith(APPT_CANONICAL.memberships)) {
+    await createViaBrowserPrompt(page, namePrefix, async () => {
+      await page.getByRole("button", { name: /^Create$/i }).click({ timeout: ACTION_TIMEOUT });
+    });
+    return;
+  }
+
+  if (route.startsWith(APPT_CANONICAL.giftCards)) {
+    await createViaBrowserPrompt(page, namePrefix, async () => {
+      await page.getByRole("button", { name: /^Create$/i }).click({ timeout: ACTION_TIMEOUT });
+    });
+    return;
+  }
+
+  if (route.startsWith(APPT_CANONICAL.discounts)) {
+    await createViaBrowserPrompt(page, namePrefix, async () => {
+      await page.getByRole("button", { name: /^Create$/i }).click({ timeout: ACTION_TIMEOUT });
+    });
+    return;
+  }
+
+  if (route.startsWith(APPT_CANONICAL.pos)) {
+    const newCart = page.getByRole("button", { name: /new cart/i }).first();
+    await newCart.click({ timeout: ACTION_TIMEOUT });
+    const desc = page.locator('input[class*="rounded"]').first();
+    await desc.fill(unique);
+    await page.getByRole("button", { name: /add item/i }).click({ timeout: ACTION_TIMEOUT });
+    await page.waitForTimeout(1500);
+    const body = await page.locator("body").innerText();
+    if (!body.includes(unique)) throw new Error(`POS product line "${unique}" not listed`);
+    return;
+  }
+
   const tab = page.getByRole("button", { name: tabLabel }).first();
   if (await tab.count()) await tab.click({ timeout: ACTION_TIMEOUT });
-  const unique = `${namePrefix} ${Date.now().toString().slice(-6)}`;
-  const nameInput = page.locator('[data-testid="commerce-name-input"], input[aria-label="Name"], input[placeholder*="name" i]').first();
+  const nameInput = page
+    .locator('[data-testid="commerce-name-input"], input[aria-label="Name"], input[placeholder*="name" i]')
+    .first();
   await nameInput.waitFor({ state: "visible", timeout: ACTION_TIMEOUT });
   await nameInput.fill(unique);
   const addRes = page.waitForResponse(
@@ -106,7 +168,7 @@ export async function commerceTabReadOnly(page: Page, route: string, tabLabel: R
 
 export async function shareEmbedHubUserAction(page: Page) {
   await ensureAppointmentsShell(page);
-  await visitRoute(page, "/appointments/booking/share");
+  await visitRoute(page, APPT_CANONICAL.share);
   await page.waitForTimeout(1200);
   const body = await page.locator("body").innerText();
   if (!/Share booking|Public booking link|QR code|Embed/i.test(body)) {
@@ -122,7 +184,7 @@ export async function shareEmbedHubUserAction(page: Page) {
 
 export async function segmentsPageUserAction(page: Page) {
   await ensureAppointmentsShell(page);
-  await visitRoute(page, "/appointments/segments");
+  await visitRoute(page, APPT_CANONICAL.segments);
   await page.waitForTimeout(1000);
   const body = await page.locator("body").innerText();
   if (!/segment|appointment/i.test(body)) {
