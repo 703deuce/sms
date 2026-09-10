@@ -451,32 +451,79 @@ function commerceCanonicalAdminComplete() {
   return required.every((rel) => existsSync(join(ROOT, rel)));
 }
 
-function detectWorkspacePolicyOnlyOnTempRoute() {
-  const policiesPage = join(ROOT, "src/app/(app)/appointments/policies/page.tsx");
-  const policiesClient = join(ROOT, "src/components/appointments/appointments-policies-client.tsx");
-  if (!existsSync(policiesPage) || !existsSync(policiesClient)) return false;
-  const src = readFileSync(policiesClient, "utf8");
+function detectCanonicalWorkspacePolicyEditor() {
+  const editor = join(ROOT, "src/components/appointments/workspace-booking-policies-editor.tsx");
+  const settingsCard = join(
+    ROOT,
+    "src/components/settings/kimi-ui/business/components/DefaultBookingPoliciesCard.tsx",
+  );
+  const business = join(ROOT, "src/features/settings/kimi/business/business-connected.tsx");
+  if (!existsSync(editor) || !existsSync(settingsCard) || !existsSync(business)) return false;
+  const businessSrc = readFileSync(business, "utf8");
+  const editorSrc = readFileSync(editor, "utf8");
   return (
-    src.includes("cancellationPolicyText") &&
-    src.includes("noShowPolicyText") &&
-    src.includes("/api/appointments/settings")
+    businessSrc.includes("DefaultBookingPoliciesCard") &&
+    editorSrc.includes("cancellationPolicyText") &&
+    editorSrc.includes("/api/appointments/settings")
   );
 }
 
-function detectAcuityReportsOnlyOnTempRoute() {
-  const hub = join(ROOT, "src/components/appointments/service-booking-admin-client.tsx");
-  const reporting = join(ROOT, "src/lib/appointments/service-booking/reporting.ts");
+function detectWorkspacePolicyOnlyOnTempRoute() {
+  if (detectCanonicalWorkspacePolicyEditor()) return false;
+  const policiesClient = join(ROOT, "src/components/appointments/appointments-policies-client.tsx");
+  if (!existsSync(policiesClient)) return true;
+  const src = readFileSync(policiesClient, "utf8");
+  return src.includes("cancellationPolicyText") && !src.includes("WorkspaceBookingPoliciesEditor");
+}
+
+function detectCanonicalServiceBookingReport() {
   const analytics = join(ROOT, "src/components/appointments/kimi-ui/analytics/components/analytics-client.tsx");
-  if (!existsSync(hub) || !existsSync(reporting)) return false;
+  const card = join(
+    ROOT,
+    "src/components/appointments/kimi-ui/analytics/components/service-booking-report-card.tsx",
+  );
+  const reporting = join(ROOT, "src/lib/appointments/service-booking/reporting.ts");
+  if (!existsSync(analytics) || !existsSync(card) || !existsSync(reporting)) return false;
+  const analyticsSrc = readFileSync(analytics, "utf8");
+  const cardSrc = readFileSync(card, "utf8");
+  return analyticsSrc.includes("ServiceBookingReportCard") && cardSrc.includes("loadAcuityStyleReports") === false && cardSrc.includes("/api/appointments/service-booking/reports");
+}
+
+function detectAcuityReportsOnlyOnTempRoute() {
+  if (detectCanonicalServiceBookingReport()) return false;
+  const hub = join(ROOT, "src/components/appointments/service-booking-admin-client.tsx");
+  const analytics = join(ROOT, "src/components/appointments/kimi-ui/analytics/components/analytics-client.tsx");
+  if (!existsSync(hub)) return true;
   const hubSrc = readFileSync(hub, "utf8");
   const analyticsSrc = existsSync(analytics) ? readFileSync(analytics, "utf8") : "";
-  return hubSrc.includes('section === "reports"') && !analyticsSrc.includes("loadAcuityStyleReports");
+  return hubSrc.includes('section === "reports"') && !analyticsSrc.includes("ServiceBookingReportCard");
+}
+
+function detectCanonicalLegacyRoutingAdmin() {
+  const panel = join(ROOT, "src/components/appointments/legacy-routing-rules-panel.tsx");
+  const routingForms = join(
+    ROOT,
+    "src/components/appointments/kimi-ui/routing-forms/components/RoutingFormsClient.tsx",
+  );
+  const routingService = join(ROOT, "src/lib/appointments/appointment-routing.ts");
+  const publicBook = join(ROOT, "src/app/api/public/book/[slug]/route.ts");
+  if (!existsSync(panel) || !existsSync(routingForms) || !existsSync(routingService) || !existsSync(publicBook))
+    return false;
+  const formsSrc = readFileSync(routingForms, "utf8");
+  const publicSrc = readFileSync(publicBook, "utf8");
+  const serviceSrc = readFileSync(routingService, "utf8");
+  return (
+    formsSrc.includes("LegacyRoutingRulesPanel") &&
+    serviceSrc.includes("resolveAppointmentRouting") &&
+    publicSrc.includes("resolveAppointmentRouting")
+  );
 }
 
 function detectLegacyRoutingRulesOnlyOnTempRoute() {
+  if (detectCanonicalLegacyRoutingAdmin()) return false;
   const routingPage = join(ROOT, "src/features/appointments/kimi/routing/routing-connected.tsx");
   const publicBook = join(ROOT, "src/app/api/public/book/[slug]/route.ts");
-  if (!existsSync(routingPage) || !existsSync(publicBook)) return false;
+  if (!existsSync(routingPage) || !existsSync(publicBook)) return true;
   const routingSrc = readFileSync(routingPage, "utf8");
   const publicSrc = readFileSync(publicBook, "utf8");
   return routingSrc.includes("routingRules") && publicSrc.includes("resolveRoutingDestination");
@@ -568,7 +615,7 @@ function buildDynamicTempRouteClassification() {
       classification: policiesUnique ? "STILL_HAS_UNIQUE_V1" : "READY_FOR_RETIREMENT",
       unique: policiesUnique ? 1 : 0,
       uniqueFeatureIds: policiesUnique ? ["workspace-policy"] : [],
-      canonical: "/appointments/types → Policies (per-type) + /appointments/booking for workspace defaults",
+      canonical: "/settings/business — Default booking policies (+ per-type override on Booking Types)",
       uniqueBefore: 1,
     },
     "/appointments/client-restrictions": {
@@ -688,7 +735,7 @@ function buildDynamicTempRouteClassification() {
       classification: routingUnique ? "COMPATIBILITY_REQUIRED" : "READY_FOR_RETIREMENT",
       unique: routingUnique ? 1 : 0,
       uniqueFeatureIds: routingUnique ? ["15-2"] : [],
-      canonical: "/appointments/routing-forms (15-1) — legacy rules need migration or compat editor",
+      canonical: "/appointments/routing-forms — Answer-based routing rules panel",
       uniqueBefore: 1,
     },
     "/appointments/voice-reminders": {
@@ -1015,10 +1062,16 @@ function main() {
   const oldRoutingUnique = routingRoute?.unique || 0;
   const oldRoutingFeatureIds = routingRoute?.uniqueFeatureIds || [];
   const tempUniqueRoutes = enrichedTempRoutes.filter(
-    (t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED",
+    (t) =>
+      (t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED") &&
+      (t.unique || 0) > 0,
   ).length;
   const tempUniqueFunctionCount = enrichedTempRoutes
-    .filter((t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED")
+    .filter(
+      (t) =>
+        (t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED") &&
+        (t.unique || 0) > 0,
+    )
     .reduce((s, t) => s + (t.unique || 0), 0);
   const tempNoUniqueRemaining = enrichedTempRoutes.filter(
     (t) => t.classification === "READY_FOR_RETIREMENT" || t.classification === "NO_UNIQUE_V1_REMAINING",
@@ -1481,7 +1534,7 @@ See \`docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md\` § Proposed next implementat
   // --- Batch 8G-0: Final pre-convergence master reconciliation ---
   if (BATCH_MODE === "8G0") {
     summary.batch = "8G0";
-    summary.wavesReconciled = "8D-1 through 8D-7 + 8F-1 through 8F-4";
+    summary.wavesReconciled = "8D-1 through 8D-7 + 8F-1 through 8F-4 + 8G-0C";
     writeFileSync(OUT_8G0_LEDGER, csvOut);
     writeFileSync(OUT_8G0_JSON, JSON.stringify(summary, null, 2) + "\n");
     writeFileSync(OUT_8G0_TEMP, tempMd.replace(`Batch ${BATCH_MODE}`, "Batch 8G-0 FINAL PRE-CONVERGENCE"));

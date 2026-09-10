@@ -37,19 +37,19 @@ Full **308-row** mechanical re-audit from current codebase after all 8F implemen
 | Check | Unique required V1 | Remaining IDs |
 |-------|-------------------:|---------------|
 | **Commerce** (`/appointments/commerce`) | 0 | — |
-| **Policies** (`/appointments/policies`) | 1 | workspace-policy |
-| **Service-booking report** | 1 | 16-6 |
-| **Legacy routing** | 1 | 15-2 |
+| **Policies** (`/appointments/policies`) | 0 | — |
+| **Service-booking report** | 0 | — |
+| **Legacy routing** | 0 | — |
 
 ### Readiness gates
 
 | Gate | Result | Blockers |
 |------|--------|----------|
-| **READY_FOR_ROUTE_CONVERGENCE** | **NO** | Policies unique V1: workspace-policy; Service-booking report unique V1: 16-6; Legacy routing unique V1: 15-2 |
+| **READY_FOR_ROUTE_CONVERGENCE** | **YES** | None |
 | **READY_FOR_MASTER_BROWSER_CERTIFICATION** | **YES** | None (provider-blocked + runtime-only excepted) |
 
 
-> **Route convergence blocked.** Resolve temp-route unique V1 or migrate to canonical destinations before 8G-1.
+> **Next batch:** 8G-1 — FINAL ROUTE CONVERGENCE + LEGACY RETIREMENT
 
 
 > **Master browser certification:** Implementation gaps are zero, but route convergence must complete first. Do NOT run master browser certification until after 8G-1.
@@ -57,8 +57,8 @@ Full **308-row** mechanical re-audit from current codebase after all 8F implemen
 
 ## Temp route summary
 
-- **Blocking routes (unique V1 / compatibility):** 3
-- **Ready for retirement:** 18
+- **Blocking routes (unique V1 / compatibility):** 0
+- **Ready for retirement:** 21
 - **Discovered non-canonical routes:** 22
 
 See `docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md` and `docs/APPOINTMENTS-FINAL-ROUTE-RETIREMENT-MAP.md`.
@@ -78,15 +78,15 @@ See `docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md` and `docs/APPO
 | `/appointments/contracts` | 9 | NO |
 | `/appointments/coupons` | 7 | NO |
 | `/appointments/no-show-recovery` | 25 | NO |
-| `/appointments/policies` | 6 | YES |
+| `/appointments/policies` | 6 | NO |
 | `/appointments/recall-campaigns` | 25 | NO |
-| `/appointments/reports/service-booking` | 4 | YES |
+| `/appointments/reports/service-booking` | 4 | NO |
 | `/appointments/resources` | 8 | NO |
 | `/appointments/restrictions` | 6 | NO |
-| `/appointments/routing` | 23 | YES |
+| `/appointments/routing` | 27 | NO |
 | `/appointments/scheduled` | 7 | NO |
 | `/appointments/segments` | 4 | NO |
-| `/appointments/service-booking` | 121 | NO |
+| `/appointments/service-booking` | 122 | NO |
 | `/appointments/voice-reminders` | 14 | NO |
 
 ## Artifacts

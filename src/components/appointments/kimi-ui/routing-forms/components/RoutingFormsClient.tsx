@@ -6,6 +6,7 @@ import type { RoutingForm, RoutingFormMeta } from "../types";
 import { industryOptions, companySizeOptions } from "../types";
 import FormListPanel from "./FormListPanel";
 import FormEditor from "./FormEditor";
+import { LegacyRoutingRulesPanel } from "@/components/appointments/legacy-routing-rules-panel";
 
 function emptyForm(): RoutingForm {
   return {
@@ -202,6 +203,10 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
           )}
         </div>
       )}
+
+      <div style={{ marginTop: 28 }}>
+        <LegacyRoutingRulesPanel embedded />
+      </div>
 
       {toast && (
         <div className="toast" role="status">

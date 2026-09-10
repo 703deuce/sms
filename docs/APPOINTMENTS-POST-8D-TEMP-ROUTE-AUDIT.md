@@ -17,21 +17,21 @@
 | `/appointments/coupons` | READY_FOR_RETIREMENT | 0→0 | — | /appointments/discounts | 7 |
 | `/appointments/no-show-recovery` | READY_FOR_RETIREMENT | 0→0 | — | /appointments/automations/no-show | 25 |
 | `/appointments/payments` | V2_ONLY | 1→0 | — | V2 deferred — hide from V1 nav | 6 |
-| `/appointments/policies` | STILL_HAS_UNIQUE_V1 | 1→1 | workspace-policy | /appointments/types → Policies (per-type) + /appointments/booking for workspace defaults | 6 |
+| `/appointments/policies` | READY_FOR_RETIREMENT | 1→0 | — | /appointments/types → Policies (per-type) + /appointments/booking for workspace defaults | 6 |
 | `/appointments/recall-campaigns` | READY_FOR_RETIREMENT | 0→0 | — | /appointments/automations/recall | 25 |
-| `/appointments/reports/service-booking` | STILL_HAS_UNIQUE_V1 | 1→1 | 16-6 | /appointments/analytics/reports | 4 |
+| `/appointments/reports/service-booking` | READY_FOR_RETIREMENT | 1→0 | — | /appointments/analytics/reports | 4 |
 | `/appointments/resources` | READY_FOR_RETIREMENT | 0→0 | — | /appointments/booking/rooms-equipment | 8 |
 | `/appointments/restrictions` | READY_FOR_RETIREMENT | 0→0 | — | Duplicate client-restrictions | 6 |
-| `/appointments/routing` | COMPATIBILITY_REQUIRED | 1→1 | 15-2 | /appointments/routing-forms (15-1) — legacy rules need migration or compat editor | 23 |
+| `/appointments/routing` | READY_FOR_RETIREMENT | 1→0 | — | /appointments/routing-forms — Answer-based routing rules panel | 27 |
 | `/appointments/scheduled` | READY_FOR_RETIREMENT | 0→0 | — | /appointments | 7 |
 | `/appointments/segments` | READY_FOR_RETIREMENT | 0→0 | — | /contacts/segments + /appointments/recalls | 4 |
-| `/appointments/service-booking` | READY_FOR_RETIREMENT | 0→0 | — | Alias hub entry — canonical pages exist | 121 |
+| `/appointments/service-booking` | READY_FOR_RETIREMENT | 0→0 | — | Alias hub entry — canonical pages exist | 122 |
 | `/appointments/voice-reminders` | READY_FOR_RETIREMENT | 0→0 | — | /appointments/reminders | 14 |
 
 **Commerce unique required V1:** 0 (none)
-**Policies unique required V1:** 1 (workspace-policy)
-**Service-booking report unique required V1:** 1 (16-6)
-**Old routing unique required V1:** 1 (15-2)
-**Temp routes blocking convergence (STILL_HAS_UNIQUE_V1 + COMPATIBILITY_REQUIRED):** 3
-**Temp routes ready for retirement:** 18
+**Policies unique required V1:** 0 (none)
+**Service-booking report unique required V1:** 0 (none)
+**Old routing unique required V1:** 0 (none)
+**Temp routes blocking convergence (STILL_HAS_UNIQUE_V1 + COMPATIBILITY_REQUIRED):** 0
+**Temp routes ready for retirement:** 21
 **Temp routes discovered (non-canonical):** 22

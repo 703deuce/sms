@@ -8,4 +8,4 @@
 
 | Batch | Domain | Feature IDs | Gap type | Rows |
 |-------|--------|-------------|----------|-----:|
-| **8G-1** | Route convergence + legacy retirement | temp routes with unique V1 | temp uniqueness | 3 routes / 0 functions |
+| **8G-1** | **FINAL ROUTE CONVERGENCE + LEGACY RETIREMENT** | All READY_FOR_RETIREMENT temp routes | retirement only | 21 |

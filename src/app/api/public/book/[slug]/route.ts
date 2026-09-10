@@ -25,9 +25,9 @@ import { listBookingAddOns, listSchedulingResources, listIntakeForms } from "@/l
 import { listCustomerFieldDefinitions } from "@/lib/appointments/service-booking/phase2/custom-fields";
 import { calculateAddOnTotals } from "@/lib/appointments/service-booking/add-ons";
 import { chargeSavedCardForAppointment } from "@/lib/merchant-payments/saved-cards";
+import { resolveAppointmentRouting } from "@/lib/appointments/appointment-routing";
 import {
   loadSchedulingContext,
-  resolveRoutingDestination,
   resolveStaffForBooking,
 } from "@/lib/appointments/scheduling-domain";
 import { SlotTakenError } from "@/lib/appointments/slot-booking";
@@ -556,7 +556,7 @@ export async function POST(request: Request, { params }: Params) {
     let locationId = body.locationId ? String(body.locationId) : undefined;
     let locationName: string | undefined;
 
-    const routingDest = resolveRoutingDestination(config.routingRules, bookingAnswers || {});
+    const routingDest = resolveAppointmentRouting(config, bookingAnswers || {});
     if (routingDest) {
       if (routingDest.appointmentTypeId) {
         const routed = await resolveTypeConfig(workspace.id, routingDest.appointmentTypeId);

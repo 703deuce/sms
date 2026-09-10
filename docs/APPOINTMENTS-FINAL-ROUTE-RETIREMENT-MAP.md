@@ -16,12 +16,12 @@
 | `/appointments/contracts` | /appointments/booking/forms | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/coupons` | /appointments/discounts | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/no-show-recovery` | /appointments/automations/no-show | 301 | none | READY_FOR_RETIREMENT | — |
-| `/appointments/policies` | /appointments/types → Policies (per-type) + /appointments/booking for workspace defaults | 301 | none | STILL_HAS_UNIQUE_V1 | workspace-policy |
+| `/appointments/policies` | /appointments/types → Policies (per-type) + /appointments/booking for workspace defaults | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/recall-campaigns` | /appointments/automations/recall | 301 | none | READY_FOR_RETIREMENT | — |
-| `/appointments/reports/service-booking` | /appointments/analytics/reports | 301 | from/to query if present | STILL_HAS_UNIQUE_V1 | 16-6 |
+| `/appointments/reports/service-booking` | /appointments/analytics/reports | 301 | from/to query if present | READY_FOR_RETIREMENT | — |
 | `/appointments/resources` | /appointments/booking/rooms-equipment | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/restrictions` | Duplicate client-restrictions | 301 | none | READY_FOR_RETIREMENT | — |
-| `/appointments/routing` | /appointments/routing-forms (15-1) — legacy rules need migration or compat editor | compat-wrapper-or-301 | none | COMPATIBILITY_REQUIRED | 15-2 |
+| `/appointments/routing` | /appointments/routing-forms — Answer-based routing rules panel | compat-wrapper-or-301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/scheduled` | /appointments | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/segments` | /contacts/segments + /appointments/recalls | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/service-booking` | Alias hub entry — canonical pages exist | 301 | none | READY_FOR_RETIREMENT | — |

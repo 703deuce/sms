@@ -276,6 +276,11 @@ export type AppointmentPlatformConfig = {
     rateBps?: number;
     taxableKinds?: string[];
   };
+  /** Workspace-default cancellation/no-show policy copy (booking types may override) */
+  cancellationPolicyText?: string;
+  noShowPolicyText?: string;
+  lateCancelHours?: number;
+  extendedCancellation?: import("@/lib/appointments/service-booking/types").ExtendedCancellationPolicy;
 };
 
 /** Booking archetype — MEETING (minimal), SERVICE (commerce/recurrence), CLASS (group/capacity). */

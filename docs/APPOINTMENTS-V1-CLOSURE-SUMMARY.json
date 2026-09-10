@@ -14,26 +14,20 @@
   "backendReadyUiMissing": 0,
   "uiPresentBackendGap": 0,
   "commerceUniqueV1Features": 0,
-  "tempRoutesStillUniqueV1": 3,
-  "tempRoutesReadyForRetirement": 18,
+  "tempRoutesStillUniqueV1": 0,
+  "tempRoutesReadyForRetirement": 21,
   "tempRoutesDiscovered": 22,
   "residualImplementationRows": 0,
   "implementationGapCount": 0,
   "unassignedError": 0,
   "outOfScopeError": 0,
-  "readyForRouteConvergence": "NO",
+  "readyForRouteConvergence": "YES",
   "commerceUniqueFeatureIds": [],
-  "policiesUniqueFeatureIds": [
-    "workspace-policy"
-  ],
-  "serviceBookingReportUnique": 1,
-  "serviceBookingReportFeatureIds": [
-    "16-6"
-  ],
-  "oldRoutingUnique": 1,
-  "oldRoutingFeatureIds": [
-    "15-2"
-  ],
-  "tempUniqueFunctionCount": 3,
+  "policiesUniqueFeatureIds": [],
+  "serviceBookingReportUnique": 0,
+  "serviceBookingReportFeatureIds": [],
+  "oldRoutingUnique": 0,
+  "oldRoutingFeatureIds": [],
+  "tempUniqueFunctionCount": 0,
   "readyForMasterBrowserCertification": "YES"
 }
