@@ -1,7 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { GiftCardsAdminClient } from "@/components/appointments/gift-cards-admin-client";
 
 export default function AppointmentGiftCardsPage() {
-  return (
-    <ServiceBookingAdminClient initialSection="gifts" title="Gift certificates" />
-  );
+  return <GiftCardsAdminClient />;
 }

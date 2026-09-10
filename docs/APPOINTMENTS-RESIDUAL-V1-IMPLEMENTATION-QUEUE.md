@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 18
+**Total residual rows:** 6
 
 ## /appointments/availability
 
@@ -14,60 +14,6 @@
 - **Priority:** P2
 - **Evidence:** contextual audit; routeExists=true; backend=true
 
-## /appointments/discounts
-
-### 8-18 — Coupons / discounts
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/discounts
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/discounts; routeExists=false; backend=false
-
-## /appointments/gift-cards
-
-### 8-16 — Gift balance redemption at checkout
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/gift-cards
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/gift-cards; routeExists=true; backend=false
-
-## /appointments/memberships
-
-### 8-11 — Membership failed-payment suspension
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=true; backend=false
-
-### 8-12 — Membership payment recovery / entitlement restore
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=true; backend=false
-
-### 8-13 — Membership-only booking types / classes
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=true; backend=false
-
-### 8-14 — Recurring membership credit replenishment
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=true; backend=false
-
 ## /appointments/new
 
 ### 6-2 — Create appointment (staff)
@@ -77,56 +23,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** /appointments/new; routeExists=true; backend=true
-
-## /appointments/packages
-
-### 8-1 — Packages & memberships hub
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=null
-
-### 8-3 — Package purchase
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=false
-
-### 8-5 — Package lifecycle (restore on cancel)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=false
-
-### 8-6 — Package credit forfeiture (late cancel / no-show)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=false
-
-### 8-7 — Mixed-content package entitlements
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=false
-
-### 8-33 — Policy fees (late cancel / no-show)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=true; backend=true
 
 ## /appointments/polls
 
@@ -178,4 +74,4 @@
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |
 | 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |
 | 8D-6 | Automations + contacts + integrations/settings admin | completed in 8D-6 wave |
-| 8D-7 | Commerce/POS/operations admin residuals | 17 admin + 0 backend |
+| 8D-7 | Commerce/POS/operations admin residuals | 5 admin + 0 backend |

@@ -1,7 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { MembershipsAdminClient } from "@/components/appointments/memberships-admin-client";
 
 export default function AppointmentMembershipsPage() {
-  return (
-    <ServiceBookingAdminClient initialSection="memberships" title="Memberships" />
-  );
+  return <MembershipsAdminClient />;
 }

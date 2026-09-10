@@ -164,6 +164,7 @@ export async function checkoutPosSession(
     contactId?: string;
     referralCode?: string;
     loyaltyProgramId?: string;
+    giftCode?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -238,6 +239,27 @@ export async function checkoutPosSession(
         break;
       default:
         fulfillment.push({ lineId: line.id, kind: line.kind, skipped: true });
+    }
+  }
+
+  if (input?.giftCode && contactId && session.totalCents > 0) {
+    const { redeemGiftCertificate, lookupGiftCertificateByCode } = await import("../gift-certificates");
+    const balance = await lookupGiftCertificateByCode(workspaceId, input.giftCode);
+    if (!balance || balance.status !== "active") {
+      throw new Error("Gift certificate not found");
+    }
+    const redeemAmount = Math.min(session.totalCents, balance.balanceCents);
+    if (redeemAmount <= 0) throw new Error("Insufficient gift balance");
+    try {
+      const gift = await redeemGiftCertificate(workspaceId, input.giftCode, redeemAmount);
+      fulfillment.push({
+        kind: "gift_redemption",
+        balanceId: gift.balanceId,
+        amountCents: redeemAmount,
+        remainingCents: gift.remainingCents,
+      });
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : "Gift redemption failed");
     }
   }
 

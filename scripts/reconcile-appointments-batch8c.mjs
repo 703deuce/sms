@@ -204,6 +204,19 @@ const OVERRIDES = {
   "9-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 buildInvoicePdf + /invoices/[id]/pdf download" },
   "12-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 installWorkflowFromTemplate idempotent API action install-template" },
   "13-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 finalizeMeetingPollBooking + meeting-polls finalize action" },
+  // Batch 8F-1 — commerce admin depth (canonical pages; 7-1 reassigned to 8F-2)
+  "8-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 PackagesAdminClient list + editor on /appointments/packages" },
+  "8-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 package sell-to-customer + purchase API on PackagesAdminClient" },
+  "8-5": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 package lifecycle restore policy UI + resolvePackageLifecyclePolicyForAppointment runtime" },
+  "8-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 late-cancel/no-show credit forfeiture controls on package editor" },
+  "8-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 mixed-content credit rules with per booking-type costs" },
+  "8-11": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 MembershipsAdminClient failed-payment lifecycle explanation + admin suspend/recover" },
+  "8-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 membership payment recovery actions on members list" },
+  "8-13": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 member-only booking type selection in membership benefits" },
+  "8-14": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 recurring credit replenishment policy on membership editor" },
+  "8-16": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 gift redemption at POS checkout + GiftCardsAdminClient issue/lookup" },
+  "8-18": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 DiscountsAdminClient on /appointments/discounts + POS coupon apply" },
+  "8-33": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 policy fees on booking type TypeAdvancedSections (not commerce hub)" },
   "8-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 /api/public/portal/[token]/memberships lifecycle API" },
   // Batch 8D-4 — operations/admin wave 1 (calendar, list, detail, waitlist, overview)
   "1-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-4 overview date picker → /appointments/calendar?date=; KPIs from /api/appointments/overview" },
@@ -345,8 +358,23 @@ const CANONICAL_APPOINTMENTS_ROUTES = new Set([
   "/appointments/integrations",
 ]);
 
+function commerceCanonicalAdminComplete() {
+  const required = [
+    "src/components/appointments/packages-admin-client.tsx",
+    "src/components/appointments/memberships-admin-client.tsx",
+    "src/components/appointments/gift-cards-admin-client.tsx",
+    "src/components/appointments/discounts-admin-client.tsx",
+    "src/app/(app)/appointments/discounts/page.tsx",
+  ];
+  return required.every((rel) => existsSync(join(ROOT, rel)));
+}
+
 const TEMP_ROUTE_CLASSIFICATION = {
-  "/appointments/commerce": { classification: "STILL_HAS_UNIQUE_V1", unique: 12, canonical: "Split to packages/memberships/gift-cards/pos/discounts" },
+  "/appointments/commerce": {
+    classification: commerceCanonicalAdminComplete() ? "READY_FOR_RETIREMENT" : "STILL_HAS_UNIQUE_V1",
+    unique: commerceCanonicalAdminComplete() ? 0 : 12,
+    canonical: "Split to packages/memberships/gift-cards/discounts/pos",
+  },
   "/appointments/service-booking": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Alias hub entry — canonical pages exist" },
   "/appointments/policies": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/types Advanced tab" },
   "/appointments/client-restrictions": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts/[id] Booking Access" },
@@ -886,9 +914,9 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 
   const adminGaps = reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_ADMIN_UI_GAP");
   const commerceAdmin = adminGaps.filter((r) =>
-    ["8-1", "8-3", "8-5", "8-6", "8-7", "8-11", "8-12", "8-13", "8-14", "8-16", "8-18", "8-33", "7-1"].includes(r.FEATURE_ID),
+    ["8-1", "8-3", "8-5", "8-6", "8-7", "8-11", "8-12", "8-13", "8-14", "8-16", "8-18", "8-33"].includes(r.FEATURE_ID),
   );
-  const opsAdmin = adminGaps.filter((r) => ["6-2", "18-7", "3-21"].includes(r.FEATURE_ID));
+  const opsAdmin = adminGaps.filter((r) => ["6-2", "18-7", "3-21", "7-1"].includes(r.FEATURE_ID));
   const pollsPerm = adminGaps.filter((r) => r.FEATURE_ID === "15-7");
   const contextualGaps = reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_CONTEXTUAL_FLOW_GAP");
 

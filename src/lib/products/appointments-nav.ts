@@ -45,6 +45,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     children.push({ label: "Packages", href: "/appointments/packages" });
     children.push({ label: "Memberships", href: "/appointments/memberships" });
     children.push({ label: "Gift certificates", href: "/appointments/gift-cards" });
+    children.push({ label: "Discounts", href: "/appointments/discounts" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
   if (modules.classes) {
@@ -297,6 +298,8 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/packages")) return "Packages";
   if (pathname.startsWith("/appointments/memberships")) return "Memberships";
   if (pathname.startsWith("/appointments/gift-cards")) return "Gift certificates";
+  if (pathname.startsWith("/appointments/discounts") || pathname.startsWith("/appointments/coupons"))
+    return "Discounts";
   if (pathname.startsWith("/appointments/types/classes")) return "Classes";
   if (pathname.startsWith("/appointments/booking/forms")) return "Forms & documents";
   if (pathname.startsWith("/appointments/automations/recall")) return "Recall automation";

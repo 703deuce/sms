@@ -5,14 +5,13 @@
 
 | Route | Classification | Unique V1 functions | Canonical destination |
 |-------|----------------|--------------------:|------------------------|
-| `/appointments/` | UNKNOWN | 0 | Manual IA review required |
 | `/appointments/booking/branding` | READY_FOR_RETIREMENT | 0 | /appointments/booking hub |
 | `/appointments/booking/contracts` | READY_FOR_RETIREMENT | 0 | Duplicate of /appointments/booking/forms |
 | `/appointments/booking/share` | READY_FOR_RETIREMENT | 0 | /appointments/booking hub |
 | `/appointments/categories` | READY_FOR_RETIREMENT | 0 | /appointments/types |
 | `/appointments/classes` | READY_FOR_RETIREMENT | 0 | /appointments/types/classes |
 | `/appointments/client-restrictions` | READY_FOR_RETIREMENT | 0 | /contacts/[id] Booking Access |
-| `/appointments/commerce` | STILL_HAS_UNIQUE_V1 | 12 | Split to packages/memberships/gift-cards/pos/discounts |
+| `/appointments/commerce` | READY_FOR_RETIREMENT | 0 | Split to packages/memberships/gift-cards/discounts/pos |
 | `/appointments/commerce/contact-merge` | READY_FOR_RETIREMENT | 0 | /contacts merge modal |
 | `/appointments/contracts` | READY_FOR_RETIREMENT | 0 | /appointments/booking/forms |
 | `/appointments/coupons` | READY_FOR_RETIREMENT | 0 | /appointments/discounts |
@@ -29,7 +28,7 @@
 | `/appointments/service-booking` | READY_FOR_RETIREMENT | 0 | Alias hub entry — canonical pages exist |
 | `/appointments/voice-reminders` | READY_FOR_RETIREMENT | 0 | /appointments/reminders |
 
-**Commerce unique required V1 count (estimate):** 15
-**Temp routes with unique V1 (STILL_HAS_UNIQUE_V1):** 4
-**Temp routes ready for retirement:** 17
-**Temp routes discovered (non-canonical):** 23
+**Commerce unique required V1 count (estimate):** 3
+**Temp routes with unique V1 (STILL_HAS_UNIQUE_V1):** 3
+**Temp routes ready for retirement:** 18
+**Temp routes discovered (non-canonical):** 22

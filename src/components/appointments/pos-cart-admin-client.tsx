@@ -129,6 +129,8 @@ export function PosCartAdminClient() {
   const [priceDollars, setPriceDollars] = useState("");
   const [selectedContact, setSelectedContact] = useState<ContactOption | null>(null);
   const [referralCode, setReferralCode] = useState("");
+  const [giftCode, setGiftCode] = useState("");
+  const [couponCode, setCouponCode] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export function PosCartAdminClient() {
     setLoading(true);
     setError(null);
     try {
-      const [posRes, packagesRes, giftsRes, membershipsRes, productsRes, typesRes] =
+      const [posRes, packagesRes, giftsRes, membershipsRes, productsRes, typesRes, couponsRes] =
         await Promise.all([
           fetch("/api/appointments/service-booking/pos-cart"),
           fetch("/api/appointments/service-booking/packages"),
@@ -148,6 +150,7 @@ export function PosCartAdminClient() {
           fetch("/api/appointments/service-booking/memberships"),
           fetch("/api/appointments/service-booking/products"),
           fetch("/api/appointments/types"),
+          fetch("/api/appointments/service-booking/coupons"),
         ]);
       const posJson = await posRes.json();
       if (!posRes.ok) throw new Error(posJson.error || "Failed to load POS sessions");
@@ -181,6 +184,20 @@ export function PosCartAdminClient() {
             name: String(r.name),
             kind: "service",
             priceCents: Number(r.priceCents ?? 0),
+          });
+        }
+      }
+      if (couponsRes.ok) {
+        for (const row of (await couponsRes.json()).data || []) {
+          const r = row as Record<string, unknown>;
+          if (!r.id || !r.code || r.active === false) continue;
+          const discountType = String(r.discountType || "percent");
+          const discountValue = Number(r.discountValue || 0);
+          items.push({
+            id: String(r.id),
+            name: `Coupon ${String(r.code)}`,
+            kind: "discount",
+            priceCents: discountType === "fixed" ? discountValue : 0,
           });
         }
       }
@@ -303,6 +320,53 @@ export function PosCartAdminClient() {
     await load();
   }
 
+  async function applyCouponCode() {
+    if (!activeId || !active || !couponCode.trim()) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/appointments/service-booking/coupons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "preview",
+        code: couponCode.trim(),
+        baseCents: active.subtotalCents,
+        contactId: contactId || undefined,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setBusy(false);
+      setError(json.error || "Invalid coupon");
+      return;
+    }
+    const discountCents = Number(json.data?.discountCents || 0);
+    const coupon = json.data?.coupon as { id?: string; code?: string };
+    const addRes = await fetch("/api/appointments/service-booking/pos-cart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_line",
+        sessionId: activeId,
+        line: {
+          kind: "discount",
+          description: `Coupon ${coupon?.code || couponCode}`,
+          unitPriceCents: -Math.abs(discountCents),
+          quantity: 1,
+          referenceId: coupon?.id,
+        },
+      }),
+    });
+    setBusy(false);
+    if (!addRes.ok) {
+      const addJson = await addRes.json().catch(() => ({}));
+      setError(addJson.error || "Could not apply coupon");
+      return;
+    }
+    setCouponCode("");
+    await load();
+  }
+
   async function checkout() {
     if (!activeId) return;
     if (!contactId) {
@@ -320,6 +384,7 @@ export function PosCartAdminClient() {
         sessionId: activeId,
         contactId: contactId.trim() || undefined,
         referralCode: referralCode.trim() || undefined,
+        giftCode: giftCode.trim() || undefined,
       }),
     });
     setBusy(false);
@@ -381,6 +446,35 @@ export function PosCartAdminClient() {
             placeholder="REF…"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span>Gift card code (apply at checkout)</span>
+          <input
+            className="rounded border px-3 py-2"
+            value={giftCode}
+            onChange={(e) => setGiftCode(e.target.value)}
+            placeholder="Gift code"
+            autoComplete="off"
+          />
+        </label>
+        <div className="flex flex-col gap-1 text-sm">
+          <span>Coupon code</span>
+          <div className="flex gap-2">
+            <input
+              className="rounded border px-3 py-2 flex-1"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              placeholder="SAVE10"
+            />
+            <button
+              type="button"
+              className="rounded border px-3 py-2 text-xs"
+              disabled={!activeId || !couponCode.trim() || busy}
+              onClick={() => void applyCouponCode()}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
       </div>
 
       {success ? (
