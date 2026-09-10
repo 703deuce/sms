@@ -2,17 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 161
-
-##  equipment)
-
-### 4-8 — Resources (rooms
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:**  equipment)
-- **Missing:** Resources on /appointments/resources hub
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** no rooms-equipment canonical route; routeExists=null; backend=false
+**Total residual rows:** 145
 
 ## /appointments
 
@@ -25,14 +15,6 @@
 - **Evidence:** /appointments; routeExists=true; backend=true
 
 ## /appointments/[id]
-
-### 6-4 — Appointment detail
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/[id]
-- **Missing:** No-show recovery on temp route
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** missing /appointments/automations/no-show; routeExists=true; backend=null
 
 ### 6-9 — Internal notes
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -110,26 +92,6 @@
 - **Priority:** P2
 - **Evidence:** /appointments/automations/activity; routeExists=true; backend=null
 
-## /appointments/automations/no-show
-
-### 10-12 — No-show recovery
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/automations/no-show
-- **Missing:** Canonical route missing: /appointments/automations/no-show
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** temp parity still primary; routeExists=false; backend=true
-
-## /appointments/automations/recall
-
-### 10-10 — Recall campaigns
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/automations/recall
-- **Missing:** Canonical route missing: /appointments/automations/recall
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** temp parity still primary; routeExists=false; backend=true
-
 ## /appointments/availability
 
 ### 3-8 — Booking limits (daily/weekly/per-type)
@@ -163,38 +125,6 @@
 - **Backend:** YES / LIKELY
 - **Priority:** P1
 - **Evidence:** detail partial; routeExists=true; backend=false
-
-### 3-6 — Blackout dates
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/availability
-- **Missing:** Categories admin only on /appointments/categories hub
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** no /appointments/types categories drawer; routeExists=true; backend=null
-
-### 3-12 — Minimize gaps / compact scheduling
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/availability
-- **Missing:** Contracts on temp /appointments/contracts
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** no Forms & Documents canonical; routeExists=true; backend=false
-
-### 3-15 — Group / collective scheduling
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/availability
-- **Missing:** Resources on /appointments/resources hub
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** no rooms-equipment canonical; routeExists=true; backend=true
-
-### 3-16 — Resource-constrained slots
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/availability
-- **Missing:** Classes on /appointments/classes hub
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** types landing not split; routeExists=true; backend=false
 
 ### 3-4 — Maximum booking horizon
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -350,7 +280,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=false; backend=false
+- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
 
 ### 2-42 — Formal contracts + e-signature
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -358,7 +288,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=false; backend=false
+- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
 
 ### 19-6 — Intake form templates
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -366,7 +296,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=false; backend=false
+- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
 
 ## /appointments/booking/rooms-equipment
 
@@ -376,7 +306,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/booking/rooms-equipment; routeExists=false; backend=false
+- **Evidence:** /appointments/booking/rooms-equipment; routeExists=true; backend=false
 
 ### 4-10 — Resource pools (any-one-in-group)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -384,25 +314,9 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/booking/rooms-equipment; routeExists=false; backend=false
+- **Evidence:** /appointments/booking/rooms-equipment; routeExists=true; backend=false
 
 ## /appointments/calendar
-
-### 6-3 — Calendar slot-click create
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/calendar
-- **Missing:** Recall campaigns on /appointments/recall-campaigns
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** missing /appointments/automations/recall; routeExists=true; backend=null
-
-### 6-8 — Cancel (staff)
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/calendar
-- **Missing:** Appointment segments on /appointments/segments
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** distinct from contacts segments; routeExists=true; backend=true
 
 ### 4-14 — Staff / service calendar colors
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -438,15 +352,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=null
-
-### 8-15 — Gift certificates
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/gift-cards
-- **Missing:** Feature on temp route; canonical /appointments/gift-cards missing
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Commerce admin; routeExists=false; backend=false
+- **Evidence:** /portal; routeExists=true; backend=null
 
 ### 8-16 — Gift balance redemption at checkout
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -454,7 +360,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/gift-cards; routeExists=false; backend=false
+- **Evidence:** /appointments/gift-cards; routeExists=true; backend=false
 
 ### 8-17 — Gift balance redemption history
 - **Gap type:** V1_PORTAL_UI_GAP
@@ -462,7 +368,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=false
+- **Evidence:** /portal; routeExists=true; backend=false
 
 ## /appointments/memberships
 
@@ -472,7 +378,7 @@
 - **Missing:** Membership customer pause/cancel API
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** portal view-only; routeExists=false; backend=false
+- **Evidence:** portal view-only; routeExists=true; backend=false
 
 ### 7-13 — Portal: memberships
 - **Gap type:** V1_PORTAL_UI_GAP
@@ -480,15 +386,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=null
-
-### 8-8 — Membership products
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/memberships
-- **Missing:** Feature on temp route; canonical /appointments/memberships missing
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Commerce admin; routeExists=false; backend=false
+- **Evidence:** /portal; routeExists=true; backend=null
 
 ### 8-9 — Membership subscriptions
 - **Gap type:** V1_PORTAL_UI_GAP
@@ -496,7 +394,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=false
+- **Evidence:** /portal; routeExists=true; backend=false
 
 ### 8-11 — Membership failed-payment suspension
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -504,7 +402,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=false; backend=false
+- **Evidence:** /appointments/memberships; routeExists=true; backend=false
 
 ### 8-12 — Membership payment recovery / entitlement restore
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -512,7 +410,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=false; backend=false
+- **Evidence:** /appointments/memberships; routeExists=true; backend=false
 
 ### 8-13 — Membership-only booking types / classes
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -520,7 +418,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=false; backend=false
+- **Evidence:** /appointments/memberships; routeExists=true; backend=false
 
 ### 8-14 — Recurring membership credit replenishment
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -528,7 +426,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/memberships; routeExists=false; backend=false
+- **Evidence:** /appointments/memberships; routeExists=true; backend=false
 
 ## /appointments/new
 
@@ -558,7 +456,7 @@
 - **Missing:** Public consumer incomplete
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** Info step; routeExists=false; backend=false
+- **Evidence:** Info step; routeExists=true; backend=false
 
 ### 5-31 — Public store (packages)
 - **Gap type:** V1_PUBLIC_UI_GAP
@@ -566,7 +464,7 @@
 - **Missing:** Public consumer incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** `/book/[slug]/store`; routeExists=false; backend=false
+- **Evidence:** `/book/[slug]/store`; routeExists=true; backend=false
 
 ### 7-15 — Portal: package usage history
 - **Gap type:** V1_PORTAL_UI_GAP
@@ -574,7 +472,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=null
+- **Evidence:** /portal; routeExists=true; backend=null
 
 ### 8-1 — Packages & memberships hub
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -582,15 +480,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=null
-
-### 8-2 — Package products
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/packages
-- **Missing:** Feature on temp route; canonical /appointments/packages missing
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Commerce admin; routeExists=false; backend=false
+- **Evidence:** /appointments/packages; routeExists=true; backend=null
 
 ### 8-3 — Package purchase
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -598,7 +488,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=false
+- **Evidence:** /appointments/packages; routeExists=true; backend=false
 
 ### 8-4 — Package credits & ledger
 - **Gap type:** V1_PORTAL_UI_GAP
@@ -606,7 +496,7 @@
 - **Missing:** Portal depth incomplete
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /portal; routeExists=false; backend=false
+- **Evidence:** /portal; routeExists=true; backend=false
 
 ### 8-5 — Package lifecycle (restore on cancel)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -614,7 +504,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=false
+- **Evidence:** /appointments/packages; routeExists=true; backend=false
 
 ### 8-6 — Package credit forfeiture (late cancel / no-show)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -622,7 +512,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=false
+- **Evidence:** /appointments/packages; routeExists=true; backend=false
 
 ### 8-7 — Mixed-content package entitlements
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -630,7 +520,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=false
+- **Evidence:** /appointments/packages; routeExists=true; backend=false
 
 ### 8-33 — Policy fees (late cancel / no-show)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -638,7 +528,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/packages; routeExists=false; backend=true
+- **Evidence:** /appointments/packages; routeExists=true; backend=true
 
 ## /appointments/polls
 
@@ -712,16 +602,6 @@
 - **Priority:** P2
 - **Evidence:** /appointments/recalls; routeExists=true; backend=true
 
-## /appointments/reminders
-
-### 11-8 — Voice reminders
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** /appointments/reminders
-- **Missing:** Voice reminders on /appointments/voice-reminders
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** not merged into /appointments/reminders; routeExists=true; backend=false
-
 ## /appointments/routing-forms
 
 ### 15-1 — Routing forms builder
@@ -792,7 +672,7 @@
 - **Missing:** Invoice email send
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** gap queue 8B-6; routeExists=false; backend=false
+- **Evidence:** gap queue 8B-6; routeExists=true; backend=false
 
 ### 9-7 — Event admission tickets
 - **Gap type:** V1_BACKEND_GAP
@@ -800,7 +680,7 @@
 - **Missing:** Invoice PDF export polish
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** gap queue 8B-6; routeExists=false; backend=false
+- **Evidence:** gap queue 8B-6; routeExists=true; backend=false
 
 ### 9-1 — Class series admin
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -808,7 +688,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=false; backend=false
+- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
 
 ### 9-2 — Class occurrences
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -816,7 +696,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=false; backend=false
+- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
 
 ### 9-3 — Staff class enrollment
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -824,7 +704,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=false; backend=null
+- **Evidence:** /appointments/types/classes; routeExists=true; backend=null
 
 ### 9-5 — Class check-in (QR)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -832,7 +712,7 @@
 - **Missing:** Backend exists; admin/contextual UI not exposed on final page
 - **Backend:** YES / LIKELY
 - **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=false; backend=false
+- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
 
 ## /appointments/types/events
 
@@ -1198,22 +1078,6 @@
 - **Priority:** P1
 - **Evidence:** BACKEND_GAP; routeExists=null; backend=false
 
-### 5-21 — Group attendee count
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Booking share on /appointments/booking/share
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** not in booking pages hub; routeExists=null; backend=null
-
-### 5-22 — Email OTP verification
-- **Gap type:** V1_WRONG_PLACEMENT
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Branding on /appointments/booking/branding
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** theme editor temp route; routeExists=null; backend=null
-
 ### 3-23 — Class capacity display mode
 - **Gap type:** V1_PUBLIC_UI_GAP
 - **Section:** PUBLIC_BOOKING
@@ -1372,7 +1236,7 @@
 
 | Batch | Domain | Approx rows |
 |-------|--------|------------:|
-| 8D-1 | Route convergence + wrong-placement (commerce hub → canonical pages) | 16 |
+| 8D-1 | Route convergence + wrong-placement (commerce hub → canonical pages) | 0 |
 | 8D-2 | Public booking payment + class/event + AI public flows | 35 |
 | 8D-3 | Portal depth (saved cards, membership self-service, household) | 12 |
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |

@@ -1,5 +1,5 @@
-import { AppointmentRemindersClient } from "@/components/appointments/reminders-client";
+import { RemindersWithVoiceClient } from "@/components/appointments/reminders-with-voice-client";
 
 export default function AppointmentRemindersPage() {
-  return <AppointmentRemindersClient />;
+  return <RemindersWithVoiceClient />;
 }

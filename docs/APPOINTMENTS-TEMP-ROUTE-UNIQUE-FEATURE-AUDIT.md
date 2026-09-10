@@ -10,23 +10,24 @@
 | `/appointments/client-restrictions` | PARTIALLY_ABSORBED | 0 | /contacts/[id] Booking Access |
 | `/appointments/coupons` | PARTIALLY_ABSORBED | 0 | /appointments/discounts |
 | `/appointments/payments` | V2_ONLY | 1 | V2 deferred |
-| `/appointments/contracts` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/booking/forms |
+| `/appointments/contracts` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/booking/forms |
 | `/appointments/booking/contracts` | READY_FOR_RETIREMENT | 0 | Duplicate of contracts |
-| `/appointments/categories` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/types |
-| `/appointments/segments` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/recalls |
+| `/appointments/categories` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/types |
+| `/appointments/segments` | NO_UNIQUE_V1_REMAINING | 0 | /contacts/segments + /appointments/recalls |
 | `/appointments/scheduled` | READY_FOR_RETIREMENT | 0 | /appointments |
-| `/appointments/recall-campaigns` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/automations/recall |
-| `/appointments/no-show-recovery` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/automations/no-show |
-| `/appointments/commerce/contact-merge` | STILL_HAS_UNIQUE_V1 | 1 | /contacts merge modal |
-| `/appointments/booking/share` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/booking |
-| `/appointments/booking/branding` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/booking |
+| `/appointments/recall-campaigns` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/automations/recall |
+| `/appointments/no-show-recovery` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/automations/no-show |
+| `/appointments/commerce/contact-merge` | NO_UNIQUE_V1_REMAINING | 0 | /contacts merge modal |
+| `/appointments/booking/share` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/booking |
+| `/appointments/booking/branding` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/booking |
 | `/appointments/reports/service-booking` | PARTIALLY_ABSORBED | 1 | /appointments/analytics/reports |
-| `/appointments/classes` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/types/classes |
-| `/appointments/resources` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/booking/rooms-equipment |
+| `/appointments/classes` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/types/classes |
+| `/appointments/resources` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/booking/rooms-equipment |
 | `/appointments/routing` | PARTIALLY_ABSORBED | 1 | /appointments/routing-forms |
-| `/appointments/voice-reminders` | STILL_HAS_UNIQUE_V1 | 1 | /appointments/reminders |
+| `/appointments/voice-reminders` | NO_UNIQUE_V1_REMAINING | 0 | /appointments/reminders |
 | `/appointments/restrictions` | READY_FOR_RETIREMENT | 0 | Duplicate client-restrictions |
 
-**Commerce unique required V1 count (estimate):** 11
-**Temp routes with unique V1:** 11
+**Commerce unique required V1 count (estimate):** 0
+**Temp routes with unique V1:** 0
+**Temp routes NO_UNIQUE_V1_REMAINING (8D-1):** 11
 **Ready for retirement:** 4

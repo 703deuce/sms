@@ -12,26 +12,26 @@ After Batches 8B-1–8B-9, mechanical re-audit of all **308** master ledger rows
 |--------|------:|
 | V1 rows | 295 |
 | V2 rows | 11 |
-| **V1_COMPLETE** | 99 |
+| **V1_COMPLETE** | 115 |
 | **V1_COMPLETE_RUNTIME_ONLY** | 30 |
 | **V1_PROVIDER_BLOCKED** | 6 |
 | **V1_ADMIN_UI_GAP** | 89 |
 | **V1_PUBLIC_UI_GAP** | 35 |
 | **V1_PORTAL_UI_GAP** | 12 |
-| **V1_WRONG_PLACEMENT** | 16 |
+| **V1_WRONG_PLACEMENT** | 0 |
 | **V1_BACKEND_GAP** | 6 |
 | **V1_MOCK_OR_PLACEHOLDER** | 2 |
 | **V2_DEFERRED** | 12 |
 | **UNASSIGNED_ERROR** | 0 |
-| Residual implementation rows | 161 |
-| Commerce unique V1 (temp hub) | 11 |
-| Temp routes with unique V1 | 11 |
+| Residual implementation rows | 145 |
+| Commerce unique V1 (temp hub) | 0 |
+| Temp routes with unique V1 | 0 |
 
 ### Readiness
 
 | Gate | Result |
 |------|--------|
-| **READY_FOR_ROUTE_CONVERGENCE** | **NO** |
+| **READY_FOR_ROUTE_CONVERGENCE** | **YES** |
 | **READY_FOR_MASTER_BROWSER_CERTIFICATION** | **NO** |
 
 Route convergence requires **zero** temp routes with unique required V1 functionality. Certification requires **zero** known implementation gaps (provider-blocked and runtime-only excepted).
@@ -44,11 +44,11 @@ See `docs/APPOINTMENTS-V1-CLOSURE-SUMMARY.json`.
 
 ## 2. V1 closure status
 
-Primary closure distribution: V1_MOCK_OR_PLACEHOLDER=2, V1_COMPLETE_RUNTIME_ONLY=30, V1_ADMIN_UI_GAP=89, V1_COMPLETE=99, V1_WRONG_PLACEMENT=16, V1_CONTEXTUAL_FLOW_GAP=1, V1_PUBLIC_UI_GAP=35, V2_DEFERRED=12, V1_PORTAL_UI_GAP=12, V1_BACKEND_GAP=6, V1_PROVIDER_BLOCKED=6.
+Primary closure distribution: V1_MOCK_OR_PLACEHOLDER=2, V1_COMPLETE_RUNTIME_ONLY=30, V1_ADMIN_UI_GAP=89, V1_COMPLETE=115, V1_CONTEXTUAL_FLOW_GAP=1, V1_PUBLIC_UI_GAP=35, V2_DEFERRED=12, V1_PORTAL_UI_GAP=12, V1_BACKEND_GAP=6, V1_PROVIDER_BLOCKED=6.
 
 ## 3. Remaining implementation gaps
 
-**161** rows require implementation work. Full queue: `docs/APPOINTMENTS-RESIDUAL-V1-IMPLEMENTATION-QUEUE.md`.
+**145** rows require implementation work. Full queue: `docs/APPOINTMENTS-RESIDUAL-V1-IMPLEMENTATION-QUEUE.md`.
 
 Top gap types:
 - Admin UI depth on canonical pages (calendar, appointment detail, waitlist, overview)
@@ -83,11 +83,11 @@ Production-path mock residue: public booking kimi types (type-only imports OK), 
 
 ## 10. Temporary route status
 
-See `docs/APPOINTMENTS-TEMP-ROUTE-UNIQUE-FEATURE-AUDIT.md`. **11** routes still hold unique V1; **4** ready for retirement after absorption.
+See `docs/APPOINTMENTS-TEMP-ROUTE-UNIQUE-FEATURE-AUDIT.md`. **0** routes still hold unique V1; **4** ready for retirement after absorption.
 
 ## 11. Commerce unique-function status
 
-**11** unique required V1 functions estimated still on commerce/hub routes (target: 0).
+**0** unique required V1 functions estimated still on commerce/hub routes (target: 0).
 
 ## 12. Provider-blocked status
 
@@ -103,11 +103,11 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 
 ## 15. Route-retirement readiness
 
-**NO** — Do not retire temp routes until canonical pages absorb unique functionality.
+**YES** — Do not retire temp routes until canonical pages absorb unique functionality.
 
 ## 16. Certification readiness
 
-**NO** — 161 implementation gaps remain before master browser certification.
+**NO** — 145 implementation gaps remain before master browser certification.
 
 ---
 
@@ -117,7 +117,7 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 |---------------|-----------|
 | Portal wave pending | **RESOLVED** for core portal (8B-9); residual saved-card UI |
 | Public booking 34 gaps | **PARTIALLY RESOLVED** (8B-8); payment + event/class remain |
-| Commerce 29 temp unique | **11** unique functions remain on hub |
+| Commerce 29 temp unique | **0** unique functions remain on hub |
 | Backend-ready UI-missing 184 | **Recalculated: 136** |
 | UI-present backend-uncertain 89 | **Recalculated: 0** |
 
@@ -130,9 +130,9 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 | Page | Expected rows | Complete | Partial/Gap | Wrong placement |
 |------|--------------:|---------:|------------:|----------------:|
 | `/appointments/overview` | 2 | 1 | 1 (SMALL RESIDUAL) | 0 |
-| `/appointments/calendar` | 7 | 3 | 4 (MEDIUM RESIDUAL) | 2 |
-| `/appointments` | 200 | 79 | 119 (MAJOR RESIDUAL) | 13 |
-| `/appointments/[id]` | 7 | 1 | 6 (MEDIUM RESIDUAL) | 1 |
+| `/appointments/calendar` | 7 | 5 | 2 (SMALL RESIDUAL) | 0 |
+| `/appointments` | 200 | 92 | 106 (MAJOR RESIDUAL) | 0 |
+| `/appointments/[id]` | 7 | 2 | 5 (MEDIUM RESIDUAL) | 0 |
 | `/appointments/waitlist` | 12 | 2 | 10 (MAJOR RESIDUAL) | 0 |
 | `/appointments/recalls` | 2 | 0 | 2 (SMALL RESIDUAL) | 0 |
 | `/appointments/types` | 38 | 18 | 20 (MAJOR RESIDUAL) | 0 |
@@ -140,18 +140,18 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 | `/appointments/types/services` | 12 | 5 | 7 (MAJOR RESIDUAL) | 0 |
 | `/appointments/types/classes` | 6 | 0 | 6 (MEDIUM RESIDUAL) | 0 |
 | `/appointments/booking` | 17 | 1 | 16 (MAJOR RESIDUAL) | 0 |
-| `/appointments/availability` | 19 | 4 | 15 (MAJOR RESIDUAL) | 4 |
+| `/appointments/availability` | 19 | 8 | 11 (MAJOR RESIDUAL) | 0 |
 | `/appointments/staff` | 2 | 1 | 1 (SMALL RESIDUAL) | 0 |
 | `/appointments/locations` | 4 | 4 | 0 (CLOSED) | 0 |
-| `/appointments/packages` | 12 | 1 | 11 (MAJOR RESIDUAL) | 1 |
-| `/appointments/memberships` | 8 | 0 | 8 (MAJOR RESIDUAL) | 1 |
-| `/appointments/gift-cards` | 4 | 0 | 4 (MEDIUM RESIDUAL) | 1 |
+| `/appointments/packages` | 12 | 2 | 10 (MAJOR RESIDUAL) | 0 |
+| `/appointments/memberships` | 8 | 1 | 7 (MAJOR RESIDUAL) | 0 |
+| `/appointments/gift-cards` | 4 | 1 | 3 (MEDIUM RESIDUAL) | 0 |
 | `/appointments/pos` | 10 | 5 | 4 (MEDIUM RESIDUAL) | 0 |
 | `/payments/transactions` | 4 | 4 | 0 (CLOSED) | 0 |
 | `/payments/invoices` | 1 | 1 | 0 (CLOSED) | 0 |
 | `/contacts` | 8 | 7 | 1 (SMALL RESIDUAL) | 0 |
 | `/contacts/[id]` | 3 | 3 | 0 (CLOSED) | 0 |
-| `/appointments/reminders` | 10 | 9 | 1 (SMALL RESIDUAL) | 1 |
+| `/appointments/reminders` | 10 | 10 | 0 (CLOSED) | 0 |
 | `/appointments/workflows` | 13 | 9 | 4 (MEDIUM RESIDUAL) | 0 |
 | `/appointments/routing-forms` | 4 | 3 | 1 (SMALL RESIDUAL) | 0 |
 | `/appointments/analytics` | 7 | 7 | 0 (CLOSED) | 0 |
@@ -195,24 +195,9 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 
 | File | Classification |
 |------|----------------|
-| `src/components/appointments/kimi-ui/public-reschedule/components/RescheduleFlow.tsx` | SAFE_DEV_ONLY (production uses live API) |
-| `src/components/appointments/kimi-ui/public-reschedule/components/SlotPicker.tsx` | SAFE_DEV_ONLY (production uses live API) |
-| `src/components/appointments/kimi-ui/waitlist/components/WaitlistEntryRow.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/waitlist/components/ConfirmRemoveModal.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/waitlist/components/WaitlistAdminClient.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/BookingShell.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/PublicBookingClient.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/DetailsStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/BookingDisabledState.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/WaitlistStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/components/ServiceStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking/page.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-confirm/components/public-action-client.tsx` | SAFE_DEV_ONLY (production uses live API) |
-| `src/components/appointments/kimi-ui/public-confirm/page.tsx` | SAFE_DEV_ONLY (production uses live API) |
+| `src/features/appointments/kimi/public/public-embed-booking-connected.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/features/appointments/kimi/public/public-booking-service-flow-inner.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-waitlist-accept/components/PublicWaitlistAcceptClient.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/DetailsStep.tsx` | V1_PRODUCTION_BLOCKER |
@@ -220,3 +205,18 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 | `src/components/appointments/kimi-ui/public-embed-booking/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/WaitlistStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/ServiceStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/page.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-reschedule/components/RescheduleFlow.tsx` | SAFE_DEV_ONLY (production uses live API) |
+| `src/components/appointments/kimi-ui/public-reschedule/components/SlotPicker.tsx` | SAFE_DEV_ONLY (production uses live API) |
+| `src/components/appointments/kimi-ui/public-booking-service/components/InfoStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/WaitlistStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/ServiceStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/PublicBookingClient.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/DoneStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/BookingQuestionField.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-cancel/components/public-cancel-client.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/waitlist/components/WaitlistEntryRow.tsx` | V1_PRODUCTION_BLOCKER |

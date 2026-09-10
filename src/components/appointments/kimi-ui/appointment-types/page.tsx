@@ -35,6 +35,13 @@ export default function AppointmentTypesView({ model, actions }: Props) {
           <div className="flex items-center gap-2.5 shrink-0 pt-0.5">
             <button
               type="button"
+              className="flex items-center gap-1.5 text-[13px] font-medium h-9 px-3.5 rounded-lg border border-[#e4e6ee] bg-white text-[#3c4257] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-[#f7f8fb] hover:border-[#d8dbe6]"
+              onClick={actions.onManageCategories}
+            >
+              Manage categories
+            </button>
+            <button
+              type="button"
               className="flex items-center gap-1.5 text-[13px] font-medium h-9 px-3.5 rounded-lg border border-[#e4e6ee] bg-white text-[#3c4257] shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-[#f7f8fb] hover:border-[#d8dbe6] disabled:opacity-50 disabled:pointer-events-none"
               onClick={actions.onViewBookingPage}
               disabled={!model.bookingBaseUrl}
@@ -88,6 +95,8 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onManageAvailability={actions.onManageAvailability}
               onManageStaff={actions.onManageStaff}
               onManageLocations={actions.onManageLocations}
+              onManageCategories={actions.onManageCategories}
+              onCreateCategory={actions.onCreateCategory}
             />
           </div>
           {selected ? (

@@ -114,18 +114,23 @@ const OVERRIDES = {
   // Portal gaps (post 8B-9)
   "7-18": { status: "V1_PORTAL_UI_GAP", gap: "Portal add/remove saved card (Stripe Elements)", evidence: "display only", priority: "P1" },
   "8-29": { status: "V1_PORTAL_UI_GAP", gap: "Portal saved card management", evidence: "setup API exists, no portal UI", priority: "P1" },
-  // Admin / wrong placement — still on commerce hub
-  "3-6": { status: "V1_WRONG_PLACEMENT", gap: "Categories admin only on /appointments/categories hub", evidence: "no /appointments/types categories drawer", priority: "P1" },
-  "3-12": { status: "V1_WRONG_PLACEMENT", gap: "Contracts on temp /appointments/contracts", evidence: "no Forms & Documents canonical", priority: "P1" },
-  "3-15": { status: "V1_WRONG_PLACEMENT", gap: "Resources on /appointments/resources hub", evidence: "no rooms-equipment canonical", priority: "P1" },
-  "3-16": { status: "V1_WRONG_PLACEMENT", gap: "Classes on /appointments/classes hub", evidence: "types landing not split", priority: "P1" },
-  "6-3": { status: "V1_WRONG_PLACEMENT", gap: "Recall campaigns on /appointments/recall-campaigns", evidence: "missing /appointments/automations/recall", priority: "P1" },
-  "6-4": { status: "V1_WRONG_PLACEMENT", gap: "No-show recovery on temp route", evidence: "missing /appointments/automations/no-show", priority: "P1" },
-  "6-8": { status: "V1_WRONG_PLACEMENT", gap: "Appointment segments on /appointments/segments", evidence: "distinct from contacts segments", priority: "P2" },
-  "4-8": { status: "V1_WRONG_PLACEMENT", gap: "Resources on /appointments/resources hub", evidence: "no rooms-equipment canonical route", priority: "P1" },
-  "11-8": { status: "V1_WRONG_PLACEMENT", gap: "Voice reminders on /appointments/voice-reminders", evidence: "not merged into /appointments/reminders", priority: "P1" },
-  "5-21": { status: "V1_WRONG_PLACEMENT", gap: "Booking share on /appointments/booking/share", evidence: "not in booking pages hub", priority: "P2" },
-  "5-22": { status: "V1_WRONG_PLACEMENT", gap: "Branding on /appointments/booking/branding", evidence: "theme editor temp route", priority: "P2" },
+  // Batch 8D-1 — canonical absorption complete (temp routes preserved)
+  "3-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 CategoryManagerDrawer on /appointments/types" },
+  "3-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/booking/forms ContractsAdminClient" },
+  "3-15": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/booking/rooms-equipment" },
+  "3-16": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/types/classes" },
+  "4-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/booking/rooms-equipment" },
+  "5-21": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 booking layout + /appointments/booking/share" },
+  "5-22": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 booking layout + /appointments/booking/branding" },
+  "6-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/recall" },
+  "6-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/no-show" },
+  "6-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 Contacts segments + Recalls saved views" },
+  "8-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/packages" },
+  "8-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/memberships" },
+  "8-15": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/gift-cards" },
+  "10-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/recall" },
+  "10-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/no-show" },
+  "11-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 voice channel on /appointments/reminders" },
   // Backend gaps
   "8-25": { status: "V1_BACKEND_GAP", gap: "POS tax engine", evidence: "gap queue 8B-5", priority: "P1" },
   "9-6": { status: "V1_BACKEND_GAP", gap: "Invoice email send", evidence: "gap queue 8B-6", priority: "P2" },
@@ -170,21 +175,21 @@ const TEMP_ROUTES = [
   { route: "/appointments/client-restrictions", classification: "PARTIALLY_ABSORBED", unique: 0, canonical: "/contacts/[id] Booking Access" },
   { route: "/appointments/coupons", classification: "PARTIALLY_ABSORBED", unique: 0, canonical: "/appointments/discounts" },
   { route: "/appointments/payments", classification: "V2_ONLY", unique: 1, canonical: "V2 deferred" },
-  { route: "/appointments/contracts", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/booking/forms" },
+  { route: "/appointments/contracts", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/booking/forms" },
   { route: "/appointments/booking/contracts", classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate of contracts" },
-  { route: "/appointments/categories", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/types" },
-  { route: "/appointments/segments", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/recalls" },
+  { route: "/appointments/categories", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/types" },
+  { route: "/appointments/segments", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/contacts/segments + /appointments/recalls" },
   { route: "/appointments/scheduled", classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments" },
-  { route: "/appointments/recall-campaigns", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/automations/recall" },
-  { route: "/appointments/no-show-recovery", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/automations/no-show" },
-  { route: "/appointments/commerce/contact-merge", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/contacts merge modal" },
-  { route: "/appointments/booking/share", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/booking" },
-  { route: "/appointments/booking/branding", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/booking" },
+  { route: "/appointments/recall-campaigns", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/automations/recall" },
+  { route: "/appointments/no-show-recovery", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/automations/no-show" },
+  { route: "/appointments/commerce/contact-merge", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/contacts merge modal" },
+  { route: "/appointments/booking/share", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/booking" },
+  { route: "/appointments/booking/branding", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/booking" },
   { route: "/appointments/reports/service-booking", classification: "PARTIALLY_ABSORBED", unique: 1, canonical: "/appointments/analytics/reports" },
-  { route: "/appointments/classes", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/types/classes" },
-  { route: "/appointments/resources", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/booking/rooms-equipment" },
+  { route: "/appointments/classes", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/types/classes" },
+  { route: "/appointments/resources", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/booking/rooms-equipment" },
   { route: "/appointments/routing", classification: "PARTIALLY_ABSORBED", unique: 1, canonical: "/appointments/routing-forms" },
-  { route: "/appointments/voice-reminders", classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/reminders" },
+  { route: "/appointments/voice-reminders", classification: "NO_UNIQUE_V1_REMAINING", unique: 0, canonical: "/appointments/reminders" },
   { route: "/appointments/restrictions", classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate client-restrictions" },
 ];
 
@@ -317,6 +322,7 @@ function main() {
 
   const commerceUnique = TEMP_ROUTES.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").reduce((s, t) => s + t.unique, 0);
   const tempUniqueRoutes = TEMP_ROUTES.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").length;
+  const tempNoUniqueRemaining = TEMP_ROUTES.filter((t) => t.classification === "NO_UNIQUE_V1_REMAINING").length;
 
   const backendReadyUiMissing = reconciled.filter((r) => r.BACKEND_PRESENT === "YES" && ["V1_ADMIN_UI_GAP", "V1_PUBLIC_UI_GAP", "V1_PORTAL_UI_GAP"].includes(r.CURRENT_FINAL_STATUS));
   const uiPresentBackendGap = reconciled.filter((r) => r.UI_PRESENT === "YES" && r.CURRENT_FINAL_STATUS === "V1_BACKEND_GAP");
@@ -369,6 +375,7 @@ function main() {
   }
   tempMd += `\n**Commerce unique required V1 count (estimate):** ${commerceUnique}\n`;
   tempMd += `**Temp routes with unique V1:** ${tempUniqueRoutes}\n`;
+  tempMd += `**Temp routes NO_UNIQUE_V1_REMAINING (8D-1):** ${tempNoUniqueRemaining}\n`;
   tempMd += `**Ready for retirement:** ${TEMP_ROUTES.filter((t) => t.classification === "READY_FOR_RETIREMENT").length}\n`;
   writeFileSync(OUT_TEMP, tempMd);
 
