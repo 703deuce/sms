@@ -8,6 +8,10 @@
 
 Absorbed into canonical UI (no browser UAT): Contact Detail panels (overview, packages/memberships, account credit, household, booking access, custom fields), contact merge modal, segments appointment conditions, import custom-field mapping, POS coupons + account credit + recent sales. **Remaining:** POS tax engine (BACKEND_GAP), full Stripe card capture at POS (provider integration), portal/public wallet waves, membership pause/cancel contextual actions where backend incomplete.
 
+## Batch 8B-6 absorption (2026-09-10) — STATIC_PASS
+
+Absorbed: Transactions enriched list/detail, refund to original method + account credit, Invoices create/void/pay-link/filters, Analytics revenue tab + workflow metrics, Reports hub (service-booking report absorbed), Security team/RBAC links, global search placeholder/backend, commerce InvoicesPanel redirect-only. **Remaining:** invoice email send (BACKEND_GAP), PDF export polish (BACKEND_GAP), payment link resend from transaction drawer (API), per-booking-type permission editor on type Advanced (STILL_MISSING), saved cards (PORTAL_WAVE_PENDING), SAML/SCIM (PROVIDER_BLOCKED), Public Booking payment completion (PUBLIC_WAVE_PENDING).
+
 Features that must be **added to or moved into** existing final pages (not new page creation).
 
 ## PAGE: /appointments

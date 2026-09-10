@@ -30,6 +30,7 @@ import { BookingsChart } from "./bookings-chart";
 import { PopularTimes, PopularTypes } from "./popular-panel";
 import { ScheduleReportCard } from "./schedule-report-card";
 import { RoutingFormsPanel } from "./routing-forms-panel";
+import { ReportsHub } from "./reports-hub";
 
 const RANGE_OPTIONS: Array<{ value: 7 | 30; label: string }> = [
   { value: 7, label: "7 days" },
@@ -68,8 +69,13 @@ const SECTION_METRICS: Record<AnalyticsSection, string[]> = {
   ],
   reminders: ["Reminders sent", "Email opens", "Confirmation rate", "Booked"],
   automations: ["Reminders sent", "Reschedule requests", "No-shows", "UTM conversions"],
+  revenue: ["Booked", "Completed", "Confirmation rate", "Cancel rate"],
   reports: [],
 };
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
+}
 
 function RangeToggle({
   range,
@@ -120,10 +126,10 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
       .then((json) => {
         const d = json.data as AnalyticsData;
         setData(d);
-        setState(!d || d.booked === 0 ? "empty" : "ready");
+        setState(!d || (d.booked === 0 && section !== "reports" && section !== "revenue") ? "empty" : "ready");
       })
       .catch(() => setState("error"));
-  }, [range]);
+  }, [range, section]);
 
   async function handleExport() {
     setExporting(true);
@@ -135,7 +141,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
   }
 
   const metrics = useMemo(() => {
-    if (!data) return [];
+    if (!data || section === "reports" || section === "revenue") return [];
     const all = buildMetrics(data);
     const wanted = SECTION_METRICS[section];
     if (wanted.length === 0) return all;
@@ -231,32 +237,67 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
           </div>
 
           {section === "reports" ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ScheduleReportCard />
-              <Card className="p-5">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
-                    <FileBarChart2 size={18} />
+            <div className="space-y-4">
+              <ReportsHub rangeDays={range} />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ScheduleReportCard />
+                <Card className="p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+                      <FileBarChart2 size={18} />
+                    </div>
+                    <div>
+                      <CardTitle>Analytics export</CardTitle>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        Download appointment, reminder, and conversion metrics for the selected range.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle>Export data</CardTitle>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      Download a CSV of appointment, reminder, and conversion
-                      metrics for the selected range.
-                    </p>
+                  <div className="mt-4">
+                    <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
+                      <Download size={14} />
+                      {exporting ? "Exporting…" : `Export ${range}-day CSV`}
+                    </Button>
                   </div>
-                </div>
-                <div className="mt-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleExport}
-                    disabled={exporting}
-                  >
-                    <Download size={14} />
-                    {exporting ? "Exporting…" : `Export ${range}-day CSV`}
-                  </Button>
-                </div>
+                </Card>
+              </div>
+            </div>
+          ) : section === "revenue" ? (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <MetricCard
+                metric={{
+                  label: "Gross payments",
+                  value: formatCurrency(data.revenueGrossCents ?? 0),
+                  icon: BarChart3,
+                  tone: "bg-emerald-50 text-emerald-600",
+                }}
+              />
+              <MetricCard
+                metric={{
+                  label: "Refunds",
+                  value: formatCurrency(data.revenueRefundsCents ?? 0),
+                  icon: RefreshCcw,
+                  tone: "bg-rose-50 text-rose-600",
+                }}
+              />
+              <MetricCard
+                metric={{
+                  label: "Net revenue",
+                  value: formatCurrency(data.revenueNetCents ?? 0),
+                  icon: CheckCircle2,
+                  tone: "bg-indigo-50 text-primary",
+                }}
+              />
+              <Card className="p-5 lg:col-span-3">
+                <CardTitle>Revenue notes</CardTitle>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Revenue is calculated from collected appointment payments in this date range.
+                  Refunds reduce net revenue. Package, membership, and gift-card accounting follows
+                  authoritative reporting logic — see Reports for detailed breakdowns.
+                </p>
+                <a href="/payments/transactions" className="mt-3 inline-block text-sm font-medium text-primary underline">
+                  View transactions
+                </a>
               </Card>
             </div>
           ) : (
@@ -314,17 +355,16 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                         <Workflow size={18} />
                       </div>
                       <div>
-                        <CardTitle>Workflow impact</CardTitle>
+                        <CardTitle>Workflow activity</CardTitle>
                         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                          Automated follow-ups recovered{" "}
                           <span className="font-semibold text-foreground">
-                            {formatNumber(Math.round(data.noShow * 0.5))}
+                            {formatNumber(data.workflowRuns ?? 0)}
                           </span>{" "}
-                          no-shows and processed{" "}
+                          workflow runs with{" "}
                           <span className="font-semibold text-foreground">
-                            {formatNumber(data.rescheduleRequested)}
+                            {formatNumber(data.workflowFailures ?? 0)}
                           </span>{" "}
-                          reschedule requests in this range.
+                          failures in this range.
                         </p>
                       </div>
                     </div>

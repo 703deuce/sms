@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X, Send, ExternalLink, RotateCcw, Link2 } from "lucide-react";
+import { useEffect } from "react";
+import { X, ExternalLink, RotateCcw } from "lucide-react";
 import {
   TransactionRow,
   formatMoney,
@@ -26,11 +26,8 @@ export function TransactionDrawer({
   onClose: () => void;
   onRefund: (row: TransactionRow) => void;
 }) {
-  const [linkState, setLinkState] = useState<"idle" | "sending" | "sent">("idle");
-
   useEffect(() => {
     if (!row) return;
-    setLinkState("idle");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -43,11 +40,7 @@ export function TransactionDrawer({
   const balanceCents = row.totalPriceCents - row.amountPaidCents;
   const canRefund = row.amountPaidCents - row.refundAmountCents > 0;
   const providerName = row.provider === "stripe" ? "Stripe" : "Square";
-
-  const sendPaymentLink = () => {
-    setLinkState("sending");
-    setTimeout(() => setLinkState("sent"), 800);
-  };
+  const methodLabel = row.paymentMethodLabel || providerName;
 
   return (
     <>
@@ -73,30 +66,24 @@ export function TransactionDrawer({
         <div className="tv-drawer-body">
           <div className="tv-drawer-status">
             <StatusChip status={row.status} />
-            <span className="tv-provider-badge">{providerName}</span>
+            <span className="tv-provider-badge">{row.source}</span>
           </div>
 
           <section className="tv-detail-group">
-            <h3 className="tv-detail-heading">Appointment</h3>
+            <h3 className="tv-detail-heading">Summary</h3>
             <dl className="tv-detail-list">
-              <div><dt>Service</dt><dd>{row.appointmentTitle}</dd></div>
               <div><dt>Customer</dt><dd>{row.customerName}</dd></div>
-              <div><dt>Phone</dt><dd>{row.customerPhone}</dd></div>
-              <div>
-                <dt>Appointment</dt>
-                <dd>
-                  <a href={appointmentHref(row.appointmentId)} className="tv-link">
-                    View appointment
-                  </a>
-                </dd>
-              </div>
+              <div><dt>Description</dt><dd>{row.appointmentTitle}</dd></div>
+              <div><dt>Date</dt><dd>{formatWhen(row.paidAt || row.createdAt)}</dd></div>
             </dl>
           </section>
 
           <section className="tv-detail-group">
             <h3 className="tv-detail-heading">Payment</h3>
             <dl className="tv-detail-list">
-              <div><dt>Method</dt><dd>{modeLabel[row.paymentMode] ?? row.paymentMode}</dd></div>
+              <div><dt>Method</dt><dd>{methodLabel}</dd></div>
+              <div><dt>Provider</dt><dd>{providerName}</dd></div>
+              <div><dt>Mode</dt><dd>{modeLabel[row.paymentMode] ?? row.paymentMode}</dd></div>
               <div><dt>Total</dt><dd className="tv-num">{formatMoney(row.totalPriceCents, row.currency)}</dd></div>
               <div><dt>Paid</dt><dd className="tv-num">{formatMoney(row.amountPaidCents, row.currency)}</dd></div>
               {balanceCents > 0 && row.status !== "failed" && (
@@ -105,53 +92,45 @@ export function TransactionDrawer({
               {row.refundAmountCents > 0 && (
                 <div><dt>Refunded</dt><dd className="tv-num tv-refunded">−{formatMoney(row.refundAmountCents, row.currency)}</dd></div>
               )}
+              {row.providerPaymentId ? (
+                <div>
+                  <dt>Reference</dt>
+                  <dd className="tv-mono">{row.providerPaymentId}</dd>
+                </div>
+              ) : null}
             </dl>
           </section>
 
-          {/* Contextual actions by transaction state */}
-          {(row.status === "pending" || row.status === "failed" || (row.paymentMode === "deposit" && balanceCents > 0)) && (
+          <section className="tv-detail-group">
+            <h3 className="tv-detail-heading">Related</h3>
+            <dl className="tv-detail-list">
+              <div>
+                <dt>Appointment</dt>
+                <dd>
+                  <a href={appointmentHref(row.appointmentId)} className="tv-link">
+                    View appointment
+                  </a>
+                </dd>
+              </div>
+              {row.contactId ? (
+                <div>
+                  <dt>Customer</dt>
+                  <dd>
+                    <a href={`/contacts/${row.contactId}`} className="tv-link">
+                      View contact
+                    </a>
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+
+          {row.status === "failed" && row.failureReason ? (
             <section className="tv-detail-group">
-              <h3 className="tv-detail-heading">Collect payment</h3>
-              {row.status === "pending" && (
-                <p className="tv-drawer-note">
-                  A payment link for {formatMoney(row.totalPriceCents, row.currency)} was sent to{" "}
-                  {row.customerName} but hasn’t been paid yet.
-                </p>
-              )}
-              {row.status === "failed" && (
-                <p className="tv-drawer-note">
-                  The charge was declined by the card issuer. Send a new payment link so the customer
-                  can pay with a different card.
-                </p>
-              )}
-              {row.paymentMode === "deposit" && balanceCents > 0 && row.status !== "failed" && (
-                <p className="tv-drawer-note">
-                  A {formatMoney(row.amountPaidCents, row.currency)} deposit was collected at booking.
-                  The remaining balance is due before the appointment.
-                </p>
-              )}
-              <button
-                className="tv-btn tv-btn-secondary tv-btn-block"
-                onClick={sendPaymentLink}
-                disabled={linkState !== "idle"}
-              >
-                {linkState === "sent" ? (
-                  <>Payment link sent to {row.customerPhone}</>
-                ) : linkState === "sending" ? (
-                  <>Sending…</>
-                ) : (
-                  <>
-                    {row.status === "pending" ? <Send size={14} /> : <Link2 size={14} />}
-                    {row.status === "pending"
-                      ? "Resend payment link"
-                      : row.status === "failed"
-                        ? "Send new payment link"
-                        : `Send balance link — ${formatMoney(balanceCents, row.currency)}`}
-                  </>
-                )}
-              </button>
+              <h3 className="tv-detail-heading">Failure</h3>
+              <p className="tv-drawer-note">{row.failureReason}</p>
             </section>
-          )}
+          ) : null}
 
           <section className="tv-detail-group">
             <h3 className="tv-detail-heading">Activity</h3>
@@ -167,7 +146,7 @@ export function TransactionDrawer({
                 <li>
                   <span className="tv-tl-dot tv-tl-success" />
                   <div>
-                    <p className="tv-tl-title">Payment received via {providerName}</p>
+                    <p className="tv-tl-title">Payment received via {methodLabel}</p>
                     <p className="tv-tl-time">{formatWhen(row.paidAt)}</p>
                   </div>
                 </li>
@@ -195,7 +174,7 @@ export function TransactionDrawer({
                   <span className="tv-tl-dot tv-tl-danger" />
                   <div>
                     <p className="tv-tl-title">Payment failed</p>
-                    <p className="tv-tl-time">The charge was declined by the card issuer.</p>
+                    <p className="tv-tl-time">{row.failureReason || "The charge was declined."}</p>
                   </div>
                 </li>
               )}
@@ -206,21 +185,23 @@ export function TransactionDrawer({
         <div className="tv-drawer-foot">
           {canRefund ? (
             <button className="tv-btn tv-btn-danger-outline" onClick={() => onRefund(row)}>
-              <RotateCcw size={14} /> Refund
+              <RotateCcw size={14} /> {row.refundAmountCents > 0 ? "Refund remaining" : "Refund"}
             </button>
           ) : (
             <a href={appointmentHref(row.appointmentId)} className="tv-btn tv-btn-secondary">
               View appointment
             </a>
           )}
-          <a
-            href={providerDashboardHref(row.provider, row.id)}
-            target="_blank"
-            rel="noreferrer"
-            className="tv-btn tv-btn-ghost"
-          >
-            Open in {providerName} <ExternalLink size={13} />
-          </a>
+          {row.providerPaymentId ? (
+            <a
+              href={providerDashboardHref(row.provider, row.providerPaymentId)}
+              target="_blank"
+              rel="noreferrer"
+              className="tv-btn tv-btn-ghost"
+            >
+              Open in {providerName} <ExternalLink size={13} />
+            </a>
+          ) : null}
         </div>
       </aside>
     </>

@@ -4,6 +4,7 @@ export type TransactionRow = {
   appointmentTitle: string;
   customerName: string;
   customerPhone: string;
+  contactId: string | null;
   provider: "stripe" | "square";
   status: "succeeded" | "refunded" | "partially_refunded" | "pending" | "failed";
   paymentMode: "booking" | "payment_link" | "deposit";
@@ -13,6 +14,18 @@ export type TransactionRow = {
   refundAmountCents: number;
   paidAt: string | null;
   createdAt: string;
+  source: string;
+  paymentMethodLabel: string | null;
+  failureReason: string | null;
+  providerPaymentId: string | null;
+};
+
+const mockExtras = {
+  contactId: "contact_mock",
+  source: "Appointment",
+  paymentMethodLabel: "Visa •••• 4821",
+  failureReason: null,
+  providerPaymentId: "pi_mock",
 };
 
 export const mockTransactions: TransactionRow[] = [
@@ -22,6 +35,7 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Water Heater Estimate",
     customerName: "Sarah Johnson",
     customerPhone: "+1 (571) 402-1183",
+    ...mockExtras,
     provider: "stripe",
     status: "succeeded",
     paymentMode: "booking",
@@ -38,6 +52,8 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Initial Consultation",
     customerName: "Anthony Rivera",
     customerPhone: "+1 (703) 555-0164",
+    ...mockExtras,
+    paymentMethodLabel: "Square",
     provider: "square",
     status: "partially_refunded",
     paymentMode: "payment_link",
@@ -54,6 +70,7 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "HVAC Maintenance Visit",
     customerName: "Maria Chen",
     customerPhone: "+1 (571) 555-0190",
+    ...mockExtras,
     provider: "stripe",
     status: "succeeded",
     paymentMode: "deposit",
@@ -70,6 +87,7 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Kitchen Remodel Walkthrough",
     customerName: "David Okafor",
     customerPhone: "+1 (240) 555-0177",
+    ...mockExtras,
     provider: "stripe",
     status: "refunded",
     paymentMode: "booking",
@@ -86,6 +104,8 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Annual Plumbing Inspection",
     customerName: "Priya Patel",
     customerPhone: "+1 (202) 555-0143",
+    ...mockExtras,
+    paymentMethodLabel: "Square",
     provider: "square",
     status: "succeeded",
     paymentMode: "booking",
@@ -102,6 +122,7 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Water Heater Estimate",
     customerName: "Tom Nguyen",
     customerPhone: "+1 (571) 555-0121",
+    ...mockExtras,
     provider: "stripe",
     status: "pending",
     paymentMode: "payment_link",
@@ -118,6 +139,9 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Bathroom Fixture Install",
     customerName: "Elena Morales",
     customerPhone: "+1 (301) 555-0119",
+    ...mockExtras,
+    paymentMethodLabel: null,
+    failureReason: "Card declined",
     provider: "stripe",
     status: "failed",
     paymentMode: "deposit",
@@ -134,6 +158,8 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Initial Consultation",
     customerName: "James Whitfield",
     customerPhone: "+1 (703) 555-0132",
+    ...mockExtras,
+    paymentMethodLabel: "Square",
     provider: "square",
     status: "succeeded",
     paymentMode: "booking",
@@ -150,6 +176,7 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "HVAC Maintenance Visit",
     customerName: "Grace Kim",
     customerPhone: "+1 (571) 555-0174",
+    ...mockExtras,
     provider: "stripe",
     status: "succeeded",
     paymentMode: "deposit",
@@ -166,6 +193,8 @@ export const mockTransactions: TransactionRow[] = [
     appointmentTitle: "Annual Plumbing Inspection",
     customerName: "Robert Alvarez",
     customerPhone: "+1 (202) 555-0188",
+    ...mockExtras,
+    paymentMethodLabel: "Square",
     provider: "square",
     status: "succeeded",
     paymentMode: "booking",

@@ -29,6 +29,11 @@ export type AnalyticsData = {
   popularTimes: Array<{ hour: number; count: number }>;
   series: Array<{ date: string; count: number }>;
   routingForms: RoutingFormSummary[];
+  revenueGrossCents?: number;
+  revenueRefundsCents?: number;
+  revenueNetCents?: number;
+  workflowRuns?: number;
+  workflowFailures?: number;
 };
 
 function buildSeries(days: number, base: number[]): Array<{ date: string; count: number }> {
@@ -144,6 +149,7 @@ export const analyticsTabs = [
   { id: "booking", label: "Booking" },
   { id: "reminders", label: "Reminders" },
   { id: "automations", label: "Automations" },
+  { id: "revenue", label: "Revenue" },
   { id: "reports", label: "Reports" },
 ] as const;
 
@@ -168,6 +174,10 @@ export const sectionMeta: Record<AnalyticsSection, { title: string; description:
   },
   reports: {
     title: "Reports",
-    description: "Scheduled and exported analytics reports.",
+    description: "Detailed records behind your business activity.",
+  },
+  revenue: {
+    title: "Revenue analytics",
+    description: "Gross payments, refunds, and net revenue by source.",
   },
 };

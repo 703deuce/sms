@@ -5,6 +5,7 @@ import { X, RotateCcw, Check } from "lucide-react";
 import { TransactionRow, formatMoney } from "../types";
 
 type RefundPhase = "confirm" | "processing" | "done";
+type RefundDestination = "original_method" | "account_credit";
 
 export function RefundModal({
   row,
@@ -17,17 +18,21 @@ export function RefundModal({
 }) {
   const [phase, setPhase] = useState<RefundPhase>("confirm");
   const [amountStr, setAmountStr] = useState("");
+  const [destination, setDestination] = useState<RefundDestination>("original_method");
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   const refundableCents = row ? row.amountPaidCents - row.refundAmountCents : 0;
+  const canUseAccountCredit = Boolean(row?.contactId);
 
   useEffect(() => {
     if (row) {
       setPhase("confirm");
       setAmountStr(((row.amountPaidCents - row.refundAmountCents) / 100).toFixed(2));
+      setDestination("original_method");
+      setReason("");
       setError(null);
-      // Initial focus on the safe action (Cancel) for a destructive dialog
       setTimeout(() => closeRef.current?.focus(), 0);
     }
   }, [row]);
@@ -55,6 +60,10 @@ export function RefundModal({
       );
       return;
     }
+    if (destination === "account_credit" && !row.contactId) {
+      setError("Account credit refunds require a linked customer.");
+      return;
+    }
     setError(null);
     setPhase("processing");
     fetch("/api/merchant-payments/refund", {
@@ -63,6 +72,9 @@ export function RefundModal({
       body: JSON.stringify({
         appointmentId: row.appointmentId,
         amountCents: cents,
+        reason: reason.trim() || undefined,
+        refundToWallet: destination === "account_credit",
+        contactId: destination === "account_credit" ? row.contactId : undefined,
       }),
     })
       .then((res) => {
@@ -75,6 +87,9 @@ export function RefundModal({
         setPhase("confirm");
       });
   };
+
+  const providerName = row.provider === "stripe" ? "Stripe" : "Square";
+  const methodLabel = row.paymentMethodLabel || providerName;
 
   return (
     <>
@@ -111,9 +126,10 @@ export function RefundModal({
             </div>
             <p className="tv-modal-text">
               {formatMoney(Math.round(parseFloat(amountStr) * 100), row.currency)} was refunded to{" "}
-              <strong>{row.customerName}</strong> through{" "}
-              {row.provider === "stripe" ? "Stripe" : "Square"}. The transaction now shows the
-              refunded amount.
+              <strong>{row.customerName}</strong>
+              {destination === "account_credit"
+                ? " as customer account credit."
+                : ` through ${methodLabel}.`}
             </p>
             <div className="tv-modal-actions">
               <button className="tv-btn tv-btn-primary" onClick={onClose}>
@@ -124,10 +140,25 @@ export function RefundModal({
         ) : (
           <div className="tv-modal-body">
             <p className="tv-modal-text">
-              Refund {row.customerName} for <strong>{row.appointmentTitle}</strong>. The refund is
-              sent back to the original payment method through{" "}
-              {row.provider === "stripe" ? "Stripe" : "Square"} and can’t be undone.
+              Refund {row.customerName} for <strong>{row.appointmentTitle}</strong>.
             </p>
+
+            <dl className="tv-refund-summary">
+              <div>
+                <dt>Original payment</dt>
+                <dd>{formatMoney(row.amountPaidCents, row.currency)}</dd>
+              </div>
+              {row.refundAmountCents > 0 && (
+                <div>
+                  <dt>Already refunded</dt>
+                  <dd>{formatMoney(row.refundAmountCents, row.currency)}</dd>
+                </div>
+              )}
+              <div>
+                <dt>Maximum refundable</dt>
+                <dd>{formatMoney(refundableCents, row.currency)}</dd>
+              </div>
+            </dl>
 
             <div className="tv-field">
               <label className="tv-label" htmlFor="tv-refund-amount">
@@ -146,18 +177,64 @@ export function RefundModal({
                 />
               </div>
               <p className="tv-hint" id="tv-refund-hint">
-                Up to {formatMoney(refundableCents, row.currency)} available to refund
-                {row.refundAmountCents > 0
-                  ? ` (${formatMoney(row.refundAmountCents, row.currency)} already refunded)`
-                  : ""}
-                .
+                Up to {formatMoney(refundableCents, row.currency)} available to refund.
               </p>
-              {error && (
-                <p className="tv-error-text" id="tv-refund-error" role="alert">
-                  {error}
-                </p>
-              )}
             </div>
+
+            <fieldset className="tv-field">
+              <legend className="tv-label">Destination</legend>
+              <label className="tv-radio">
+                <input
+                  type="radio"
+                  name="refund-destination"
+                  checked={destination === "original_method"}
+                  onChange={() => setDestination("original_method")}
+                  disabled={phase === "processing"}
+                />
+                <span>
+                  Original payment method
+                  <span className="tv-hint block">{methodLabel}</span>
+                </span>
+              </label>
+              {canUseAccountCredit ? (
+                <label className="tv-radio">
+                  <input
+                    type="radio"
+                    name="refund-destination"
+                    checked={destination === "account_credit"}
+                    onChange={() => setDestination("account_credit")}
+                    disabled={phase === "processing"}
+                  />
+                  <span>
+                    Customer account credit
+                    <span className="tv-hint block">
+                      Adds the refund to the customer&apos;s Transovo account credit instead of
+                      returning it to the card.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+            </fieldset>
+
+            <div className="tv-field">
+              <label className="tv-label" htmlFor="tv-refund-reason">
+                Reason <span className="tv-optional">(optional)</span>
+              </label>
+              <input
+                id="tv-refund-reason"
+                className="tv-input"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={phase === "processing"}
+                placeholder="Customer request, duplicate charge…"
+              />
+            </div>
+
+            {error && (
+              <p className="tv-error-text" id="tv-refund-error" role="alert">
+                {error}
+              </p>
+            )}
 
             <div className="tv-modal-actions">
               <button

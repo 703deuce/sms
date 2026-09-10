@@ -337,6 +337,30 @@ export function SecuritySettingsPanel() {
       </Card>
 
       <Card className="mt-4">
+        <CardTitle>Team access & roles</CardTitle>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Manage organization roles, booking-type permissions, and enterprise access controls.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/settings/users">
+            <Button variant="outline" size="sm">Manage team</Button>
+          </Link>
+          <Link href="/appointments/enterprise">
+            <Button variant="outline" size="sm">Booking access controls</Button>
+          </Link>
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <CardTitle>Enterprise sign-in (SAML / SCIM)</CardTitle>
+        <p className="mt-2 text-sm text-muted-foreground">
+          SAML and SCIM provisioning require enterprise setup and provider configuration.
+          Contact your account team to enable single sign-on.
+        </p>
+        <p className="mt-3 text-sm font-medium text-amber-800">Provider configuration required</p>
+      </Card>
+
+      <Card className="mt-4">
         <CardTitle>API access</CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
           Manage API keys and webhook signing secrets in the integrations area.

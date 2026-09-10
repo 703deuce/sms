@@ -68,7 +68,7 @@ export function AppointmentsGlobalSearch() {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search contacts, appointments…"
+          placeholder="Search appointments, customers, services…"
           className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm"
           autoComplete="off"
         />

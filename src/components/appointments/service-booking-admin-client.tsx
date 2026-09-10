@@ -632,132 +632,21 @@ type InvoiceRow = {
   createdAt: string;
 };
 
-function InvoicesPanel({
-  items,
-  onReload,
-}: {
-  items: unknown[];
-  onReload: () => void;
-}) {
+function InvoicesPanel({ items }: { items: unknown[]; onReload: () => void }) {
   const invoices = items as InvoiceRow[];
-  const [contactId, setContactId] = useState("");
-  const [description, setDescription] = useState("");
-  const [amountDollars, setAmountDollars] = useState("50");
-  const [creating, setCreating] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [lastPayUrl, setLastPayUrl] = useState<string | null>(null);
-
-  async function createInvoice() {
-    if (!contactId.trim() || !description.trim()) {
-      setMessage("Contact ID and description are required.");
-      return;
-    }
-    const unitPriceCents = Math.round(Number(amountDollars) * 100);
-    if (!Number.isFinite(unitPriceCents) || unitPriceCents <= 0) {
-      setMessage("Enter a valid amount.");
-      return;
-    }
-    setCreating(true);
-    setMessage(null);
-    setLastPayUrl(null);
-    const res = await fetch(SECTION_API.invoices, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contactId: contactId.trim(),
-        lineItems: [{ description: description.trim(), quantity: 1, unitPriceCents }],
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    setCreating(false);
-    if (!res.ok) {
-      setMessage(json.error || "Could not create invoice");
-      return;
-    }
-    const payToken = json.data?.payToken as string | undefined;
-    if (payToken) {
-      const base = typeof window !== "undefined" ? window.location.origin : "";
-      setLastPayUrl(`${base}/pay/invoice/${payToken}`);
-    }
-    setMessage("Invoice created.");
-    setDescription("");
-    onReload();
-  }
 
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        For the full invoices workspace, open{" "}
-        <a href="/payments/invoices" className="text-primary underline">Payments → Invoices</a>.
-      </p>
-      <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-          <span>Contact ID</span>
-          <input
-            className="rounded border px-3 py-2"
-            value={contactId}
-            onChange={(e) => setContactId(e.target.value)}
-            placeholder="contact_…"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Description</span>
-          <input
-            className="rounded border px-3 py-2"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Service balance"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Amount (USD)</span>
-          <input
-            className="rounded border px-3 py-2"
-            type="number"
-            min={0}
-            step="0.01"
-            value={amountDollars}
-            onChange={(e) => setAmountDollars(e.target.value)}
-          />
-        </label>
-        <div className="sm:col-span-2">
-          <button
-            type="button"
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            disabled={creating}
-            onClick={() => void createInvoice()}
-          >
-            {creating ? "Creating…" : "Create invoice"}
-          </button>
-        </div>
-        {message ? <p className="text-sm text-muted-foreground sm:col-span-2">{message}</p> : null}
-        {lastPayUrl ? (
-          <p className="text-sm sm:col-span-2">
-            Pay link:{" "}
-            <a className="text-primary underline break-all" href={lastPayUrl}>{lastPayUrl}</a>
-          </p>
+    <div className="space-y-4">
+      <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+        <p>
+          Invoice management has moved to{" "}
+          <a href="/payments/invoices" className="text-primary underline">Payments → Invoices</a>.
+          Use the canonical workspace to create, send, and track invoices.
+        </p>
+        {invoices.length > 0 ? (
+          <p className="mt-2">{invoices.length} invoice{invoices.length === 1 ? "" : "s"} on file.</p>
         ) : null}
       </div>
-      <ul className="divide-y rounded-lg border">
-        {invoices.length === 0 ? (
-          <li className="p-4 text-sm text-muted-foreground">No invoices yet.</li>
-        ) : (
-          invoices.map((row) => (
-            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
-              <div>
-                <p className="font-medium">{row.id}</p>
-                <p className="text-xs text-muted-foreground">
-                  {row.status} · contact {row.contactId}
-                </p>
-              </div>
-              <div className="text-right text-xs text-muted-foreground">
-                <p>Total ${(row.totalCents / 100).toFixed(2)}</p>
-                <p>Due ${(row.balanceDueCents / 100).toFixed(2)}</p>
-              </div>
-            </li>
-          ))
-        )}
-      </ul>
     </div>
   );
 }
