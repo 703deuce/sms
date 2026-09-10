@@ -23,11 +23,12 @@
 
 | Legacy | Canonical | Shared component | Shared backend | Retirement |
 |--------|-----------|------------------|----------------|------------|
-| `/campaigns` | `/appointments/campaigns` | Yes | Yes | Internal Appointments links fixed; browser equivalence QA pending |
-| `/campaigns/new` | `/appointments/campaigns/new` | Yes | Yes | After equivalence QA |
-| `/campaigns/new/review` | `/appointments/campaigns/new/review` | Yes | Yes | After equivalence QA |
-| `/campaigns/[id]` | `/appointments/campaigns/[id]` | Yes | Yes | After equivalence QA |
-| `/campaigns/drafts` | `/appointments/campaigns/drafts` | Yes | Yes | After equivalence QA |
+| `/campaigns` | `/appointments/campaigns` | Yes | Yes | Browser equivalence PASS (2026-09-10) |
+| `/campaigns/new` | `/appointments/campaigns/new` | Yes | Yes | Browser equivalence PASS |
+| `/campaigns/new/review` | `/appointments/campaigns/new/review` | Yes | Yes | Browser equivalence PASS |
+| `/campaigns/[id]` | `/appointments/campaigns/[id]` | Yes | Yes | Browser equivalence PASS |
+| `/campaigns/drafts` | `/appointments/campaigns/drafts` | Yes | Yes | Browser equivalence PASS |
+| `/campaigns/all` | `/appointments/campaigns` | Yes | Yes | Redirect fixed to canonical |
 | `/dashboard` | — | — | — | DO_NOT_BRING_BACK |
 | `/send` | Inbox + Contact detail | — | `/api/sms/send` | DO_NOT_BRING_BACK (nav) |
 | `/grow/*` | — | — | — | Hidden |

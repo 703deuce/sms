@@ -1,6 +1,7 @@
 # Appointments Business Texting — Template Ownership
 
-**Date:** 2026-09-10
+**Date:** 2026-09-10  
+**Browser proof:** BT-TEST-14 PASS — template picker on Campaign composer
 
 ## Models (no third system created)
 

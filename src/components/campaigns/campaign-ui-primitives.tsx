@@ -151,3 +151,225 @@ export function CampaignIconButton({
     />
   );
 }
+
+export function CampaignPrimaryButton({
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <Button
+      type="button"
+      className={cn("h-9 px-4 text-[13px] font-semibold shadow-sm", className)}
+      {...props}
+    />
+  );
+}
+
+export function CampaignGhostButton({
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className={cn("h-9 px-4 text-[13px] font-semibold", className)}
+      {...props}
+    />
+  );
+}
+
+export function CampaignReviewCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CampaignSegmentToggle({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex gap-0.5 rounded-[10px] bg-muted p-1",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CampaignSegmentOption({
+  active,
+  children,
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex-1 rounded-lg px-4 py-2 text-[13px] font-medium transition-colors",
+        active
+          ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+          : "text-muted-foreground hover:text-foreground",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function CampaignWeekdayToggle({
+  active,
+  children,
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex-1 rounded-md border px-0 py-1.5 text-[12px] font-medium transition-colors",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-transparent text-muted-foreground hover:bg-muted",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function CampaignModalOverlay({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CampaignModalCard({
+  children,
+  className,
+  onClick,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className={cn(
+        "w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl",
+        className,
+      )}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CampaignPageShell({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-h-screen flex-1 bg-muted/30 px-6 py-8 lg:px-10", className)}>
+      {children}
+    </div>
+  );
+}
+
+export function CampaignFilterMenu({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <CampaignDropdownPanel
+      className={cn("left-0 right-auto min-w-[200px] p-1.5", className)}
+    >
+      {children}
+    </CampaignDropdownPanel>
+  );
+}
+
+export function CampaignFilterMenuItem({
+  active,
+  children,
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition-colors",
+        active
+          ? "bg-primary/10 font-semibold text-primary"
+          : "text-foreground hover:bg-muted",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function CampaignActionMenu({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <CampaignDropdownPanel
+      className={cn("left-auto right-0 min-w-[180px] p-1.5", className)}
+    >
+      {children}
+    </CampaignDropdownPanel>
+  );
+}

@@ -47,7 +47,7 @@ Maps canonical Business Texting capabilities to UI, routes, APIs, domain, worker
 | UI | `CreateCampaign` + `campaign-compose.tsx` patterns |
 | API | Campaign PATCH on draft save |
 | Service | `compose-draft.ts`, segment estimate utils |
-| Templates | Legacy campaign templates + optional Automations templates (audit pending) |
+| Templates | `GET /api/templates` (Campaign/SMS); separate from appointment workflow templates |
 | MMS | Existing media picker if enabled in compose |
 
 ## Review / attestation

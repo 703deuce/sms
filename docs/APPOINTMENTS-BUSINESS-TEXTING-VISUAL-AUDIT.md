@@ -1,36 +1,41 @@
 # Appointments Business Texting — Visual Audit
 
-**Date:** 2026-09-10
+**Date:** 2026-09-10 (final local certification pass)
 
 ## Strategy
 
-Preserve Kimi campaign **layout and workflow**. Replace presentation primitives with Appointments design system (`@/components/ui/*`, `campaign-ui-primitives.tsx`). Scoped `appointments-campaigns-overrides.css` remains **fallback only** for unmigrated legacy classes.
+Preserve Kimi campaign **layout and workflow**. Replace presentation primitives with Appointments design system (`@/components/ui/*`, `campaign-ui-primitives.tsx`). Scoped `appointments-campaigns-overrides.css` is **fallback only** for unmigrated legacy class hooks.
 
-## Surface audit
+## Surface audit (phase 2 complete)
 
-| Surface | Primary mechanism | Target |
+| Surface | Primary mechanism | Status |
 |---------|-------------------|--------|
-| Campaign list | `CampaignButton`, `CampaignInput`, typography tokens | CURRENT_APPOINTMENTS_COMPONENT |
-| Create Campaign | `CampaignLabel`, `CampaignComposerBox`, `CampaignButton` | CURRENT_APPOINTMENTS_COMPONENT |
+| Campaign list | `CampaignButton`, `CampaignInput`, `CampaignFilterMenu` | CURRENT_APPOINTMENTS_COMPONENT |
+| Create Campaign | `CampaignSegmentToggle`, `CampaignComposerBox`, primitives | CURRENT_APPOINTMENTS_COMPONENT |
 | Audience picker | `CampaignAudienceField`, `CampaignChip`, `CampaignDropdownPanel` | CURRENT_APPOINTMENTS_COMPONENT |
-| Message composer | `CampaignComposerBox` + shared textarea styling | SHARED_DESIGN_SYSTEM |
-| Review | `ReviewDetails.tsx` | LEGACY_KIMI_COMPONENT (pending) |
-| Recurring modal | `RecurringModal.tsx` | LEGACY_KIMI_COMPONENT (pending) |
-| Calendar | Mixed — links fixed; header button still indigo utility | SCOPED_CSS_ONLY + partial |
-| Filter menus / seg-toggle | `.filter-menu`, `.seg-toggle` in Kimi CSS | SCOPED_CSS_ONLY |
-| Detail / Results | `campaign-detail-view`, `campaign-results` | SHARED_DESIGN_SYSTEM (already V1 polish) |
+| Review | `ReviewDetails` + `CampaignReviewCard`, real launch-review data | CURRENT_APPOINTMENTS_COMPONENT |
+| Recurring modal | `RecurringModal` + `CampaignModalOverlay` | CURRENT_APPOINTMENTS_COMPONENT |
+| Filter menus | `CampaignFilterMenu` / `CampaignFilterMenuItem` | CURRENT_APPOINTMENTS_COMPONENT |
+| Calendar | `useCampaignsBasePath`, StatusChip | SHARED_DESIGN_SYSTEM |
+| Detail / Results | `campaign-detail-view`, `campaign-results` | SHARED_DESIGN_SYSTEM |
 | No-sender state | `BusinessTextingActivationPanel` | SHARED_DESIGN_SYSTEM |
 
-## Typography & color
+## CSS override audit (`appointments-campaigns-overrides.css`)
 
-- Migrated surfaces: `font-display`, `text-foreground`, `text-muted-foreground`, `text-primary`, `border-border`
-- Remaining indigo/slate utilities on unmigrated Kimi toolbars and review flow
+| Rule class | Classification |
+|------------|----------------|
+| Token bridge (`--camp-accent`, etc.) | REQUIRED_EXCEPTION |
+| `.btn-primary`, `.input-field` | REQUIRED_EXCEPTION (composer toolbar) |
+| `.camp-row`, `.camp-table`, `.status-pill` | REQUIRED_EXCEPTION |
+| `.composer-toolbar` | REQUIRED_EXCEPTION |
+| Indigo utility remaps | LEGACY_WORKAROUND (remove as markup migrates) |
+| `.filter-menu`, `.seg-toggle`, `.weekday-btn` | **OBSOLETE** (removed — component migration) |
 
-## Remaining CSS overrides
+## Mobile / desktop
 
-`appointments-campaigns-overrides.css` still remaps `.btn-primary`, `.input-field`, indigo text utilities under `.appt-overview-pilot .kimi-campaigns`. **Remove incrementally** as each surface migrates to primitives.
+- **Desktop:** PASS — migrated primitives on list, create, review, recurring
+- **Mobile (BT-18):** PASS — responsive toolbar, no horizontal overflow, CTAs reachable at 390px
 
-## Screenshot QA (pending browser pass)
+## Recurring decision
 
-Desktop: list, create, audience, composer, review, results, no-sender  
-Mobile: list, create, audience, Contact Detail → Message
+Recurring send is **in scope** for lightweight Campaigns. UI migrated; backend preserved for legacy Mass SMS product.

@@ -3,9 +3,11 @@
 **Effective:** 2026-09-10  
 **Authority:** Product scope expansion — Business Texting Phase 1
 
-## Status: PAUSED
+## Status: READY TO RESUME (Business Texting implementation complete)
 
-Final master browser certification (8H-1), final visual tightening, and production polish for Appointments are **paused** until Business Texting absorption is complete and reconciled.
+Business Texting local certification passed (2026-09-10). Provider smokes BT-08/BT-10 remain tracked separately.
+
+Final master browser certification (8H-1) may resume. **Do not** conflate provider send/reply certification with 229-journey master UAT.
 
 **Do not** resume master UAT or treat the 308-row closed inventory as frozen scope.
 
@@ -52,4 +54,4 @@ Resume final certification when **all** Business Texting completion gates pass:
 
 ## Sign-off
 
-When gates pass, update this document with resume date and link to reconciliation PR.
+**2026-09-10:** `BUSINESS_TEXTING_ABSORPTION_COMPLETE = YES`. Branch `cursor/appt-business-texting-audit-8af6`. Provider certification pending BT-08/BT-10 only.

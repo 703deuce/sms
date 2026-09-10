@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Users, ChevronLeft, Loader2, CalendarClock, Wallet } from "lucide-react";
+import { Users, ChevronLeft, Loader2, CalendarClock, Wallet, Phone, MessageSquare } from "lucide-react";
 import PhonePreview from "./PhonePreview";
 import {
   composeMessageBody,
@@ -20,6 +20,12 @@ import {
   type ReviewNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { zonedIsoToLocalDateTime } from "@/lib/campaigns/schedule-time";
+import {
+  CampaignButton,
+  CampaignGhostButton,
+  CampaignPageShell,
+  CampaignReviewCard,
+} from "@/components/campaigns/campaign-ui-primitives";
 
 export default function ReviewDetails({
   onPrev,
@@ -119,63 +125,70 @@ export default function ReviewDetails({
         : "Schedule Campaign";
 
   const previewBody = composeMessageBody(draft.message);
+  const segmentsPerRecipient =
+    review && review.finalRecipientCount > 0
+      ? Math.max(1, Math.round(review.requiredSegments / review.finalRecipientCount))
+      : null;
+  const senderDisplay = review?.phoneE164 || draft.senderLabel || null;
 
   if (!campaignId) {
     return (
-      <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-        <div className="mx-auto max-w-xl rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-          <p className="text-[13px] font-medium text-red-700">No campaign to review. Go back and save your draft first.</p>
-          <button type="button" onClick={() => onPrev()} className="btn-ghost mt-3">Back</button>
+      <CampaignPageShell>
+        <div className="mx-auto max-w-xl rounded-xl border border-destructive/30 bg-destructive/5 px-5 py-4">
+          <p className="text-[13px] font-medium text-destructive">
+            No campaign to review. Go back and save your draft first.
+          </p>
+          <CampaignGhostButton type="button" className="mt-3" onClick={() => onPrev()}>
+            Back
+          </CampaignGhostButton>
         </div>
-      </div>
+      </CampaignPageShell>
     );
   }
 
-  const sectionCard = "review-card";
-
   return (
-    <div className="flex-1 min-h-screen bg-[#f6f7fb] px-10 py-8">
-      <p className="text-[12px] text-slate-400">
-        Campaigns / <span className="text-slate-600">Create Campaign</span>
+    <CampaignPageShell>
+      <p className="text-[12px] text-muted-foreground">
+        Campaigns / <span className="text-foreground">Create Campaign</span>
       </p>
-      <div className="grid grid-cols-[1fr_360px] gap-14 mt-4">
+      <div className="mt-4 grid grid-cols-1 gap-10 xl:grid-cols-[1fr_360px]">
         <div>
-          <h1 className="text-[22px] font-bold text-slate-900">Review Details</h1>
-          <p className="text-sm text-slate-500 mt-1">Confirm your campaign details.</p>
+          <h1 className="text-[22px] font-bold text-foreground">Review Details</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Confirm your campaign details before sending.</p>
 
           <div className="mt-8 max-w-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-bold text-slate-900">
+              <h2 className="text-[15px] font-semibold text-foreground">
                 Audience{" "}
-                <span className="ml-1 text-[11px] font-medium text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">
-                  (Subscribed Contacts Only)
+                <span className="ml-1 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+                  Subscribed contacts only
                 </span>
-              </h3>
+              </h2>
               <button
                 type="button"
                 onClick={() => onPrev(campaignId)}
-                className="text-[13px] font-semibold text-indigo-600"
+                className="text-[13px] font-semibold text-primary"
               >
                 Edit
               </button>
             </div>
-            <div className={`${sectionCard} mt-3 flex items-center justify-between px-5 py-4`}>
+            <CampaignReviewCard className="mt-3 flex items-center justify-between px-5 py-4">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 ring-1 ring-indigo-200/60">
-                  <Users className="h-5 w-5 text-indigo-600" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
+                  <Users className="h-5 w-5 text-primary" aria-hidden />
                 </div>
                 <div className="min-w-0 space-y-0.5">
                   {(review?.listNames?.length ? review.listNames : draft.audience.map((a) => a.name)).map((a, i) => (
-                    <p key={`${a}-${i}`} className="truncate text-[13px] font-medium text-slate-700">{a}</p>
+                    <p key={`${a}-${i}`} className="truncate text-[13px] font-medium text-foreground">{a}</p>
                   ))}
                 </div>
               </div>
-              <span className="ml-4 shrink-0 text-[20px] font-bold tabular-nums tracking-tight text-slate-900">
+              <span className="ml-4 shrink-0 text-[20px] font-bold tabular-nums tracking-tight text-foreground">
                 {loading ? "…" : formatNumber(review?.finalRecipientCount ?? 0)}
               </span>
-            </div>
+            </CampaignReviewCard>
             {review && !loading ? (
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+              <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
                 {formatLaunchReviewAudienceSummary(review) ||
                   "Recipients are deduplicated across lists and exclude opted-out or invalid numbers."}
               </p>
@@ -184,35 +197,87 @@ export default function ReviewDetails({
 
           <div className="mt-7 max-w-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-bold text-slate-900">Timing</h3>
+              <h2 className="text-[15px] font-semibold text-foreground">Sender</h2>
               <button
                 type="button"
                 onClick={() => onPrev(campaignId)}
-                className="text-[13px] font-semibold text-indigo-600"
+                className="text-[13px] font-semibold text-primary"
               >
                 Edit
               </button>
             </div>
-            <div className={`${sectionCard} mt-3 flex items-center gap-3 px-5 py-4 text-[13px] font-medium text-slate-700`}>
-              <CalendarClock className="h-4 w-4 shrink-0 text-slate-400" />
-              {timingLabel(draft)}
-            </div>
+            <CampaignReviewCard className="mt-3 flex items-center gap-3 px-5 py-4 text-[13px] font-medium text-foreground">
+              <Phone className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              {loading ? "…" : senderDisplay || "No sender selected"}
+            </CampaignReviewCard>
           </div>
 
           <div className="mt-7 max-w-xl">
-            <h3 className="flex items-center gap-2 text-[15px] font-bold text-slate-900">
-              <Wallet className="h-4 w-4 text-slate-400" /> Message Credit Summary
-            </h3>
-            <div className={`${sectionCard} mt-3 divide-y divide-slate-100`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-foreground">Message</h2>
+              <button
+                type="button"
+                onClick={() => onPrev(campaignId)}
+                className="text-[13px] font-semibold text-primary"
+              >
+                Edit
+              </button>
+            </div>
+            <CampaignReviewCard className="mt-3 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">
+                    {previewBody || "—"}
+                  </p>
+                  {loading ? null : (
+                    <p className="mt-2 text-[12px] text-muted-foreground">
+                      {segmentsPerRecipient
+                        ? `${segmentsPerRecipient} SMS segment${segmentsPerRecipient === 1 ? "" : "s"} per recipient`
+                        : "Segment count unavailable"}
+                      {review && review.estimatedSegments > 0
+                        ? ` · ${formatNumber(review.estimatedSegments)} total segments`
+                        : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CampaignReviewCard>
+          </div>
+
+          <div className="mt-7 max-w-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-foreground">Timing</h2>
+              <button
+                type="button"
+                onClick={() => onPrev(campaignId)}
+                className="text-[13px] font-semibold text-primary"
+              >
+                Edit
+              </button>
+            </div>
+            <CampaignReviewCard className="mt-3 flex items-center gap-3 px-5 py-4 text-[13px] font-medium text-foreground">
+              <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              {timingLabel(draft)}
+            </CampaignReviewCard>
+          </div>
+
+          <div className="mt-7 max-w-xl">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+              <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden />
+              Message credit summary
+            </h2>
+            <CampaignReviewCard className="mt-3 divide-y divide-border">
               {loading ? (
-                <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-slate-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" /> Calculating…
+                <div className="flex items-center gap-2 px-5 py-4 text-[13px] text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  Calculating…
                 </div>
               ) : review ? (
                 [
-                  ["Credits Available", formatNumber(review.availableSegments)],
-                  ["Credits Required", formatNumber(review.requiredSegments)],
-                  ["Credits Remaining", formatNumber(Math.max(0, review.availableSegments - review.requiredSegments))],
+                  ["Credits available", formatNumber(review.availableSegments)],
+                  ["Credits required", formatNumber(review.requiredSegments)],
+                  ["Credits remaining", formatNumber(Math.max(0, review.availableSegments - review.requiredSegments))],
                   ...(review.finalRecipientCount > 0
                     ? [
                         [
@@ -223,14 +288,22 @@ export default function ReviewDetails({
                     : []),
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between px-5 py-3.5">
-                    <span className="text-[13px] text-slate-500">{k}</span>
-                    <span className={`text-[14px] font-semibold tabular-nums ${k === "Credits Remaining" && review.shortage > 0 ? "text-red-600" : "text-slate-900"}`}>{v}</span>
+                    <span className="text-[13px] text-muted-foreground">{k}</span>
+                    <span
+                      className={`text-[14px] font-semibold tabular-nums ${
+                        k === "Credits remaining" && review.shortage > 0
+                          ? "text-destructive"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {v}
+                    </span>
                   </div>
                 ))
               ) : null}
-            </div>
+            </CampaignReviewCard>
             {review && !review.canSend && review.blockReason ? (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] leading-relaxed text-red-700">
+              <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-[13px] text-destructive" role="alert">
                 {review.blockReason}
               </p>
             ) : null}
@@ -251,22 +324,24 @@ export default function ReviewDetails({
           </div>
 
           {error ? (
-            <p className="mt-4 max-w-xl rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">{error}</p>
+            <p className="mt-4 max-w-xl rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-[13px] text-destructive" role="alert">
+              {error}
+            </p>
           ) : null}
 
-          <div className="mt-10 flex max-w-xl items-center justify-between">
-            <button type="button" onClick={() => onPrev(campaignId)} className="btn-ghost flex items-center gap-1">
-              <ChevronLeft className="h-4 w-4" /> Prev
-            </button>
-            <div className="flex items-center gap-4">
+          <div className="mt-10 flex max-w-xl flex-wrap items-center justify-between gap-3">
+            <CampaignGhostButton type="button" onClick={() => onPrev(campaignId)} className="gap-1">
+              <ChevronLeft className="h-4 w-4" aria-hidden /> Prev
+            </CampaignGhostButton>
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => void handleSaveDraft()}
-                className="text-[13px] font-semibold text-indigo-600"
+                className="text-[13px] font-semibold text-primary"
               >
                 Save Draft
               </button>
-              <button
+              <CampaignButton
                 type="button"
                 onClick={() => void handleSend()}
                 disabled={
@@ -275,17 +350,17 @@ export default function ReviewDetails({
                   !review?.canSend ||
                   (review.finalRecipientCount >= 1000 && !confirmLargeSend)
                 }
-                className="btn-primary flex items-center gap-1.5 !py-2.5"
+                className="gap-1.5"
               >
-                {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {launching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
                 {actionLabel}
-              </button>
+              </CampaignButton>
             </div>
           </div>
         </div>
 
         <PhonePreview message={previewBody} label="Campaign Preview" mediaUrls={draft.mediaUrls} />
       </div>
-    </div>
+    </CampaignPageShell>
   );
 }
