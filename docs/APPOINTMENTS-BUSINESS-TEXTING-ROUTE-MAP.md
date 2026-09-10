@@ -23,7 +23,7 @@
 
 | Legacy | Canonical | Shared component | Shared backend | Retirement |
 |--------|-----------|------------------|----------------|------------|
-| `/campaigns` | `/appointments/campaigns` | Yes | Yes | After equivalence QA |
+| `/campaigns` | `/appointments/campaigns` | Yes | Yes | Internal Appointments links fixed; browser equivalence QA pending |
 | `/campaigns/new` | `/appointments/campaigns/new` | Yes | Yes | After equivalence QA |
 | `/campaigns/new/review` | `/appointments/campaigns/new/review` | Yes | Yes | After equivalence QA |
 | `/campaigns/[id]` | `/appointments/campaigns/[id]` | Yes | Yes | After equivalence QA |

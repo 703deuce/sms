@@ -151,7 +151,7 @@ export function CampaignDetailView({
             {campaign.status !== "Draft" &&
             campaign.status !== "Scheduled" &&
             campaignDetailIsKimiBroadcast(campaign.configJson) ? (
-              <Link href={`/campaigns/new?duplicate=${campaignId}`}>
+              <Link href={`${campaignsHomeHref}/new?duplicate=${campaignId}`}>
                 <Button variant="outline">Duplicate</Button>
               </Link>
             ) : null}

@@ -3,6 +3,10 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { resolveSegmentContactIds } from "@/lib/contacts/segment-query";
 import { validateBulkRecipients, type BulkRecipient } from "@/lib/campaigns/enroll-campaign";
+import {
+  resolveAppointmentSegment,
+  type AppointmentSegmentPreset,
+} from "@/lib/appointments/appointment-segments";
 import type {
   AudiencePreviewResult,
   BroadcastAudienceDefinition,
@@ -82,6 +86,25 @@ async function contactsFromIndividual(workspaceId: string, contactId: string): P
   ];
 }
 
+async function contactsFromAppointmentPreset(
+  workspaceId: string,
+  presetId: string,
+  bookingTypeName?: string,
+): Promise<ResolvedContact[]> {
+  const preset = presetId as AppointmentSegmentPreset;
+  const rows = await resolveAppointmentSegment(workspaceId, preset, {
+    bookingTypeName: bookingTypeName?.trim() || undefined,
+  });
+  return rows
+    .filter((c) => c.phone)
+    .map((c) => ({
+      contactId: c.id,
+      phone: c.phone!,
+      displayName: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.phone!,
+      email: c.email || undefined,
+    }));
+}
+
 async function resolveSelection(
   workspaceId: string,
   selection: BroadcastAudienceSelection[],
@@ -96,6 +119,8 @@ async function resolveSelection(
       out.push(...(await contactsFromSegment(workspaceId, item.id)));
     } else if (item.type === "contact") {
       out.push(...(await contactsFromIndividual(workspaceId, item.id)));
+    } else if (item.type === "appointment_preset") {
+      out.push(...(await contactsFromAppointmentPreset(workspaceId, item.id, item.bookingTypeName)));
     }
   }
   return out;

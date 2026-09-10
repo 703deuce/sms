@@ -30,6 +30,7 @@ import {
   type CampaignListRow,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { formatNumber } from "@/lib/utils";
+import { CampaignButton, CampaignInput } from "@/components/campaigns/campaign-ui-primitives";
 
 const FILTER_OPTIONS = [
   { id: "all", label: "All" },
@@ -199,10 +200,10 @@ export default function CampaignsList({
       ) : null}
 
       <header className="px-8 pt-7 pb-4">
-        <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
-          <Megaphone className="w-6 h-6 text-indigo-500" /> {title}
+        <h1 className="flex items-center gap-2 font-display text-[22px] font-bold tracking-tight text-foreground">
+          <Megaphone className="h-6 w-6 text-primary" aria-hidden /> {title}
         </h1>
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
       </header>
 
       <div className="px-8 flex items-center gap-3">
@@ -238,23 +239,23 @@ export default function CampaignsList({
           </div>
         ) : null}
         <div className="relative flex-1 max-w-sm ml-auto">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <CampaignInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
-            className="input-field !pl-9"
+            className="!pl-9"
+            aria-label="Search campaigns"
           />
         </div>
-        <button
+        <CampaignButton
           type="button"
-          className="btn-primary"
           onClick={onCreate}
           disabled={!senderActive}
           title={senderActive ? undefined : "Activate Business Texting in Settings → Messaging"}
         >
           Create Campaign
-        </button>
+        </CampaignButton>
       </div>
 
       <div className="px-8 mt-5 pb-10">

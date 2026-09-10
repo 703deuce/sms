@@ -1,9 +1,10 @@
 /** Mass Texting broadcast campaign — product types (not legacy automation campaigns). */
 
 export type BroadcastAudienceSelection = {
-  type: "all" | "list" | "segment" | "contact";
+  type: "all" | "list" | "segment" | "contact" | "appointment_preset";
   id: string;
   name: string;
+  bookingTypeName?: string;
 };
 
 export type BroadcastAudienceDefinition = {

@@ -157,9 +157,17 @@ export function stripCampaignComplianceFooter(body: string): string {
 }
 
 export function draftAudiencePayload(draft: CampaignComposeDraft) {
+  const mapItem = (a: AudienceSelection) => ({
+    type: a.type,
+    id: a.id,
+    name: a.name,
+    ...(a.type === "appointment_preset" && a.bookingTypeName
+      ? { bookingTypeName: a.bookingTypeName }
+      : {}),
+  });
   return {
-    include: draft.audience.map((a) => ({ type: a.type, id: a.id, name: a.name })),
-    exclude: draft.excludeAudience.map((a) => ({ type: a.type, id: a.id, name: a.name })),
+    include: draft.audience.map(mapItem),
+    exclude: draft.excludeAudience.map(mapItem),
   };
 }
 
@@ -567,6 +575,38 @@ export async function loadAudiencePickerCatalog(): Promise<AudiencePickerItem[]>
       name: s.name,
       count: segmentCounts[index] ?? 0,
       group: "segments",
+    });
+  });
+
+  const APPOINTMENT_PRESETS = [
+    { id: "booked_tomorrow", name: "Booked tomorrow" },
+    { id: "membership_customers", name: "Active members" },
+    { id: "low_credits", name: "Low package credits" },
+    { id: "inactive_60_days", name: "Not seen in 60 days" },
+    { id: "booking_type", name: "Customers of a booking type" },
+  ] as const;
+
+  const presetCounts = await Promise.all(
+    APPOINTMENT_PRESETS.map(async (preset) => {
+      try {
+        const res = await fetch(
+          `/api/appointments/service-booking/appointment-segments?preset=${preset.id}`,
+        );
+        const json = await res.json();
+        return (json.data?.contacts || []).length;
+      } catch {
+        return 0;
+      }
+    }),
+  );
+
+  APPOINTMENT_PRESETS.forEach((preset, index) => {
+    items.push({
+      type: "appointment_preset",
+      id: preset.id,
+      name: preset.name,
+      count: presetCounts[index] ?? 0,
+      group: "suggested",
     });
   });
 

@@ -34,6 +34,13 @@ import {
   type AudiencePreviewData,
   type CampaignNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
+import {
+  CampaignButton,
+  CampaignComposerBox,
+  CampaignInput,
+  CampaignLabel,
+} from "@/components/campaigns/campaign-ui-primitives";
+import Link from "next/link";
 
 type SendMode = "Now" | "Later" | "Recurring";
 
@@ -88,6 +95,7 @@ export default function CreateCampaign({
   const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewData | null>(null);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<Array<{ id: string; number: string }>>([]);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; body: string; type?: string }>>([]);
 
   useEffect(() => {
     const playbook = searchParams.get("playbook");
@@ -173,7 +181,14 @@ export default function CreateCampaign({
             campaignId: editId ? c.id : undefined,
             name: duplicateId ? `${c.name} (copy)` : c.name,
             message: stripCampaignComplianceFooter(c.body),
-            audience: include.map((a) => ({ type: a.type, id: a.id, name: a.name })),
+            audience: include.map((a) => ({
+              type: a.type,
+              id: a.id,
+              name: a.name,
+              ...("bookingTypeName" in a && typeof (a as { bookingTypeName?: string }).bookingTypeName === "string"
+                ? { bookingTypeName: (a as { bookingTypeName: string }).bookingTypeName }
+                : {}),
+            })),
             excludeAudience: (audienceConfig?.exclude || []).map((a) => ({
               type: a.type,
               id: a.id,
@@ -227,6 +242,22 @@ export default function CreateCampaign({
         setNumbers(rows);
       })
       .catch(() => setNumbers([]));
+
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        const rows = (json.data || []) as Array<{ id: string; name: string; body: string; type?: string }>;
+        setTemplates(
+          rows.filter(
+            (t) =>
+              !t.type ||
+              t.type === "Campaign" ||
+              t.type.toLowerCase() === "campaign" ||
+              t.type === "SMS",
+          ),
+        );
+      })
+      .catch(() => setTemplates([]));
   }, [searchParams]);
 
   useEffect(() => {
@@ -410,24 +441,24 @@ export default function CreateCampaign({
             />
           ) : (
             <>
-              <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
-                <Megaphone className="w-6 h-6 text-indigo-500" /> Create Campaign
+              <h1 className="flex items-center gap-2 font-display text-[22px] font-bold tracking-tight text-foreground">
+                <Megaphone className="h-6 w-6 text-primary" aria-hidden /> Create Campaign
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Create a campaign to reach your contacts at scale.
               </p>
             </>
           )}
 
-          <label className="block text-[13px] font-semibold text-slate-700 mt-7 mb-1.5">Campaign Name</label>
-          <input
+          <CampaignLabel className="mt-7">Campaign Name</CampaignLabel>
+          <CampaignInput
             value={draft.name}
             onChange={(e) => updateDraft({ name: e.target.value })}
             placeholder="Black Friday Dress Sale"
-            className="input-field max-w-md"
+            className="max-w-md"
           />
 
-          <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">Send From</label>
+          <CampaignLabel className="mt-5">Send From</CampaignLabel>
           <div className="max-w-md">
             <select
               value={draft.numberId}
@@ -482,21 +513,46 @@ export default function CreateCampaign({
             />
           </div>
 
-          <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
-            <label className="text-[13px] font-semibold text-slate-700">Message</label>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
-              {characters}/{limit} <span className="segment-badge">{segments}</span>
-              {segments > 1 ? (
-                <span className="text-amber-600">({segments} segments/recipient)</span>
+          <div className="flex max-w-md flex-wrap items-center justify-between gap-2 mt-5 mb-1.5">
+            <CampaignLabel className="mb-0">Message</CampaignLabel>
+            <div className="flex flex-wrap items-center gap-2">
+              {templates.length > 0 ? (
+                <select
+                  className="h-8 rounded-lg border border-border bg-card px-2 text-[12px] text-foreground"
+                  defaultValue=""
+                  aria-label="Use template"
+                  onChange={(e) => {
+                    const t = templates.find((x) => x.id === e.target.value);
+                    if (t) updateDraft({ message: stripCampaignComplianceFooter(t.body) });
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">Use template</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
               ) : null}
-            </span>
+              <Link
+                href="/templates"
+                className="text-[12px] font-medium text-primary hover:underline"
+              >
+                Manage templates
+              </Link>
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+                {characters}/{limit} <span className="segment-badge">{segments}</span>
+                {segments > 1 ? (
+                  <span className="text-amber-600">({segments} segments/recipient)</span>
+                ) : null}
+              </span>
+            </div>
           </div>
-          <div className="max-w-md composer-box">
+          <CampaignComposerBox className="max-w-md">
             <textarea
               value={draft.message}
               onChange={(e) => handleMessageChange(e.target.value)}
               placeholder="Write your message here. Use {{first_name}} to personalize each text."
-              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 rounded-t-xl bg-transparent"
+              className="w-full h-36 resize-none border-0 bg-transparent p-3 text-[13.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
             />
             {messageHasMergeFields ? (
               <p className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2 text-[12px] leading-relaxed text-indigo-800">
@@ -619,7 +675,7 @@ export default function CreateCampaign({
               <button type="button" title="AI Compose" aria-label="AI compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
               <button type="button" title="Send a Test" aria-label="Send test message" className="ml-auto" onClick={() => setShowTest(true)}><Send className="w-4 h-4" /></button>
             </div>
-          </div>
+          </CampaignComposerBox>
 
           <label className="block text-[13px] font-semibold text-slate-700 mt-6 mb-2">When to Send</label>
           <div className="seg-toggle max-w-md">
@@ -728,25 +784,26 @@ export default function CreateCampaign({
           ) : null}
 
           <div className="flex items-center justify-between max-w-md mt-12">
-            <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
+            <CampaignButton type="button" variant="ghost" onClick={onCancel}>Cancel</CampaignButton>
             <div className="flex items-center gap-4">
-              <button
+              <CampaignButton
                 type="button"
+                variant="ghost"
                 onClick={() => void handleSaveDraft()}
                 disabled={saving}
-                className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+                className="text-primary"
               >
                 {saving ? "Saving…" : "Save Draft"}
-              </button>
-              <button
+              </CampaignButton>
+              <CampaignButton
                 type="button"
                 onClick={() => void handleReview()}
                 disabled={!canReview}
-                className="btn-primary flex items-center gap-1.5"
+                className="gap-1.5"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Review <ChevronRight className="w-4 h-4" />
-              </button>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                Review <ChevronRight className="h-4 w-4" aria-hidden />
+              </CampaignButton>
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   type CampaignListRow,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
+import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 type CalendarView = "month" | "week" | "agenda";
@@ -41,6 +42,9 @@ function statusColor(status: string) {
 
 export default function CampaignCalendarPage() {
   const router = useRouter();
+  const campaignsBase = useCampaignsBasePath();
+  const newCampaignPath = useCampaignsPath("/new");
+  const scheduledListPath = useCampaignsPath("/scheduled");
   const [rows, setRows] = useState<CampaignListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -113,14 +117,14 @@ export default function CampaignCalendarPage() {
               type="button"
               onClick={() => {
                 startFreshComposeDraft();
-                router.push("/campaigns/new");
+                router.push(newCampaignPath);
               }}
               className="inline-flex h-9 items-center rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white"
             >
               Schedule campaign
             </button>
             <Link
-              href="/campaigns/scheduled"
+              href={scheduledListPath}
               className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600"
             >
               Scheduled list
@@ -232,7 +236,7 @@ export default function CampaignCalendarPage() {
                             return (
                               <Link
                                 key={c.id}
-                                href={`/campaigns/${c.id}`}
+                                href={`${campaignsBase}/${c.id}`}
                                 className="block truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
                                 style={{ backgroundColor: colors.bg, color: colors.color }}
                               >
@@ -273,7 +277,7 @@ export default function CampaignCalendarPage() {
                       {dayCampaigns.map((c) => (
                         <li key={c.id}>
                           <Link
-                            href={`/campaigns/${c.id}`}
+                            href={`${campaignsBase}/${c.id}`}
                             className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-sm hover:bg-slate-100"
                           >
                             <span className="truncate font-medium">{c.name}</span>
@@ -294,7 +298,7 @@ export default function CampaignCalendarPage() {
             {scheduledCampaigns.map((c) => (
               <li key={c.id}>
                 <Link
-                  href={`/campaigns/${c.id}`}
+                  href={`${campaignsBase}/${c.id}`}
                   className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition hover:bg-slate-50"
                 >
                   <div className="shrink-0 text-center">

@@ -17,6 +17,7 @@ import { ArrowLeft, Check, ImagePlus, Send } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 
 const FOLLOW_UP_TRIGGERS = [
   "new lead",
@@ -40,15 +41,17 @@ export default function NewCategoryCampaignPage() {
   const searchParams = useSearchParams();
   const categoryId = String(params.category || "") as CampaignCategoryId;
   const category = getCampaignCategory(categoryId);
+  const campaignsBase = useCampaignsBasePath();
+  const newCampaignPath = useCampaignsPath("/new");
 
   useEffect(() => {
     if (category?.engine === "broadcast") {
       const q = searchParams.toString();
       router.replace(
-        q ? `/campaigns/new?playbook=${categoryId}&${q}` : `/campaigns/new?playbook=${categoryId}`,
+        q ? `${newCampaignPath}?playbook=${categoryId}&${q}` : `${newCampaignPath}?playbook=${categoryId}`,
       );
     }
-  }, [category, categoryId, router, searchParams]);
+  }, [category, categoryId, router, searchParams, newCampaignPath]);
 
   const [name, setName] = useState(category ? `${category.title}` : "New campaign");
   const [message, setMessage] = useState(
@@ -212,7 +215,7 @@ export default function NewCategoryCampaignPage() {
       if (activate && enrolled === 0) {
         setError("Campaign created but no recipients were enrolled. Check audience settings.");
       }
-      router.push(`/campaigns/${json.data.campaign.id}`);
+      router.push(`${campaignsBase}/${json.data.campaign.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create");
     } finally {

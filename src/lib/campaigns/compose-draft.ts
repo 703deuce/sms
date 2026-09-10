@@ -1,12 +1,14 @@
 export const CAMPAIGN_COMPOSE_STORAGE_KEY = "transovo-campaign-compose-draft";
 
 export type AudienceSelection = {
-  type: "all" | "list" | "segment" | "contact";
+  type: "all" | "list" | "segment" | "contact" | "appointment_preset";
   id: string;
   name: string;
   /** Present for type "contact" — used in composer chips and review. */
   phone?: string;
   count?: number;
+  /** Required when type is appointment_preset and preset is booking_type. */
+  bookingTypeName?: string;
 };
 
 export type CampaignComposeDraft = {
@@ -105,6 +107,10 @@ export function estimatedRecipientCount(selection: AudienceSelection[]): number 
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     if (item.type === "all") return item.count ?? 0;
+    if (item.type === "appointment_preset") {
+      total += item.count ?? 0;
+      continue;
+    }
     total += item.count ?? 0;
   }
   return total;

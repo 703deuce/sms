@@ -7,7 +7,7 @@
 
 Absorb the **existing working** Mass SMS Campaigns experience into Appointments without rebuilding messaging infrastructure. One contact database, one inbox, one send pipeline.
 
-## What was implemented (this pass)
+## What was implemented
 
 ### Navigation
 - `BUSINESS_TEXTING_CAMPAIGNS_IN_V1_NAV = true` in `v1-launch-nav.ts`
@@ -18,7 +18,7 @@ Absorb the **existing working** Mass SMS Campaigns experience into Appointments 
 ### Canonical routes
 - `/appointments/campaigns` — list, filters, create, review, detail
 - Legacy `/campaigns/*` preserved (hidden from Appointments nav)
-- Route helpers: `src/lib/products/business-texting-routes.ts`
+- Route helpers: `src/lib/products/business-texting-routes.ts`, `useCampaignsBasePath()`
 
 ### Reused components (no new campaign product)
 | Surface | Component |
@@ -30,55 +30,46 @@ Absorb the **existing working** Mass SMS Campaigns experience into Appointments 
 | Audience | `kimi/campaigns/components/AudiencePicker.tsx` |
 | Detail | `campaign-detail-view.tsx` |
 | Results | `broadcast/campaign-results.tsx` |
+| UI primitives | `campaign-ui-primitives.tsx` |
 
 ### Reused runtime (no new workers/models)
 - `src/lib/mass-texting/broadcast/service.ts`
-- `src/lib/mass-texting/broadcast/audience.ts`
+- `src/lib/mass-texting/broadcast/audience.ts` (+ `appointment_preset`)
 - `src/lib/mass-texting/campaign-launch.ts` / `campaign-send.ts`
 - `src/lib/campaigns/campaign-processor.ts`
-- `src/lib/campaigns/campaign-message-send.ts`
 - APIs: `src/app/api/mass-texting/campaigns/**`
 
 ### Business Texting sender gate
 - Server: `getBusinessTextingCampaignStatus()` → `assertMassTextMarketingSendAllowed()`
-- API: `GET /api/appointments/business-texting/status`
-- UI: `BusinessTextingActivationPanel` — discoverable Campaigns, blocked send until approved sender
-- Settings CTA: `/settings/messaging`
+- UI: `BusinessTextingActivationPanel`
+
+### Completion pass additions (2026-09-10)
+- **Contact Detail → Message** — `ContactMessageAction` → `/conversations?contactId=`
+- **Appointment-aware audiences** — `appointment_preset` in picker + `resolveAppointmentSegment`
+- **Template picker** — `/api/templates` in Create Campaign; manage → `/templates`
+- **Visual migration phase 1** — design-system primitives on list, create, audience
+- **Internal route cleanup** — Appointments calendar/category/import/segments/detail links use `useCampaignsPath`
 
 ### Visual integration
-- Campaign routes under `/appointments/*` inherit Appointments layout (Geist, pilot chrome)
-- `appointments-campaigns-overrides.css` — scoped teal/charcoal token remap for `.kimi-campaigns`
-- Layout preserved; purple SMS tokens overridden under Appointments pilot only
+- Appointments layout + Geist pilot chrome
+- `campaign-ui-primitives.tsx` — primary migration path
+- `appointments-campaigns-overrides.css` — fallback for unmigrated Kimi classes only
 
-### Contacts integration
-- Audience picker links to canonical **Contacts → Import**
-- Segments/lists/contacts resolved via existing `audience.ts` + `kimi-campaigns-adapter`
-- No second Contacts database or nav entry
+## Remaining gaps
 
-## What was NOT implemented (remaining gaps)
-
-| Gap | Notes |
-|-----|-------|
-| Full component token migration | Some Kimi campaign classes still use legacy `btn-primary` / indigo utilities; overrides handle most under pilot |
-| Contact detail → Message action | Planned (BT-19) |
-| Campaign activity on Contact detail | Defer unless activity architecture ready |
-| Template ownership merge | Audit: prefer Automations → Templates; not wired in composer yet |
-| Appointment-aware segment presets in Campaign picker | Backend exists; UI promotion pending |
-| Legacy `/campaigns` redirect | Intentionally kept parallel until equivalence proven |
-| Focused live send / Inbox reply smokes | Require provider test environment |
+See `APPOINTMENTS-BUSINESS-TEXTING-COMPLETION.md` — live provider smokes, inbox reply, full visual migration on review/recurring, browser equivalence proof.
 
 ## Red flags avoided
 
-- No new `Campaign` model
-- No new campaign worker
-- No new inbox
-- No new Contact model
+- No new `Campaign` model, worker, inbox, or Contact model
 - No `MASS_MESSAGING_IN_V1_NAV` re-enable
 
 ## Related docs
 
+- `APPOINTMENTS-BUSINESS-TEXTING-COMPLETION.md`
+- `APPOINTMENTS-BUSINESS-TEXTING-TEST-MATRIX.md`
+- `APPOINTMENTS-BUSINESS-TEXTING-VISUAL-AUDIT.md`
+- `APPOINTMENTS-BUSINESS-TEXTING-TEMPLATE-OWNERSHIP.md`
 - `APPOINTMENTS-BUSINESS-TEXTING-ABSORPTION-AUDIT.md`
 - `APPOINTMENTS-BUSINESS-TEXTING-CONNECTION-MATRIX.md`
 - `APPOINTMENTS-BUSINESS-TEXTING-ROUTE-MAP.md`
-- `APPOINTMENTS-BUSINESS-TEXTING-V1-SCOPE.md`
-- `APPOINTMENTS-BUSINESS-TEXTING-CERTIFICATION-PAUSE.md`
