@@ -24,6 +24,7 @@ import {
   type KimiImportResult,
 } from "@/lib/contacts/kimi-contacts-adapter";
 import { addContactsToList, removeContactsFromLists } from "@/lib/contacts/kimi-lists-adapter";
+import { ContactMergeDialog } from "@/components/contacts/contact-merge-dialog";
 
 type View = "list" | "create" | "import";
 
@@ -49,12 +50,13 @@ export function KimiContactsConnected({
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [listLoading, setListLoading] = useState(false);
   const [serverFiltered, setServerFiltered] = useState(false);
+  const [mergeContact, setMergeContact] = useState<Contact | null>(null);
   const householdBanner = (
     <div className="mx-6 mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
       <span className="font-medium text-foreground">Household &amp; family accounts</span>
       {" — "}
       Link dependents and family members for shared booking, packages, and appointment history.
-      <a href="/appointments/commerce" className="ml-2 text-primary underline">
+      <a href="/appointments/packages" className="ml-2 text-primary underline">
         Manage households
       </a>
     </div>
@@ -212,6 +214,7 @@ export function KimiContactsConnected({
               await Promise.all(ids.map((id) => updateContact(id, { optInLabel: "Unsubscribed" })));
               await reload(latestFilterRef.current);
             }}
+            onMergeContact={(contact) => setMergeContact(contact)}
             savedToast={savedToast}
           />
         )}
@@ -242,6 +245,16 @@ export function KimiContactsConnected({
           }}
         />
       )}
+      <ContactMergeDialog
+        open={mergeContact !== null}
+        onClose={() => setMergeContact(null)}
+        primaryContactId={mergeContact?.id}
+        primaryContactLabel={
+          mergeContact
+            ? `${mergeContact.firstName} ${mergeContact.lastName}`.trim() || mergeContact.mobile
+            : undefined
+        }
+      />
     </div>
   );
 }

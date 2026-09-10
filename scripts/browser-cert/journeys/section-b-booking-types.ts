@@ -97,7 +97,7 @@ export const SECTION_B_JOURNEYS = [
   }),
   journey("23", "B", "Approval decline", async (page) => {
     await ensureAppointmentsAdmin(page);
-    await visitRoute(page, "/appointments/scheduled");
+    await visitRoute(page, "/appointments");
     const body = await page.locator("body").innerText();
     if (!/pending|approval|scheduled|appointment/i.test(body)) {
       throw new Error("Scheduled list not available for approval decline journey");

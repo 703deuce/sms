@@ -28,6 +28,7 @@ export default function CalendarPage({ model, actions }: Props) {
         onNext={actions.onNext}
         onViewChange={actions.onViewChange}
         onNewAppointment={actions.onNewAppointment}
+        onCheckAvailability={actions.onCheckAvailability}
       />
       <StatCards stats={model.stats} />
       <div className="cal-main">

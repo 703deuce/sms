@@ -10,6 +10,7 @@ import {
 import type { WaitlistEntry } from "../mock-data";
 import { WaitlistEntryRow } from "./WaitlistEntryRow";
 import { ConfirmRemoveModal } from "./ConfirmRemoveModal";
+import { WaitlistOfferModal } from "./WaitlistOfferModal";
 
 type StatusFilter =
   | "all"
@@ -43,6 +44,10 @@ export function WaitlistAdminClient() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [pendingRemove, setPendingRemove] = useState<WaitlistEntry | null>(null);
+  const [offerEntry, setOfferEntry] = useState<WaitlistEntry | null>(null);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [priorityRules, setPriorityRules] = useState<Array<{ id: string; name: string; ruleType: string }>>([]);
+  const [autoFillLabel, setAutoFillLabel] = useState("Automatically offer open times");
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,11 +59,15 @@ export function WaitlistAdminClient() {
 
   const load = useCallback(() => {
     setLoadState("loading");
-    // Sandbox: simulate /api/appointments/waitlist fetch
     fetch("/api/appointments/waitlist")
       .then((r) => r.json())
       .then((j) => {
-        setEntries(j.data || []);
+        setEntries(
+          (j.data || []).map((e: WaitlistEntry & { offerExpiresAt?: string }) => ({
+            ...e,
+            offerExpiresAt: e.offerExpiresAt || null,
+          })),
+        );
         setLoadState("ready");
       })
       .catch(() => {
@@ -66,26 +75,48 @@ export function WaitlistAdminClient() {
       });
   }, []);
 
+  const loadPriorityMeta = useCallback(() => {
+    fetch("/api/appointments/service-booking/waitlist-priority")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => setPriorityRules(j.data || j || []))
+      .catch(() => setPriorityRules([]));
+    fetch("/api/appointments/settings")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const autoFill = j?.data?.waitlistAutoFill !== false;
+        setAutoFillLabel(
+          autoFill
+            ? "Automatically offer open times when slots open"
+            : "Auto-fill disabled — staff must send offers manually",
+        );
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    const t = setTimeout(load, 450);
+    const t = setTimeout(() => {
+      load();
+      loadPriorityMeta();
+    }, 450);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, loadPriorityMeta]);
 
   async function patchEntry(
     entryId: string,
     action: "notify" | "remove" | "reactivate",
+    extra?: { serviceName?: string; startsAt?: string },
   ) {
     setActing(entryId);
     try {
       await fetch("/api/appointments/waitlist", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryId, action }),
+        body: JSON.stringify({ entryId, action, ...extra }),
       });
       load();
     } finally {
       setActing(null);
-      if (action === "notify") showToast("Customer notified about the opening.");
+      if (action === "notify") showToast("Opening offer sent to customer.");
       if (action === "reactivate") showToast("Entry reactivated.");
       if (action === "remove") showToast("Entry removed from the waitlist.");
     }
@@ -118,11 +149,36 @@ export function WaitlistAdminClient() {
         <div>
           <h1 className="tv-page-title">Waitlist</h1>
           <p className="tv-page-desc">
-            Customers waiting for an opening. Notify them when a slot becomes
-            available.
+            Customers waiting for an opening. Send offers when slots become available.
+            {autoFillLabel ? ` ${autoFillLabel}.` : ""}
           </p>
         </div>
+        <button
+          type="button"
+          className="tv-btn tv-btn--outline"
+          onClick={() => {
+            setPriorityOpen((v) => !v);
+            if (!priorityRules.length) loadPriorityMeta();
+          }}
+        >
+          Priority settings
+        </button>
       </div>
+
+      {priorityOpen ? (
+        <div className="tv-card" style={{ marginBottom: 12, padding: 14 }}>
+          <h2 className="tv-section-title" style={{ marginTop: 0 }}>Priority rules</h2>
+          {priorityRules.length === 0 ? (
+            <p className="tv-muted">Default ordering: first come, first served.</p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {priorityRules.map((rule) => (
+                <li key={rule.id}>{rule.name}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
 
       {/* Local navigation — Appointments domain */}
       <nav className="tv-tabs" aria-label="Appointments">
@@ -289,6 +345,7 @@ export function WaitlistAdminClient() {
               <tr>
                 <th scope="col">Service</th>
                 <th scope="col">Contact</th>
+                <th scope="col" className="tv-hide-sm">Priority</th>
                 <th scope="col" className="tv-hide-sm">
                   Activity
                 </th>
@@ -314,7 +371,7 @@ export function WaitlistAdminClient() {
                   key={e.id}
                   entry={e}
                   acting={acting === e.id}
-                  onNotify={() => patchEntry(e.id, "notify")}
+                  onNotify={() => setOfferEntry(e)}
                   onReactivate={() => patchEntry(e.id, "reactivate")}
                   onRemove={() => setPendingRemove(e)}
                 />
@@ -330,6 +387,18 @@ export function WaitlistAdminClient() {
           {entries.length === 1 ? "entry" : "entries"}
           {filtering ? " (filtered)" : ""}
         </p>
+      ) : null}
+
+      {offerEntry ? (
+        <WaitlistOfferModal
+          entry={offerEntry}
+          busy={acting === offerEntry.id}
+          onClose={() => setOfferEntry(null)}
+          onSend={async ({ serviceName, startsAt }) => {
+            await patchEntry(offerEntry.id, "notify", { serviceName, startsAt });
+            setOfferEntry(null);
+          }}
+        />
       ) : null}
 
       {pendingRemove ? (

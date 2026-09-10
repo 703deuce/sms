@@ -42,6 +42,8 @@ export type Appointment = {
   pendingApproval: boolean;
   remindersSuppressed: boolean;
   source: string;
+  manageAppointmentUrl?: string;
+  manageAppointmentTokenIssuedAt?: string;
   notes: string;
   bookingAnswers: Record<string, string>;
   reminderSchedule: ReminderStep[];
@@ -78,6 +80,34 @@ export type Appointment = {
     createdAt: string;
   }>;
   contractTemplates?: Array<{ id: string; name: string; version: string }>;
+  servicePhases?: Array<{
+    name: string;
+    phaseKind: "active_staff" | "processing";
+    startsAt: string;
+    endsAt: string;
+    staffRequired: boolean;
+  }>;
+  resources?: Array<{ id: string; name: string; groupName?: string }>;
+  addOns?: Array<{
+    id: string;
+    name: string;
+    quantity?: number;
+    priceCents?: number;
+    durationMinutes?: number;
+  }>;
+  recurringSeriesId?: string | null;
+  recurringOccurrenceIndex?: number | null;
+  termsAcceptance?: { acceptedAt?: string; termsVersion?: string };
+  packageAccess?: { packageName?: string; creditsUsed?: number; creditsRemaining?: number };
+  membershipAccess?: { membershipName?: string; benefitLabel?: string };
+  accountCreditAppliedCents?: number;
+  paymentSummary?: {
+    totalCents: number;
+    depositPaidCents: number;
+    paidCents: number;
+    balanceDueCents: number;
+    refundedCents: number;
+  };
 };
 
 export const appointment: Appointment = {

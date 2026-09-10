@@ -7,6 +7,8 @@ import {
   loadAppointmentPlatformConfig,
   reschedulePlatformAppointment,
 } from "@/lib/appointments";
+import { resolveManageLinkFromMetadata } from "@/lib/appointments/settings";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -26,11 +28,13 @@ export async function GET(_request: Request, { params }: Params) {
     const slots = availability.slots.filter(
       (slot) => new Date(slot.startsAt).getTime() > now + 60_000,
     );
+    const meta = (row.metadata || {}) as AppointmentMetadata;
     return NextResponse.json({
       data: {
         ...buildPublicAppointmentCustomerPreview(row),
         endsAt: row.endsAt,
         slots,
+        manageLink: resolveManageLinkFromMetadata(meta, meta.rescheduleToken),
       },
     });
   } catch (err) {

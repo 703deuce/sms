@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarCheck2, Clock, Globe, User } from "lucide-react";
+import { Bell, CalendarCheck2, Clock, CreditCard, Globe, MapPin, User, Users } from "lucide-react";
 import { workspace } from "../types";
 
 export function SummarySidebar({
@@ -11,6 +11,9 @@ export function SummarySidebar({
   lastName,
   phone,
   smsConsent,
+  staffName,
+  locationName,
+  priceCents,
 }: {
   typeName?: string;
   duration?: number;
@@ -19,6 +22,9 @@ export function SummarySidebar({
   lastName: string;
   phone: string;
   smsConsent: boolean;
+  staffName?: string;
+  locationName?: string;
+  priceCents?: number | null;
 }) {
   const dateLabel = startsAt
     ? new Date(startsAt).toLocaleString(undefined, {
@@ -51,6 +57,30 @@ export function SummarySidebar({
       value: customerName || "Not entered",
       ready: !!customerName,
     },
+    ...(staffName
+      ? [{
+          icon: <Users className="h-3.5 w-3.5" />,
+          label: "Staff",
+          value: staffName,
+          ready: true,
+        }]
+      : []),
+    ...(locationName
+      ? [{
+          icon: <MapPin className="h-3.5 w-3.5" />,
+          label: "Location",
+          value: locationName,
+          ready: true,
+        }]
+      : []),
+    ...(priceCents != null && priceCents > 0
+      ? [{
+          icon: <CreditCard className="h-3.5 w-3.5" />,
+          label: "Price",
+          value: `$${(priceCents / 100).toFixed(2)}`,
+          ready: true,
+        }]
+      : []),
     {
       icon: <Bell className="h-3.5 w-3.5" />,
       label: "Reminders",

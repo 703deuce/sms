@@ -19,8 +19,15 @@ export type MeetingPoll = {
   invitees: number;
   responded: number;
   shareUrl: string;
+  appointmentTypeId?: string;
   winningOptionId?: string;
   options: PollOption[];
+};
+
+export type MeetingTypeOption = {
+  id: string;
+  name: string;
+  durationMinutes: number;
 };
 
 function iso(offsetMs: number) {

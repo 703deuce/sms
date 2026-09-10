@@ -65,6 +65,7 @@ export type MeetingPoll = {
   options: MeetingPollOption[];
   status: "open" | "closed" | "booked";
   bookedAppointmentId?: string;
+  winningOptionId?: string;
   createdAt: string;
 };
 

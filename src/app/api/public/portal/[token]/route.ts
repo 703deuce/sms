@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
-import { resolveClientPortalSession, createClientPortalSession } from "@/lib/appointments/service-booking";
+import {
+  resolveClientPortalSession,
+  createClientPortalSession,
+  revokeClientPortalSession,
+} from "@/lib/appointments/service-booking";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -15,9 +19,19 @@ export async function GET(_request: Request, { params }: Params) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request, { params }: Params) {
   try {
-    const body = await request.json();
+    const { token } = await params;
+    const body = await request.json().catch(() => ({}));
+
+    if (body.action === "sign_out") {
+      const revoked = await revokeClientPortalSession(token);
+      if (!revoked) {
+        return NextResponse.json({ error: "Invalid or expired portal session" }, { status: 404 });
+      }
+      return NextResponse.json({ data: { signedOut: true } });
+    }
+
     if (!body.workspaceId || !body.contactId) {
       return NextResponse.json({ error: "workspaceId and contactId required" }, { status: 400 });
     }

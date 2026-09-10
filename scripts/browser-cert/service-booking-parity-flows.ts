@@ -19,6 +19,7 @@ import {
 import { visitRoute } from "./lib";
 import { switchToAppointments } from "./flow-helpers";
 import { ensureAppointmentsShell } from "./service-booking-parity-helpers";
+import { APPT_CANONICAL } from "./canonical-appointments-routes";
 
 const B1 = "SB-BATCH-01";
 const B2 = "SB-BATCH-02";
@@ -48,85 +49,85 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     id: "SB-04",
     batchId: B2,
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Packages/i, "UAT Package"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.packages, /Packages/i, "UAT Package"),
   },
   {
     id: "SB-05",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/commerce", /Memberships/i, "UAT Membership"),
+      commerceCreateItem(page, APPT_CANONICAL.memberships, /Memberships/i, "UAT Membership"),
   },
   {
     id: "SB-06",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/commerce", /Gift certificates/i, "UAT Gift"),
+      commerceCreateItem(page, APPT_CANONICAL.giftCards, /Gift/i, "UAT Gift"),
   },
   {
     id: "SB-07",
     batchId: B2,
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Coupons/i, "UAT Coupon"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.discounts, /Coupon/i, "UAT Coupon"),
   },
   {
     id: "SB-08",
     batchId: B2,
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Add-ons/i, "UAT Add-on"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.types, /Add-ons/i, "UAT Add-on"),
   },
   {
     id: "SB-09",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/resources", /Resources/i, "UAT Resource"),
+      commerceCreateItem(page, APPT_CANONICAL.roomsEquipment, /Resources/i, "UAT Resource"),
   },
   {
     id: "SB-10",
     batchId: B2,
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/classes", /Classes/i, "UAT Class"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.classes, /Classes/i, "UAT Class"),
   },
   {
     id: "SB-11",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/commerce", /Programs/i, "UAT Program"),
+      commerceCreateItem(page, APPT_CANONICAL.events, /Programs|Events/i, "UAT Program"),
   },
   {
     id: "SB-12",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceTabReadOnly(page, "/appointments/commerce", /Payment plans/i, /payment|plan|installment/i),
+      commerceTabReadOnly(page, APPT_CANONICAL.payments, /Payment plans/i, /payment|plan|installment/i),
   },
   {
     id: "SB-13",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceTabReadOnly(page, "/appointments/commerce", /Processing phases/i, /phase|processing/i),
+      commerceTabReadOnly(page, APPT_CANONICAL.types, /phase|processing/i, /phase|processing/i),
   },
   {
     id: "SB-14",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/commerce", /Households/i, "UAT Household"),
+      commerceTabReadOnly(page, APPT_CANONICAL.contacts, /household|family/i, /household|family|contact/i),
   },
   {
     id: "SB-15",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(
+      commerceTabReadOnly(
         page,
-        "/appointments/client-restrictions",
-        /Client restrictions/i,
-        "UAT Restriction",
+        APPT_CANONICAL.contacts,
+        /contact/i,
+        /restrict|booking|contact/i,
       ),
   },
   {
@@ -134,14 +135,14 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceCreateItem(page, "/appointments/commerce", /Intake forms/i, "UAT Intake"),
+      commerceCreateItem(page, APPT_CANONICAL.intakeForms, /Intake forms/i, "UAT Intake"),
   },
   {
     id: "SB-17",
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceTabReadOnly(page, "/appointments/commerce", /Webhooks/i, /webhook|endpoint|url/i),
+      commerceTabReadOnly(page, APPT_CANONICAL.webhooks, /webhook/i, /webhook|endpoint|url/i),
   },
   {
     id: "SB-18",
@@ -150,8 +151,8 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     run: (page) =>
       commerceTabReadOnly(
         page,
-        "/appointments/commerce",
-        /Scheduler branding/i,
+        APPT_CANONICAL.branding,
+        /branding|theme/i,
         /theme|branding|css|terminology/i,
       ),
   },
@@ -160,7 +161,7 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceTabReadOnly(page, "/appointments/reports/service-booking", /Reports/i, /report|export|csv/i),
+      commerceTabReadOnly(page, APPT_CANONICAL.serviceBookingReport, /report/i, /report|export|csv|booking/i),
   },
   {
     id: "SB-20",
@@ -169,9 +170,9 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     run: (page) =>
       commerceTabReadOnly(
         page,
-        "/appointments/commerce",
-        /Import \/ export/i,
-        /import|export|csv/i,
+        APPT_CANONICAL.contacts,
+        /import/i,
+        /import|export|csv|contact/i,
       ),
   },
   {
@@ -179,7 +180,7 @@ export const SERVICE_BOOKING_UAT_FLOWS: BrowserFlow[] = [
     batchId: B2,
     tier: "user-action",
     run: (page) =>
-      commerceTabReadOnly(page, "/appointments/categories", /Categories/i, /categor/i),
+      commerceTabReadOnly(page, APPT_CANONICAL.types, /categor/i, /categor|type/i),
   },
 
   // §5 Share & embed

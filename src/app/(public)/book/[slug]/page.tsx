@@ -12,6 +12,8 @@ type Props = {
     category?: string;
     staff?: string;
     location?: string;
+    bookFor?: string;
+    portal?: string;
   }>;
 };
 
@@ -44,6 +46,8 @@ export default async function PublicBookPage({ params, searchParams }: Props) {
       initialCategorySlug={query.category}
       initialStaffId={query.staff}
       initialLocationId={query.location}
+      bookForContactId={query.bookFor}
+      portalToken={query.portal}
     />
   );
 }

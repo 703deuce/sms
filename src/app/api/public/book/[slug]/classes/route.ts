@@ -58,6 +58,13 @@ export async function GET(_request: Request, { params }: Params) {
         ]),
     );
 
+    const staffMap = new Map(
+      (config.staff || []).map((s: { id: string; name: string }) => [s.id, s.name]),
+    );
+    const locationMap = new Map(
+      (config.locations || []).map((l: { id: string; name: string }) => [l.id, l.name]),
+    );
+
     const publicOccurrences = occurrences.map(
       (occ: {
         id: string;
@@ -67,14 +74,23 @@ export async function GET(_request: Request, { params }: Params) {
         capacity: number | null;
       }) => {
         const seatMap = seatMapByOccurrence.get(occ.id);
+        const series = active.find((s: { id: string }) => s.id === occ.seriesId);
+        const enrolled = Number(countMap.get(occ.id) ?? 0);
+        const capacity = Number(occ.capacity ?? series?.capacity ?? 0);
+        const meta = (series?.metadata || {}) as Record<string, unknown>;
         return {
           id: occ.id,
           seriesId: occ.seriesId,
           startsAt: occ.startsAt.toISOString(),
           endsAt: occ.endsAt.toISOString(),
-          capacity: occ.capacity,
-          enrolled: Number(countMap.get(occ.id) ?? 0),
-          remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
+          capacity,
+          enrolled,
+          remaining: Math.max(0, capacity - enrolled),
+          instructor: series?.staffId ? staffMap.get(series.staffId) : null,
+          location: series?.locationId ? locationMap.get(series.locationId) : null,
+          priceCents: typeof meta.priceCents === "number" ? meta.priceCents : null,
+          capacityDisplay: (meta.capacityDisplay as string) || "exact",
+          waitlistEnabled: meta.waitlistEnabled === true,
           seatMapId: seatMap?.id ?? null,
           seatMapName: seatMap?.name ?? null,
           requiresSeatSelection: Boolean(seatMap?.id),
@@ -84,14 +100,25 @@ export async function GET(_request: Request, { params }: Params) {
 
     return NextResponse.json({
       data: {
-        series: active.map((s: { id: string; name: string; description: string | null; capacity: number; requireFullSeries: boolean }) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          capacity: s.capacity,
-          requireFullSeries: s.requireFullSeries,
-        })),
+        series: active.map(
+          (s: {
+            id: string;
+            name: string;
+            description: string | null;
+            capacity: number;
+            requireFullSeries: boolean;
+            metadata?: unknown;
+          }) => ({
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            capacity: s.capacity,
+            requireFullSeries: s.requireFullSeries,
+            capacityDisplay: ((s.metadata || {}) as Record<string, unknown>).capacityDisplay || "exact",
+          }),
+        ),
         occurrences: publicOccurrences,
+        timezone: config.timezone,
       },
     });
   } catch (err) {
@@ -140,9 +167,56 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const occurrenceId = body.occurrenceId ? String(body.occurrenceId) : undefined;
+    const partySize = Math.max(1, Math.floor(Number(body.partySize || 1)));
+    const waitlist = body.waitlist === true;
     const seatMapId = body.seatMapId ? String(body.seatMapId) : undefined;
     const rowIndex = body.rowIndex != null ? Number(body.rowIndex) : undefined;
     const colIndex = body.colIndex != null ? Number(body.colIndex) : undefined;
+
+    if (occurrenceId && waitlist) {
+      const occ = await prisma.classOccurrence.findFirst({
+        where: { id: occurrenceId, workspaceId: workspace.id },
+        include: { series: true },
+      });
+      if (!occ) return NextResponse.json({ error: "Class session not found" }, { status: 404 });
+      const enrolled = await prisma.classEnrollment.count({
+        where: { workspaceId: workspace.id, occurrenceId, status: "enrolled" },
+      });
+      const capacity = Number(occ.capacity ?? occ.series?.capacity ?? 0);
+      if (enrolled < capacity) {
+        return NextResponse.json({ error: "This class still has openings — register instead." }, { status: 400 });
+      }
+      const { joinWaitlist } = await import("@/lib/appointments/waitlist");
+      const entry = await joinWaitlist({
+        workspaceId: workspace.id,
+        contactId,
+        serviceName: occ.series?.name || "Class",
+        preferredDate: occ.startsAt.toISOString().slice(0, 10),
+        preferredTimeStart: occ.startsAt.toISOString(),
+        preferredTimeEnd: occ.endsAt.toISOString(),
+        phone,
+        email: body.email ? String(body.email) : undefined,
+      });
+      return NextResponse.json({ data: { waitlist: entry } }, { status: 201 });
+    }
+
+    if (occurrenceId) {
+      const occ = await prisma.classOccurrence.findFirst({
+        where: { id: occurrenceId, workspaceId: workspace.id },
+        include: { series: true },
+      });
+      if (!occ) return NextResponse.json({ error: "Class session not found" }, { status: 404 });
+      const enrolled = await prisma.classEnrollment.count({
+        where: { workspaceId: workspace.id, occurrenceId, status: "enrolled" },
+      });
+      const capacity = Number(occ.capacity ?? occ.series?.capacity ?? 0);
+      if (enrolled + partySize > capacity) {
+        return NextResponse.json(
+          { error: "This class doesn't have enough space for your group." },
+          { status: 409 },
+        );
+      }
+    }
 
     if (occurrenceId) {
       const seatMap = await prisma.classSeatMap.findFirst({

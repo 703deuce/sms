@@ -40,6 +40,8 @@ export * from "./package-lifecycle";
 export * from "./membership-lifecycle";
 export * from "./booking-contracts";
 export * from "./booking-invoices";
+export * from "./invoice-pdf";
+export * from "./pos-tax";
 export * from "./booking-products";
 export * from "./event-tickets";
 export * from "./resource-pools";

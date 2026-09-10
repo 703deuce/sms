@@ -9,11 +9,26 @@ export type BookingQuestion = {
 };
 
 export type PaymentRequirement = {
-  mode: "none" | "full" | "deposit";
+  mode:
+    | "none"
+    | "full"
+    | "deposit"
+    | "optional"
+    | "pay_what_you_want"
+    | "save_card"
+    | "deposit_fixed"
+    | "deposit_percent"
+    | "customer_choice";
   priceCents?: number;
   depositCents?: number;
   depositPercent?: number;
   currency?: string;
+  payWhatYouWant?: {
+    enabled?: boolean;
+    minimumCents?: number;
+    suggestedCents?: number;
+    presetCents?: number[];
+  };
 };
 
 export type DurationOption = { id: string; label: string; minutes: number; active?: boolean };

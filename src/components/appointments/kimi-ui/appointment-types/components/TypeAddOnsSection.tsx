@@ -5,7 +5,7 @@ import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appo
 
 type Props = {
   form: AppointmentTypeFormState;
-  addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
+  addOnOptions: Array<{ id: string; name: string; priceCents?: number; durationDeltaMinutes?: number }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -33,7 +33,7 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
           </p>
         </div>
         <Link
-          href="/appointments/commerce"
+          href="/appointments/types"
           className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
         >
           Manage add-ons →
@@ -63,11 +63,14 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
                   />
                   <span className="text-[13px] font-medium text-[#1a1d29]">{addOn.name}</span>
                 </span>
-                {addOn.priceCents != null && addOn.priceCents > 0 ? (
-                  <span className="text-[11px] text-[#8a8fa3]">
-                    +${(addOn.priceCents / 100).toFixed(2)}
-                  </span>
-                ) : null}
+                <span className="text-[11px] text-[#8a8fa3] text-right">
+                  {addOn.priceCents != null && addOn.priceCents > 0
+                    ? `+$${(addOn.priceCents / 100).toFixed(2)}`
+                    : null}
+                  {addOn.durationDeltaMinutes && addOn.durationDeltaMinutes > 0
+                    ? `${addOn.priceCents ? " · " : ""}+${addOn.durationDeltaMinutes} min`
+                    : null}
+                </span>
               </label>
             </li>
           ))}

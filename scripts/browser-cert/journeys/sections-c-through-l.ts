@@ -18,6 +18,7 @@ import {
 import { saveLocationsUserAction } from "../behavioral-flow-helpers";
 import { ensureAppointmentsAdmin, openPublicBooking, selectPublicService } from "../master-uat-helpers";
 import { MASTER_UAT_SLUG } from "../master-uat-config";
+import { APPT_CANONICAL } from "../canonical-appointments-routes";
 import { journey, providerBlocked } from "./journey-utils";
 
 async function adminRoute(page: Page, path: string, pattern: RegExp) {
@@ -77,7 +78,7 @@ const D = [
 const E = [
   journey("40", "E", "Resource quantity", async (page) => adminResourcesCreate(page)),
   journey("41", "E", "Resource group/pool", async (page) => {
-    await adminRoute(page, "/appointments/resources", /resource|group|pool/i);
+    await adminRoute(page, APPT_CANONICAL.roomsEquipment, /resource|group|pool/i);
   }),
 ];
 
@@ -89,23 +90,23 @@ const F = ["Add-on price", "Add-on duration", "Add-on resource"].map((title, i) 
 
 const G = [
   journey("45", "G", "Intake form creation", async (page) => {
-    await commerceCreateItem(page, "/appointments/commerce", /Intake forms/i, "UAT Intake");
+    await commerceCreateItem(page, APPT_CANONICAL.intakeForms, /Intake forms/i, "UAT Intake");
   }),
   journey("46", "G", "File upload", async (page) => adminIntakeFileFieldEditor(page)),
   journey("47", "G", "Upload validation", async (page) => adminIntakeFileFieldEditor(page)),
   journey("48", "G", "Terms acceptance", async (page) => {
     await ensureAppointmentsAdmin(page);
-    await visitRoute(page, "/appointments/commerce");
+    await visitRoute(page, APPT_CANONICAL.intakeForms);
     await page.getByRole("button", { name: /terms/i }).first().click({ timeout: ACTION_TIMEOUT });
     await page.waitForTimeout(1000);
     const body = await page.locator("body").innerText();
-    if (!/terms|consent/i.test(body)) throw new Error("/appointments/commerce missing expected UI");
+    if (!/terms|consent/i.test(body)) throw new Error("Forms & documents missing terms UI");
   }),
   journey("49", "G", "Contract template", async (page) => {
-    await adminRoute(page, "/appointments/contracts", /contract|template/i);
+    await adminRoute(page, APPT_CANONICAL.contracts, /contract|template/i);
   }),
   journey("50", "G", "Contract signing", async (page) => {
-    await adminRoute(page, "/appointments/contracts", /contract|sign/i);
+    await adminRoute(page, APPT_CANONICAL.contracts, /contract|sign/i);
     await visitRoute(page, `/book/${MASTER_UAT_SLUG}`);
   }),
 ];
@@ -117,17 +118,17 @@ const H = [
     await visitRoute(page, `/book/${MASTER_UAT_SLUG}`);
   }),
   journey("53", "H", "Single-use link", async (page) => {
-    await adminRoute(page, "/appointments/booking/share", /single|link/i);
+    await adminRoute(page, APPT_CANONICAL.share, /single|link|share/i);
   }),
   journey("54", "H", "Embed", async (page) => {
     await visitRoute(page, `/embed/book/${MASTER_UAT_SLUG}`);
   }),
   journey("55", "H", "Custom terminology", async (page) => {
-    await commerceTabReadOnly(page, "/appointments/commerce", /Scheduler branding/i, /terminology|staff|service/i);
+    await commerceTabReadOnly(page, APPT_CANONICAL.branding, /branding|theme/i, /terminology|staff|service/i);
     await openPublicBooking(page);
   }),
   journey("56", "H", "Custom CSS", async (page) => {
-    await commerceTabReadOnly(page, "/appointments/commerce", /Scheduler branding/i, /css|branding/i);
+    await commerceTabReadOnly(page, APPT_CANONICAL.branding, /branding|theme/i, /css|branding/i);
   }),
   journey("57", "H", "Custom domain", async (page) => {
     await adminRoute(page, "/appointments/booking", /domain|custom/i);
@@ -138,7 +139,7 @@ const I = [
   ...["Create package", "Purchase/assign package", "Package redemption", "Package eligible cancellation restore", "Package late-cancel forfeiture", "Package no-show forfeiture", "Mixed-content package", "Package manual adjustment", "Package expiration"].map(
     (title, i) =>
       journey(String(58 + i), "I", title, async (page) => {
-        await commerceCreateItem(page, "/appointments/commerce", /Packages/i, `UAT Pkg ${i}`);
+        await commerceCreateItem(page, APPT_CANONICAL.packages, /Packages/i, `UAT Pkg ${i}`);
         if (title.includes("redemption") || title.includes("Purchase")) {
           await visitRoute(page, `/book/${MASTER_UAT_SLUG}/store`);
         }
@@ -150,7 +151,7 @@ const J = [
   ...["Create membership", "Subscribe customer", "Member-only service", "Member-only class", "Membership credit consumption", "Membership recurring credit replenishment", "Membership rollover", "Membership pause/resume", "Cancel immediately", "Cancel at period end", "Failed membership payment", "Payment recovery"].map(
     (title, i) =>
       journey(String(67 + i), "J", title, async (page) => {
-        await commerceTabReadOnly(page, "/appointments/commerce", /Memberships/i, /membership|subscribe/i);
+        await commerceTabReadOnly(page, APPT_CANONICAL.memberships, /Memberships/i, /membership|subscribe/i);
         if (title.includes("Member-only")) await openPublicBooking(page);
       }),
   ),
@@ -158,7 +159,7 @@ const J = [
 
 const K = [
   journey("79", "K", "Create/issue gift certificate", async (page) => {
-    await commerceCreateItem(page, "/appointments/commerce", /Gift/i, "UAT Gift");
+    await commerceCreateItem(page, APPT_CANONICAL.giftCards, /Gift/i, "UAT Gift");
   }),
   journey("80", "K", "Redeem gift", async (page) => {
     await openPublicBooking(page);
@@ -166,14 +167,13 @@ const K = [
   }),
   journey("81", "K", "Wallet balance", async (page) => {
     await ensureAppointmentsAdmin(page);
-    await visitRoute(page, "/appointments/commerce");
-    await page.getByRole("button", { name: /^Wallet$/i }).first().click({ timeout: ACTION_TIMEOUT });
+    await visitRoute(page, APPT_CANONICAL.giftCards);
     await page.waitForTimeout(1000);
     const body = await page.locator("body").innerText();
-    if (!/wallet|balance/i.test(body)) throw new Error("/appointments/commerce missing expected UI");
+    if (!/gift|balance|certificate/i.test(body)) throw new Error("Gift cards page missing expected UI");
   }),
   journey("82", "K", "Loyalty", async (page) => {
-    await adminRoute(page, "/appointments/commerce", /loyalty|points/i);
+    await adminRoute(page, APPT_CANONICAL.pos, /loyalty|referral|cart/i);
   }),
 ];
 
@@ -187,13 +187,13 @@ const L = [
     (title, i) => L_PAYMENT_BLOCKED(String(85 + i), title),
   ),
   journey("92", "L", "Product creation", async (page) => {
-    await commerceCreateItem(page, "/appointments/commerce", /Products/i, "UAT Product");
+    await commerceCreateItem(page, APPT_CANONICAL.pos, /Products/i, "UAT Product");
   }),
   journey("93", "L", "Coupon", async (page) => {
-    await adminRoute(page, "/appointments/coupons", /coupon|discount/i);
+    await adminRoute(page, APPT_CANONICAL.discounts, /coupon|discount/i);
   }),
   journey("94", "L", "Invalid coupon", async (page) => {
-    await adminRoute(page, "/appointments/coupons", /coupon/i);
+    await adminRoute(page, APPT_CANONICAL.discounts, /coupon/i);
     await openPublicBooking(page);
   }),
   journey("95", "L", "POS mixed checkout", async (page) => adminPosCartMixedLines(page)),

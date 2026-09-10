@@ -15,6 +15,16 @@ export async function listWebhookEndpoints(workspaceId: string) {
   });
 }
 
+export async function listWebhookDeliveries(workspaceId: string, limit = 50) {
+  const prisma = getPrisma();
+  return prisma.appointmentWebhookDelivery.findMany({
+    where: { endpoint: { workspaceId } },
+    include: { endpoint: { select: { url: true } } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
 export async function createWebhookEndpoint(
   workspaceId: string,
   input: { url: string; events: AppointmentWebhookEvent[] },
