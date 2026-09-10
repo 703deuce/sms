@@ -73,6 +73,11 @@ export default function StaffView({ model, actions }: Props) {
               onSetCustomHours={actions.onSetCustomHours}
               onUpdateWindow={actions.onUpdateWindow}
               onAddWindow={actions.onAddWindow}
+              calendarColor={model.calendarColor}
+              roundRobinEligible={selected.roundRobinEligible !== false}
+              roundRobinStateSummary={model.roundRobinStateSummary}
+              onCalendarColorChange={actions.onCalendarColorChange}
+              onRoundRobinEligibleChange={actions.onRoundRobinEligibleChange}
               onSave={actions.onSave}
               onRemove={() => actions.onRemoveStaff(selected.id)}
             />

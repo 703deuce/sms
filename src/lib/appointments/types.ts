@@ -80,6 +80,10 @@ export type BookableStaffMember = {
   locationIds?: string[];
   /** Linked calendar connection for per-staff busy blocking */
   calendarConnectionId?: string;
+  /** Include in round-robin assignment pools (default true) */
+  roundRobinEligible?: boolean;
+  /** Weight for round-robin when backend supports weighted distribution */
+  roundRobinWeight?: number;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
   dateOverrides?: DateOverride[];
   blackoutDates?: string[];
@@ -242,6 +246,14 @@ export type AppointmentPlatformConfig = {
   schedulingLimits?: import("@/lib/appointments/service-booking/types").SchedulingLimitsConfig;
   /** Round-robin assignment tracking */
   roundRobinState?: Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>;
+  /** Staff/service calendar color coding (authoritative for operational calendar) */
+  calendarColors?: import("@/lib/appointments/service-booking/types").CalendarColorConfig;
+  /** When a matching slot opens, auto-offer or fill waitlist (default true) */
+  waitlistAutoFill?: boolean;
+  /** Send opening notifications when waitlist slots become available */
+  waitlistNotifyOnOpening?: boolean;
+  /** Minutes before a waitlist offer expires */
+  waitlistOfferExpirationMinutes?: number;
   /** External calendar blocking */
   externalCalendarBlocking?: {
     enabled?: boolean;
@@ -315,6 +327,8 @@ export type AppointmentTypeConfig = {
   resourceIds?: string[];
   /** Intake forms assigned to this booking type */
   intakeFormIds?: string[];
+  /** Calendar display color for this booking type */
+  calendarColor?: string;
   /** AI Notetaker defaults for this appointment type */
   notetaker?: import("@/lib/meeting-assistant/types").EventTypeNotetakerConfig;
   /** Transovo Video defaults for this appointment type */

@@ -39,6 +39,7 @@ type ApiAppointment = {
     remindersSuppressed?: boolean;
     location?: string;
     source?: string;
+    refundAmountCents?: number;
   };
   contact?: { id: string } | null;
   serviceLines?: Array<{
@@ -57,6 +58,7 @@ type ApiAppointment = {
     createdAt: string;
   }>;
   contractTemplates?: Array<{ id: string; name: string; version: string }>;
+  enrichment?: Appointment["enrichment"];
 };
 
 export function mapApiAppointment(data: ApiAppointment): Appointment {
@@ -133,5 +135,7 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
       createdAt: c.createdAt,
     })),
     contractTemplates: data.contractTemplates || [],
+    enrichment: data.enrichment,
+    refundAmountCents: Number(meta.refundAmountCents) || 0,
   };
 }

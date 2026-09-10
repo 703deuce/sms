@@ -104,10 +104,20 @@ export async function getAvailability(
   return { slots };
 }
 
+export type ListedAppointmentType = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  bufferMinutes: number;
+  calendarId: string | null;
+  config: AppointmentTypeConfig;
+  active: boolean;
+};
+
 export async function listAppointmentTypes(
   workspaceId: string,
   opts?: { includeSecret?: boolean; includeUnlisted?: boolean },
-) {
+): Promise<ListedAppointmentType[]> {
   const prisma = getPrisma();
   const rows = await prisma.voiceService.findMany({
     where: { workspaceId },

@@ -76,6 +76,11 @@ export function WaitlistEntryRow({
           ) : null}
         </div>
       </td>
+      <td>
+        <div className="tv-cell-primary">
+          {entry.priorityRank === 1 ? "Next" : entry.priorityRank ? `#${entry.priorityRank}` : "—"}
+        </div>
+      </td>
       <td className="tv-hide-sm">
         <div className="tv-cell-meta">Joined {formatJoined(entry.createdAt)}</div>
         {entry.notifiedAt ? (

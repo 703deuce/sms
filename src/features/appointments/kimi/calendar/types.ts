@@ -1,4 +1,6 @@
-export type CalendarViewMode = "day" | "week" | "month";
+export type CalendarViewMode = "day" | "week" | "month" | "staff";
+
+export type CalendarBookingKind = "MEETING" | "SERVICE" | "CLASS" | "EVENT";
 
 export type CalendarStatItem = {
   icon: "calendar" | "check" | "clock" | "x" | "users";
@@ -32,6 +34,7 @@ export type AppointmentMeetingIndicator = {
 export type CalendarWeekEvent = {
   id: string;
   day: number;
+  staffLane?: number;
   start: number;
   duration: number;
   timeLabel: string;
@@ -40,7 +43,16 @@ export type CalendarWeekEvent = {
   type: "consultation" | "call" | "followup" | "onboarding" | "canceled";
   status: "confirmed" | "pending" | "canceled";
   meeting?: AppointmentMeetingIndicator;
-  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker" | "external_busy";
+  colorDot?: string;
+  bookingKind?: CalendarBookingKind;
+  capacityLabel?: string;
+  isRecurring?: boolean;
+  recurringLabel?: string | null;
+  staffId?: string | null;
+  staffName?: string | null;
+  locationName?: string | null;
+  busySource?: string;
 };
 
 export type CalendarTypeColor = {
@@ -102,12 +114,38 @@ export type CalendarMonthDay = {
   }>;
 };
 
+export type CalendarBusyBlock = {
+  id: string;
+  day: number;
+  staffLane?: number;
+  start: number;
+  duration: number;
+  label: string;
+  source: string;
+};
+
+export type CalendarAvailabilityBand = {
+  day: number;
+  staffLane?: number;
+  start: number;
+  duration: number;
+};
+
+export type CalendarStaffLane = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 export type CalendarPageModel = {
   view: CalendarViewMode;
   rangeLabel: string;
   stats: CalendarStatItem[];
   weekDays: CalendarWeekDay[];
   weekEvents: CalendarWeekEvent[];
+  staffLanes: CalendarStaffLane[];
+  busyBlocks: CalendarBusyBlock[];
+  availabilityBands: CalendarAvailabilityBand[];
   monthDays: CalendarMonthDay[];
   hours: string[];
   typeColors: Record<string, CalendarTypeColor>;
@@ -138,5 +176,15 @@ export type CalendarPageActions = {
   onViewFullDay: () => void;
   onShowCalendarSettings: () => void;
   onRetry: () => void;
-  onSlotClick?: (input: { dateKey: string; hour: number }) => void;
+  onSlotClick?: (input: { dateKey: string; hour: number; staffId?: string }) => void;
+  onEventMove?: (input: {
+    id: string;
+    fromStartsAt: string;
+    toStartsAt: string;
+    staffId?: string | null;
+  }) => void;
+  onToggleFilters?: () => void;
+  onToggleAvailability?: () => void;
+  filterCount?: number;
+  showAvailability?: boolean;
 };

@@ -1,11 +1,14 @@
 import "server-only";
 
-import { listAppointments } from "@/lib/appointments";
+import { listAppointments, listAppointmentTypes, type ListedAppointmentType } from "@/lib/appointments";
+import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
+import { resolveServiceCalendarColor, resolveStaffCalendarColor } from "@/lib/appointments/calendar-colors";
 import { getPrisma, type DbRow } from "@/lib/db";
 import { meetingPlatformLabel } from "@/lib/meeting-assistant/platform";
 import type { MeetingPlatform } from "@/lib/meeting-assistant/types";
 import { publicVideoMeetingUrl } from "@/lib/transovo-video/meeting-url";
 import type { CalendarApiAppointment } from "@/features/appointments/kimi/calendar/map-calendar";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 function mapVideoStatus(status: string) {
   if (status === "canceled") return "canceled";
@@ -26,24 +29,61 @@ export async function listWorkspaceCalendarEvents(
   workspaceId: string,
   input: { from?: Date; to?: Date },
 ): Promise<CalendarApiAppointment[]> {
-  const appointments = await listAppointments(workspaceId, {
-    from: input.from,
-    to: input.to,
-  });
+  const [appointments, platform, types] = await Promise.all([
+    listAppointments(workspaceId, { from: input.from, to: input.to }),
+    loadAppointmentPlatformConfig(workspaceId),
+    listAppointmentTypes(workspaceId, { includeSecret: true, includeUnlisted: true }),
+  ]);
 
-  const appointmentRows: CalendarApiAppointment[] = appointments.map((row: DbRow) => ({
-    id: row.id,
-    eventKind: "appointment",
-    inviteeName: row.inviteeName,
-    inviteePhone: row.inviteePhone,
-    serviceName: row.serviceName,
-    startsAt: row.startsAt,
-    endsAt: row.endsAt,
-    status: row.status,
-    timezone: row.timezone,
-    metadata: row.metadata,
-    meeting: row.meeting,
-  }));
+  const typeByName = new Map<string, ListedAppointmentType>(types.map((t) => [t.name, t]));
+  const colorConfig = platform.calendarColors;
+
+  const appointmentRows: CalendarApiAppointment[] = appointments.map((row: DbRow) => {
+    const meta = (row.metadata || {}) as AppointmentMetadata;
+    const matchedType = row.serviceName ? typeByName.get(row.serviceName) : undefined;
+    const staffId = meta.staffId || undefined;
+    const staffMember = staffId ? platform.staff?.find((s) => s.id === staffId) : undefined;
+    const location = platform.locations?.find((l) => l.id === meta.locationId);
+    const kind = matchedType?.config.bookingTypeKind || "SERVICE";
+    const capacity = matchedType?.config.groupCapacity;
+    const enrolled = meta.attendeeCount;
+    const colorDot = resolveServiceCalendarColor(colorConfig, {
+      typeId: matchedType?.id,
+      serviceName: row.serviceName,
+      typeCalendarColor: matchedType?.config.calendarColor,
+    });
+    const staffColor = resolveStaffCalendarColor(colorConfig, staffId);
+
+    return {
+      id: row.id,
+      eventKind: "appointment",
+      inviteeName: row.inviteeName,
+      inviteePhone: row.inviteePhone,
+      serviceName: row.serviceName,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      status: row.status,
+      timezone: row.timezone,
+      metadata: row.metadata,
+      meeting: row.meeting,
+      staffId,
+      staffName: row.staffName || staffMember?.name || null,
+      locationId: meta.locationId || null,
+      locationName: location?.name || meta.location || null,
+      bookingTypeKind: kind,
+      typeId: matchedType?.id || null,
+      capacity: capacity ?? null,
+      enrolledCount: enrolled ?? null,
+      colorDot,
+      staffColor,
+      isRecurring: Boolean(meta.recurringSeriesId),
+      recurringLabel: meta.recurringSeriesId
+        ? `Repeats ${matchedType?.config.recurring?.allowedFrequencies?.[0] || "weekly"}`
+        : null,
+      recurringOccurrenceIndex: meta.recurringOccurrenceIndex ?? null,
+      recurringTotal: null,
+    };
+  });
 
   if (!input.from || !input.to) {
     return appointmentRows;

@@ -10,6 +10,8 @@ import {
 import type { WaitlistEntry } from "../mock-data";
 import { WaitlistEntryRow } from "./WaitlistEntryRow";
 import { ConfirmRemoveModal } from "./ConfirmRemoveModal";
+import { PriorityRulesDrawer } from "./PriorityRulesDrawer";
+import { WaitlistSettingsPanel } from "./WaitlistSettingsPanel";
 
 type StatusFilter =
   | "all"
@@ -44,6 +46,11 @@ export function WaitlistAdminClient() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [pendingRemove, setPendingRemove] = useState<WaitlistEntry | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [notifyOnOpening, setNotifyOnOpening] = useState(true);
+  const [autoFill, setAutoFill] = useState(true);
+  const [offerExpirationMinutes, setOfferExpirationMinutes] = useState(30);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -54,17 +61,55 @@ export function WaitlistAdminClient() {
 
   const load = useCallback(() => {
     setLoadState("loading");
-    // Sandbox: simulate /api/appointments/waitlist fetch
-    fetch("/api/appointments/waitlist")
-      .then((r) => r.json())
-      .then((j) => {
-        setEntries(j.data || []);
+    Promise.all([
+      fetch("/api/appointments/waitlist").then((r) => r.json()),
+      fetch("/api/appointments/settings").then((r) => (r.ok ? r.json() : { data: {} })),
+    ])
+      .then(([waitlistJson, settingsJson]) => {
+        const mapped = (waitlistJson.data || []).map((row: Record<string, unknown>) => ({
+          id: String(row.id),
+          serviceName: (row.serviceName as string) || null,
+          phone: (row.phone as string) || null,
+          email: (row.email as string) || null,
+          preferredDate: (row.preferredDate as string) || null,
+          preferredStaffName: (row.preferredStaffName as string) || null,
+          locationName: (row.locationName as string) || null,
+          partySize: (row.partySize as number) || null,
+          status: String(row.status || "active") as WaitlistEntry["status"],
+          createdAt: String(row.createdAt),
+          notifiedAt: (row.notifiedAt as string) || null,
+          priorityRank: (row.priorityRank as number) ?? null,
+          priorityScore: (row.priorityScore as number) ?? null,
+        })) as WaitlistEntry[];
+        setEntries(mapped);
+        const settings = settingsJson.data || {};
+        setNotifyOnOpening(settings.waitlistNotifyOnOpening !== false);
+        setAutoFill(settings.waitlistAutoFill !== false);
+        setOfferExpirationMinutes(settings.waitlistOfferExpirationMinutes ?? 30);
         setLoadState("ready");
       })
       .catch(() => {
         setLoadState("error");
       });
   }, []);
+
+  async function saveWaitlistSettings() {
+    setSettingsSaving(true);
+    try {
+      await fetch("/api/appointments/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          waitlistNotifyOnOpening: notifyOnOpening,
+          waitlistAutoFill: autoFill,
+          waitlistOfferExpirationMinutes: offerExpirationMinutes,
+        }),
+      });
+      showToast("Waitlist settings saved.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
 
   useEffect(() => {
     const t = setTimeout(load, 450);
@@ -121,6 +166,9 @@ export function WaitlistAdminClient() {
             Customers waiting for an opening. Notify them when a slot becomes
             available.
           </p>
+          <button type="button" className="tv-btn" onClick={() => setRulesOpen(true)}>
+            Priority rules
+          </button>
         </div>
       </div>
 
@@ -292,6 +340,7 @@ export function WaitlistAdminClient() {
                 <th scope="col" className="tv-hide-sm">
                   Activity
                 </th>
+                <th scope="col">Priority</th>
                 <th scope="col">Status</th>
                 <th scope="col" style={{ textAlign: "right" }}>
                   <span
@@ -343,6 +392,19 @@ export function WaitlistAdminClient() {
           }}
         />
       ) : null}
+
+      <WaitlistSettingsPanel
+        notifyOnOpening={notifyOnOpening}
+        autoFill={autoFill}
+        offerExpirationMinutes={offerExpirationMinutes}
+        saving={settingsSaving}
+        onNotifyChange={setNotifyOnOpening}
+        onAutoFillChange={setAutoFill}
+        onExpirationChange={setOfferExpirationMinutes}
+        onSave={saveWaitlistSettings}
+      />
+
+      <PriorityRulesDrawer open={rulesOpen} onClose={() => setRulesOpen(false)} />
 
       {toast ? (
         <div className="tv-toast" role="status">

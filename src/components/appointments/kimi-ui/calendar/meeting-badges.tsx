@@ -4,7 +4,7 @@ import type { AppointmentMeetingIndicator } from "@/features/appointments/kimi/c
 type Props = {
   meeting?: AppointmentMeetingIndicator;
   appointmentId: string;
-  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker" | "external_busy";
   compact?: boolean;
 };
 

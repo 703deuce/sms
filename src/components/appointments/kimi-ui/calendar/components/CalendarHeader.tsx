@@ -10,11 +10,16 @@ type Props = {
   onNext: () => void;
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
+  filterCount?: number;
+  onToggleFilters?: () => void;
+  showAvailability?: boolean;
+  onToggleAvailability?: () => void;
 };
 
 const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
   { value: "day", label: "Day" },
   { value: "week", label: "Week" },
+  { value: "staff", label: "Staff" },
   { value: "month", label: "Month" },
 ];
 
@@ -26,6 +31,10 @@ export default function CalendarHeader({
   onNext,
   onViewChange,
   onNewAppointment,
+  filterCount = 0,
+  onToggleFilters,
+  showAvailability,
+  onToggleAvailability,
 }: Props) {
   return (
     <div className="cal-header">
@@ -52,6 +61,21 @@ export default function CalendarHeader({
           <span className="btn-range-label">{rangeLabel}</span>
           <ChevronDown size={14} />
         </button>
+        {onToggleFilters ? (
+          <button type="button" className="btn-today" onClick={onToggleFilters}>
+            Filters{filterCount > 0 ? ` (${filterCount})` : ""}
+          </button>
+        ) : null}
+        {onToggleAvailability ? (
+          <button
+            type="button"
+            className={`btn-today ${showAvailability ? "active-filter" : ""}`}
+            onClick={onToggleAvailability}
+            aria-pressed={showAvailability}
+          >
+            Show availability
+          </button>
+        ) : null}
         <div className="view-toggle" role="group" aria-label="Calendar view">
           {VIEW_OPTIONS.map((opt) => (
             <button

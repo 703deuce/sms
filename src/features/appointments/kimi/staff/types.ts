@@ -9,7 +9,7 @@ export type StaffListItem = {
   locationCount: number;
 };
 
-export type StaffEditorTab = "details" | "availability" | "assignments";
+export type StaffEditorTab = "details" | "availability" | "assignments" | "scheduling" | "calendar";
 
 export type StaffDayRow = {
   key: string;
@@ -28,6 +28,8 @@ export type StaffPageModel = {
   appointmentTypes: Array<{ id: string; name: string }>;
   locations: Array<{ id: string; name: string }>;
   dayRows: StaffDayRow[];
+  calendarColor: string;
+  roundRobinStateSummary: string | null;
   saving: boolean;
   saved: boolean;
   error: string;
@@ -47,6 +49,8 @@ export type StaffPageActions = {
   onSetCustomHours: (dayKey: string, enabled: boolean) => void;
   onUpdateWindow: (dayKey: string, index: number, field: "open" | "close", value: string) => void;
   onAddWindow: (dayKey: string) => void;
+  onCalendarColorChange: (value: string) => void;
+  onRoundRobinEligibleChange: (value: boolean) => void;
   onSave: () => void;
   onRetry: () => void;
 };

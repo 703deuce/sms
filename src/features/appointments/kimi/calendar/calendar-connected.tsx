@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/appointments/kimi-ui/calendar/page";
+import MoveAppointmentDialog from "@/components/appointments/kimi-ui/calendar/components/MoveAppointmentDialog";
 import "@/components/appointments/kimi-ui/calendar/reference.css";
 import {
   addDays,
@@ -13,8 +14,30 @@ import {
   getCalendarRange,
   startOfWeek,
   type CalendarApiAppointment,
+  type CalendarBusyApiBlock,
+  type CalendarFilterState,
 } from "@/features/appointments/kimi/calendar/map-calendar";
 import type { CalendarPageActions, CalendarPageModel, CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
+import { resolveStaffCalendarColor } from "@/lib/appointments/calendar-colors";
+
+type CalendarContext = {
+  calendarColors: { staffColors?: Record<string, string>; serviceColors?: Record<string, string> };
+  staff: Array<{ id: string; name: string }>;
+  locations: Array<{ id: string; name: string }>;
+  bookingTypes: Array<{ id: string; name: string; kind: string; calendarColor: string | null }>;
+  weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+};
+
+type PendingMove = {
+  id: string;
+  title: string;
+  customerName: string;
+  fromStartsAt: string;
+  toStartsAt: string;
+  staffName?: string | null;
+  locationName?: string | null;
+  isRecurring?: boolean;
+};
 
 function CalendarLoading() {
   return (
@@ -56,6 +79,17 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function formatMoveLabel(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function CalendarConnected() {
   const router = useRouter();
   const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
@@ -66,10 +100,22 @@ export function CalendarConnected() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [rows, setRows] = useState<CalendarApiAppointment[]>([]);
+  const [busyBlocks, setBusyBlocks] = useState<CalendarBusyApiBlock[]>([]);
+  const [context, setContext] = useState<CalendarContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showAvailability, setShowAvailability] = useState(false);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>([]);
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [staffViewIds, setStaffViewIds] = useState<string[]>([]);
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [moveLoading, setMoveLoading] = useState(false);
 
-  const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
+  const range = useMemo(() => getCalendarRange(cursor, view === "staff" ? "day" : view), [cursor, view]);
 
   const loadMeetingIndicators = useCallback(async (appointments: CalendarApiAppointment[]) => {
     const ids = appointments
@@ -97,23 +143,67 @@ export function CalendarConnected() {
       from: range.from.toISOString(),
       to: range.to.toISOString(),
     });
-    fetch(`/api/calendar/events?${params}`)
-      .then((r) => {
+    Promise.all([
+      fetch(`/api/calendar/events?${params}`).then((r) => {
         if (!r.ok) throw new Error("calendar fetch failed");
         return r.json();
-      })
-      .then(async (json) => {
-        const appointments = (json.data || []) as CalendarApiAppointment[];
+      }),
+      fetch("/api/calendar/context").then((r) => (r.ok ? r.json() : { data: null })),
+      fetch(`/api/calendar/busy-blocks?${params}`).then((r) => (r.ok ? r.json() : { data: [] })),
+      fetch("/api/appointments/settings").then((r) => (r.ok ? r.json() : { data: {} })),
+    ])
+      .then(async ([eventsJson, ctxJson, busyJson, settingsJson]) => {
+        const appointments = (eventsJson.data || []) as CalendarApiAppointment[];
         const enriched = await loadMeetingIndicators(appointments);
         setRows(enriched);
+        const ctxData = ctxJson.data as CalendarContext | null;
+        const settings = settingsJson.data || {};
+        setContext({
+          calendarColors: ctxData?.calendarColors || {},
+          staff: ctxData?.staff || settings.staff || [],
+          locations: ctxData?.locations || settings.locations || [],
+          bookingTypes: ctxData?.bookingTypes || [],
+          weeklyHours: settings.weeklyHours,
+        });
+        setBusyBlocks((busyJson.data || []) as CalendarBusyApiBlock[]);
+        if (!staffViewIds.length && ctxData?.staff?.length) {
+          setStaffViewIds(ctxData.staff.slice(0, 4).map((s) => s.id));
+        }
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
-  }, [loadMeetingIndicators, range.from, range.to]);
+  }, [loadMeetingIndicators, range.from, range.to, staffViewIds.length]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const filters: CalendarFilterState = useMemo(
+    () => ({
+      staffIds: selectedStaffIds,
+      typeIds: selectedTypeIds,
+      locationIds: selectedLocationIds,
+      statuses: selectedStatuses,
+    }),
+    [selectedLocationIds, selectedStaffIds, selectedStatuses, selectedTypeIds],
+  );
+
+  const filterCount =
+    selectedStaffIds.length + selectedTypeIds.length + selectedLocationIds.length + selectedStatuses.length;
+
+  const staffLanes = useMemo(() => {
+    const colorConfig = context?.calendarColors;
+    const pool = context?.staff || [];
+    const ids = view === "staff" ? (staffViewIds.length ? staffViewIds : pool.slice(0, 4).map((s) => s.id)) : [];
+    return ids
+      .map((id) => pool.find((s) => s.id === id))
+      .filter(Boolean)
+      .map((s) => ({
+        id: s!.id,
+        name: s!.name,
+        color: resolveStaffCalendarColor(colorConfig, s!.id),
+      }));
+  }, [context, staffViewIds, view]);
 
   const model: CalendarPageModel | null = useMemo(
     () =>
@@ -123,14 +213,21 @@ export function CalendarConnected() {
         view,
         selectedDayKey,
         miniCalendarMonth,
+        context: {
+          filters,
+          staffLanes: view === "staff" ? staffLanes : undefined,
+          busyBlocks,
+          showAvailability,
+          weeklyHours: context?.weeklyHours,
+        },
       }),
-    [cursor, miniCalendarMonth, rows, selectedDayKey, view],
+    [busyBlocks, context?.weeklyHours, cursor, filters, miniCalendarMonth, rows, selectedDayKey, showAvailability, staffLanes, view],
   );
 
   const shift = useCallback(
     (direction: -1 | 1) => {
       setCursor((c) =>
-        view === "day"
+        view === "day" || view === "staff"
           ? addDays(c, direction)
           : view === "week"
             ? addDays(c, direction * 7)
@@ -138,6 +235,34 @@ export function CalendarConnected() {
       );
     },
     [view],
+  );
+
+  const confirmMove = useCallback(
+    async (scope?: "this_only" | "this_and_future" | "entire_series") => {
+      if (!pendingMove) return;
+      setMoveLoading(true);
+      setMoveError(null);
+      try {
+        const body: Record<string, unknown> = { startsAt: pendingMove.toStartsAt };
+        if (scope) body.recurringScope = scope;
+        const res = await fetch(`/api/appointments/${pendingMove.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Could not move appointment");
+        }
+        setPendingMove(null);
+        load();
+      } catch (err) {
+        setMoveError(err instanceof Error ? err.message : "Could not move appointment");
+      } finally {
+        setMoveLoading(false);
+      }
+    },
+    [load, pendingMove],
   );
 
   const actions: CalendarPageActions = useMemo(
@@ -171,13 +296,14 @@ export function CalendarConnected() {
           router.push(`/meetings/${id.slice("meeting:".length)}`);
           return;
         }
+        if (id.startsWith("busy:")) return;
         router.push(`/appointments/${id}`);
       },
       onSelectDay: (key) => {
         setSelectedDayKey(key);
         const d = new Date(key);
         setMiniCalendarMonth(new Date(d.getFullYear(), d.getMonth(), 1));
-        if (view === "day") setCursor(d);
+        if (view === "day" || view === "staff") setCursor(d);
       },
       onMiniCalendarPrev: () => {
         setMiniCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1));
@@ -191,35 +317,98 @@ export function CalendarConnected() {
       },
       onShowCalendarSettings: () => router.push("/appointments/availability"),
       onRetry: load,
-      onSlotClick: ({ dateKey, hour }) => {
-        const d = new Date(dateKey);
+      onSlotClick: ({ dateKey: slotDay, hour, staffId }) => {
+        const d = new Date(slotDay);
         d.setHours(hour, 0, 0, 0);
-        router.push(`/appointments/new?startsAt=${encodeURIComponent(d.toISOString())}`);
+        const params = new URLSearchParams({ startsAt: d.toISOString() });
+        if (staffId) params.set("staffId", staffId);
+        router.push(`/appointments/new?${params}`);
       },
+      onEventMove: ({ id, toStartsAt }) => {
+        const row = rows.find((r) => r.id === id);
+        if (!row) return;
+        setMoveError(null);
+        setPendingMove({
+          id,
+          title: row.serviceName || "Appointment",
+          customerName: row.inviteeName || "Customer",
+          fromStartsAt: row.startsAt,
+          toStartsAt,
+          staffName: row.staffName,
+          locationName: row.locationName,
+          isRecurring: row.isRecurring,
+        });
+      },
+      onToggleFilters: () => setFiltersOpen((v) => !v),
+      onToggleAvailability: () => setShowAvailability((v) => !v),
+      filterCount,
+      showAvailability,
     }),
-    [load, router, selectedDayKey, shift, view],
+    [filterCount, load, router, rows, selectedDayKey, shift, showAvailability, view],
   );
 
   if (loading) return <CalendarLoading />;
   if (failed || !model) return <CalendarError onRetry={load} />;
 
+  const colorConfig = context?.calendarColors;
+
   return (
     <div>
-      <div className="cal-page border-b border-gray-200 bg-white px-10 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            Recurring appointment series — schedule repeat visits and edit the full series from one place.
-          </p>
-          <button
-            type="button"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
-            onClick={() => router.push("/appointments/new?recurring=1")}
-          >
-            New recurring series
-          </button>
-        </div>
-      </div>
-      <CalendarView model={model} actions={actions} />
+      <CalendarView
+        model={model}
+        actions={actions}
+        filtersOpen={filtersOpen}
+        filterStaff={(context?.staff || []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          color: resolveStaffCalendarColor(colorConfig, s.id),
+        }))}
+        filterTypes={(context?.bookingTypes || []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          color: t.calendarColor || undefined,
+        }))}
+        filterLocations={context?.locations || []}
+        selectedStaffIds={selectedStaffIds}
+        selectedTypeIds={selectedTypeIds}
+        selectedLocationIds={selectedLocationIds}
+        selectedStatuses={selectedStatuses}
+        onToggleStaffFilter={(id) =>
+          setSelectedStaffIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+        }
+        onToggleTypeFilter={(id) =>
+          setSelectedTypeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+        }
+        onToggleLocationFilter={(id) =>
+          setSelectedLocationIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+        }
+        onToggleStatusFilter={(status) =>
+          setSelectedStatuses((prev) =>
+            prev.includes(status) ? prev.filter((x) => x !== status) : [...prev, status],
+          )
+        }
+        onClearFilters={() => {
+          setSelectedStaffIds([]);
+          setSelectedTypeIds([]);
+          setSelectedLocationIds([]);
+          setSelectedStatuses([]);
+        }}
+        onCloseFilters={() => setFiltersOpen(false)}
+      />
+      <MoveAppointmentDialog
+        open={Boolean(pendingMove)}
+        title={pendingMove?.title || ""}
+        customerName={pendingMove?.customerName || ""}
+        fromLabel={pendingMove ? formatMoveLabel(pendingMove.fromStartsAt) : ""}
+        toLabel={pendingMove ? formatMoveLabel(pendingMove.toStartsAt) : ""}
+        staffName={pendingMove?.staffName}
+        locationName={pendingMove?.locationName}
+        isRecurring={pendingMove?.isRecurring}
+        onClose={() => setPendingMove(null)}
+        onConfirm={confirmMove}
+        error={moveError}
+        loading={moveLoading}
+      />
     </div>
   );
 }
