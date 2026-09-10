@@ -24,14 +24,14 @@ After Batches 8B-1–8B-9, mechanical re-audit of all **308** master ledger rows
 | **V2_DEFERRED** | 12 |
 | **UNASSIGNED_ERROR** | 0 |
 | Residual implementation rows | 18 |
-| Commerce unique V1 (temp hub) | 0 |
-| Temp routes with unique V1 | 0 |
+| Commerce unique V1 (temp hub) | 15 |
+| Temp routes with unique V1 | 4 |
 
 ### Readiness
 
 | Gate | Result |
 |------|--------|
-| **READY_FOR_ROUTE_CONVERGENCE** | **YES** |
+| **READY_FOR_ROUTE_CONVERGENCE** | **NO** |
 | **READY_FOR_MASTER_BROWSER_CERTIFICATION** | **NO** |
 
 Route convergence requires **zero** temp routes with unique required V1 functionality. Certification requires **zero** known implementation gaps (provider-blocked and runtime-only excepted).
@@ -83,11 +83,11 @@ Production-path mock residue: public booking kimi types (type-only imports OK), 
 
 ## 10. Temporary route status
 
-See `docs/APPOINTMENTS-TEMP-ROUTE-UNIQUE-FEATURE-AUDIT.md`. **0** routes still hold unique V1; **4** ready for retirement after absorption.
+See `docs/APPOINTMENTS-TEMP-ROUTE-UNIQUE-FEATURE-AUDIT.md`. **4** routes still hold unique V1; **4** ready for retirement after absorption.
 
 ## 11. Commerce unique-function status
 
-**0** unique required V1 functions estimated still on commerce/hub routes (target: 0).
+**15** unique required V1 functions estimated still on commerce/hub routes (target: 0).
 
 ## 12. Provider-blocked status
 
@@ -103,7 +103,7 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 
 ## 15. Route-retirement readiness
 
-**YES** — Do not retire temp routes until canonical pages absorb unique functionality.
+**NO** — Do not retire temp routes until canonical pages absorb unique functionality.
 
 ## 16. Certification readiness
 
@@ -117,7 +117,7 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 |---------------|-----------|
 | Portal wave pending | **RESOLVED** for core portal (8B-9); residual saved-card UI |
 | Public booking 34 gaps | **PARTIALLY RESOLVED** (8B-8); payment + event/class remain |
-| Commerce 29 temp unique | **0** unique functions remain on hub |
+| Commerce 29 temp unique | **15** unique functions remain on hub |
 | Backend-ready UI-missing 184 | **Recalculated: 17** |
 | UI-present backend-uncertain 89 | **Recalculated: 0** |
 
@@ -200,23 +200,23 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 | `src/components/appointments/kimi-ui/public-reschedule/components/RescheduleFlow.tsx` | SAFE_DEV_ONLY (production uses live API) |
 | `src/components/appointments/kimi-ui/public-reschedule/components/SlotPicker.tsx` | SAFE_DEV_ONLY (production uses live API) |
 | `src/components/appointments/kimi-ui/public-waitlist-accept/components/PublicWaitlistAcceptClient.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-confirm/components/public-action-client.tsx` | SAFE_DEV_ONLY (production uses live API) |
-| `src/components/appointments/kimi-ui/public-confirm/page.tsx` | SAFE_DEV_ONLY (production uses live API) |
-| `src/components/appointments/kimi-ui/public-booking-service/components/InfoStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-embed-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/waitlist/components/WaitlistOfferModal.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/PublicBookingClient.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-embed-booking/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/waitlist/components/WaitlistEntryRow.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/DoneStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-embed-booking/components/DetailsStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/waitlist/components/ConfirmRemoveModal.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/BookingQuestionField.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-embed-booking/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/waitlist/components/WaitlistAdminClient.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/automations-activity/components/LogDetailDrawer.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/components/DateTimeStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/components/DetailsStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/automations-activity/components/WorkflowLogsPanel.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/automations-activity/components/AutomationsActivityClient.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/automations-activity/components/UnknownRepliesPanel.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/WaitlistStep.tsx` | V1_PRODUCTION_BLOCKER |
-| `src/components/appointments/kimi-ui/public-booking-service/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
 | `src/components/appointments/kimi-ui/public-embed-booking/components/ServiceStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-embed-booking/page.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/PaymentStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/InfoStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking-service/components/AiBookingStep.tsx` | V1_PRODUCTION_BLOCKER |
+| `src/components/appointments/kimi-ui/public-booking/components/ConfirmationStep.tsx` | V1_PRODUCTION_BLOCKER |

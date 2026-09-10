@@ -1,6 +1,7 @@
 {
   "generatedAt": "2026-09-10",
-  "batch": "8C",
+  "batch": "8E",
+  "wavesReconciled": "8D-1 through 8D-7",
   "totalMasterRows": 308,
   "v1Rows": 295,
   "v2Rows": 11,
@@ -14,12 +15,14 @@
   },
   "backendReadyUiMissing": 17,
   "uiPresentBackendGap": 0,
-  "commerceUniqueV1Features": 0,
-  "tempRoutesStillUniqueV1": 0,
-  "tempRoutesReadyForRetirement": 4,
+  "commerceUniqueV1Features": 15,
+  "tempRoutesStillUniqueV1": 4,
+  "tempRoutesReadyForRetirement": 17,
+  "tempRoutesDiscovered": 23,
   "residualImplementationRows": 18,
+  "implementationGapCount": 18,
   "unassignedError": 0,
   "outOfScopeError": 0,
-  "readyForRouteConvergence": "YES",
+  "readyForRouteConvergence": "NO",
   "readyForMasterBrowserCertification": "NO"
 }

@@ -1,19 +1,27 @@
 #!/usr/bin/env node
 /**
- * Batch 8C — Post-implementation master reconciliation (308 rows).
+ * Appointments master reconciliation (308 rows).
+ * Batch 8C baseline + Batch 8E post-8D recount outputs.
  * Audit only — generates docs, does not modify application source.
  */
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs";
+import { join, relative } from "path";
 import { execSync } from "child_process";
 
 const ROOT = process.cwd();
+const BATCH_MODE = process.env.RECONCILE_BATCH || "8E";
 const LEDGER_PATH = join(ROOT, "docs/APPOINTMENTS-FEATURE-ABSORPTION-LEDGER.csv");
 const OUT_RECON = join(ROOT, "docs/APPOINTMENTS-POST-ABSORPTION-RECONCILIATION.md");
 const OUT_LEDGER = join(ROOT, "docs/APPOINTMENTS-POST-ABSORPTION-LEDGER.csv");
 const OUT_QUEUE = join(ROOT, "docs/APPOINTMENTS-RESIDUAL-V1-IMPLEMENTATION-QUEUE.md");
 const OUT_TEMP = join(ROOT, "docs/APPOINTMENTS-TEMP-ROUTE-UNIQUE-FEATURE-AUDIT.md");
 const OUT_JSON = join(ROOT, "docs/APPOINTMENTS-V1-CLOSURE-SUMMARY.json");
+// Batch 8E — post-8D master reconciliation artifacts
+const OUT_8D_RECON = join(ROOT, "docs/APPOINTMENTS-POST-8D-RECONCILIATION.md");
+const OUT_8D_LEDGER = join(ROOT, "docs/APPOINTMENTS-POST-8D-LEDGER.csv");
+const OUT_8D_QUEUE = join(ROOT, "docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md");
+const OUT_8D_TEMP = join(ROOT, "docs/APPOINTMENTS-POST-8D-TEMP-ROUTE-AUDIT.md");
+const OUT_8D_JSON = join(ROOT, "docs/APPOINTMENTS-POST-8D-CLOSURE-SUMMARY.json");
 
 function parseCsv(text) {
   const rows = [];
@@ -293,6 +301,118 @@ const OUT_OF_SCOPE = new Set([
   // MCTB / mass SMS / smart routing should not appear as appointments V1
 ]);
 
+/** Canonical appointments admin routes (final IA) — temp/alias routes are anything else under /appointments with a page.tsx */
+const CANONICAL_APPOINTMENTS_ROUTES = new Set([
+  "/appointments",
+  "/appointments/overview",
+  "/appointments/calendar",
+  "/appointments/new",
+  "/appointments/waitlist",
+  "/appointments/recalls",
+  "/appointments/types",
+  "/appointments/types/meetings",
+  "/appointments/types/services",
+  "/appointments/types/classes",
+  "/appointments/types/events",
+  "/appointments/booking",
+  "/appointments/booking/forms",
+  "/appointments/booking/rooms-equipment",
+  "/appointments/availability",
+  "/appointments/staff",
+  "/appointments/locations",
+  "/appointments/packages",
+  "/appointments/memberships",
+  "/appointments/gift-cards",
+  "/appointments/discounts",
+  "/appointments/pos",
+  "/appointments/reminders",
+  "/appointments/workflows",
+  "/appointments/routing-forms",
+  "/appointments/polls",
+  "/appointments/ai-booking",
+  "/appointments/automations/recall",
+  "/appointments/automations/no-show",
+  "/appointments/automations/templates",
+  "/appointments/automations/activity",
+  "/appointments/analytics",
+  "/appointments/analytics/booking",
+  "/appointments/analytics/reminders",
+  "/appointments/analytics/automations",
+  "/appointments/analytics/reports",
+  "/appointments/setup",
+  "/appointments/team-pages",
+  "/appointments/enterprise",
+  "/appointments/integrations",
+]);
+
+const TEMP_ROUTE_CLASSIFICATION = {
+  "/appointments/commerce": { classification: "STILL_HAS_UNIQUE_V1", unique: 12, canonical: "Split to packages/memberships/gift-cards/pos/discounts" },
+  "/appointments/service-booking": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Alias hub entry — canonical pages exist" },
+  "/appointments/policies": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/types Advanced tab" },
+  "/appointments/client-restrictions": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts/[id] Booking Access" },
+  "/appointments/coupons": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/discounts" },
+  "/appointments/payments": { classification: "V2_ONLY", unique: 1, canonical: "V2 deferred — /appointments/payments" },
+  "/appointments/contracts": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking/forms" },
+  "/appointments/booking/contracts": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate of /appointments/booking/forms" },
+  "/appointments/categories": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/types" },
+  "/appointments/segments": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts/segments + /appointments/recalls" },
+  "/appointments/scheduled": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments" },
+  "/appointments/recall-campaigns": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/automations/recall" },
+  "/appointments/no-show-recovery": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/automations/no-show" },
+  "/appointments/commerce/contact-merge": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts merge modal" },
+  "/appointments/booking/share": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking hub" },
+  "/appointments/booking/branding": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking hub" },
+  "/appointments/reports/service-booking": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/analytics/reports" },
+  "/appointments/classes": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/types/classes" },
+  "/appointments/resources": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking/rooms-equipment" },
+  "/appointments/routing": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/routing-forms" },
+  "/appointments/voice-reminders": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/reminders" },
+  "/appointments/restrictions": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate client-restrictions" },
+};
+
+function discoverAppointmentRoutes() {
+  const base = join(ROOT, "src/app/(app)/appointments");
+  const routes = [];
+  function walk(dir) {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (name === "page.tsx") {
+        const rel = relative(base, dir).replace(/\\/g, "/");
+        const route =
+          rel === "" || rel === "."
+            ? "/appointments"
+            : `/appointments/${rel}`.replace(/\/+/g, "/");
+        routes.push(route.replace(/\/$/, "") || "/appointments");
+      }
+    }
+  }
+  if (existsSync(base)) walk(base);
+  return routes.sort();
+}
+
+function buildTempRoutesAudit() {
+  const discovered = discoverAppointmentRoutes();
+  const known = new Set(Object.keys(TEMP_ROUTE_CLASSIFICATION));
+  const rows = [];
+  for (const route of discovered) {
+    if (CANONICAL_APPOINTMENTS_ROUTES.has(route)) continue;
+    if (route.match(/\/\[id\]/)) continue; // detail routes are canonical patterns
+    if (route.includes("/workflows/")) continue; // workflow editor subroutes
+    const meta = TEMP_ROUTE_CLASSIFICATION[route];
+    if (meta) {
+      rows.push({ route, ...meta });
+    } else {
+      rows.push({ route, classification: "UNKNOWN", unique: 0, canonical: "Manual IA review required" });
+    }
+  }
+  // Include known temp routes even if page removed
+  for (const [route, meta] of Object.entries(TEMP_ROUTE_CLASSIFICATION)) {
+    if (!rows.find((r) => r.route === route)) rows.push({ route, ...meta });
+  }
+  return rows.sort((a, b) => a.route.localeCompare(b.route));
+}
+
 const TEMP_ROUTES = [
   { route: "/appointments/commerce", classification: "PARTIALLY_ABSORBED", unique: 12, canonical: "Multiple commerce pages" },
   { route: "/appointments/service-booking", classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Alias hub entry" },
@@ -445,9 +565,14 @@ function main() {
     !["V1_COMPLETE", "V1_COMPLETE_RUNTIME_ONLY", "V1_COMPLETE_PROVIDER_READY", "V1_PROVIDER_BLOCKED", "V2_DEFERRED", "OUT_OF_SCOPE_ERROR"].includes(r.CURRENT_FINAL_STATUS),
   );
 
-  const commerceUnique = TEMP_ROUTES.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").reduce((s, t) => s + t.unique, 0);
-  const tempUniqueRoutes = TEMP_ROUTES.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").length;
-  const tempNoUniqueRemaining = TEMP_ROUTES.filter((t) => t.classification === "NO_UNIQUE_V1_REMAINING").length;
+  const tempRouteAudit = buildTempRoutesAudit();
+  const commerceUnique = tempRouteAudit
+    .filter((t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "PARTIALLY_ABSORBED")
+    .reduce((s, t) => s + (t.unique || 0), 0);
+  const tempUniqueRoutes = tempRouteAudit.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").length;
+  const tempNoUniqueRemaining = tempRouteAudit.filter(
+    (t) => t.classification === "READY_FOR_RETIREMENT" || t.classification === "NO_UNIQUE_V1_REMAINING",
+  ).length;
 
   const backendReadyUiMissing = reconciled.filter((r) => r.BACKEND_PRESENT === "YES" && ["V1_ADMIN_UI_GAP", "V1_PUBLIC_UI_GAP", "V1_PORTAL_UI_GAP"].includes(r.CURRENT_FINAL_STATUS));
   const uiPresentBackendGap = reconciled.filter((r) => r.UI_PRESENT === "YES" && r.CURRENT_FINAL_STATUS === "V1_BACKEND_GAP");
@@ -494,20 +619,37 @@ function main() {
   writeFileSync(OUT_QUEUE, queueMd);
 
   // Temp route audit
-  let tempMd = `# Appointments — Temporary Route Unique-Feature Audit (Batch 8C)\n\n**Generated:** 2026-09-10\n\n`;
+  let tempMd = `# Appointments — Temporary Route Unique-Feature Audit (Batch ${BATCH_MODE})\n\n**Generated:** 2026-09-10\n**Method:** Filesystem discovery under \`src/app/(app)/appointments/**\` + IA classification\n\n`;
   tempMd += `| Route | Classification | Unique V1 functions | Canonical destination |\n|-------|----------------|--------------------:|------------------------|\n`;
-  for (const t of TEMP_ROUTES) {
-    tempMd += `| \`${t.route}\` | ${t.classification} | ${t.unique} | ${t.canonical} |\n`;
+  for (const t of tempRouteAudit) {
+    tempMd += `| \`${t.route}\` | ${t.classification} | ${t.unique ?? 0} | ${t.canonical} |\n`;
   }
   tempMd += `\n**Commerce unique required V1 count (estimate):** ${commerceUnique}\n`;
-  tempMd += `**Temp routes with unique V1:** ${tempUniqueRoutes}\n`;
-  tempMd += `**Temp routes NO_UNIQUE_V1_REMAINING (8D-1):** ${tempNoUniqueRemaining}\n`;
-  tempMd += `**Ready for retirement:** ${TEMP_ROUTES.filter((t) => t.classification === "READY_FOR_RETIREMENT").length}\n`;
+  tempMd += `**Temp routes with unique V1 (STILL_HAS_UNIQUE_V1):** ${tempUniqueRoutes}\n`;
+  const tempRoutesReadyForRetirement = tempRouteAudit.filter((t) => t.classification === "READY_FOR_RETIREMENT").length;
+  tempMd += `**Temp routes ready for retirement:** ${tempRoutesReadyForRetirement}\n`;
+  tempMd += `**Temp routes discovered (non-canonical):** ${tempRouteAudit.length}\n`;
   writeFileSync(OUT_TEMP, tempMd);
+
+  const wrongPlacement = counts.V1_WRONG_PLACEMENT || 0;
+  const implementationGapStatuses = [
+    "V1_ADMIN_UI_GAP",
+    "V1_PUBLIC_UI_GAP",
+    "V1_PORTAL_UI_GAP",
+    "V1_CONTEXTUAL_FLOW_GAP",
+    "V1_BACKEND_GAP",
+    "V1_PERSISTENCE_GAP",
+    "V1_MOCK_OR_PLACEHOLDER",
+    "V1_WRONG_PLACEMENT",
+    "V1_DUPLICATE_CONFLICT",
+    "UNASSIGNED_ERROR",
+  ];
+  const implementationGapCount = implementationGapStatuses.reduce((s, k) => s + (counts[k] || 0), 0);
 
   const summary = {
     generatedAt: "2026-09-10",
-    batch: "8C",
+    batch: BATCH_MODE,
+    wavesReconciled: "8D-1 through 8D-7",
     totalMasterRows: reconciled.length,
     v1Rows: v1Rows.length,
     v2Rows: v2Rows.length,
@@ -516,12 +658,15 @@ function main() {
     uiPresentBackendGap: uiPresentBackendGap.length,
     commerceUniqueV1Features: commerceUnique,
     tempRoutesStillUniqueV1: tempUniqueRoutes,
-    tempRoutesReadyForRetirement: TEMP_ROUTES.filter((t) => t.classification === "READY_FOR_RETIREMENT").length,
+    tempRoutesReadyForRetirement,
+    tempRoutesDiscovered: tempRouteAudit.length,
     residualImplementationRows: residual.length,
+    implementationGapCount,
     unassignedError: reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "UNASSIGNED_ERROR").length,
     outOfScopeError: reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "OUT_OF_SCOPE_ERROR").length,
-    readyForRouteConvergence: commerceUnique === 0 && tempUniqueRoutes === 0 ? "YES" : "NO",
-    readyForMasterBrowserCertification: residual.length === 0 ? "YES" : "NO",
+    readyForRouteConvergence:
+      commerceUnique === 0 && tempUniqueRoutes === 0 && wrongPlacement === 0 ? "YES" : "NO",
+    readyForMasterBrowserCertification: implementationGapCount === 0 ? "YES" : "NO",
   };
   writeFileSync(OUT_JSON, JSON.stringify(summary, null, 2) + "\n");
 
@@ -736,7 +881,129 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
     );
   }
 
-  console.log("Batch 8C reconciliation complete");
+  // --- Batch 8E: POST-8D master reconciliation artifacts ---
+  writeFileSync(OUT_8D_LEDGER, csvOut);
+
+  const adminGaps = reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_ADMIN_UI_GAP");
+  const commerceAdmin = adminGaps.filter((r) =>
+    ["8-1", "8-3", "8-5", "8-6", "8-7", "8-11", "8-12", "8-13", "8-14", "8-16", "8-18", "8-33", "7-1"].includes(r.FEATURE_ID),
+  );
+  const opsAdmin = adminGaps.filter((r) => ["6-2", "18-7", "3-21"].includes(r.FEATURE_ID));
+  const pollsPerm = adminGaps.filter((r) => r.FEATURE_ID === "15-7");
+  const contextualGaps = reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_CONTEXTUAL_FLOW_GAP");
+
+  let queue8d = `# Appointments — Post-8D Residual Implementation Queue (Batch 8E)\n\n`;
+  queue8d += `**Generated:** 2026-09-10\n`;
+  queue8d += `**Waves reconciled:** 8D-1 through 8D-7\n`;
+  queue8d += `**Total residual rows:** ${residual.length}\n\n`;
+  for (const [page, items] of Object.entries(byPage).sort((a, b) => a[0].localeCompare(b[0]))) {
+    queue8d += `## ${page}\n\n`;
+    items.sort((a, b) => (prioOrder[a.PRIORITY] ?? 3) - (prioOrder[b.PRIORITY] ?? 3));
+    for (const r of items) {
+      queue8d += `### ${r.FEATURE_ID} — ${r.FEATURE_NAME}\n`;
+      queue8d += `- **Gap type:** ${r.CURRENT_FINAL_STATUS}\n`;
+      queue8d += `- **Canonical page:** ${r.FINAL_ADMIN_CANONICAL_PAGE || r.FINAL_PUBLIC_SURFACE || r.FINAL_PORTAL_SURFACE}\n`;
+      queue8d += `- **Missing:** ${r.EXACT_REMAINING_GAP}\n`;
+      queue8d += `- **Backend:** ${r.BACKEND_PRESENT} / ${r.BACKEND_COMPLETE_ENOUGH}\n`;
+      queue8d += `- **Priority:** ${r.PRIORITY || "P2"}\n`;
+      queue8d += `- **Evidence:** ${r.EVIDENCE}\n\n`;
+    }
+  }
+
+  queue8d += `## Proposed next implementation batches (post-8D)\n\n`;
+  queue8d += `| Batch | Domain | Feature IDs | Gap type | Rows |\n|-------|--------|-------------|----------|-----:|\n`;
+  if (commerceAdmin.length) {
+    queue8d += `| **8F-1** | Commerce admin depth (packages, memberships, gift cards, discounts, POS) | ${commerceAdmin.map((r) => r.FEATURE_ID).join(", ")} | V1_ADMIN_UI_GAP | ${commerceAdmin.length} |\n`;
+  }
+  if (opsAdmin.length) {
+    queue8d += `| **8F-2** | Operations admin (staff create, events audit, dynamic pricing) | ${opsAdmin.map((r) => r.FEATURE_ID).join(", ")} | V1_ADMIN_UI_GAP | ${opsAdmin.length} |\n`;
+  }
+  if (pollsPerm.length) {
+    queue8d += `| **8F-3** | Booking permissions + polls | ${pollsPerm.map((r) => r.FEATURE_ID).join(", ")} | V1_ADMIN_UI_GAP | ${pollsPerm.length} |\n`;
+  }
+  if (contextualGaps.length) {
+    queue8d += `| **8F-4** | Contextual flow completion | ${contextualGaps.map((r) => r.FEATURE_ID).join(", ")} | V1_CONTEXTUAL_FLOW_GAP | ${contextualGaps.length} |\n`;
+  }
+  if (tempUniqueRoutes > 0 || commerceUnique > 0) {
+    queue8d += `| **8G-1** | Route convergence + legacy retirement | temp routes with unique V1 | temp uniqueness | ${tempUniqueRoutes} routes / ${commerceUnique} functions |\n`;
+  } else if (summary.readyForRouteConvergence === "YES") {
+    queue8d += `| **8G-1** | **FINAL ROUTE CONVERGENCE + LEGACY RETIREMENT** | All READY_FOR_RETIREMENT temp routes | retirement only | ${summary.tempRoutesReadyForRetirement} |\n`;
+  }
+  writeFileSync(OUT_8D_QUEUE, queue8d);
+
+  writeFileSync(OUT_8D_TEMP, tempMd.replace(`Batch ${BATCH_MODE}`, "Batch 8E POST-8D"));
+  writeFileSync(OUT_8D_JSON, JSON.stringify(summary, null, 2) + "\n");
+
+  const recon8d = `# Appointments Post-8D Master Reconciliation (Batch 8E)
+
+**Generated:** 2026-09-10  
+**Type:** Mechanical implementation reconciliation — NOT browser UAT  
+**Waves reconciled:** 8D-1 (canonical absorption) · 8D-2 (public booking) · 8D-3 (portal) · 8D-4 (ops/admin wave 1) · 8D-5 (booking setup wave 2) · 8D-6 (admin wave 3) · 8D-7 (backend gap closure)
+
+## Executive summary
+
+Mechanical re-audit of all **${reconciled.length}** master ledger rows from current codebase:
+
+| Metric | Count |
+|--------|------:|
+| **Total master rows** | ${reconciled.length} |
+| **V1 rows** | ${v1Rows.length} |
+| **V2 rows** | ${v2Rows.length} |
+| **V1_COMPLETE** | ${counts.V1_COMPLETE || 0} |
+| **V1_COMPLETE_RUNTIME_ONLY** | ${counts.V1_COMPLETE_RUNTIME_ONLY || 0} |
+| **V1_PROVIDER_BLOCKED** | ${counts.V1_PROVIDER_BLOCKED || 0} |
+| **V1_ADMIN_UI_GAP** | ${counts.V1_ADMIN_UI_GAP || 0} |
+| **V1_PUBLIC_UI_GAP** | ${counts.V1_PUBLIC_UI_GAP || 0} |
+| **V1_PORTAL_UI_GAP** | ${counts.V1_PORTAL_UI_GAP || 0} |
+| **V1_CONTEXTUAL_FLOW_GAP** | ${counts.V1_CONTEXTUAL_FLOW_GAP || 0} |
+| **V1_BACKEND_GAP** | ${counts.V1_BACKEND_GAP || 0} |
+| **V1_PERSISTENCE_GAP** | ${counts.V1_PERSISTENCE_GAP || 0} |
+| **V1_MOCK_OR_PLACEHOLDER** | ${counts.V1_MOCK_OR_PLACEHOLDER || 0} |
+| **V1_WRONG_PLACEMENT** | ${counts.V1_WRONG_PLACEMENT || 0} |
+| **V1_DUPLICATE_CONFLICT** | ${counts.V1_DUPLICATE_CONFLICT || 0} |
+| **V2_DEFERRED** | ${counts.V2_DEFERRED || 0} |
+| **OUT_OF_SCOPE_ERROR** | ${summary.outOfScopeError} |
+| **UNASSIGNED_ERROR** | ${summary.unassignedError} |
+| Residual implementation rows | ${residual.length} |
+| Commerce unique V1 (temp) | ${commerceUnique} |
+| Temp routes with unique V1 | ${tempUniqueRoutes} |
+| Backend ready / UI missing | ${backendReadyUiMissing.length} |
+| UI present / backend gap | ${uiPresentBackendGap.length} |
+
+### Readiness gates
+
+| Gate | Result | Criteria |
+|------|--------|----------|
+| **READY_FOR_ROUTE_CONVERGENCE** | **${summary.readyForRouteConvergence}** | temp unique V1 = 0, commerce unique = 0, wrong placement = 0 |
+| **READY_FOR_MASTER_BROWSER_CERTIFICATION** | **${summary.readyForMasterBrowserCertification}** | all implementation gap statuses = 0 |
+
+${summary.readyForRouteConvergence === "YES" && summary.readyForMasterBrowserCertification === "NO" ? "\n> **Note:** Route convergence is ready, but implementation gaps remain. Complete 8F batches before browser certification.\n" : ""}
+${summary.readyForRouteConvergence === "NO" ? "\n> **Note:** Temp routes still hold unique V1 OR wrong-placement rows remain. Route retirement blocked.\n" : ""}
+
+## Remaining implementation rows (${residual.length})
+
+${residual.map((r) => `- **${r.FEATURE_ID}** — ${r.FEATURE_NAME} → \`${r.FINAL_ADMIN_CANONICAL_PAGE || r.FINAL_PUBLIC_SURFACE || r.FINAL_PORTAL_SURFACE}\` (${r.CURRENT_FINAL_STATUS}: ${r.EXACT_REMAINING_GAP})`).join("\n")}
+
+## Proposed next batches
+
+See \`docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md\` § Proposed next implementation batches.
+
+## Artifacts
+
+| File | Purpose |
+|------|---------|
+| \`docs/APPOINTMENTS-POST-8D-LEDGER.csv\` | Full 308-row current-state ledger |
+| \`docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md\` | Residual queue + proposed 8F/8G batches |
+| \`docs/APPOINTMENTS-POST-8D-TEMP-ROUTE-AUDIT.md\` | Mechanical temp route audit |
+| \`docs/APPOINTMENTS-POST-8D-CLOSURE-SUMMARY.json\` | Machine-readable counts |
+
+---
+
+*Source inventory: \`docs/APPOINTMENTS-MASTER-FEATURE-INVENTORY.md\` · Reconciliation script: \`scripts/reconcile-appointments-batch8c.mjs\`*
+`;
+  writeFileSync(OUT_8D_RECON, recon8d);
+
+  console.log(`Batch ${BATCH_MODE} reconciliation complete`);
   console.log(JSON.stringify(summary, null, 2));
 }
 
