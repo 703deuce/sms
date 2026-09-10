@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 23
+**Total residual rows:** 18
 
 ## /appointments/availability
 
@@ -140,14 +140,6 @@
 
 ## /appointments/pos
 
-### 13-2 — Staff-initiated AI book
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/pos
-- **Missing:** Poll vote → appointment booking
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** gap queue 8B-7; routeExists=true; backend=true
-
 ### 7-1 — Manage appointment link
 - **Gap type:** V1_ADMIN_UI_GAP
 - **Section:** /appointments/pos
@@ -155,34 +147,6 @@
 - **Backend:** YES / LIKELY
 - **Priority:** P2
 - **Evidence:** /appointments/pos; routeExists=true; backend=false
-
-## /appointments/products
-
-### 8-25 — Products for sale
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/products
-- **Missing:** POS tax engine
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** gap queue 8B-5; routeExists=false; backend=false
-
-## /appointments/types/classes
-
-### 9-6 — Seat selection / maps
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Invoice email send
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** gap queue 8B-6; routeExists=true; backend=false
-
-### 9-7 — Event admission tickets
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Invoice PDF export polish
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** gap queue 8B-6; routeExists=true; backend=false
 
 ## /appointments/types/events
 
@@ -193,16 +157,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** /appointments/types/events; routeExists=true; backend=false
-
-## /appointments/workflows
-
-### 12-3 — Workflow from template
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/workflows
-- **Missing:** Backend incomplete
-- **Backend:** NO / NO
-- **Priority:** P2
-- **Evidence:** `templates.ts`; routeExists=true; backend=false
 
 ## PARITY_TEMP
 
@@ -224,4 +178,4 @@
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |
 | 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |
 | 8D-6 | Automations + contacts + integrations/settings admin | completed in 8D-6 wave |
-| 8D-7 | Commerce/POS/operations admin residuals | 17 admin + 5 backend |
+| 8D-7 | Commerce/POS/operations admin residuals | 17 admin + 0 backend |

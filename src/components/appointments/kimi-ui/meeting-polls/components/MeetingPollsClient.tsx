@@ -81,7 +81,19 @@ export function MeetingPollsClient() {
   /** Book winner — from ConfirmTimeModal */
   async function bookWinningTime(poll: MeetingPoll, winningOptionId: string) {
     try {
-      const saved = await persistPoll({ ...poll, status: "scheduled", winningOptionId });
+      const res = await fetch("/api/appointments/meeting-polls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "finalize",
+          pollId: poll.id,
+          optionId: winningOptionId,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "finalize failed");
+      const saved = json.data?.poll as MeetingPoll;
+      if (!saved) throw new Error("missing poll");
       setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
       if (selected?.id === poll.id) setSelected(saved);
       setConfirmingPoll(null);

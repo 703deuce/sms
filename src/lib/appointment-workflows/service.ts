@@ -220,3 +220,31 @@ export async function listActiveWorkflowsForTrigger(
   });
   return rows.map(mapRow);
 }
+
+/** Idempotent install from a prebuilt template — returns existing workflow when already installed. */
+export async function installWorkflowFromTemplate(
+  workspaceId: string,
+  templateId: string,
+  input?: Partial<CreateAppointmentWorkflowInput>,
+): Promise<AppointmentWorkflowRecord> {
+  const template = getPrebuiltTemplate(templateId);
+  if (!template) throw new Error("Workflow template not found");
+
+  const existing = (await listAppointmentWorkflows(workspaceId)).find(
+    (w) => w.templateId === templateId,
+  );
+  if (existing) return existing;
+
+  return createAppointmentWorkflow(workspaceId, {
+    name: input?.name?.trim() || template.name,
+    sourceType: "template",
+    templateId: template.id,
+    active: input?.active ?? true,
+    status: input?.status || "active",
+    trigger: input?.trigger || template.trigger,
+    channels: input?.channels || template.channels,
+    conditions: input?.conditions !== undefined ? input.conditions : template.defaultConditions,
+    steps: input?.steps?.length ? input.steps : template.defaultSteps,
+    appointmentTypeScope: input?.appointmentTypeScope,
+  });
+}

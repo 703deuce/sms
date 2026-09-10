@@ -6,6 +6,7 @@ type PosSession = {
   id: string;
   status: string;
   subtotalCents: number;
+  taxCents?: number;
   totalCents: number;
   contactId?: string | null;
   lineItems: Array<{
@@ -400,9 +401,17 @@ export function PosCartAdminClient() {
         <p className="text-sm text-muted-foreground">Start a cart to add items and check out.</p>
       ) : (
         <div className="space-y-4 rounded-lg border p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Open session</p>
-            <p className="text-sm text-muted-foreground">{formatMoney(active.totalCents)}</p>
+          <div className="space-y-1 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-medium">Open session</p>
+              <p className="text-muted-foreground">{formatMoney(active.totalCents)}</p>
+            </div>
+            {(active.taxCents ?? 0) > 0 ? (
+              <div className="flex justify-between text-muted-foreground text-xs">
+                <span>Subtotal {formatMoney(active.subtotalCents)}</span>
+                <span>Tax {formatMoney(active.taxCents ?? 0)}</span>
+              </div>
+            ) : null}
           </div>
           <ul className="divide-y rounded-md border">
             {active.lineItems.length === 0 ? (

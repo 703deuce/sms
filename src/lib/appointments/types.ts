@@ -271,6 +271,11 @@ export type AppointmentPlatformConfig = {
   calendarColorBy?: "staff" | "service";
   /** Automatically offer open waitlist slots when a booking cancels */
   waitlistAutoFill?: boolean;
+  /** POS sales tax — rate in basis points (600 = 6%) applied to taxable line kinds */
+  posSalesTax?: {
+    rateBps?: number;
+    taxableKinds?: string[];
+  };
 };
 
 /** Booking archetype — MEETING (minimal), SERVICE (commerce/recurrence), CLASS (group/capacity). */

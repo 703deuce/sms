@@ -190,11 +190,12 @@ const OVERRIDES = {
   "10-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/recall" },
   "10-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/automations/no-show" },
   "11-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 voice channel on /appointments/reminders" },
-  // Backend gaps
-  "8-25": { status: "V1_BACKEND_GAP", gap: "POS tax engine", evidence: "gap queue 8B-5", priority: "P1" },
-  "9-6": { status: "V1_BACKEND_GAP", gap: "Invoice email send", evidence: "gap queue 8B-6", priority: "P2" },
-  "9-7": { status: "V1_BACKEND_GAP", gap: "Invoice PDF export polish", evidence: "gap queue 8B-6", priority: "P2" },
-  "13-2": { status: "V1_BACKEND_GAP", gap: "Poll vote → appointment booking", evidence: "gap queue 8B-7", priority: "P2" },
+  // Batch 8D-7 — backend gap closure
+  "8-25": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 pos-tax.ts + authoritative POS tax in pos-cart recalculateSessionTotals" },
+  "9-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 sendInvoiceEmail + /invoices/[id]/send transactional email" },
+  "9-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 buildInvoicePdf + /invoices/[id]/pdf download" },
+  "12-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 installWorkflowFromTemplate idempotent API action install-template" },
+  "13-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-7 finalizeMeetingPollBooking + meeting-polls finalize action" },
   "8-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 /api/public/portal/[token]/memberships lifecycle API" },
   // Batch 8D-4 — operations/admin wave 1 (calendar, list, detail, waitlist, overview)
   "1-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-4 overview date picker → /appointments/calendar?date=; KPIs from /api/appointments/overview" },
