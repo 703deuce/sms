@@ -1,3 +1,5 @@
+import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import type { PublicBookingCatalog, PublicCatalogTerminology } from "@/lib/appointments/public-booking-catalog";
 import type {
   BookingQuestion,
   GroupBookingConfig,
@@ -21,6 +23,7 @@ export type PublicBookingType = {
   name: string;
   durationMinutes: number;
   durationOptions?: DurationOption[];
+  bookingTypeKind?: BookingTypeKind;
   confirmationPage?: ConfirmationResources;
   config?: {
     description?: string;

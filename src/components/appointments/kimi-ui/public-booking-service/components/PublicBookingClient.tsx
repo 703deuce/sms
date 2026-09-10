@@ -192,7 +192,17 @@ export function PublicBookingClient({
           ) : null}
 
           {step === "done" && selectedType ? (
-            <DoneStep type={selectedType} startsAt={startsAt} timezone={workspace.timezone} paid={paid} />
+            <DoneStep
+              type={selectedType}
+              startsAt={startsAt}
+              timezone={workspace.timezone}
+              paid={paid}
+              workspace={{
+                name: workspace.name,
+                businessPhone: workspace.businessPhone,
+                businessAddress: workspace.businessAddress,
+              }}
+            />
           ) : null}
 
           {step === "waitlist" ? (

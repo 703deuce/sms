@@ -102,6 +102,14 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/invite/")) return true;
   // Public appointment booking pages (no login required)
   if (pathname.startsWith("/book/")) return true;
+  if (pathname.startsWith("/embed/book/")) return true;
+  if (pathname.startsWith("/manage/")) return true;
+  if (pathname.startsWith("/portal/")) return true;
+  if (pathname.startsWith("/waitlist/")) return true;
+  if (pathname.startsWith("/team/")) return true;
+  if (pathname.startsWith("/routing/")) return true;
+  if (pathname.startsWith("/recap/")) return true;
+  if (pathname.startsWith("/video/")) return true;
   if (pathname.startsWith("/messaging/payments/mock/")) return true;
   if (pathname.startsWith("/r/")) return true;
   // Hosted + embeddable opt-in forms (consent capture)
