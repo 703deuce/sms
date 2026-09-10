@@ -83,8 +83,8 @@ body {
 .dot-orange { background: #f97316; }
 .chip-slate { background: #f1f5f9; color: #475569; --tw-ring-color: rgba(100,116,139,0.18); }
 .dot-slate { background: #94a3b8; }
-.chip-violet { background: #f5f3ff; color: #6d28d9; --tw-ring-color: rgba(124,58,237,0.18); }
-.dot-violet { background: #8b5cf6; }
+.chip-violet { background: #dcefeb; color: #10665f; --tw-ring-color: rgba(124,58,237,0.18); }
+.dot-violet { background: #147d74; }
 .chip-rose { background: #fff1f2; color: #be123c; --tw-ring-color: rgba(225,29,72,0.18); }
 .dot-rose { background: #f43f5e; }
 

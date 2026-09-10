@@ -389,7 +389,7 @@ export function RefDecoPrimaryLink({
   return (
     <Link
       href={href}
-      className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-[0_4px_14px_rgba(79,70,229,0.25)] transition hover:bg-primary/90 hover:shadow-[0_6px_18px_rgba(79,70,229,0.3)]"
+      className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-primary-foreground shadow-[0_4px_14px_rgba(20,125,116,0.25)] transition hover:bg-primary/90 hover:shadow-[0_6px_18px_rgba(20,125,116,0.3)]"
     >
       {children}
     </Link>

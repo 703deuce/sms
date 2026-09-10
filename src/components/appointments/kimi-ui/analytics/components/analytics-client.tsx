@@ -46,13 +46,13 @@ function buildMetrics(data: AnalyticsData): MetricDef[] {
     { label: "Awaiting", value: formatNumber(data.awaiting), icon: Clock3, tone: "bg-sky-50 text-sky-600" },
     { label: "Canceled", value: formatNumber(data.canceled), icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-shows", value: formatNumber(data.noShow), icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
-    { label: "Reschedule requests", value: formatNumber(data.rescheduleRequested), icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
+    { label: "Reschedule requests", value: formatNumber(data.rescheduleRequested), icon: RefreshCcw, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Confirmation rate", value: `${data.confirmationRate}%`, icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Reminders sent", value: formatNumber(data.remindersSent), icon: Bell, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Completed", value: formatNumber(data.completed), icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Cancel rate", value: `${data.cancellationRate}%`, icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-show rate", value: `${data.noShowRate}%`, icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
-    { label: "Reschedule rate", value: `${data.rescheduleRate}%`, icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
+    { label: "Reschedule rate", value: `${data.rescheduleRate}%`, icon: RefreshCcw, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Email opens", value: formatNumber(data.emailOpens), icon: Inbox, tone: "bg-sky-50 text-sky-600" },
     { label: "UTM conversions", value: formatNumber(data.utmConversions), icon: BarChart3, tone: "bg-[#dcefeb] text-[#147d74]" },
   ];
@@ -332,7 +332,7 @@ export function AnalyticsClient({
                 ) : section === "automations" ? (
                   <Card className="p-5">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
                         <Workflow size={18} />
                       </div>
                       <div>
@@ -354,7 +354,7 @@ export function AnalyticsClient({
                       {[
                         { label: "Confirmation rate", value: data.confirmationRate, tone: "bg-emerald-500" },
                         { label: "Conversion rate", value: data.conversionRate, tone: "bg-primary" },
-                        { label: "Reschedule rate", value: data.rescheduleRate, tone: "bg-violet-500" },
+                        { label: "Reschedule rate", value: data.rescheduleRate, tone: "bg-[#147d74]" },
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-baseline justify-between">

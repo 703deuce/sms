@@ -9,7 +9,7 @@
   --tv-text-secondary: #4b5563;
   --tv-text-muted: #6b7280;
   --tv-accent: #147d74;
-  --tv-accent-soft: #eef2ff;
+  --tv-accent-soft: #dcefeb;
   --tv-success: #047857;
   --tv-success-soft: #ecfdf5;
   --tv-warning: #b45309;
@@ -84,7 +84,7 @@ body {
   border-color: var(--tv-accent);
   color: #fff;
 }
-.tv-btn-primary:hover { background: #4338ca; }
+.tv-btn-primary:hover { background: #10665f; }
 
 .tv-icon-btn {
   display: inline-flex;

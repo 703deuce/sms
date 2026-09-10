@@ -58,7 +58,7 @@ function QuestionField({
             type="checkbox"
             checked={value === "yes"}
             onChange={(e) => onChange(e.target.checked ? "yes" : "")}
-            className="h-4 w-4 rounded border-border accent-[#4338ca]"
+            className="h-4 w-4 rounded border-border accent-[#10665f]"
           />
           {question.placeholder || "Yes"}
         </label>
@@ -75,7 +75,7 @@ function QuestionField({
                     const next = e.target.checked ? [...selected, o] : selected.filter((s) => s !== o);
                     onChange(next.join(", "));
                   }}
-                  className="h-4 w-4 rounded border-border accent-[#4338ca]"
+                  className="h-4 w-4 rounded border-border accent-[#10665f]"
                 />
                 {o}
               </label>
@@ -223,7 +223,7 @@ export function DetailsStep({
                 type="checkbox"
                 checked={smsConsent}
                 onChange={(e) => setSmsConsent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-[#4338ca]"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-[#10665f]"
               />
               <span className="text-[12px] leading-relaxed text-muted-foreground">
                 <span className="mb-1 block text-[12px] font-semibold text-foreground">

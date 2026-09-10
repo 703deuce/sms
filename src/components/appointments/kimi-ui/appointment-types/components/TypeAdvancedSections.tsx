@@ -77,7 +77,7 @@ export default function TypeAdvancedSections({
               key={opt.value}
               className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${
                 form.staffAssignment === opt.value
-                  ? "border-[#147d74] bg-[#f7f6ff]"
+                  ? "border-[#147d74] bg-[#dcefeb]"
                   : "border-[#ecedf2]"
               }`}
             >

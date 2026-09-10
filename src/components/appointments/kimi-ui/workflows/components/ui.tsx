@@ -102,7 +102,7 @@ export function ChannelBadge({ channel }: { channel: string }) {
   const map: Record<string, string> = {
     sms: "bg-[#eff4ff] text-[#2547e0]",
     email: "bg-[#f0fdf9] text-[#067647]",
-    voice: "bg-[#f4f3ff] text-[#5925dc]",
+    voice: "bg-[#dcefeb] text-[#10665f]",
     webhook: "bg-[#f0f9ff] text-[#026aa2]",
     payment_link: "bg-[#fffaeb] text-[#b54708]",
   };

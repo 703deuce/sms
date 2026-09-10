@@ -52,7 +52,7 @@ export function TypeIntakeFormsSection({ form, intakeFormOptions, onFormChange }
               <label
                 className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 cursor-pointer ${
                   form.intakeFormIds.includes(formRow.id)
-                    ? "border-[#147d74] bg-[#f7f6ff]"
+                    ? "border-[#147d74] bg-[#dcefeb]"
                     : "border-[#ecedf2] hover:bg-[#f7f8fa]"
                 }`}
               >

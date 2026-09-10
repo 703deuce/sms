@@ -10,7 +10,7 @@
   --border: #e4e7ec;
   --input: #e4e7ec;
   --primary: #147d74;
-  --primary-hover: #4338ca;
+  --primary-hover: #10665f;
   --primary-foreground: #ffffff;
   --ring: rgba(20, 125, 116, 0.35);
   --danger: #dc2626;
@@ -20,7 +20,7 @@
   --warning: #b54708;
   --warning-bg: #fffaeb;
   --info-bg: #eef4ff;
-  --info: #3538cd;
+  --info: #10665f;
 }
 
 * { box-sizing: border-box; }

@@ -12,7 +12,7 @@ export default function MergeTagsCard({ tags }: { tags: string[] }) {
           <button
             key={tag}
             type="button"
-            className="rounded-md bg-[#eef2ff] px-2 py-1 text-[11.5px] font-medium text-[#147d74] transition-colors hover:bg-[#e0e7ff]"
+            className="rounded-md bg-[#dcefeb] px-2 py-1 text-[11.5px] font-medium text-[#147d74] transition-colors hover:bg-[#c5e8e3]"
           >
             {tag}
           </button>

@@ -304,8 +304,8 @@ select.tv-input {
 .tv-dot--orange { background: #fb6514; }
 .tv-chip--slate { background: #f2f4f7; color: #475467; box-shadow: inset 0 0 0 1px #e4e7ec; }
 .tv-dot--slate { background: #98a2b3; }
-.tv-chip--violet { background: #f4f3ff; color: #5925dc; box-shadow: inset 0 0 0 1px #d9d6fe; }
-.tv-dot--violet { background: #7a5af8; }
+.tv-chip--violet { background: #dcefeb; color: #10665f; box-shadow: inset 0 0 0 1px rgba(20, 125, 116, 0.22); }
+.tv-dot--violet { background: #147d74; }
 .tv-chip--rose { background: #fff1f3; color: #c01048; box-shadow: inset 0 0 0 1px #fecdd6; }
 .tv-dot--rose { background: #f63d68; }
 

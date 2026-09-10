@@ -13,7 +13,7 @@
   --tv-text-secondary: #344054;
   --tv-text-muted: #667085;
   --tv-accent: #147d74;
-  --tv-accent-hover: #4338ca;
+  --tv-accent-hover: #10665f;
   --tv-accent-soft: #eef0ff;
   --tv-success: #067647;
   --tv-success-soft: #dcfae6;
@@ -68,7 +68,7 @@ body {
 }
 .tv-brand-mark {
   width: 28px; height: 28px; border-radius: 8px;
-  background: linear-gradient(135deg, #147d74, #7c3aed);
+  background: linear-gradient(135deg, #147d74, #147d74);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-weight: 800; font-size: 14px;
 }

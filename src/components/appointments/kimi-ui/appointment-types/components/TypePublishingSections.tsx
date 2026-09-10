@@ -111,7 +111,7 @@ export default function TypePublishingSections({
               type="button"
               className={`rounded-xl border px-3 py-2 text-[12px] font-medium capitalize ${
                 form.visibility === v
-                  ? "border-[#147d74] bg-[#f7f6ff] text-[#147d74]"
+                  ? "border-[#147d74] bg-[#dcefeb] text-[#147d74]"
                   : "border-[#ecedf2]"
               }`}
               onClick={() => onFormChange("visibility", v)}

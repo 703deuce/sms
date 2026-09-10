@@ -226,8 +226,8 @@ function buildSummary(
     },
     {
       icon: "sparkles",
-      bg: "#f1eafd",
-      color: "#7c3aed",
+      bg: "#dcefeb",
+      color: "#147d74",
       title: "Next available",
       value:
         weeklyHours.find((d) => d.open)?.windows[0]

@@ -1,5 +1,6 @@
 import { Geist } from "next/font/google";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
+import "@/components/appointments/kimi-ui/shared/appointments-pilot-overrides.css";
 import { AppointmentsPilotChrome } from "@/components/appointments/kimi-ui/shared/appointments-pilot-chrome";
 
 /** Appointments product — Geist + charcoal/teal theme on all /appointments/* routes. */

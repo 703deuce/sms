@@ -58,7 +58,7 @@ export default function ReminderCard({
               <h3 className="text-[14px] font-semibold text-foreground">
                 {reminder.index}. {reminder.title}
               </h3>
-              <span className="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#147d74]">
+              <span className="rounded-md bg-[#dcefeb] px-2 py-0.5 text-[11px] font-medium text-[#147d74]">
                 {reminder.badge}
               </span>
             </div>

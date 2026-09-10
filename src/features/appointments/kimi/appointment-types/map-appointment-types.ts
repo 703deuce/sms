@@ -34,7 +34,7 @@ const TYPE_COLORS = [
   { color: "text-sky-600", bg: "bg-sky-100" },
   { color: "text-rose-600", bg: "bg-rose-100" },
   { color: "text-teal-600", bg: "bg-teal-100" },
-  { color: "text-violet-600", bg: "bg-violet-100" },
+  { color: "text-[#147d74]", bg: "bg-[#dcefeb]" },
 ];
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {

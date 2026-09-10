@@ -121,7 +121,7 @@
 .stat-icon-green { background: #e7f6ec; color: var(--green); }
 .stat-icon-amber { background: #fdf1e2; color: var(--amber); }
 .stat-icon-red { background: #fdecec; color: var(--red); }
-.stat-icon-violet { background: #f1eafd; color: #7c3aed; }
+.stat-icon-violet { background: #dcefeb; color: #147d74; }
 .stat-value { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 .stat-label { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 .stat-delta { font-size: 10.5px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 3px; }
@@ -408,7 +408,7 @@
   line-height: 1.4;
 }
 .cal-meeting-badge.tone-indigo { background: #dcefeb; color: #147d74; }
-.cal-meeting-badge.tone-violet { background: #f3e8ff; color: #7e22ce; }
+.cal-meeting-badge.tone-violet { background: #dcefeb; color: #10665f; }
 .cal-meeting-badge.tone-green { background: #ecfdf5; color: #047857; }
 
 /* ---------- day view ---------- */

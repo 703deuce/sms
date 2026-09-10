@@ -1,0 +1,146 @@
+/**
+ * Appointments pilot — force teal/charcoal on interactive chrome (toggles, selections, accents).
+ * Scoped under .appt-overview-pilot so global product pages are unaffected.
+ */
+
+/* Form controls */
+.appt-overview-pilot input[type="checkbox"],
+.appt-overview-pilot input[type="radio"],
+.appt-overview-pilot .checkbox,
+.appt-overview-pilot .radio {
+  accent-color: var(--appt-brand-accent, #147d74) !important;
+}
+
+.appt-overview-pilot input:focus-visible,
+.appt-overview-pilot select:focus-visible,
+.appt-overview-pilot textarea:focus-visible {
+  outline-color: var(--appt-brand-accent, #147d74);
+  --tw-ring-color: rgba(20, 125, 116, 0.25);
+}
+
+/* Tailwind semantic overrides — purple/violet/indigo → teal palette */
+.appt-overview-pilot .bg-indigo-50,
+.appt-overview-pilot .bg-indigo-100,
+.appt-overview-pilot .bg-violet-50,
+.appt-overview-pilot .bg-violet-100,
+.appt-overview-pilot .bg-purple-50,
+.appt-overview-pilot .bg-purple-100 {
+  background-color: #dcefeb !important;
+}
+
+.appt-overview-pilot .text-indigo-600,
+.appt-overview-pilot .text-indigo-700,
+.appt-overview-pilot .text-violet-600,
+.appt-overview-pilot .text-violet-700,
+.appt-overview-pilot .text-purple-600,
+.appt-overview-pilot .text-purple-700 {
+  color: #147d74 !important;
+}
+
+.appt-overview-pilot .bg-indigo-500,
+.appt-overview-pilot .bg-indigo-600,
+.appt-overview-pilot .bg-violet-500,
+.appt-overview-pilot .bg-violet-600,
+.appt-overview-pilot .bg-purple-500,
+.appt-overview-pilot .bg-purple-600 {
+  background-color: #147d74 !important;
+}
+
+.appt-overview-pilot .border-indigo-100,
+.appt-overview-pilot .border-indigo-200,
+.appt-overview-pilot .border-violet-100,
+.appt-overview-pilot .border-violet-200,
+.appt-overview-pilot .border-purple-100,
+.appt-overview-pilot .border-purple-200,
+.appt-overview-pilot .hover\:border-indigo-200:hover {
+  border-color: rgba(20, 125, 116, 0.22) !important;
+}
+
+.appt-overview-pilot .ring-indigo-600\/15,
+.appt-overview-pilot .ring-violet-600\/15 {
+  --tw-ring-color: rgba(20, 125, 116, 0.15) !important;
+}
+
+/* ref-deco legacy class names — remap purple tints */
+.appt-overview-pilot .pill-purple,
+.appt-overview-pilot .pill-indigo,
+.appt-overview-pilot .pill-violet {
+  background: #dcefeb !important;
+  color: #147d74 !important;
+}
+
+.appt-overview-pilot .tile-purple,
+.appt-overview-pilot .av-purple {
+  background: #dcefeb !important;
+  color: #147d74 !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi--purple::before,
+.appt-overview-pilot .ref-deco-section--tint-purple,
+.appt-overview-pilot .ref-deco-section-accent--purple {
+  background: var(--appt-brand-accent, #147d74) !important;
+}
+
+.appt-overview-pilot .ref-deco-icon-ring--purple {
+  background: #dcefeb !important;
+  color: #147d74 !important;
+  box-shadow: inset 0 0 0 1px #e5e7eb !important;
+}
+
+/* Status chips — completed/violet semantic → teal in admin UI */
+.appt-overview-pilot .badge-violet,
+.appt-overview-pilot .tv-chip--violet,
+.appt-overview-pilot .chip-violet,
+.appt-overview-pilot .status-completed {
+  background: #dcefeb !important;
+  color: #10665f !important;
+  border-color: rgba(20, 125, 116, 0.22) !important;
+}
+
+.appt-overview-pilot .badge-violet .dot,
+.appt-overview-pilot .tv-dot--violet,
+.appt-overview-pilot .dot-violet,
+.appt-overview-pilot .status-completed .status-dot {
+  background: #147d74 !important;
+}
+
+/* shadcn / product primary on appointments pages */
+.appt-overview-pilot .bg-primary {
+  background-color: var(--appt-brand-accent, #147d74) !important;
+}
+
+.appt-overview-pilot .text-primary {
+  color: var(--appt-brand-accent, #147d74) !important;
+}
+
+.appt-overview-pilot .border-primary {
+  border-color: var(--appt-brand-accent, #147d74) !important;
+}
+
+.appt-overview-pilot .ring-primary,
+.appt-overview-pilot .ring-primary\/20 {
+  --tw-ring-color: rgba(20, 125, 116, 0.2) !important;
+}
+
+.appt-overview-pilot .bg-primary\/5,
+.appt-overview-pilot .bg-primary\/10,
+.appt-overview-pilot .bg-primary\/\[0\.04\] {
+  background-color: rgba(20, 125, 116, 0.08) !important;
+}
+
+.appt-overview-pilot .hover\:bg-primary\/90:hover {
+  background-color: #10665f !important;
+}
+
+/* Calendar stat tones */
+.appt-overview-pilot .stat-icon-violet,
+.appt-overview-pilot .stat-icon-indigo {
+  background: #dcefeb !important;
+  color: #147d74 !important;
+}
+
+.appt-overview-pilot .cal-meeting-badge.tone-violet,
+.appt-overview-pilot .cal-meeting-badge.tone-indigo {
+  background: #dcefeb !important;
+  color: #10665f !important;
+}

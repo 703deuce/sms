@@ -107,7 +107,7 @@ button { font-family: inherit; }
 }
 .avatar {
   width: 30px; height: 30px; border-radius: 50%;
-  background: #e0e7ff; color: #3538cd;
+  background: #c5e8e3; color: #10665f;
   display: grid; place-items: center;
   font-size: 11.5px; font-weight: 700;
   flex-shrink: 0;
@@ -191,8 +191,8 @@ button { font-family: inherit; }
 .badge-neutral .dot { background: #98a2b3; }
 .badge-danger { background: var(--danger-soft); color: var(--danger); border-color: #f3c1bc; }
 .badge-danger .dot { background: #f04438; }
-.badge-violet { background: #f4f3ff; color: #5925dc; border-color: #d9d6fe; }
-.badge-violet .dot { background: #7a5af8; }
+.badge-violet { background: #dcefeb; color: #10665f; border-color: rgba(20, 125, 116, 0.22); }
+.badge-violet .dot { background: #147d74; }
 
 /* ---------- Detail layout ---------- */
 .detail-grid {
@@ -219,7 +219,7 @@ button { font-family: inherit; }
 .avatar-lg {
   width: 46px; height: 46px; border-radius: 50%;
   background: linear-gradient(135deg, #dbe7ff, #e8e2ff);
-  color: #3538cd;
+  color: #10665f;
   display: grid; place-items: center;
   font-size: 15px; font-weight: 700;
   flex-shrink: 0;

@@ -59,7 +59,7 @@ export default function TypeListPanel({
               <div
                 key={t.id}
                 className={`flex items-center gap-1 rounded-xl ${
-                  selected ? "bg-[#f0efff] ring-1 ring-[#dcd9ff]" : "hover:bg-[#f7f8fa]"
+                  selected ? "bg-[#dcefeb] ring-1 ring-[#147d74]/30" : "hover:bg-[#f7f8fa]"
                 }`}
               >
                 {onMoveType ? (

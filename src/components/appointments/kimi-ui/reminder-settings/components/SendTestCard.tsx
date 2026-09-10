@@ -86,7 +86,7 @@ export default function SendTestCard({
         type="button"
         onClick={onSend}
         disabled={testing || !phone.trim()}
-        className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[#147d74] px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#4338ca] disabled:opacity-60"
+        className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[#147d74] px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#10665f] disabled:opacity-60"
       >
         {sent ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
         {sent ? 'Test sent!' : testing ? 'Sending…' : 'Send test SMS'}
