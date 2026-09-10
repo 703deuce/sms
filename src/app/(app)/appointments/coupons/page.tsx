@@ -1,5 +1,6 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { redirect } from "next/navigation";
 
+/** Legacy route — canonical home is Discounts. */
 export default function AppointmentsCouponsPage() {
-  return <ServiceBookingAdminClient initialSection="coupons" title="Coupons" />;
+  redirect("/appointments/discounts");
 }

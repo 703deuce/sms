@@ -1233,3 +1233,38 @@ Features that must be **added to or moved into** existing final pages (not new p
   - Backend: YES (`meeting-polls.ts`)
 
 ---
+
+## Batch 8B-2 resolution — Packages, Memberships, Gift Cards, Products, Discounts (2026-09-10)
+
+**Branch:** `cursor/batch8b2-money-access-709b`
+
+### Canonical routes shipped
+
+| Area | Route | Client |
+|------|-------|--------|
+| Packages | `/appointments/packages` | `packages-client.tsx` |
+| Memberships | `/appointments/memberships` | `memberships-client.tsx` |
+| Gift Cards | `/appointments/gift-cards` | `gift-cards-client.tsx` |
+| Products | `/appointments/products` | `products-client.tsx` |
+| Discounts | `/appointments/discounts` | `discounts-client.tsx` |
+
+`/appointments/coupons` redirects to Discounts. Nav: **Packages & Sales** group added per IA directive. `/appointments/commerce` preserved (legacy).
+
+### Absorbed from Commerce
+
+- Package products, credit rules, purchase/assign, lifecycle policy UI, customer balances, credit adjust/history
+- Membership products, billing, benefits, lifecycle policy UI, members pause/resume/cancel
+- Gift certificate options, manual issue, issued cards, redemption history
+- Retail products list/editor
+- Coupons → Discounts with eligibility and usage summary
+
+### Remaining gaps (not this batch)
+
+- **PUBLIC_WAVE_PENDING:** Public store/booking polish; package image on store if added later
+- **PORTAL_WAVE_PENDING:** Portal package/membership/gift presentation wave
+- **BACKEND_GAP:** `policy-fees.ts` referenced in audit but not in repo; late/no-show fee fields not exposed
+- **BACKEND_GAP:** Membership credit rollover replenishment runtime not fully surfaced
+- **STILL_MISSING:** Full contextual create package/membership from service editor with draft preserve (links only in Batch 8B-2)
+- Commerce mega-page not retired (intentional)
+
+---

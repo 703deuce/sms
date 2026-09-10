@@ -44,7 +44,6 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
   if (modules.commerce) {
-    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
@@ -208,6 +207,23 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
     });
   }
 
+  if (modules.commerce) {
+    items.push({
+      label: "Packages & Sales",
+      href: "/appointments/packages",
+      icon: CreditCard,
+      children: [
+        { label: "Packages", href: "/appointments/packages" },
+        { label: "Memberships", href: "/appointments/memberships" },
+        { label: "Gift Cards", href: "/appointments/gift-cards" },
+        { label: "Products", href: "/appointments/products" },
+        { label: "Discounts", href: "/appointments/discounts" },
+        { label: "Point of Sale", href: "/appointments/pos" },
+        { label: "Commerce (legacy)", href: "/appointments/commerce" },
+      ],
+    });
+  }
+
   if (modules.payments) {
     items.push({
       label: "Payments",
@@ -285,7 +301,14 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
-  if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
+  if (pathname.startsWith("/appointments/packages")) return "Packages";
+  if (pathname.startsWith("/appointments/memberships")) return "Memberships";
+  if (pathname.startsWith("/appointments/gift-cards")) return "Gift Cards";
+  if (pathname.startsWith("/appointments/products")) return "Products";
+  if (pathname.startsWith("/appointments/discounts")) return "Discounts";
+  if (pathname.startsWith("/appointments/coupons")) return "Discounts";
+  if (pathname.startsWith("/appointments/commerce")) return "Commerce (legacy)";
+  if (pathname.startsWith("/appointments/pos")) return "Point of Sale";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
   if (pathname.startsWith("/appointments/resources")) return "Resources";

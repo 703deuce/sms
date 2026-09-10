@@ -112,3 +112,95 @@ export async function redeemGiftCertificate(
   });
   return { balanceId: balance.id, remainingCents: next };
 }
+
+export async function listIssuedGiftCertificates(workspaceId: string) {
+  const prisma = getPrisma();
+  const balances = await prisma.giftCertificateBalance.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "desc" },
+    include: { product: { select: { name: true } } },
+  });
+  type ContactLite = {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+    email: string | null;
+  };
+  const purchaserIds = balances
+    .map((b: (typeof balances)[number]) => b.purchaserContactId)
+    .filter((id: string | null): id is string => Boolean(id));
+  const contacts: ContactLite[] = purchaserIds.length
+    ? await prisma.contact.findMany({
+        where: { workspaceId, id: { in: purchaserIds } },
+        select: { id: true, firstName: true, lastName: true, phone: true, email: true },
+      })
+    : [];
+  const contactMap = new Map(contacts.map((c) => [c.id, c]));
+  return balances.map((balance: (typeof balances)[number]) => {
+    const purchaser = balance.purchaserContactId
+      ? contactMap.get(balance.purchaserContactId)
+      : null;
+    const purchaserName = purchaser
+      ? [purchaser.firstName, purchaser.lastName].filter(Boolean).join(" ") ||
+        purchaser.phone ||
+        purchaser.email
+      : null;
+    return {
+      ...balance,
+      purchaserName,
+      maskedCode: balance.code.length > 4
+        ? `•••• ${balance.code.slice(-4)}`
+        : balance.code,
+    };
+  });
+}
+
+export async function getGiftCertificateLedgerHistory(balanceId: string) {
+  const prisma = getPrisma();
+  const balance = await prisma.giftCertificateBalance.findUnique({
+    where: { id: balanceId },
+    select: { balanceCents: true },
+  });
+  const entries = await prisma.giftCertificateLedgerEntry.findMany({
+    where: { balanceId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  let running = balance?.balanceCents ?? 0;
+  return entries.map((entry: (typeof entries)[number]) => {
+    const row = { ...entry, balanceAfterCents: running };
+    running -= entry.amountCents;
+    return row;
+  });
+}
+
+export async function duplicateGiftCertificateProduct(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const source = await prisma.giftCertificateProduct.findFirst({
+    where: { id: productId, workspaceId },
+  });
+  if (!source) throw new Error("Gift card option not found");
+  const baseSlug = `${source.slug}-copy`;
+  let slug = baseSlug;
+  let n = 1;
+  while (await prisma.giftCertificateProduct.findFirst({ where: { workspaceId, slug } })) {
+    slug = `${baseSlug}-${n++}`;
+  }
+  return prisma.giftCertificateProduct.create({
+    data: {
+      workspaceId,
+      name: `${source.name} (copy)`,
+      slug,
+      description: source.description,
+      fixedAmountCents: source.fixedAmountCents,
+      allowCustomAmount: source.allowCustomAmount,
+      minAmountCents: source.minAmountCents,
+      maxAmountCents: source.maxAmountCents,
+      denominations: source.denominations,
+      eligibleTypeIds: source.eligibleTypeIds,
+      active: false,
+      metadata: source.metadata,
+    },
+  });
+}
