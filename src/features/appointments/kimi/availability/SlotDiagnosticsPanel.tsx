@@ -75,7 +75,7 @@ export function SlotDiagnosticsPanel() {
     <section className="avail-card p-6 space-y-4" aria-labelledby="slot-diagnostics-heading">
       <div>
         <h2 id="slot-diagnostics-heading" className="text-[15px] font-bold text-[#1a1830]">
-          Diagnose availability
+          Check a time
         </h2>
         <p className="text-[12px] text-[#8a87a0] mt-1">
           See why a specific time is or is not offered to customers. Uses the same rules as public

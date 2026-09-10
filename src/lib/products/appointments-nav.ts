@@ -39,6 +39,8 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   const children = [
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
+    { label: "Forms & Documents", href: "/appointments/booking/forms" },
+    { label: "Rooms & Equipment", href: "/appointments/booking/rooms-equipment" },
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
   if (modules.commerce) {
@@ -62,7 +64,7 @@ function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
     { label: "Locations", href: "/appointments/locations" },
-    { label: "Resources", href: "/appointments/resources" },
+    { label: "Rooms & Equipment", href: "/appointments/booking/rooms-equipment" },
   ];
 }
 

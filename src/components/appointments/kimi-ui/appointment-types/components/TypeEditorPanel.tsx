@@ -40,6 +40,7 @@ interface Props {
   onManageAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onCategoriesChanged?: () => void;
 }
 
 export default function TypeEditorPanel({
@@ -65,6 +66,7 @@ export default function TypeEditorPanel({
   onManageAvailability,
   onManageStaff,
   onManageLocations,
+  onCategoriesChanged,
 }: Props) {
   const kindDefaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
@@ -300,6 +302,7 @@ export default function TypeEditorPanel({
           form={form}
           categoryOptions={categoryOptions}
           onFormChange={onFormChange}
+          onCategoriesChanged={onCategoriesChanged}
         />
 
         <TypeResourcesSection
@@ -308,7 +311,12 @@ export default function TypeEditorPanel({
           onFormChange={onFormChange}
         />
 
-        <TypeAddOnsSection form={form} addOnOptions={addOnOptions} onFormChange={onFormChange} />
+        <TypeAddOnsSection
+          form={form}
+          addOnOptions={addOnOptions}
+          resourceOptions={resourceOptions}
+          onFormChange={onFormChange}
+        />
 
         <TypeIntakeFormsSection
           form={form}

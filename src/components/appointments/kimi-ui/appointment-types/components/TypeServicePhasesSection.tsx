@@ -13,8 +13,8 @@ type PhaseRow = {
 };
 
 const PHASE_KINDS: Array<{ value: PhaseRow["phaseKind"]; label: string }> = [
-  { value: "active_staff", label: "Active (staff required)" },
-  { value: "processing", label: "Processing (room / passive)" },
+  { value: "active_staff", label: "Staff needed" },
+  { value: "processing", label: "Staff not needed (processing)" },
 ];
 
 type Props = {
@@ -153,10 +153,9 @@ export function TypeServicePhasesSection({ appointmentTypeId, isCreating }: Prop
     <section aria-labelledby="type-phases-heading">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h3 id="type-phases-heading" className="text-[14px] font-semibold">Service phases</h3>
+          <h3 id="type-phases-heading" className="text-[14px] font-semibold">Service steps</h3>
           <p className="text-[12.5px] text-[#8a8fa3] mt-1">
-            Chain sub-steps for availability and duration. Total blocked time: {totalMinutes} min
-            {totalMinutes > 0 ? " (overrides base duration when phases exist)" : ""}.
+            Break this service into steps with different durations. When staff aren&apos;t needed during a step, they may be available for another appointment. Total: {totalMinutes} min.
           </p>
         </div>
         <button
