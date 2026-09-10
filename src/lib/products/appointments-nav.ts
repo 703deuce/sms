@@ -38,6 +38,7 @@ function calendarChildren(): NavItem["children"] {
 function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   const children = [
     { label: "Booking Types", href: "/appointments/types" },
+    { label: "Meetings", href: "/appointments/meetings" },
     { label: "Booking Pages", href: "/appointments/booking" },
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
@@ -289,6 +290,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
   if (pathname.startsWith("/appointments/reports/service-booking")) return "Service booking reports";
+  if (pathname.startsWith("/appointments/meetings")) return "Meetings";
   if (pathname.startsWith("/appointments/types")) return "Booking Types";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
