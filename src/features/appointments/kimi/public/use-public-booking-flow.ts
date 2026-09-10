@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { appointmentSmsConsentDisclosure } from "@/lib/appointments/sms-consent-disclosure";
+import type { PublicBookingCatalog, PublicCatalogTerminology } from "@/lib/appointments/public-booking-catalog";
+import type {
+  ConfirmationState,
+} from "@/components/appointments/kimi-ui/public-booking-service/components/DoneStep";
 import type {
   PublicBookingCategory,
   PublicBookingFlowOptions,
@@ -144,6 +148,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [additionalServices, setAdditionalServices] = useState<PublicBookingType[]>([]);
   const [addingAdditionalService, setAddingAdditionalService] = useState(false);
   const [slotHoldId, setSlotHoldId] = useState("");
+  const [catalog, setCatalog] = useState<PublicBookingCatalog | null>(null);
+  const [terminology, setTerminology] = useState<PublicCatalogTerminology | null>(null);
+  const [pendingApproval, setPendingApproval] = useState(false);
+  const [manageUrl, setManageUrl] = useState<string | null>(null);
+  const [confirmationState, setConfirmationState] = useState<ConfirmationState>("confirmed");
+  const [paidAtBooking, setPaidAtBooking] = useState(false);
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -504,7 +514,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    fetch(`/api/public/book/${encodeURIComponent(slug)}`)
+    const typeIdParam = preselectTypeId || initialServiceId;
+    const query = typeIdParam ? `?typeId=${encodeURIComponent(typeIdParam)}` : "";
+    fetch(`/api/public/book/${encodeURIComponent(slug)}${query}`)
       .then(async (r) => {
         if (!r.ok) {
           const json = await r.json().catch(() => ({}));
@@ -535,6 +547,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         setIntakeCatalog(json.data.intakeForms || []);
         setStaffOptions(json.data.staff || []);
         setLocationOptions(json.data.locations || []);
+        setCatalog(json.data.catalog || null);
+        setTerminology(json.data.terminology || null);
         if (deepLinkStaffId) setSelectedStaffId(deepLinkStaffId);
         if (deepLinkLocationId) setSelectedLocationId(deepLinkLocationId);
         if (initialServiceId || preselectTypeId) {
@@ -670,6 +684,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       return false;
     }
     setWaitlistSubmitted(true);
+    setConfirmationState("waitlist");
     return true;
   }, [
     selectedType,
@@ -886,6 +901,13 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     }
     setBookingMeetingLink(json.data?.meetingLink || json.data?.joinUrl || null);
     setBookingIsTransovoVideo(Boolean(json.data?.isTransovoVideo));
+    setPendingApproval(Boolean(json.data?.pendingApproval));
+    setManageUrl(json.data?.manageUrl ? String(json.data.manageUrl) : null);
+    setPaidAtBooking(
+      Boolean(json.data?.paymentRequired === false && selectedType?.config?.payment?.mode !== "none") ||
+        Boolean(json.data?.entitlement?.paymentWaived),
+    );
+    setConfirmationState(json.data?.pendingApproval ? "pending_approval" : "confirmed");
     if (json.data?.redirectUrl) setRedirectUrl(json.data.redirectUrl);
     setConfirmationResources(
       json.data?.confirmationResources ||
@@ -965,6 +987,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setBookingMeetingLink(null);
       setBookingIsTransovoVideo(false);
     }
+    setPaidAtBooking(true);
+    setConfirmationState("confirmed");
     setStep("done");
   }, [pendingAppointmentId]);
 
@@ -1056,6 +1080,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     setSelectedDuration,
     redirectUrl,
     confirmationResources,
+    catalog,
+    terminology,
+    pendingApproval,
+    manageUrl,
+    confirmationState,
+    paidAtBooking,
     extraRecipients,
     setExtraRecipients,
     activeDurationOptions,

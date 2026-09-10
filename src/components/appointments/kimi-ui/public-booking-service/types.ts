@@ -23,6 +23,7 @@ export type BookingType = {
   name: string;
   durationMinutes: number;
   durationOptions?: DurationOption[];
+  bookingTypeKind?: "MEETING" | "SERVICE" | "CLASS";
   config?: {
     description?: string;
     location?: string;

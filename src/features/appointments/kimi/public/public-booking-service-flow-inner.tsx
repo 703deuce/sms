@@ -22,6 +22,7 @@ function toServiceType(type: PublicBookingType): KimiServiceBookingType {
     id: type.id,
     name: type.name,
     durationMinutes: type.durationMinutes,
+    bookingTypeKind: type.bookingTypeKind,
     durationOptions: type.durationOptions || type.config?.durationOptions,
     config: type.config as KimiServiceBookingType["config"],
   };
@@ -75,6 +76,9 @@ export function PublicBookingServiceFlowInner({
               categories={flow.categories}
               activeCategorySlug={flow.initialCategorySlug}
               addingAdditional={flow.addingAdditionalService}
+              terminology={flow.terminology || undefined}
+              classesUrl={flow.catalog?.classesUrl}
+              hasClasses={flow.catalog?.hasClasses}
               onPick={(type) => void flow.pickType(flow.types.find((t) => t.id === type.id)!)}
             />
           ) : null}
@@ -213,12 +217,41 @@ export function PublicBookingServiceFlowInner({
             />
           ) : null}
 
-          {flow.step === "done" && flow.selectedType ? (
+          {flow.step === "done" && (flow.selectedType || flow.waitlistSubmitted) ? (
             <DoneStep
-              type={toServiceType(flow.selectedType)}
+              type={toServiceType(
+                flow.selectedType || {
+                  id: "waitlist",
+                  name: flow.waitlistSubmitted ? "Waitlist" : "Booking",
+                  durationMinutes: 0,
+                },
+              )}
               startsAt={flow.startsAt}
               timezone={ws.timezone}
-              paid={Boolean(flow.squareConfig)}
+              durationMinutes={flow.effectiveDurationMinutes}
+              paid={flow.paidAtBooking}
+              confirmationState={
+                flow.waitlistSubmitted ? "waitlist" : flow.confirmationState
+              }
+              workspace={{
+                name: ws.name,
+                businessPhone: ws.businessPhone,
+                businessAddress: ws.businessAddress,
+              }}
+              confirmationResources={flow.confirmationResources}
+              manageUrl={flow.manageUrl}
+              meetingLink={flow.bookingMeetingLink}
+              staffName={
+                flow.selectedStaffId
+                  ? flow.eligibleStaff.find((s) => s.id === flow.selectedStaffId)?.name
+                  : null
+              }
+              locationLabel={
+                flow.selectedLocationId
+                  ? flow.eligibleLocations.find((l) => l.id === flow.selectedLocationId)?.name
+                  : flow.selectedType?.config?.location || null
+              }
+              bookAgainUrl={`/book/${slug}`}
             />
           ) : null}
 

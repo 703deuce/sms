@@ -31,7 +31,12 @@ export function PublicBookingConnected(props: PublicBookingFlowOptions) {
     );
   }
 
-  if (flow.error && flow.step === "service" && flow.types.length === 0) {
+  if (
+    flow.error &&
+    flow.step === "service" &&
+    flow.types.length === 0 &&
+    !flow.catalog?.hasClasses
+  ) {
     return (
       <BookingShell>
         {flow.error.toLowerCase().includes("disabled") ? (

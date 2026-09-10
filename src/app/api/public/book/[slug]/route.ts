@@ -21,6 +21,11 @@ import {
 import { listBookingCategories } from "@/lib/appointments/service-booking/booking-category";
 import { loadSchedulerTheme } from "@/lib/appointments/service-booking/scheduler-theme";
 import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import {
+  buildPublicBookingCatalog,
+  filterPublicSchedulerTypes,
+  resolvePublicTerminologyFromTheme,
+} from "@/lib/appointments/public-booking-catalog";
 import { listBookingAddOns, listSchedulingResources, listIntakeForms } from "@/lib/appointments/service-booking";
 import { listCustomerFieldDefinitions } from "@/lib/appointments/service-booking/phase2/custom-fields";
 import { calculateAddOnTotals } from "@/lib/appointments/service-booking/add-ons";
@@ -130,7 +135,7 @@ async function attachPaymentCheckout(
   };
 }
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const { slug } = await params;
     const workspace = await resolveWorkspaceBySlug(slug);
@@ -139,7 +144,8 @@ export async function GET(_request: Request, { params }: Params) {
     if (!config.bookingEnabled) {
       return NextResponse.json({ error: "Booking page disabled" }, { status: 403 });
     }
-    const types = (await listAppointmentTypes(workspace.id))
+    const includeTypeId = new URL(request.url).searchParams.get("typeId") || undefined;
+    const allTypes = (await listAppointmentTypes(workspace.id, { includeUnlisted: true }))
       .filter((t: { active: boolean }) => t.active)
       .map((t: { id: string; name: string; durationMinutes: number; config: AppointmentTypeConfig }) => ({
         id: t.id,
@@ -150,6 +156,10 @@ export async function GET(_request: Request, { params }: Params) {
         confirmationPage: t.config?.confirmationPage,
         config: t.config,
       }));
+    const schedulerTheme = await loadSchedulerTheme(workspace.id);
+    const types = filterPublicSchedulerTypes(allTypes, { includeTypeId });
+    const catalog = buildPublicBookingCatalog(allTypes, workspace.slug);
+    const terminology = resolvePublicTerminologyFromTheme(schedulerTheme);
     const staff = (config.staff || [])
       .filter((s) => s.active !== false && s.customerSelectable !== false)
       .map((s) => ({
@@ -186,7 +196,6 @@ export async function GET(_request: Request, { params }: Params) {
           imageUrl: c.imageUrl,
         }),
       );
-    const schedulerTheme = await loadSchedulerTheme(workspace.id);
     const allResources = await listSchedulingResources(workspace.id);
     const allAddOns = await listBookingAddOns(workspace.id);
     const intakeForms = await listIntakeForms(workspace.id, "appointment");
@@ -270,6 +279,8 @@ export async function GET(_request: Request, { params }: Params) {
         schedulerTheme,
         staff,
         locations,
+        catalog,
+        terminology,
       },
     });
   } catch (err) {
