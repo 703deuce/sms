@@ -79,6 +79,12 @@ function mapProperty(property: string): string | null {
       return "timezone";
     case "Created":
       return "createdAt";
+    case "Appointment status":
+      return "appointment_status";
+    case "Booking type":
+      return "appointment_type";
+    case "Has upcoming appointment":
+      return "appointment_status";
     case "Area Code":
       return "areaCode";
     case "Favorite Sports Team":
@@ -165,6 +171,8 @@ export function segmentConditionsToKimiGroups(conditions: unknown): KimiConditio
     if (field === "email") return "Email Address";
     if (field === "timezone") return "Timezone";
     if (field === "createdAt") return "Created";
+    if (field === "appointment_status") return "Appointment status";
+    if (field === "appointment_type") return "Booking type";
     if (field === "link_clicked") return "Link Clicked";
     if (field === "campaign_sent") return "Campaign Sent";
     if (field === "areaCode") return "Area Code";

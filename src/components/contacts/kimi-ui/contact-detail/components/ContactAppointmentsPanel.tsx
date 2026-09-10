@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Appointment } from "../types";
 import { Card, SectionHeader, StatusChip, InlineEmpty, formatAppointmentWhen } from "./ui";
@@ -41,8 +42,8 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count?: 
 
 function AppointmentRow({ appt, upcoming }: { appt: Appointment; upcoming: boolean }) {
   return (
-    <a
-      href={`#/appointments/${appt.id}`}
+    <Link
+      href={`/appointments/${appt.id}`}
       className="row-hover"
       style={{
         display: "flex",
@@ -94,7 +95,7 @@ function AppointmentRow({ appt, upcoming }: { appt: Appointment; upcoming: boole
         <StatusChip status={appt.status} />
         <ArrowUpRight style={{ width: 14, height: 14, color: "var(--muted-foreground)" }} />
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -185,8 +186,8 @@ export function ContactAppointmentsPanel({ contactId }: { contactId: string }) {
                 </div>
               )}
             </div>
-            <a
-              href="#/appointments"
+            <Link
+              href="/appointments"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -199,7 +200,7 @@ export function ContactAppointmentsPanel({ contactId }: { contactId: string }) {
             >
               View all appointments
               <ArrowUpRight style={{ width: 14, height: 14 }} />
-            </a>
+            </Link>
           </div>
         )}
       </div>

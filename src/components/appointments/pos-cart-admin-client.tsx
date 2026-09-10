@@ -128,6 +128,11 @@ export function PosCartAdminClient() {
   const [priceDollars, setPriceDollars] = useState("");
   const [selectedContact, setSelectedContact] = useState<ContactOption | null>(null);
   const [referralCode, setReferralCode] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [accountCreditDollars, setAccountCreditDollars] = useState("");
+  const [walletBalanceCents, setWalletBalanceCents] = useState(0);
+  const [recentSessions, setRecentSessions] = useState<PosSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,9 +144,10 @@ export function PosCartAdminClient() {
     setLoading(true);
     setError(null);
     try {
-      const [posRes, packagesRes, giftsRes, membershipsRes, productsRes, typesRes] =
+      const [posRes, recentRes, packagesRes, giftsRes, membershipsRes, productsRes, typesRes] =
         await Promise.all([
           fetch("/api/appointments/service-booking/pos-cart"),
+          fetch("/api/appointments/service-booking/pos-cart?recent=1"),
           fetch("/api/appointments/service-booking/packages"),
           fetch("/api/appointments/service-booking/gift-certificates"),
           fetch("/api/appointments/service-booking/memberships"),
@@ -151,8 +157,10 @@ export function PosCartAdminClient() {
       const posJson = await posRes.json();
       if (!posRes.ok) throw new Error(posJson.error || "Failed to load POS sessions");
       const list = (posJson.data || []) as PosSession[];
+      const recentJson = await recentRes.json();
       setSessions(list);
-      setActiveId((current) => current ?? list[0]?.id ?? null);
+      setRecentSessions((recentJson.data || []) as PosSession[]);
+      setActiveId((current) => current ?? list.find((s) => s.status === "open")?.id ?? null);
 
       const items: CatalogItem[] = [];
       const pushRows = (rows: unknown[], kind: string, priceKey = "priceCents") => {
@@ -225,6 +233,66 @@ export function PosCartAdminClient() {
         .catch(() => undefined);
     }
   }, [active?.contactId, selectedContact]);
+
+  useEffect(() => {
+    if (!contactId) {
+      setWalletBalanceCents(0);
+      return;
+    }
+    void fetch(`/api/appointments/service-booking/client-wallet?contactId=${encodeURIComponent(contactId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json?.data?.balanceCents != null) setWalletBalanceCents(Number(json.data.balanceCents));
+      })
+      .catch(() => setWalletBalanceCents(0));
+  }, [contactId]);
+
+  async function applyPromoCode() {
+    if (!active || !promoCode.trim()) return;
+    setPromoError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/appointments/service-booking/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "preview",
+          code: promoCode.trim(),
+          baseCents: active.subtotalCents,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Coupon not valid for this sale");
+      const coupon = json.data?.coupon as { id: string; code: string; discountType: string; discountValue: number };
+      const discountCents = Number(json.data?.discountCents || 0);
+      if (discountCents <= 0) throw new Error("This discount doesn't apply to the items in this sale.");
+      const addRes = await fetch("/api/appointments/service-booking/pos-cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "add_line",
+          sessionId: active.id,
+          line: {
+            kind: "discount",
+            description: `${coupon.code} (${coupon.discountType === "percent" ? `${coupon.discountValue}%` : "fixed"})`,
+            unitPriceCents: -discountCents,
+            quantity: 1,
+            referenceId: coupon.id,
+          },
+        }),
+      });
+      if (!addRes.ok) {
+        const addJson = await addRes.json().catch(() => ({}));
+        throw new Error(addJson.error || "Could not apply discount");
+      }
+      setPromoCode("");
+      await load();
+    } catch (err) {
+      setPromoError(err instanceof Error ? err.message : "Coupon failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function startSession() {
     setBusy(true);
@@ -311,6 +379,9 @@ export function PosCartAdminClient() {
     setBusy(true);
     setError(null);
     setSuccess(null);
+    const creditCents = accountCreditDollars
+      ? Math.round(Number(accountCreditDollars) * 100)
+      : 0;
     const res = await fetch("/api/appointments/service-booking/pos-cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -319,6 +390,7 @@ export function PosCartAdminClient() {
         sessionId: activeId,
         contactId: contactId.trim() || undefined,
         referralCode: referralCode.trim() || undefined,
+        accountCreditCents: creditCents > 0 ? creditCents : undefined,
       }),
     });
     setBusy(false);
@@ -329,6 +401,7 @@ export function PosCartAdminClient() {
     }
     const json = await res.json().catch(() => ({}));
     setActiveId(null);
+    setAccountCreditDollars("");
     setSuccess(
       json.data?.paymentId
         ? `Checkout complete — payment recorded.`
@@ -336,6 +409,15 @@ export function PosCartAdminClient() {
     );
     await load();
   }
+
+  const creditAppliedCents = accountCreditDollars
+    ? Math.min(
+        Math.round(Number(accountCreditDollars) * 100) || 0,
+        walletBalanceCents,
+        active?.totalCents ?? 0,
+      )
+    : 0;
+  const amountDueCents = Math.max(0, (active?.totalCents ?? 0) - creditAppliedCents);
 
   function formatMoney(cents: number) {
     return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(
@@ -354,9 +436,9 @@ export function PosCartAdminClient() {
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">POS cart</h1>
+          <h1 className="text-2xl font-semibold">Point of Sale</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mixed checkout for services, packages, memberships, gifts, products, discounts, and tips.
+            Mixed checkout for services, packages, memberships, gift cards, products, discounts, and tips.
           </p>
         </div>
         <button
@@ -380,6 +462,20 @@ export function PosCartAdminClient() {
             placeholder="REF…"
           />
         </label>
+        {contactId && walletBalanceCents > 0 ? (
+          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+            <span>Apply account credit (available {formatMoney(walletBalanceCents)})</span>
+            <input
+              className="rounded border px-3 py-2 w-40"
+              type="number"
+              min="0"
+              step="0.01"
+              value={accountCreditDollars}
+              onChange={(e) => setAccountCreditDollars(e.target.value)}
+              placeholder="0.00"
+            />
+          </label>
+        ) : null}
       </div>
 
       {success ? (
@@ -429,7 +525,7 @@ export function PosCartAdminClient() {
             )}
           </ul>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <button type="button" className="rounded border px-3 py-1 text-xs" onClick={() => quickAdd("tip")}>
               Add tip line
             </button>
@@ -440,6 +536,47 @@ export function PosCartAdminClient() {
             >
               Add discount line
             </button>
+            <input
+              className="rounded border px-2 py-1 text-xs"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              placeholder="Promo code"
+            />
+            <button
+              type="button"
+              className="rounded border px-3 py-1 text-xs disabled:opacity-50"
+              disabled={busy || !promoCode.trim()}
+              onClick={() => void applyPromoCode()}
+            >
+              Apply discount
+            </button>
+          </div>
+          {promoError ? (
+            <p className="text-xs text-destructive">{promoError}</p>
+          ) : null}
+
+          <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{formatMoney(active.subtotalCents)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Tax</span>
+              <span title="BACKEND_GAP — no authoritative tax engine wired">$0.00</span>
+            </div>
+            {creditAppliedCents > 0 ? (
+              <div className="flex justify-between text-emerald-700">
+                <span>Account credit</span>
+                <span>-{formatMoney(creditAppliedCents)}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between font-semibold border-t pt-2">
+              <span>Amount due</span>
+              <span>{formatMoney(amountDueCents)}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground pt-1">
+              Tax uses real backend when available — currently recorded as BACKEND_GAP.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-end gap-3 border-t pt-4">
@@ -515,6 +652,26 @@ export function PosCartAdminClient() {
           </div>
         </div>
       )}
+
+      {recentSessions.length > 0 ? (
+        <div className="rounded-lg border p-4 space-y-3">
+          <h2 className="text-sm font-semibold">Recent sales</h2>
+          <ul className="divide-y text-sm">
+            {recentSessions.map((s) => (
+              <li key={s.id} className="flex justify-between gap-4 py-2">
+                <span>
+                  {s.lineItems.length} item{s.lineItems.length === 1 ? "" : "s"}
+                  {s.contactId ? ` · Customer` : ""}
+                </span>
+                <span className="font-medium">{formatMoney(s.totalCents)}</span>
+              </li>
+            ))}
+          </ul>
+          <a href="/appointments/payments" className="text-sm text-primary underline">
+            View all transactions
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }

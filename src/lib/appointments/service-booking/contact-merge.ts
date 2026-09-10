@@ -21,15 +21,57 @@ export async function previewContactMerge(
     }
   }
 
-  const [sourceAppts, targetAppts] = await Promise.all([
+  const [
+    sourceAppts,
+    targetAppts,
+    sourcePackages,
+    targetPackages,
+    sourceMemberships,
+    targetMemberships,
+  ] = await Promise.all([
     prisma.voiceAppointment.count({ where: { workspaceId, contactId: sourceContactId } }),
     prisma.voiceAppointment.count({ where: { workspaceId, contactId: targetContactId } }),
+    prisma.packageBalance.count({ where: { workspaceId, contactId: sourceContactId } }),
+    prisma.packageBalance.count({ where: { workspaceId, contactId: targetContactId } }),
+    prisma.serviceMembershipSubscription.count({ where: { workspaceId, contactId: sourceContactId } }),
+    prisma.serviceMembershipSubscription.count({ where: { workspaceId, contactId: targetContactId } }),
   ]);
+
+  const sourceHousehold = await prisma.householdMember.findFirst({
+    where: { contactId: sourceContactId },
+    include: { household: { select: { name: true } } },
+  });
+  const targetHousehold = await prisma.householdMember.findFirst({
+    where: { contactId: targetContactId },
+    include: { household: { select: { name: true } } },
+  });
 
   return {
     sourceContactId,
     targetContactId,
+    source: {
+      firstName: source.firstName,
+      lastName: source.lastName,
+      email: source.email,
+      phone: source.phone,
+    },
+    target: {
+      firstName: target.firstName,
+      lastName: target.lastName,
+      email: target.email,
+      phone: target.phone,
+    },
     conflicts,
+    relatedData: {
+      appointments: { source: sourceAppts, target: targetAppts },
+      packages: { source: sourcePackages, target: targetPackages },
+      memberships: { source: sourceMemberships, target: targetMemberships },
+      notes: { source: 0, target: 0 },
+      household:
+        sourceHousehold?.household?.name ||
+        targetHousehold?.household?.name ||
+        null,
+    },
     appointmentCounts: { source: sourceAppts, target: targetAppts },
   };
 }
