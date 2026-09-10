@@ -10,6 +10,7 @@ export type WorkspaceBookingPolicyForm = {
 };
 
 type Props = {
+  id?: string;
   variant?: "card" | "page";
   title?: string;
   description?: string;
@@ -41,6 +42,7 @@ function buildPolicyPatch(form: WorkspaceBookingPolicyForm) {
 }
 
 export function WorkspaceBookingPoliciesEditor({
+  id,
   variant = "page",
   title = "Default booking policies",
   description = "Workspace-wide defaults used when a booking type does not define its own policy text.",
@@ -93,7 +95,7 @@ export function WorkspaceBookingPoliciesEditor({
       : "space-y-6";
 
   return (
-    <div className={shellClass}>
+    <div id={id} className={shellClass}>
       <header>
         <h2 className={variant === "card" ? "text-base font-semibold text-foreground" : "text-2xl font-semibold text-foreground"}>
           {title}

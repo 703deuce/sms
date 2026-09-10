@@ -56,7 +56,7 @@ export function KimiContactsConnected({
       <span className="font-medium text-foreground">Household &amp; family accounts</span>
       {" — "}
       Link dependents and family members for shared booking, packages, and appointment history.
-      <a href="/appointments/commerce" className="ml-2 text-primary underline">
+      <a href="/appointments/packages" className="ml-2 text-primary underline">
         Manage households
       </a>
     </div>

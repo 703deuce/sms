@@ -125,7 +125,7 @@ export function RecallsHub({
             When recall campaigns or no-show follow-ups are sent, they&apos;ll appear here so you can track
             outreach and rebookings in one place.
           </p>
-          <a className="tv-btn tv-btn-primary" href="/appointments/recall-campaigns">
+          <a className="tv-btn tv-btn-primary" href="/appointments/automations/recall">
             <Plus size={15} />
             Create your first recall campaign
           </a>

@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const LINKS = [
-  { href: "/appointments/booking", label: "Pages" },
-  { href: "/appointments/booking/share", label: "Share & embed" },
-  { href: "/appointments/booking/branding", label: "Branding" },
-  { href: "/appointments/booking/forms", label: "Forms & documents" },
-  { href: "/appointments/booking/rooms-equipment", label: "Rooms & equipment" },
+  { href: "/appointments/booking", label: "Pages", section: null },
+  { href: "/appointments/booking?section=share", label: "Share & embed", section: "share" },
+  { href: "/appointments/booking?section=branding", label: "Branding", section: "branding" },
+  { href: "/appointments/booking/forms", label: "Forms & documents", section: null },
+  { href: "/appointments/booking/rooms-equipment", label: "Rooms & equipment", section: null },
 ] as const;
 
 export function BookingPagesSubnav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentSection = searchParams.get("section");
 
   return (
     <nav
@@ -20,10 +22,11 @@ export function BookingPagesSubnav() {
       aria-label="Booking pages sections"
     >
       {LINKS.map((link) => {
+        const linkPath = link.href.split("?")[0];
         const active =
-          link.href === "/appointments/booking"
-            ? pathname === link.href
-            : pathname === link.href || pathname.startsWith(`${link.href}/`);
+          link.section === null
+            ? pathname === linkPath && !currentSection
+            : pathname === "/appointments/booking" && currentSection === link.section;
         return (
           <Link
             key={link.href}

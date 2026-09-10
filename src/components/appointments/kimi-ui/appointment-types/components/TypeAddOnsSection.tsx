@@ -33,7 +33,7 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
           </p>
         </div>
         <Link
-          href="/appointments/commerce?section=addons"
+          href="/appointments/types"
           className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
         >
           Manage add-ons →

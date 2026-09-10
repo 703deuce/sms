@@ -67,27 +67,27 @@ See `docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md` and `docs/APPO
 
 | Route | Internal references | External/historical risk |
 |-------|--------------------:|--------------------------|
-| `/appointments/booking/branding` | 5 | NO |
-| `/appointments/booking/contracts` | 3 | NO |
+| `/appointments/booking/branding` | 7 | NO |
+| `/appointments/booking/contracts` | 5 | NO |
 | `/appointments/booking/share` | 10 | NO |
-| `/appointments/categories` | 7 | NO |
-| `/appointments/classes` | 11 | NO |
-| `/appointments/client-restrictions` | 4 | NO |
-| `/appointments/commerce` | 22 | NO |
-| `/appointments/commerce/contact-merge` | 2 | NO |
-| `/appointments/contracts` | 9 | NO |
-| `/appointments/coupons` | 7 | NO |
-| `/appointments/no-show-recovery` | 25 | NO |
-| `/appointments/policies` | 6 | NO |
-| `/appointments/recall-campaigns` | 25 | NO |
-| `/appointments/reports/service-booking` | 4 | NO |
-| `/appointments/resources` | 8 | NO |
-| `/appointments/restrictions` | 6 | NO |
-| `/appointments/routing` | 27 | NO |
-| `/appointments/scheduled` | 7 | NO |
-| `/appointments/segments` | 4 | NO |
-| `/appointments/service-booking` | 122 | NO |
-| `/appointments/voice-reminders` | 14 | NO |
+| `/appointments/categories` | 11 | NO |
+| `/appointments/classes` | 15 | NO |
+| `/appointments/client-restrictions` | 6 | NO |
+| `/appointments/commerce` | 24 | NO |
+| `/appointments/commerce/contact-merge` | 4 | NO |
+| `/appointments/contracts` | 10 | NO |
+| `/appointments/coupons` | 10 | NO |
+| `/appointments/no-show-recovery` | 27 | NO |
+| `/appointments/policies` | 10 | NO |
+| `/appointments/recall-campaigns` | 26 | NO |
+| `/appointments/reports/service-booking` | 8 | NO |
+| `/appointments/resources` | 12 | NO |
+| `/appointments/restrictions` | 9 | NO |
+| `/appointments/routing` | 32 | NO |
+| `/appointments/scheduled` | 10 | NO |
+| `/appointments/segments` | 8 | NO |
+| `/appointments/service-booking` | 116 | NO |
+| `/appointments/voice-reminders` | 16 | NO |
 
 ## Artifacts
 

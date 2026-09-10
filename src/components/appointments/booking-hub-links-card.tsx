@@ -5,12 +5,12 @@ import Link from "next/link";
 export function BookingHubLinksCard() {
   const links = [
     {
-      href: "/appointments/booking/share",
+      href: "/appointments/booking?section=share",
       title: "Share & embed",
       description: "Direct links, QR codes, embed codes, and single-use links.",
     },
     {
-      href: "/appointments/booking/branding",
+      href: "/appointments/booking?section=branding",
       title: "Branding & appearance",
       description: "Colors, logo, terminology, and advanced booking page styling.",
     },

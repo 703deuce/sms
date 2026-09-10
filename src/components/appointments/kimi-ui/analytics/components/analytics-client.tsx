@@ -105,7 +105,19 @@ function RangeToggle({
   );
 }
 
-export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
+export function AnalyticsClient({
+  section,
+  reportFocus,
+  reportFrom,
+  reportTo,
+  reportStatus,
+}: {
+  section: AnalyticsSection;
+  reportFocus?: "service-booking";
+  reportFrom?: string;
+  reportTo?: string;
+  reportStatus?: string;
+}) {
   const [range, setRange] = useState<7 | 30>(7);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -233,7 +245,13 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
 
           {section === "reports" ? (
             <div className="space-y-4">
-              <ServiceBookingReportCard rangeDays={range} />
+              <ServiceBookingReportCard
+                rangeDays={range}
+                highlighted={reportFocus === "service-booking"}
+                initialFrom={reportFrom}
+                initialTo={reportTo}
+                initialStatus={reportStatus}
+              />
               <div className="grid gap-4 lg:grid-cols-2">
               <ScheduleReportCard />
               <Card className="p-5">

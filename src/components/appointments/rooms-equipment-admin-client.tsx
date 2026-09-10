@@ -163,7 +163,7 @@ export function RoomsEquipmentAdminClient() {
         {resources.length === 0 ? (
           <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-6 text-center">
             No rooms or equipment yet. Add items in{" "}
-            <Link href="/appointments/commerce" className="text-primary underline">commerce settings</Link> or create via API.
+            <Link href="/appointments/packages" className="text-primary underline">packages &amp; sales settings</Link> or create via API.
           </p>
         ) : (
           <ul className="divide-y rounded-lg border bg-card">

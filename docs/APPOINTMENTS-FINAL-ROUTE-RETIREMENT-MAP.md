@@ -16,7 +16,7 @@
 | `/appointments/contracts` | /appointments/booking/forms | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/coupons` | /appointments/discounts | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/no-show-recovery` | /appointments/automations/no-show | 301 | none | READY_FOR_RETIREMENT | — |
-| `/appointments/policies` | /appointments/types → Policies (per-type) + /appointments/booking for workspace defaults | 301 | none | READY_FOR_RETIREMENT | — |
+| `/appointments/policies` | /settings/business — Default booking policies (+ per-type override on Booking Types) | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/recall-campaigns` | /appointments/automations/recall | 301 | none | READY_FOR_RETIREMENT | — |
 | `/appointments/reports/service-booking` | /appointments/analytics/reports | 301 | from/to query if present | READY_FOR_RETIREMENT | — |
 | `/appointments/resources` | /appointments/booking/rooms-equipment | 301 | none | READY_FOR_RETIREMENT | — |

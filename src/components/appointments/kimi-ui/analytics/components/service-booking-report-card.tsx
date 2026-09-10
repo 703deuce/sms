@@ -30,16 +30,30 @@ function rangeToIso(rangeDays: 7 | 30) {
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-export function ServiceBookingReportCard({ rangeDays }: { rangeDays: 7 | 30 }) {
+export function ServiceBookingReportCard({
+  rangeDays,
+  highlighted = false,
+  initialFrom,
+  initialTo,
+  initialStatus,
+}: {
+  rangeDays: 7 | 30;
+  highlighted?: boolean;
+  initialFrom?: string;
+  initialTo?: string;
+  initialStatus?: string;
+}) {
   const [report, setReport] = useState<ServiceBookingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatus || "");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
-    const { from, to } = rangeToIso(rangeDays);
+    const fallback = rangeToIso(rangeDays);
+    const from = initialFrom || fallback.from;
+    const to = initialTo || fallback.to;
     const params = new URLSearchParams({ from, to });
     if (statusFilter) params.set("status", statusFilter);
     try {
@@ -53,17 +67,25 @@ export function ServiceBookingReportCard({ rangeDays }: { rangeDays: 7 | 30 }) {
     } finally {
       setLoading(false);
     }
-  }, [rangeDays, statusFilter]);
+  }, [rangeDays, statusFilter, initialFrom, initialTo]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const { from, to } = rangeToIso(rangeDays);
+  useEffect(() => {
+    if (!highlighted) return;
+    const el = document.getElementById("service-booking-report");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [highlighted]);
+
+  const fallbackRange = rangeToIso(rangeDays);
+  const from = initialFrom || fallbackRange.from;
+  const to = initialTo || fallbackRange.to;
   const exportHref = `/api/appointments/service-booking/reports?format=csv&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : ""}`;
 
   return (
-    <Card className="p-5">
+    <Card id="service-booking-report" className={`p-5${highlighted ? " ring-2 ring-primary/30" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">

@@ -39,7 +39,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   const children = [
     { label: "Booking Types", href: "/appointments/types" },
     { label: "Booking Pages", href: "/appointments/booking" },
-    { label: "Share & embed", href: "/appointments/booking/share" },
+    { label: "Share & embed", href: "/appointments/booking?section=share" },
   ];
   if (modules.commerce) {
     children.push({ label: "Packages", href: "/appointments/packages" });
@@ -97,7 +97,6 @@ function analyticsChildren(): NavItem["children"] {
     { label: "Reminders", href: "/appointments/analytics/reminders" },
     { label: "Automations", href: "/appointments/analytics/automations" },
     { label: "Reports", href: "/appointments/analytics/reports" },
-    { label: "Service booking", href: "/appointments/reports/service-booking" },
   ];
 }
 
