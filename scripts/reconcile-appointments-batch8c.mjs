@@ -217,6 +217,11 @@ const OVERRIDES = {
   "8-16": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 gift redemption at POS checkout + GiftCardsAdminClient issue/lookup" },
   "8-18": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 DiscountsAdminClient on /appointments/discounts + POS coupon apply" },
   "8-33": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-1 policy fees on booking type TypeAdvancedSections (not commerce hub)" },
+  // Batch 8F-2 — operations admin cleanup
+  "6-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-2 /appointments/new staff/location/questions/pricing + staff_created source" },
+  "7-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-2 ManageAppointmentLinkCard on appointment detail + ensure/regenerate API" },
+  "18-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-2 ActivityTimeline maps metadata.timeline label + manage link audit events" },
+  "3-21": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-2 DynamicPricingRulesEditor on Service type Payment section + evaluate API" },
   "8-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 /api/public/portal/[token]/memberships lifecycle API" },
   // Batch 8D-4 — operations/admin wave 1 (calendar, list, detail, waitlist, overview)
   "1-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-4 overview date picker → /appointments/calendar?date=; KPIs from /api/appointments/overview" },

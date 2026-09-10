@@ -13,10 +13,10 @@ Mechanical re-audit of all **308** master ledger rows from current codebase:
 | **Total master rows** | 308 |
 | **V1 rows** | 295 |
 | **V2 rows** | 11 |
-| **V1_COMPLETE** | 252 |
+| **V1_COMPLETE** | 256 |
 | **V1_COMPLETE_RUNTIME_ONLY** | 32 |
 | **V1_PROVIDER_BLOCKED** | 6 |
-| **V1_ADMIN_UI_GAP** | 5 |
+| **V1_ADMIN_UI_GAP** | 1 |
 | **V1_PUBLIC_UI_GAP** | 0 |
 | **V1_PORTAL_UI_GAP** | 0 |
 | **V1_CONTEXTUAL_FLOW_GAP** | 1 |
@@ -28,10 +28,10 @@ Mechanical re-audit of all **308** master ledger rows from current codebase:
 | **V2_DEFERRED** | 12 |
 | **OUT_OF_SCOPE_ERROR** | 0 |
 | **UNASSIGNED_ERROR** | 0 |
-| Residual implementation rows | 6 |
-| Commerce unique V1 (temp) | 3 |
-| Temp routes with unique V1 | 3 |
-| Backend ready / UI missing | 5 |
+| Residual implementation rows | 2 |
+| Commerce unique V1 (temp) | 15 |
+| Temp routes with unique V1 | 4 |
+| Backend ready / UI missing | 1 |
 | UI present / backend gap | 0 |
 
 ### Readiness gates
@@ -46,14 +46,10 @@ Mechanical re-audit of all **308** master ledger rows from current codebase:
 > **Note:** Temp routes still hold unique V1 OR wrong-placement rows remain. Route retirement blocked.
 
 
-## Remaining implementation rows (6)
+## Remaining implementation rows (2)
 
 - **3-20** — Slot diagnostics → `/appointments/availability` (V1_CONTEXTUAL_FLOW_GAP: Service → create staff contextual return)
-- **3-21** — Dynamic pricing by slot → `PARITY_TEMP` (V1_ADMIN_UI_GAP: Admin UI partial)
-- **6-2** — Create appointment (staff) → `/appointments/new` (V1_ADMIN_UI_GAP: Admin UI partial)
-- **7-1** — Manage appointment link → `/appointments/pos` (V1_ADMIN_UI_GAP: Admin UI partial)
 - **15-7** — Meeting polls → `/appointments/polls` (V1_ADMIN_UI_GAP: Per-booking-type permission editor)
-- **18-7** — Audit timeline on appointment → `/appointments/types/events` (V1_ADMIN_UI_GAP: Admin UI partial)
 
 ## Proposed next batches
 

@@ -39,6 +39,9 @@ type ApiAppointment = {
     remindersSuppressed?: boolean;
     location?: string;
     source?: string;
+    bookingSource?: string;
+    manageAppointmentUrl?: string;
+    manageAppointmentTokenIssuedAt?: string;
   };
   contact?: { id: string } | null;
   serviceLines?: Array<{
@@ -104,13 +107,16 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     scheduledFor: s.scheduledFor,
   }));
 
-  const timeline: TimelineEvent[] = (meta.timeline || []).map((t, i) => ({
-    id: String(t.id || `t_${i}`),
-    at: String(t.at || t.createdAt || new Date().toISOString()),
-    type: String(t.type || "event"),
-    title: String(t.title || t.summary || "Updated"),
-    detail: t.detail ? String(t.detail) : t.description ? String(t.description) : undefined,
-  }));
+  const timeline: TimelineEvent[] = (meta.timeline || [])
+    .map((t, i) => ({
+      id: String(t.id || `t_${i}`),
+      at: String(t.at || t.createdAt || new Date().toISOString()),
+      type: String(t.type || "event"),
+      title: String(t.title || t.label || t.summary || "Updated"),
+      detail: t.detail ? String(t.detail) : t.description ? String(t.description) : undefined,
+      actor: t.actor ? String(t.actor) : undefined,
+    }))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   return {
     id: data.id,
@@ -130,7 +136,18 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     paymentStatus: meta.paymentStatus || "none",
     pendingApproval: meta.pendingApproval ?? false,
     remindersSuppressed: meta.remindersSuppressed ?? meta.reminderOverride?.suppressed ?? false,
-    source: meta.source || "Staff",
+    source:
+      meta.bookingSource === "staff_created"
+        ? "Staff-created"
+        : meta.source === "public_booking"
+          ? "Public booking"
+          : meta.source || "Staff",
+    manageAppointmentUrl:
+      typeof meta.manageAppointmentUrl === "string" ? meta.manageAppointmentUrl : undefined,
+    manageAppointmentTokenIssuedAt:
+      typeof meta.manageAppointmentTokenIssuedAt === "string"
+        ? meta.manageAppointmentTokenIssuedAt
+        : undefined,
     notes: meta.notes || "",
     bookingAnswers: meta.bookingAnswers || {},
     reminderSchedule,

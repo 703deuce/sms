@@ -8,9 +8,11 @@ import {
   QUESTION_TYPE_OPTIONS,
   STAFF_ASSIGNMENT_OPTIONS,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
+import { DynamicPricingRulesEditor } from "./DynamicPricingRulesEditor";
 
 type Props = {
   form: AppointmentTypeFormState;
+  appointmentTypeId?: string;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
@@ -22,6 +24,7 @@ type Props = {
 
 export default function TypeAdvancedSections({
   form,
+  appointmentTypeId,
   staffOptions,
   locationOptions,
   connectedPaymentProviders,
@@ -451,6 +454,12 @@ export default function TypeAdvancedSections({
             </div>
           </div>
         ) : null}
+        <div className="mt-6 border-t border-[#ecedf2] pt-6">
+          <DynamicPricingRulesEditor
+            appointmentTypeId={appointmentTypeId}
+            basePriceCents={form.paymentPriceCents > 0 ? form.paymentPriceCents : undefined}
+          />
+        </div>
       </section>
 
       {/* Group & recurring */}
