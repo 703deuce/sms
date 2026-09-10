@@ -2,7 +2,7 @@
 @import "../overview/ref-deco.css";
 .booking-page {
   padding: 24px 28px 48px;
-  background: #f8f8fb;
+  background: var(--appt-surface-muted, #f7f8fa);
   min-height: 100%;
   font-family: inherit;
 }
@@ -68,8 +68,8 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: #efecfc;
-  color: #5b3df0;
+  background: #dcefeb;
+  color: #147d74;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,8 +112,8 @@
 }
 
 .booking-input:focus {
-  border-color: #5b3df0;
-  box-shadow: 0 0 0 3px rgba(91, 61, 240, 0.12);
+  border-color: #147d74;
+  box-shadow: 0 0 0 3px rgba(20, 125, 116, 0.12);
 }
 
 .booking-input:disabled,
@@ -146,8 +146,8 @@
 }
 
 .booking-btn-primary {
-  background: #5b3df0;
-  border-color: #5b3df0;
+  background: #147d74;
+  border-color: #147d74;
   color: #ffffff;
 }
 
@@ -161,7 +161,7 @@
   width: 40px;
   height: 22px;
   border-radius: 999px;
-  background: #5b3df0;
+  background: #147d74;
   border: none;
   cursor: pointer;
   flex-shrink: 0;
@@ -236,9 +236,9 @@
 }
 
 .preview-device-btn.active {
-  border-color: #5b3df0;
-  color: #5b3df0;
-  background: #efecfc;
+  border-color: #147d74;
+  color: #147d74;
+  background: #dcefeb;
 }
 
 .preview-frame {
@@ -250,7 +250,7 @@
 
 .preview-banner {
   height: 120px;
-  background: linear-gradient(135deg, #c9befc 0%, #b3a4f8 50%, #cbb8f7 100%);
+  background: linear-gradient(135deg, #9fd4cc 0%, #6db5ab 50%, #b8e0db 100%);
   position: relative;
 }
 
@@ -258,7 +258,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: #5b3df0;
+  background: #147d74;
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -270,7 +270,7 @@
   left: 50%;
   bottom: -32px;
   transform: translateX(-50%);
-  box-shadow: 0 2px 8px rgba(91, 61, 240, 0.35);
+  box-shadow: 0 2px 8px rgba(20, 125, 116, 0.35);
 }
 
 .preview-body {
@@ -326,7 +326,7 @@
 }
 
 .preview-type:hover {
-  border-color: #c9befc;
+  border-color: #9fd4cc;
 }
 
 .preview-type-name {
@@ -339,7 +339,7 @@
 }
 
 .preview-type-name svg {
-  color: #5b3df0;
+  color: #147d74;
 }
 
 .preview-type-dur {
@@ -370,8 +370,8 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #efecfc;
-  color: #5b3df0;
+  background: #dcefeb;
+  color: #147d74;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -400,7 +400,7 @@
 }
 
 .preview-legal a {
-  color: #5b3df0;
+  color: #147d74;
   text-decoration: none;
 }
 
@@ -420,7 +420,7 @@
 }
 
 .preview-powered svg {
-  color: #5b3df0;
+  color: #147d74;
 }
 
 .preview-footnote {
