@@ -32,4 +32,10 @@
 
 ## READY_TO_RETIRE_GENERIC_BOOKING_TYPES
 
-**NO** — Meetings/Services locked editors ship; Classes/Workshops use ClassSeries admin with core fields. Full editor specialization matrices and public smokes remain before retirement sign-off.
+**NO** — Structural absorption complete (four editors, occurrence scheduling, dedicated workshop public route). Browser save/reload/public smokes and live waitlist/admission cert remain.
+
+### Remaining blockers (exact)
+
+1. Browser smokes FOUR-02–05, 10–12, 16–18, 23, 25–26
+2. Live three-customer capacity proof (FOUR-09 server logic present)
+3. Package/membership multi-select on Class/Workshop editor (commerce at checkout only today)

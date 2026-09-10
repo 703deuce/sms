@@ -21,10 +21,19 @@
 | General (name, description) | Yes | Yes | `name`, `description` |
 | Capacity | Yes | Yes | `capacity` |
 | Instructor / location | Yes | Yes | `staffId`, `locationId` |
-| Schedule / occurrences | Read hint | Date TBD in UI | `class_occurrences` |
+| General (visibility, image) | Yes | Yes | `metadata` JSON |
+| Schedule / occurrences | Yes — `ClassSeriesOccurrencePanel` | Yes — workshop panel (no weekly default) | `class_occurrences` |
+| Pricing & access | Yes | Yes | `metadata.priceCents`, `isFree`, `memberOnly` |
+| Customer information | Yes | Yes | `metadata.intakeFormId` |
+| Policies | Yes | Yes | `metadata.cancellationPolicy`, `termsUrl` |
+| Waitlist | Yes | — | `metadata.waitlist*` |
+| Admission | Yes | Yes | `metadata.admissionEnabled` |
+| Confirmation | — | Yes | `metadata.confirmationMessage` |
 | Offering discriminator | `metadata.kind: class` | `metadata.kind: workshop` | `class_series.metadata` |
 
-**Runtime:** `upsertClassSeries` → `/api/appointments/service-booking/classes`
+**Runtime:** `upsertClassSeries` → `/api/appointments/service-booking/classes`  
+**Occurrences:** `generateClassOccurrences`, `listOccurrencesForSeries`, `cancelClassOccurrence`  
+**Capacity:** `assertOccurrenceCapacity` in `enrollInClass`
 
 ## Public consequences
 
@@ -32,5 +41,5 @@
 |---------------|----------------|
 | Service duration | `/book/[slug]/[serviceId]` slot length |
 | Meeting host mode | Host resolution on public booking |
-| Class capacity | `/book/[slug]/classes` remaining spots |
-| Workshop metadata | Filtered workshop list (admin); public classes page until dedicated workshops URL |
+| Class capacity | `/book/[slug]/classes` remaining spots (kind=class filter) |
+| Workshop registration | `/book/[slug]/workshops` (kind=workshop filter, Workshop labels) |

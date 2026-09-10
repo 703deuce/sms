@@ -30,7 +30,10 @@ Under **Booking**:
 | Class | `ClassSeries` (`metadata.kind: class`) | `/appointments/classes` | `ClassSeriesAdminConnected` |
 | Workshop | `ClassSeries` (`metadata.kind: workshop`) | `/appointments/workshops` | `ClassSeriesAdminConnected` |
 
-Public booking URLs are unchanged (`/book/[slug]`, `/book/[slug]/classes`, etc.).
+Public booking URLs:
+- Meetings/Services: `/book/[slug]`, `/book/[slug]/[serviceId]`
+- Classes: `/book/[slug]/classes` (kind=class filter)
+- Workshops: `/book/[slug]/workshops` (kind=workshop filter, Workshop customer labels)
 
 ## Core rules
 

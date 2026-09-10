@@ -46,6 +46,80 @@ export async function upsertClassSeries(
   return prisma.classSeries.create({ data: { workspaceId, ...data } });
 }
 
+export async function listOccurrencesForSeries(workspaceId: string, seriesId: string) {
+  const prisma = getPrisma();
+  const occurrences = await prisma.classOccurrence.findMany({
+    where: { workspaceId, seriesId },
+    orderBy: { startsAt: "asc" },
+    take: 100,
+  });
+  const ids = occurrences.map((o) => o.id);
+  const counts = ids.length
+    ? await prisma.classEnrollment.groupBy({
+        by: ["occurrenceId"],
+        where: { workspaceId, occurrenceId: { in: ids }, status: "enrolled" },
+        _count: { occurrenceId: true },
+      })
+    : [];
+  const countMap = new Map(
+    counts.map((c) => [c.occurrenceId, c._count.occurrenceId]),
+  );
+  return occurrences.map((occ) => ({
+    ...occ,
+    enrolled: countMap.get(occ.id) ?? 0,
+    remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
+  }));
+}
+
+export async function cancelClassOccurrence(workspaceId: string, occurrenceId: string) {
+  const prisma = getPrisma();
+  const occ = await prisma.classOccurrence.findFirst({
+    where: { id: occurrenceId, workspaceId },
+  });
+  if (!occ) throw new Error("Occurrence not found");
+  return prisma.classOccurrence.update({
+    where: { id: occurrenceId },
+    data: { status: "cancelled" },
+  });
+}
+
+export async function updateClassOccurrence(
+  workspaceId: string,
+  occurrenceId: string,
+  input: { startsAt?: string; endsAt?: string; capacity?: number },
+) {
+  const prisma = getPrisma();
+  const occ = await prisma.classOccurrence.findFirst({
+    where: { id: occurrenceId, workspaceId },
+  });
+  if (!occ) throw new Error("Occurrence not found");
+  return prisma.classOccurrence.update({
+    where: { id: occurrenceId },
+    data: {
+      startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
+      endsAt: input.endsAt ? new Date(input.endsAt) : undefined,
+      capacity: input.capacity,
+    },
+  });
+}
+
+async function assertOccurrenceCapacity(
+  workspaceId: string,
+  occurrenceId: string,
+): Promise<void> {
+  const prisma = getPrisma();
+  const occ = await prisma.classOccurrence.findFirst({
+    where: { id: occurrenceId, workspaceId, status: "scheduled" },
+    include: { series: true },
+  });
+  if (!occ) throw new Error("Occurrence not found or not open for registration");
+  const cap = occ.capacity ?? occ.series?.capacity ?? 0;
+  const enrolled = await prisma.classEnrollment.count({
+    where: { workspaceId, occurrenceId, status: "enrolled" },
+  });
+  if (enrolled >= cap) throw new Error("This session is full");
+}
+
 export async function generateClassOccurrences(
   workspaceId: string,
   seriesId: string,
@@ -103,6 +177,7 @@ export async function enrollInClass(
     return enrollments;
   }
   if (!input.occurrenceId) throw new Error("occurrenceId required");
+  await assertOccurrenceCapacity(workspaceId, input.occurrenceId);
   return prisma.classEnrollment.create({
     data: {
       workspaceId,

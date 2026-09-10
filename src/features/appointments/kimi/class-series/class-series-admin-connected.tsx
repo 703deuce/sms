@@ -1,14 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, AlertTriangle } from "lucide-react";
+import Link from "next/link";
+import { Plus, AlertTriangle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  CLASS_EDITOR_SECTIONS,
   CLASS_SERIES_OFFERING_UI,
+  WORKSHOP_EDITOR_SECTIONS,
   metadataForOfferingKind,
+  parseClassSeriesMetadata,
   resolveClassSeriesOfferingKind,
+  type ClassSeriesMetadata,
   type ClassSeriesOfferingKind,
 } from "@/lib/appointments/class-series-offering";
+import { ClassSeriesOccurrencePanel } from "./class-series-occurrence-panel";
+import { ClassSeriesWorkshopSchedulePanel } from "./class-series-workshop-schedule-panel";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 
 type ClassSeriesRow = {
@@ -20,7 +27,7 @@ type ClassSeriesRow = {
   locationId: string | null;
   active: boolean;
   metadata: unknown;
-  occurrences?: Array<{ id: string; startsAt: string; endsAt: string }>;
+  occurrences?: Array<{ id: string; startsAt: string; endsAt: string; capacity?: number | null }>;
 };
 
 type ClassSeriesForm = {
@@ -30,6 +37,7 @@ type ClassSeriesForm = {
   staffId: string;
   locationId: string;
   active: boolean;
+  metadata: ClassSeriesMetadata;
 };
 
 const EMPTY_FORM: ClassSeriesForm = {
@@ -39,6 +47,7 @@ const EMPTY_FORM: ClassSeriesForm = {
   staffId: "",
   locationId: "",
   active: true,
+  metadata: {},
 };
 
 function LoadingShell({ title }: { title: string }) {
@@ -50,30 +59,52 @@ function LoadingShell({ title }: { title: string }) {
   );
 }
 
+function rowToForm(row: ClassSeriesRow, kind: ClassSeriesOfferingKind): ClassSeriesForm {
+  const meta = metadataForOfferingKind(kind, parseClassSeriesMetadata(row.metadata));
+  return {
+    name: row.name,
+    description: row.description || "",
+    capacity: row.capacity,
+    staffId: row.staffId || "",
+    locationId: row.locationId || "",
+    active: row.active,
+    metadata: meta,
+  };
+}
+
 export function ClassSeriesAdminConnected({
   offeringKind,
 }: {
   offeringKind: ClassSeriesOfferingKind;
 }) {
   const copy = CLASS_SERIES_OFFERING_UI[offeringKind];
+  const sections = offeringKind === "workshop" ? WORKSHOP_EDITOR_SECTIONS : CLASS_EDITOR_SECTIONS;
   const [rows, setRows] = useState<ClassSeriesRow[]>([]);
   const [staffOptions, setStaffOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [locationOptions, setLocationOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [intakeForms, setIntakeForms] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [form, setForm] = useState<ClassSeriesForm>(EMPTY_FORM);
+  const [form, setForm] = useState<ClassSeriesForm>({
+    ...EMPTY_FORM,
+    metadata: metadataForOfferingKind(offeringKind),
+  });
+  const [activeSection, setActiveSection] = useState<string>(sections[0]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [bookingSlug, setBookingSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [classesRes, settingsRes] = await Promise.all([
+      const [classesRes, settingsRes, intakeRes, platformRes] = await Promise.all([
         fetch("/api/appointments/service-booking/classes"),
+        fetch("/api/appointments/settings"),
+        fetch("/api/appointments/service-booking/intake-forms"),
         fetch("/api/appointments/settings"),
       ]);
       if (!classesRes.ok) throw new Error("classes failed");
@@ -90,6 +121,17 @@ export function ClassSeriesAdminConnected({
         setLocationOptions(
           locations.filter((l) => l.active !== false && l.name).map((l) => ({ id: l.id, name: l.name })),
         );
+      }
+      if (intakeRes.ok) {
+        const intakeJson = await intakeRes.json();
+        setIntakeForms(
+          (intakeJson.data || []).map((f: { id: string; name: string }) => ({ id: f.id, name: f.name })),
+        );
+      }
+      if (platformRes.ok) {
+        const platformJson = await platformRes.json();
+        const slug = platformJson.data?.publicBookingSlug || platformJson.data?.slug;
+        if (slug) setBookingSlug(String(slug));
       }
     } catch {
       setFailed(true);
@@ -111,23 +153,17 @@ export function ClassSeriesAdminConnected({
     if (!loading && visibleRows.length > 0 && !selectedId && !isCreating) {
       const first = visibleRows[0];
       setSelectedId(first.id);
-      setForm({
-        name: first.name,
-        description: first.description || "",
-        capacity: first.capacity,
-        staffId: first.staffId || "",
-        locationId: first.locationId || "",
-        active: first.active,
-      });
+      setForm(rowToForm(first, offeringKind));
     }
-  }, [visibleRows, isCreating, loading, selectedId]);
+  }, [visibleRows, isCreating, loading, selectedId, offeringKind]);
 
   const selected = visibleRows.find((row) => row.id === selectedId) ?? null;
 
   const startCreate = () => {
     setSelectedId(null);
     setIsCreating(true);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, metadata: metadataForOfferingKind(offeringKind) });
+    setActiveSection(sections[0]);
     setError("");
   };
 
@@ -136,15 +172,12 @@ export function ClassSeriesAdminConnected({
     if (!row) return;
     setSelectedId(id);
     setIsCreating(false);
-    setForm({
-      name: row.name,
-      description: row.description || "",
-      capacity: row.capacity,
-      staffId: row.staffId || "",
-      locationId: row.locationId || "",
-      active: row.active,
-    });
+    setForm(rowToForm(row, offeringKind));
     setError("");
+  };
+
+  const updateMeta = (patch: Partial<ClassSeriesMetadata>) => {
+    setForm((f) => ({ ...f, metadata: { ...f.metadata, ...patch } }));
   };
 
   const save = async () => {
@@ -166,7 +199,7 @@ export function ClassSeriesAdminConnected({
       staffId: form.staffId || undefined,
       locationId: form.locationId || undefined,
       active: form.active,
-      metadata: metadataForOfferingKind(offeringKind),
+      metadata: metadataForOfferingKind(offeringKind, form.metadata),
     };
     const res = await fetch("/api/appointments/service-booking/classes", {
       method: "POST",
@@ -186,6 +219,29 @@ export function ClassSeriesAdminConnected({
     await load();
   };
 
+  const sectionLabel = (id: string) => {
+    const labels: Record<string, string> = {
+      general: "General",
+      schedule: "Schedule",
+      datetime: "Date & time",
+      instructor: "Instructor & location",
+      location: "Location",
+      capacity: "Capacity",
+      registration: "Registration",
+      pricing: "Pricing & access",
+      customer: "Customer information",
+      policies: offeringKind === "workshop" ? "Policies & documents" : "Policies",
+      waitlist: "Waitlist",
+      admission: "Admission",
+      confirmation: "Confirmation",
+    };
+    return labels[id] || id;
+  };
+
+  const publicHref = bookingSlug
+    ? `/book/${bookingSlug}/${copy.publicPathSuffix}`
+    : null;
+
   if (loading) return <LoadingShell title={copy.pageTitle} />;
   if (failed) {
     return (
@@ -201,7 +257,7 @@ export function ClassSeriesAdminConnected({
     );
   }
 
-  const nextOccurrence = selected?.occurrences?.[0];
+  const nextOccurrence = selected?.occurrences?.find((o) => new Date(o.startsAt) >= new Date());
   const nextOccurrenceLabel = nextOccurrence
     ? new Date(nextOccurrence.startsAt).toLocaleString()
     : "—";
@@ -242,27 +298,34 @@ export function ClassSeriesAdminConnected({
                 aria-label={`Search ${copy.pageTitle}`}
               />
             </div>
-            <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+            <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 max-h-[70vh]">
               {visibleRows.length === 0 ? (
                 <p className="px-3 py-6 text-center text-[12.5px] text-[#8a8fa3]">{copy.listEmptyMessage}</p>
               ) : (
-                visibleRows.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => selectRow(row.id)}
-                    className={`w-full text-left rounded-lg px-3 py-2.5 text-[13px] transition-colors ${
-                      row.id === selectedId
-                        ? "bg-[#f7f6ff] text-[#1a1d29] ring-1 ring-[#dcd9ff]"
-                        : "hover:bg-[#fafbfc] text-[#3f4254]"
-                    }`}
-                  >
-                    <div className="font-medium truncate">{row.name}</div>
-                    <div className="text-[11.5px] text-[#8a8fa3] mt-0.5">
-                      Capacity {row.capacity} · {row.active ? "Active" : "Inactive"}
-                    </div>
-                  </button>
-                ))
+                visibleRows.map((row) => {
+                  const next = row.occurrences?.[0];
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => selectRow(row.id)}
+                      className={`w-full text-left rounded-lg px-3 py-2.5 text-[13px] transition-colors ${
+                        row.id === selectedId
+                          ? "bg-[#f7f6ff] text-[#1a1d29] ring-1 ring-[#dcd9ff]"
+                          : "hover:bg-[#fafbfc] text-[#3f4254]"
+                      }`}
+                    >
+                      <div className="font-medium truncate">{row.name}</div>
+                      <div className="text-[11.5px] text-[#8a8fa3] mt-0.5">
+                        {next
+                          ? `Next: ${new Date(next.startsAt).toLocaleDateString()}`
+                          : "No upcoming session"}
+                        {" · "}
+                        Cap {row.capacity}
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>
@@ -279,70 +342,95 @@ export function ClassSeriesAdminConnected({
               </div>
             ) : (
               <>
-                <div className="px-5 py-3.5 border-b border-[#ecedf2] text-[13px] text-[#6b6f82]">
-                  {copy.editorBackLabel}
+                <div className="px-5 py-3 border-b border-[#ecedf2] flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[13px] text-[#6b6f82]">{copy.editorBackLabel}</span>
+                  {publicHref ? (
+                    <Link
+                      href={publicHref}
+                      target="_blank"
+                      className="inline-flex items-center gap-1 text-[12px] font-medium text-[#147d74] hover:underline"
+                    >
+                      Public page <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    </Link>
+                  ) : null}
                 </div>
+
+                <div className="flex border-b border-[#ecedf2] overflow-x-auto px-2">
+                  {sections.map((section) => (
+                    <button
+                      key={section}
+                      type="button"
+                      onClick={() => setActiveSection(section)}
+                      className={`shrink-0 px-3 py-2.5 text-[12.5px] font-medium border-b-2 transition-colors ${
+                        activeSection === section
+                          ? "border-[#147d74] text-[#147d74]"
+                          : "border-transparent text-[#6b6f82] hover:text-[#1a1d29]"
+                      }`}
+                    >
+                      {sectionLabel(section)}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-                  <section>
-                    <h3 className="text-[14px] font-semibold mb-4">General</h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  {activeSection === "general" && (
+                    <section className="grid gap-4 sm:grid-cols-2">
                       <div className="sm:col-span-2">
                         <label className="label" htmlFor="series-name">Name</label>
-                        <input
-                          id="series-name"
-                          className="input w-full"
-                          value={form.name}
-                          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                        />
+                        <input id="series-name" className="input w-full" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="label" htmlFor="series-description">Description</label>
-                        <textarea
-                          id="series-description"
-                          className="input w-full min-h-[80px]"
-                          value={form.description}
-                          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                        />
+                        <textarea id="series-description" className="input w-full min-h-[80px]" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
                       </div>
                       <div>
-                        <label className="label" htmlFor="series-capacity">Maximum capacity</label>
-                        <input
-                          id="series-capacity"
-                          type="number"
-                          min={1}
-                          className="input w-full"
-                          value={form.capacity}
-                          onChange={(e) => setForm((f) => ({ ...f, capacity: Number(e.target.value) || 1 }))}
-                        />
+                        <label className="label" htmlFor="series-visibility">Visibility</label>
+                        <select id="series-visibility" className="input w-full" value={form.metadata.visibility || "public"} onChange={(e) => updateMeta({ visibility: e.target.value as "public" | "hidden" })}>
+                          <option value="public">Public</option>
+                          <option value="hidden">Hidden</option>
+                        </select>
                       </div>
                       <div>
                         <label className="label" htmlFor="series-active">Status</label>
-                        <select
-                          id="series-active"
-                          className="input w-full"
-                          value={form.active ? "active" : "inactive"}
-                          onChange={(e) => setForm((f) => ({ ...f, active: e.target.value === "active" }))}
-                        >
+                        <select id="series-active" className="input w-full" value={form.active ? "active" : "inactive"} onChange={(e) => setForm((f) => ({ ...f, active: e.target.value === "active" }))}>
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
                         </select>
                       </div>
-                    </div>
-                  </section>
+                      <div className="sm:col-span-2">
+                        <label className="label" htmlFor="series-image">Image URL</label>
+                        <input id="series-image" className="input w-full" value={form.metadata.imageUrl || ""} onChange={(e) => updateMeta({ imageUrl: e.target.value })} placeholder="https://…" />
+                      </div>
+                    </section>
+                  )}
 
-                  <section>
-                    <h3 className="text-[14px] font-semibold mb-4">
-                      {offeringKind === "workshop" ? "Instructor & location" : "Instructor & location"}
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                  {activeSection === "schedule" && selectedId && (
+                    <ClassSeriesOccurrencePanel
+                      seriesId={selectedId}
+                      defaultCapacity={form.capacity}
+                      timezone={form.metadata.timezone}
+                    />
+                  )}
+                  {activeSection === "schedule" && !selectedId && (
+                    <p className="text-[13px] text-[#8a8fa3]">Save the {offeringKind} first, then add schedule occurrences.</p>
+                  )}
+
+                  {activeSection === "datetime" && selectedId && (
+                    <ClassSeriesWorkshopSchedulePanel
+                      seriesId={selectedId}
+                      defaultCapacity={form.capacity}
+                      timezone={form.metadata.timezone}
+                    />
+                  )}
+                  {activeSection === "datetime" && !selectedId && (
+                    <p className="text-[13px] text-[#8a8fa3]">Save the workshop first, then set date and time.</p>
+                  )}
+
+                  {(activeSection === "instructor" || activeSection === "location") && (
+                    <section className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="label" htmlFor="series-staff">Instructor / staff</label>
-                        <select
-                          id="series-staff"
-                          className="input w-full"
-                          value={form.staffId}
-                          onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
-                        >
+                        <select id="series-staff" className="input w-full" value={form.staffId} onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}>
                           <option value="">Select staff</option>
                           {staffOptions.map((s) => (
                             <option key={s.id} value={s.id}>{s.name}</option>
@@ -351,42 +439,161 @@ export function ClassSeriesAdminConnected({
                       </div>
                       <div>
                         <label className="label" htmlFor="series-location">Location</label>
-                        <select
-                          id="series-location"
-                          className="input w-full"
-                          value={form.locationId}
-                          onChange={(e) => setForm((f) => ({ ...f, locationId: e.target.value }))}
-                        >
+                        <select id="series-location" className="input w-full" value={form.locationId} onChange={(e) => setForm((f) => ({ ...f, locationId: e.target.value }))}>
                           <option value="">Select location</option>
                           {locationOptions.map((l) => (
                             <option key={l.id} value={l.id}>{l.name}</option>
                           ))}
                         </select>
                       </div>
-                    </div>
-                  </section>
+                      <div className="sm:col-span-2">
+                        <label className="label" htmlFor="series-tz">Timezone</label>
+                        <input id="series-tz" className="input w-full" value={form.metadata.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} onChange={(e) => updateMeta({ timezone: e.target.value })} />
+                      </div>
+                    </section>
+                  )}
 
-                  {offeringKind === "class" && selected ? (
-                    <section>
-                      <h3 className="text-[14px] font-semibold mb-2">Schedule</h3>
-                      <p className="text-[12.5px] text-[#8a8fa3]">
-                        Next occurrence: {nextOccurrenceLabel}. Manage occurrences from Calendar or class operations.
+                  {activeSection === "capacity" && (
+                    <section className="grid gap-4 sm:grid-cols-2 max-w-md">
+                      <div>
+                        <label className="label" htmlFor="series-capacity">Maximum capacity</label>
+                        <input id="series-capacity" type="number" min={1} className="input w-full" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: Number(e.target.value) || 1 }))} />
+                        <p className="mt-1 text-[12px] text-[#8a8fa3]">Enforced server-side at registration.</p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-6">
+                        <input id="show-remaining" type="checkbox" checked={form.metadata.showRemainingSpots !== false} onChange={(e) => updateMeta({ showRemainingSpots: e.target.checked })} />
+                        <label htmlFor="show-remaining" className="text-[13px]">Show remaining spots on public page</label>
+                      </div>
+                    </section>
+                  )}
+
+                  {activeSection === "registration" && (
+                    <section className="grid gap-4 sm:grid-cols-2 max-w-lg">
+                      <div>
+                        <label className="label" htmlFor="reg-capacity">Maximum capacity</label>
+                        <input
+                          id="reg-capacity"
+                          type="number"
+                          min={1}
+                          className="input w-full"
+                          value={form.capacity}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, capacity: Number(e.target.value) || 1 }))
+                          }
+                        />
+                        <p className="mt-1 text-[12px] text-[#8a8fa3]">Enforced server-side at registration.</p>
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="reg-opens">Registration opens</label>
+                        <input id="reg-opens" type="datetime-local" className="input w-full" value={form.metadata.registrationOpensAt?.slice(0, 16) || ""} onChange={(e) => updateMeta({ registrationOpensAt: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="reg-closes">Registration closes</label>
+                        <input id="reg-closes" type="datetime-local" className="input w-full" value={form.metadata.registrationClosesAt?.slice(0, 16) || ""} onChange={(e) => updateMeta({ registrationClosesAt: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
+                      </div>
+                      <p className="sm:col-span-2 text-[12px] text-[#8a8fa3]">Next session: {nextOccurrenceLabel}</p>
+                    </section>
+                  )}
+
+                  {activeSection === "pricing" && (
+                    <section className="grid gap-4 sm:grid-cols-2 max-w-lg">
+                      <div className="flex items-center gap-2 sm:col-span-2">
+                        <input id="is-free" type="checkbox" checked={form.metadata.isFree === true} onChange={(e) => updateMeta({ isFree: e.target.checked, priceCents: e.target.checked ? 0 : form.metadata.priceCents })} />
+                        <label htmlFor="is-free" className="text-[13px]">Free</label>
+                      </div>
+                      {!form.metadata.isFree && (
+                        <div>
+                          <label className="label" htmlFor="price">Price (USD)</label>
+                          <input id="price" type="number" min={0} step="0.01" className="input w-full" value={(form.metadata.priceCents ?? 0) / 100} onChange={(e) => updateMeta({ priceCents: Math.round(Number(e.target.value) * 100) })} />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 sm:col-span-2">
+                        <input id="member-only" type="checkbox" checked={form.metadata.memberOnly === true} onChange={(e) => updateMeta({ memberOnly: e.target.checked })} />
+                        <label htmlFor="member-only" className="text-[13px]">Members only</label>
+                      </div>
+                      <p className="sm:col-span-2 text-[12px] text-[#8a8fa3]">
+                        Package and membership eligibility use canonical commerce settings at checkout when configured.
                       </p>
                     </section>
-                  ) : null}
+                  )}
 
-                  {error ? (
-                    <p className="text-[13px] text-red-600" role="alert">{error}</p>
-                  ) : null}
+                  {activeSection === "customer" && (
+                    <section className="max-w-md">
+                      <label className="label" htmlFor="intake-form">Intake form</label>
+                      <select id="intake-form" className="input w-full" value={form.metadata.intakeFormId || ""} onChange={(e) => updateMeta({ intakeFormId: e.target.value || undefined })}>
+                        <option value="">None</option>
+                        {intakeForms.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-[12px] text-[#8a8fa3]">
+                        <Link href="/appointments/booking/forms" className="text-[#147d74] underline">Manage forms</Link>
+                      </p>
+                    </section>
+                  )}
 
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      className="btn-brand text-[13px] font-semibold h-9 px-4 rounded-lg disabled:opacity-50"
-                      onClick={() => void save()}
-                      disabled={saving}
-                    >
-                      {saving ? "Saving…" : "Save changes"}
+                  {activeSection === "policies" && (
+                    <section className="grid gap-4 max-w-lg">
+                      <div>
+                        <label className="label" htmlFor="cancel-policy">Cancellation policy</label>
+                        <textarea id="cancel-policy" className="input w-full min-h-[72px]" value={form.metadata.cancellationPolicy || ""} onChange={(e) => updateMeta({ cancellationPolicy: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="label" htmlFor="terms-url">Terms URL</label>
+                        <input id="terms-url" className="input w-full" value={form.metadata.termsUrl || ""} onChange={(e) => updateMeta({ termsUrl: e.target.value })} />
+                      </div>
+                    </section>
+                  )}
+
+                  {activeSection === "waitlist" && (
+                    <section className="grid gap-4 max-w-lg">
+                      <div className="flex items-center gap-2">
+                        <input id="waitlist-enabled" type="checkbox" checked={form.metadata.waitlistEnabled === true} onChange={(e) => updateMeta({ waitlistEnabled: e.target.checked })} />
+                        <label htmlFor="waitlist-enabled" className="text-[13px]">Enable waitlist when full</label>
+                      </div>
+                      {form.metadata.waitlistEnabled && (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <input id="waitlist-auto" type="checkbox" checked={form.metadata.waitlistAutoPromote === true} onChange={(e) => updateMeta({ waitlistAutoPromote: e.target.checked })} />
+                            <label htmlFor="waitlist-auto" className="text-[13px]">Automatically promote when a spot opens</label>
+                          </div>
+                          <div>
+                            <label className="label" htmlFor="waitlist-expire">Offer expires (hours)</label>
+                            <input id="waitlist-expire" type="number" min={1} className="input w-full max-w-[120px]" value={form.metadata.waitlistOfferExpiresHours ?? 24} onChange={(e) => updateMeta({ waitlistOfferExpiresHours: Number(e.target.value) || 24 })} />
+                          </div>
+                        </>
+                      )}
+                      <p className="text-[12px] text-[#8a8fa3]">
+                        Waitlist runtime uses the shared appointments waitlist engine.{" "}
+                        <Link href="/appointments/waitlist" className="text-[#147d74] underline">View waitlist</Link>
+                      </p>
+                    </section>
+                  )}
+
+                  {activeSection === "admission" && (
+                    <section className="max-w-lg space-y-3">
+                      <div className="flex items-center gap-2">
+                        <input id="admission-enabled" type="checkbox" checked={form.metadata.admissionEnabled === true} onChange={(e) => updateMeta({ admissionEnabled: e.target.checked })} />
+                        <label htmlFor="admission-enabled" className="text-[13px]">Enable check-in / ticket tracking</label>
+                      </div>
+                      <p className="text-[12px] text-[#8a8fa3]">
+                        After registrations exist, manage attendance from Calendar or class operations. Seat maps remain available per occurrence when configured.
+                      </p>
+                    </section>
+                  )}
+
+                  {activeSection === "confirmation" && (
+                    <section className="max-w-lg">
+                      <label className="label" htmlFor="confirm-msg">Confirmation message</label>
+                      <textarea id="confirm-msg" className="input w-full min-h-[100px]" value={form.metadata.confirmationMessage || ""} onChange={(e) => updateMeta({ confirmationMessage: e.target.value })} placeholder="Instructions shown after registration…" />
+                    </section>
+                  )}
+
+                  {error ? <p className="text-[13px] text-red-600" role="alert">{error}</p> : null}
+
+                  <div className="flex gap-2 pt-2 border-t border-[#ecedf2]">
+                    <button type="button" className="btn-brand text-[13px] font-semibold h-9 px-4 rounded-lg disabled:opacity-50" onClick={() => void save()} disabled={saving}>
+                      {saving ? "Saving…" : isCreating ? copy.createButtonLabel : "Save changes"}
                     </button>
                   </div>
                 </div>
