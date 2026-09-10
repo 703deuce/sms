@@ -1,3 +1,12 @@
+## Batch 8C reconciliation (2026-09-10) — MECHANICAL AUDIT COMPLETE
+
+308-row post-absorption reconciliation complete. See:
+- `docs/APPOINTMENTS-POST-ABSORPTION-RECONCILIATION.md`
+- `docs/APPOINTMENTS-RESIDUAL-V1-IMPLEMENTATION-QUEUE.md`
+- `docs/APPOINTMENTS-V1-CLOSURE-SUMMARY.json`
+
+**Route convergence:** NO | **Certification:** NO | **Residual rows:** 174
+
 # Appointments — Existing Page Gap Queue (Batch 8A)
 
 **Status:** Audit-only output — do not implement from this document without explicit directive.

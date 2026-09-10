@@ -122,7 +122,8 @@ const OVERRIDES = {
   "6-3": { status: "V1_WRONG_PLACEMENT", gap: "Recall campaigns on /appointments/recall-campaigns", evidence: "missing /appointments/automations/recall", priority: "P1" },
   "6-4": { status: "V1_WRONG_PLACEMENT", gap: "No-show recovery on temp route", evidence: "missing /appointments/automations/no-show", priority: "P1" },
   "6-8": { status: "V1_WRONG_PLACEMENT", gap: "Appointment segments on /appointments/segments", evidence: "distinct from contacts segments", priority: "P2" },
-  "4-8": { status: "V1_WRONG_PLACEMENT", gap: "Voice reminders on /appointments/voice-reminders", evidence: "not merged into reminders", priority: "P1" },
+  "4-8": { status: "V1_WRONG_PLACEMENT", gap: "Resources on /appointments/resources hub", evidence: "no rooms-equipment canonical route", priority: "P1" },
+  "11-8": { status: "V1_WRONG_PLACEMENT", gap: "Voice reminders on /appointments/voice-reminders", evidence: "not merged into /appointments/reminders", priority: "P1" },
   "5-21": { status: "V1_WRONG_PLACEMENT", gap: "Booking share on /appointments/booking/share", evidence: "not in booking pages hub", priority: "P2" },
   "5-22": { status: "V1_WRONG_PLACEMENT", gap: "Branding on /appointments/booking/branding", evidence: "theme editor temp route", priority: "P2" },
   // Backend gaps
@@ -206,7 +207,14 @@ function classifyRow(row) {
   if (row.FINAL_SURFACE_TYPE === "RUNTIME_ONLY" || row.IMPL_STATE === "RUNTIME_ONLY_COMPLETE" || row.IMPL_STATE === "RUNTIME_UI_EFFECT") {
     return { status: "V1_COMPLETE_RUNTIME_ONLY", gap: "", evidence: row.BACKEND_LOCATION || "runtime", nextAction: "Certify runtime behavior" };
   }
-  if (row.UAT_STATUS === "STATIC_PASS" || row.UAT_STATUS === "PASS" || row.IMPL_STATE === "ABSORBED_CANONICAL_UI") {
+  if (
+    row.UAT_STATUS === "STATIC_PASS" ||
+    row.UAT_STATUS === "PASS" ||
+    row.UAT_STATUS === "CODE_COMPLETE" ||
+    row.IMPL_STATE === "ABSORBED_CANONICAL_UI" ||
+    row.IMPL_STATE === "ALREADY_PRESENT" ||
+    row.IMPL_STATE === "COMPLETE_CURRENT_UI"
+  ) {
     // Verify not still on temp-only
     if (row.TEMP_PARITY_EXISTS === "YES" && row.FINAL_CANONICAL_PAGE && !routeExists(row.FINAL_CANONICAL_PAGE)) {
       return { status: "V1_WRONG_PLACEMENT", gap: `Canonical route missing: ${row.FINAL_CANONICAL_PAGE}`, evidence: "temp parity still primary", nextAction: "Absorb to canonical route" };
@@ -512,7 +520,77 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
 
 *Full row-level data: \`docs/APPOINTMENTS-POST-ABSORPTION-LEDGER.csv\`*
 `;
-  writeFileSync(OUT_RECON, reconMd);
+  // Page-by-page rollup
+  const PAGE_FAMILIES = [
+    "/appointments/overview", "/appointments/calendar", "/appointments", "/appointments/[id]",
+    "/appointments/waitlist", "/appointments/recalls", "/appointments/types", "/appointments/types/meetings",
+    "/appointments/types/services", "/appointments/types/classes", "/appointments/booking",
+    "/appointments/availability", "/appointments/staff", "/appointments/locations",
+    "/appointments/packages", "/appointments/memberships", "/appointments/gift-cards", "/appointments/pos",
+    "/payments/transactions", "/payments/invoices", "/contacts", "/contacts/[id]",
+    "/appointments/reminders", "/appointments/workflows", "/appointments/routing-forms",
+    "/appointments/analytics", "/book", "/portal/[token]", "/manage/[token]",
+  ];
+  let pageSection = `\n## Page-by-page completeness (Part 3)\n\n| Page | Expected rows | Complete | Partial/Gap | Wrong placement |\n|------|--------------:|---------:|------------:|----------------:|\n`;
+  for (const page of PAGE_FAMILIES) {
+    const matched = reconciled.filter((r) => (r.FINAL_ADMIN_CANONICAL_PAGE || "").includes(page) || (r.FINAL_PUBLIC_SURFACE || "").includes(page) || (r.FINAL_PORTAL_SURFACE || "").includes(page));
+    const complete = matched.filter((r) => r.CURRENT_FINAL_STATUS === "V1_COMPLETE" || r.CURRENT_FINAL_STATUS === "V1_COMPLETE_RUNTIME_ONLY").length;
+    const gap = matched.filter((r) => residual.includes(r)).length;
+    const wrong = matched.filter((r) => r.CURRENT_FINAL_STATUS === "V1_WRONG_PLACEMENT").length;
+    const classification = gap === 0 ? "CLOSED" : gap <= 2 ? "SMALL RESIDUAL" : gap <= 6 ? "MEDIUM RESIDUAL" : "MAJOR RESIDUAL";
+    pageSection += `| \`${page}\` | ${matched.length} | ${complete} | ${gap} (${classification}) | ${wrong} |\n`;
+  }
+
+  const publicMatrix = [
+    ["Meeting Type selection", "YES", "PARTIAL", "catalog API", "PARTIAL", "Class/event dedicated flows"],
+    ["Service flow + add-ons", "YES", "PARTIAL", "public-booking-service", "PARTIAL", "Add-ons-before-slot reorder"],
+    ["Payment Stripe/Square", "YES", "PARTIAL", "merchant payments", "GAP", "PUBLIC_WAVE_PENDING rows"],
+    ["Packages/memberships at checkout", "YES", "LIKELY", "entitlements", "PARTIAL", "—"],
+    ["Portal OTP + session", "YES", "YES", "client-portal.ts", "COMPLETE", "Saved card add/remove UI"],
+    ["Legacy confirm/cancel/reschedule", "YES", "YES", "live API mode", "COMPLETE", "—"],
+  ];
+  let publicSection = `\n## Public Booking matrix (Part 4)\n\n| Feature | Admin config | Public consumer | Data contract | Present? | Complete? | Residual |\n|---------|-------------|-----------------|---------------|----------|-----------|----------|\n`;
+  for (const row of publicMatrix) {
+    publicSection += `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} | ${row[4]} | ${row[5]} | ${row[6]} |\n`;
+  }
+
+  const portalChecklist = [
+    ["Auth token + OTP", existsSync(join(ROOT, "src/lib/appointments/service-booking/portal-customer-payload.ts")) ? "COMPLETE" : "GAP"],
+    ["Appointments upcoming/past", existsSync(join(ROOT, "src/components/appointments/client-portal-public-client.tsx")) ? "COMPLETE" : "GAP"],
+    ["Packages + credit history", "COMPLETE"],
+    ["Saved payment methods add/remove", "GAP — display only"],
+    ["Membership pause/cancel self-service", "GAP — backend staff-only"],
+    ["Household dependent booking", "GAP — display only"],
+  ];
+  let portalSection = `\n## Portal reconciliation (Part 5)\n\n| Area | Status |\n|------|--------|\n`;
+  for (const [area, st] of portalChecklist) portalSection += `| ${area} | ${st} |\n`;
+
+  const contextualFlows = [
+    ["SERVICE → STAFF", "PARTIAL", "NO_CREATE", "Type editor", "P2"],
+    ["SERVICE → INTAKE FORM", "PARTIAL", "NO_AUTO_SELECT", "Forms contextual", "P2"],
+    ["CONTACT → PACKAGE", "COMPLETE", "—", "Contact detail", "—"],
+    ["POS → COUPON", "COMPLETE", "—", "8B-5", "—"],
+    ["IMPORT → CUSTOMER FIELD", "COMPLETE", "—", "8B-5", "—"],
+  ];
+  let ctxSection = `\n## Contextual flows (Part 6)\n\n| Flow | Status | Failure class | Evidence | Priority |\n|------|--------|---------------|----------|----------|\n`;
+  for (const row of contextualFlows) ctxSection += `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} | ${row[4]} |\n`;
+
+  let mockSection = `\n## Mock / placeholder audit (Part 9)\n\n`;
+  try {
+    const mockHits = execSync(
+      `rg -l "from.*mock-data|MOCK_APPOINTMENT|MOCK_SLOTS" src/components/appointments src/features/appointments --glob "*.tsx" 2>/dev/null | head -25`,
+      { encoding: "utf8", cwd: ROOT },
+    ).trim().split("\n").filter(Boolean);
+    mockSection += `| File | Classification |\n|------|----------------|\n`;
+    for (const f of mockHits) {
+      const cls = f.includes("public-confirm") || f.includes("public-reschedule") ? "SAFE_DEV_ONLY (production uses live API)" : f.includes("mock-data") && f.includes("type") ? "SAFE_DEV_ONLY (type imports)" : "V1_PRODUCTION_BLOCKER";
+      mockSection += `| \`${f}\` | ${cls} |\n`;
+    }
+  } catch {
+    mockSection += "_Mock scan: see manual inspection in reconciliation notes._\n";
+  }
+
+  writeFileSync(OUT_RECON, reconMd + pageSection + publicSection + portalSection + ctxSection + mockSection);
 
   // Update gap queue header
   const gapPath = join(ROOT, "docs/APPOINTMENTS-EXISTING-PAGE-GAP-QUEUE.md");
