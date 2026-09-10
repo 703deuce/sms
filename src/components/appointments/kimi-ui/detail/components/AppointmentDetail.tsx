@@ -15,6 +15,7 @@ import { ReminderSchedule } from "./ReminderSchedule";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { RescheduleModal } from "./RescheduleModal";
 import { CancelModal } from "./CancelModal";
+import { RefundModal } from "./RefundModal";
 import { VideoMeetingPanel } from "./VideoMeetingPanel";
 import { NotetakerPanel } from "./NotetakerPanel";
 
@@ -51,6 +52,13 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
   const [extraEmail, setExtraEmail] = useState("");
   const [extraName, setExtraName] = useState("");
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
+
+  function customerInitials(name: string) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || "").join("");
+  }
 
   async function fetchAppt() {
     setLoading(true);
@@ -178,19 +186,27 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
     );
   }
 
-  async function refundPayment() {
+  async function refundPayment(input: {
+    amountCents: number;
+    refundToAccountCredit: boolean;
+    reason: string;
+  }) {
     setActing(true);
     try {
-      const res = await fetch("/api/merchant-payments/refund", {
+      const res = await fetch("/api/appointments/service-booking/refund", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({
+          appointmentId,
+          amountCents: input.amountCents,
+          refundToAccountCredit: input.refundToAccountCredit,
+          contactId: appt?.contactId,
+          reason: input.reason,
+        }),
       });
       if (!res.ok) throw new Error("refund failed");
       await fetchAppt();
       showToast("Refund issued.");
-    } catch {
-      showToast("Refund could not be processed.");
     } finally {
       setActing(false);
     }
@@ -421,13 +437,61 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                   </span>
                 </div>
               ) : null}
+              {appt.enrichment?.servicePhases?.length ? (
+                <div className="info-row">
+                  <span className="info-label"><Clock size={13} /> Service schedule</span>
+                  <span className="info-value">
+                    <ol style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.enrichment.servicePhases.map((phase) => (
+                        <li key={`${phase.name}-${phase.startsAt}`}>
+                          {phase.name}
+                          <span className="sub">
+                            {fmtDateTime(phase.startsAt, appt.timezone)} – {fmtDateTime(phase.endsAt, appt.timezone).split(", ").pop()}
+                            {phase.staffRequired ? " · Staff needed" : " · Staff released"}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </span>
+                </div>
+              ) : null}
+              {appt.enrichment?.roomsEquipment?.length ? (
+                <div className="info-row">
+                  <span className="info-label"><MapPin size={13} /> Rooms &amp; Equipment</span>
+                  <span className="info-value">
+                    {appt.enrichment.roomsEquipment.map((r) => r.label).join(" · ")}
+                  </span>
+                </div>
+              ) : null}
+              {appt.enrichment?.addOns?.length ? (
+                <div className="info-row">
+                  <span className="info-label"><Plus size={13} /> Add-ons</span>
+                  <span className="info-value">
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.enrichment.addOns.map((a) => (
+                        <li key={a.name}>
+                          {a.name}
+                          {a.priceCents ? <span className="sub"> +{money(a.priceCents)}</span> : null}
+                          {a.durationMinutes ? <span className="sub"> +{a.durationMinutes} min</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </span>
+                </div>
+              ) : null}
               <div className="info-row">
                 <span className="info-label"><CreditCard size={13} /> Payment</span>
                 <span className="info-value" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <StatusBadge status={appt.paymentStatus} />
-                  <span>{money(appt.paymentAmountCents)} deposit</span>
+                  <span>{money(appt.enrichment?.financialSummary?.paidCents ?? appt.paymentAmountCents)}</span>
+                  {(appt.enrichment?.financialSummary?.balanceCents || 0) > 0 ? (
+                    <span className="sub">Balance {money(appt.enrichment!.financialSummary!.balanceCents!)}</span>
+                  ) : null}
+                  {(appt.enrichment?.financialSummary?.refundedCents || appt.refundAmountCents || 0) > 0 ? (
+                    <span className="sub">Refunded {money(appt.enrichment?.financialSummary?.refundedCents ?? appt.refundAmountCents ?? 0)}</span>
+                  ) : null}
                   {appt.paymentStatus === "paid" && appt.paymentsConnected && !isTerminal && (
-                    <Button size="sm" variant="ghost" disabled={acting} onClick={refundPayment}>Refund</Button>
+                    <Button size="sm" variant="ghost" disabled={acting} onClick={() => setRefundOpen(true)}>Refund</Button>
                   )}
                   {appt.paymentStatus === "paid" && !appt.paymentsConnected && (
                     <span className="sub" style={{ display: "inline" }}>
@@ -458,6 +522,60 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                 </span>
               </div>
             </div>
+            {appt.enrichment?.entitlementPayment ? (
+              <>
+                <hr className="section-divider" />
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                  Payments &amp; access
+                </div>
+                <div className="info-list">
+                  {appt.enrichment.entitlementPayment.packageName ? (
+                    <div className="info-row">
+                      <span className="info-label">Paid with</span>
+                      <span className="info-value">
+                        {appt.enrichment.entitlementPayment.packageName}
+                        {appt.enrichment.entitlementPayment.creditsUsed ? (
+                          <span className="sub">Credits used: {appt.enrichment.entitlementPayment.creditsUsed}</span>
+                        ) : null}
+                        {appt.enrichment.entitlementPayment.creditsRemaining != null ? (
+                          <span className="sub">Remaining after booking: {appt.enrichment.entitlementPayment.creditsRemaining}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  ) : null}
+                  {appt.enrichment.entitlementPayment.membershipName ? (
+                    <div className="info-row">
+                      <span className="info-label">Membership</span>
+                      <span className="info-value">{appt.enrichment.entitlementPayment.membershipName}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            {appt.enrichment?.intakeResponses?.length ? (
+              <>
+                <hr className="section-divider" />
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                  Intake form
+                </div>
+                {appt.enrichment.intakeResponses.map((form) => (
+                  <div key={form.formId} style={{ marginBottom: 10 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{form.formName}</div>
+                    {form.attachments.map((file) => (
+                      <div key={file.fieldId} className="sub">
+                        {file.url ? (
+                          <a href={file.url} target="_blank" rel="noreferrer">{file.filename}</a>
+                        ) : (
+                          file.filename
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </>
+            ) : null}
+
             {Object.keys(appt.bookingAnswers).length > 0 && (
               <>
                 <hr className="section-divider" />
@@ -493,6 +611,50 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
             </button>
             {diagnostic ? <p className="muted small" style={{ margin: "8px 0 0" }}>{diagnostic}</p> : null}
           </Card>
+
+          {(appt.policySnapshot || appt.enrichment?.termsAcceptance) ? (
+            <Card title="Documents &amp; policies">
+              {appt.policySnapshot ? (
+                <div className="info-list">
+                  <div className="info-row">
+                    <span className="info-label">Cancellation policy</span>
+                    <span className="info-value">
+                      {appt.policySnapshot.cancellation?.policyText ||
+                        (appt.policySnapshot.cancellation?.allowed === "until_hours_before"
+                          ? `Cancel at least ${appt.policySnapshot.cancellation.cutoffHours || 0} hours before`
+                          : "Policy at booking")}
+                      {appt.policySnapshot.capturedAt ? (
+                        <span className="sub">Accepted/booked: {fmtDateTime(appt.policySnapshot.capturedAt, appt.timezone)}</span>
+                      ) : null}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {appt.enrichment?.termsAcceptance?.accepted ? (
+                <p className="muted small" style={{ margin: "8px 0 0" }}>
+                  Terms &amp; Conditions v{appt.enrichment.termsAcceptance.termsVersion || "—"}
+                  {appt.enrichment.termsAcceptance.acceptedAt
+                    ? ` · Accepted ${fmtDateTime(appt.enrichment.termsAcceptance.acceptedAt, appt.timezone)}`
+                    : ""}
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
+
+          {appt.enrichment?.recurringSeries ? (
+            <Card title="Recurring series">
+              <p style={{ margin: 0, fontSize: 13.5 }}>
+                {appt.enrichment.recurringSeries.frequencyLabel}
+                {appt.enrichment.recurringSeries.rangeLabel ? ` · ${appt.enrichment.recurringSeries.rangeLabel}` : ""}
+              </p>
+              <p className="muted small" style={{ margin: "6px 0 0" }}>
+                Appointment {appt.enrichment.recurringSeries.occurrenceIndex}
+                {appt.enrichment.recurringSeries.totalOccurrences
+                  ? ` of ${appt.enrichment.recurringSeries.totalOccurrences}`
+                  : ""}
+              </p>
+            </Card>
+          ) : null}
 
           {(appt.contracts?.length || appt.contractTemplates?.length) ? (
             <Card title="Contracts">
@@ -573,7 +735,9 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
         <div className="stack">
           <Card title={<><User size={15} className="muted" /> Customer</>}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
-              <span className="avatar" style={{ width: 36, height: 36, fontSize: 13 }}>SJ</span>
+              <span className="avatar" style={{ width: 36, height: 36, fontSize: 13 }} aria-hidden>
+                {customerInitials(appt.inviteeName)}
+              </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{appt.inviteeName}</div>
                 <a
@@ -649,6 +813,17 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
           loading={loadingRescheduleSlots}
           onClose={() => setRescheduleOpen(false)}
           onSave={saveReschedule}
+        />
+      )}
+
+      {refundOpen && !isTerminal && (
+        <RefundModal
+          open={refundOpen}
+          amountPaidCents={appt.enrichment?.financialSummary?.paidCents ?? appt.paymentAmountCents}
+          amountRefundedCents={appt.enrichment?.financialSummary?.refundedCents ?? appt.refundAmountCents ?? 0}
+          supportsAccountCredit={Boolean(appt.contactId)}
+          onClose={() => setRefundOpen(false)}
+          onConfirm={refundPayment}
         />
       )}
 

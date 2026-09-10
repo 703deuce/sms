@@ -58,6 +58,8 @@ export function StaffConnected() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [calendarColors, setCalendarColors] = useState<Record<string, string>>({});
+  const [roundRobinState, setRoundRobinState] = useState<Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +75,8 @@ export function StaffConnected() {
       const data = settingsJson.data || {};
       const nextStaff = (data.staff || []) as BookableStaffMember[];
       setStaff(nextStaff);
+      setCalendarColors((data.calendarColors?.staffColors || {}) as Record<string, string>);
+      setRoundRobinState((data.roundRobinState || {}) as Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>);
       setLocations(
         ((data.locations || []) as Array<{ id: string; name: string }>).map((l) => ({
           id: l.id,
@@ -162,13 +166,22 @@ export function StaffConnected() {
       const next = [...(hours[dayKey] || []), { open: "09:00", close: "17:00" }];
       updateSelected({ weeklyHours: { ...hours, [dayKey]: next } });
     },
+    onCalendarColorChange: (value) => {
+      if (!selectedId) return;
+      setCalendarColors((prev) => ({ ...prev, [selectedId]: value }));
+      setSaved(false);
+    },
+    onRoundRobinEligibleChange: (value) => updateSelected({ roundRobinEligible: value }),
     onSave: async () => {
       setSaving(true);
       setError("");
       const res = await fetch("/api/appointments/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staff }),
+        body: JSON.stringify({
+          staff,
+          calendarColors: { staffColors: calendarColors },
+        }),
       });
       setSaving(false);
       if (!res.ok) {
@@ -185,6 +198,17 @@ export function StaffConnected() {
   if (loading) return <StaffLoading />;
   if (failed) return <StaffError onRetry={load} />;
 
+  const roundRobinStateSummary = selected
+    ? (() => {
+        const counts = Object.values(roundRobinState)
+          .flatMap((entry) => Object.entries(entry.counts || {}))
+          .filter(([staffId]) => staffId === selected.id);
+        if (!counts.length) return null;
+        const total = counts.reduce((sum, [, n]) => sum + (n || 0), 0);
+        return total > 0 ? `Assigned ${total} time${total === 1 ? "" : "s"} via round robin recently` : null;
+      })()
+    : null;
+
   return (
     <StaffView
       model={{
@@ -197,6 +221,8 @@ export function StaffConnected() {
         appointmentTypes,
         locations,
         dayRows,
+        calendarColor: selected ? calendarColors[selected.id] || "#6366f1" : "#6366f1",
+        roundRobinStateSummary,
         saving,
         saved,
         error,

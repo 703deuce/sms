@@ -13,6 +13,9 @@ type Props = {
   selectedTypeIds: string[];
   selectedLocationIds: string[];
   dayRows: StaffDayRow[];
+  calendarColor: string;
+  roundRobinEligible: boolean;
+  roundRobinStateSummary: string | null;
   saving: boolean;
   saved: boolean;
   error: string;
@@ -25,6 +28,8 @@ type Props = {
   onSetCustomHours: (dayKey: string, enabled: boolean) => void;
   onUpdateWindow: (dayKey: string, index: number, field: "open" | "close", value: string) => void;
   onAddWindow: (dayKey: string) => void;
+  onCalendarColorChange: (value: string) => void;
+  onRoundRobinEligibleChange: (value: boolean) => void;
   onSave: () => void;
   onRemove: () => void;
 };
@@ -33,6 +38,8 @@ const TABS: Array<{ id: StaffEditorTab; label: string }> = [
   { id: "details", label: "Details" },
   { id: "availability", label: "Availability" },
   { id: "assignments", label: "Assigned services" },
+  { id: "scheduling", label: "Scheduling" },
+  { id: "calendar", label: "Calendar display" },
 ];
 
 export default function StaffEditorPanel({
@@ -57,6 +64,11 @@ export default function StaffEditorPanel({
   onSetCustomHours,
   onUpdateWindow,
   onAddWindow,
+  calendarColor,
+  roundRobinEligible,
+  roundRobinStateSummary,
+  onCalendarColorChange,
+  onRoundRobinEligibleChange,
   onSave,
   onRemove,
 }: Props) {
@@ -170,6 +182,47 @@ export default function StaffEditorPanel({
                 </div>
               </div>
             ) : null}
+          </>
+        ) : null}
+
+        {tab === "scheduling" ? (
+          <>
+            <label className="flex items-center gap-2 text-[13px] text-[#3f4254]">
+              <input
+                type="checkbox"
+                className="checkbox"
+                checked={roundRobinEligible}
+                onChange={(e) => onRoundRobinEligibleChange(e.target.checked)}
+              />
+              Include in round-robin booking
+            </label>
+            <p className="text-[12.5px] text-[#8a8fa3]">
+              When a booking type uses round robin, Transovo distributes appointments between available team members who are eligible here.
+            </p>
+            {roundRobinStateSummary ? (
+              <p className="text-[12.5px] text-[#3f4254]">{roundRobinStateSummary}</p>
+            ) : null}
+          </>
+        ) : null}
+
+        {tab === "calendar" ? (
+          <>
+            <label className="label" htmlFor="staff-calendar-color">Calendar color</label>
+            <div className="flex items-center gap-3">
+              <input
+                id="staff-calendar-color"
+                type="color"
+                value={calendarColor}
+                onChange={(e) => onCalendarColorChange(e.target.value)}
+                aria-label="Calendar color"
+              />
+              <span className="text-[13px] font-medium" style={{ color: calendarColor }}>
+                ■ {name || "Staff member"}
+              </span>
+            </div>
+            <p className="text-[12.5px] text-[#8a8fa3]">
+              This color appears on the operational calendar and filter legend.
+            </p>
           </>
         ) : null}
 

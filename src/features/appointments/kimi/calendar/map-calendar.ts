@@ -1,17 +1,22 @@
 import { formatAppointmentTime } from "@/components/appointments/appointment-ui";
+import { fallbackTypeDot, fallbackTypeColorKey } from "@/lib/appointments/calendar-colors";
 import type {
   CalendarAgendaItem,
+  CalendarAvailabilityBand,
+  CalendarBusyBlock,
   CalendarMiniDay,
   CalendarMonthDay,
   CalendarNextAppointment,
   CalendarNowLine,
   CalendarPageModel,
+  CalendarStaffLane,
   CalendarStatItem,
   CalendarTypeColor,
   CalendarViewMode,
   CalendarWeekDay,
   CalendarWeekEvent,
   AppointmentMeetingIndicator,
+  CalendarBookingKind,
 } from "./types";
 
 export type CalendarApiAppointment = {
@@ -28,6 +33,44 @@ export type CalendarApiAppointment = {
   standaloneVideoMeetingId?: string | null;
   standaloneMeetingSessionId?: string | null;
   meeting?: AppointmentMeetingIndicator;
+  staffId?: string | null;
+  staffName?: string | null;
+  locationId?: string | null;
+  locationName?: string | null;
+  bookingTypeKind?: CalendarBookingKind | string | null;
+  typeId?: string | null;
+  capacity?: number | null;
+  enrolledCount?: number | null;
+  colorDot?: string;
+  staffColor?: string;
+  isRecurring?: boolean;
+  recurringLabel?: string | null;
+  recurringOccurrenceIndex?: number | null;
+  recurringTotal?: number | null;
+};
+
+export type CalendarBusyApiBlock = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  label?: string;
+  source?: string;
+  staffId?: string | null;
+};
+
+export type CalendarFilterState = {
+  staffIds: string[];
+  typeIds: string[];
+  locationIds: string[];
+  statuses: string[];
+};
+
+export type BuildCalendarContext = {
+  staffLanes?: CalendarStaffLane[];
+  busyBlocks?: CalendarBusyApiBlock[];
+  showAvailability?: boolean;
+  weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
+  filters?: CalendarFilterState;
 };
 
 const HOUR_H = 56;
@@ -80,7 +123,7 @@ export function getCalendarRange(cursor: Date, view: CalendarViewMode) {
 }
 
 function formatRangeLabel(cursor: Date, view: CalendarViewMode) {
-  if (view === "day") {
+  if (view === "day" || view === "staff") {
     return cursor.toLocaleDateString(undefined, {
       weekday: "long",
       month: "long",
@@ -113,13 +156,59 @@ function mapUiStatus(status: string): "confirmed" | "pending" | "canceled" {
   return "pending";
 }
 
-function mapEventType(serviceName: string | null, status: string): CalendarWeekEvent["type"] {
+function mapEventType(
+  serviceName: string | null,
+  status: string,
+  kind?: string | null,
+): CalendarWeekEvent["type"] {
   if (mapUiStatus(status) === "canceled") return "canceled";
+  if (kind === "CLASS") return "onboarding";
+  if (kind === "MEETING") return "call";
   const name = (serviceName || "").toLowerCase();
   if (name.includes("onboard")) return "onboarding";
   if (name.includes("follow")) return "followup";
   if (name.includes("call") || name.includes("demo")) return "call";
   return "consultation";
+}
+
+function mapBookingKind(kind?: string | null, serviceName?: string | null): CalendarBookingKind {
+  if (kind === "MEETING" || kind === "SERVICE" || kind === "CLASS") return kind;
+  const name = (serviceName || "").toLowerCase();
+  if (name.includes("workshop") || name.includes("event")) return "EVENT";
+  if (name.includes("class") || name.includes("yoga")) return "CLASS";
+  if (name.includes("meeting") || name.includes("call")) return "MEETING";
+  return "SERVICE";
+}
+
+function capacityLabel(row: CalendarApiAppointment): string | undefined {
+  if (row.capacity == null) return undefined;
+  const enrolled = row.enrolledCount ?? 0;
+  if (enrolled >= row.capacity) return "Full";
+  return `${enrolled} / ${row.capacity}`;
+}
+
+function passesFilters(row: CalendarApiAppointment, filters?: CalendarFilterState): boolean {
+  if (!filters) return true;
+  if (filters.staffIds.length && row.staffId && !filters.staffIds.includes(row.staffId)) return false;
+  if (filters.typeIds.length && row.typeId && !filters.typeIds.includes(row.typeId)) return false;
+  if (filters.locationIds.length && row.locationId && !filters.locationIds.includes(row.locationId)) {
+    return false;
+  }
+  if (filters.statuses.length) {
+    const ui = mapUiStatus(row.status);
+    const normalized =
+      ui === "canceled"
+        ? "canceled"
+        : ui === "pending"
+          ? "pending"
+          : row.status === "completed"
+            ? "completed"
+            : row.status === "no_show"
+              ? "no_show"
+              : "confirmed";
+    if (!filters.statuses.includes(normalized)) return false;
+  }
+  return true;
 }
 
 function formatDuration(startsAt: string, endsAt?: string | null) {
@@ -229,12 +318,14 @@ function decimalHour(iso: string, timezone?: string | null) {
 function mapWeekEvents(
   appointments: CalendarApiAppointment[],
   weekStart: Date,
+  context?: BuildCalendarContext,
 ): CalendarWeekEvent[] {
   const weekEnd = addDays(weekStart, 7);
+  const staffLaneIndex = new Map((context?.staffLanes || []).map((s, i) => [s.id, i]));
   return appointments
     .filter((row) => {
       const start = new Date(row.startsAt);
-      return start >= weekStart && start < weekEnd;
+      return start >= weekStart && start < weekEnd && passesFilters(row, context?.filters);
     })
     .map((row) => {
       const start = new Date(row.startsAt);
@@ -243,7 +334,7 @@ function mapWeekEvents(
       const endHour = row.endsAt
         ? decimalHour(row.endsAt, row.timezone)
         : startHour + 0.5;
-      const type = mapEventType(row.serviceName, row.status);
+      const type = mapEventType(row.serviceName, row.status, row.bookingTypeKind);
       const title =
         row.eventKind === "standalone_video"
           ? row.serviceName || "Transovo Video"
@@ -256,9 +347,12 @@ function mapWeekEvents(
           : row.eventKind === "standalone_notetaker"
             ? row.inviteeName || "External meeting"
             : row.inviteeName || "Customer";
+      const colorDot =
+        row.colorDot || fallbackTypeDot(row.bookingTypeKind, row.serviceName);
       return {
         id: row.id,
         day: Math.max(0, Math.min(6, dayIndex)),
+        staffLane: row.staffId ? staffLaneIndex.get(row.staffId) : undefined,
         start: startHour,
         duration: Math.max(0.25, endHour - startHour),
         timeLabel: formatAppointmentTime(row.startsAt, row.timezone),
@@ -268,8 +362,72 @@ function mapWeekEvents(
         status: mapUiStatus(row.status),
         meeting: row.meeting,
         eventKind: row.eventKind,
+        colorDot,
+        bookingKind: mapBookingKind(row.bookingTypeKind, row.serviceName),
+        capacityLabel: capacityLabel(row),
+        isRecurring: row.isRecurring,
+        recurringLabel: row.recurringLabel,
+        staffId: row.staffId,
+        staffName: row.staffName,
+        locationName: row.locationName,
       };
     });
+}
+
+function mapBusyBlocks(
+  blocks: CalendarBusyApiBlock[],
+  weekStart: Date,
+  context?: BuildCalendarContext,
+): CalendarBusyBlock[] {
+  const weekEnd = addDays(weekStart, 7);
+  const staffLaneIndex = new Map((context?.staffLanes || []).map((s, i) => [s.id, i]));
+  return blocks
+    .filter((b) => {
+      const start = new Date(b.startsAt);
+      return start >= weekStart && start < weekEnd;
+    })
+    .map((b) => {
+      const start = new Date(b.startsAt);
+      const dayIndex = Math.floor((start.getTime() - weekStart.getTime()) / 86_400_000);
+      const startHour = decimalHour(b.startsAt, null);
+      const endHour = decimalHour(b.endsAt, null);
+      return {
+        id: b.id,
+        day: Math.max(0, Math.min(6, dayIndex)),
+        staffLane: b.staffId ? staffLaneIndex.get(b.staffId) : undefined,
+        start: startHour,
+        duration: Math.max(0.25, endHour - startHour),
+        label: b.label || "Busy",
+        source: b.source || "External calendar",
+      };
+    });
+}
+
+function mapAvailabilityBands(
+  weekDays: CalendarWeekDay[],
+  weeklyHours?: Record<string, Array<{ open: string; close: string }>>,
+  staffLanes?: CalendarStaffLane[],
+): CalendarAvailabilityBand[] {
+  if (!weeklyHours) return [];
+  const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const bands: CalendarAvailabilityBand[] = [];
+  weekDays.forEach((d, dayIndex) => {
+    const windows = weeklyHours[dayKeys[d.dayOfWeek]] || [];
+    for (const w of windows) {
+      const [oh, om] = w.open.split(":").map(Number);
+      const [ch, cm] = w.close.split(":").map(Number);
+      const start = oh + (om || 0) / 60;
+      const end = ch + (cm || 0) / 60;
+      if (staffLanes?.length) {
+        staffLanes.forEach((_, lane) => {
+          bands.push({ day: dayIndex, staffLane: lane, start, duration: Math.max(0.25, end - start) });
+        });
+      } else {
+        bands.push({ day: dayIndex, start, duration: Math.max(0.25, end - start) });
+      }
+    }
+  });
+  return bands;
 }
 
 function mapNowLine(weekDays: CalendarWeekDay[]): CalendarNowLine | null {
@@ -459,11 +617,13 @@ export type BuildCalendarPageModelInput = {
   view: CalendarViewMode;
   selectedDayKey: string;
   miniCalendarMonth: Date;
+  context?: BuildCalendarContext;
 };
 
 function mapDayEvents(
   appointments: CalendarApiAppointment[],
   dayKey: string,
+  context?: BuildCalendarContext,
 ): CalendarWeekEvent[] {
   const dayStart = new Date(dayKey);
   dayStart.setHours(0, 0, 0, 0);
@@ -471,6 +631,7 @@ function mapDayEvents(
   return mapWeekEvents(
     appointments.filter((row) => dateKey(new Date(row.startsAt)) === dayKey),
     weekStart,
+    context,
   ).map((ev) => ({ ...ev, day: 0 }));
 }
 
@@ -552,39 +713,68 @@ function mapMonthDays(
   return cells;
 }
 
+function buildDynamicTypeColors(appointments: CalendarApiAppointment[]): Record<string, CalendarTypeColor> {
+  const colors: Record<string, CalendarTypeColor> = { ...TYPE_COLORS };
+  for (const row of appointments) {
+    const key = fallbackTypeColorKey(row.bookingTypeKind, row.serviceName);
+    if (!colors[key]) {
+      colors[key] = {
+        label: row.serviceName || key,
+        dot: row.colorDot || fallbackTypeDot(row.bookingTypeKind, row.serviceName),
+      };
+    }
+  }
+  return colors;
+}
+
 export function buildCalendarPageModel(input: BuildCalendarPageModelInput): CalendarPageModel {
+  const ctx = input.context;
   const weekStart =
-    input.view === "day"
+    input.view === "day" || input.view === "staff"
       ? new Date(input.cursor)
       : input.view === "week"
         ? input.cursor
         : startOfWeek(new Date(input.selectedDayKey));
   const weekDays =
-    input.view === "day"
+    input.view === "day" || input.view === "staff"
       ? mapWeekDays(weekStart).filter((d) => d.dateKey === dateKey(input.cursor))
       : input.view === "week"
         ? mapWeekDays(weekStart)
         : mapWeekDays(weekStart);
   const weekEvents =
-    input.view === "day"
-      ? mapDayEvents(input.appointments, dateKey(input.cursor))
-      : mapWeekEvents(input.appointments, weekStart);
+    input.view === "day" || input.view === "staff"
+      ? mapDayEvents(input.appointments, dateKey(input.cursor), ctx)
+      : mapWeekEvents(input.appointments, weekStart, ctx);
   const monthDays =
     input.view === "month"
       ? mapMonthDays(input.cursor, input.appointments)
       : mapMonthDays(input.miniCalendarMonth, input.appointments);
+  const busyBlocks = mapBusyBlocks(ctx?.busyBlocks || [], weekStart, ctx);
+  const availabilityBands =
+    ctx?.showAvailability
+      ? mapAvailabilityBands(
+          weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1),
+          ctx.weeklyHours,
+          ctx.staffLanes,
+        )
+      : [];
 
   return {
     view: input.view,
     rangeLabel: formatRangeLabel(input.cursor, input.view),
-    stats: mapStats(input.appointments),
+    stats: mapStats(input.appointments.filter((r) => passesFilters(r, ctx?.filters))),
     weekDays: weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1),
     weekEvents,
+    staffLanes: ctx?.staffLanes || [],
+    busyBlocks,
+    availabilityBands,
     monthDays,
     hours: HOURS,
-    typeColors: TYPE_COLORS,
+    typeColors: buildDynamicTypeColors(input.appointments),
     nowLine:
-      input.view === "week" || input.view === "day" ? mapNowLine(weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1)) : null,
+      input.view === "week" || input.view === "day" || input.view === "staff"
+        ? mapNowLine(weekDays.length ? weekDays : mapWeekDays(weekStart).slice(0, 1))
+        : null,
     miniCalendar: buildMiniCalendar(input.miniCalendarMonth, input.selectedDayKey, input.appointments),
     agenda: mapAgenda(input.appointments, input.selectedDayKey),
     nextAppointment: mapNextAppointment(input.appointments),

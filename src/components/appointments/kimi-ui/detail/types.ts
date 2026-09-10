@@ -78,6 +78,56 @@ export type Appointment = {
     createdAt: string;
   }>;
   contractTemplates?: Array<{ id: string; name: string; version: string }>;
+  enrichment?: {
+    servicePhases: Array<{
+      name: string;
+      phaseKind: string;
+      startsAt: string;
+      endsAt: string;
+      staffRequired: boolean;
+    }>;
+    roomsEquipment: Array<{ label: string; quantity?: number; fromGroup?: string }>;
+    addOns: Array<{ name: string; priceCents?: number; durationMinutes?: number }>;
+    intakeResponses: Array<{
+      formId: string;
+      formName: string;
+      answers: Record<string, unknown>;
+      attachments: Array<{ fieldId: string; filename: string; url?: string; mimeType?: string }>;
+    }>;
+    entitlementPayment?: {
+      method: "package" | "gift";
+      packageName?: string;
+      creditsUsed?: number;
+      creditsRemaining?: number;
+      membershipName?: string;
+      monthlyCreditsUsed?: number;
+      monthlyCreditsRemaining?: number;
+      giftCode?: string;
+      amountCentsWaived?: number;
+    };
+    recurringSeries?: {
+      seriesId: string;
+      frequencyLabel: string;
+      occurrenceIndex: number;
+      totalOccurrences?: number;
+      rangeLabel?: string;
+    };
+    termsAcceptance?: {
+      accepted: boolean;
+      acceptedAt?: string;
+      termsVersion?: string;
+      termsUrl?: string;
+    };
+    financialSummary: {
+      totalCents?: number;
+      depositCents?: number;
+      paidCents?: number;
+      balanceCents?: number;
+      refundedCents?: number;
+      paymentMethod?: string;
+    };
+  };
+  refundAmountCents?: number;
 };
 
 export const appointment: Appointment = {

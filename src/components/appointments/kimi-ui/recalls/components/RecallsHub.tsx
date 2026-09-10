@@ -6,6 +6,7 @@ import { RecallStatsRow } from "./RecallStatsRow";
 import { RecallFeatureCard } from "./RecallFeatureCard";
 import { RecallActivityList } from "./RecallActivityList";
 import { RecallActivityModal } from "./RecallActivityModal";
+import { RecallSavedViews } from "./RecallSavedViews";
 import type { RecallActivity, RecallStat } from "../types";
 
 export function RecallsHub({
@@ -54,6 +55,8 @@ export function RecallsHub({
       </header>
 
       <RecallStatsRow stats={stats} />
+
+      <RecallSavedViews />
 
       <h2 className="tv-section-title">Recall tools</h2>
       <div className="tv-cards">
