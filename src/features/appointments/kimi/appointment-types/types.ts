@@ -133,8 +133,15 @@ export type AppointmentTypesPageModel = {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions: Array<{ id: string; name: string }>;
   teamGroupOptions: Array<{ id: string; name: string }>;
+  teamUserOptions: Array<{ id: string; name: string; email: string; role: string }>;
+  currentUserId: string;
   resourceOptions: Array<{ id: string; name: string; quantity?: number }>;
-  addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
+  addOnOptions: Array<{
+    id: string;
+    name: string;
+    priceCents?: number;
+    durationDeltaMinutes?: number;
+  }>;
   categoryOptions: Array<{ id: string; name: string }>;
   intakeFormOptions: Array<{ id: string; name: string; active?: boolean }>;
 };
@@ -155,8 +162,11 @@ export type AppointmentTypesPageActions = {
   onCopyLink: (id: string) => void;
   onViewBookingPage: () => void;
   onManageAvailability: () => void;
+  onCheckAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onManageCategories: () => void;
+  onCreateCategory: () => void;
   onReorderTypes: (orderedIds: string[]) => void;
   onMoveType: (id: string, direction: "up" | "down") => void;
   onRetry: () => void;

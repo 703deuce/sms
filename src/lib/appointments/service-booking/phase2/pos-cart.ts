@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { fulfillStorePurchase } from "@/lib/appointments/service-booking/store-checkout";
 import { fulfillBookingProductSale } from "@/lib/appointments/service-booking/booking-products";
+import { calculatePosTaxCents, getPosTaxConfig } from "@/lib/appointments/service-booking/pos-tax";
 import { earnLoyaltyPoints, processReferralOnPosCheckout } from "./loyalty";
 
 export type PosLineItemInput = {
@@ -18,12 +19,25 @@ const FULFILLMENT_KINDS = new Set(["package", "gift", "membership", "product"]);
 
 async function recalculateSessionTotals(sessionId: string) {
   const prisma = getPrisma();
+  const session = await prisma.posSession.findUnique({
+    where: { id: sessionId },
+    select: { workspaceId: true },
+  });
+  if (!session) throw new Error("POS session not found");
+
   const lineItems = await prisma.posLineItem.findMany({ where: { sessionId } });
   const subtotalCents = lineItems.reduce(
     (sum: number, item: { totalCents: number }) => sum + item.totalCents,
     0,
   );
-  const taxCents = 0;
+  const taxConfig = await getPosTaxConfig(session.workspaceId);
+  const taxCents = calculatePosTaxCents(
+    lineItems.map((item: { kind: string; totalCents: number }) => ({
+      kind: item.kind,
+      totalCents: item.totalCents,
+    })),
+    taxConfig,
+  );
   const totalCents = subtotalCents + taxCents;
 
   return prisma.posSession.update({
@@ -150,6 +164,7 @@ export async function checkoutPosSession(
     contactId?: string;
     referralCode?: string;
     loyaltyProgramId?: string;
+    giftCode?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -224,6 +239,27 @@ export async function checkoutPosSession(
         break;
       default:
         fulfillment.push({ lineId: line.id, kind: line.kind, skipped: true });
+    }
+  }
+
+  if (input?.giftCode && contactId && session.totalCents > 0) {
+    const { redeemGiftCertificate, lookupGiftCertificateByCode } = await import("../gift-certificates");
+    const balance = await lookupGiftCertificateByCode(workspaceId, input.giftCode);
+    if (!balance || balance.status !== "active") {
+      throw new Error("Gift certificate not found");
+    }
+    const redeemAmount = Math.min(session.totalCents, balance.balanceCents);
+    if (redeemAmount <= 0) throw new Error("Insufficient gift balance");
+    try {
+      const gift = await redeemGiftCertificate(workspaceId, input.giftCode, redeemAmount);
+      fulfillment.push({
+        kind: "gift_redemption",
+        balanceId: gift.balanceId,
+        amountCents: redeemAmount,
+        remainingCents: gift.remainingCents,
+      });
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : "Gift redemption failed");
     }
   }
 

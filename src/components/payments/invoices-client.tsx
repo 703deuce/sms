@@ -127,6 +127,7 @@ export function InvoicesClient() {
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [lastPayUrl, setLastPayUrl] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,6 +201,26 @@ export function InvoicesClient() {
     setMessage("Invoice created.");
     setDescription("");
     void load();
+  }
+
+  async function sendInvoiceEmail(invoiceId: string) {
+    setSendingId(invoiceId);
+    setMessage(null);
+    const res = await fetch(`/api/appointments/service-booking/invoices/${invoiceId}/send`, {
+      method: "POST",
+    });
+    const json = await res.json().catch(() => ({}));
+    setSendingId(null);
+    if (!res.ok) {
+      setMessage(json.error || "Could not send invoice email");
+      return;
+    }
+    setMessage("Invoice email sent.");
+    void load();
+  }
+
+  function downloadInvoicePdf(invoiceId: string) {
+    window.open(`/api/appointments/service-booking/invoices/${invoiceId}/pdf`, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -284,6 +305,7 @@ export function InvoicesClient() {
                   <th scope="col" className="px-4 py-3 font-medium">Amount</th>
                   <th scope="col" className="px-4 py-3 font-medium">Balance</th>
                   <th scope="col" className="px-4 py-3 font-medium">Status</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,6 +319,25 @@ export function InvoicesClient() {
                     <td className="px-4 py-3">{formatMoney(row.totalCents)}</td>
                     <td className="px-4 py-3">{formatMoney(row.balanceDueCents)}</td>
                     <td className="px-4 py-3">{statusLabel(row.status)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="text-indigo-600 underline text-xs disabled:opacity-50"
+                          disabled={sendingId === row.id}
+                          onClick={() => void sendInvoiceEmail(row.id)}
+                        >
+                          {sendingId === row.id ? "Sending…" : "Send email"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-indigo-600 underline text-xs"
+                          onClick={() => downloadInvoicePdf(row.id)}
+                        >
+                          Download PDF
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

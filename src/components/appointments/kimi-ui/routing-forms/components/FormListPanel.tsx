@@ -1,15 +1,15 @@
 import { Plus, Route } from "lucide-react";
-import type { RoutingForm } from "../types";
-import { routingAnalytics } from "../types";
+import type { RoutingForm, RoutingFormMeta } from "../types";
 
 type Props = {
   forms: RoutingForm[];
+  meta: RoutingFormMeta;
   selectedId: string | null;
   onSelect: (form: RoutingForm) => void;
   onNew: () => void;
 };
 
-export default function FormListPanel({ forms, selectedId, onSelect, onNew }: Props) {
+export default function FormListPanel({ forms, meta, selectedId, onSelect, onNew }: Props) {
   return (
     <div className="surface rounded-xl bg-card" style={{ padding: 12, alignSelf: "start" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 10px" }}>
@@ -32,7 +32,7 @@ export default function FormListPanel({ forms, selectedId, onSelect, onNew }: Pr
         </div>
       ) : (
         forms.map((f) => {
-          const a = routingAnalytics[f.id];
+          const a = meta.routingAnalytics[f.id];
           return (
             <button
               key={f.id}

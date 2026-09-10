@@ -10,6 +10,7 @@ type Props = {
   onNext: () => void;
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
+  onCheckAvailability: () => void;
 };
 
 const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
@@ -26,6 +27,7 @@ export default function CalendarHeader({
   onNext,
   onViewChange,
   onNewAppointment,
+  onCheckAvailability,
 }: Props) {
   return (
     <div className="cal-header">
@@ -65,6 +67,9 @@ export default function CalendarHeader({
             </button>
           ))}
         </div>
+        <button type="button" className="btn-today" onClick={onCheckAvailability}>
+          Check availability
+        </button>
         <button type="button" className="btn-primary" onClick={onNewAppointment}>
           <Plus size={16} /> New appointment
         </button>

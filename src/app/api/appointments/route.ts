@@ -18,9 +18,11 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || undefined;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
+    const pendingApproval = searchParams.get("pendingApproval") === "1";
     const data = await listAppointments(auth.workspaceId, {
       status,
       q,
+      pendingApproval: pendingApproval || undefined,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
     });
@@ -57,10 +59,19 @@ export async function POST(request: Request) {
       phone: String(body.phone || ""),
       email: body.email ? String(body.email) : undefined,
       notes: body.notes ? String(body.notes) : undefined,
+      bookingAnswers:
+        body.bookingAnswers && typeof body.bookingAnswers === "object"
+          ? (body.bookingAnswers as Record<string, string>)
+          : undefined,
       smsConsent: body.smsConsent === true,
       source: "admin",
       status: body.status ? String(body.status) : "scheduled",
       skipSms: body.skipSms === true,
+      staffId: body.staffId ? String(body.staffId) : undefined,
+      staffName: body.staffName ? String(body.staffName) : undefined,
+      locationId: body.locationId ? String(body.locationId) : undefined,
+      locationName: body.locationName ? String(body.locationName) : undefined,
+      durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
     });
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (err) {

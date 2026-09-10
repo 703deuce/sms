@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SlotDiagnosticsDrawer } from "@/features/appointments/kimi/availability/SlotDiagnosticsDrawer";
+import { toDatetimeLocalValue } from "@/features/appointments/kimi/availability/datetime-local";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppointmentTypesView from "@/components/appointments/kimi-ui/appointment-types/page";
@@ -88,6 +90,7 @@ export function AppointmentTypesConnected() {
   const [intakeFormOptions, setIntakeFormOptions] = useState<
     Array<{ id: string; name: string; active?: boolean }>
   >([]);
+  const [slotDiagnosticsOpen, setSlotDiagnosticsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -454,6 +457,7 @@ export function AppointmentTypesConnected() {
         if (bookingBaseUrl) window.open(bookingBaseUrl, "_blank");
       },
       onManageAvailability: () => router.push("/appointments/availability"),
+      onCheckAvailability: () => setSlotDiagnosticsOpen(true),
       onManageStaff: () => router.push("/appointments/staff"),
       onManageLocations: () => router.push("/appointments/locations"),
       onReorderTypes: reorderTypes,
@@ -463,8 +467,32 @@ export function AppointmentTypesConnected() {
     [bookingBaseUrl, copyLink, load, moveType, resetEditor, router, save, selectType, startCreate, toggleActive, updateForm, reorderTypes],
   );
 
+  const diagnosticsStaffId =
+    form.collectiveStaffIds[0] ||
+    form.staffIds[0] ||
+    "";
+
   if (loading) return <TypesLoading />;
   if (failed || !model) return <TypesError onRetry={load} />;
 
-  return <AppointmentTypesView model={model} actions={actions} />;
+  return (
+    <>
+      <AppointmentTypesView model={model} actions={actions} />
+      <SlotDiagnosticsDrawer
+        open={slotDiagnosticsOpen}
+        onClose={() => setSlotDiagnosticsOpen(false)}
+        staffOptions={staffOptions}
+        context={{
+          serviceName: form.name.trim() || undefined,
+          startsAt: toDatetimeLocalValue(new Date()),
+          staffId: diagnosticsStaffId || undefined,
+          lockServiceName: Boolean(form.name.trim()),
+        }}
+        onOpenFullPage={() => {
+          setSlotDiagnosticsOpen(false);
+          router.push("/appointments/availability");
+        }}
+      />
+    </>
+  );
 }
