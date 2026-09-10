@@ -9,7 +9,12 @@ import {
   filterStaffList,
   mapStaffToListItem,
 } from "@/features/appointments/kimi/staff/map-staff";
-import type { StaffEditorTab, StaffPageActions } from "@/features/appointments/kimi/staff/types";
+import type {
+  StaffEditorTab,
+  StaffPageActions,
+  StaffRoundRobinStat,
+} from "@/features/appointments/kimi/staff/types";
+import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 import { newStaffMember } from "@/features/appointments/kimi/shared/platform-settings-types";
 import type { BookableStaffMember } from "@/lib/appointments/types";
 
@@ -58,6 +63,9 @@ export function StaffConnected() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [roundRobinState, setRoundRobinState] = useState<
+    Record<string, { lastAssignedStaffId?: string; counts?: Record<string, number> }>
+  >({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,9 +78,10 @@ export function StaffConnected() {
       if (!settingsRes.ok) throw new Error("settings failed");
       const settingsJson = await settingsRes.json();
       const typesJson = typesRes.ok ? await typesRes.json() : { data: [] };
-      const data = settingsJson.data || {};
+      const data = (settingsJson.data || {}) as AppointmentPlatformConfig;
       const nextStaff = (data.staff || []) as BookableStaffMember[];
       setStaff(nextStaff);
+      setRoundRobinState(data.roundRobinState || {});
       setLocations(
         ((data.locations || []) as Array<{ id: string; name: string }>).map((l) => ({
           id: l.id,
@@ -97,6 +106,16 @@ export function StaffConnected() {
   }, [load]);
 
   const selected = staff.find((s) => s.id === selectedId) || null;
+  const roundRobinStats = useMemo<StaffRoundRobinStat[]>(() => {
+    if (!selectedId) return [];
+    return Object.entries(roundRobinState)
+      .map(([serviceKey, state]) => ({
+        serviceKey,
+        assignmentCount: state?.counts?.[selectedId] ?? 0,
+        lastAssigned: state?.lastAssignedStaffId === selectedId,
+      }))
+      .filter((s) => s.assignmentCount > 0 || s.lastAssigned);
+  }, [roundRobinState, selectedId]);
   const staffItems = useMemo(() => staff.map(mapStaffToListItem), [staff]);
   const visibleStaff = useMemo(() => filterStaffList(staffItems, searchQuery), [staffItems, searchQuery]);
   const dayRows = useMemo(() => buildStaffDayRows(selected), [selected]);
@@ -162,6 +181,7 @@ export function StaffConnected() {
       const next = [...(hours[dayKey] || []), { open: "09:00", close: "17:00" }];
       updateSelected({ weeklyHours: { ...hours, [dayKey]: next } });
     },
+    onCalendarColorChange: (value) => updateSelected({ calendarColor: value }),
     onSave: async () => {
       setSaving(true);
       setError("");
@@ -197,6 +217,7 @@ export function StaffConnected() {
         appointmentTypes,
         locations,
         dayRows,
+        roundRobinStats,
         saving,
         saved,
         error,

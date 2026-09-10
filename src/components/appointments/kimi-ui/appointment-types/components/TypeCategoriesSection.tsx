@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 
 type Props = {
@@ -10,9 +9,17 @@ type Props = {
     key: K,
     value: AppointmentTypeFormState[K],
   ) => void;
+  onManageCategories?: () => void;
+  onCreateCategory?: () => void;
 };
 
-export function TypeCategoriesSection({ form, categoryOptions, onFormChange }: Props) {
+export function TypeCategoriesSection({
+  form,
+  categoryOptions,
+  onFormChange,
+  onManageCategories,
+  onCreateCategory,
+}: Props) {
   return (
     <section aria-labelledby="type-categories-heading">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -24,12 +31,26 @@ export function TypeCategoriesSection({ form, categoryOptions, onFormChange }: P
             Group this type on your public booking page and optionally show a service image.
           </p>
         </div>
-        <Link
-          href="/appointments/categories"
-          className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
-        >
-          Manage categories →
-        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {onManageCategories ? (
+            <button
+              type="button"
+              className="text-[12px] font-medium text-[#5b4bff] hover:underline"
+              onClick={onManageCategories}
+            >
+              Manage categories
+            </button>
+          ) : null}
+          {onCreateCategory ? (
+            <button
+              type="button"
+              className="text-[12px] font-medium text-[#5b4bff] hover:underline"
+              onClick={onCreateCategory}
+            >
+              Create category
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>

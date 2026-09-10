@@ -41,6 +41,17 @@ export type CalendarWeekEvent = {
   status: "confirmed" | "pending" | "canceled";
   meeting?: AppointmentMeetingIndicator;
   eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
+  colorDot?: string;
+  isRecurring?: boolean;
+  isClassOrEvent?: boolean;
+  attendeeCount?: number;
+};
+
+export type CalendarUnavailableBlock = {
+  day: number;
+  start: number;
+  duration: number;
+  label?: string;
 };
 
 export type CalendarTypeColor = {
@@ -123,6 +134,8 @@ export type CalendarPageModel = {
   };
   nextAppointment: CalendarNextAppointment | null;
   timezoneLabel: string;
+  unavailableBlocks?: CalendarUnavailableBlock[];
+  showAvailabilityOverlay?: boolean;
 };
 
 export type CalendarPageActions = {
@@ -139,4 +152,8 @@ export type CalendarPageActions = {
   onShowCalendarSettings: () => void;
   onRetry: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
+  onRescheduleEvent?: (input: { id: string; startsAt: string }) => void | Promise<void>;
+  onToggleAvailabilityOverlay?: () => void;
+  onOpenFilters?: () => void;
+  activeFilterCount?: number;
 };

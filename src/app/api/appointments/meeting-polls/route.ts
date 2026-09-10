@@ -2,16 +2,47 @@ import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import {
   createMeetingPoll,
+  finalizeMeetingPollBooking,
   listMeetingPolls,
+  meetingPollShareUrl,
   saveMeetingPoll,
   voteMeetingPollOption,
 } from "@/lib/appointments/meeting-polls";
+import type { MeetingPoll } from "@/lib/appointments/scheduling-capabilities";
 
-export async function GET() {
+function serializeAdminPoll(poll: MeetingPoll, baseUrl: string) {
+  const responded = poll.options.reduce((sum, o) => sum + o.votes, 0);
+  return {
+    ...poll,
+    status: poll.status === "booked" ? "scheduled" : poll.status,
+    shareUrl: meetingPollShareUrl(baseUrl, poll.id),
+    location: "",
+    durationMinutes: poll.options[0]
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(poll.options[0].endsAt).getTime() - new Date(poll.options[0].startsAt).getTime()) /
+              60_000,
+          ),
+        )
+      : 30,
+    organizer: "",
+    invitees: 0,
+    responded,
+    closesAt: null,
+  };
+}
+
+export async function GET(request: Request) {
   try {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
-    return NextResponse.json({ data: await listMeetingPolls(auth.workspaceId) });
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      process.env.APP_URL?.trim() ||
+      new URL(request.url).origin;
+    const polls = await listMeetingPolls(auth.workspaceId);
+    return NextResponse.json({ data: polls.map((p) => serializeAdminPoll(p, baseUrl)) });
   } catch (err) {
     return jsonError(err, 500);
   }
@@ -31,14 +62,40 @@ export async function POST(request: Request) {
       poll?: Parameters<typeof saveMeetingPoll>[1];
     };
 
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      process.env.APP_URL?.trim() ||
+      new URL(request.url).origin;
+
     if (body.action === "vote" && body.pollId && body.optionId) {
       const poll = await voteMeetingPollOption(auth.workspaceId, body.pollId, body.optionId);
-      return NextResponse.json({ data: poll });
+      return NextResponse.json({ data: poll ? serializeAdminPoll(poll, baseUrl) : poll });
+    }
+
+    if (body.action === "finalize" && body.pollId && body.optionId) {
+      const result = await finalizeMeetingPollBooking(
+        auth.workspaceId,
+        body.pollId,
+        body.optionId,
+        {
+          contactId: (body as { contactId?: string }).contactId,
+          phone: (body as { phone?: string }).phone,
+          email: (body as { email?: string }).email,
+          firstName: (body as { firstName?: string }).firstName,
+          lastName: (body as { lastName?: string }).lastName,
+        },
+      );
+      return NextResponse.json({
+        data: {
+          ...result,
+          poll: serializeAdminPoll(result.poll, baseUrl),
+        },
+      });
     }
 
     if (body.poll) {
       const saved = await saveMeetingPoll(auth.workspaceId, body.poll);
-      return NextResponse.json({ data: saved });
+      return NextResponse.json({ data: serializeAdminPoll(saved, baseUrl) });
     }
 
     const poll = createMeetingPoll({
@@ -48,7 +105,7 @@ export async function POST(request: Request) {
       options: body.options || [],
     });
     const saved = await saveMeetingPoll(auth.workspaceId, poll);
-    return NextResponse.json({ data: saved }, { status: 201 });
+    return NextResponse.json({ data: serializeAdminPoll(saved, baseUrl) }, { status: 201 });
   } catch (err) {
     return jsonError(err, 400);
   }

@@ -139,6 +139,62 @@ export async function getSavedPaymentMethodForContact(workspaceId: string, conta
   return readPaymentMeta(contact.customFields);
 }
 
+export async function detachSavedPaymentMethod(input: {
+  workspaceId: string;
+  contactId: string;
+  paymentMethodId?: string;
+}) {
+  const prisma = getPrisma();
+  const contact = await prisma.contact.findUnique({
+    where: { id: input.contactId, workspaceId: input.workspaceId },
+  });
+  if (!contact) throw new Error("Contact not found");
+
+  const meta = readPaymentMeta(contact.customFields);
+  if (!meta.stripeCustomerId || !meta.defaultPaymentMethodId) {
+    throw new Error("No saved payment method on file");
+  }
+
+  const targetId = input.paymentMethodId || meta.defaultPaymentMethodId;
+  if (targetId !== meta.defaultPaymentMethodId) {
+    throw new Error("Payment method not found");
+  }
+
+  const activeMembership = await prisma.serviceMembershipSubscription.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      contactId: input.contactId,
+      status: { in: ["active", "past_due"] },
+      stripeSubscriptionId: { not: null },
+    },
+    include: { product: true },
+  });
+  if (activeMembership) {
+    throw new Error(
+      `This card is used for your ${activeMembership.product?.name || "membership"}. Add another payment method or change membership billing before removing it.`,
+    );
+  }
+
+  const connection = await getMerchantConnection(input.workspaceId, "STRIPE");
+  if (!connection?.merchantAccountId) throw new Error("Stripe is not connected");
+
+  const stripe = getStripe();
+  if (!stripe) throw new Error("Stripe is not configured");
+
+  try {
+    await stripe.paymentMethods.detach(
+      targetId,
+      {},
+      { stripeAccount: connection.merchantAccountId },
+    );
+  } catch {
+    // If already detached at provider, still clear local default.
+  }
+
+  await writePaymentMeta(input.contactId, { defaultPaymentMethodId: undefined });
+  return { removed: true };
+}
+
 export async function chargeSavedCardForAppointment(input: {
   workspaceId: string;
   appointmentId: string;

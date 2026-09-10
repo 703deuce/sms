@@ -13,6 +13,7 @@ export const appointmentsSettingsTabs = [
 export const appointmentsIntegrationsTabs = [
   { label: "Calendars", href: "/integrations/calendars" },
   { label: "Payments", href: "/integrations/payments" },
+  { label: "Developer", href: "/integrations/developer" },
 ];
 
 /** Appointments product — analytics subnav. */

@@ -40,8 +40,15 @@ export function CalendarIntegrationsConnected() {
           onNavigate={(href) => router.push(href)}
         />
 
-        <div className="max-w-2xl">
+        <div className="max-w-2xl space-y-4">
           <CalendarIntegrationsCard />
+          <p className="text-[12px] text-[var(--muted-foreground)]">
+            Appointment outbound webhooks and delivery logs live under{" "}
+            <Link href="/integrations/developer" className="font-medium text-[var(--primary)] hover:underline">
+              Integrations → Developer
+            </Link>
+            .
+          </p>
         </div>
       </div>
     </main>

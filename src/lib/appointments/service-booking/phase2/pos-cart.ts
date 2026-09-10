@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { fulfillStorePurchase } from "@/lib/appointments/service-booking/store-checkout";
 import { fulfillBookingProductSale } from "@/lib/appointments/service-booking/booking-products";
+import { calculatePosTaxCents, getPosTaxConfig } from "@/lib/appointments/service-booking/pos-tax";
 import { earnLoyaltyPoints, processReferralOnPosCheckout } from "./loyalty";
 
 export type PosLineItemInput = {
@@ -18,12 +19,25 @@ const FULFILLMENT_KINDS = new Set(["package", "gift", "membership", "product"]);
 
 async function recalculateSessionTotals(sessionId: string) {
   const prisma = getPrisma();
+  const session = await prisma.posSession.findUnique({
+    where: { id: sessionId },
+    select: { workspaceId: true },
+  });
+  if (!session) throw new Error("POS session not found");
+
   const lineItems = await prisma.posLineItem.findMany({ where: { sessionId } });
   const subtotalCents = lineItems.reduce(
     (sum: number, item: { totalCents: number }) => sum + item.totalCents,
     0,
   );
-  const taxCents = 0;
+  const taxConfig = await getPosTaxConfig(session.workspaceId);
+  const taxCents = calculatePosTaxCents(
+    lineItems.map((item: { kind: string; totalCents: number }) => ({
+      kind: item.kind,
+      totalCents: item.totalCents,
+    })),
+    taxConfig,
+  );
   const totalCents = subtotalCents + taxCents;
 
   return prisma.posSession.update({

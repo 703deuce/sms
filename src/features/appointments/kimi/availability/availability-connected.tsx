@@ -157,7 +157,8 @@ export function AvailabilityConnected() {
     setSaving(false);
     if (!res.ok) return;
     setSaved(true);
-  }, [form]);
+    await load();
+  }, [form, load]);
 
   const model: AvailabilityPageModel | null = useMemo(() => {
     if (loading || failed) return null;
@@ -263,19 +264,53 @@ export function AvailabilityConnected() {
           ) : (
             <ul className="space-y-2">
               {form.namedSchedules.map((s) => (
-                <li key={s.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-[13px]">
-                  <span>{s.name}{s.isDefault ? " (default)" : ""}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      patchForm({
-                        namedSchedules: form.namedSchedules.filter((x) => x.id !== s.id),
-                      })
-                    }
-                  >
-                    Remove
-                  </Button>
+                <li key={s.id} className="rounded-lg border px-3 py-2 text-[13px] space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
+                    <input
+                      className="input flex-1 min-w-[160px] text-[13px]"
+                      value={s.name}
+                      aria-label={`Schedule name ${s.name}`}
+                      onChange={(e) =>
+                        patchForm({
+                          namedSchedules: form.namedSchedules.map((row) =>
+                            row.id === s.id ? { ...row, name: e.target.value } : row,
+                          ),
+                        })
+                      }
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          patchForm({
+                            namedSchedules: form.namedSchedules.map((row) =>
+                              row.id === s.id
+                                ? { ...row, weeklyHours: form.weeklyHours, timezone: form.timezone }
+                                : row,
+                            ),
+                          })
+                        }
+                      >
+                        Sync hours
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          patchForm({
+                            namedSchedules: form.namedSchedules.filter((x) => x.id !== s.id),
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {s.isDefault ? "Default schedule · " : ""}
+                    Uses saved weekly template (assign on appointment types).
+                  </p>
                 </li>
               ))}
             </ul>

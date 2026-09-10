@@ -102,6 +102,33 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
     }
   }
 
+  async function approvalAction(action: "approve" | "reject") {
+    setActing(true);
+    try {
+      const res = await fetch("/api/appointments/booking/approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId, action }),
+      });
+      if (!res.ok) throw new Error("approval failed");
+      await fetchAppt();
+      showToast(action === "approve" ? "Booking approved." : "Booking rejected.");
+    } catch {
+      showToast("Could not update approval. Try again.");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  function initials(name: string) {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join("") || "?";
+  }
+
   async function openReschedule() {
     if (!appt?.serviceName) return;
     setRescheduleOpen(true);
@@ -322,8 +349,8 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
             <div className="banner-title">Booking request needs your approval</div>
             <div className="banner-text">This booking type requires approval. The time is held but not confirmed. Approve to confirm it, or reject to release the slot.</div>
           </div>
-          <Button size="sm" onClick={() => patch({ pendingApproval: false, status: "confirmed" }, "Booking approved.")}>Approve</Button>
-          <Button size="sm" variant="outline" onClick={() => patch({ pendingApproval: false, action: "cancel", status: "canceled" }, "Booking rejected.")}>Reject</Button>
+          <Button size="sm" disabled={acting} onClick={() => approvalAction("approve")}>Approve</Button>
+          <Button size="sm" variant="outline" disabled={acting} onClick={() => approvalAction("reject")}>Decline</Button>
         </div>
       ) : null}
 
@@ -368,6 +395,68 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                         </li>
                       ))}
                     </ol>
+                  </span>
+                </div>
+              ) : null}
+              {appt.servicePhases && appt.servicePhases.length > 0 ? (
+                <div className="info-row">
+                  <span className="info-label"><Clock size={13} /> Service flow</span>
+                  <span className="info-value">
+                    <ol style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.servicePhases.map((phase) => (
+                        <li key={`${phase.name}-${phase.startsAt}`}>
+                          <strong>{phase.name}</strong>
+                          <span className="sub">
+                            {fmtDateTime(phase.startsAt, appt.timezone)} –{" "}
+                            {fmtDateTime(phase.endsAt, appt.timezone).split(", ").pop()}
+                            {phase.staffRequired ? ` · ${appt.staffName}` : " · No staff required"}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </span>
+                </div>
+              ) : null}
+              {appt.resources && appt.resources.length > 0 ? (
+                <div className="info-row">
+                  <span className="info-label"><MapPin size={13} /> Rooms &amp; equipment</span>
+                  <span className="info-value">
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.resources.map((r) => (
+                        <li key={r.id}>
+                          {r.name}
+                          {r.groupName ? <span className="sub"> · {r.groupName}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </span>
+                </div>
+              ) : null}
+              {appt.addOns && appt.addOns.length > 0 ? (
+                <div className="info-row">
+                  <span className="info-label"><Plus size={13} /> Add-ons</span>
+                  <span className="info-value">
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {appt.addOns.map((a) => (
+                        <li key={a.id}>
+                          {a.name}
+                          {a.quantity && a.quantity > 1 ? ` ×${a.quantity}` : ""}
+                          {a.priceCents ? <span className="sub"> · +{money(a.priceCents)}</span> : null}
+                          {a.durationMinutes ? <span className="sub"> · +{a.durationMinutes} min</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </span>
+                </div>
+              ) : null}
+              {appt.recurringSeriesId ? (
+                <div className="info-row">
+                  <span className="info-label"><RefreshCcw size={13} /> Recurring</span>
+                  <span className="info-value">
+                    Part of a recurring series
+                    {typeof appt.recurringOccurrenceIndex === "number" ? (
+                      <span className="sub"> · Occurrence {appt.recurringOccurrenceIndex + 1}</span>
+                    ) : null}
                   </span>
                 </div>
               ) : null}
@@ -423,19 +512,70 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
               ) : null}
               <div className="info-row">
                 <span className="info-label"><CreditCard size={13} /> Payment</span>
-                <span className="info-value" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <StatusBadge status={appt.paymentStatus} />
-                  <span>{money(appt.paymentAmountCents)} deposit</span>
-                  {appt.paymentStatus === "paid" && appt.paymentsConnected && !isTerminal && (
-                    <Button size="sm" variant="ghost" disabled={acting} onClick={refundPayment}>Refund</Button>
+                <span className="info-value">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                    <StatusBadge status={appt.paymentStatus} />
+                    {appt.paymentStatus === "paid" && appt.paymentsConnected && !isTerminal && (
+                      <Button size="sm" variant="ghost" disabled={acting} onClick={refundPayment}>Refund</Button>
+                    )}
+                  </div>
+                  {appt.paymentSummary ? (
+                    <div className="info-list" style={{ gap: 4 }}>
+                      <div>Total {money(appt.paymentSummary.totalCents)}</div>
+                      {appt.paymentSummary.depositPaidCents > 0 ? (
+                        <div className="sub">Deposit {money(appt.paymentSummary.depositPaidCents)}</div>
+                      ) : null}
+                      {appt.paymentSummary.paidCents > 0 ? (
+                        <div className="sub">Paid {money(appt.paymentSummary.paidCents)}</div>
+                      ) : null}
+                      {appt.paymentSummary.balanceDueCents > 0 ? (
+                        <div className="sub">Balance {money(appt.paymentSummary.balanceDueCents)}</div>
+                      ) : null}
+                      {appt.paymentSummary.refundedCents > 0 ? (
+                        <div className="sub">Refunded {money(appt.paymentSummary.refundedCents)}</div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span>{money(appt.paymentAmountCents)}</span>
                   )}
-                  {appt.paymentStatus === "paid" && !appt.paymentsConnected && (
-                    <span className="sub" style={{ display: "inline" }}>
-                      Payments provider disconnected — refunds unavailable. Reconnect under Integrations → Payments.
+                  {appt.packageAccess?.packageName ? (
+                    <span className="sub">
+                      Paid with {appt.packageAccess.packageName}
+                      {typeof appt.packageAccess.creditsUsed === "number"
+                        ? ` · ${appt.packageAccess.creditsUsed} credit used`
+                        : ""}
+                      {typeof appt.packageAccess.creditsRemaining === "number"
+                        ? ` · ${appt.packageAccess.creditsRemaining} remaining`
+                        : ""}
                     </span>
-                  )}
+                  ) : null}
+                  {appt.membershipAccess?.membershipName ? (
+                    <span className="sub">
+                      {appt.membershipAccess.membershipName}
+                      {appt.membershipAccess.benefitLabel
+                        ? ` · ${appt.membershipAccess.benefitLabel}`
+                        : ""}
+                    </span>
+                  ) : null}
+                  {appt.accountCreditAppliedCents ? (
+                    <span className="sub">Account credit {money(appt.accountCreditAppliedCents)} applied</span>
+                  ) : null}
                 </span>
               </div>
+              {appt.termsAcceptance?.acceptedAt ? (
+                <div className="info-row">
+                  <span className="info-label"><ShieldCheck size={13} /> Terms</span>
+                  <span className="info-value">
+                    Terms accepted
+                    <span className="sub">
+                      {fmtDateTime(appt.termsAcceptance.acceptedAt, appt.timezone)}
+                      {appt.termsAcceptance.termsVersion
+                        ? ` · Version ${appt.termsAcceptance.termsVersion}`
+                        : ""}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
               <div className="info-row">
                 <span className="info-label"><ShieldCheck size={13} /> SMS consent</span>
                 <span className="info-value">
@@ -573,7 +713,7 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
         <div className="stack">
           <Card title={<><User size={15} className="muted" /> Customer</>}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
-              <span className="avatar" style={{ width: 36, height: 36, fontSize: 13 }}>SJ</span>
+              <span className="avatar" style={{ width: 36, height: 36, fontSize: 13 }}>{initials(appt.inviteeName)}</span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{appt.inviteeName}</div>
                 <a
@@ -600,7 +740,15 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
                 <span className="info-value" style={{ wordBreak: "break-all" }}>{appt.inviteeEmail}</span>
               </div>
             </div>
-            <Button variant="outline" size="sm" style={{ width: "100%", marginTop: 8 }} onClick={() => showToast("Opening conversation…")}>
+            <Button
+              variant="outline"
+              size="sm"
+              style={{ width: "100%", marginTop: 8 }}
+              onClick={() => {
+                if (appt.contactId) router.push(`/conversations?contact=${appt.contactId}`);
+                else showToast("No contact record linked.");
+              }}
+            >
               <MessageSquare size={13} /> Message customer
             </Button>
           </Card>

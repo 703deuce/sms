@@ -107,6 +107,7 @@ export default function ContactsList({
   onAddToLists,
   onRemoveFromLists,
   onUnsubscribeContacts,
+  onMergeContact,
   savedToast,
 }: {
   contacts?: Contact[];
@@ -121,6 +122,7 @@ export default function ContactsList({
   onAddToLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
   onRemoveFromLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
   onUnsubscribeContacts?: (contactIds: string[]) => void | Promise<void>;
+  onMergeContact?: (contact: Contact) => void;
   savedToast: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -659,6 +661,18 @@ export default function ContactsList({
                                 }}
                               >
                                 <UserX className="h-4 w-4 text-muted-foreground" /> Unsubscribe
+                              </button>
+                            )}
+                            {onMergeContact && (
+                              <button
+                                type="button"
+                                className={menuItemCls}
+                                onClick={() => {
+                                  setRowMenuFor(null);
+                                  onMergeContact(c);
+                                }}
+                              >
+                                <UserMinus className="h-4 w-4 text-muted-foreground" /> Merge duplicate
                               </button>
                             )}
                             {onDeleteContacts && (
