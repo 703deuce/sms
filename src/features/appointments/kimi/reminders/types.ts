@@ -59,4 +59,6 @@ export type RemindersPageActions = {
       attachIcs: boolean;
     }>,
   ) => void;
+  onVoiceTemplateChange: (stepKey: ReminderStepKey, templateId: string) => void;
+  onDefaultVoiceTemplateChange?: (templateId: string) => void;
 };

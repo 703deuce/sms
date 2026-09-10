@@ -5,12 +5,16 @@ import { Button } from '@/components/ui/button';
 import MergeTagsCard from './components/MergeTagsCard';
 import SendTestCard from './components/SendTestCard';
 import ReminderCard from './components/ReminderCard';
+import SmsConsentNotice from './components/SmsConsentNotice';
+import VoiceReminderSection from './components/VoiceReminderSection';
 import type { RemindersPageActions, RemindersPageModel } from '@/features/appointments/kimi/reminders/types';
 import type { ReminderStepKey } from '@/features/appointments/kimi/reminders/types';
 import './reference.css';
 
 type Props = {
   model: RemindersPageModel;
+  voiceTemplates?: Array<{ id: string; name: string }>;
+  defaultVoiceTemplateId?: string;
   actions: RemindersPageActions;
   saved?: boolean;
   saving?: boolean;
@@ -23,6 +27,8 @@ type Props = {
 
 export default function ReminderSettingsView({
   model,
+  voiceTemplates = [],
+  defaultVoiceTemplateId,
   actions,
   saved = true,
   saving = false,
@@ -57,6 +63,10 @@ export default function ReminderSettingsView({
 
       <div className="mt-6 grid grid-cols-2 gap-4">
         <MergeTagsCard tags={model.mergeTags} />
+        <SmsConsentNotice />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <SendTestCard
           phone={testPhone}
           stepKey={testStep}
@@ -68,7 +78,21 @@ export default function ReminderSettingsView({
           onStepChange={actions.onTestStepChange}
           onSend={actions.onSendTest}
         />
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="text-[14px] font-semibold text-foreground">Delivery results</h3>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">
+            Sent counts and delivery rates live in Automation Activity and Reminder Analytics.
+          </p>
+          <a href="/appointments/automations/activity" className="mt-3 inline-block text-[12.5px] font-medium text-[#4f46e5] hover:underline">
+            View activity
+          </a>
+        </div>
       </div>
+
+      <VoiceReminderSection
+        selectedTemplateId={defaultVoiceTemplateId}
+        onSelectTemplate={actions.onDefaultVoiceTemplateChange}
+      />
 
       <div className="mt-7 flex items-start justify-between gap-4">
         <div>
@@ -91,6 +115,8 @@ export default function ReminderSettingsView({
             onTemplateChange={(value) => actions.onTemplateChange(r.stepKey, value)}
             onChannelChange={(channel) => actions.onChannelChange(r.stepKey, channel)}
             onReset={() => actions.onResetTemplate(r.stepKey)}
+            voiceTemplates={voiceTemplates}
+            onVoiceTemplateChange={(id) => actions.onVoiceTemplateChange(r.stepKey, id)}
             onAdvancedChange={(patch) => actions.onAdvancedChange(r.stepKey, patch)}
           />
         ))}

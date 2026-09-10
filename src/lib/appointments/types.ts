@@ -28,6 +28,8 @@ export type ReminderStepConfig = {
   label: string;
   /** Voice reminder template when channel is voice */
   voiceReminderTemplateId?: string;
+  /** Attach .ics calendar invite to email reminders */
+  attachIcs?: boolean;
 };
 
 export type DateOverride = {

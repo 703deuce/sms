@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import "@/components/appointments/kimi-ui/workflows/reference.css";
 import { WorkflowBuilder } from "@/components/appointments/kimi-ui/workflows/components/WorkflowBuilder";
@@ -27,6 +27,14 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
   const router = useRouter();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [bookingTypes, setBookingTypes] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    fetch("/api/appointments/workflows/context")
+      .then((r) => r.json())
+      .then((json) => setBookingTypes(json.data?.bookingTypes || []))
+      .catch(() => {});
+  }, []);
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -208,6 +216,7 @@ export function AppointmentWorkflowEditor({ mode, initial, templateId }: Props) 
       <WorkflowBuilder
         mode={mode}
         initial={kimiInitial}
+        appointmentTypes={bookingTypes}
         onBack={() => router.push("/appointments/workflows")}
         onSaved={persistWorkflow}
         onTest={handleTest}

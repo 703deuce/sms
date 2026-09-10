@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Plus, Route } from "lucide-react";
 import type { RoutingForm } from "../types";
-import { initialForms, industryOptions, companySizeOptions } from "../types";
+import { industryOptions, companySizeOptions } from "../types";
+import { listRoutingFormPresets } from "@/lib/appointments/routing-forms-presets";
 import FormListPanel from "./FormListPanel";
 import FormEditor from "./FormEditor";
 
@@ -39,33 +40,58 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
   const [loadError, setLoadError] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [bookingTypes, setBookingTypes] = useState<Array<{ id: string; name: string }>>([]);
+  const [staffMembers, setStaffMembers] = useState<Array<{ id: string; name: string }>>([]);
+  const [analyticsMap, setAnalyticsMap] = useState<Record<string, { views: number; routes: Record<string, number> }>>({});
+  const [submissions, setSubmissions] = useState<Array<{
+    id: string;
+    submittedAt: string;
+    visitorName?: string;
+    visitorEmail?: string;
+    answers: Record<string, string>;
+    destinationLabel?: string;
+    outcome: string;
+  }>>([]);
+
+  const loadContext = useCallback(async (formId?: string) => {
+    const url = formId
+      ? `/api/appointments/routing-forms/context?formId=${encodeURIComponent(formId)}`
+      : "/api/appointments/routing-forms/context";
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const json = await res.json();
+    setBookingTypes(json.data?.bookingTypes || []);
+    setStaffMembers(json.data?.staff || []);
+    setAnalyticsMap(json.data?.analytics || {});
+    setSubmissions(json.data?.submissions || []);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [formsRes, typesRes, settingsRes] = await Promise.all([
-        fetch("/api/appointments/routing-forms"),
-        fetch("/api/appointments/types"),
-        fetch("/api/appointments/settings"),
-      ]);
+      const formsRes = await fetch("/api/appointments/routing-forms");
       if (!formsRes.ok) throw new Error("load failed");
       const formsJson = await formsRes.json();
       const list = (formsJson.data || []) as RoutingForm[];
       setForms(list);
-      setSelected((sel) => sel ?? list[0] ?? null);
-      if (typesRes.ok) await typesRes.json();
-      if (settingsRes.ok) await settingsRes.json();
+      const nextSelected = list[0] ?? null;
+      setSelected((sel) => sel ?? nextSelected);
+      await loadContext(nextSelected?.id);
     } catch {
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadContext]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (selected?.id) void loadContext(selected.id);
+  }, [selected?.id, loadContext]);
 
   useEffect(() => {
     if (!toast) return;
@@ -94,6 +120,19 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
   function handleNew() {
     if (dirty && !window.confirm("You have unsaved changes. Discard them and create a new form?")) return;
     const f = emptyForm();
+    setForms((prev) => [...prev, f]);
+    setSelected(f);
+    setDirty(true);
+  }
+
+  function handlePreset(presetId: string) {
+    const preset = listRoutingFormPresets().find((p) => p.id === presetId);
+    if (!preset) return;
+    const f: RoutingForm = {
+      ...preset.form,
+      id: `rf_${Date.now()}`,
+      slug: `${preset.form.slug}-${Date.now().toString(36)}`,
+    };
     setForms((prev) => [...prev, f]);
     setSelected(f);
     setDirty(true);
@@ -131,9 +170,14 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
             Intake forms that route leads to the right booking type or team member based on their answers.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={handleNew}>
-          <Plus size={16} /> New form
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-outline" onClick={() => handlePreset("new_client_intake")}>
+            Start from template
+          </button>
+          <button className="btn btn-primary" onClick={handleNew}>
+            <Plus size={16} /> New form
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -169,6 +213,10 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
               workspaceSlug={workspaceSlug}
               saving={saving}
               dirty={dirty}
+              bookingTypes={bookingTypes}
+              staffMembers={staffMembers}
+              analytics={analyticsMap[selected.id]}
+              submissions={submissions}
               onChange={handleChange}
               onSave={save}
               onDelete={handleDelete}

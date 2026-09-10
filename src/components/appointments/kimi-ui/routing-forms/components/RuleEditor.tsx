@@ -1,9 +1,12 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { RoutingForm, RoutingFormRule, RoutingDestination } from "../types";
-import { bookingTypes, staffMembers } from "../types";
+
+type Lookup = { id: string; name: string };
 
 type Props = {
   form: RoutingForm;
+  bookingTypes: Lookup[];
+  staffMembers: Lookup[];
   onChange: (form: RoutingForm) => void;
 };
 
@@ -29,7 +32,7 @@ function parseDest(val: string): RoutingDestination {
   return {};
 }
 
-export default function RuleEditor({ form, onChange }: Props) {
+export default function RuleEditor({ form, bookingTypes, staffMembers, onChange }: Props) {
   function updateRule(ri: number, patch: Partial<RoutingFormRule>) {
     const rules = form.rules.map((r, i) => (i === ri ? { ...r, ...patch } : r));
     onChange({ ...form, rules });

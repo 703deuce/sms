@@ -64,10 +64,23 @@ export function resolveRoutingFormDestination(
   return fallbackRule?.destination || form.fallbackDestination || null;
 }
 
+export type RoutingSubmission = {
+  id: string;
+  formId: string;
+  submittedAt: string;
+  visitorName?: string;
+  visitorEmail?: string;
+  answers: Record<string, string>;
+  destination?: RoutingFormRule["destination"];
+  destinationLabel?: string;
+  outcome: "routed" | "booked";
+};
+
 export async function recordRoutingAnalytics(
   workspaceId: string,
   formId: string,
   destination: RoutingFormRule["destination"],
+  input?: { answers?: Record<string, string>; visitorName?: string; visitorEmail?: string },
 ) {
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const stats = (platform as { routingAnalytics?: Record<string, { views: number; routes: Record<string, number> }> }).routingAnalytics || {};
@@ -81,5 +94,34 @@ export async function recordRoutingAnalytics(
     "unknown";
   entry.routes[destKey] = (entry.routes[destKey] || 0) + 1;
   stats[formId] = entry;
-  await saveAppointmentPlatformConfig(workspaceId, { routingAnalytics: stats } as object);
+
+  const submissions = (platform as { routingSubmissions?: Record<string, RoutingSubmission[]> }).routingSubmissions || {};
+  const list = submissions[formId] || [];
+  const submission: RoutingSubmission = {
+    id: `rs_${Date.now()}`,
+    formId,
+    submittedAt: new Date().toISOString(),
+    visitorName: input?.visitorName,
+    visitorEmail: input?.visitorEmail,
+    answers: input?.answers || {},
+    destination,
+    outcome: "routed",
+  };
+  submissions[formId] = [submission, ...list].slice(0, 100);
+
+  await saveAppointmentPlatformConfig(workspaceId, {
+    routingAnalytics: stats,
+    routingSubmissions: submissions,
+  } as object);
+}
+
+export async function listRoutingSubmissions(workspaceId: string, formId: string): Promise<RoutingSubmission[]> {
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const submissions = (platform as { routingSubmissions?: Record<string, RoutingSubmission[]> }).routingSubmissions || {};
+  return submissions[formId] || [];
+}
+
+export async function getRoutingAnalytics(workspaceId: string) {
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  return (platform as { routingAnalytics?: Record<string, { views: number; routes: Record<string, number> }> }).routingAnalytics || {};
 }

@@ -34,7 +34,11 @@ export async function POST(request: Request, { params }: Params) {
     const form = forms.find((f) => f.id === body.formId);
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 });
     const destination = resolveRoutingFormDestination(form, body.answers || {});
-    await recordRoutingAnalytics(workspace.id, form.id, destination || {});
+    await recordRoutingAnalytics(workspace.id, form.id, destination || {}, {
+      answers: body.answers || {},
+      visitorName: (body as { name?: string }).name,
+      visitorEmail: (body as { email?: string }).email,
+    });
     return NextResponse.json({ data: { destination } });
   } catch (err) {
     return jsonError(err, 400);
