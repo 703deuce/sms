@@ -19,10 +19,40 @@ export async function GET(_request: Request, { params }: Params) {
       resolved.session.workspaceId,
       resolved.session.contactId,
     );
+
+    let card: { brand?: string; last4?: string; expMonth?: number; expYear?: number } | null = null;
+    if (saved?.defaultPaymentMethodId && saved.stripeCustomerId) {
+      try {
+        const { getStripe } = await import("@/lib/stripe/client");
+        const { getMerchantConnection } = await import("@/lib/merchant-payments/connection-store");
+        const stripe = getStripe();
+        const connection = await getMerchantConnection(resolved.session.workspaceId, "STRIPE");
+        if (stripe && connection?.merchantAccountId) {
+          const pm = await stripe.paymentMethods.retrieve(
+            saved.defaultPaymentMethodId,
+            {},
+            { stripeAccount: connection.merchantAccountId },
+          );
+          if (pm.card) {
+            card = {
+              brand: pm.card.brand,
+              last4: pm.card.last4,
+              expMonth: pm.card.exp_month,
+              expYear: pm.card.exp_year,
+            };
+          }
+        }
+      } catch {
+        card = null;
+      }
+    }
+
     return NextResponse.json({
       data: {
         hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
         paymentMethodId: saved?.defaultPaymentMethodId || null,
+        card,
+        providerConfigured: Boolean(saved?.stripeCustomerId),
       },
     });
   } catch (err) {
