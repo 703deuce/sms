@@ -57,6 +57,7 @@ export default function CampaignsList({
   onCreate,
   editCampaignPath,
   campaignsBasePath = "/campaigns",
+  senderActive = true,
   rowFilter,
   fetchStatus,
   title = "Campaigns",
@@ -68,6 +69,7 @@ export default function CampaignsList({
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
   campaignsBasePath?: string;
+  senderActive?: boolean;
   rowFilter?: (row: CampaignListRow) => boolean;
   fetchStatus?: string;
   title?: string;
@@ -244,7 +246,13 @@ export default function CampaignsList({
             className="input-field !pl-9"
           />
         </div>
-        <button type="button" className="btn-primary" onClick={onCreate}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={onCreate}
+          disabled={!senderActive}
+          title={senderActive ? undefined : "Activate Business Texting in Settings → Messaging"}
+        >
           Create Campaign
         </button>
       </div>
@@ -277,12 +285,21 @@ export default function CampaignsList({
                 <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 ring-1 ring-indigo-100">
                   <Megaphone className="h-5 w-5 text-indigo-500" />
                 </span>
-                <p className="mt-4 text-sm font-semibold text-slate-800">No campaigns found</p>
-                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-slate-400">
-                  Create your first bulk SMS campaign to reach your audience.
+                <p className="mt-4 text-sm font-semibold text-slate-800">
+                  {senderActive ? "No campaigns yet" : "Business Texting not active"}
                 </p>
-                <button type="button" className="btn-primary mt-5" onClick={onCreate}>
-                  Create Campaign
+                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-slate-400">
+                  {senderActive
+                    ? "Create your first campaign to reach your customer list."
+                    : "Activate Business Texting in Settings → Messaging to send campaigns."}
+                </p>
+                <button
+                  type="button"
+                  className="btn-primary mt-5"
+                  onClick={onCreate}
+                  disabled={!senderActive}
+                >
+                  {senderActive ? "Create Campaign" : "Activate Business Texting"}
                 </button>
               </div>
             </div>

@@ -15,15 +15,22 @@ import { CampaignNavTabs } from "@/components/campaigns/campaign-nav-tabs";
 import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
 import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 import { buildCampaignNavPaths } from "@/lib/products/business-texting-routes";
+import {
+  BusinessTextingActivationPanel,
+  BusinessTextingSenderBadge,
+} from "@/components/campaigns/business-texting-activation-panel";
+import type { BusinessTextingCampaignStatus } from "@/lib/mass-texting/business-texting-types";
 
 export type CampaignsInitialView = "list" | "create" | "review";
 
 export function KimiCampaignsConnected({
   initialView = "list",
   initialRows = [],
+  senderStatus = null,
 }: {
   initialView?: CampaignsInitialView;
   initialRows?: import("@/lib/campaigns/kimi-campaigns-adapter").CampaignListRow[];
+  senderStatus?: BusinessTextingCampaignStatus | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -45,14 +52,34 @@ export function KimiCampaignsConnected({
     prevPathRef.current = pathname;
   }, [pathname, initialView, campaignsListPath]);
 
+  const senderActive = senderStatus?.active ?? true;
+
   const navShell = (content: ReactNode) => (
     <div className="kimi-surface kimi-campaigns">
       <div className="border-b border-slate-200/80 bg-white px-8 pt-6">
+        {senderStatus?.active && senderStatus.phoneE164 ? (
+          <div className="pb-3">
+            <BusinessTextingSenderBadge phoneE164={senderStatus.phoneE164} />
+          </div>
+        ) : null}
         <CampaignNavTabs />
       </div>
+      {senderStatus && !senderStatus.active ? (
+        <BusinessTextingActivationPanel status={senderStatus} variant="banner" />
+      ) : null}
       {content}
     </div>
   );
+
+  if (!senderActive && (initialView === "create" || initialView === "review")) {
+    return navShell(
+      senderStatus ? (
+        <BusinessTextingActivationPanel status={senderStatus} variant="page" />
+      ) : (
+        <p className="p-8 text-sm text-slate-500">Checking Business Texting status…</p>
+      ),
+    );
+  }
 
   if (initialView === "create") {
     return navShell(
@@ -79,7 +106,12 @@ export function KimiCampaignsConnected({
       key={listKey}
       initialRows={initialRows}
       campaignsBasePath={campaignsBase}
+      senderActive={senderActive}
       onCreate={() => {
+        if (!senderActive) {
+          router.push("/settings/messaging");
+          return;
+        }
         startFreshComposeDraft();
         router.push(campaignsNewPath);
       }}

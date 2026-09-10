@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Users, List, PieChart, X, Check, User } from "lucide-react";
+import Link from "next/link";
+import { Search, Users, List, PieChart, X, Check, User, Upload } from "lucide-react";
 import type { AudienceSelection } from "@/lib/campaigns/compose-draft";
 import {
   loadAudiencePickerCatalog,
@@ -258,6 +259,15 @@ export default function AudiencePicker({
               </div>
             ))
           )}
+          <div className="mt-2 border-t border-slate-100 pt-2">
+            <Link
+              href="/contacts/imports"
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50"
+            >
+              <Upload className="h-3.5 w-3.5" aria-hidden />
+              Import contacts
+            </Link>
+          </div>
         </div>
       )}
     </div>

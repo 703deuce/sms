@@ -41,13 +41,13 @@ These rows are **new** — not part of the closed 308-row master inventory.
 
 | ID | Feature | Canonical route / surface | Status |
 |----|---------|---------------------------|--------|
-| BT-1 | Business Texting activation | Settings → Messaging | Planned |
-| BT-2 | Approved sender status display | Settings → Messaging; campaign composer | Planned |
+| BT-1 | Business Texting activation | Settings → Messaging | **Partial** — existing settings + activation panel on Campaigns |
+| BT-2 | Approved sender status display | Settings → Messaging; campaign composer | **Partial** — sender badge + gate via `assertMassTextMarketingSendAllowed` |
 | BT-3 | Contacts usable for messaging | `/contacts` | Partial — shared model exists |
 | BT-4 | CSV-imported contacts usable for campaigns | `/contacts/imports` | Partial |
 | BT-5 | Segments as campaign audiences | `/contacts/segments` | Partial |
-| BT-6 | Campaign list | `/appointments/campaigns` | In progress |
-| BT-7 | Create campaign | `/appointments/campaigns/new` | In progress |
+| BT-6 | Campaign list | `/appointments/campaigns` | **Implemented** (reuse legacy UI + runtime) |
+| BT-7 | Create campaign | `/appointments/campaigns/new` | **Implemented** (reuse legacy flow) |
 | BT-8 | Audience selection | Campaign compose step 1 | Reuse legacy |
 | BT-9 | SMS composer | Campaign compose step 2 | Reuse legacy |
 | BT-10 | Template selection | Link to `/appointments/automations/templates` | Audit needed |
