@@ -59,7 +59,7 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "h-8 px-3 text-[13px]" : "h-9 px-4 text-[13px]",
-        variant === "primary" && "bg-primary text-white hover:bg-[#147d74]",
+        variant === "primary" && "bg-primary text-primary-foreground hover:bg-primary-hover",
         variant === "secondary" &&
           "border border-border bg-card text-foreground hover:bg-muted",
         variant === "ghost" && "text-muted-foreground hover:bg-muted hover:text-foreground",

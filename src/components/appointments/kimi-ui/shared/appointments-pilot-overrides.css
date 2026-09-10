@@ -1,7 +1,36 @@
 /**
  * Appointments pilot — force teal/charcoal on interactive chrome (toggles, selections, accents).
- * Scoped under .appt-overview-pilot so global product pages are unaffected.
+ * Scoped under html.appt-overview-pilot-active / .appt-overview-pilot.
  */
+
+html.appt-overview-pilot-active .reference-root .toggle.on,
+html.appt-overview-pilot-active .toggle.on,
+.appt-overview-pilot .reference-root .toggle.on,
+.appt-overview-pilot .toggle.on {
+  background: #147d74 !important;
+}
+
+html.appt-overview-pilot-active button.bg-primary,
+html.appt-overview-pilot-active .bg-primary,
+.appt-overview-pilot .bg-primary {
+  background-color: #147d74 !important;
+}
+
+html.appt-overview-pilot-active .hover\:bg-primary-hover:hover,
+.appt-overview-pilot .hover\:bg-primary-hover:hover {
+  background-color: #10665f !important;
+}
+
+html.appt-overview-pilot-active .text-primary,
+.appt-overview-pilot .text-primary {
+  color: #147d74 !important;
+}
+
+html.appt-overview-pilot-active .ring-ring,
+html.appt-overview-pilot-active .focus-visible\:ring-ring:focus-visible,
+.appt-overview-pilot .ring-ring {
+  --tw-ring-color: rgba(20, 125, 116, 0.35) !important;
+}
 
 /* Form controls */
 .appt-overview-pilot input[type="checkbox"],
