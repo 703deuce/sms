@@ -10,6 +10,7 @@ import {
   patchReminderEnabled,
   patchReminderTemplate,
   patchReminderChannel,
+  patchReminderVoiceTemplate,
   resetReminderTemplate,
   type RemindersApiConfig,
   type ReminderPreviewMap,
@@ -79,6 +80,8 @@ export function RemindersConnected() {
   const [testing, setTesting] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [testError, setTestError] = useState("");
+  const [voiceTemplates, setVoiceTemplates] = useState<Array<{ id: string; name: string }>>([]);
+  const [defaultVoiceTemplateId, setDefaultVoiceTemplateId] = useState<string>("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -94,8 +97,17 @@ export function RemindersConnected() {
           timezone: data.timezone,
           reminders: data.reminders,
         });
-        const nextPreviews = await loadPreviews();
+        const [nextPreviews, voiceRes] = await Promise.all([
+          loadPreviews(),
+          fetch("/api/appointments/voice-reminders"),
+        ]);
         setPreviews(nextPreviews);
+        if (voiceRes.ok) {
+          const voiceJson = await voiceRes.json();
+          const templates = (voiceJson.data?.templates || []) as Array<{ id: string; name: string }>;
+          setVoiceTemplates(templates.map((t) => ({ id: t.id, name: t.name })));
+          setDefaultVoiceTemplateId(voiceJson.data?.defaultTemplateId || templates[0]?.id || "");
+        }
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
@@ -195,6 +207,19 @@ export function RemindersConnected() {
         setConfig(patchReminderAdvanced(config, stepKey, patch));
         setSaved(false);
       },
+      onVoiceTemplateChange: (stepKey, templateId) => {
+        if (!config) return;
+        setConfig(patchReminderVoiceTemplate(config, stepKey, templateId));
+        setSaved(false);
+      },
+      onDefaultVoiceTemplateChange: async (templateId) => {
+        setDefaultVoiceTemplateId(templateId);
+        await fetch("/api/appointments/voice-reminders", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ defaultTemplateId: templateId }),
+        });
+      },
     }),
     [config, load, refreshPreview, testPhone, testStep],
   );
@@ -205,6 +230,8 @@ export function RemindersConnected() {
   return (
     <ReminderSettingsView
       model={model}
+      voiceTemplates={voiceTemplates}
+      defaultVoiceTemplateId={defaultVoiceTemplateId}
       actions={actions}
       saved={saved}
       saving={saving}

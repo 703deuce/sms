@@ -47,11 +47,12 @@ function newStep(index: number): WorkflowStep {
   };
 }
 
-export function WorkflowBuilder({ initial, mode, onBack, onSaved, onTest, toast }: {
+export function WorkflowBuilder({ initial, mode, onBack, onSaved, onTest, toast, appointmentTypes }: {
   initial?: WorkflowRecord;
   mode: "create" | "edit";
   onBack: () => void;
   onSaved: (wf: WorkflowRecord) => void | Promise<void>;
+  appointmentTypes?: Array<{ id: string; name: string }>;
   onTest?: (args: {
     name: string;
     trigger: string;
@@ -78,6 +79,7 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, onTest, toast 
 
   const isPaused = initial?.status === "paused" && !initial.active;
   const dirty = true;
+  const typeOptions = appointmentTypes?.length ? appointmentTypes : APPOINTMENT_TYPES;
   const channels = useMemo(() => Array.from(new Set(steps.map((s) => s.channel))) as Channel[], [steps]);
   const triggerGroups = useMemo(() => {
     const g = new Map<string, typeof TRIGGER_OPTIONS>();
@@ -208,7 +210,7 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, onTest, toast 
               <Label htmlFor="wf-scope">Applies to</Label>
               <Select id="wf-scope" value={scopeTypeId} onChange={(e) => setScopeTypeId(e.target.value)}>
                 <option value="all">All booking types</option>
-                {APPOINTMENT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {typeOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </div>
 

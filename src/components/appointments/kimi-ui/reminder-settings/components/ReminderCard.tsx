@@ -21,6 +21,8 @@ export default function ReminderCard({
   onTemplateChange,
   onChannelChange,
   onReset,
+  voiceTemplates = [],
+  onVoiceTemplateChange,
   onAdvancedChange,
 }: {
   reminder: ReminderItem;
@@ -28,12 +30,15 @@ export default function ReminderCard({
   onTemplateChange: (value: string) => void;
   onChannelChange: (channel: ReminderChannel) => void;
   onReset: () => void;
+  voiceTemplates?: Array<{ id: string; name: string }>;
+  onVoiceTemplateChange?: (templateId: string) => void;
   onAdvancedChange?: (patch: Partial<{
     timeOfDayAt: string;
     timeOfDayDaysBefore: number;
     skipWeekends: boolean;
     skipOffHours: boolean;
     stopOnReply: boolean;
+    attachIcs: boolean;
   }>) => void;
 }) {
   const Icon = iconMap[reminder.icon];
@@ -98,14 +103,35 @@ export default function ReminderCard({
                 <option value="email">Email</option>
                 <option value="voice">Voice call</option>
               </select>
+              {reminder.channel === 'voice' && voiceTemplates.length > 0 ? (
+                <select
+                  value={reminder.voiceReminderTemplateId || voiceTemplates[0]?.id || ''}
+                  onChange={(e) => onVoiceTemplateChange?.(e.target.value)}
+                  className="mt-2 h-9 w-full rounded-lg border border-border bg-background px-3 text-[12.5px]"
+                >
+                  {voiceTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              ) : null}
               {reminder.channel === 'voice' ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Uses your Voice Reminders templates and keypad options.
+                  Uses your voice reminder templates and keypad options.
                 </p>
               ) : reminder.channel === 'email' ? (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Includes ICS calendar attachment and open/click tracking.
-                </p>
+                <div className="mt-2 space-y-2">
+                  <label className="flex items-center gap-2 text-[12px] text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={reminder.attachIcs ?? true}
+                      onChange={(e) => onAdvancedChange?.({ attachIcs: e.target.checked })}
+                    />
+                    Attach calendar invite (.ics)
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Delivery results include open and click tracking when supported by your email provider.
+                  </p>
+                </div>
               ) : (
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Sent from the Transovo platform number. International numbers supported.

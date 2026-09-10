@@ -70,13 +70,18 @@ function availabilityChildren(): NavItem["children"] {
 function remindersChildren(): NavItem["children"] {
   return [
     { label: "Reminder Sequences", href: "/appointments/reminders" },
+    { label: "No-show recovery", href: "/appointments/automations/no-show" },
+    { label: "Recall automation", href: "/appointments/automations/recall" },
     { label: "Templates", href: "/appointments/automations/templates" },
     { label: "Activity", href: "/appointments/automations/activity" },
   ];
 }
 
 function workflowsChildren(): NavItem["children"] {
-  return [{ label: "Workflows", href: "/appointments/workflows" }];
+  return [
+    { label: "Workflows", href: "/appointments/workflows" },
+    { label: "Activity", href: "/appointments/automations/activity" },
+  ];
 }
 
 function meetingsChildren(): NavItem["children"] {

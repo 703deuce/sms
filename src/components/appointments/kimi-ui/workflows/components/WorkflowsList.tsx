@@ -76,8 +76,11 @@ export function WorkflowsList({
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">Workflows</h1>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Automated appointment reminders, confirmations, and follow-ups.
+            Automate routine follow-up when appointment and customer events happen.
           </p>
+          <a href="/appointments/automations/activity" className="mt-2 inline-block text-sm font-medium text-[var(--primary)] hover:underline">
+            View activity
+          </a>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative">

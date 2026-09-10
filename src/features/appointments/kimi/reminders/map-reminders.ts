@@ -81,7 +81,8 @@ function mapReminderItem(
     skipOffHours: step.skipOffHours,
     skipClosedDays: step.skipClosedDays,
     stopOnReply: step.stopOnReply,
-    attachIcs: step.channel === "email",
+    attachIcs: step.attachIcs ?? step.channel === "email",
+    voiceReminderTemplateId: step.voiceReminderTemplateId,
   };
 }
 
@@ -174,9 +175,24 @@ export function patchReminderAdvanced(
   if (patch.skipWeekends !== undefined) next.skipWeekends = patch.skipWeekends;
   if (patch.skipOffHours !== undefined) next.skipOffHours = patch.skipOffHours;
   if (patch.stopOnReply !== undefined) next.stopOnReply = patch.stopOnReply;
+  if (patch.attachIcs !== undefined) next.attachIcs = patch.attachIcs;
   return {
     ...config,
     reminders: { ...config.reminders, [stepKey]: next },
+  };
+}
+
+export function patchReminderVoiceTemplate(
+  config: RemindersApiConfig,
+  stepKey: ReminderStepKey,
+  voiceReminderTemplateId: string,
+): RemindersApiConfig {
+  return {
+    ...config,
+    reminders: {
+      ...config.reminders,
+      [stepKey]: { ...config.reminders[stepKey], voiceReminderTemplateId },
+    },
   };
 }
 

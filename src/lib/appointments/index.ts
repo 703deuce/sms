@@ -27,6 +27,7 @@ export {
 } from "./appointments-service";
 export {
   listAppointmentTypes,
+  type ListedAppointmentType,
   upsertAppointmentType,
   createPlatformAppointment,
   updatePlatformAppointmentStatus,
@@ -99,6 +100,8 @@ export {
   saveRoutingForm,
   resolveRoutingFormDestination,
   recordRoutingAnalytics,
+  listRoutingSubmissions,
+  getRoutingAnalytics,
 } from "./routing-forms";
 export {
   listSchedulingGroups,

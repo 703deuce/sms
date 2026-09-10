@@ -1,15 +1,30 @@
 import { useState } from "react";
 import { Check, Copy, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
 import type { RoutingForm } from "../types";
-import { routingAnalytics, bookingTypes, staffMembers } from "../types";
 import RuleEditor from "./RuleEditor";
 import PreviewModal from "./PreviewModal";
+import RoutingSubmissionsPanel from "./RoutingSubmissionsPanel";
+
+type Lookup = { id: string; name: string };
+type AnalyticsEntry = { views: number; routes: Record<string, number> };
 
 type Props = {
   form: RoutingForm;
   workspaceSlug: string;
   saving: boolean;
   dirty: boolean;
+  bookingTypes: Lookup[];
+  staffMembers: Lookup[];
+  analytics?: AnalyticsEntry;
+  submissions: Array<{
+    id: string;
+    submittedAt: string;
+    visitorName?: string;
+    visitorEmail?: string;
+    answers: Record<string, string>;
+    destinationLabel?: string;
+    outcome: string;
+  }>;
   onChange: (form: RoutingForm) => void;
   onSave: (form: RoutingForm) => void;
   onDelete: (id: string) => void;
@@ -23,11 +38,22 @@ const fieldTypes = [
   { value: "select", label: "Dropdown" },
 ] as const;
 
-export default function FormEditor({ form, workspaceSlug, saving, dirty, onChange, onSave, onDelete }: Props) {
+export default function FormEditor({
+  form,
+  workspaceSlug,
+  saving,
+  dirty,
+  bookingTypes,
+  staffMembers,
+  analytics,
+  submissions,
+  onChange,
+  onSave,
+  onDelete,
+}: Props) {
   const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const analytics = routingAnalytics[form.id];
   const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/routing/${workspaceSlug}/${form.slug}`;
 
   function updateField(fi: number, patch: Partial<RoutingForm["fields"][number]>) {
@@ -250,7 +276,12 @@ export default function FormEditor({ form, workspaceSlug, saving, dirty, onChang
       </div>
 
       {/* Rules */}
-      <RuleEditor form={form} onChange={onChange} />
+      <RuleEditor form={form} bookingTypes={bookingTypes} staffMembers={staffMembers} onChange={onChange} />
+
+      <div style={{ marginTop: 20 }}>
+        <div className="section-label">Recent submissions</div>
+        <RoutingSubmissionsPanel submissions={submissions} />
+      </div>
 
       {/* Analytics */}
       {analytics && (

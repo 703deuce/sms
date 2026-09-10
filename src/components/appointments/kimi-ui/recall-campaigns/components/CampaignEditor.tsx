@@ -259,6 +259,28 @@ export function CampaignEditor({
             </p>
           )}
 
+          <div className="rounded-xl border border-border bg-muted/20 p-4">
+            <p className="text-[13px] font-semibold text-foreground">Stop this automation when</p>
+            <ul className="mt-2 space-y-2 text-[12.5px] text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <input type="checkbox" checked readOnly aria-readonly="true" />
+                Customer books an appointment
+              </li>
+              <li className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={campaign.segment?.noFutureAppointment !== false}
+                  disabled={readOnly}
+                  onChange={(e) => setSegment({ noFutureAppointment: e.target.checked })}
+                />
+                Customer already has an upcoming appointment
+              </li>
+            </ul>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Recall follow-up stops automatically when the customer rebooks. Operational recall queue remains on Recalls.
+            </p>
+          </div>
+
           {/* Danger zone */}
           {!readOnly && (
             <div className="rounded-xl border border-red-200 bg-red-50/40 px-4 py-3.5">
