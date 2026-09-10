@@ -7,7 +7,7 @@ export function BookingHubLinksCard() {
     {
       href: "/appointments/booking/share",
       title: "Share & embed",
-      description: "Copy links, QR codes, and embed codes for your booking page.",
+      description: "Direct links, QR codes, embed codes, and single-use links.",
     },
     {
       href: "/appointments/booking/branding",
@@ -20,14 +20,14 @@ export function BookingHubLinksCard() {
       description: "Intake forms, contracts, and terms assigned to booking types.",
     },
     {
-      href: "/appointments/booking/share",
-      title: "Share & embed",
-      description: "Direct links, QR codes, embed codes, and single-use links.",
+      href: "/contacts",
+      title: "Contacts",
+      description: "Customer records, segments, and booking access for your clients.",
     },
     {
-      href: "/payments/invoices",
-      title: "Invoices",
-      description: "Bill customers and send payment links.",
+      href: "/conversations",
+      title: "Messages",
+      description: "SMS conversations with customers who booked or inquired.",
     },
   ];
 
@@ -38,7 +38,7 @@ export function BookingHubLinksCard() {
       </h2>
       <ul className="space-y-2">
         {links.map((link) => (
-          <li key={link.href}>
+          <li key={link.href + link.title}>
             <Link
               href={link.href}
               className="block rounded-lg border border-transparent px-3 py-2 hover:border-border hover:bg-muted/40 transition-colors"

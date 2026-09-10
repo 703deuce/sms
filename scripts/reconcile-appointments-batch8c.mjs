@@ -256,8 +256,24 @@ const OVERRIDES = {
   "9-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-5 ClassesPanel staff enrollment action" },
   "9-5": { status: "V1_COMPLETE_RUNTIME_ONLY", gap: "", evidence: "Batch 8D-5 class-check-in.ts + event-tickets runtime; admin QR at check-in not editor" },
   "19-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-5 FormsDocumentsClient intake builder tab" },
+  // Batch 8D-6 — automations + contacts/data + integrations/settings
+  "1-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 buildAppointmentsMobileNav Home/Calendar/Messages/Contacts without truncation" },
+  "6-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/workflows status workflow builder + list" },
+  "10-9": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/recalls hub + segment presets + saved views" },
+  "10-11": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 AppointmentSegmentPresetsPanel on recalls hub + appointment-segments API" },
+  "11-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/automations/templates transactional templates" },
+  "11-13": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/automations/activity execution log" },
+  "12-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/workflows list + CRUD" },
+  "12-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /appointments/workflows/[id]/edit builder depth" },
+  "15-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 routing forms real types/staff/analytics + public URL open" },
+  "17-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 CalendarIntegrationsCard Google OAuth + sync on /integrations/calendars" },
+  "17-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 CalendarIntegrationsCard Microsoft OAuth + sync on /integrations/calendars" },
+  "19-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 BookingHubLinksCard → /contacts" },
+  "19-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 BookingHubLinksCard → /conversations" },
+  "20-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /integrations/developer AppointmentsWebhooksPanel endpoints" },
+  "20-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 webhook create shows HMAC signing secret" },
+  "20-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 webhook delivery log table + deliveries API" },
   // Admin UI gaps (remaining waves)
-  "1-3": { status: "V1_ADMIN_UI_GAP", gap: "Mobile bottom nav appointments", evidence: "PARTIAL", priority: "P2" },
   "15-7": { status: "V1_ADMIN_UI_GAP", gap: "Per-booking-type permission editor", evidence: "STILL_MISSING", priority: "P2" },
   // Mock / placeholder
   // Contextual
@@ -471,7 +487,8 @@ function main() {
   queueMd += `| 8D-3 | Portal depth (saved cards, membership self-service, household) | ${reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_PORTAL_UI_GAP").length} |\n`;
   queueMd += `| 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |\n`;
   queueMd += `| 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |\n`;
-  queueMd += `| 8D-6 | Backend gaps (POS tax, invoice email/PDF, poll booking) | ${reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_BACKEND_GAP").length} |\n`;
+  queueMd += `| 8D-6 | Automations + contacts + integrations/settings admin | completed in 8D-6 wave |\n`;
+  queueMd += `| 8D-7 | Commerce/POS/operations admin residuals | ${reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_ADMIN_UI_GAP").length} admin + ${reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "V1_BACKEND_GAP").length} backend |\n`;
 
   writeFileSync(OUT_QUEUE, queueMd);
 

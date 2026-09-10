@@ -2,17 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 39
-
-## /appointments/automations/activity
-
-### 11-13 — Automation activity log
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/automations/activity
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/automations/activity; routeExists=true; backend=null
+**Total residual rows:** 23
 
 ## /appointments/availability
 
@@ -23,24 +13,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** contextual audit; routeExists=true; backend=true
-
-## /appointments/booking
-
-### 19-1 — Contacts (shared)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=null
-
-### 19-2 — Conversations / Inbox (shared)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=null
 
 ## /appointments/discounts
 
@@ -194,34 +166,6 @@
 - **Priority:** P1
 - **Evidence:** gap queue 8B-5; routeExists=false; backend=false
 
-## /appointments/recalls
-
-### 10-9 — Recalls hub
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/recalls
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/recalls; routeExists=true; backend=true
-
-### 10-11 — Appointment segments (recalls)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/recalls
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/recalls; routeExists=true; backend=true
-
-## /appointments/routing-forms
-
-### 15-1 — Routing forms builder
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/routing-forms
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/routing-forms; routeExists=true; backend=true
-
 ## /appointments/types/classes
 
 ### 9-6 — Seat selection / maps
@@ -252,30 +196,6 @@
 
 ## /appointments/workflows
 
-### 6-12 — Status workflow
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/workflows
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/workflows; routeExists=true; backend=null
-
-### 11-12 — Automation templates
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/workflows
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/workflows; routeExists=true; backend=null
-
-### 12-1 — Workflow list
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/workflows
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/workflows; routeExists=true; backend=false
-
 ### 12-3 — Workflow from template
 - **Gap type:** V1_BACKEND_GAP
 - **Section:** /appointments/workflows
@@ -283,58 +203,6 @@
 - **Backend:** NO / NO
 - **Priority:** P2
 - **Evidence:** `templates.ts`; routeExists=true; backend=false
-
-## /integrations/calendars
-
-### 17-1 — Google Calendar sync
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /integrations/calendars
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /integrations/calendars; routeExists=true; backend=null
-
-### 17-2 — Microsoft / Outlook sync
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /integrations/calendars
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /integrations/calendars; routeExists=true; backend=null
-
-### 20-1 — Outbound webhook endpoints
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /integrations/calendars
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /integrations/calendars; routeExists=true; backend=false
-
-### 20-2 — Webhook signing (HMAC)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /integrations/calendars
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /integrations/calendars; routeExists=true; backend=false
-
-### 20-3 — Webhook delivery queue
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /integrations/calendars
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /integrations/calendars; routeExists=true; backend=null
-
-## Create / edit workflow
-
-### 12-2 — Create / edit workflow
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** Create / edit workflow
-- **Missing:** UA_PENDING — depth unverified
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** NO; Create / edit workflow; routeExists=null; backend=false
 
 ## PARITY_TEMP
 
@@ -346,16 +214,6 @@
 - **Priority:** P2
 - **Evidence:** PARITY_TEMP; routeExists=null; backend=false
 
-## SHELL_RUNTIME
-
-### 1-3 — Mobile bottom nav
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** SHELL_RUNTIME
-- **Missing:** Mobile bottom nav appointments
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** PARTIAL; routeExists=null; backend=false
-
 ## Proposed residual implementation batches (8D series)
 
 | Batch | Domain | Approx rows |
@@ -365,4 +223,5 @@
 | 8D-3 | Portal depth (saved cards, membership self-service, household) | 0 |
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |
 | 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |
-| 8D-6 | Backend gaps (POS tax, invoice email/PDF, poll booking) | 5 |
+| 8D-6 | Automations + contacts + integrations/settings admin | completed in 8D-6 wave |
+| 8D-7 | Commerce/POS/operations admin residuals | 17 admin + 5 backend |

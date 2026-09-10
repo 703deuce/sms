@@ -104,6 +104,7 @@ function integrationsChildren(): NavItem["children"] {
   return [
     { label: "Calendars", href: "/integrations/calendars" },
     { label: "Payments", href: "/integrations/payments" },
+    { label: "Developer", href: "/integrations/developer" },
   ];
 }
 
@@ -255,13 +256,12 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   return items;
 }
 
-/** Bottom nav for mobile — primary appointment-platform destinations. */
+/** Bottom nav for mobile — primary appointment-platform destinations (4 slots + More). */
 export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
   const items: NavItem[] = [
     { label: "Home", href: "/appointments/overview", icon: Home },
     { label: "Calendar", href: "/appointments/calendar", icon: Calendar },
-    { label: "Booking", href: "/appointments/types", icon: Globe },
   ];
 
   if (isConversationsInV1Nav()) {
@@ -275,6 +275,11 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
 
   if (isContactsInV1Nav()) {
     items.push({ label: "Contacts", href: "/contacts", icon: Users });
+  }
+
+  // Fill fourth slot with Booking when Messages/Contacts are hidden; never truncate Contacts.
+  if (items.length < 4) {
+    items.push({ label: "Booking", href: "/appointments/types", icon: Globe });
   }
 
   return items.slice(0, 4);
