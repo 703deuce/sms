@@ -1,38 +1,37 @@
 # Page Blueprint — Availability (Batch 8B-1)
 
 **Route:** `/appointments/availability`  
-**Status:** Batch 8B-1 extended  
-**Primary user job:** When can customers book?
+**Classification:** KEEP VISUAL + EXTEND FUNCTIONALITY  
+**Primary user job:** Tell Transovo when customers are allowed to book.
 
-## Sections
+## Page structure
 
-1. Schedules — weekly hours, timezone, named schedules  
-2. Special Dates — date overrides, blackouts, holidays  
-3. Booking Rules — start interval, fixed starts, limits  
-4. Availability Preferences — density, minimize gaps  
-5. Diagnostics — Check a time (`SlotDiagnosticsPanel`)
+1. **Regular hours** — `WeeklyHours` + `BookingRules` (timezone, minimum notice, booking horizon) in main shell
+2. **Special dates** — `SpecialDatesSection` (overrides, blackouts, holidays) with drawer add flow
+3. **Booking rules** — `SchedulingRulesSection` (start interval, fixed start times)
+4. **Booking limits** — workspace caps in connected shell
+5. **Named schedules** — reusable hour templates
+6. **Schedule preferences** — `SchedulePreferencesSection` (reduce gaps, show fewer times, external calendar link)
+7. **Check availability** — `SlotDiagnosticsPanel` admin tool
 
-## Gap records
+## Controls
 
-| FEATURE ID | AUDIT GAP | FINAL SECTION | BACKEND | UI CONTROL | STATUS |
-|------------|-----------|---------------|---------|------------|--------|
-| 3-5 | Date overrides | Special Dates | `dateOverrides` | Add special date CLOSED/CUSTOM | ABSORBED_CANONICAL_UI |
-| 3-6 | Blackout dates | Special Dates | platform config | Blackout list | ABSORBED_CANONICAL_UI |
-| 3-7 | Holidays | Special Dates | `holidays` | Holiday calendar | ABSORBED_CANONICAL_UI |
-| 3-9 | Fixed start times | Booking Rules | `fixed-start-times.ts` | Allowed start times list | ABSORBED_CANONICAL_UI |
-| 3-10 | Start interval | Booking Rules | scheduling limits | Interval select | ABSORBED_CANONICAL_UI |
-| 3-11 | Make Me Look Busy | Preferences | `availability-density.ts` | Hide % of slots | ABSORBED_CANONICAL_UI |
-| 3-12 | Compact scheduling | Preferences | `minimize-gaps.ts` | Prefer near appointments | ABSORBED_CANONICAL_UI |
-| 3-15 | Collective scheduling | — | `scheduling-domain.ts` | Runtime only; config on booking types | RUNTIME_ONLY |
-| 3-16 | Resource constraints | Diagnostics | `resource-availability.ts` | Diagnostic reasons | RUNTIME_ONLY |
-| 3-17 | External calendar busy | Integrations card | integrations | CalendarIntegrationsCard | ABSORBED_CANONICAL_UI |
-| 3-18 | Atomic booking | Diagnostics | `slot-booking.ts` | No admin toggle | RUNTIME_ONLY |
-| 3-19 | Slot validation | Diagnostics | `slot-validation.ts` | No admin toggle | RUNTIME_ONLY |
-| 3-20 | Slot diagnostics | Diagnostics | `slot-diagnostics.ts` | Check a time tool | ABSORBED_CANONICAL_UI |
-| 3-22 | Admin availability query | Diagnostics | `availability-engine.ts` | Powers diagnostics | ABSORBED_CANONICAL_UI |
-| 2-37 | Named schedules | Schedules | scheduling capabilities | Named schedule list | ABSORBED_CANONICAL_UI |
+| Section | Control | Backend | Parity absorbed |
+|---------|---------|---------|-----------------|
+| Special dates | Add special date drawer (closed/custom/holiday) | `dateOverrides`, `blackoutDates`, `holidays` | Commerce/parity blackout blocks |
+| Booking rules | Appointment start interval | `slotStepMinutes` / `schedulingLimits.customStartIntervalMinutes` | Parity schedule |
+| Booking rules | Only allow specific start times | `fixed-start-times.ts` | Parity |
+| Preferences | Reduce gaps in schedule | `minimize-gaps.ts` | Parity compact scheduling |
+| Preferences | Show fewer available times | `availability-density.ts` | Make Me Look Busy |
+| Preferences | Manage calendars | Integrations → Calendars | `scheduling-domain.ts` external busy |
+| Diagnostics | Check a time (type, date, time, staff, location) | `slot-diagnostics.ts`, `availability-engine.ts` | Parity diagnostics |
 
-## Remaining
+## Runtime-only (no admin toggle)
 
-- Staff/location pickers in diagnostics (optional fields — staff ID text only; polish in later batch)
-- Room/equipment in diagnostics query — STILL_MISSING (optional enhancement)
+- Collective / group scheduling — configured on booking types
+- Resource-constrained availability — Service + Rooms & Equipment
+- Atomic booking / slot validation — runtime protections
+
+## Status
+
+ABSORBED_CANONICAL_UI for listed controls. STILL_MISSING: room/equipment field in diagnostics query (optional).

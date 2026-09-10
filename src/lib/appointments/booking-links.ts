@@ -53,9 +53,25 @@ export async function resolveSingleUseBookingLink(
   const links = (platform as { singleUseLinks?: SingleUseBookingLink[] }).singleUseLinks || [];
   const link = links.find((l) => l.token === token);
   if (!link) return null;
+  if (link.revokedAt) return null;
   if (link.expiresAt && new Date(link.expiresAt) < new Date()) return null;
   if (link.usedCount >= link.maxUses) return null;
   return { link, appointmentTypeId: link.appointmentTypeId };
+}
+
+export async function revokeSingleUseBookingLink(workspaceId: string, linkId: string): Promise<boolean> {
+  const { loadAppointmentPlatformConfig, saveAppointmentPlatformConfig } = await import(
+    "@/lib/appointments/settings"
+  );
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const links = (platform as { singleUseLinks?: SingleUseBookingLink[] }).singleUseLinks || [];
+  const target = links.find((l) => l.id === linkId);
+  if (!target) return false;
+  const updated = links.map((l) =>
+    l.id === linkId ? { ...l, revokedAt: new Date().toISOString(), maxUses: l.usedCount } : l,
+  );
+  await saveAppointmentPlatformConfig(workspaceId, { singleUseLinks: updated } as object);
+  return true;
 }
 
 export async function consumeSingleUseBookingLink(workspaceId: string, token: string) {

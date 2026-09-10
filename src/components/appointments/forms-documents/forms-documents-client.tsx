@@ -132,15 +132,53 @@ function IntakeTemplatesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-[13px] flex-1 min-w-[200px]">
-          <span className="font-medium">New template name</span>
-          <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. New client intake" />
-        </label>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12px] text-[#8a87a0]">Collect information from customers before their appointment.</p>
         <Button size="sm" disabled={saving || !newName.trim()} onClick={() => void createForm()}>
-          Create template
+          Create intake form
         </Button>
       </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-1 text-[13px] flex-1 min-w-[200px]">
+          <span className="font-medium">New form name</span>
+          <input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. New client intake" />
+        </label>
+      </div>
+
+      {forms.length > 0 ? (
+        <div className="overflow-x-auto rounded-xl border border-[#eceaf3] bg-white">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-[#8a87a0] border-b border-[#eceaf3]">
+                <th className="px-4 py-2 font-semibold" scope="col">Name</th>
+                <th className="px-4 py-2 font-semibold" scope="col">Fields</th>
+                <th className="px-4 py-2 font-semibold" scope="col">Status</th>
+                <th className="px-4 py-2 font-semibold" scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f2f1f7]">
+              {forms.map((form) => (
+                <tr key={form.id} className={selectedId === form.id ? "bg-[#f7f6ff]" : ""}>
+                  <td className="px-4 py-3 font-medium">
+                    <button type="button" className="text-left hover:underline" onClick={() => setSelectedId(form.id)}>
+                      {form.name}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-[#6b6880]">{form.fields?.length ?? 0}</td>
+                  <td className="px-4 py-3">{form.active === false ? "Inactive" : "Active"}</td>
+                  <td className="px-4 py-3">
+                    <button type="button" className="text-[12px] text-[#5b4bff] hover:underline mr-2" onClick={() => setSelectedId(form.id)}>Edit</button>
+                    <button type="button" className="text-[12px] text-[#5b4bff] hover:underline mr-2" onClick={() => void duplicateForm(form)}>Duplicate</button>
+                    <button type="button" className="text-[12px] text-[#6b6880] hover:underline" onClick={() => void toggleActive(form)}>
+                      {form.active === false ? "Activate" : "Disable"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         <ul className="divide-y rounded-xl border border-[#eceaf3] bg-white">

@@ -308,7 +308,9 @@ export default function TypeEditorPanel({
         <TypeResourcesSection
           form={form}
           resourceOptions={resourceOptions}
+          locationOptions={locationOptions}
           onFormChange={onFormChange}
+          onOptionsRefresh={onCategoriesChanged}
         />
 
         <TypeAddOnsSection
@@ -322,6 +324,7 @@ export default function TypeEditorPanel({
           form={form}
           intakeFormOptions={intakeFormOptions}
           onFormChange={onFormChange}
+          onOptionsRefresh={onCategoriesChanged}
         />
 
         <TypeServicePhasesSection

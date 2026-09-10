@@ -18,9 +18,10 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onChanged?: () => void;
+  onCreated?: (category: { id: string; name: string }) => void;
 };
 
-export function ServiceCategoriesDrawer({ open, onClose, onChanged }: Props) {
+export function ServiceCategoriesDrawer({ open, onClose, onChanged, onCreated }: Props) {
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,7 +44,7 @@ export function ServiceCategoriesDrawer({ open, onClose, onChanged }: Props) {
     const name = newName.trim();
     if (!name) return;
     setSaving(true);
-    await fetch(CATEGORIES_API, {
+    const res = await fetch(CATEGORIES_API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, displayOrder: categories.length, collapsible: true }),
@@ -51,6 +52,11 @@ export function ServiceCategoriesDrawer({ open, onClose, onChanged }: Props) {
     setSaving(false);
     setNewName("");
     await load();
+    if (res.ok) {
+      const json = await res.json();
+      const created = json.data as { id: string; name: string } | undefined;
+      if (created?.id) onCreated?.(created);
+    }
     onChanged?.();
   }
 

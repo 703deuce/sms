@@ -1,27 +1,36 @@
 # Page Blueprint — Service Editor (Batch 8B-1)
 
-**Route:** `/appointments/types/services` + `/appointments/types/editor?segment=services`  
-**Status:** Batch 8B-1 extended  
-**Primary user job:** Configure the service my customers can book.
+**Route:** `/appointments/types/services` (+ editor deep link)  
+**Classification:** KEEP VISUAL + EXTEND INTO EXISTING SECTIONS  
+**Primary user job:** Configure exactly how this service is booked and delivered.
 
-## Gap records
+## Sections (absorbed into `TypeEditorPanel`)
 
-| FEATURE ID | AUDIT GAP | FINAL SECTION | BACKEND | UI CONTROL | STATUS |
-|------------|-----------|---------------|---------|------------|--------|
-| 2-38 | Categories admin | Category & image | `booking-category.ts` | ServiceCategoriesDrawer | ABSORBED_CANONICAL_UI |
-| 2-16 | Image on type | Category & image | `imageUrl` | URL + preview | ALREADY_PRESENT |
-| 2-18 | Add-ons on type | Add-ons | `add-ons.ts` | ServiceAddOnsPanel + selection | ABSORBED_CANONICAL_UI |
-| 2-19 | Add-on duration/resources | Add-ons | `add-ons.ts` | Inline add-on editor fields | ABSORBED_CANONICAL_UI |
-| 2-22 | Service phases | Service steps | `service-phases.ts` | TypeServicePhasesSection | ABSORBED_CANONICAL_UI |
-| 2-23 | Processing / staff release | Service steps | `staff-phase-occupancy.ts` | Staff needed checkbox + copy | ABSORBED_CANONICAL_UI |
-| 4-4 | Location-specific hours | Locations | `location-scheduling.ts` | Location picker + link to Locations | ALREADY_PRESENT |
-| 5-2 | Deep link | Status panel | public flow | Copy booking link | ALREADY_PRESENT |
-| 5-4 | Service picker | — | public | PUBLIC_WAVE_PENDING | PUBLIC_WAVE_PENDING |
-| — | Multi-service chain | — | `multi-service.ts` | Customer selects at booking; no per-type chain object | RUNTIME_ONLY |
-| — | Multi-staff per line | Staff assignment | collective mode | Collective staff pool | ALREADY_PRESENT |
+| Section | Controls added | Backend |
+|---------|----------------|---------|
+| General | Category select, image URL/preview, Manage categories drawer | `booking-category.ts`, `imageUrl` |
+| Scheduling | Service steps/phases | `service-phases.ts`, `staff-phase-occupancy.ts` |
+| Staff/Locations/Rooms | Required rooms & equipment + contextual create | `resources.ts` |
+| Customer info | Intake form + contextual create | `intake-forms.ts` |
+| Add-ons | Full add-on panel | `add-ons.ts` |
+| Pricing | Payment modes (existing advanced sections) | `payments-extended.ts` |
+| Policies | Approval toggle (TypePublishingSections) | `booking-approval.ts` |
 
-## Remaining
+## Contextual create flows
 
-- Image upload (media picker) — STILL_MISSING (URL field only)
-- Per-phase resource IDs — STILL_MISSING
-- Payment modes — ALREADY_PRESENT in TypeAdvancedSections (IA: not Transactions)
+- Category → `ServiceCategoriesDrawer` → auto-select `categoryId`, draft preserved
+- Room/equipment → `ServiceResourceQuickCreate` → auto-select `resourceIds`
+- Intake form → `IntakeFormQuickCreate` → auto-select `intakeFormIds`
+
+## STILL_MISSING
+
+- Multi-service compatibility toggle (no per-type config field in backend yet)
+- Multi-staff required count (needs scheduling domain field)
+- Contract/terms contextual create from Service editor
+- Image upload (media picker) — URL field only
+
+## Absorbed from
+
+- `/appointments/categories` → Manage categories drawer
+- `/appointments/commerce` service parity controls
+- `/appointments/resources` assignment UX

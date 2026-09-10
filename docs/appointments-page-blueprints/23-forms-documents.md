@@ -1,27 +1,25 @@
 # Page Blueprint — Forms & Documents (Batch 8B-1)
 
 **Route:** `/appointments/booking/forms`  
-**Status:** Batch 8B-1 implemented (new canonical page)  
-**Primary user job:** Manage intake, contracts, and terms for booking.
+**Primary user job:** Create reusable information and agreements customers complete during booking.
 
-## Sections
+## Structure
 
-| Section | Component |
-|---------|-----------|
-| Intake templates | `FormsDocumentsClient` → IntakeTemplatesSection |
-| Contract templates | `ContractsAdminClient` (reused) |
-| Terms | TermsSection (version + body) |
+1. **Intake forms** — list table + builder (`intake-forms.ts`)
+2. **Contracts** — `ContractsAdminClient` (`booking-contracts.ts`)
+3. **Terms** — workspace terms version editor
 
-## Gap records
+## Intake forms
 
-| FEATURE ID | AUDIT GAP | FINAL SECTION | BACKEND | UI CONTROL | STATUS |
-|------------|-----------|---------------|---------|------------|--------|
-| 2-20 | Intake on type | Intake templates | `intake-forms.ts` | Full template CRUD + field types | ABSORBED_CANONICAL_UI |
-| 2-42 | Contracts + e-sign | Contracts | `booking-contracts.ts` | ContractsAdminClient | ABSORBED_CANONICAL_UI |
-| — | Terms versioning | Terms | settings API | Version + text editor | ABSORBED_CANONICAL_UI |
-| — | File/image field types | Intake | intake types | file, image in builder | ABSORBED_CANONICAL_UI |
+- List columns: Name, Fields, Status, Actions
+- Field types: short/long text, number, date, dropdown, checkbox, file, image, signature, agreement
+- Assign from Service editor via contextual create
 
-## Remaining
+## Status
 
-- Legacy `/appointments/commerce` intake tab preserved  
-- Contextual assign from Service editor — ALREADY_PRESENT (`TypeIntakeFormsSection`)
+ABSORBED_CANONICAL_UI for intake list/builder and contracts shell. STILL_MISSING: per-form "Used by" column with live assignment query; terms version history UI; contract preview modal polish.
+
+## Absorbed from
+
+- `/appointments/commerce` intake templates
+- Legacy intake admin routes

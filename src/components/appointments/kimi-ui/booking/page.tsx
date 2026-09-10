@@ -8,6 +8,7 @@ import SmsConsentCard from "./components/SmsConsentCard";
 import AiProtectionCard from "./components/AiProtectionCard";
 import LivePreview from "./components/LivePreview";
 import { BookingBrandingPanel } from "@/components/appointments/booking-branding-panel";
+import { BookingAdvancedCssPanel } from "@/components/appointments/booking-advanced-css-panel";
 import { BookingShareEmbedSection } from "@/components/appointments/booking-share-embed-section";
 import type { BookingPageActions, BookingPageModel } from "@/features/appointments/kimi/booking/types";
 import "./reference.css";
@@ -110,12 +111,15 @@ export default function BookingView({
             />
           ) : null}
           {section === "advanced" ? (
-            <AiProtectionCard
-              protectionMode={model.protectionMode}
-              protectionOptions={model.protectionOptions}
-              suspiciousBookings={model.suspiciousBookings}
-              onModeChange={actions.onProtectionModeChange}
-            />
+            <>
+              <BookingAdvancedCssPanel />
+              <AiProtectionCard
+                protectionMode={model.protectionMode}
+                protectionOptions={model.protectionOptions}
+                suspiciousBookings={model.suspiciousBookings}
+                onModeChange={actions.onProtectionModeChange}
+              />
+            </>
           ) : null}
         </div>
         <div className="booking-right">

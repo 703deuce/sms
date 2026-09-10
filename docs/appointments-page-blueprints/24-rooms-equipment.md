@@ -1,19 +1,27 @@
 # Page Blueprint — Rooms & Equipment (Batch 8B-1)
 
 **Route:** `/appointments/booking/rooms-equipment`  
-**Status:** Batch 8B-1 implemented (new canonical page)  
-**Primary user job:** Manage bookable rooms, equipment, and groups.
+**Primary user job:** Tell Transovo which physical rooms and equipment bookings require.
 
-## Gap records
+## Structure
 
-| FEATURE ID | AUDIT GAP | FINAL SECTION | BACKEND | UI CONTROL | STATUS |
-|------------|-----------|---------------|---------|------------|--------|
-| 4-8 | Resources parity | Items | `resources.ts` | List, create, quantity | ABSORBED_CANONICAL_UI |
-| 4-9 | Quantity / capacity | Items | `SchedulingResource.quantity` | Quantity field + helper | ABSORBED_CANONICAL_UI |
-| 4-10 | Resource pools | Groups | `resource-pools.ts` | Groups tab (customer label) | ABSORBED_CANONICAL_UI |
+1. **Items** — table: Name, Type, Quantity, Used by, Status, Actions
+2. **Groups** — resource pools (`resource-pools.ts`)
 
-## Remaining
+## Backend
 
-- Type/location fields on resource rows — STILL_MISSING (name + quantity only)
-- Contextual quick-create from Service editor preserving draft — STILL_MISSING
-- Legacy `/appointments/resources` preserved
+- Items: `resources.ts`, `SchedulingResource.quantity`
+- Groups: `resource-pools.ts`
+- Availability: `resource-availability.ts` (runtime)
+
+## Contextual create
+
+- From Service editor: `ServiceResourceQuickCreate` (name, type, location, quantity) → auto-select, preserve draft
+
+## Status
+
+ABSORBED_CANONICAL_UI for items table, groups, quantity edit. STILL_MISSING: full edit drawer with location picker on main page; group "Used by" column; location-contextual create from Locations page.
+
+## Absorbed from
+
+- `/appointments/resources` parity admin

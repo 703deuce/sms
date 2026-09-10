@@ -10,12 +10,11 @@ export function BookingBrandingPanel() {
   const [logoUrl, setLogoUrl] = useState("");
   const [noIndex, setNoIndex] = useState(false);
   const [customDomain, setCustomDomain] = useState("");
-  const [domainStatus, setDomainStatus] = useState<"not_configured" | "pending" | "connected">("not_configured");
-  const [customCss, setCustomCss] = useState("");
+  const [domainStatus, setDomainStatus] = useState<"not_configured" | "pending" | "connected" | "needs_attention">("not_configured");
+  const [appointmentLabel, setAppointmentLabel] = useState("Appointment");
   const [serviceLabel, setServiceLabel] = useState("Service");
-  const [staffLabel, setStaffLabel] = useState("Staff member");
+  const [staffLabel, setStaffLabel] = useState("Staff");
   const [bookButtonLabel, setBookButtonLabel] = useState("Book now");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -30,10 +29,11 @@ export function BookingBrandingPanel() {
     setNoIndex(theme.noIndex === true);
     const domain = String(theme.customDomain || "");
     setCustomDomain(domain);
-    setDomainStatus(domain ? "pending" : "not_configured");
-    setCustomCss(String(theme.customCss || ""));
+    const verified = theme.customDomainVerified === true;
+    setDomainStatus(!domain ? "not_configured" : verified ? "connected" : "pending");
+    setAppointmentLabel(String(t.appointmentLabel || "Appointment"));
     setServiceLabel(String(t.serviceLabel || "Service"));
-    setStaffLabel(String(t.staffLabel || "Staff member"));
+    setStaffLabel(String(t.staffLabel || "Staff"));
     setBookButtonLabel(String(t.bookButtonLabel || "Book now"));
   }, []);
 
@@ -52,8 +52,8 @@ export function BookingBrandingPanel() {
         logoUrl: logoUrl || undefined,
         noIndex,
         customDomain: customDomain.trim() || undefined,
-        customCss: customCss.trim() || undefined,
         terminology: {
+          appointmentLabel: appointmentLabel.trim() || undefined,
           serviceLabel: serviceLabel.trim() || undefined,
           staffLabel: staffLabel.trim() || undefined,
           bookButtonLabel: bookButtonLabel.trim() || undefined,
@@ -76,18 +76,46 @@ export function BookingBrandingPanel() {
     <div className="booking-card space-y-6">
       <div>
         <h2 className="booking-card-title">Branding</h2>
-        <p className="booking-card-desc">Logo, colors, and customer-facing labels on your booking page.</p>
+        <p className="booking-card-desc">Customize how your public booking page looks to customers.</p>
       </div>
 
       <div className="space-y-4">
+        <div>
+          <p className="text-[13px] font-medium mb-2">Logo</p>
+          {logoUrl ? (
+            <div className="flex items-center gap-4">
+              <img src={logoUrl} alt="" className="h-12 max-w-[160px] object-contain rounded border border-[#eceaf3] bg-white p-2" />
+              <div className="flex gap-2">
+                <label className="text-[12px] text-[#5b4bff] hover:underline cursor-pointer">
+                  Change logo
+                  <input type="url" className="sr-only" onChange={(e) => setLogoUrl(e.target.value)} />
+                </label>
+                <button type="button" className="text-[12px] text-[#6b6880] hover:underline" onClick={() => setLogoUrl("")}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="flex flex-col gap-1 text-[13px]">
+              <span className="text-[#8a87a0]">No logo set</span>
+              <input className="input" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://… or paste image URL" />
+            </label>
+          )}
+        </div>
+
         <label className="flex flex-col gap-1 text-[13px]">
           <span className="font-medium">Primary color</span>
-          <input className="input" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              className="h-9 w-12 rounded border border-[#eceaf3] cursor-pointer"
+              value={primaryColor.startsWith("#") ? primaryColor : "#5b4bff"}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+            />
+            <input className="input flex-1 font-mono text-[12px]" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} />
+          </div>
         </label>
-        <label className="flex flex-col gap-1 text-[13px]">
-          <span className="font-medium">Logo URL</span>
-          <input className="input" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…" />
-        </label>
+
         <label className="flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={noIndex} onChange={(e) => setNoIndex(e.target.checked)} />
           Hide booking page from search engines
@@ -95,67 +123,72 @@ export function BookingBrandingPanel() {
       </div>
 
       <div className="space-y-3 border-t border-[#eceaf3] pt-4">
-        <h3 className="text-[13px] font-semibold">Customer-facing terminology</h3>
-        <p className="text-[12px] text-[#8a87a0]">
-          Preview: &ldquo;{bookButtonLabel} a {serviceLabel.toLowerCase()} with a {staffLabel.toLowerCase()}&rdquo;
-        </p>
-        <div className="grid sm:grid-cols-3 gap-3">
-          <label className="flex flex-col gap-1 text-[12px]">
-            <span>Default: Service</span>
-            <input className="input" value={serviceLabel} onChange={(e) => setServiceLabel(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-[12px]">
-            <span>Default: Staff</span>
-            <input className="input" value={staffLabel} onChange={(e) => setStaffLabel(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-[12px]">
-            <span>Book button</span>
-            <input className="input" value={bookButtonLabel} onChange={(e) => setBookButtonLabel(e.target.value)} />
-          </label>
+        <h3 className="text-[13px] font-semibold">Terminology</h3>
+        <p className="text-[12px] text-[#8a87a0]">Use the words your customers already know.</p>
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="text-left text-[#8a87a0] border-b border-[#eceaf3]">
+              <th className="py-2 font-medium">System term</th>
+              <th className="py-2 font-medium">Customers see</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#f2f1f7]">
+            {[
+              { system: "Service", value: serviceLabel, set: setServiceLabel },
+              { system: "Staff", value: staffLabel, set: setStaffLabel },
+              { system: "Appointment", value: appointmentLabel, set: setAppointmentLabel },
+            ].map((row) => (
+              <tr key={row.system}>
+                <td className="py-2 pr-4 text-[#6b6880]">{row.system}</td>
+                <td className="py-2">
+                  <input className="input w-full" value={row.value} onChange={(e) => row.set(e.target.value)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="rounded-lg bg-[#faf9fc] border border-[#eceaf3] px-3 py-2 text-[12px] text-[#4a4763]">
+          <p>&ldquo;Choose a {serviceLabel}&rdquo;</p>
+          <p>&ldquo;Select a {staffLabel}&rdquo;</p>
+          <p>&ldquo;{bookButtonLabel}&rdquo;</p>
         </div>
-      </div>
-
-      <div className="space-y-2 border-t border-[#eceaf3] pt-4">
-        <label className="flex flex-col gap-1 text-[13px]">
-          <span className="font-medium">Custom domain</span>
-          <input
-            className="input"
-            placeholder="book.example.com"
-            value={customDomain}
-            onChange={(e) => setCustomDomain(e.target.value)}
-          />
+        <label className="flex flex-col gap-1 text-[12px]">
+          <span className="text-[#6b6880]">Book button label</span>
+          <input className="input" value={bookButtonLabel} onChange={(e) => setBookButtonLabel(e.target.value)} />
         </label>
-        <p className="text-[11px] text-[#8a87a0]">
-          Status:{" "}
-          {domainStatus === "not_configured"
-            ? "Not configured"
-            : domainStatus === "pending"
-              ? "Pending verification — point CNAME to your Transovo booking host, then save"
-              : "Connected"}
-        </p>
       </div>
 
-      <div className="border-t border-[#eceaf3] pt-4">
-        <button
-          type="button"
-          className="text-[13px] font-medium text-[#5b4bff] hover:underline"
-          onClick={() => setShowAdvanced((v) => !v)}
-        >
-          {showAdvanced ? "Hide advanced CSS" : "Advanced CSS"}
-        </button>
-        {showAdvanced ? (
-          <div className="mt-3 space-y-2">
-            <textarea
-              className="input font-mono text-[12px] min-h-[100px]"
-              value={customCss}
-              onChange={(e) => setCustomCss(e.target.value)}
-              placeholder=".booking-header { … }"
+      <div className="space-y-3 border-t border-[#eceaf3] pt-4">
+        <h3 className="text-[13px] font-semibold">Custom domain</h3>
+        {domainStatus === "not_configured" ? (
+          <>
+            <p className="text-[12px] text-[#8a87a0]">Use your own domain for your booking page.</p>
+            <Button size="sm" variant="outline" onClick={() => setCustomDomain("book.example.com")}>Add domain</Button>
+          </>
+        ) : (
+          <>
+            <input
+              className="input"
+              placeholder="book.example.com"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
             />
-            <p className="text-[11px] text-amber-800 bg-amber-50 rounded px-2 py-1">
-              Custom CSS may affect booking-page appearance. Clear to reset.
+            <p className="text-[12px] text-[#6b6880]">
+              {domainStatus === "connected"
+                ? `${customDomain} — Connected`
+                : domainStatus === "needs_attention"
+                  ? "DNS settings no longer match."
+                  : `${customDomain} — Pending verification`}
             </p>
-          </div>
-        ) : null}
+            {domainStatus === "pending" ? (
+              <div className="rounded-lg border border-[#eceaf3] p-3 text-[11px] font-mono space-y-1">
+                <p className="font-sans text-[12px] font-medium text-[#1a1830] mb-2">Required DNS record</p>
+                <p>Type: CNAME · Host: book · Value: booking.transovo.com</p>
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => void save()}>Verify</Button>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <Button size="sm" disabled={saving} onClick={() => void save()}>

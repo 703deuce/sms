@@ -1,36 +1,35 @@
 # Page Blueprint — Booking Pages (Batch 8B-1)
 
 **Route:** `/appointments/booking`  
-**Status:** Batch 8B-1 implemented  
-**Primary user job:** What does my customer booking experience look like, and how do I share it?
+**Classification:** KEEP VISUAL + ABSORB PARITY + EXTEND  
+**Primary user job:** Control what customers see when they book and distribute booking links.
 
-## Sections
+## Local sections
 
-| Section | Implementation |
-|---------|----------------|
-| General | Public booking toggle, business info |
-| Branding | `BookingBrandingPanel` — theme, terminology, domain, CSS |
-| Share & Embed | `BookingShareEmbedSection` — links, QR, embed, single-use |
-| Confirmation | SMS consent / terms |
-| Advanced | AI booking protection |
+1. **General** — page enabled, URL, business info (preserved)
+2. **Branding** — `BookingBrandingPanel` (logo, primary color, terminology table, custom domain states)
+3. **Share & embed** — `BookingShareEmbedSection` (main link, direct links by type, QR modal, embed, single-use links)
+4. **Confirmation** — SMS consent / confirmation defaults (preserved)
+5. **Advanced** — `BookingAdvancedCssPanel` + AI protection (preserved)
 
-## Gap records (Batch 8A → 8B-1)
+## Absorbed from parity routes
 
-| FEATURE ID | AUDIT GAP | FINAL SECTION | BACKEND | UI CONTROL | STATUS |
-|------------|-----------|---------------|---------|------------|--------|
-| 2-25 | Booking page settings | General | `settings.ts` | Business info, enable toggle | ABSORBED_CANONICAL_UI |
-| 2-26 | Share hub split | Share & Embed | share client | Consolidated section | ABSORBED_CANONICAL_UI |
-| 2-27 | QR | Share & Embed | QR API | QR preview/download | ABSORBED_CANONICAL_UI |
-| 2-29 | Embed iframe | Share & Embed | `booking-links.ts` | Embed code + preview | ABSORBED_CANONICAL_UI |
-| 2-31 | Scheduler theme | Branding | `scheduler-theme.ts` | Branding panel | ABSORBED_CANONICAL_UI |
-| 2-32 | Custom domain | Branding | theme config | Domain field + status | ABSORBED_CANONICAL_UI |
-| 2-33 | Advanced CSS | Branding | theme config | Collapsible CSS editor | ABSORBED_CANONICAL_UI |
-| 2-34 | Terminology | Branding | theme config | Label pairs + preview | ABSORBED_CANONICAL_UI |
-| 2-35 | Direct links | Share & Embed | public routes | Per-type copy/preview | ABSORBED_CANONICAL_UI |
-| 5-3 | Embeddable widget | Share & Embed | embed route | Admin embed (public wave pending theme apply) | ABSORBED_CANONICAL_UI |
+| Source | Destination |
+|--------|-------------|
+| `/appointments/booking/branding` | Branding section |
+| `/appointments/booking/share` | Share & embed section |
+| `/appointments/commerce` theme | Branding |
 
-## Remaining
+## Backend map
 
-- Public runtime theme/terminology/CSS application → PUBLIC_WAVE_PENDING
-- Legacy `/appointments/booking/share` and `/branding` routes preserved (not retired)
-- Contacts/Inbox audit rows — NOT on this page (IA correction)
+- Theme: `scheduler-theme.ts`
+- Terminology: `bookingTerminology`
+- Custom domain/CSS: `SchedulerThemeConfig`
+- Direct links: `directLinksForWorkspace()` pattern via `/book/{slug}/{typeId}`
+- Single-use: `booking-links.ts` + DELETE revoke
+- QR: `/api/appointments/booking/qr`
+- Embed: `embedBookingUrl`, iframe snippet
+
+## Status
+
+ABSORBED_CANONICAL_UI. PUBLIC_WAVE_PENDING: live public theme/terminology runtime verification. STILL_MISSING: full DNS verification state machine if provider API not wired.

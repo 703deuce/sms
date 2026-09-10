@@ -40,6 +40,7 @@ export function TypeCategoriesSection({ form, categoryOptions, onFormChange, onC
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onChanged={onCategoriesChanged}
+        onCreated={(cat) => onFormChange("categoryId", cat.id)}
       />
       <div className="grid grid-cols-2 gap-4">
         <div>

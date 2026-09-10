@@ -221,27 +221,39 @@ export function RoomsEquipmentClient() {
               {resources.length === 0 ? (
                 <p className="text-[13px] text-[#8a87a0]">No rooms or equipment yet.</p>
               ) : (
-                <ul className="divide-y border border-[#eceaf3] rounded-xl overflow-hidden">
+                <div className="overflow-x-auto rounded-xl border border-[#eceaf3]">
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-[#8a87a0] border-b border-[#eceaf3] bg-[#faf9fc]">
+                        <th className="px-4 py-2 font-semibold" scope="col">Name</th>
+                        <th className="px-4 py-2 font-semibold" scope="col">Type</th>
+                        <th className="px-4 py-2 font-semibold" scope="col">Quantity</th>
+                        <th className="px-4 py-2 font-semibold" scope="col">Used by</th>
+                        <th className="px-4 py-2 font-semibold" scope="col">Status</th>
+                        <th className="px-4 py-2 font-semibold" scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f2f1f7] bg-white">
                   {resources.map((row) => (
-                    <li key={row.id} className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white text-[13px]">
-                      <div>
-                        <p className="font-medium text-[#1a1830]">{row.name}</p>
-                        <p className="text-[11px] text-[#8a87a0]">
-                          {resourceTypeLabel(row.name)}
-                          {row.active === false ? " · Inactive" : " · Active"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-2 text-[12px]">
-                          Qty
-                          <input
-                            type="number"
-                            min={1}
-                            className="input w-16"
-                            defaultValue={row.quantity ?? 1}
-                            id={`qty-${row.id}`}
-                          />
-                        </label>
+                    <tr key={row.id}>
+                      <td className="px-4 py-3 font-medium text-[#1a1830]">{row.name}</td>
+                      <td className="px-4 py-3 text-[#6b6880]">{resourceTypeLabel(row.name)}</td>
+                      <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          min={1}
+                          className="input w-16"
+                          defaultValue={row.quantity ?? 1}
+                          id={`qty-${row.id}`}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-[#6b6880]">
+                        {(row.eligibleTypeIds?.length ?? 0) > 0
+                          ? `${row.eligibleTypeIds!.length} service${row.eligibleTypeIds!.length === 1 ? "" : "s"}`
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">{row.active === false ? "Inactive" : "Active"}</td>
+                      <td className="px-4 py-3">
                         <Button
                           size="sm"
                           variant="outline"
@@ -253,10 +265,12 @@ export function RoomsEquipmentClient() {
                         >
                           Save
                         </Button>
-                      </div>
-                    </li>
+                      </td>
+                    </tr>
                   ))}
-                </ul>
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
