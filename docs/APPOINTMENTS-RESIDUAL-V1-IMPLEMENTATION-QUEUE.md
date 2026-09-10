@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 70
+**Total residual rows:** 39
 
 ## /appointments/automations/activity
 
@@ -24,119 +24,7 @@
 - **Priority:** P2
 - **Evidence:** contextual audit; routeExists=true; backend=true
 
-### 3-5 — Date overrides (custom hours)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/availability; routeExists=true; backend=false
-
-### 3-7 — Holiday calendar
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/availability; routeExists=true; backend=false
-
-### 3-10 — Custom start interval
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/availability; routeExists=true; backend=false
-
-### 3-11 — Make Me Look Busy (hide slots)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/availability; routeExists=true; backend=false
-
-### 3-17 — External calendar busy blocking
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/availability; routeExists=true; backend=true
-
 ## /appointments/booking
-
-### 2-25 — Booking page settings
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=true
-
-### 2-26 — Share & embed hub
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=null
-
-### 2-27 — Booking QR code generator
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=null
-
-### 2-29 — Embed URL & iframe
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
-
-### 2-31 — Scheduler theme / branding
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
-
-### 2-32 — Custom booking domain
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
-
-### 2-33 — Advanced custom CSS
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
-
-### 2-34 — Custom terminology / locale
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
-
-### 2-35 — Direct booking links per type
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking; routeExists=true; backend=false
 
 ### 19-1 — Contacts (shared)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -153,50 +41,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** /appointments/booking; routeExists=true; backend=null
-
-## /appointments/booking/forms
-
-### 2-20 — Intake forms on type
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking/forms
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
-
-### 2-42 — Formal contracts + e-signature
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking/forms
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
-
-### 19-6 — Intake form templates
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking/forms
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/booking/forms; routeExists=true; backend=false
-
-## /appointments/booking/rooms-equipment
-
-### 4-9 — Resource quantity / capacity
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking/rooms-equipment
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/booking/rooms-equipment; routeExists=true; backend=false
-
-### 4-10 — Resource pools (any-one-in-group)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/booking/rooms-equipment
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/booking/rooms-equipment; routeExists=true; backend=false
 
 ## /appointments/discounts
 
@@ -378,34 +222,6 @@
 - **Priority:** P2
 - **Evidence:** /appointments/routing-forms; routeExists=true; backend=true
 
-## /appointments/staff
-
-### 4-12 — Staff round-robin state
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/staff
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/staff; routeExists=true; backend=false
-
-## /appointments/types
-
-### 2-28 — Single-use booking links
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types; routeExists=true; backend=true
-
-### 2-37 — Named availability schedules
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types; routeExists=true; backend=true
-
 ## /appointments/types/classes
 
 ### 9-6 — Seat selection / maps
@@ -424,47 +240,7 @@
 - **Priority:** P2
 - **Evidence:** gap queue 8B-6; routeExists=true; backend=false
 
-### 9-1 — Class series admin
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
-
-### 9-2 — Class occurrences
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
-
-### 9-3 — Staff class enrollment
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=true; backend=null
-
-### 9-5 — Class check-in (QR)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/classes
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/types/classes; routeExists=true; backend=false
-
 ## /appointments/types/events
-
-### 6-5 — Calendar view
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/events
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/types/events; routeExists=false; backend=null
 
 ### 18-7 — Audit timeline on appointment
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -472,41 +248,7 @@
 - **Missing:** Admin UI partial
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
-- **Evidence:** /appointments/types/events; routeExists=false; backend=false
-
-## /appointments/types/services
-
-### 2-19 — Add-on duration & resource effects
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/types/services; routeExists=false; backend=false
-
-### 2-22 — Service phases (multi-phase duration)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/types/services; routeExists=false; backend=false
-
-### 2-23 — Provider-release processing time
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/types/services; routeExists=false; backend=false
-
-### 2-38 — Categories admin
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/types/services; routeExists=false; backend=false
+- **Evidence:** /appointments/types/events; routeExists=true; backend=false
 
 ## /appointments/workflows
 

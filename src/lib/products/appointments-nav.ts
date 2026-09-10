@@ -62,6 +62,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Staff", href: "/appointments/staff" },
     { label: "Locations", href: "/appointments/locations" },
     { label: "Rooms & equipment", href: "/appointments/booking/rooms-equipment" },
   ];

@@ -1,5 +1,5 @@
-import { ContractsAdminClient } from "@/components/appointments/contracts-admin-client";
+import { FormsDocumentsClient } from "@/components/appointments/forms-documents-client";
 
 export default function BookingFormsDocumentsPage() {
-  return <ContractsAdminClient />;
+  return <FormsDocumentsClient />;
 }

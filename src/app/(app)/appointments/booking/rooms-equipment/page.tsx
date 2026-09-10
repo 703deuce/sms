@@ -1,10 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { RoomsEquipmentAdminClient } from "@/components/appointments/rooms-equipment-admin-client";
 
 export default function BookingRoomsEquipmentPage() {
-  return (
-    <ServiceBookingAdminClient
-      initialSection="resources"
-      title="Rooms & equipment"
-    />
-  );
+  return <RoomsEquipmentAdminClient />;
 }

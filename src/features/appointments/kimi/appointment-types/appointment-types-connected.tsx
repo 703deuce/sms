@@ -83,7 +83,7 @@ export function AppointmentTypesConnected() {
     Array<{ id: string; name: string; quantity?: number }>
   >([]);
   const [addOnOptions, setAddOnOptions] = useState<
-    Array<{ id: string; name: string; priceCents?: number }>
+    Array<{ id: string; name: string; priceCents?: number; durationDeltaMinutes?: number }>
   >([]);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [intakeFormOptions, setIntakeFormOptions] = useState<
@@ -137,9 +137,20 @@ export function AppointmentTypesConnected() {
       if (addOnsRes.ok) {
         const addOnsJson = await addOnsRes.json();
         setAddOnOptions(
-          ((addOnsJson.data || []) as Array<{ id: string; name: string; priceCents?: number; active?: boolean }>)
+          ((addOnsJson.data || []) as Array<{
+            id: string;
+            name: string;
+            priceCents?: number;
+            durationDeltaMinutes?: number;
+            active?: boolean;
+          }>)
             .filter((a) => a.active !== false)
-            .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents })),
+            .map((a) => ({
+              id: a.id,
+              name: a.name,
+              priceCents: a.priceCents,
+              durationDeltaMinutes: a.durationDeltaMinutes,
+            })),
         );
       }
       if (categoriesRes.ok) {
