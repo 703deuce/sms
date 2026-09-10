@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
-import { upsertAppointmentType } from "@/lib/appointments";
+import { upsertAppointmentType, listAppointmentTypes } from "@/lib/appointments";
 import type { AppointmentTypeConfig } from "@/lib/appointments/types";
 import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
@@ -16,6 +16,17 @@ export async function PATCH(request: Request, { params }: Params) {
     const auth = await requireAppointmentsAccess("appointments.types.manage");
     if ("error" in auth) return auth.error;
     const { id } = await params;
+    const existingTypes = await listAppointmentTypes(auth.workspaceId);
+    const existing = existingTypes.find((t: { id: string }) => t.id === id);
+    if (existing) {
+      await assertEventTypeAccess(
+        auth.workspaceId,
+        auth.session.userId,
+        auth.session.email,
+        existing.config || {},
+        "edit",
+      );
+    }
     const body = (await request.json()) as {
       name?: string;
       durationMinutes?: number;

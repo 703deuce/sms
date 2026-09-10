@@ -106,6 +106,35 @@ function routeExists(route) {
   return candidates.some((p) => existsSync(p));
 }
 
+function detectPerTypeAccessEvidence() {
+  const publishing = join(
+    ROOT,
+    "src/components/appointments/kimi-ui/appointment-types/components/TypePublishingSections.tsx",
+  );
+  if (!existsSync(publishing)) return false;
+  const src = readFileSync(publishing, "utf8");
+  return (
+    src.includes("Who can manage this booking type?") &&
+    src.includes("teamUserOptions") &&
+    src.includes("Selected team members")
+  );
+}
+
+function detectMeetingPollPermissionEvidence() {
+  const api = join(ROOT, "src/app/api/appointments/meeting-polls/route.ts");
+  const access = join(ROOT, "src/lib/appointments/meeting-poll-access.ts");
+  const modal = join(ROOT, "src/components/appointments/kimi-ui/meeting-polls/components/CreatePollModal.tsx");
+  if (!existsSync(api) || !existsSync(access) || !existsSync(modal)) return false;
+  const apiSrc = readFileSync(api, "utf8");
+  const modalSrc = readFileSync(modal, "utf8");
+  return (
+    apiSrc.includes("filterMeetingPollsForUser") &&
+    apiSrc.includes("finalizeMeetingPollBooking") &&
+    modalSrc.includes("poll-meeting-type") &&
+    modalSrc.includes("eligibleMeetingTypes")
+  );
+}
+
 function backendExists(loc) {
   if (!loc || loc === "—" || loc === "N/A") return null;
   const paths = loc.match(/`[^`]+`/g)?.map((s) => s.replace(/`/g, "")) || [];
@@ -300,8 +329,8 @@ const OVERRIDES = {
   "20-1": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 /integrations/developer AppointmentsWebhooksPanel endpoints" },
   "20-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 webhook create shows HMAC signing secret" },
   "20-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-6 webhook delivery log table + deliveries API" },
-  // Admin UI gaps (remaining waves)
-  "15-7": { status: "V1_ADMIN_UI_GAP", gap: "Per-booking-type permission editor", evidence: "STILL_MISSING", priority: "P2" },
+  // Batch 8F-3 — booking permissions + meeting polls (evidence-detected; see classifyRow)
+  "15-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-3 per-type team access + poll authorization" },
   // Mock / placeholder
   // Contextual
   "3-20": { status: "V1_CONTEXTUAL_FLOW_GAP", gap: "Service → create staff contextual return", evidence: "contextual audit", priority: "P2" },
@@ -473,6 +502,18 @@ const TEMP_ROUTES = [
 
 function classifyRow(row) {
   const id = row.FEATURE_ID;
+  if (
+    id === "15-7" &&
+    detectPerTypeAccessEvidence() &&
+    detectMeetingPollPermissionEvidence()
+  ) {
+    return {
+      status: "V1_COMPLETE",
+      gap: "",
+      evidence: "Batch 8F-3 TypePublishingSections team access + CreatePollModal meeting type selector + meeting-poll-access authorization",
+      nextAction: "Browser certification when ready",
+    };
+  }
   if (OVERRIDES[id]) {
     const o = OVERRIDES[id];
     return { ...o, nextAction: o.gap ? `Implement: ${o.gap}` : "Browser certification when ready" };

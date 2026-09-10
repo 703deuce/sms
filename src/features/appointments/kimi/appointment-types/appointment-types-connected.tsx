@@ -88,12 +88,16 @@ export function AppointmentTypesConnected() {
   const [intakeFormOptions, setIntakeFormOptions] = useState<
     Array<{ id: string; name: string; active?: boolean }>
   >([]);
+  const [teamUserOptions, setTeamUserOptions] = useState<
+    Array<{ id: string; name: string; email: string; role: string }>
+  >([]);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes, categoriesRes, intakeRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes, categoriesRes, intakeRes, teamRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
         fetch("/api/merchant-payments/status"),
@@ -102,6 +106,7 @@ export function AppointmentTypesConnected() {
         fetch("/api/appointments/service-booking/add-ons"),
         fetch("/api/appointments/service-booking/categories"),
         fetch("/api/appointments/service-booking/intake-forms?targetKind=appointment"),
+        fetch("/api/team"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -110,6 +115,20 @@ export function AppointmentTypesConnected() {
       setApiTypes(rows);
       setWorkspaceSlug(settingsJson.workspace?.slug || "");
       setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled));
+      setCurrentUserId(settingsJson.currentUser?.id || "");
+      if (teamRes.ok) {
+        const teamJson = await teamRes.json();
+        setTeamUserOptions(
+          ((teamJson.data || []) as Array<{ id: string; name: string; email: string; role: string }>).map(
+            (m) => ({
+              id: m.id,
+              name: m.name || m.email,
+              email: m.email,
+              role: m.role,
+            }),
+          ),
+        );
+      }
       setNamedScheduleOptions(
         ((settingsJson.data?.namedSchedules || []) as Array<{ id: string; name: string }>).map(
           (s) => ({ id: s.id, name: s.name }),
@@ -409,6 +428,8 @@ export function AppointmentTypesConnected() {
       addOnOptions,
       categoryOptions,
       intakeFormOptions,
+      teamUserOptions,
+      currentUserId,
     };
   }, [
     bookingBaseUrl,
@@ -430,6 +451,8 @@ export function AppointmentTypesConnected() {
     addOnOptions,
     categoryOptions,
     intakeFormOptions,
+    teamUserOptions,
+    currentUserId,
     types,
     visibleTypes,
     workspaceSlug,
