@@ -5,6 +5,7 @@ import { BookingQuestionField } from "./BookingQuestionField";
 import { Button, Input, Label, Textarea } from "./ui";
 import { formatSlotTime, formatFullDate } from "./utils";
 import { ArrowLeft, CalendarCheck, Clock, MapPin, ShieldCheck } from "lucide-react";
+import { PaymentSummary, computePaymentBreakdown } from "./PaymentSummary";
 
 type EntitlementOption = {
   packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
@@ -75,6 +76,9 @@ export function InfoStep({
   termsAccepted = false,
   onTermsAcceptedChange,
   uploadSlug,
+  payWhatYouWantCents,
+  onPayWhatYouWantCentsChange,
+  providerUnavailable,
 }: {
   type: BookingType;
   startsAt: string;
@@ -150,6 +154,9 @@ export function InfoStep({
   termsAccepted?: boolean;
   onTermsAcceptedChange?: (value: boolean) => void;
   uploadSlug?: string;
+  payWhatYouWantCents?: number | null;
+  onPayWhatYouWantCentsChange?: (cents: number) => void;
+  providerUnavailable?: boolean;
 }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -200,8 +207,13 @@ export function InfoStep({
 
   const hasEntitlements =
     Boolean(entitlements?.packages?.length) || Boolean(entitlements?.gifts?.length);
-  const paymentRequired = type.config?.payment && type.config.payment.mode !== "none";
-  const basePriceCents = type.config?.payment?.priceCents || 0;
+  const payment = type.config?.payment;
+  const paymentRequired = payment && payment.mode !== "none" && payment.mode !== "save_card";
+  const basePriceCents = payment?.priceCents || 0;
+  const isPayWhatYouWant = payment?.mode === "pay_what_you_want";
+  const pwywMin = payment?.payWhatYouWant?.minimumCents ?? 0;
+  const pwywSuggested = payment?.payWhatYouWant?.suggestedCents ?? pwywMin;
+  const paymentBreakdown = computePaymentBreakdown(payment, dynamicPriceCents, payWhatYouWantCents);
   const showDynamicPrice =
     paymentRequired &&
     dynamicPriceCents != null &&
@@ -222,8 +234,23 @@ export function InfoStep({
 
   function submit() {
     if (!validate()) return;
+    if (isPayWhatYouWant && onPayWhatYouWantCentsChange) {
+      const amount = payWhatYouWantCents ?? 0;
+      if (amount < pwywMin) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          payWhatYouWant: `Enter at least ${formatMoney(pwywMin)}.`,
+        }));
+        return;
+      }
+    }
     onBook({ firstName, lastName, phone, email, notes, smsConsent, answers, recurringMode, recurringOccurrences, attendeeCount });
   }
+
+  const submitLabel =
+    submitting
+      ? "Booking…"
+      : paymentBreakdown?.ctaLabel || (paymentRequired ? "Continue" : "Book appointment");
 
   return (
     <div className="fade-in">
@@ -334,6 +361,47 @@ export function InfoStep({
           Price for this time: <strong>{formatMoney(dynamicPriceCents!)}</strong>
           <span className="text-muted-foreground"> (standard {formatMoney(basePriceCents)})</span>
         </p>
+      ) : null}
+
+      {isPayWhatYouWant && entitlementMethod === "none" ? (
+        <div className="mt-4 rounded-xl border border-border p-4">
+          <Label htmlFor="pwyw-amount">Amount</Label>
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
+            <Input
+              id="pwyw-amount"
+              type="number"
+              min={(pwywMin / 100).toFixed(2)}
+              step="0.01"
+              className="flex-1"
+              value={payWhatYouWantCents != null ? (payWhatYouWantCents / 100).toFixed(2) : ""}
+              placeholder={(pwywSuggested / 100).toFixed(2)}
+              onChange={(e) => {
+                const dollars = Number(e.target.value);
+                if (!Number.isFinite(dollars)) return;
+                onPayWhatYouWantCentsChange?.(Math.round(dollars * 100));
+              }}
+            />
+          </div>
+          {pwywMin > 0 ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Minimum {formatMoney(pwywMin)}
+              {pwywSuggested > pwywMin ? ` · suggested ${formatMoney(pwywSuggested)}` : ""}
+            </p>
+          ) : null}
+          {fieldErrors.payWhatYouWant ? (
+            <p className="mt-1 text-[12px] text-rose-600">{fieldErrors.payWhatYouWant}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {paymentRequired && entitlementMethod === "none" ? (
+        <PaymentSummary
+          payment={payment}
+          dynamicPriceCents={dynamicPriceCents}
+          payWhatYouWantCents={payWhatYouWantCents}
+          providerUnavailable={providerUnavailable}
+        />
       ) : null}
 
       {paymentRequired && entitlementMethod === "none" ? (
@@ -769,7 +837,7 @@ export function InfoStep({
           </Button>
         ) : null}
         <Button size="lg" className="w-full" onClick={submit} disabled={submitting}>
-          {submitting ? "Booking…" : "Book appointment"}
+          {submitLabel}
         </Button>
         <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5" />

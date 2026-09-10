@@ -4,9 +4,13 @@ export type WaitlistEntry = {
   phone: string | null;
   email: string | null;
   preferredDate?: string | null;
+  partySize?: number | null;
   status: "active" | "notified" | "accepted" | "expired" | "removed";
   createdAt: string;
   notifiedAt?: string | null;
+  priorityRank?: number | null;
+  priorityScore?: number | null;
+  offerExpiresAt?: string | null;
 };
 
 export const WAITLIST_ENTRIES: WaitlistEntry[] = [

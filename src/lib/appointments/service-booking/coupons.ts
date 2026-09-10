@@ -43,6 +43,36 @@ export async function upsertCoupon(
   return prisma.appointmentCoupon.create({ data: { workspaceId, ...data } });
 }
 
+export async function previewCouponDiscount(
+  workspaceId: string,
+  code: string,
+  input: { contactId?: string; baseCents: number },
+) {
+  const prisma = getPrisma();
+  const coupon = await prisma.appointmentCoupon.findFirst({
+    where: { workspaceId, code: code.trim().toUpperCase(), active: true },
+  });
+  if (!coupon) throw new Error("Invalid coupon");
+  const now = new Date();
+  if (coupon.startsAt && coupon.startsAt > now) throw new Error("Coupon not active yet");
+  if (coupon.expiresAt && coupon.expiresAt < now) throw new Error("Coupon expired");
+  if (coupon.usageCap != null) {
+    const used = await prisma.appointmentCouponRedemption.count({ where: { couponId: coupon.id } });
+    if (used >= coupon.usageCap) throw new Error("Coupon usage limit reached");
+  }
+  if (coupon.onePerCustomer && input.contactId) {
+    const prior = await prisma.appointmentCouponRedemption.findFirst({
+      where: { couponId: coupon.id, contactId: input.contactId },
+    });
+    if (prior) throw new Error("Coupon already used");
+  }
+  const discountCents =
+    coupon.discountType === "percent"
+      ? Math.round((input.baseCents * coupon.discountValue) / 100)
+      : Math.min(input.baseCents, coupon.discountValue);
+  return { coupon, discountCents };
+}
+
 export async function validateAndApplyCoupon(
   workspaceId: string,
   code: string,

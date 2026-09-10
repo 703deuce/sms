@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Plus, Route } from "lucide-react";
-import type { RoutingForm } from "../types";
-import { initialForms, industryOptions, companySizeOptions } from "../types";
+import type { RoutingForm, RoutingFormMeta } from "../types";
+import { industryOptions, companySizeOptions } from "../types";
 import FormListPanel from "./FormListPanel";
 import FormEditor from "./FormEditor";
 
@@ -31,8 +31,15 @@ function emptyForm(): RoutingForm {
   };
 }
 
+const emptyMeta: RoutingFormMeta = {
+  routingAnalytics: {},
+  bookingTypes: [],
+  staffMembers: [],
+};
+
 export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: string }) {
   const [forms, setForms] = useState<RoutingForm[]>([]);
+  const [meta, setMeta] = useState<RoutingFormMeta>(emptyMeta);
   const [selected, setSelected] = useState<RoutingForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,18 +51,19 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
     setLoading(true);
     setLoadError(false);
     try {
-      const [formsRes, typesRes, settingsRes] = await Promise.all([
-        fetch("/api/appointments/routing-forms"),
-        fetch("/api/appointments/types"),
-        fetch("/api/appointments/settings"),
-      ]);
+      const formsRes = await fetch("/api/appointments/routing-forms");
       if (!formsRes.ok) throw new Error("load failed");
       const formsJson = await formsRes.json();
       const list = (formsJson.data || []) as RoutingForm[];
       setForms(list);
       setSelected((sel) => sel ?? list[0] ?? null);
-      if (typesRes.ok) await typesRes.json();
-      if (settingsRes.ok) await settingsRes.json();
+      if (formsJson.meta) {
+        setMeta({
+          routingAnalytics: formsJson.meta.routingAnalytics || {},
+          bookingTypes: formsJson.meta.bookingTypes || [],
+          staffMembers: formsJson.meta.staffMembers || [],
+        });
+      }
     } catch {
       setLoadError(true);
     } finally {
@@ -158,6 +166,7 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
         <div className="routing-grid" style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: 20, alignItems: "start" }}>
           <FormListPanel
             forms={forms}
+            meta={meta}
             selectedId={selected?.id ?? null}
             onSelect={handleSelect}
             onNew={handleNew}
@@ -166,6 +175,7 @@ export default function RoutingFormsClient({ workspaceSlug }: { workspaceSlug: s
           {selected ? (
             <FormEditor
               form={selected}
+              meta={meta}
               workspaceSlug={workspaceSlug}
               saving={saving}
               dirty={dirty}

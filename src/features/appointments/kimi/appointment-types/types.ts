@@ -134,7 +134,12 @@ export type AppointmentTypesPageModel = {
   namedScheduleOptions: Array<{ id: string; name: string }>;
   teamGroupOptions: Array<{ id: string; name: string }>;
   resourceOptions: Array<{ id: string; name: string; quantity?: number }>;
-  addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
+  addOnOptions: Array<{
+    id: string;
+    name: string;
+    priceCents?: number;
+    durationDeltaMinutes?: number;
+  }>;
   categoryOptions: Array<{ id: string; name: string }>;
   intakeFormOptions: Array<{ id: string; name: string; active?: boolean }>;
 };
@@ -157,6 +162,8 @@ export type AppointmentTypesPageActions = {
   onManageAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onManageCategories: () => void;
+  onCreateCategory: () => void;
   onReorderTypes: (orderedIds: string[]) => void;
   onMoveType: (id: string, direction: "up" | "down") => void;
   onRetry: () => void;

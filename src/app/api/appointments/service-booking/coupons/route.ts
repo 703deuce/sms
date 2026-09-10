@@ -1,4 +1,9 @@
-import { listCoupons, upsertCoupon, validateAndApplyCoupon } from "@/lib/appointments/service-booking";
+import {
+  listCoupons,
+  upsertCoupon,
+  validateAndApplyCoupon,
+  previewCouponDiscount,
+} from "@/lib/appointments/service-booking";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 
 export async function GET() {
@@ -10,6 +15,11 @@ export async function POST(request: Request) {
   if (body.action === "apply") {
     return withAppointmentsAuth("appointments.read", async ({ workspaceId }) =>
       validateAndApplyCoupon(workspaceId, body.code, body),
+    );
+  }
+  if (body.action === "preview") {
+    return withAppointmentsAuth("appointments.read", async ({ workspaceId }) =>
+      previewCouponDiscount(workspaceId, body.code, body),
     );
   }
   return withAppointmentsAuth("appointments.types.manage", async ({ workspaceId }) =>

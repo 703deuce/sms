@@ -57,6 +57,7 @@ export type OverviewPageModel = {
 };
 
 export type OverviewPageActions = {
+  onOpenCalendarDate: (dateKey: string) => void;
   onViewCalendar: () => void;
   onCopyBookingLink: () => void;
   onNewAppointment: () => void;

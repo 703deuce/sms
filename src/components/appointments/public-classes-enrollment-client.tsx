@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatCapacityLabel } from "@/components/appointments/public-capacity-display";
 
-type ClassSeries = { id: string; name: string; description: string | null; capacity: number };
+type ClassSeries = {
+  id: string;
+  name: string;
+  description: string | null;
+  capacity: number;
+  capacityDisplay?: string;
+};
 type ClassOccurrence = {
   id: string;
   seriesId: string;
@@ -11,6 +18,11 @@ type ClassOccurrence = {
   capacity: number;
   enrolled: number;
   remaining: number;
+  instructor?: string | null;
+  location?: string | null;
+  priceCents?: number | null;
+  capacityDisplay?: string;
+  waitlistEnabled?: boolean;
   seatMapId?: string | null;
   seatMapName?: string | null;
   requiresSeatSelection?: boolean;
@@ -53,6 +65,7 @@ export function PublicClassesEnrollmentClient({
   const [seatMap, setSeatMap] = useState<SeatMapData | null>(null);
   const [seatMapLoading, setSeatMapLoading] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState<SeatCell | null>(null);
+  const [partySize, setPartySize] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,6 +116,7 @@ export function PublicClassesEnrollmentClient({
   async function enroll(
     occurrenceId: string,
     seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string },
+    waitlist = false,
   ) {
     if (!firstName.trim() || !phone.trim()) {
       setError("First name and phone are required.");
@@ -121,6 +135,8 @@ export function PublicClassesEnrollmentClient({
           lastName,
           phone,
           email: email || undefined,
+          partySize,
+          waitlist,
           seatMapId: seat?.seatMapId,
           rowIndex: seat?.rowIndex,
           colIndex: seat?.colIndex,
@@ -130,7 +146,11 @@ export function PublicClassesEnrollmentClient({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Enrollment failed");
       const seatLabel = seat?.seatLabel ? ` Seat ${seat.seatLabel} reserved.` : "";
-      setMessage(`You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`);
+      setMessage(
+        waitlist
+          ? "You're on the waitlist. We'll notify you if a spot opens."
+          : `You're registered.${seatLabel} We'll send a confirmation if messaging is enabled.`,
+      );
       setSeatPickerOpen(false);
       setPendingOccurrence(null);
       setSelectedSeat(null);
@@ -151,6 +171,10 @@ export function PublicClassesEnrollmentClient({
       hour: "numeric",
       minute: "2-digit",
     });
+  }
+
+  function formatMoney(cents: number) {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
   }
 
   const seriesMap = new Map(series.map((s) => [s.id, s]));
@@ -182,6 +206,14 @@ export function PublicClassesEnrollmentClient({
             <input type="email" className="mt-1 h-9 w-full rounded-md border px-2" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
         </div>
+        <label className="block text-sm">
+          <span className="text-muted-foreground">How many people?</span>
+          <div className="mt-1 flex items-center gap-2">
+            <button type="button" className="h-8 w-8 rounded border" onClick={() => setPartySize((n) => Math.max(1, n - 1))} aria-label="Decrease party size">−</button>
+            <span className="min-w-[2rem] text-center font-medium">{partySize}</span>
+            <button type="button" className="h-8 w-8 rounded border" onClick={() => setPartySize((n) => n + 1)} aria-label="Increase party size">+</button>
+          </div>
+        </label>
       </section>
 
       {message ? (
@@ -281,31 +313,54 @@ export function PublicClassesEnrollmentClient({
         <ul className="divide-y rounded-lg border">
           {occurrences.map((occ) => {
             const s = seriesMap.get(occ.seriesId);
-            const full = occ.remaining <= 0;
+            const full = occ.remaining <= 0 || occ.remaining < partySize;
+            const capacityLabel = formatCapacityLabel(
+              occ.capacityDisplay || s?.capacityDisplay || "exact",
+              occ.remaining,
+              occ.capacity,
+              full,
+            );
             return (
               <li key={occ.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
                   <p className="font-medium">{s?.name || "Class"}</p>
                   <p className="text-sm text-muted-foreground">{formatWhen(occ.startsAt)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {full ? "Full" : `${occ.remaining} spot${occ.remaining === 1 ? "" : "s"} left`}
+                    {[occ.instructor, occ.location].filter(Boolean).join(" · ")}
+                    {occ.priceCents ? ` · ${formatMoney(occ.priceCents)}` : ""}
+                  </p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {capacityLabel}
                     {occ.requiresSeatSelection ? " · Seat selection required" : ""}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy || full}
-                  className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-                  onClick={() => {
-                    if (occ.requiresSeatSelection && occ.seatMapId) {
-                      void openSeatPicker(occ);
-                      return;
-                    }
-                    void enroll(occ.id);
-                  }}
-                >
-                  {occ.requiresSeatSelection ? "Choose seat" : "Enroll"}
-                </button>
+                {!full ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                    onClick={() => {
+                      if (occ.requiresSeatSelection && occ.seatMapId) {
+                        void openSeatPicker(occ);
+                        return;
+                      }
+                      void enroll(occ.id);
+                    }}
+                  >
+                    {occ.requiresSeatSelection ? "Choose seat" : "Join"}
+                  </button>
+                ) : occ.waitlistEnabled ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
+                    onClick={() => void enroll(occ.id, undefined, true)}
+                  >
+                    Join waitlist
+                  </button>
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">Full</span>
+                )}
               </li>
             );
           })}

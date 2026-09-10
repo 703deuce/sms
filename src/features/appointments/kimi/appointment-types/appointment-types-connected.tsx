@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CategoryManagerDrawer } from "@/components/appointments/category-manager-drawer";
 import AppointmentTypesView from "@/components/appointments/kimi-ui/appointment-types/page";
 import {
   buildSavePayload,
@@ -82,12 +83,13 @@ export function AppointmentTypesConnected() {
     Array<{ id: string; name: string; quantity?: number }>
   >([]);
   const [addOnOptions, setAddOnOptions] = useState<
-    Array<{ id: string; name: string; priceCents?: number }>
+    Array<{ id: string; name: string; priceCents?: number; durationDeltaMinutes?: number }>
   >([]);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [intakeFormOptions, setIntakeFormOptions] = useState<
     Array<{ id: string; name: string; active?: boolean }>
   >([]);
+  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,9 +137,20 @@ export function AppointmentTypesConnected() {
       if (addOnsRes.ok) {
         const addOnsJson = await addOnsRes.json();
         setAddOnOptions(
-          ((addOnsJson.data || []) as Array<{ id: string; name: string; priceCents?: number; active?: boolean }>)
+          ((addOnsJson.data || []) as Array<{
+            id: string;
+            name: string;
+            priceCents?: number;
+            durationDeltaMinutes?: number;
+            active?: boolean;
+          }>)
             .filter((a) => a.active !== false)
-            .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents })),
+            .map((a) => ({
+              id: a.id,
+              name: a.name,
+              priceCents: a.priceCents,
+              durationDeltaMinutes: a.durationDeltaMinutes,
+            })),
         );
       }
       if (categoriesRes.ok) {
@@ -456,6 +469,8 @@ export function AppointmentTypesConnected() {
       onManageAvailability: () => router.push("/appointments/availability"),
       onManageStaff: () => router.push("/appointments/staff"),
       onManageLocations: () => router.push("/appointments/locations"),
+      onManageCategories: () => setCategoryDrawerOpen(true),
+      onCreateCategory: () => setCategoryDrawerOpen(true),
       onReorderTypes: reorderTypes,
       onMoveType: moveType,
       onRetry: load,
@@ -466,5 +481,15 @@ export function AppointmentTypesConnected() {
   if (loading) return <TypesLoading />;
   if (failed || !model) return <TypesError onRetry={load} />;
 
-  return <AppointmentTypesView model={model} actions={actions} />;
+  return (
+    <>
+      <AppointmentTypesView model={model} actions={actions} />
+      <CategoryManagerDrawer
+        open={categoryDrawerOpen}
+        onClose={() => setCategoryDrawerOpen(false)}
+        onCategoriesChange={setCategoryOptions}
+        onSelectCategoryId={(categoryId) => updateForm("categoryId", categoryId)}
+      />
+    </>
+  );
 }

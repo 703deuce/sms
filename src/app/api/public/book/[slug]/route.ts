@@ -372,6 +372,33 @@ export async function POST(request: Request, { params }: Params) {
       });
     }
 
+    if (action === "validate_single_use") {
+      const token = String(body.singleUseToken || "").trim();
+      if (!token) {
+        return NextResponse.json({ error: "Booking link is required." }, { status: 400 });
+      }
+      const { resolveSingleUseBookingLink } = await import("@/lib/appointments/booking-links");
+      const resolved = await resolveSingleUseBookingLink(workspace.id, token);
+      if (!resolved) {
+        const platform = await loadAppointmentPlatformConfig(workspace.id);
+        const links = (platform as { singleUseLinks?: Array<{ token: string; expiresAt?: string; usedCount: number; maxUses: number }> }).singleUseLinks || [];
+        const stale = links.find((l) => l.token === token);
+        if (!stale) {
+          return NextResponse.json({ error: "This booking link is no longer available." }, { status: 404 });
+        }
+        if (stale.expiresAt && new Date(stale.expiresAt) < new Date()) {
+          return NextResponse.json({ error: "This booking link has expired." }, { status: 410 });
+        }
+        if (stale.usedCount >= stale.maxUses) {
+          return NextResponse.json({ error: "This booking link has already been used." }, { status: 410 });
+        }
+        return NextResponse.json({ error: "This booking link is no longer available." }, { status: 404 });
+      }
+      return NextResponse.json({
+        data: { appointmentTypeId: resolved.appointmentTypeId, valid: true },
+      });
+    }
+
     if (action === "preview_recurring") {
       const { generateRecurringOccurrences } = await import("@/lib/appointments/recurring-schedule");
       const startsAt = String(body.startsAt || "");
@@ -702,11 +729,30 @@ export async function POST(request: Request, { params }: Params) {
     const startsAtDate = new Date(startsAt);
     const endsAtDate = new Date(startsAtDate.getTime() + effectiveDuration * 60_000);
 
-    const contactIdBeforeBook = await resolveContactIdByPhone(
+    let contactIdBeforeBook = await resolveContactIdByPhone(
       workspace.id,
       phone,
       body.email ? String(body.email) : undefined,
     );
+
+    try {
+      const { resolveAuthorizedBookForContact } = await import(
+        "@/lib/appointments/service-booking/portal-booking-context"
+      );
+      const authorizedBookFor = await resolveAuthorizedBookForContact({
+        workspaceId: workspace.id,
+        portalToken: body.portalToken ? String(body.portalToken) : undefined,
+        bookForContactId: body.bookForContactId ? String(body.bookForContactId) : undefined,
+      });
+      if (authorizedBookFor) {
+        contactIdBeforeBook = authorizedBookFor;
+      }
+    } catch (bookForErr) {
+      return NextResponse.json(
+        { error: bookForErr instanceof Error ? bookForErr.message : "Unauthorized booking context" },
+        { status: 403 },
+      );
+    }
     try {
       const { assertMemberAccessForBookingType } = await import(
         "@/lib/appointments/service-booking/membership-lifecycle"
@@ -740,6 +786,36 @@ export async function POST(request: Request, { params }: Params) {
 
     const payment = resolvedType?.config.payment;
     let effectivePayment = payment ? { ...payment } : undefined;
+    if (effectivePayment?.mode === "pay_what_you_want") {
+      const { validatePayWhatYouWantAmount } = await import(
+        "@/lib/appointments/service-booking/payments-extended"
+      );
+      const pwywCents = Math.round(Number(body.payWhatYouWantCents || 0));
+      const config = effectivePayment.payWhatYouWant || { enabled: true, minimumCents: 0 };
+      try {
+        const validated = validatePayWhatYouWantAmount(
+          { enabled: true, minimumCents: config.minimumCents ?? 0, suggestedCents: config.suggestedCents },
+          pwywCents,
+        );
+        effectivePayment = { ...effectivePayment, mode: "full", priceCents: validated };
+      } catch (pwywErr) {
+        return NextResponse.json(
+          { error: pwywErr instanceof Error ? pwywErr.message : "Invalid amount" },
+          { status: 400 },
+        );
+      }
+    }
+    if (
+      effectivePayment &&
+      (effectivePayment.mode === "deposit_fixed" ||
+        effectivePayment.mode === "deposit_percent" ||
+        effectivePayment.mode === "customer_choice")
+    ) {
+      effectivePayment = { ...effectivePayment, mode: "deposit" };
+    }
+    if (effectivePayment?.mode === "optional") {
+      effectivePayment = { ...effectivePayment, mode: "none" };
+    }
     if (effectivePayment?.priceCents && startsAt) {
       try {
         const { evaluateSlotPrice } = await import(
@@ -847,6 +923,7 @@ export async function POST(request: Request, { params }: Params) {
       intakeResponses,
       customFieldValues,
       multiServiceLines,
+      contactId: contactIdBeforeBook || undefined,
     };
 
     if (

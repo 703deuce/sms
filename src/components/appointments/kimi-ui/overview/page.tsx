@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Calendar, ChevronDown } from "lucide-react";
 import StatCards from "./components/StatCards";
 import TodaysSchedule from "./components/TodaysSchedule";
@@ -18,17 +19,39 @@ type Props = {
 };
 
 export default function OverviewView({ model, actions, copied }: Props) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const todayKey = new Date().toISOString().slice(0, 10);
+
   return (
     <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5">
       <RefDecoPageHeader
         title="Overview"
         description="Here's what's happening with your appointments today."
         action={
-          <button type="button" className="appt-pilot-date-btn">
-            <Calendar size={15} className="text-[var(--text-secondary)]" aria-hidden />
-            {model.dateLabel}
-            <ChevronDown size={14} className="text-[var(--text-secondary)]" aria-hidden />
-          </button>
+          <div className="relative">
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={todayKey}
+              className="sr-only"
+              aria-label="Choose a date to open in calendar"
+              onChange={(e) => {
+                if (e.target.value) actions.onOpenCalendarDate(e.target.value);
+              }}
+            />
+            <button
+              type="button"
+              className="appt-pilot-date-btn"
+              onClick={() => {
+                dateInputRef.current?.showPicker?.();
+                dateInputRef.current?.click();
+              }}
+            >
+              <Calendar size={15} className="text-[var(--text-secondary)]" aria-hidden />
+              {model.dateLabel}
+              <ChevronDown size={14} className="text-[var(--text-secondary)]" aria-hidden />
+            </button>
+          </div>
         }
       />
 
