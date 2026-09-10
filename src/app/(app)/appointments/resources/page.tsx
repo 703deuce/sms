@@ -1,5 +1,7 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function SchedulingResourcesPage() {
-  return <ServiceBookingAdminClient initialSection="resources" />;
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function ResourcesPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/resources", searchParams });
 }

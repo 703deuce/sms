@@ -90,6 +90,7 @@ export async function listAppointments(
     status?: string;
     q?: string;
     take?: number;
+    pendingApproval?: boolean;
   },
 ) {
   const prisma = getPrisma();
@@ -128,6 +129,11 @@ export async function listAppointments(
         : null,
     }),
   );
+  if (input?.pendingApproval) {
+    mapped = mapped.filter(
+      (a) => (a.metadata as AppointmentMetadata)?.pendingApproval === true,
+    );
+  }
   if (input?.q?.trim()) {
     const q = input.q.trim().toLowerCase();
     mapped = mapped.filter(
@@ -135,11 +141,20 @@ export async function listAppointments(
         (a.inviteeName || "").toLowerCase().includes(q) ||
         (a.inviteePhone || "").includes(q) ||
         (a.inviteeEmail || "").toLowerCase().includes(q) ||
-        (a.serviceName || "").toLowerCase().includes(q),
+        (a.serviceName || "").toLowerCase().includes(q) ||
+        (a.staffName || "").toLowerCase().includes(q),
     );
   }
   return mapped;
 }
+
+export type AppointmentServicePhase = {
+  name: string;
+  phaseKind: "active_staff" | "processing";
+  startsAt: string;
+  endsAt: string;
+  staffRequired: boolean;
+};
 
 export async function getAppointment(workspaceId: string, id: string) {
   const prisma = getPrisma();
@@ -168,6 +183,51 @@ export async function getAppointment(workspaceId: string, id: string) {
     }),
   ]);
   const base = mapAppointmentRow({ ...row, contact });
+  const meta = (base.metadata || {}) as AppointmentMetadata;
+
+  let servicePhases: AppointmentServicePhase[] = [];
+  if (row.serviceName) {
+    const typeRow = await prisma.voiceService.findFirst({
+      where: { workspaceId, name: row.serviceName },
+      select: { id: true },
+    });
+    if (typeRow?.id) {
+      const { listServicePhaseTemplates } = await import(
+        "@/lib/appointments/service-booking/service-phases"
+      );
+      const templates = await listServicePhaseTemplates(workspaceId, typeRow.id);
+      if (templates.length) {
+        let cursor = new Date(row.startsAt).getTime();
+        servicePhases = templates.map((phase: DbRow) => {
+          const start = new Date(cursor);
+          const end = new Date(cursor + Number(phase.durationMinutes) * 60_000);
+          cursor = end.getTime();
+          return {
+            name: String(phase.name),
+            phaseKind: phase.phaseKind as "active_staff" | "processing",
+            startsAt: start.toISOString(),
+            endsAt: end.toISOString(),
+            staffRequired:
+              phase.staffRequired ?? phase.phaseKind === "active_staff",
+          };
+        });
+      }
+    }
+  }
+
+  const resources = Array.isArray(meta.resourceLabels)
+    ? (meta.resourceLabels as Array<{ id: string; name: string; groupName?: string }>)
+    : [];
+  const addOns = Array.isArray(meta.addOnLabels)
+    ? (meta.addOnLabels as Array<{
+        id: string;
+        name: string;
+        quantity?: number;
+        priceCents?: number;
+        durationMinutes?: number;
+      }>)
+    : [];
+
   return {
     ...base,
     serviceLines: serviceLines.map((line: {
@@ -199,6 +259,49 @@ export async function getAppointment(workspaceId: string, id: string) {
       createdAt: c.createdAt.toISOString(),
     })),
     contractTemplates,
+    servicePhases,
+    resources,
+    addOns,
+    recurringSeriesId: meta.recurringSeriesId || null,
+    recurringOccurrenceIndex:
+      typeof meta.recurringOccurrenceIndex === "number"
+        ? meta.recurringOccurrenceIndex
+        : null,
+    termsAcceptance: meta.termsAcceptance as
+      | { acceptedAt?: string; termsVersion?: string }
+      | undefined,
+    packageAccess: meta.packageAccess as
+      | { packageName?: string; creditsUsed?: number; creditsRemaining?: number }
+      | undefined,
+    membershipAccess: meta.membershipAccess as
+      | { membershipName?: string; benefitLabel?: string }
+      | undefined,
+    accountCreditAppliedCents:
+      typeof meta.accountCreditAppliedCents === "number"
+        ? meta.accountCreditAppliedCents
+        : undefined,
+    paymentSummary: {
+      totalCents:
+        typeof meta.totalPriceCents === "number"
+          ? meta.totalPriceCents
+          : typeof meta.paymentAmountCents === "number"
+            ? meta.paymentAmountCents
+            : 0,
+      depositPaidCents:
+        typeof meta.depositPaidCents === "number" ? meta.depositPaidCents : 0,
+      paidCents:
+        meta.paymentStatus === "paid" && typeof meta.paymentAmountCents === "number"
+          ? meta.paymentAmountCents
+          : 0,
+      balanceDueCents:
+        typeof meta.balanceDueCents === "number"
+          ? meta.balanceDueCents
+          : typeof meta.amountDueCents === "number"
+            ? meta.amountDueCents
+            : 0,
+      refundedCents:
+        typeof meta.refundAmountCents === "number" ? meta.refundAmountCents : 0,
+    },
   };
 }
 

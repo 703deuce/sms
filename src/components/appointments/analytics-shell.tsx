@@ -8,13 +8,27 @@ import type { AppointmentsAnalyticsSection } from "@/lib/products/appointments-s
 
 export function AppointmentsAnalyticsShell({
   section = "overview",
+  reportFocus,
+  reportFrom,
+  reportTo,
+  reportStatus,
 }: {
   section?: AppointmentsAnalyticsSection;
+  reportFocus?: "service-booking";
+  reportFrom?: string;
+  reportTo?: string;
+  reportStatus?: string;
 }) {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 p-6">
       <Tabs items={appointmentsAnalyticsTabs} />
-      <AppointmentsAnalyticsClient section={section} />
+      <AppointmentsAnalyticsClient
+        section={section}
+        reportFocus={reportFocus}
+        reportFrom={reportFrom}
+        reportTo={reportTo}
+        reportStatus={reportStatus}
+      />
     </div>
   );
 }

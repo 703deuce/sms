@@ -1,5 +1,5 @@
-import { VoiceRemindersClient } from "@/components/appointments/voice-reminders-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentVoiceRemindersPage() {
-  return <VoiceRemindersClient />;
+export default function VoiceRemindersPage() {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/voice-reminders" });
 }

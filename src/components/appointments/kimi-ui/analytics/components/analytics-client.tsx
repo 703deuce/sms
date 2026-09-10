@@ -29,6 +29,7 @@ import { MetricCard, MetricSkeletonGrid, type MetricDef } from "./metric-card";
 import { BookingsChart } from "./bookings-chart";
 import { PopularTimes, PopularTypes } from "./popular-panel";
 import { ScheduleReportCard } from "./schedule-report-card";
+import { ServiceBookingReportCard } from "./service-booking-report-card";
 import { RoutingFormsPanel } from "./routing-forms-panel";
 
 const RANGE_OPTIONS: Array<{ value: 7 | 30; label: string }> = [
@@ -104,7 +105,19 @@ function RangeToggle({
   );
 }
 
-export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
+export function AnalyticsClient({
+  section,
+  reportFocus,
+  reportFrom,
+  reportTo,
+  reportStatus,
+}: {
+  section: AnalyticsSection;
+  reportFocus?: "service-booking";
+  reportFrom?: string;
+  reportTo?: string;
+  reportStatus?: string;
+}) {
   const [range, setRange] = useState<7 | 30>(7);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -231,7 +244,15 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
           </div>
 
           {section === "reports" ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
+              <ServiceBookingReportCard
+                rangeDays={range}
+                highlighted={reportFocus === "service-booking"}
+                initialFrom={reportFrom}
+                initialTo={reportTo}
+                initialStatus={reportStatus}
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
               <ScheduleReportCard />
               <Card className="p-5">
                 <div className="flex items-start gap-3">
@@ -258,6 +279,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                   </Button>
                 </div>
               </Card>
+            </div>
             </div>
           ) : (
             <>

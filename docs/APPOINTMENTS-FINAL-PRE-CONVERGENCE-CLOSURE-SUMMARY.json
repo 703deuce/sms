@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-09-10",
+  "batch": "8G0",
+  "wavesReconciled": "8D-1 through 8D-7 + 8F-1 through 8F-4 + 8G-0C",
+  "totalMasterRows": 308,
+  "v1Rows": 295,
+  "v2Rows": 11,
+  "statusCounts": {
+    "V1_COMPLETE": 258,
+    "V1_COMPLETE_RUNTIME_ONLY": 32,
+    "V2_DEFERRED": 12,
+    "V1_PROVIDER_BLOCKED": 6
+  },
+  "backendReadyUiMissing": 0,
+  "uiPresentBackendGap": 0,
+  "commerceUniqueV1Features": 0,
+  "tempRoutesStillUniqueV1": 0,
+  "tempRoutesReadyForRetirement": 21,
+  "tempRoutesDiscovered": 22,
+  "residualImplementationRows": 0,
+  "implementationGapCount": 0,
+  "unassignedError": 0,
+  "outOfScopeError": 0,
+  "readyForRouteConvergence": "YES",
+  "commerceUniqueFeatureIds": [],
+  "policiesUniqueFeatureIds": [],
+  "serviceBookingReportUnique": 0,
+  "serviceBookingReportFeatureIds": [],
+  "oldRoutingUnique": 0,
+  "oldRoutingFeatureIds": [],
+  "tempUniqueFunctionCount": 0,
+  "readyForMasterBrowserCertification": "YES"
+}

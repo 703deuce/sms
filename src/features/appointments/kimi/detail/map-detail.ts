@@ -39,6 +39,9 @@ type ApiAppointment = {
     remindersSuppressed?: boolean;
     location?: string;
     source?: string;
+    bookingSource?: string;
+    manageAppointmentUrl?: string;
+    manageAppointmentTokenIssuedAt?: string;
   };
   contact?: { id: string } | null;
   serviceLines?: Array<{
@@ -49,6 +52,34 @@ type ApiAppointment = {
     endsAt: string;
     displayOrder?: number;
   }>;
+  servicePhases?: Array<{
+    name: string;
+    phaseKind: "active_staff" | "processing";
+    startsAt: string;
+    endsAt: string;
+    staffRequired: boolean;
+  }>;
+  resources?: Array<{ id: string; name: string; groupName?: string }>;
+  addOns?: Array<{
+    id: string;
+    name: string;
+    quantity?: number;
+    priceCents?: number;
+    durationMinutes?: number;
+  }>;
+  recurringSeriesId?: string | null;
+  recurringOccurrenceIndex?: number | null;
+  termsAcceptance?: { acceptedAt?: string; termsVersion?: string };
+  packageAccess?: { packageName?: string; creditsUsed?: number; creditsRemaining?: number };
+  membershipAccess?: { membershipName?: string; benefitLabel?: string };
+  accountCreditAppliedCents?: number;
+  paymentSummary?: {
+    totalCents: number;
+    depositPaidCents: number;
+    paidCents: number;
+    balanceDueCents: number;
+    refundedCents: number;
+  };
   contracts?: Array<{
     id: string;
     status: string;
@@ -76,13 +107,16 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     scheduledFor: s.scheduledFor,
   }));
 
-  const timeline: TimelineEvent[] = (meta.timeline || []).map((t, i) => ({
-    id: String(t.id || `t_${i}`),
-    at: String(t.at || t.createdAt || new Date().toISOString()),
-    type: String(t.type || "event"),
-    title: String(t.title || t.summary || "Updated"),
-    detail: t.detail ? String(t.detail) : t.description ? String(t.description) : undefined,
-  }));
+  const timeline: TimelineEvent[] = (meta.timeline || [])
+    .map((t, i) => ({
+      id: String(t.id || `t_${i}`),
+      at: String(t.at || t.createdAt || new Date().toISOString()),
+      type: String(t.type || "event"),
+      title: String(t.title || t.label || t.summary || "Updated"),
+      detail: t.detail ? String(t.detail) : t.description ? String(t.description) : undefined,
+      actor: t.actor ? String(t.actor) : undefined,
+    }))
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   return {
     id: data.id,
@@ -100,10 +134,20 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     reminderStatus: data.reminderStatus || "scheduled",
     smsConsent: meta.smsConsent ?? false,
     paymentStatus: meta.paymentStatus || "none",
-    paymentAmountCents: meta.paymentAmountCents || 0,
     pendingApproval: meta.pendingApproval ?? false,
     remindersSuppressed: meta.remindersSuppressed ?? meta.reminderOverride?.suppressed ?? false,
-    source: meta.source || "Staff",
+    source:
+      meta.bookingSource === "staff_created"
+        ? "Staff-created"
+        : meta.source === "public_booking"
+          ? "Public booking"
+          : meta.source || "Staff",
+    manageAppointmentUrl:
+      typeof meta.manageAppointmentUrl === "string" ? meta.manageAppointmentUrl : undefined,
+    manageAppointmentTokenIssuedAt:
+      typeof meta.manageAppointmentTokenIssuedAt === "string"
+        ? meta.manageAppointmentTokenIssuedAt
+        : undefined,
     notes: meta.notes || "",
     bookingAnswers: meta.bookingAnswers || {},
     reminderSchedule,
@@ -133,5 +177,19 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
       createdAt: c.createdAt,
     })),
     contractTemplates: data.contractTemplates || [],
+    servicePhases: data.servicePhases || [],
+    resources: data.resources || [],
+    addOns: data.addOns || [],
+    recurringSeriesId: data.recurringSeriesId || null,
+    recurringOccurrenceIndex: data.recurringOccurrenceIndex ?? null,
+    termsAcceptance: data.termsAcceptance,
+    packageAccess: data.packageAccess,
+    membershipAccess: data.membershipAccess,
+    accountCreditAppliedCents: data.accountCreditAppliedCents,
+    paymentSummary: data.paymentSummary,
+    paymentAmountCents:
+      data.paymentSummary?.paidCents ??
+      meta.paymentAmountCents ??
+      0,
   };
 }

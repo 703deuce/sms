@@ -1,5 +1,5 @@
-import { RoutingConnected } from "@/features/appointments/kimi/routing/routing-connected";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentRoutingPage() {
-  return <RoutingConnected />;
+export default function LegacyRoutingPage() {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/routing" });
 }

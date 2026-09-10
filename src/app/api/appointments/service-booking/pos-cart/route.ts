@@ -38,6 +38,7 @@ export async function POST(request: Request) {
           contactId: body.contactId,
           referralCode: body.referralCode,
           loyaltyProgramId: body.loyaltyProgramId,
+          giftCode: body.giftCode,
         });
       case "void":
         return voidPosSession(workspaceId, body.sessionId);

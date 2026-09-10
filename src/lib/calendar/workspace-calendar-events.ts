@@ -31,19 +31,31 @@ export async function listWorkspaceCalendarEvents(
     to: input.to,
   });
 
-  const appointmentRows: CalendarApiAppointment[] = appointments.map((row: DbRow) => ({
-    id: row.id,
-    eventKind: "appointment",
-    inviteeName: row.inviteeName,
-    inviteePhone: row.inviteePhone,
-    serviceName: row.serviceName,
-    startsAt: row.startsAt,
-    endsAt: row.endsAt,
-    status: row.status,
-    timezone: row.timezone,
-    metadata: row.metadata,
-    meeting: row.meeting,
-  }));
+  const appointmentRows: CalendarApiAppointment[] = appointments.map((row: DbRow) => {
+    const meta = (row.metadata || {}) as Record<string, unknown>;
+    return {
+      id: row.id,
+      eventKind: "appointment",
+      inviteeName: row.inviteeName,
+      inviteePhone: row.inviteePhone,
+      serviceName: row.serviceName,
+      staffName: row.staffName,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      status: row.status,
+      timezone: row.timezone,
+      metadata: row.metadata,
+      meeting: row.meeting,
+      staffId: typeof meta.staffId === "string" ? meta.staffId : null,
+      location: typeof meta.location === "string" ? meta.location : null,
+      recurringSeriesId:
+        typeof meta.recurringSeriesId === "string" ? meta.recurringSeriesId : null,
+      attendeeCount:
+        typeof meta.attendeeCount === "number" ? meta.attendeeCount : undefined,
+      bookingTypeKind:
+        typeof meta.bookingTypeKind === "string" ? meta.bookingTypeKind : undefined,
+    };
+  });
 
   if (!input.from || !input.to) {
     return appointmentRows;

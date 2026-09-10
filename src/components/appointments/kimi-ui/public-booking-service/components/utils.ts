@@ -20,21 +20,27 @@ export function formatFullDate(iso: string, timezone?: string | null) {
   });
 }
 
-export function formatPrice(payment?: {
-  mode: "none" | "full" | "deposit";
-  priceCents?: number;
-  depositCents?: number;
-  depositPercent?: number;
-  currency?: string;
-}) {
-  if (!payment || payment.mode === "none") return null;
-  const cents =
-    payment.mode === "deposit"
-      ? payment.depositCents ||
-        Math.round((payment.priceCents || 0) * ((payment.depositPercent || 0) / 100))
-      : payment.priceCents;
+import type { PaymentRequirement } from "../types";
+
+export function formatPrice(payment?: PaymentRequirement) {
+  if (!payment || payment.mode === "none" || payment.mode === "optional") return null;
+  if (payment.mode === "pay_what_you_want") {
+    const suggested = payment.payWhatYouWant?.suggestedCents ?? payment.payWhatYouWant?.minimumCents;
+    if (!suggested) return "Pay what you want";
+    const amount = (suggested / 100).toFixed(2);
+    return `From $${amount}`;
+  }
+  const isDeposit =
+    payment.mode === "deposit" ||
+    payment.mode === "deposit_fixed" ||
+    payment.mode === "deposit_percent" ||
+    payment.mode === "customer_choice";
+  const cents = isDeposit
+    ? payment.depositCents ||
+      Math.round((payment.priceCents || 0) * ((payment.depositPercent || 0) / 100))
+    : payment.priceCents;
   if (!cents) return null;
   const currency = (payment.currency || "usd").toUpperCase();
   const amount = (cents / 100).toFixed(2);
-  return payment.mode === "deposit" ? `Deposit $${amount} ${currency}` : `$${amount} ${currency}`;
+  return isDeposit ? `Deposit $${amount} ${currency}` : `$${amount} ${currency}`;
 }

@@ -1,9 +1,7 @@
-import { AppointmentsPoliciesClient } from "@/components/appointments/appointments-policies-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentsPoliciesPage() {
-  return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-      <AppointmentsPoliciesClient />
-    </div>
-  );
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function AppointmentsPoliciesPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/policies", searchParams });
 }

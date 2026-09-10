@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentsCouponsPage() {
-  return <ServiceBookingAdminClient initialSection="coupons" title="Coupons" />;
+export default function CouponsPage() {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/coupons" });
 }

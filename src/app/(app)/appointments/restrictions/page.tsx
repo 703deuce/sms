@@ -1,10 +1,7 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentsRestrictionsPage() {
-  return (
-    <ServiceBookingAdminClient
-      initialSection="restrictions"
-      title="Client booking restrictions"
-    />
-  );
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function RestrictionsPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/restrictions", searchParams });
 }

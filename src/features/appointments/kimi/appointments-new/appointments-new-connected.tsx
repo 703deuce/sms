@@ -17,10 +17,17 @@ export function AppointmentsNewConnected() {
     return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
   }, [searchParams]);
 
+  const initialServiceId = searchParams.get("serviceId") || undefined;
+  const initialStaffId = searchParams.get("staffId") || undefined;
+  const initialLocationId = searchParams.get("locationId") || undefined;
+
   return (
     <div className="tv-page">
       <AppointmentForm
         initialStartsAt={initialStartsAt}
+        initialServiceId={initialServiceId}
+        initialStaffId={initialStaffId}
+        initialLocationId={initialLocationId}
         createdId={createdId}
         onCreated={(id) => {
           setCreatedId(id);

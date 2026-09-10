@@ -1,7 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
 export default function BookingBrandingPage() {
-  return (
-    <ServiceBookingAdminClient initialSection="theme" title="Booking appearance" />
-  );
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/booking/branding" });
 }
