@@ -44,12 +44,12 @@ export default function StatusPanel({
 
       <div className="border-t border-[#ecedf2] pt-4">
         <h3 className="text-[14px] font-semibold mb-2">Booking link</h3>
-        <div className="flex items-center gap-1.5 border border-[#e4e6ee] rounded-lg px-3 py-2 bg-[#f7f8fb]">
-          <span className="flex-1 text-[12px] text-[#5b4bff] font-medium truncate">{bookingPath}</span>
-          <button type="button" className="text-[#a0a3b5] hover:text-[#5b4bff]" onClick={onCopyLink}>
+        <div className="flex items-center gap-1.5 border border-[#e4e6ee] rounded-lg px-3 py-2 bg-[#f7f8fa]">
+          <span className="flex-1 text-[12px] text-[#147d74] font-medium truncate">{bookingPath}</span>
+          <button type="button" className="text-[#a0a3b5] hover:text-[#147d74]" onClick={onCopyLink}>
             <Copy size={13} />
           </button>
-          <button type="button" className="text-[#a0a3b5] hover:text-[#5b4bff]" onClick={onViewBookingPage}>
+          <button type="button" className="text-[#a0a3b5] hover:text-[#147d74]" onClick={onViewBookingPage}>
             <ExternalLink size={13} />
           </button>
         </div>

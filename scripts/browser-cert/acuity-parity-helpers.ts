@@ -11,6 +11,7 @@ import {
   publicSurfaceLoads,
   shareEmbedHubUserAction,
 } from "./service-booking-parity-helpers";
+import { APPT_CANONICAL } from "./canonical-appointments-routes";
 import { ensureCertWorkspaceReadyViaApi } from "./behavioral-flow-helpers";
 
 export async function adminAvailabilityPageLoads(page: Page) {
@@ -78,9 +79,9 @@ export async function adminPosCartMixedLines(page: Page) {
 
 export async function adminIntakeFileFieldEditor(page: Page) {
   await ensureAppointmentsShell(page);
-  await visitRoute(page, "/appointments/commerce");
+  await visitRoute(page, APPT_CANONICAL.intakeForms);
   const intakeTab = page.getByRole("button", { name: /Intake forms/i }).first();
-  await intakeTab.click({ timeout: ACTION_TIMEOUT });
+  if (await intakeTab.count()) await intakeTab.click({ timeout: ACTION_TIMEOUT });
   await page.waitForTimeout(800);
 
   const unique = `UAT Intake File ${Date.now().toString().slice(-5)}`;
@@ -121,9 +122,9 @@ export async function adminShareQr(page: Page) {
 
 export async function adminThemeCustomCss(page: Page) {
   await ensureAppointmentsShell(page);
-  await visitRoute(page, "/appointments/commerce");
-  const tab = page.getByRole("button", { name: /Scheduler branding/i }).first();
-  await tab.click({ timeout: ACTION_TIMEOUT });
+  await visitRoute(page, APPT_CANONICAL.branding);
+  const tab = page.getByRole("button", { name: /branding|theme/i }).first();
+  if (await tab.count()) await tab.click({ timeout: ACTION_TIMEOUT });
   await page.waitForTimeout(800);
   const body = await page.locator("body").innerText();
   if (!/Primary color|branding|css|terminology/i.test(body)) {
@@ -132,18 +133,18 @@ export async function adminThemeCustomCss(page: Page) {
 }
 
 export async function adminResourcesCreate(page: Page) {
-  await commerceCreateItem(page, "/appointments/resources", /Resources/i, "UAT Resource Qty");
+  await commerceCreateItem(page, APPT_CANONICAL.roomsEquipment, /Resources/i, "UAT Resource Qty");
 }
 
 export async function adminProductsCreate(page: Page) {
   await ensureAppointmentsShell(page);
-  await visitRoute(page, "/appointments/commerce");
+  await visitRoute(page, APPT_CANONICAL.pos);
   const tab = page.getByRole("button", { name: /Products|packages/i }).first();
   if (await tab.count()) await tab.click({ timeout: ACTION_TIMEOUT });
 }
 
 export async function adminPackageCreate(page: Page) {
-  await commerceCreateItem(page, "/appointments/commerce", /Packages/i, "UAT Package Browser");
+  await commerceCreateItem(page, APPT_CANONICAL.packages, /Packages/i, "UAT Package Browser");
 }
 
 export async function adminManageLinkInvalid(page: Page) {

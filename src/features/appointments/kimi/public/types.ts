@@ -96,6 +96,8 @@ export type PublicBookingFlowOptions = {
   initialServiceId?: string;
   preselectTypeId?: string;
   singleUseToken?: string;
+  bookForContactId?: string;
+  portalToken?: string;
   theme?: "light" | "dark" | "auto";
   initialCategorySlug?: string;
   initialStaffId?: string;

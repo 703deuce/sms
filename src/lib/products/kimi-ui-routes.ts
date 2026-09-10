@@ -48,6 +48,9 @@ export function kimiRouteScopeClass(pathname: string): string | null {
   if (pathname === "/campaigns" || pathname.startsWith("/campaigns/")) {
     return "kimi-campaigns";
   }
+  if (pathname === "/appointments/campaigns" || pathname.startsWith("/appointments/campaigns/")) {
+    return "kimi-campaigns";
+  }
   if (pathname === "/contacts/segments" || pathname.startsWith("/contacts/segments/")) {
     return "kimi-contacts-segments";
   }

@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
 import { CampaignNavTabs } from "@/components/campaigns/campaign-nav-tabs";
+import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
+import { useBusinessTextingStatus } from "@/hooks/use-business-texting-status";
+import { BusinessTextingActivationPanel } from "@/components/campaigns/business-texting-activation-panel";
 import type { CampaignRowFilterKey } from "@/lib/campaigns/campaign-list-filters";
 import {
   campaignRowMatchesFilter,
@@ -30,6 +33,10 @@ export function CampaignsFilteredView({
   initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
+  const campaignsBasePath = useCampaignsBasePath();
+  const campaignsNewPath = useCampaignsPath("/new");
+  const senderStatus = useBusinessTextingStatus(undefined);
+  const senderActive = senderStatus?.active ?? true;
   const rowFilter = useMemo(() => {
     if (!rowFilterKey) return undefined;
     return (row: CampaignListRow) => campaignRowMatchesFilter(row, rowFilterKey);
@@ -40,6 +47,9 @@ export function CampaignsFilteredView({
       <div className="border-b border-slate-200/80 bg-white px-8 pt-6">
         <CampaignNavTabs />
       </div>
+      {senderStatus && !senderStatus.active ? (
+        <BusinessTextingActivationPanel status={senderStatus} variant="banner" />
+      ) : null}
       <CampaignsList
         title={title}
         subtitle={subtitle}
@@ -48,9 +58,15 @@ export function CampaignsFilteredView({
         rowFilter={rowFilter}
         fetchStatus={fetchStatus}
         initialRows={filterCampaignRows(initialRows, rowFilterKey)}
+        campaignsBasePath={campaignsBasePath}
+        senderActive={senderActive}
         onCreate={() => {
+          if (!senderActive) {
+            router.push("/settings/messaging");
+            return;
+          }
           startFreshComposeDraft();
-          router.push("/campaigns/new");
+          router.push(campaignsNewPath);
         }}
       />
     </div>

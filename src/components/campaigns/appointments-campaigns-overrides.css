@@ -1,0 +1,97 @@
+/**
+ * Business Texting — Campaign surfaces under Appointments pilot theme.
+ * Scoped to .appt-overview-pilot .kimi-campaigns only — legacy /campaigns unchanged.
+ *
+ * CSS audit (2026-09-10):
+ * REQUIRED_EXCEPTION — token bridge + unmigrated Kimi class hooks (camp-table, camp-row, status-pill, composer-toolbar)
+ * LEGACY_WORKAROUND — indigo utility remaps (lines 75–93) until all surfaces use campaign-ui-primitives
+ * OBSOLETE — filter-menu, seg-toggle, weekday-btn overrides removed after CampaignsList/RecurringModal migration
+ */
+
+/* REQUIRED_EXCEPTION: Appointments brand token bridge */
+.appt-overview-pilot .kimi-campaigns {
+  --camp-accent: var(--appt-brand-accent, #147d74);
+  --camp-accent-hover: var(--appt-brand-accent-hover, #10665f);
+  --camp-accent-soft: var(--appt-brand-accent-soft, #dcefeb);
+  --camp-bg: var(--appt-surface-muted, #f7f8fa);
+  --camp-surface: var(--appt-surface, #ffffff);
+  --camp-border: var(--appt-border, #e5e7eb);
+  --camp-text: var(--appt-text-primary, #101418);
+  --camp-muted: var(--appt-text-secondary, #6b7280);
+}
+
+/* REQUIRED_EXCEPTION: legacy .btn-primary / .input-field still used in composer toolbar */
+.appt-overview-pilot .kimi-campaigns .btn-primary {
+  background: var(--camp-accent);
+  box-shadow: 0 1px 2px rgba(20, 125, 116, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.appt-overview-pilot .kimi-campaigns .btn-primary:hover {
+  background: var(--camp-accent-hover);
+  box-shadow: 0 3px 8px rgba(20, 125, 116, 0.28);
+}
+
+.appt-overview-pilot .kimi-campaigns .btn-primary:disabled {
+  background: #9fd4cf;
+}
+
+.appt-overview-pilot .kimi-campaigns .input-field:focus {
+  border-color: var(--camp-accent);
+  box-shadow: 0 0 0 3px rgba(20, 125, 116, 0.12);
+}
+
+/* REQUIRED_EXCEPTION: camp-table row chrome (not yet componentized) */
+.appt-overview-pilot .kimi-campaigns .camp-row:hover {
+  background: #f3faf9;
+}
+
+.appt-overview-pilot .kimi-campaigns .camp-row.selected {
+  background: var(--camp-accent-soft);
+}
+
+.appt-overview-pilot .kimi-campaigns .status-pill.scheduled {
+  background: var(--camp-accent-soft);
+  color: var(--camp-accent-hover);
+}
+
+/* REQUIRED_EXCEPTION: composer toolbar legacy hooks */
+.appt-overview-pilot .kimi-campaigns .composer-toolbar button.ai:hover {
+  background: var(--camp-accent-soft);
+  color: var(--camp-accent);
+}
+
+/* LEGACY_WORKAROUND: residual indigo Tailwind utilities in unmigrated markup */
+.appt-overview-pilot .kimi-campaigns .text-indigo-500,
+.appt-overview-pilot .kimi-campaigns .text-indigo-600,
+.appt-overview-pilot .kimi-campaigns .text-indigo-700,
+.appt-overview-pilot .kimi-campaigns .hover\:text-indigo-600:hover {
+  color: var(--camp-accent) !important;
+}
+
+.appt-overview-pilot .kimi-campaigns .bg-indigo-50,
+.appt-overview-pilot .kimi-campaigns .bg-indigo-100 {
+  background-color: var(--camp-accent-soft) !important;
+}
+
+.appt-overview-pilot .kimi-campaigns .ring-indigo-100 {
+  --tw-ring-color: rgba(20, 125, 116, 0.15) !important;
+}
+
+.appt-overview-pilot .kimi-campaigns .border-t-indigo-500 {
+  border-top-color: var(--camp-accent) !important;
+}
+
+/* REQUIRED_EXCEPTION: camp-table shell */
+.appt-overview-pilot .kimi-campaigns .camp-table {
+  border-color: var(--camp-border);
+  background: var(--camp-surface);
+}
+
+.appt-overview-pilot .kimi-campaigns header h1 {
+  font-size: var(--appt-type-page-title, 1.625rem);
+  color: var(--camp-text);
+}
+
+.appt-overview-pilot .kimi-campaigns header p {
+  color: var(--camp-muted);
+}

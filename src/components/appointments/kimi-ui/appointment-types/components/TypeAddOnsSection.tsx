@@ -5,7 +5,7 @@ import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appo
 
 type Props = {
   form: AppointmentTypeFormState;
-  addOnOptions: Array<{ id: string; name: string; priceCents?: number }>;
+  addOnOptions: Array<{ id: string; name: string; priceCents?: number; durationDeltaMinutes?: number }>;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -33,8 +33,8 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
           </p>
         </div>
         <Link
-          href="/appointments/commerce"
-          className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
+          href="/appointments/types"
+          className="text-[12px] font-medium text-[#147d74] hover:underline shrink-0"
         >
           Manage add-ons →
         </Link>
@@ -50,8 +50,8 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
               <label
                 className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 cursor-pointer ${
                   form.addOnIds.includes(addOn.id)
-                    ? "border-[#5b4bff] bg-[#f7f6ff]"
-                    : "border-[#ecedf2] hover:bg-[#f7f8fb]"
+                    ? "border-[#147d74] bg-[#dcefeb]"
+                    : "border-[#ecedf2] hover:bg-[#f7f8fa]"
                 }`}
               >
                 <span className="flex items-center gap-2.5">
@@ -63,11 +63,14 @@ export function TypeAddOnsSection({ form, addOnOptions, onFormChange }: Props) {
                   />
                   <span className="text-[13px] font-medium text-[#1a1d29]">{addOn.name}</span>
                 </span>
-                {addOn.priceCents != null && addOn.priceCents > 0 ? (
-                  <span className="text-[11px] text-[#8a8fa3]">
-                    +${(addOn.priceCents / 100).toFixed(2)}
-                  </span>
-                ) : null}
+                <span className="text-[11px] text-[#8a8fa3] text-right">
+                  {addOn.priceCents != null && addOn.priceCents > 0
+                    ? `+$${(addOn.priceCents / 100).toFixed(2)}`
+                    : null}
+                  {addOn.durationDeltaMinutes && addOn.durationDeltaMinutes > 0
+                    ? `${addOn.priceCents ? " · " : ""}+${addOn.durationDeltaMinutes} min`
+                    : null}
+                </span>
               </label>
             </li>
           ))}

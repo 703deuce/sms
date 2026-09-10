@@ -4,7 +4,7 @@ function renderMessage(text: string) {
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
   return parts.map((p, i) =>
     p.startsWith('http') ? (
-      <a key={i} href="#" onClick={(e) => e.preventDefault()} className="text-[#4f46e5] break-all">
+      <a key={i} href="#" onClick={(e) => e.preventDefault()} className="text-[#147d74] break-all">
         {p}
       </a>
     ) : (

@@ -5,8 +5,17 @@
  * @see docs/V1-APPOINTMENTS-MCTB-UI-REBUILD.md
  */
 
-/** Mass SMS marketing surfaces (Campaigns, Drips, Keywords, Playbooks, Grow, etc.). */
+/**
+ * Full legacy Mass SMS product nav (Dashboard, Grow, Drips, Playbooks, standalone Reports, etc.).
+ * Remains false — we are NOT restoring the old SMS platform shell.
+ */
 export const MASS_MESSAGING_IN_V1_NAV = false;
+
+/**
+ * Business Texting Phase 1 — Campaigns under Appointments Messages.
+ * Selective absorption only; does not re-enable Grow/Drips/standalone SMS dashboard.
+ */
+export const BUSINESS_TEXTING_CAMPAIGNS_IN_V1_NAV = true;
 
 /** Appointments / scheduling product surfaces. */
 export const APPOINTMENTS_IN_V1_NAV = true;
@@ -30,6 +39,10 @@ export const AUTOMATIONS_IN_V1_NAV = false;
 
 export function isMassMessagingInV1Nav(): boolean {
   return MASS_MESSAGING_IN_V1_NAV;
+}
+
+export function isBusinessTextingCampaignsInV1Nav(): boolean {
+  return BUSINESS_TEXTING_CAMPAIGNS_IN_V1_NAV;
 }
 
 export function isAppointmentsInV1Nav(): boolean {

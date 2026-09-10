@@ -1,5 +1,7 @@
 "use client";
 
+import { useCampaignsPath } from "@/hooks/use-campaigns-base-path";
+
 import { CampaignActions, campaignLooksLikeMassText } from "@/components/campaigns/campaign-actions";
 import { campaignDetailIsKimiBroadcast } from "@/lib/campaigns/mass-text-detection";
 import { V1Breadcrumb, V1PageHeader } from "@/components/v1/v1-polish";
@@ -368,6 +370,8 @@ export function CampaignResultsView({
   segmentsPerMessage?: number;
   cost?: number;
 }) {
+  const campaignsHome = useCampaignsPath();
+  const campaignsDuplicatePath = useCampaignsPath(`/new?duplicate=${campaign.id}`);
   const [tab, setTab] = useState("overview");
   const [recipientFilter, setRecipientFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -466,7 +470,7 @@ export function CampaignResultsView({
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 pb-10 lg:px-6">
-      <V1Breadcrumb items={[{ label: "Campaigns", href: "/campaigns" }, { label: campaign.name }]} />
+      <V1Breadcrumb items={[{ label: "Campaigns", href: campaignsHome }, { label: campaign.name }]} />
 
       <V1PageHeader
         emoji={campaignStatusEmoji(campaign.status)}
@@ -474,11 +478,11 @@ export function CampaignResultsView({
         description={campaign.audience || "Campaign results"}
         actions={
           <>
-            <Link href="/campaigns">
+            <Link href={campaignsHome}>
               <Button variant="outline">← Back</Button>
             </Link>
             {campaignDetailIsKimiBroadcast(campaign.configJson) ? (
-              <Link href={`/campaigns/new?duplicate=${campaign.id}`}>
+              <Link href={campaignsDuplicatePath}>
                 <Button variant="outline">
                   <Copy className="mr-2 h-4 w-4" />
                   Duplicate

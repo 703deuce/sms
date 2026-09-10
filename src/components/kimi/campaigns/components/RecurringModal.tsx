@@ -8,6 +8,17 @@ import {
   formatRecurrenceSummary,
   validateRecurrence,
 } from "@/lib/campaigns/recurrence-format";
+import {
+  CampaignButton,
+  CampaignGhostButton,
+  CampaignInput,
+  CampaignLabel,
+  CampaignModalCard,
+  CampaignModalOverlay,
+  CampaignSegmentOption,
+  CampaignSegmentToggle,
+  CampaignWeekdayToggle,
+} from "@/components/campaigns/campaign-ui-primitives";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -49,176 +60,194 @@ export default function RecurringModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card w-[420px] p-6 fade-in" onClick={(e) => e.stopPropagation()}>
+    <CampaignModalOverlay onClose={onClose}>
+      <CampaignModalCard className="w-[420px] max-w-[calc(100vw-2rem)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-[16px] font-bold text-slate-900">
-            <span className="flex h-6 w-6 items-center justify-center rounded bg-indigo-100">
-              <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+              <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden />
             </span>
             Recurring Send
           </h2>
-          <button type="button" onClick={onClose} className="text-slate-400">
+          <CampaignButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close recurring schedule dialog"
+          >
             <X className="h-4 w-4" />
-          </button>
+          </CampaignButton>
         </div>
 
-        <label className="mb-1 mt-4 block text-[12px] font-semibold text-slate-600">Starting On</label>
-        <input
-          type="date"
-          min={new Date().toISOString().slice(0, 10)}
-          value={rec.startDate}
-          onChange={(e) => setRec({ ...rec, startDate: e.target.value })}
-          className="input-field !text-[13px]"
-        />
-
-        <label className="mb-1 mt-4 block text-[12px] font-semibold text-slate-600">Repeat Every</label>
-        <div className="flex gap-2">
-          <select
-            value={String(rec.interval)}
-            onChange={(e) => setRec({ ...rec, interval: Number(e.target.value) })}
-            className="input-field !w-20 !text-[13px]"
-          >
-            {["1", "2", "3", "4"].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <select
-            value={unitLabel}
-            onChange={(e) => {
-              const unit =
-                e.target.value === "Days" ? "days" : e.target.value === "Weeks" ? "weeks" : "months";
-              setRec({
-                ...rec,
-                unit,
-                weekdays: unit === "weeks" ? rec.weekdays?.length ? rec.weekdays : [new Date(rec.startDate).getDay()] : undefined,
-              });
-            }}
-            className="input-field flex-1 !text-[13px]"
-          >
-            <option>Days</option>
-            <option>Weeks</option>
-            <option>Months</option>
-          </select>
-        </div>
-
-        {rec.unit === "weeks" ? (
-          <>
-            <label className="mb-1 mt-4 block text-[12px] font-semibold text-slate-600">
-              On the following weekdays
-            </label>
-            <div className="flex gap-1">
-              {WEEKDAYS.map((label, index) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => toggleWeekday(index)}
-                  className={`weekday-btn ${rec.weekdays?.includes(index) ? "on" : ""}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        <label className="mb-1 mt-4 block text-[12px] font-semibold text-slate-600">Sending At</label>
-        <div className="flex gap-2">
-          <select
-            value={String(rec.sendHour)}
-            onChange={(e) => setRec({ ...rec, sendHour: Number(e.target.value) })}
-            className="input-field !w-16 !text-[13px]"
-          >
-            {HOURS.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-          <select
-            value={String(rec.sendMinute).padStart(2, "0")}
-            onChange={(e) => setRec({ ...rec, sendMinute: Number(e.target.value) })}
-            className="input-field !w-16 !text-[13px]"
-          >
-            {MINUTES.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <select
-            value={rec.ampm}
-            onChange={(e) => setRec({ ...rec, ampm: e.target.value as "AM" | "PM" })}
-            className="input-field !w-20 !text-[13px]"
-          >
-            <option>AM</option>
-            <option>PM</option>
-          </select>
-        </div>
-
-        <label className="mb-1 mt-4 block text-[12px] font-semibold text-slate-600">Ending</label>
-        <div className="seg-toggle w-full">
-          {(["never", "on", "after"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setRec({ ...rec, endMode: mode })}
-              className={`flex-1 capitalize ${rec.endMode === mode ? "on" : ""}`}
-            >
-              {mode === "never" ? "Never" : mode === "on" ? "On" : "After"}
-            </button>
-          ))}
-        </div>
-
-        {rec.endMode === "on" ? (
-          <div className="mt-3">
-            <label className="mb-1 block text-[12px] font-semibold text-slate-600">End Date</label>
-            <input
+        <div className="mt-4 space-y-4">
+          <div>
+            <CampaignLabel htmlFor="rec-start-date">Starting on</CampaignLabel>
+            <CampaignInput
+              id="rec-start-date"
               type="date"
-              min={rec.startDate}
-              value={rec.endDate || ""}
-              onChange={(e) => setRec({ ...rec, endDate: e.target.value })}
-              className="input-field !text-[13px]"
+              min={new Date().toISOString().slice(0, 10)}
+              value={rec.startDate}
+              onChange={(e) => setRec({ ...rec, startDate: e.target.value })}
             />
           </div>
-        ) : null}
 
-        {rec.endMode === "after" ? (
-          <div className="mt-3">
-            <label className="mb-1 block text-[12px] font-semibold text-slate-600">Number of Sends</label>
-            <input
-              type="number"
-              min={1}
-              value={rec.endAfter ?? 10}
-              onChange={(e) => setRec({ ...rec, endAfter: Number(e.target.value) })}
-              className="input-field !text-[13px]"
-            />
+          <div>
+            <CampaignLabel>Repeat every</CampaignLabel>
+            <div className="mt-1 flex gap-2">
+              <select
+                value={String(rec.interval)}
+                onChange={(e) => setRec({ ...rec, interval: Number(e.target.value) })}
+                className="h-9 w-20 rounded-md border border-input bg-background px-2 text-[13px]"
+                aria-label="Interval"
+              >
+                {["1", "2", "3", "4"].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <select
+                value={unitLabel}
+                onChange={(e) => {
+                  const unit =
+                    e.target.value === "Days" ? "days" : e.target.value === "Weeks" ? "weeks" : "months";
+                  setRec({
+                    ...rec,
+                    unit,
+                    weekdays:
+                      unit === "weeks"
+                        ? rec.weekdays?.length
+                          ? rec.weekdays
+                          : [new Date(rec.startDate).getDay()]
+                        : undefined,
+                  });
+                }}
+                className="flex h-9 flex-1 rounded-md border border-input bg-background px-3 text-[13px]"
+                aria-label="Recurrence unit"
+              >
+                <option>Days</option>
+                <option>Weeks</option>
+                <option>Months</option>
+              </select>
+            </div>
           </div>
-        ) : null}
 
-        <p className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-[12px] leading-relaxed text-indigo-800">
-          {summary}
-        </p>
-        {validationError ? (
-          <p className="mt-2 text-[12px] font-medium text-red-600">{validationError}</p>
-        ) : null}
+          {rec.unit === "weeks" ? (
+            <div>
+              <CampaignLabel>On the following weekdays</CampaignLabel>
+              <div className="mt-1 flex gap-1" role="group" aria-label="Weekdays">
+                {WEEKDAYS.map((label, index) => (
+                  <CampaignWeekdayToggle
+                    key={label}
+                    active={rec.weekdays?.includes(index)}
+                    onClick={() => toggleWeekday(index)}
+                    aria-pressed={rec.weekdays?.includes(index)}
+                  >
+                    {label}
+                  </CampaignWeekdayToggle>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div>
+            <CampaignLabel>Sending at</CampaignLabel>
+            <div className="mt-1 flex gap-2">
+              <select
+                value={String(rec.sendHour)}
+                onChange={(e) => setRec({ ...rec, sendHour: Number(e.target.value) })}
+                className="h-9 w-16 rounded-md border border-input bg-background px-2 text-[13px]"
+                aria-label="Hour"
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <select
+                value={String(rec.sendMinute).padStart(2, "0")}
+                onChange={(e) => setRec({ ...rec, sendMinute: Number(e.target.value) })}
+                className="h-9 w-16 rounded-md border border-input bg-background px-2 text-[13px]"
+                aria-label="Minute"
+              >
+                {MINUTES.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={rec.ampm}
+                onChange={(e) => setRec({ ...rec, ampm: e.target.value as "AM" | "PM" })}
+                className="h-9 w-20 rounded-md border border-input bg-background px-2 text-[13px]"
+                aria-label="AM or PM"
+              >
+                <option>AM</option>
+                <option>PM</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <CampaignLabel>Ending</CampaignLabel>
+            <CampaignSegmentToggle className="mt-1 w-full">
+              {(["never", "on", "after"] as const).map((mode) => (
+                <CampaignSegmentOption
+                  key={mode}
+                  active={rec.endMode === mode}
+                  onClick={() => setRec({ ...rec, endMode: mode })}
+                  aria-pressed={rec.endMode === mode}
+                >
+                  {mode === "never" ? "Never" : mode === "on" ? "On" : "After"}
+                </CampaignSegmentOption>
+              ))}
+            </CampaignSegmentToggle>
+          </div>
+
+          {rec.endMode === "on" ? (
+            <div>
+              <CampaignLabel htmlFor="rec-end-date">End date</CampaignLabel>
+              <CampaignInput
+                id="rec-end-date"
+                type="date"
+                min={rec.startDate}
+                value={rec.endDate || ""}
+                onChange={(e) => setRec({ ...rec, endDate: e.target.value })}
+              />
+            </div>
+          ) : null}
+
+          {rec.endMode === "after" ? (
+            <div>
+              <CampaignLabel htmlFor="rec-end-after">Number of sends</CampaignLabel>
+              <CampaignInput
+                id="rec-end-after"
+                type="number"
+                min={1}
+                value={rec.endAfter ?? 10}
+                onChange={(e) => setRec({ ...rec, endAfter: Number(e.target.value) })}
+              />
+            </div>
+          ) : null}
+
+          <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-[12px] leading-relaxed text-foreground">
+            {summary}
+          </p>
+          {validationError ? (
+            <p className="text-[12px] font-medium text-destructive" role="alert">{validationError}</p>
+          ) : null}
+        </div>
 
         <div className="mt-5 flex gap-2">
-          <button
+          <CampaignButton
             type="button"
-            onClick={handleSet}
+            className="flex-1"
             disabled={Boolean(validationError)}
-            className="btn-primary flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleSet}
           >
-            Set
-          </button>
-          <button type="button" onClick={onClose} className="btn-ghost flex-1">
+            Set schedule
+          </CampaignButton>
+          <CampaignGhostButton type="button" className="flex-1" onClick={onClose}>
             Cancel
-          </button>
+          </CampaignGhostButton>
         </div>
-      </div>
-    </div>
+      </CampaignModalCard>
+    </CampaignModalOverlay>
   );
 }

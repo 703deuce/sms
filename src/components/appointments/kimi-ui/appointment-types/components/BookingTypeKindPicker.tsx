@@ -63,7 +63,7 @@ export function BookingTypeKindPicker({ form, isCreating, onFormChange }: Props)
               key={kind}
               className={`flex flex-col rounded-xl border p-3.5 cursor-pointer transition-colors ${
                 selected
-                  ? "border-[#5b4bff] bg-[#f7f6ff] ring-1 ring-[#dcd9ff]"
+                  ? "border-[#147d74] bg-[#dcefeb] ring-1 ring-[#147d74]/30"
                   : "border-[#ecedf2] hover:border-[#d8dbe6] hover:bg-[#fafbfc]"
               }`}
             >

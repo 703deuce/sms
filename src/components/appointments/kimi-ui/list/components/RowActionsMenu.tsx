@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from "react";
 export function RowActionsMenu({
   name,
   status,
+  pendingApproval,
   onAction,
 }: {
   name: string;
   status: string;
+  pendingApproval?: boolean;
   onAction: (action: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,6 +52,17 @@ export function RowActionsMenu({
           <button role="menuitem" className="tv-menuitem" onClick={() => { setOpen(false); onAction("message"); }}>
             Message customer
           </button>
+          {pendingApproval ? (
+            <>
+              <div className="tv-menudivider" />
+              <button role="menuitem" className="tv-menuitem" onClick={() => { setOpen(false); onAction("approve"); }}>
+                Approve booking
+              </button>
+              <button role="menuitem" className="tv-menuitem tv-menuitem--danger" onClick={() => { setOpen(false); onAction("decline"); }}>
+                Decline booking
+              </button>
+            </>
+          ) : null}
           {isActive && (
             <button role="menuitem" className="tv-menuitem" onClick={() => { setOpen(false); onAction("reschedule"); }}>
               Reschedule

@@ -10,6 +10,7 @@ import { parseCsv, guessCsvField } from "@/lib/contacts/parse-csv";
 import { FileSpreadsheet, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 import { useCallback, useRef, useState } from "react";
 
 type ListOption = { id: string; name: string };
@@ -39,6 +40,7 @@ export function ContactImportForm({
   marketingImport?: boolean;
 }) {
   const router = useRouter();
+  const newBroadcastCampaignPath = useCampaignsPath("/new/broadcast");
   const fileRef = useRef<HTMLInputElement>(null);
   const [columns, setColumns] = useState<ColumnMapping[]>([]);
   const [rowCount, setRowCount] = useState(0);
@@ -350,7 +352,7 @@ export function ContactImportForm({
                     <Button variant="outline" size="sm">Send message to imported contact</Button>
                   </Link>
                   <Link
-                    href={`/campaigns/new/broadcast?to=${encodeURIComponent(importedPhones[0])}`}
+                    href={`${newBroadcastCampaignPath}?to=${encodeURIComponent(importedPhones[0])}`}
                   >
                     <Button variant="outline" size="sm">Create campaign</Button>
                   </Link>

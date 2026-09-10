@@ -4,6 +4,7 @@ import type { Contact } from "../types";
 import { StatusChip, formatPhone } from "./ui";
 import { ContactBookingActions } from "./ContactBookingActions";
 import { ClickToCallButton } from "./ClickToCallButton";
+import { ContactMessageAction } from "./ContactMessageAction";
 import { Building2, Mail, Phone, Tag } from "lucide-react";
 
 function initialsOf(c: Contact) {
@@ -94,7 +95,10 @@ export function ContactHeader({ contact }: { contact: Contact }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
-          <ClickToCallButton phone={contact.phone} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+            <ContactMessageAction contactId={contact.id} phone={contact.phone} />
+            <ClickToCallButton phone={contact.phone} />
+          </div>
           <ContactBookingActions
             contactId={contact.id}
             phone={contact.phone}

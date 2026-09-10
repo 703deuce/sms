@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --tv-bg: #f7f8fa;
@@ -7,9 +8,9 @@
   --tv-text: #101828;
   --tv-text-secondary: #475467;
   --tv-text-muted: #667085;
-  --tv-accent: #4f46e5;
-  --tv-accent-hover: #4338ca;
-  --tv-accent-soft: #eef2ff;
+  --tv-accent: #147d74;
+  --tv-accent-hover: #10665f;
+  --tv-accent-soft: #dcefeb;
   --tv-danger: #dc2626;
   --tv-danger-soft: #fef2f2;
   --tv-success: #047857;
@@ -21,7 +22,7 @@
   --tv-radius: 10px;
   --tv-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
   --tv-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
-  --tv-ring: 0 0 0 3px rgba(79, 70, 229, 0.18);
+  --tv-ring: 0 0 0 3px rgba(20, 125, 116, 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +66,7 @@ a { color: inherit; text-decoration: none; }
 .tv-page-desc {
   margin: 4px 0 0;
   color: var(--tv-text-muted);
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
 }
 
 /* ---------- Local tabs ---------- */
@@ -136,7 +137,7 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--tv-border);
   border-radius: 8px;
   background: var(--tv-card);
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   color: var(--tv-text);
   outline: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -193,7 +194,7 @@ a { color: inherit; text-decoration: none; }
   padding: 13px 16px;
   border-bottom: 1px solid var(--tv-border-subtle);
   vertical-align: middle;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
 }
 .tv-table tbody tr:last-child td { border-bottom: none; }
 .tv-table tbody tr { transition: background 0.1s ease; }
@@ -305,7 +306,7 @@ a { color: inherit; text-decoration: none; }
 .tv-state-icon svg { width: 20px; height: 20px; }
 .tv-state-icon--danger { background: var(--tv-danger-soft); color: var(--tv-danger); }
 .tv-state-title { margin: 0; font-size: 14.5px; font-weight: 650; }
-.tv-state-desc { margin: 0; font-size: 13px; color: var(--tv-text-muted); max-width: 420px; }
+.tv-state-desc { margin: 0; font-size: var(--appt-type-list, 0.8125rem); color: var(--tv-text-muted); max-width: 420px; }
 .tv-state-actions { margin-top: 12px; display: flex; gap: 8px; }
 
 /* ---------- Skeleton ---------- */
@@ -349,7 +350,7 @@ a { color: inherit; text-decoration: none; }
   to { opacity: 1; transform: none; }
 }
 .tv-modal-title { margin: 0 0 6px; font-size: 15px; font-weight: 650; }
-.tv-modal-desc { margin: 0 0 18px; font-size: 13px; color: var(--tv-text-secondary); }
+.tv-modal-desc { margin: 0 0 18px; font-size: var(--appt-type-list, 0.8125rem); color: var(--tv-text-secondary); }
 .tv-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------- Toast ---------- */
@@ -360,7 +361,7 @@ a { color: inherit; text-decoration: none; }
   transform: translateX(-50%);
   background: var(--tv-text);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 550;
   padding: 9px 16px;
   border-radius: 8px;

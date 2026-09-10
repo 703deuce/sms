@@ -1,5 +1,7 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function ServiceBookingPage() {
-  return <ServiceBookingAdminClient initialSection="dynamicPricing" title="Service booking" />;
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function ServiceBookingHubPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/service-booking", searchParams });
 }

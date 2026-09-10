@@ -4,6 +4,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 import { useCallback, useEffect, useState } from "react";
 import AudienceSubNav, { AudienceTab } from "@/components/kimi/contacts-segments/components/AudienceSubNav";
 import SegmentsList from "@/components/kimi/contacts-segments/components/SegmentsList";
@@ -37,6 +38,7 @@ type Props = { initialSegments?: Segment[] };
 
 export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
   const router = useRouter();
+  const newCampaignPath = useCampaignsPath("/new");
   const [view, setView] = useState<View>({ name: "audience", tab: "segments" });
   const [segments, setSegments] = useState<Segment[]>(initialSegments);
   const [segmentContacts, setSegmentContacts] = useState<Contact[]>([]);
@@ -221,7 +223,7 @@ export function KimiSegmentsConnected({ initialSegments = [] }: Props) {
               </div>
             ) : (
               <div className="flex gap-2 pt-1">
-                <button onClick={() => router.push(`/campaigns/new?segmentId=${encodeURIComponent(view.segment.id)}`)} className="seg-btn-primary h-10 px-5 rounded-lg text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Create Campaign</button>
+                <button onClick={() => router.push(`${newCampaignPath}?segmentId=${encodeURIComponent(view.segment.id)}`)} className="seg-btn-primary h-10 px-5 rounded-lg text-sm font-medium flex items-center gap-2"><Send className="h-4 w-4" /> Create Campaign</button>
                 <button onClick={() => setView({ name: "audience", tab: "segments" })} className="h-10 px-5 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium transition-colors">Back</button>
               </div>
             )}

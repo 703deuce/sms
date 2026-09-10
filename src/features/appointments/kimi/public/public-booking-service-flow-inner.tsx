@@ -68,6 +68,12 @@ export function PublicBookingServiceFlowInner({
           <StepIndicator step={indicatorStep === "payment" ? "info" : indicatorStep} />
         ) : null}
 
+        {flow.singleUseLinkError ? (
+          <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+            {flow.singleUseLinkError}
+          </p>
+        ) : null}
+
         <Card className="p-5 sm:p-7">
           {flow.step === "service" ? (
             <ServiceStep
@@ -75,6 +81,7 @@ export function PublicBookingServiceFlowInner({
               categories={flow.categories}
               activeCategorySlug={flow.initialCategorySlug}
               addingAdditional={flow.addingAdditionalService}
+              bookingSlug={slug}
               onPick={(type) => void flow.pickType(flow.types.find((t) => t.id === type.id)!)}
             />
           ) : null}
@@ -200,6 +207,8 @@ export function PublicBookingServiceFlowInner({
               termsAccepted={flow.termsAccepted}
               onTermsAcceptedChange={flow.setTermsAccepted}
               uploadSlug={slug}
+              payWhatYouWantCents={flow.payWhatYouWantCents}
+              onPayWhatYouWantCentsChange={flow.setPayWhatYouWantCents}
             />
           ) : null}
 
@@ -251,7 +260,11 @@ export function PublicBookingServiceFlowInner({
               loading={flow.aiLoading}
               error={flow.error}
               slots={flow.aiSlots}
+              pendingSlot={flow.aiPendingSlot}
+              selectedTypeName={flow.selectedType?.name}
               onSelectSlot={(slot) => flow.selectAiSlot(slot)}
+              onConfirmSlot={() => flow.confirmAiSlot()}
+              onCancelPendingSlot={() => flow.cancelAiSlot()}
               onBack={() => flow.setStep("datetime")}
             />
           ) : null}

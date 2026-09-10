@@ -48,6 +48,7 @@ type Props = {
   campaignId: string;
   activity: AuditLogRow[];
   timeline: CampaignTimelineEvent[];
+  campaignsHomeHref?: string;
 };
 
 function KpiCard({
@@ -111,7 +112,13 @@ function SectionCard({
   );
 }
 
-export function CampaignDetailView({ campaign, campaignId, activity, timeline }: Props) {
+export function CampaignDetailView({
+  campaign,
+  campaignId,
+  activity,
+  timeline,
+  campaignsHomeHref = "/campaigns",
+}: Props) {
   const deliveryRate = campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0;
   const replyRate = campaign.delivered > 0 ? (campaign.replies / campaign.delivered) * 100 : 0;
   const clickRate = campaign.delivered > 0 ? (campaign.clicks / campaign.delivered) * 100 : 0;
@@ -122,7 +129,9 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 pb-12">
-      <V1Breadcrumb items={[{ label: "Campaigns", href: "/campaigns" }, { label: campaign.name }]} />
+      <V1Breadcrumb
+        items={[{ label: "Campaigns", href: campaignsHomeHref }, { label: campaign.name }]}
+      />
 
       <V1PageHeader
         emoji={campaignStatusEmoji(campaign.status)}
@@ -130,19 +139,19 @@ export function CampaignDetailView({ campaign, campaignId, activity, timeline }:
         description={`${campaign.type} campaign · ${campaign.audience}`}
         actions={
           <>
-            <Link href="/campaigns">
+            <Link href={campaignsHomeHref}>
               <Button variant="ghost">← Back</Button>
             </Link>
             {(campaign.status === "Draft" || campaign.status === "Scheduled") &&
             campaignDetailIsKimiBroadcast(campaign.configJson) ? (
-              <Link href={`/campaigns/new?edit=${campaignId}`}>
+              <Link href={`${campaignsHomeHref}/new?edit=${campaignId}`}>
                 <Button>Continue editing</Button>
               </Link>
             ) : null}
             {campaign.status !== "Draft" &&
             campaign.status !== "Scheduled" &&
             campaignDetailIsKimiBroadcast(campaign.configJson) ? (
-              <Link href={`/campaigns/new?duplicate=${campaignId}`}>
+              <Link href={`${campaignsHomeHref}/new?duplicate=${campaignId}`}>
                 <Button variant="outline">Duplicate</Button>
               </Link>
             ) : null}

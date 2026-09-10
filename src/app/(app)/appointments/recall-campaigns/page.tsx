@@ -1,5 +1,5 @@
-import { RecallCampaignsClient } from "@/components/appointments/recall-campaigns-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
 export default function RecallCampaignsPage() {
-  return <RecallCampaignsClient />;
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/recall-campaigns" });
 }

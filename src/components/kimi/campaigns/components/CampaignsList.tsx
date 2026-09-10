@@ -30,6 +30,13 @@ import {
   type CampaignListRow,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
 import { formatNumber } from "@/lib/utils";
+import {
+  CampaignButton,
+  CampaignFilterMenu,
+  CampaignFilterMenuItem,
+  CampaignGhostButton,
+  CampaignInput,
+} from "@/components/campaigns/campaign-ui-primitives";
 
 const FILTER_OPTIONS = [
   { id: "all", label: "All" },
@@ -56,6 +63,8 @@ function statusPillVariant(status: string): string {
 export default function CampaignsList({
   onCreate,
   editCampaignPath,
+  campaignsBasePath = "/campaigns",
+  senderActive = true,
   rowFilter,
   fetchStatus,
   title = "Campaigns",
@@ -66,6 +75,8 @@ export default function CampaignsList({
 }: {
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
+  campaignsBasePath?: string;
+  senderActive?: boolean;
   rowFilter?: (row: CampaignListRow) => boolean;
   fetchStatus?: string;
   title?: string;
@@ -75,6 +86,8 @@ export default function CampaignsList({
   initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
+  const detailPath = (id: string) => `${campaignsBasePath}/${id}`;
+  const defaultEditPath = (id: string) => `${campaignsBasePath}/new?edit=${id}`;
   const [rows, setRows] = useState<CampaignListRow[]>(initialRows);
   const [loading, setLoading] = useState(initialRows.length === 0);
   const retainInitialRef = useRef(initialRows.length > 0);
@@ -152,7 +165,7 @@ export default function CampaignsList({
       const newId = await duplicateCampaign(c.id);
       notify("Campaign cloned.");
       reload();
-      router.push(editCampaignPath ? editCampaignPath(newId) : `/campaigns/new?edit=${newId}`);
+      router.push(editCampaignPath ? editCampaignPath(newId) : defaultEditPath(newId));
     } catch (err) {
       notify(err instanceof Error ? err.message : "Could not clone campaign");
     }
@@ -185,67 +198,79 @@ export default function CampaignsList({
   const activeFilterLabel = FILTER_OPTIONS.find((o) => o.id === filter)?.label ?? "All";
 
   return (
-    <div className="flex-1 min-h-screen bg-[#f6f7fb]">
+    <div className="flex-1 min-h-screen bg-muted/30">
       {toast ? (
         <div className="toast">
           <Check className="w-4 h-4" /> {toast}
         </div>
       ) : null}
 
-      <header className="px-8 pt-7 pb-4">
-        <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
-          <Megaphone className="w-6 h-6 text-indigo-500" /> {title}
+      <header className="px-4 pt-7 pb-4 sm:px-8">
+        <h1 className="flex items-center gap-2 font-display text-[22px] font-bold tracking-tight text-foreground">
+          <Megaphone className="h-6 w-6 text-primary" aria-hidden /> {title}
         </h1>
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
       </header>
 
-      <div className="px-8 flex items-center gap-3">
+      <div className="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:px-8">
         {!lockFilter ? (
-          <div className="relative" data-campaign-filter-root>
-            <button
+          <div className="relative shrink-0" data-campaign-filter-root>
+            <CampaignGhostButton
               type="button"
               onClick={() => setFilterOpen((v) => !v)}
-              className="btn-ghost flex items-center gap-2 !py-2"
+              className="gap-2"
+              aria-expanded={filterOpen}
+              aria-haspopup="listbox"
             >
-              <SlidersHorizontal className="w-4 h-4" />
+              <SlidersHorizontal className="h-4 w-4" aria-hidden />
               Filter
-              {filter !== "all" ? <span className="filter-badge">{activeFilterLabel}</span> : null}
-            </button>
+              {filter !== "all" ? (
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {activeFilterLabel}
+                </span>
+              ) : null}
+            </CampaignGhostButton>
             {filterOpen ? (
-              <div className="filter-menu fade-in">
+              <CampaignFilterMenu>
                 {FILTER_OPTIONS.map((option) => (
-                  <button
+                  <CampaignFilterMenuItem
                     key={option.id}
-                    type="button"
+                    active={filter === option.id}
                     onClick={() => {
                       setFilter(option.id);
                       setFilterOpen(false);
                     }}
-                    className={filter === option.id ? "active" : undefined}
                   >
                     {option.label}
-                    {filter === option.id ? <Check className="w-3.5 h-3.5" /> : null}
-                  </button>
+                    {filter === option.id ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
+                  </CampaignFilterMenuItem>
                 ))}
-              </div>
+              </CampaignFilterMenu>
             ) : null}
           </div>
         ) : null}
-        <div className="relative flex-1 max-w-sm ml-auto">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
+        <div className="relative w-full sm:ml-auto sm:max-w-sm sm:flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <CampaignInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
-            className="input-field !pl-9"
+            className="!pl-9 w-full"
+            aria-label="Search campaigns"
           />
         </div>
-        <button type="button" className="btn-primary" onClick={onCreate}>
+        <CampaignButton
+          type="button"
+          onClick={onCreate}
+          disabled={!senderActive}
+          title={senderActive ? undefined : "Activate Business Texting in Settings → Messaging"}
+          className="w-full shrink-0 sm:w-auto"
+        >
           Create Campaign
-        </button>
+        </CampaignButton>
       </div>
 
-      <div className="px-8 mt-5 pb-10">
+      <div className="mt-5 px-4 pb-10 sm:px-8">
         {error ? (
           <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
         ) : null}
@@ -263,23 +288,27 @@ export default function CampaignsList({
           {loading ? (
             <div className="camp-row !cursor-default hover:!bg-white">
               <div className="col-span-full flex flex-col items-center py-10 text-center" style={{ gridColumn: "1 / -1" }}>
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-500" />
-                <p className="mt-3 text-[13px] text-slate-500">Loading campaigns…</p>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary" />
+                <p className="mt-3 text-[13px] text-muted-foreground">Loading campaigns…</p>
               </div>
             </div>
           ) : filtered.length === 0 ? (
             <div className="camp-row !cursor-default hover:!bg-white">
               <div className="col-span-full flex flex-col items-center py-12 text-center" style={{ gridColumn: "1 / -1" }}>
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 ring-1 ring-indigo-100">
-                  <Megaphone className="h-5 w-5 text-indigo-500" />
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                  <Megaphone className="h-5 w-5 text-primary" />
                 </span>
-                <p className="mt-4 text-sm font-semibold text-slate-800">No campaigns found</p>
-                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-slate-400">
-                  Create your first bulk SMS campaign to reach your audience.
+                <p className="mt-4 text-sm font-semibold text-foreground">
+                  {senderActive ? "No campaigns yet" : "Business Texting not active"}
                 </p>
-                <button type="button" className="btn-primary mt-5" onClick={onCreate}>
-                  Create Campaign
-                </button>
+                <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-muted-foreground">
+                  {senderActive
+                    ? "Create your first campaign to reach your customer list."
+                    : "Activate Business Texting in Settings → Messaging to send campaigns."}
+                </p>
+                <CampaignButton type="button" className="mt-5" onClick={onCreate} disabled={!senderActive}>
+                  {senderActive ? "Create Campaign" : "Activate Business Texting"}
+                </CampaignButton>
               </div>
             </div>
           ) : (
@@ -313,42 +342,42 @@ export default function CampaignsList({
                 >
                   <div className="min-w-0">
                     <Link
-                      href={`/campaigns/${c.id}`}
+                      href={detailPath(c.id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="block truncate text-[14px] font-semibold text-slate-800 hover:text-indigo-600"
+                      className="block truncate text-[14px] font-semibold text-foreground hover:text-primary"
                     >
                       {c.name}
                     </Link>
-                    <p className="text-[12px] text-slate-400 mt-0.5">
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
                       {scheduleAt || savedAt || "—"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-slate-600 min-w-0">
-                    <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                    <Users className="h-4 w-4 shrink-0 text-primary/70" aria-hidden />
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold">{recipients > 0 ? formatNumber(recipients) : "—"}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{c.audience || "Audience"}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{c.audience || "Audience"}</p>
                     </div>
                   </div>
-                  <MessageSquare className="w-4 h-4 text-slate-300 justify-self-center" />
+                  <MessageSquare className="h-4 w-4 justify-self-center text-muted-foreground/40" aria-hidden />
                   <div className="flex items-center gap-6">
                     {isSent ? (
                       <>
                         <div>
-                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.clicks ?? 0)}</p>
-                          <p className="text-[11px] text-slate-400">Clicks</p>
+                          <p className="text-[13px] font-semibold text-foreground">{formatNumber(c.clicks ?? 0)}</p>
+                          <p className="text-[11px] text-muted-foreground">Clicks</p>
                         </div>
                         <div>
-                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.replies ?? 0)}</p>
-                          <p className="text-[11px] text-slate-400">Replies</p>
+                          <p className="text-[13px] font-semibold text-foreground">{formatNumber(c.replies ?? 0)}</p>
+                          <p className="text-[11px] text-muted-foreground">Replies</p>
                         </div>
                         <div>
-                          <p className="text-[13px] font-semibold text-slate-800">{formatNumber(c.optOuts ?? 0)}</p>
-                          <p className="text-[11px] text-slate-400">Opt-outs</p>
+                          <p className="text-[13px] font-semibold text-foreground">{formatNumber(c.optOuts ?? 0)}</p>
+                          <p className="text-[11px] text-muted-foreground">Opt-outs</p>
                         </div>
                       </>
                     ) : (
-                      <span className="text-[12px] text-slate-300">Not sent yet</span>
+                      <span className="text-[12px] text-muted-foreground/60">Not sent yet</span>
                     )}
                   </div>
                   <div className="text-right">
@@ -368,14 +397,17 @@ export default function CampaignsList({
                     </button>
                     {menuFor === c.id ? (
                       <div className="kebab-menu fade-in" onClick={(e) => e.stopPropagation()}>
-                        <Link href={`/campaigns/${c.id}`} onClick={() => setMenuFor(null)}>
+                        <Link href={detailPath(c.id)} onClick={() => setMenuFor(null)}>
                           <BarChart2 className="w-4 h-4" /> Analytics
                         </Link>
                         <button type="button" onClick={() => void clone(c)}>
                           <Copy className="w-4 h-4" /> Clone
                         </button>
                         {(norm === "draft" || norm === "scheduled" || norm === "paused") && (
-                          <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
+                          <Link
+                            href={editCampaignPath ? editCampaignPath(c.id) : defaultEditPath(c.id)}
+                            onClick={() => setMenuFor(null)}
+                          >
                             <PencilLine className="w-4 h-4" /> Edit
                           </Link>
                         )}

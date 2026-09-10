@@ -267,7 +267,7 @@ export async function createMasterUatAppointment(page: Page) {
 
 export async function openDynamicPricingAdmin(page: Page) {
   await ensureAppointmentsAdmin(page);
-  const v = await visitRoute(page, "/appointments/service-booking");
+  const v = await visitRoute(page, "/appointments/types");
   if (!v.ok) throw new Error(`Service booking admin: ${v.note}`);
   await page.getByRole("button", { name: /Dynamic pricing/i }).click({ timeout: ACTION_TIMEOUT }).catch(() => {});
   await page.waitForTimeout(1000);

@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --background: 220 20% 97%;
@@ -6,7 +7,7 @@
   --muted: 220 14% 94%;
   --muted-foreground: 222 10% 44%;
   --border: 220 14% 89%;
-  --primary: 234 62% 54%;
+  --primary: 174 73% 29%;
   --primary-hover: 234 66% 47%;
   --danger: 352 72% 50%;
   --ring: 234 62% 54%;
@@ -82,8 +83,8 @@ body {
 .dot-orange { background: #f97316; }
 .chip-slate { background: #f1f5f9; color: #475569; --tw-ring-color: rgba(100,116,139,0.18); }
 .dot-slate { background: #94a3b8; }
-.chip-violet { background: #f5f3ff; color: #6d28d9; --tw-ring-color: rgba(124,58,237,0.18); }
-.dot-violet { background: #8b5cf6; }
+.chip-violet { background: #dcefeb; color: #10665f; --tw-ring-color: rgba(124,58,237,0.18); }
+.dot-violet { background: #147d74; }
 .chip-rose { background: #fff1f2; color: #be123c; --tw-ring-color: rgba(225,29,72,0.18); }
 .dot-rose { background: #f43f5e; }
 

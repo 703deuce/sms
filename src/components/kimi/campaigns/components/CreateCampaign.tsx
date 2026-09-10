@@ -34,6 +34,15 @@ import {
   type AudiencePreviewData,
   type CampaignNavPaths,
 } from "@/lib/campaigns/kimi-campaigns-adapter";
+import {
+  CampaignButton,
+  CampaignComposerBox,
+  CampaignInput,
+  CampaignLabel,
+  CampaignSegmentOption,
+  CampaignSegmentToggle,
+} from "@/components/campaigns/campaign-ui-primitives";
+import Link from "next/link";
 
 type SendMode = "Now" | "Later" | "Recurring";
 
@@ -88,6 +97,7 @@ export default function CreateCampaign({
   const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewData | null>(null);
   const [playbookId, setPlaybookId] = useState<string | null>(null);
   const [numbers, setNumbers] = useState<Array<{ id: string; number: string }>>([]);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; body: string; type?: string }>>([]);
 
   useEffect(() => {
     const playbook = searchParams.get("playbook");
@@ -173,7 +183,14 @@ export default function CreateCampaign({
             campaignId: editId ? c.id : undefined,
             name: duplicateId ? `${c.name} (copy)` : c.name,
             message: stripCampaignComplianceFooter(c.body),
-            audience: include.map((a) => ({ type: a.type, id: a.id, name: a.name })),
+            audience: include.map((a) => ({
+              type: a.type,
+              id: a.id,
+              name: a.name,
+              ...("bookingTypeName" in a && typeof (a as { bookingTypeName?: string }).bookingTypeName === "string"
+                ? { bookingTypeName: (a as { bookingTypeName: string }).bookingTypeName }
+                : {}),
+            })),
             excludeAudience: (audienceConfig?.exclude || []).map((a) => ({
               type: a.type,
               id: a.id,
@@ -227,6 +244,22 @@ export default function CreateCampaign({
         setNumbers(rows);
       })
       .catch(() => setNumbers([]));
+
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        const rows = (json.data || []) as Array<{ id: string; name: string; body: string; type?: string }>;
+        setTemplates(
+          rows.filter(
+            (t) =>
+              !t.type ||
+              t.type === "Campaign" ||
+              t.type.toLowerCase() === "campaign" ||
+              t.type === "SMS",
+          ),
+        );
+      })
+      .catch(() => setTemplates([]));
   }, [searchParams]);
 
   useEffect(() => {
@@ -410,24 +443,24 @@ export default function CreateCampaign({
             />
           ) : (
             <>
-              <h1 className="flex items-center gap-2 text-[22px] font-bold text-slate-900">
-                <Megaphone className="w-6 h-6 text-indigo-500" /> Create Campaign
+              <h1 className="flex items-center gap-2 font-display text-[22px] font-bold tracking-tight text-foreground">
+                <Megaphone className="h-6 w-6 text-primary" aria-hidden /> Create Campaign
               </h1>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Create a campaign to reach your contacts at scale.
               </p>
             </>
           )}
 
-          <label className="block text-[13px] font-semibold text-slate-700 mt-7 mb-1.5">Campaign Name</label>
-          <input
+          <CampaignLabel className="mt-7">Campaign Name</CampaignLabel>
+          <CampaignInput
             value={draft.name}
             onChange={(e) => updateDraft({ name: e.target.value })}
             placeholder="Black Friday Dress Sale"
-            className="input-field max-w-md"
+            className="max-w-md"
           />
 
-          <label className="block text-[13px] font-semibold text-slate-700 mt-5 mb-1.5">Send From</label>
+          <CampaignLabel className="mt-5">Send From</CampaignLabel>
           <div className="max-w-md">
             <select
               value={draft.numberId}
@@ -482,24 +515,49 @@ export default function CreateCampaign({
             />
           </div>
 
-          <div className="flex items-center justify-between max-w-md mt-5 mb-1.5">
-            <label className="text-[13px] font-semibold text-slate-700">Message</label>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 tabular-nums">
-              {characters}/{limit} <span className="segment-badge">{segments}</span>
-              {segments > 1 ? (
-                <span className="text-amber-600">({segments} segments/recipient)</span>
+          <div className="flex max-w-md flex-wrap items-center justify-between gap-2 mt-5 mb-1.5">
+            <CampaignLabel className="mb-0">Message</CampaignLabel>
+            <div className="flex flex-wrap items-center gap-2">
+              {templates.length > 0 ? (
+                <select
+                  className="h-8 rounded-lg border border-border bg-card px-2 text-[12px] text-foreground"
+                  defaultValue=""
+                  aria-label="Use template"
+                  onChange={(e) => {
+                    const t = templates.find((x) => x.id === e.target.value);
+                    if (t) updateDraft({ message: stripCampaignComplianceFooter(t.body) });
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">Use template</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
               ) : null}
-            </span>
+              <Link
+                href="/templates"
+                className="text-[12px] font-medium text-primary hover:underline"
+              >
+                Manage templates
+              </Link>
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground tabular-nums">
+                {characters}/{limit} <span className="segment-badge">{segments}</span>
+                {segments > 1 ? (
+                  <span className="text-amber-600">({segments} segments/recipient)</span>
+                ) : null}
+              </span>
+            </div>
           </div>
-          <div className="max-w-md composer-box">
+          <CampaignComposerBox className="max-w-md">
             <textarea
               value={draft.message}
               onChange={(e) => handleMessageChange(e.target.value)}
               placeholder="Write your message here. Use {{first_name}} to personalize each text."
-              className="w-full h-36 resize-none outline-none p-3 text-[13.5px] leading-relaxed text-slate-800 placeholder:text-slate-400 rounded-t-xl bg-transparent"
+              className="w-full h-36 resize-none border-0 bg-transparent p-3 text-[13.5px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
             />
             {messageHasMergeFields ? (
-              <p className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2 text-[12px] leading-relaxed text-indigo-800">
+              <p className="border-t border-primary/20 bg-primary/5 px-3 py-2 text-[12px] leading-relaxed text-foreground">
                 Starter template — replace placeholders like{" "}
                 <span className="font-mono text-[11px]">{"{{first_name}}"}</span> with your own
                 wording before sending.
@@ -516,11 +574,11 @@ export default function CreateCampaign({
                       setLinkName(trackPrompt);
                       setTrackPrompt(null);
                     }}
-                    className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
+                    className="text-[12px] font-semibold text-primary hover:text-primary/80"
                   >
                     Yes
                   </button>
-                  <button type="button" onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-slate-400 hover:text-slate-600">No</button>
+                  <button type="button" onClick={() => setTrackPrompt(null)} className="text-[12px] font-semibold text-muted-foreground hover:text-foreground">No</button>
                 </span>
               </div>
             )}
@@ -531,7 +589,7 @@ export default function CreateCampaign({
                   value={linkName}
                   onChange={(e) => setLinkName(e.target.value)}
                   placeholder="Name your link"
-                  className="flex-1 text-[12px] outline-none border-b border-indigo-300 focus:border-indigo-500 py-1 bg-transparent transition-colors"
+                  className="flex-1 border-b border-primary/30 bg-transparent py-1 text-[12px] outline-none transition-colors focus:border-primary"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && pendingTrackUrl) {
                       const tracked = [
@@ -564,7 +622,7 @@ export default function CreateCampaign({
                     setPendingTrackUrl(null);
                     setLinkName("");
                   }}
-                  className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
+                  className="text-[12px] font-semibold text-primary hover:text-primary/80"
                 >
                   Save
                 </button>
@@ -574,7 +632,7 @@ export default function CreateCampaign({
                     setPendingTrackUrl(null);
                     setLinkName("");
                   }}
-                  className="text-[12px] font-semibold text-slate-400 hover:text-slate-600"
+                  className="text-[12px] font-semibold text-muted-foreground hover:text-foreground"
                 >
                   Cancel
                 </button>
@@ -591,7 +649,7 @@ export default function CreateCampaign({
                         key={emoji}
                         type="button"
                         onClick={() => insertEmoji(emoji)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-indigo-50 transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-colors hover:bg-primary/10"
                       >
                         {emoji}
                       </button>
@@ -608,7 +666,7 @@ export default function CreateCampaign({
                         key={t.label}
                         type="button"
                         onClick={() => insertTag(t.value)}
-                        className="flex items-center justify-between w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 text-[13px] text-slate-700 transition-colors"
+                        className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-[13px] text-foreground transition-colors hover:bg-primary/10"
                       >
                         {t.label} <span className="text-[11px] text-slate-400 font-mono">{t.value}</span>
                       </button>
@@ -619,55 +677,55 @@ export default function CreateCampaign({
               <button type="button" title="AI Compose" aria-label="AI compose" className="ai" onClick={() => setShowAI(true)}><Sparkles className="w-4 h-4" /></button>
               <button type="button" title="Send a Test" aria-label="Send test message" className="ml-auto" onClick={() => setShowTest(true)}><Send className="w-4 h-4" /></button>
             </div>
-          </div>
+          </CampaignComposerBox>
 
-          <label className="block text-[13px] font-semibold text-slate-700 mt-6 mb-2">When to Send</label>
-          <div className="seg-toggle max-w-md">
+          <CampaignLabel className="mt-6 mb-2 block">When to send</CampaignLabel>
+          <CampaignSegmentToggle className="max-w-md w-full">
             {scheduleModes.map((m) => (
-              <button
+              <CampaignSegmentOption
                 key={m}
-                type="button"
+                active={mode === m}
                 onClick={() => {
                   setMode(m);
                   updateDraft({ scheduleMode: modeToSchedule(m) });
                   if (m === "Recurring") setRecurringOpen(true);
                 }}
-                className={`flex-1 ${mode === m ? "on" : ""}`}
+                aria-pressed={mode === m}
               >
                 {m}
-              </button>
+              </CampaignSegmentOption>
             ))}
-          </div>
+          </CampaignSegmentToggle>
 
           {mode === "Later" && (
             <div className="flex flex-col gap-3 mt-4 max-w-md fade-in">
               <div className="flex items-end gap-2">
                 <div className="flex-1">
-                  <label className="block text-[12px] font-semibold text-slate-600 mb-1">Date</label>
-                  <input
+                  <CampaignLabel htmlFor="schedule-date">Date</CampaignLabel>
+                  <CampaignInput
+                    id="schedule-date"
                     type="date"
                     min={new Date().toISOString().slice(0, 10)}
                     value={draft.scheduledDate || ""}
                     onChange={(e) => updateDraft({ scheduledDate: e.target.value })}
-                    className="input-field !text-[13px]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-slate-600 mb-1">Time</label>
-                  <input
+                  <CampaignLabel htmlFor="schedule-time">Time</CampaignLabel>
+                  <CampaignInput
+                    id="schedule-time"
                     type="time"
                     value={draft.scheduledTime || ""}
                     onChange={(e) => updateDraft({ scheduledTime: e.target.value })}
-                    className="input-field !text-[13px]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-semibold text-slate-600 mb-1">Timezone</label>
-                <input
+                <CampaignLabel htmlFor="schedule-tz">Timezone</CampaignLabel>
+                <CampaignInput
+                  id="schedule-tz"
                   value={draft.timezone}
                   onChange={(e) => updateDraft({ timezone: e.target.value })}
-                  className="input-field !text-[13px]"
                   placeholder="America/New_York"
                 />
               </div>
@@ -677,12 +735,12 @@ export default function CreateCampaign({
           {mode === "Recurring" ? (
             <div className="mt-4 max-w-md fade-in">
               {recurringSummary ? (
-                <p className="flex items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-[12px] text-indigo-800">
+                <p className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-[12px] text-foreground">
                   <span>{recurringSummary}</span>
                   <button
                     type="button"
                     onClick={() => setRecurringOpen(true)}
-                    className="ml-2 shrink-0 font-semibold text-indigo-600 hover:text-indigo-700"
+                    className="ml-2 shrink-0 font-semibold text-primary hover:text-primary/80"
                   >
                     Edit
                   </button>
@@ -691,7 +749,7 @@ export default function CreateCampaign({
                 <button
                   type="button"
                   onClick={() => setRecurringOpen(true)}
-                  className="btn-ghost w-full border border-dashed border-indigo-200 text-indigo-600"
+                  className="w-full rounded-lg border border-dashed border-primary/30 px-4 py-2.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/5"
                 >
                   Configure recurring schedule
                 </button>
@@ -728,25 +786,26 @@ export default function CreateCampaign({
           ) : null}
 
           <div className="flex items-center justify-between max-w-md mt-12">
-            <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
+            <CampaignButton type="button" variant="ghost" onClick={onCancel}>Cancel</CampaignButton>
             <div className="flex items-center gap-4">
-              <button
+              <CampaignButton
                 type="button"
+                variant="ghost"
                 onClick={() => void handleSaveDraft()}
                 disabled={saving}
-                className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+                className="text-primary"
               >
                 {saving ? "Saving…" : "Save Draft"}
-              </button>
-              <button
+              </CampaignButton>
+              <CampaignButton
                 type="button"
                 onClick={() => void handleReview()}
                 disabled={!canReview}
-                className="btn-primary flex items-center gap-1.5"
+                className="gap-1.5"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Review <ChevronRight className="w-4 h-4" />
-              </button>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                Review <ChevronRight className="h-4 w-4" aria-hidden />
+              </CampaignButton>
             </div>
           </div>
         </div>

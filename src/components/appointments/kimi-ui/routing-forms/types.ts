@@ -50,19 +50,21 @@ export const industryOptions = [
 
 export const companySizeOptions = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
 
-export const bookingTypes = [
-  { id: "type_consult", name: "Initial Consultation" },
-  { id: "type_demo", name: "Product Demo" },
-  { id: "type_followup", name: "Follow-up Call" },
-  { id: "type_enterprise", name: "Enterprise Discovery" },
-];
+export type RoutingFormLookupItem = { id: string; name: string };
 
-export const staffMembers = [
-  { id: "staff_sarah", name: "Sarah Johnson" },
-  { id: "staff_mike", name: "Mike Chen" },
-  { id: "staff_ana", name: "Ana Rodriguez" },
-];
+export type RoutingFormMeta = {
+  routingAnalytics: Record<string, { views: number; routes: Record<string, number> }>;
+  bookingTypes: RoutingFormLookupItem[];
+  staffMembers: RoutingFormLookupItem[];
+};
 
+/** @deprecated Sandbox fixtures only — production uses API meta */
+export const bookingTypes: RoutingFormLookupItem[] = [];
+
+/** @deprecated Sandbox fixtures only — production uses API meta */
+export const staffMembers: RoutingFormLookupItem[] = [];
+
+/** @deprecated Sandbox fixtures only */
 export const initialForms: RoutingForm[] = [
   {
     id: "rf_1",
@@ -115,7 +117,5 @@ export const initialForms: RoutingForm[] = [
   },
 ];
 
-export const routingAnalytics: Record<string, { views: number; routes: Record<string, number> }> = {
-  rf_1: { views: 184, routes: { rule_1: 62, rule_2: 18, fallback: 41 } },
-  rf_2: { views: 37, routes: { rule_3: 9, fallback: 12 } },
-};
+/** @deprecated Sandbox fixtures only — production uses API meta.routingAnalytics */
+export const routingAnalytics: Record<string, { views: number; routes: Record<string, number> }> = {};

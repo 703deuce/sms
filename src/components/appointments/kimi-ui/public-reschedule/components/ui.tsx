@@ -153,7 +153,7 @@ const statusTones: Record<string, { bg: string; fg: string; dot: string; label: 
   reschedule_requested: { bg: "#fff7ed", fg: "#9a3412", dot: "#f97316", label: "Reschedule requested" },
   canceled: { bg: "#f1f5f9", fg: "#475569", dot: "#94a3b8", label: "Canceled" },
   cancelled: { bg: "#f1f5f9", fg: "#475569", dot: "#94a3b8", label: "Canceled" },
-  completed: { bg: "#f5f3ff", fg: "#6d28d9", dot: "#8b5cf6", label: "Completed" },
+  completed: { bg: "#dcefeb", fg: "#10665f", dot: "#147d74", label: "Completed" },
   no_show: { bg: "#fff1f2", fg: "#be123c", dot: "#f43f5e", label: "No-show" },
 };
 

@@ -1,5 +1,7 @@
-import { ContractsAdminClient } from "@/components/appointments/contracts-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentsContractsPage() {
-  return <ContractsAdminClient />;
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function ContractsPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/contracts", searchParams });
 }

@@ -558,6 +558,16 @@ html.appt-overview-pilot-active {
   --pilot-border: #e5e7eb;
   --pilot-surface-muted: #f7f8fa;
 
+  /* Global design tokens — override :root purple for all appointments routes */
+  --primary: #147d74;
+  --primary-foreground: #ffffff;
+  --primary-hover: #10665f;
+  --ring: #147d74;
+  --accent: #147d74;
+  --accent-foreground: #ffffff;
+  --sidebar-active: #147d74;
+  --success: #15803d;
+
   /* Shared type scale for shell + content */
   --type-page-title: 1.625rem;
   --type-section: 1.0625rem;

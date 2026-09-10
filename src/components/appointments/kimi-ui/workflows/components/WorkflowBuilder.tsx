@@ -30,7 +30,7 @@ const CHANNEL_ICON: Record<Channel, React.ReactNode> = {
 const CHANNEL_STYLE: Record<Channel, string> = {
   sms: "bg-[#eff4ff] text-[#2547e0]",
   email: "bg-[#f0fdf9] text-[#067647]",
-  voice: "bg-[#f4f3ff] text-[#5925dc]",
+  voice: "bg-[#dcefeb] text-[#10665f]",
   webhook: "bg-[#f0f9ff] text-[#026aa2]",
   payment_link: "bg-[#fffaeb] text-[#b54708]",
 };
@@ -276,7 +276,7 @@ export function WorkflowBuilder({ initial, mode, onBack, onSaved, onTest, toast 
                       {(s.conditions || []).length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
                           {(s.conditions || []).map((c) => (
-                            <span key={c.id} className="rounded-md bg-[#f4f3ff] px-1.5 py-0.5 text-[11px] font-medium text-[#5925dc]">{conditionLabel(c)}</span>
+                            <span key={c.id} className="rounded-md bg-[#dcefeb] px-1.5 py-0.5 text-[11px] font-medium text-[#10665f]">{conditionLabel(c)}</span>
                           ))}
                         </div>
                       )}

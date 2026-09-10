@@ -28,13 +28,13 @@ export type ApiAppointmentType = {
 };
 
 const TYPE_COLORS = [
-  { color: "text-indigo-600", bg: "bg-indigo-100" },
+  { color: "text-[#147d74]", bg: "bg-[#dcefeb]" },
   { color: "text-emerald-600", bg: "bg-emerald-100" },
   { color: "text-amber-600", bg: "bg-amber-100" },
   { color: "text-sky-600", bg: "bg-sky-100" },
   { color: "text-rose-600", bg: "bg-rose-100" },
   { color: "text-teal-600", bg: "bg-teal-100" },
-  { color: "text-violet-600", bg: "bg-violet-100" },
+  { color: "text-[#147d74]", bg: "bg-[#dcefeb]" },
 ];
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {

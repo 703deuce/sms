@@ -125,7 +125,7 @@ export function LocationsConnected() {
   if (loading) return <div className="p-8 text-sm text-gray-500">Loading locations…</div>;
 
   return (
-    <div className="min-h-screen bg-[#f7f8fb] p-6 font-sans">
+    <div className="min-h-screen bg-[#f7f8fa] p-6 font-sans">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -153,7 +153,7 @@ export function LocationsConnected() {
                   type="button"
                   onClick={() => setSelectedId(l.id)}
                   className={`w-full rounded-xl border bg-white p-3 text-left text-[13px] font-medium ${
-                    selectedId === l.id ? "ring-2 ring-[#5b4bff]" : ""
+                    selectedId === l.id ? "ring-2 ring-[#147d74]" : ""
                   }`}
                 >
                   {l.name || "Unnamed"}

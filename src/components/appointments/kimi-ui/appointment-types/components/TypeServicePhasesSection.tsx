@@ -161,7 +161,7 @@ export function TypeServicePhasesSection({ appointmentTypeId, isCreating }: Prop
         </div>
         <button
           type="button"
-          className="text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
+          className="text-[12px] font-medium text-[#147d74] flex items-center gap-1"
           onClick={addPhase}
         >
           <Plus size={14} /> Add phase
@@ -241,7 +241,7 @@ export function TypeServicePhasesSection({ appointmentTypeId, isCreating }: Prop
       <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
-          className="text-[12px] font-semibold text-white bg-[#5b4bff] px-4 py-2 rounded-lg disabled:opacity-50"
+          className="text-[12px] font-semibold text-white bg-[#147d74] px-4 py-2 rounded-lg disabled:opacity-50"
           onClick={() => void savePhases()}
           disabled={saving || !appointmentTypeId}
         >

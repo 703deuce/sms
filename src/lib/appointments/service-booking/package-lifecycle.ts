@@ -41,11 +41,27 @@ export async function adjustPackageCredits(
   return { balanceId, remaining, status };
 }
 
+export async function resolvePackageLifecyclePolicyForAppointment(
+  workspaceId: string,
+  appointmentId: string,
+): Promise<PackageLifecyclePolicy> {
+  const prisma = getPrisma();
+  const entry = await prisma.packageLedgerEntry.findFirst({
+    where: { appointmentId, kind: "redeem" },
+    include: { balance: { include: { product: true } } },
+  });
+  if (!entry?.balance?.product || entry.balance.workspaceId !== workspaceId) {
+    return {};
+  }
+  const { readPackageLifecyclePolicy } = await import("./packages");
+  return readPackageLifecyclePolicy(entry.balance.product.metadata);
+}
+
 export async function restorePackageCreditsForAppointment(
   workspaceId: string,
   appointmentId: string,
   reason: "cancel" | "late_cancel" | "no_show",
-  policy: PackageLifecyclePolicy = {},
+  policy?: PackageLifecyclePolicy,
 ) {
   const prisma = getPrisma();
   const entries = await prisma.packageLedgerEntry.findMany({
@@ -54,12 +70,15 @@ export async function restorePackageCreditsForAppointment(
   });
   if (!entries.length) return { restored: 0 };
 
+  const resolvedPolicy =
+    policy || (await resolvePackageLifecyclePolicyForAppointment(workspaceId, appointmentId));
+
   const shouldRestore =
     reason === "cancel"
-      ? policy.restoreCreditsOnCancel !== false
+      ? resolvedPolicy.restoreCreditsOnCancel !== false
       : reason === "late_cancel"
-        ? policy.restoreCreditsOnLateCancel === true
-        : policy.restoreCreditsOnNoShow === true;
+        ? resolvedPolicy.restoreCreditsOnLateCancel === true
+        : resolvedPolicy.restoreCreditsOnNoShow === true;
 
   if (!shouldRestore) return { restored: 0, skipped: true };
 

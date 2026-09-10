@@ -1,9 +1,10 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
-  --primary: #5b4bd6;
-  --primary-hover: #4c3ec4;
-  --primary-soft: #efedfb;
-  --bg: #f7f7fb;
+  --primary: #147d74;
+  --primary-hover: #10665f;
+  --primary-soft: #dcefeb;
+  --bg: #f7f8fa;
   --card: #ffffff;
   --border: #ececf2;
   --fg: #17172b;
@@ -16,10 +17,9 @@
 .cal-page {
   background: var(--bg);
   color: var(--fg);
-  font-family: "Inter", -apple-system, "Segoe UI", sans-serif;
   padding: 20px 24px 24px;
   min-height: 100vh;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
 }
 
 /* ---------- header ---------- */
@@ -121,7 +121,7 @@
 .stat-icon-green { background: #e7f6ec; color: var(--green); }
 .stat-icon-amber { background: #fdf1e2; color: var(--amber); }
 .stat-icon-red { background: #fdecec; color: var(--red); }
-.stat-icon-violet { background: #f1eafd; color: #7c3aed; }
+.stat-icon-violet { background: #dcefeb; color: #147d74; }
 .stat-value { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 .stat-label { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 .stat-delta { font-size: 10.5px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 3px; }
@@ -282,7 +282,7 @@
 
 /* ---------- mini calendar ---------- */
 .mini-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.mini-month { font-size: 13px; font-weight: 600; }
+.mini-month { font-size: var(--appt-type-list, 0.8125rem); font-weight: 600; }
 .mini-nav { display: flex; gap: 4px; }
 .mini-grid {
   display: grid;
@@ -362,7 +362,7 @@
 
 /* ---------- next appointment ---------- */
 .next-head { display: flex; justify-content: space-between; align-items: center; }
-.next-title { font-size: 13px; font-weight: 700; }
+.next-title { font-size: var(--appt-type-list, 0.8125rem); font-weight: 700; }
 .next-in { font-size: 10.5px; color: var(--muted); }
 .next-time { font-size: 11.5px; color: #55556b; margin-top: 8px; }
 .next-dot-sep { margin: 0 4px; color: var(--muted); }
@@ -407,8 +407,8 @@
   text-decoration: none;
   line-height: 1.4;
 }
-.cal-meeting-badge.tone-indigo { background: #eef2ff; color: #4338ca; }
-.cal-meeting-badge.tone-violet { background: #f3e8ff; color: #7e22ce; }
+.cal-meeting-badge.tone-indigo { background: #dcefeb; color: #147d74; }
+.cal-meeting-badge.tone-violet { background: #dcefeb; color: #10665f; }
 .cal-meeting-badge.tone-green { background: #ecfdf5; color: #047857; }
 
 /* ---------- day view ---------- */
@@ -489,3 +489,66 @@
 .month-event.ev-followup { background: #fdf6e3; color: #8a5b00; }
 .month-event.ev-onboarding { background: #e9f9f1; color: #0f6b42; }
 .month-event.ev-canceled { background: #fdeef2; color: #9f1239; }
+
+.cal-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+}
+.cal-filter-drawer {
+  width: min(360px, 100%);
+  height: 100%;
+  background: #fff;
+  padding: 20px;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+  overflow-y: auto;
+}
+.cal-filter-title { font-size: 16px; font-weight: 700; margin: 0 0 16px; }
+.cal-filter-group { margin-bottom: 16px; }
+.cal-filter-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-filter-options { display: flex; flex-direction: column; gap: 6px; }
+.cal-filter-check { display: flex; align-items: center; gap: 8px; font-size: var(--appt-type-list, 0.8125rem); }
+.cal-filter-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.cal-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #fff;
+}
+.cal-filter-chip.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.cal-unavailable {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(148, 163, 184, 0.08),
+    rgba(148, 163, 184, 0.08) 6px,
+    rgba(148, 163, 184, 0.14) 6px,
+    rgba(148, 163, 184, 0.14) 12px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.week-event.dragging { opacity: 0.65; cursor: grabbing; }
+.week-event .ev-recurring { font-size: 10px; opacity: 0.85; margin-left: 4px; }
+.week-event .ev-capacity { font-size: 10px; opacity: 0.85; }
+.week-event[style*="border-left"] { border-left-width: 3px !important; border-left-style: solid !important; }
+.cal-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #111827;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: var(--appt-type-list, 0.8125rem);
+  z-index: 60;
+}

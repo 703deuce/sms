@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { TimelineItem } from "../types";
 import { Card, SectionHeader, formatDateTime } from "./ui";
@@ -127,14 +128,14 @@ export function ContactActivityTimeline({ contactId }: { contactId: string }) {
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted-foreground)" }}>
             Calls, texts, AI voice, and voicemail for this contact will appear here.
           </p>
-          <a
-            href="#/conversations"
+          <Link
+            href={`/conversations?contactId=${encodeURIComponent(contactId)}`}
             className="btn btn-outline"
             style={{ marginTop: 14, display: "inline-flex", textDecoration: "none" }}
           >
             <MessageSquare style={{ width: 14, height: 14 }} />
             Send a message
-          </a>
+          </Link>
         </div>
       ) : (
         <div style={{ marginTop: 16, display: "grid", gap: 8 }}>

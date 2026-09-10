@@ -2,14 +2,22 @@ import { redirect } from "next/navigation";
 import { AppointmentDetailClient } from "@/components/appointments/detail-client";
 import { PosCartAdminClient } from "@/components/appointments/pos-cart-admin-client";
 
+import { resolveLegacyAppointmentsRedirect } from "@/lib/products/appointments-legacy-redirects";
+
 const RESERVED_SLUGS: Record<string, string> = {
-  coupons: "/appointments/coupons",
+  coupons: resolveLegacyAppointmentsRedirect("/appointments/coupons"),
   payments: "/appointments/payments",
-  contracts: "/appointments/contracts",
-  policies: "/appointments/policies",
-  restrictions: "/appointments/restrictions",
-  scheduled: "/appointments/scheduled",
-  "service-booking": "/appointments/service-booking",
+  contracts: resolveLegacyAppointmentsRedirect("/appointments/contracts"),
+  policies: resolveLegacyAppointmentsRedirect("/appointments/policies"),
+  restrictions: resolveLegacyAppointmentsRedirect("/appointments/restrictions"),
+  scheduled: resolveLegacyAppointmentsRedirect("/appointments/scheduled"),
+  "service-booking": resolveLegacyAppointmentsRedirect("/appointments/service-booking"),
+  commerce: resolveLegacyAppointmentsRedirect("/appointments/commerce"),
+  routing: resolveLegacyAppointmentsRedirect("/appointments/routing"),
+  categories: resolveLegacyAppointmentsRedirect("/appointments/categories"),
+  classes: resolveLegacyAppointmentsRedirect("/appointments/classes"),
+  resources: resolveLegacyAppointmentsRedirect("/appointments/resources"),
+  segments: resolveLegacyAppointmentsRedirect("/appointments/segments"),
 };
 
 type Props = { params: Promise<{ id: string }> };

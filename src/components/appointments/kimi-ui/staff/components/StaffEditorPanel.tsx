@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import type { StaffDayRow, StaffEditorTab } from "@/features/appointments/kimi/staff/types";
+import type { StaffDayRow, StaffEditorTab, StaffRoundRobinStat } from "@/features/appointments/kimi/staff/types";
 
 type Props = {
   tab: StaffEditorTab;
@@ -13,6 +13,8 @@ type Props = {
   selectedTypeIds: string[];
   selectedLocationIds: string[];
   dayRows: StaffDayRow[];
+  calendarColor: string;
+  roundRobinStats: StaffRoundRobinStat[];
   saving: boolean;
   saved: boolean;
   error: string;
@@ -25,6 +27,7 @@ type Props = {
   onSetCustomHours: (dayKey: string, enabled: boolean) => void;
   onUpdateWindow: (dayKey: string, index: number, field: "open" | "close", value: string) => void;
   onAddWindow: (dayKey: string) => void;
+  onCalendarColorChange: (value: string) => void;
   onSave: () => void;
   onRemove: () => void;
 };
@@ -33,6 +36,7 @@ const TABS: Array<{ id: StaffEditorTab; label: string }> = [
   { id: "details", label: "Details" },
   { id: "availability", label: "Availability" },
   { id: "assignments", label: "Assigned services" },
+  { id: "calendar", label: "Calendar display" },
 ];
 
 export default function StaffEditorPanel({
@@ -45,6 +49,8 @@ export default function StaffEditorPanel({
   selectedTypeIds,
   selectedLocationIds,
   dayRows,
+  calendarColor,
+  roundRobinStats,
   saving,
   saved,
   error,
@@ -57,6 +63,7 @@ export default function StaffEditorPanel({
   onSetCustomHours,
   onUpdateWindow,
   onAddWindow,
+  onCalendarColorChange,
   onSave,
   onRemove,
 }: Props) {
@@ -132,7 +139,7 @@ export default function StaffEditorPanel({
                         type="button"
                         className={`rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors ${
                           selected
-                            ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                            ? "bg-[#147d74] text-white border-[#147d74]"
                             : "border-[#e4e6ee] text-[#3f4254] hover:border-[#d8d2ff]"
                         }`}
                         onClick={() => onToggleTypeId(t.id)}
@@ -158,7 +165,7 @@ export default function StaffEditorPanel({
                         type="button"
                         className={`rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors ${
                           selected
-                            ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                            ? "bg-[#147d74] text-white border-[#147d74]"
                             : "border-[#e4e6ee] text-[#3f4254] hover:border-[#d8d2ff]"
                         }`}
                         onClick={() => onToggleLocationId(l.id)}
@@ -208,7 +215,7 @@ export default function StaffEditorPanel({
                   )}
                   <button
                     type="button"
-                    className="ml-auto text-[12px] font-semibold text-[#5b4bff]"
+                    className="ml-auto text-[12px] font-semibold text-[#147d74]"
                     onClick={() => onSetCustomHours(day.key, !day.usesWorkspaceDefault)}
                   >
                     {day.usesWorkspaceDefault ? "Set custom" : "Use workspace default"}
@@ -216,7 +223,7 @@ export default function StaffEditorPanel({
                   {!day.usesWorkspaceDefault ? (
                     <button
                       type="button"
-                      className="text-[12px] text-[#5b4bff]"
+                      className="text-[12px] text-[#147d74]"
                       onClick={() => onAddWindow(day.key)}
                     >
                       + Add window
@@ -225,6 +232,49 @@ export default function StaffEditorPanel({
                 </div>
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {tab === "calendar" ? (
+          <div className="space-y-5">
+            <div>
+              <label className="label" htmlFor="staff-calendar-color">Calendar color</label>
+              <div className="flex items-center gap-3 mt-2">
+                <input
+                  id="staff-calendar-color"
+                  type="color"
+                  className="h-10 w-14 rounded border border-[#ecedf2] cursor-pointer"
+                  value={calendarColor}
+                  onChange={(e) => onCalendarColorChange(e.target.value)}
+                />
+                <span className="text-[13px] text-[#3f4254]">{calendarColor}</span>
+              </div>
+              <p className="text-[12.5px] text-[#8a8fa3] mt-2">
+                Used on the appointments calendar when coloring by staff.
+              </p>
+            </div>
+            {roundRobinStats.length > 0 ? (
+              <div>
+                <h4 className="text-[13px] font-semibold text-[#1a1d29]">Round robin activity</h4>
+                <p className="text-[12px] text-[#8a8fa3] mt-1 mb-2">
+                  Assignment counts from meeting types using round robin. Reset happens automatically as bookings assign staff.
+                </p>
+                <ul className="space-y-1.5 text-[12.5px]">
+                  {roundRobinStats.map((stat) => (
+                    <li key={stat.serviceKey} className="flex justify-between rounded-lg border px-3 py-2">
+                      <span>{stat.serviceKey}</span>
+                      <span className="text-[#8a8fa3]">
+                        {stat.assignmentCount} assigned{stat.lastAssigned ? " · last pick" : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-[12.5px] text-[#8a8fa3]">
+                No round robin assignments recorded yet for this staff member.
+              </p>
+            )}
           </div>
         ) : null}
       </div>

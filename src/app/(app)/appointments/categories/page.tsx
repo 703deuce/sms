@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function BookingCategoriesPage() {
-  return <ServiceBookingAdminClient initialSection="categories" />;
+export default function CategoriesPage() {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/categories" });
 }

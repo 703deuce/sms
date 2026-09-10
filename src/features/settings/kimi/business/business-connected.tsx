@@ -9,6 +9,7 @@ import BusinessProfileCard from "@/components/settings/kimi-ui/business/componen
 import MessagingRegistrationCard from "@/components/settings/kimi-ui/business/components/MessagingRegistrationCard";
 import BookingEnabledCard from "@/components/settings/kimi-ui/business/components/BookingEnabledCard";
 import PublicLegalCard from "@/components/settings/kimi-ui/business/components/PublicLegalCard";
+import DefaultBookingPoliciesCard from "@/components/settings/kimi-ui/business/components/DefaultBookingPoliciesCard";
 import SuspiciousBookingsCard, {
   type SuspiciousBookingRow,
 } from "@/components/settings/kimi-ui/business/components/SuspiciousBookingsCard";
@@ -258,6 +259,7 @@ export function BusinessSettingsConnected({
             consentVersion={consentVersion}
             setConsentVersion={setConsentVersion}
           />
+          <DefaultBookingPoliciesCard />
           <SuspiciousBookingsCard rows={suspiciousBookings} />
         </div>
         <div className="settings-side">

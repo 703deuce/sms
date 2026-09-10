@@ -1,25 +1,46 @@
 import { MASS_TEXT_RECURRING_PRODUCTION_ENABLED } from "@/lib/mass-texting/constants";
+import {
+  APPOINTMENTS_CAMPAIGNS_BASE,
+  LEGACY_CAMPAIGNS_BASE,
+  resolveCampaignsBasePath,
+} from "@/lib/products/business-texting-routes";
 
-export const campaignTabs = [
-  { label: "All", href: "/campaigns" },
-  { label: "Drafts", href: "/campaigns/drafts" },
-  { label: "Scheduled", href: "/campaigns/scheduled" },
-  { label: "Completed", href: "/campaigns/completed" },
-  { label: "Failed", href: "/campaigns/failed" },
-];
-
-export const campaignTabsWithRecurring = [
-  ...campaignTabs.slice(0, 4),
-  { label: "Paused", href: "/campaigns/paused" },
-  ...campaignTabs.slice(4),
-  { label: "Sending", href: "/campaigns/sending" },
-  { label: "Recurring", href: "/campaigns/recurring" },
-  { label: "Calendar", href: "/campaigns/calendar" },
-];
-
-export function getClientCampaignTabs() {
-  return MASS_TEXT_RECURRING_PRODUCTION_ENABLED ? campaignTabsWithRecurring : campaignTabs;
+function buildCampaignTabs(base: string) {
+  return [
+    { label: "All", href: base },
+    { label: "Drafts", href: `${base}/drafts` },
+    { label: "Scheduled", href: `${base}/scheduled` },
+    { label: "Completed", href: `${base}/completed` },
+    { label: "Failed", href: `${base}/failed` },
+  ];
 }
+
+function buildCampaignTabsWithRecurring(base: string) {
+  const tabs = buildCampaignTabs(base);
+  return [
+    ...tabs.slice(0, 4),
+    { label: "Paused", href: `${base}/paused` },
+    ...tabs.slice(4),
+    { label: "Sending", href: `${base}/sending` },
+    { label: "Recurring", href: `${base}/recurring` },
+    { label: "Calendar", href: `${base}/calendar` },
+  ];
+}
+
+/** @deprecated Use getClientCampaignTabs(basePath) */
+export const campaignTabs = buildCampaignTabs(LEGACY_CAMPAIGNS_BASE);
+
+/** @deprecated Use getClientCampaignTabs(basePath) */
+export const campaignTabsWithRecurring = buildCampaignTabsWithRecurring(LEGACY_CAMPAIGNS_BASE);
+
+export function getClientCampaignTabs(basePath?: string) {
+  const base = basePath ?? resolveCampaignsBasePath();
+  return MASS_TEXT_RECURRING_PRODUCTION_ENABLED
+    ? buildCampaignTabsWithRecurring(base)
+    : buildCampaignTabs(base);
+}
+
+export { APPOINTMENTS_CAMPAIGNS_BASE, LEGACY_CAMPAIGNS_BASE };
 
 export async function getCampaignTabs(workspaceId: string) {
   const { getWorkspaceProductFeatures } = await import("@/lib/products/feature-entitlements");

@@ -131,9 +131,11 @@ function rowLabel(item: Record<string, unknown>): string {
 export function ServiceBookingAdminClient({
   initialSection = "packages",
   title = "Service booking",
+  embedded = false,
 }: {
   initialSection?: Section;
   title?: string;
+  embedded?: boolean;
 }) {
   const [section, setSection] = useState<Section>(initialSection);
   const [items, setItems] = useState<unknown[]>([]);
@@ -233,30 +235,34 @@ export function ServiceBookingAdminClient({
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Packages, memberships, gift certificates, classes, resources, and Acuity-class commerce.
-        </p>
-      </header>
+    <div className={`mx-auto flex w-full max-w-6xl flex-col gap-6 ${embedded ? "p-4" : "p-6"}`}>
+      {!embedded ? (
+        <header>
+          <h1 className="text-2xl font-semibold text-foreground">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Packages, memberships, gift certificates, classes, resources, and Acuity-class commerce.
+          </p>
+        </header>
+      ) : null}
 
-      <nav className="flex flex-wrap gap-2" aria-label="Service booking sections">
-        {nav.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setSection(item.id)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              section === item.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground hover:bg-muted/80"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {!embedded ? (
+        <nav className="flex flex-wrap gap-2" aria-label="Service booking sections">
+          {nav.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSection(item.id)}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                section === item.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground hover:bg-muted/80"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
       {section !== "reports" &&
         section !== "theme" &&
@@ -322,6 +328,8 @@ export function ServiceBookingAdminClient({
         <IntakeFormsPanel items={items} onReload={() => void load()} />
       ) : section === "resources" ? (
         <ResourcesPanel items={items} onReload={() => void load()} />
+      ) : section === "classes" ? (
+        <ClassesPanel items={items} onReload={() => void load()} />
       ) : section === "invoices" ? (
         <InvoicesPanel items={items} onReload={() => void load()} />
       ) : section === "webhooks" ? (
@@ -542,6 +550,130 @@ type ResourceRow = {
   description?: string | null;
   active?: boolean;
 };
+
+type ClassSeriesRow = {
+  id: string;
+  name: string;
+  capacity?: number;
+  active?: boolean;
+  staffId?: string | null;
+  locationId?: string | null;
+  appointmentTypeId?: string | null;
+  occurrences?: Array<{ id: string; startsAt: string; endsAt: string; capacity?: number; enrolledCount?: number }>;
+};
+
+function ClassesPanel({
+  items,
+  onReload,
+}: {
+  items: unknown[];
+  onReload: () => void;
+}) {
+  const series = items as ClassSeriesRow[];
+  const [enrollContactId, setEnrollContactId] = useState("");
+  const [enrollOccurrenceId, setEnrollOccurrenceId] = useState("");
+  const [acting, setActing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function enrollStaff() {
+    if (!enrollContactId.trim() || !enrollOccurrenceId) {
+      setMessage("Contact ID and occurrence are required.");
+      return;
+    }
+    setActing(true);
+    setMessage(null);
+    const res = await fetch(SECTION_API.classes, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "enroll", contactId: enrollContactId.trim(), occurrenceId: enrollOccurrenceId }),
+    });
+    setActing(false);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Enrollment failed");
+      return;
+    }
+    setMessage("Customer enrolled");
+    setEnrollContactId("");
+    onReload();
+  }
+
+  if (series.length === 0) {
+    return <p className="text-sm text-muted-foreground">No class series yet. Add one above.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <ul className="divide-y rounded-lg border">
+        {series.map((row) => {
+          const nextOcc = row.occurrences?.[0];
+          const nextLabel = nextOcc
+            ? new Date(nextOcc.startsAt).toLocaleString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })
+            : "No upcoming sessions";
+          return (
+            <li key={row.id} className="p-4 text-sm space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium">{row.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Capacity {row.capacity ?? "—"} · Next: {nextLabel}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground">{row.active === false ? "Inactive" : "Active"}</span>
+              </div>
+              {row.occurrences && row.occurrences.length > 0 ? (
+                <ul className="text-xs text-muted-foreground space-y-1 pl-3 border-l-2 border-muted">
+                  {row.occurrences.slice(0, 5).map((occ) => (
+                    <li key={occ.id}>
+                      {new Date(occ.startsAt).toLocaleString()} · cap {occ.capacity ?? row.capacity ?? "—"}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
+        <p className="text-sm font-medium">Staff enrollment</p>
+        <p className="text-xs text-muted-foreground">Enroll a contact into a specific class occurrence.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="text-sm">
+            <span className="block text-xs text-muted-foreground mb-1">Contact ID</span>
+            <input
+              className="w-full rounded border px-2 py-1.5"
+              value={enrollContactId}
+              onChange={(e) => setEnrollContactId(e.target.value)}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block text-xs text-muted-foreground mb-1">Occurrence ID</span>
+            <input
+              className="w-full rounded border px-2 py-1.5"
+              value={enrollOccurrenceId}
+              onChange={(e) => setEnrollOccurrenceId(e.target.value)}
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          disabled={acting}
+          onClick={() => void enrollStaff()}
+        >
+          {acting ? "Enrolling…" : "Enroll customer"}
+        </button>
+      </div>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+    </div>
+  );
+}
 
 function ResourcesPanel({
   items,
@@ -1143,7 +1275,7 @@ function ThemeEditor({
   onSaved: () => void;
 }) {
   const terminology = (extra.terminology || {}) as Record<string, string>;
-  const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#5b4bff"));
+  const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#147d74"));
   const [logoUrl, setLogoUrl] = useState(String(extra.logoUrl || ""));
   const [noIndex, setNoIndex] = useState(extra.noIndex === true);
   const [customDomain, setCustomDomain] = useState(String(extra.customDomain || ""));
@@ -1157,7 +1289,7 @@ function ThemeEditor({
 
   useEffect(() => {
     const t = (extra.terminology || {}) as Record<string, string>;
-    setPrimaryColor(String(extra.primaryColor || "#5b4bff"));
+    setPrimaryColor(String(extra.primaryColor || "#147d74"));
     setLogoUrl(String(extra.logoUrl || ""));
     setNoIndex(extra.noIndex === true);
     setCustomDomain(String(extra.customDomain || ""));
