@@ -20,6 +20,8 @@ function tabQuery(tab: string) {
     params.set("from", now.toISOString());
   } else if (tab === "past") {
     params.set("to", now.toISOString());
+  } else if (tab === "pending_approval") {
+    params.set("pendingApproval", "1");
   } else if (tab !== "all") {
     params.set("status", tab);
   }
@@ -89,7 +91,12 @@ export function ListConnected() {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const row of allRows) c[row.status] = (c[row.status] || 0) + 1;
+    for (const row of allRows) {
+      c[row.status] = (c[row.status] || 0) + 1;
+      if (row.metadata?.pendingApproval) {
+        c.pending_approval = (c.pending_approval || 0) + 1;
+      }
+    }
     return c;
   }, [allRows]);
 
@@ -159,6 +166,22 @@ export function ListConnected() {
     [load],
   );
 
+  const approvalAction = useCallback(
+    async (id: string, action: "approve" | "reject") => {
+      const res = await fetch("/api/appointments/booking/approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: id, action }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Could not update approval");
+      }
+      load();
+    },
+    [load],
+  );
+
   return (
     <div className="tv-page">
       <AppointmentsList
@@ -175,6 +198,7 @@ export function ListConnected() {
         onCreateAppointment={createAppointment}
         onCanceled={cancelAppointment}
         onRescheduled={rescheduleAppointment}
+        onApprovalAction={approvalAction}
         onNavigateToDetail={(id) => router.push(`/appointments/${id}`)}
         onNavigateToMessage={(row) => {
           if (row.contact?.id) {

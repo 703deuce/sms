@@ -1,3 +1,14 @@
 "use client";
 
-export { CalendarConnected, CalendarConnected as AppointmentsCalendarClient } from "@/features/appointments/kimi/calendar/calendar-connected";
+import { Suspense } from "react";
+import { CalendarConnected } from "@/features/appointments/kimi/calendar/calendar-connected";
+
+export { CalendarConnected };
+
+export function AppointmentsCalendarClient() {
+  return (
+    <Suspense fallback={<div className="cal-page min-h-screen animate-pulse bg-[#f7f8fb]" aria-busy="true" />}>
+      <CalendarConnected />
+    </Suspense>
+  );
+}

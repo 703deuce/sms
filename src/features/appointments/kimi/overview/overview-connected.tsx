@@ -92,6 +92,8 @@ export function OverviewConnected() {
 
   const actions: OverviewPageActions = useMemo(
     () => ({
+      onOpenCalendarDate: (dateKey) =>
+        router.push(`/appointments/calendar?date=${encodeURIComponent(dateKey)}`),
       onViewCalendar: () => router.push("/appointments/calendar"),
       onCopyBookingLink: async () => {
         if (!bookingUrl) return;

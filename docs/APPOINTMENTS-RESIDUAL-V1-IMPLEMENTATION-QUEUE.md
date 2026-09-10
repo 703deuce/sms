@@ -2,59 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 97
-
-## /appointments
-
-### 6-1 — Appointments list
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments; routeExists=true; backend=true
-
-## /appointments/[id]
-
-### 6-9 — Internal notes
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/[id]
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/[id]; routeExists=true; backend=true
-
-### 6-11 — Reminder timeline
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/[id]
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/[id]; routeExists=true; backend=null
-
-### 6-13 — Multi-service lines on record
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/[id]
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/[id]; routeExists=true; backend=false
-
-### 6-14 — Policy snapshot on record
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/[id]
-- **Missing:** Backend writes snapshot; detail display may be partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/[id]; routeExists=true; backend=true
-
-### 11-7 — Per-appointment reminder timeline
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/[id]
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/[id]; routeExists=true; backend=null
+**Total residual rows:** 70
 
 ## /appointments/automations/activity
 
@@ -67,46 +15,6 @@
 - **Evidence:** /appointments/automations/activity; routeExists=true; backend=null
 
 ## /appointments/availability
-
-### 3-8 — Booking limits (daily/weekly/per-type)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Waitlist priority rules admin
-- **Backend:** YES / LIKELY
-- **Priority:** P0
-- **Evidence:** gap queue P0; routeExists=true; backend=false
-
-### 3-9 — Fixed appointment start times
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Waitlist priority rank in table
-- **Backend:** YES / LIKELY
-- **Priority:** P0
-- **Evidence:** gap queue P0; routeExists=true; backend=false
-
-### 3-2 — Timezone
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Appointment detail recurring series UI
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** detail partial; routeExists=true; backend=null
-
-### 3-3 — Minimum booking notice
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Appointment detail service phases display
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** detail partial; routeExists=true; backend=false
-
-### 3-4 — Maximum booking horizon
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/availability
-- **Missing:** Appointment detail resource labels
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** detail partial; routeExists=true; backend=false
 
 ### 3-20 — Slot diagnostics
 - **Gap type:** V1_CONTEXTUAL_FLOW_GAP
@@ -290,24 +198,6 @@
 - **Priority:** P2
 - **Evidence:** /appointments/booking/rooms-equipment; routeExists=true; backend=false
 
-## /appointments/calendar
-
-### 4-14 — Staff / service calendar colors
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/calendar
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/calendar; routeExists=true; backend=false
-
-### 6-7 — Reschedule (staff)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/calendar
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/calendar; routeExists=true; backend=true
-
 ## /appointments/discounts
 
 ### 8-18 — Coupons / discounts
@@ -371,16 +261,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** /appointments/new; routeExists=true; backend=true
-
-## /appointments/overview
-
-### 1-1 — Appointments overview (Home)
-- **Gap type:** V1_MOCK_OR_PLACEHOLDER
-- **Section:** /appointments/overview
-- **Missing:** Overview decorative date picker / KPI gaps
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** overview partial; routeExists=true; backend=true
 
 ## /appointments/packages
 
@@ -510,30 +390,6 @@
 
 ## /appointments/types
 
-### 2-8 — Recurring eligibility on type
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types
-- **Missing:** Calendar staff lanes / colors
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** calendar-connected partial; routeExists=true; backend=true
-
-### 2-9 — Staff assignment modes
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types
-- **Missing:** Calendar drag-reschedule
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** not wired; routeExists=true; backend=true
-
-### 2-11 — Payment modes on type
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/types
-- **Missing:** Calendar availability overlays
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** partial; routeExists=true; backend=false
-
 ### 2-28 — Single-use booking links
 - **Gap type:** V1_ADMIN_UI_GAP
 - **Section:** /appointments/types
@@ -651,88 +507,6 @@
 - **Backend:** YES / LIKELY
 - **Priority:** P2
 - **Evidence:** /appointments/types/services; routeExists=false; backend=false
-
-## /appointments/waitlist
-
-### 10-5 — Waitlist offer + atomic accept
-- **Gap type:** V1_MOCK_OR_PLACEHOLDER
-- **Section:** /appointments/waitlist
-- **Missing:** Service-booking report JSON dump on temp route
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** reports/service-booking; routeExists=true; backend=true
-
-### 7-20 — Waitlist offer accept
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=true
-
-### 9-10 — Class waitlist (capacity-full join)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=true
-
-### 10-1 — Waitlist admin queue
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=true
-
-### 10-2 — Public waitlist join
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=null
-
-### 10-3 — Waitlist preferences (staff/date/time)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=null
-
-### 10-4 — Waitlist slot notification
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=true
-
-### 10-6 — Waitlist auto-fill on cancel
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Backend exists; admin/contextual UI not exposed on final page
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=false
-
-### 10-7 — Waitlist party size (group / class)
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=false
-
-### 10-8 — Waitlist priority rules
-- **Gap type:** V1_ADMIN_UI_GAP
-- **Section:** /appointments/waitlist
-- **Missing:** Admin UI partial
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /appointments/waitlist; routeExists=true; backend=false
 
 ## /appointments/workflows
 

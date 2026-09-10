@@ -49,6 +49,34 @@ type ApiAppointment = {
     endsAt: string;
     displayOrder?: number;
   }>;
+  servicePhases?: Array<{
+    name: string;
+    phaseKind: "active_staff" | "processing";
+    startsAt: string;
+    endsAt: string;
+    staffRequired: boolean;
+  }>;
+  resources?: Array<{ id: string; name: string; groupName?: string }>;
+  addOns?: Array<{
+    id: string;
+    name: string;
+    quantity?: number;
+    priceCents?: number;
+    durationMinutes?: number;
+  }>;
+  recurringSeriesId?: string | null;
+  recurringOccurrenceIndex?: number | null;
+  termsAcceptance?: { acceptedAt?: string; termsVersion?: string };
+  packageAccess?: { packageName?: string; creditsUsed?: number; creditsRemaining?: number };
+  membershipAccess?: { membershipName?: string; benefitLabel?: string };
+  accountCreditAppliedCents?: number;
+  paymentSummary?: {
+    totalCents: number;
+    depositPaidCents: number;
+    paidCents: number;
+    balanceDueCents: number;
+    refundedCents: number;
+  };
   contracts?: Array<{
     id: string;
     status: string;
@@ -100,7 +128,6 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
     reminderStatus: data.reminderStatus || "scheduled",
     smsConsent: meta.smsConsent ?? false,
     paymentStatus: meta.paymentStatus || "none",
-    paymentAmountCents: meta.paymentAmountCents || 0,
     pendingApproval: meta.pendingApproval ?? false,
     remindersSuppressed: meta.remindersSuppressed ?? meta.reminderOverride?.suppressed ?? false,
     source: meta.source || "Staff",
@@ -133,5 +160,19 @@ export function mapApiAppointment(data: ApiAppointment): Appointment {
       createdAt: c.createdAt,
     })),
     contractTemplates: data.contractTemplates || [],
+    servicePhases: data.servicePhases || [],
+    resources: data.resources || [],
+    addOns: data.addOns || [],
+    recurringSeriesId: data.recurringSeriesId || null,
+    recurringOccurrenceIndex: data.recurringOccurrenceIndex ?? null,
+    termsAcceptance: data.termsAcceptance,
+    packageAccess: data.packageAccess,
+    membershipAccess: data.membershipAccess,
+    accountCreditAppliedCents: data.accountCreditAppliedCents,
+    paymentSummary: data.paymentSummary,
+    paymentAmountCents:
+      data.paymentSummary?.paidCents ??
+      meta.paymentAmountCents ??
+      0,
   };
 }
