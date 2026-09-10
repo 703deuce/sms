@@ -133,6 +133,8 @@ export type AppointmentTypesPageModel = {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions: Array<{ id: string; name: string }>;
   teamGroupOptions: Array<{ id: string; name: string }>;
+  teamUserOptions: Array<{ id: string; name: string; email: string; role: string }>;
+  currentUserId: string;
   resourceOptions: Array<{ id: string; name: string; quantity?: number }>;
   addOnOptions: Array<{
     id: string;

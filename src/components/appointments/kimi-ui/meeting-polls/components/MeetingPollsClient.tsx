@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Search, Vote, CheckCircle2, AlertCircle } from "lucide-react";
 import { MeetingPoll, PollStatus } from "../types";
 import { Button, Input, EmptyState } from "./ui";
@@ -8,6 +8,8 @@ import { PollRow } from "./PollCard";
 import { CreatePollModal } from "./CreatePollModal";
 import { PollDetailDrawer } from "./PollDetailDrawer";
 import { ConfirmTimeModal, DeletePollModal } from "./ConfirmActionModal";
+import { mapBackendPollToUi } from "@/features/appointments/kimi/meeting-polls/map-meeting-polls";
+import type { MeetingPoll as BackendPoll } from "@/lib/appointments/scheduling-capabilities";
 
 type LoadState = "loading" | "ready" | "error" | "empty";
 type Filter = "all" | PollStatus;
@@ -21,6 +23,11 @@ const LOCAL_NAV = [
   { label: "Meeting Polls", href: "/appointments/polls", active: true },
 ];
 
+function mapPolls(rows: BackendPoll[]): MeetingPoll[] {
+  const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+  return rows.map((poll) => mapBackendPollToUi(poll, { origin }));
+}
+
 export function MeetingPollsClient() {
   const [polls, setPolls] = useState<MeetingPoll[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -32,17 +39,23 @@ export function MeetingPollsClient() {
   const [deletingPoll, setDeletingPoll] = useState<MeetingPoll | null>(null);
   const [toast, setToast] = useState("");
 
-  // GET /api/appointments/meeting-polls
-  useEffect(() => {
+  const loadPolls = useCallback(async () => {
     setLoadState("loading");
-    fetch("/api/appointments/meeting-polls")
-      .then((r) => r.json())
-      .then((j) => {
-        setPolls(j.data || []);
-        setLoadState((j.data || []).length === 0 ? "empty" : "ready");
-      })
-      .catch(() => setLoadState("error"));
+    try {
+      const res = await fetch("/api/appointments/meeting-polls");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "load failed");
+      const mapped = mapPolls(j.data || []);
+      setPolls(mapped);
+      setLoadState(mapped.length === 0 ? "empty" : "ready");
+    } catch {
+      setLoadState("error");
+    }
   }, []);
+
+  useEffect(() => {
+    void loadPolls();
+  }, [loadPolls]);
 
   useEffect(() => {
     if (!toast) return;
@@ -67,18 +80,6 @@ export function MeetingPollsClient() {
     showToast("Poll link copied to clipboard.");
   }
 
-  async function persistPoll(poll: MeetingPoll) {
-    const res = await fetch("/api/appointments/meeting-polls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ poll }),
-    });
-    if (!res.ok) throw new Error("save failed");
-    const json = await res.json();
-    return json.data as MeetingPoll;
-  }
-
-  /** Book winner — from ConfirmTimeModal */
   async function bookWinningTime(poll: MeetingPoll, winningOptionId: string) {
     try {
       const res = await fetch("/api/appointments/meeting-polls", {
@@ -90,29 +91,39 @@ export function MeetingPollsClient() {
           optionId: winningOptionId,
         }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || "finalize failed");
-      const saved = json.data?.poll as MeetingPoll;
-      if (!saved) throw new Error("missing poll");
-      setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
-      if (selected?.id === poll.id) setSelected(saved);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "finalize failed");
+      }
+      await loadPolls();
       setConfirmingPoll(null);
+      setSelected(null);
       const winner = poll.options.find((o) => o.id === winningOptionId);
       const when = winner
-        ? new Date(winner.startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        ? new Date(winner.startsAt).toLocaleString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
         : "";
-      showToast(`Poll closed — ${when} booked and invites sent.`);
-    } catch {
-      showToast("Could not book the winning time.");
+      showToast(`Poll closed — ${when} booked.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Could not book the winning time.");
     }
   }
 
-  /** Close without booking */
   async function closeWithoutBooking(poll: MeetingPoll) {
     try {
-      const saved = await persistPoll({ ...poll, status: "closed" });
-      setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
-      if (selected?.id === poll.id) setSelected(saved);
+      const res = await fetch("/api/appointments/meeting-polls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close", pollId: poll.id }),
+      });
+      if (!res.ok) throw new Error("close failed");
+      await loadPolls();
+      if (selected?.id === poll.id) setSelected(null);
       showToast("Poll closed. The voting link no longer accepts responses.");
     } catch {
       showToast("Could not close poll.");
@@ -134,30 +145,29 @@ export function MeetingPollsClient() {
     }
   }
 
-  function handleCreate(poll: MeetingPoll) {
-    fetch("/api/appointments/meeting-polls", {
+  async function handleCreate(input: {
+    title: string;
+    appointmentTypeId: string;
+    options: Array<{ startsAt: string; endsAt: string }>;
+  }) {
+    const res = await fetch("/api/appointments/meeting-polls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: poll.title,
-        options: poll.options.map((o) => ({ startsAt: o.startsAt, endsAt: o.endsAt })),
-      }),
-    })
-      .then(() => fetch("/api/appointments/meeting-polls"))
-      .then((r) => r.json())
-      .then((j) => {
-        setPolls(j.data || []);
-        setCreateOpen(false);
-        showToast("Meeting poll created. Share the link to start collecting votes.");
-      })
-      .catch(() => showToast("Could not create poll."));
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || "Could not create poll.");
+    }
+    setCreateOpen(false);
+    await loadPolls();
+    showToast("Meeting poll created. Share the link to start collecting votes.");
   }
 
   const filteredOut = loadState === "ready" && polls.length > 0 && visible.length === 0;
 
   return (
     <div className="page">
-      {/* Page header */}
       <div className="page-header">
         <div>
           <h1>Meeting polls</h1>
@@ -170,7 +180,6 @@ export function MeetingPollsClient() {
         </Button>
       </div>
 
-      {/* Local navigation (Booking domain) */}
       <nav className="local-nav" aria-label="Booking navigation">
         {LOCAL_NAV.map((item) => (
           <a key={item.label} href={item.href} className={item.active ? "active" : ""} aria-current={item.active ? "page" : undefined}>
@@ -179,7 +188,6 @@ export function MeetingPollsClient() {
         ))}
       </nav>
 
-      {/* Control bar */}
       <div className="control-bar">
         <div className="search-box">
           <Search size={15} />
@@ -205,7 +213,6 @@ export function MeetingPollsClient() {
         </div>
       </div>
 
-      {/* Loading */}
       {loadState === "loading" && (
         <div className="card">
           <table className="table">
@@ -226,21 +233,19 @@ export function MeetingPollsClient() {
         </div>
       )}
 
-      {/* Error */}
       {loadState === "error" && (
         <div className="alert alert-error" role="alert">
           <AlertCircle size={17} style={{ flexShrink: 0, marginTop: 1 }} />
           <div>
             <div className="alert-title">Meeting polls couldn&apos;t be loaded</div>
             Check your connection and try again.{" "}
-            <Button variant="outline" size="sm" style={{ marginLeft: 8 }} onClick={() => setLoadState("loading")}>
+            <Button variant="outline" size="sm" style={{ marginLeft: 8 }} onClick={() => void loadPolls()}>
               Retry
             </Button>
           </div>
         </div>
       )}
 
-      {/* First-use empty */}
       {loadState === "ready" && polls.length === 0 && (
         <EmptyState
           icon={<Vote size={20} />}
@@ -254,7 +259,19 @@ export function MeetingPollsClient() {
         />
       )}
 
-      {/* No results */}
+      {loadState === "empty" && (
+        <EmptyState
+          icon={<Vote size={20} />}
+          title="No meeting polls yet"
+          body="Create a poll with a few proposed times, share the link, and let invitees vote. Transovo books the winning time automatically."
+          action={
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus size={15} /> Create your first poll
+            </Button>
+          }
+        />
+      )}
+
       {filteredOut && (
         <EmptyState
           icon={<Search size={20} />}
@@ -268,7 +285,6 @@ export function MeetingPollsClient() {
         />
       )}
 
-      {/* Table */}
       {loadState === "ready" && visible.length > 0 && (
         <div className="card">
           <table className="table">
@@ -297,7 +313,6 @@ export function MeetingPollsClient() {
         </div>
       )}
 
-      {/* Modals / drawer / toast */}
       {createOpen && (
         <CreatePollModal onClose={() => setCreateOpen(false)} onCreate={handleCreate} />
       )}

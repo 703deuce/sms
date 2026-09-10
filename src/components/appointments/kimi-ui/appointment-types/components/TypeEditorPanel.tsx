@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
-import TypePublishingSections from "./TypePublishingSections";
+import TypePublishingSections, { type TeamUserOption } from "./TypePublishingSections";
 import { BookingTypeKindPicker } from "./BookingTypeKindPicker";
 import { TypeResourcesSection } from "./TypeResourcesSection";
 import { TypeAddOnsSection } from "./TypeAddOnsSection";
@@ -24,6 +24,8 @@ interface Props {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions?: Array<{ id: string; name: string }>;
   teamGroupOptions?: Array<{ id: string; name: string }>;
+  teamUserOptions?: TeamUserOption[];
+  currentUserId?: string;
   resourceOptions?: Array<{ id: string; name: string; quantity?: number }>;
   addOnOptions?: Array<{ id: string; name: string; priceCents?: number }>;
   categoryOptions?: Array<{ id: string; name: string }>;
@@ -53,6 +55,8 @@ export default function TypeEditorPanel({
   connectedPaymentProviders,
   namedScheduleOptions,
   teamGroupOptions,
+  teamUserOptions = [],
+  currentUserId,
   resourceOptions = [],
   addOnOptions = [],
   categoryOptions = [],
@@ -293,6 +297,8 @@ export default function TypeEditorPanel({
           form={form}
           namedScheduleOptions={namedScheduleOptions}
           teamGroupOptions={teamGroupOptions}
+          teamUserOptions={teamUserOptions}
+          currentUserId={currentUserId}
           onFormChange={onFormChange}
         />
 

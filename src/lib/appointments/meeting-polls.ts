@@ -1,17 +1,28 @@
 import "server-only";
 
 import { randomBytes } from "crypto";
-import { getPrisma } from "@/lib/db";
 import { loadAppointmentPlatformConfig, saveAppointmentPlatformConfig } from "@/lib/appointments/settings";
 import type { MeetingPoll } from "@/lib/appointments/scheduling-capabilities";
+import type { AppointmentTypeConfig } from "@/lib/appointments/types";
+import { listAppointmentTypes } from "@/lib/appointments/booking-platform";
 
-export function meetingPollShareUrl(baseUrl: string, pollId: string) {
-  return `${baseUrl.replace(/\/$/, "")}/poll/${pollId}`;
-}
+type AppointmentTypeRow = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  config?: AppointmentTypeConfig;
+};
+import { assertEventTypeAccess } from "@/lib/appointments/org-permissions";
+import { assertPollManageAccess } from "@/lib/appointments/meeting-poll-access";
 
 export async function listMeetingPolls(workspaceId: string): Promise<MeetingPoll[]> {
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   return (platform as { meetingPolls?: MeetingPoll[] }).meetingPolls || [];
+}
+
+export async function getMeetingPoll(workspaceId: string, pollId: string): Promise<MeetingPoll | null> {
+  const polls = await listMeetingPolls(workspaceId);
+  return polls.find((p) => p.id === pollId) || null;
 }
 
 export async function saveMeetingPoll(workspaceId: string, poll: MeetingPoll) {
@@ -49,14 +60,13 @@ export function createMeetingPoll(input: {
   appointmentTypeId?: string;
   options: Array<{ startsAt: string; endsAt: string }>;
 }): MeetingPoll {
-  const id = `poll_${randomBytes(8).toString("hex")}`;
   return {
-    id,
+    id: `poll_${randomBytes(8).toString("hex")}`,
     workspaceId: input.workspaceId,
     title: input.title,
     appointmentTypeId: input.appointmentTypeId,
     options: input.options.map((o, i) => ({
-      id: `opt_${i}`,
+      id: `opt_${i}_${randomBytes(4).toString("hex")}`,
       startsAt: o.startsAt,
       endsAt: o.endsAt,
       votes: 0,
@@ -68,71 +78,36 @@ export function createMeetingPoll(input: {
 
 export async function finalizeMeetingPollBooking(
   workspaceId: string,
+  userId: string,
+  email: string | undefined,
   pollId: string,
-  optionId: string,
-  input?: {
-    contactId?: string;
-    phone?: string;
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-  },
+  winningOptionId: string,
 ) {
-  const polls = await listMeetingPolls(workspaceId);
-  const poll = polls.find((p) => p.id === pollId);
+  const poll = await getMeetingPoll(workspaceId, pollId);
   if (!poll) throw new Error("Poll not found");
+  if (poll.status !== "open") throw new Error("Poll is not open for booking");
 
-  if (poll.status === "booked" && poll.bookedAppointmentId) {
-    return { poll, appointmentId: poll.bookedAppointmentId, created: false };
-  }
+  await assertPollManageAccess(workspaceId, userId, email, poll);
 
-  if (poll.status !== "open") {
-    throw new Error("This poll is no longer open for booking");
-  }
-
-  const option = poll.options.find((o) => o.id === optionId);
-  if (!option) throw new Error("Selected time is not part of this poll");
-
-  const prisma = getPrisma();
-  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  const option = poll.options.find((o) => o.id === winningOptionId);
+  if (!option) throw new Error("Invalid winning time option");
 
   let serviceName = poll.title;
   let serviceId = poll.appointmentTypeId;
-  let durationMinutes =
-    Math.max(1, Math.round((new Date(option.endsAt).getTime() - new Date(option.startsAt).getTime()) / 60_000)) ||
-    30;
+  let durationMinutes = Math.max(
+    15,
+    Math.round(
+      (new Date(option.endsAt).getTime() - new Date(option.startsAt).getTime()) / 60000,
+    ),
+  );
 
   if (poll.appointmentTypeId) {
-    const svc = await prisma.voiceService.findFirst({
-      where: { id: poll.appointmentTypeId, workspaceId },
-    });
-    if (svc) {
-      serviceName = svc.name;
-      serviceId = svc.id;
-      durationMinutes = svc.durationMinutes || durationMinutes;
-    }
-  }
-
-  let phone = input?.phone?.trim() || platform.businessPhone?.trim() || "";
-  let email = input?.email?.trim();
-  let firstName = input?.firstName?.trim() || "Meeting";
-  let lastName = input?.lastName?.trim() || "Poll";
-  let contactId = input?.contactId;
-
-  if (contactId) {
-    const contact = await prisma.contact.findFirst({
-      where: { id: contactId, workspaceId },
-      select: { phone: true, email: true, firstName: true, lastName: true },
-    });
-    if (!contact) throw new Error("Contact not found");
-    phone = contact.phone || phone;
-    email = contact.email || email;
-    firstName = contact.firstName || firstName;
-    lastName = contact.lastName || lastName;
-  }
-
-  if (!phone) {
-    throw new Error("A customer phone number is required to book this meeting");
+    const types = (await listAppointmentTypes(workspaceId)) as AppointmentTypeRow[];
+    const type = types.find((t) => t.id === poll.appointmentTypeId);
+    if (!type) throw new Error("Linked meeting type not found");
+    serviceName = type.name;
+    serviceId = type.id;
+    durationMinutes = type.durationMinutes || durationMinutes;
   }
 
   const { createPlatformAppointment } = await import("@/lib/appointments/booking-platform");
@@ -141,26 +116,54 @@ export async function finalizeMeetingPollBooking(
     serviceName,
     startsAt: option.startsAt,
     durationMinutes,
-    phone,
-    email,
-    firstName,
-    lastName,
-    contactId,
+    phone: "+15555550100",
+    firstName: "Meeting",
+    lastName: "Poll",
+    notes: `Booked from meeting poll: ${poll.title}`,
     source: "admin",
     skipSms: true,
-    notes: `Booked from meeting poll ${pollId}`,
+    status: "confirmed",
   });
 
   const appointmentId = String(result.appointmentId || "");
-  if (!appointmentId) throw new Error("That time is no longer available");
+  if (!appointmentId) throw new Error("Failed to create appointment from poll");
 
-  const bookedPoll: MeetingPoll = {
+  const updated: MeetingPoll = {
     ...poll,
     status: "booked",
-    winningOptionId: optionId,
     bookedAppointmentId: appointmentId,
   };
-  await saveMeetingPoll(workspaceId, bookedPoll);
+  await saveMeetingPoll(workspaceId, updated);
+  return { poll: updated, appointmentId };
+}
 
-  return { poll: bookedPoll, appointmentId, created: true };
+export async function closeMeetingPoll(
+  workspaceId: string,
+  userId: string,
+  email: string | undefined,
+  pollId: string,
+) {
+  const poll = await getMeetingPoll(workspaceId, pollId);
+  if (!poll) throw new Error("Poll not found");
+  await assertPollManageAccess(workspaceId, userId, email, poll);
+  if (poll.status !== "open") throw new Error("Poll is already closed");
+  const updated = { ...poll, status: "closed" as const };
+  await saveMeetingPoll(workspaceId, updated);
+  return updated;
+}
+
+export async function assertPollCreateAccess(
+  workspaceId: string,
+  userId: string,
+  email: string | undefined,
+  appointmentTypeId?: string,
+): Promise<void> {
+  if (!appointmentTypeId) throw new Error("Meeting type is required");
+  const types = (await listAppointmentTypes(workspaceId)) as AppointmentTypeRow[];
+  const type = types.find((t) => t.id === appointmentTypeId);
+  if (!type) throw new Error("Meeting type not found");
+  if (type.config?.bookingTypeKind !== "MEETING") {
+    throw new Error("Polls can only use Meeting booking types");
+  }
+  await assertEventTypeAccess(workspaceId, userId, email, type.config || {}, "book");
 }

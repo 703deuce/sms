@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CategoryManagerDrawer } from "@/components/appointments/category-manager-drawer";
 import AppointmentTypesView from "@/components/appointments/kimi-ui/appointment-types/page";
 import {
   buildSavePayload,
@@ -83,19 +82,22 @@ export function AppointmentTypesConnected() {
     Array<{ id: string; name: string; quantity?: number }>
   >([]);
   const [addOnOptions, setAddOnOptions] = useState<
-    Array<{ id: string; name: string; priceCents?: number; durationDeltaMinutes?: number }>
+    Array<{ id: string; name: string; priceCents?: number }>
   >([]);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [intakeFormOptions, setIntakeFormOptions] = useState<
     Array<{ id: string; name: string; active?: boolean }>
   >([]);
-  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
+  const [teamUserOptions, setTeamUserOptions] = useState<
+    Array<{ id: string; name: string; email: string; role: string }>
+  >([]);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
-      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes, categoriesRes, intakeRes] = await Promise.all([
+      const [typesRes, settingsRes, paymentsRes, groupsRes, resourcesRes, addOnsRes, categoriesRes, intakeRes, teamRes] = await Promise.all([
         fetch("/api/appointments/types"),
         fetch("/api/appointments/settings"),
         fetch("/api/merchant-payments/status"),
@@ -104,6 +106,7 @@ export function AppointmentTypesConnected() {
         fetch("/api/appointments/service-booking/add-ons"),
         fetch("/api/appointments/service-booking/categories"),
         fetch("/api/appointments/service-booking/intake-forms?targetKind=appointment"),
+        fetch("/api/team"),
       ]);
       if (!typesRes.ok) throw new Error("types failed");
       const typesJson = await typesRes.json();
@@ -112,6 +115,20 @@ export function AppointmentTypesConnected() {
       setApiTypes(rows);
       setWorkspaceSlug(settingsJson.workspace?.slug || "");
       setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled));
+      setCurrentUserId(settingsJson.currentUser?.id || "");
+      if (teamRes.ok) {
+        const teamJson = await teamRes.json();
+        setTeamUserOptions(
+          ((teamJson.data || []) as Array<{ id: string; name: string; email: string; role: string }>).map(
+            (m) => ({
+              id: m.id,
+              name: m.name || m.email,
+              email: m.email,
+              role: m.role,
+            }),
+          ),
+        );
+      }
       setNamedScheduleOptions(
         ((settingsJson.data?.namedSchedules || []) as Array<{ id: string; name: string }>).map(
           (s) => ({ id: s.id, name: s.name }),
@@ -137,20 +154,9 @@ export function AppointmentTypesConnected() {
       if (addOnsRes.ok) {
         const addOnsJson = await addOnsRes.json();
         setAddOnOptions(
-          ((addOnsJson.data || []) as Array<{
-            id: string;
-            name: string;
-            priceCents?: number;
-            durationDeltaMinutes?: number;
-            active?: boolean;
-          }>)
+          ((addOnsJson.data || []) as Array<{ id: string; name: string; priceCents?: number; active?: boolean }>)
             .filter((a) => a.active !== false)
-            .map((a) => ({
-              id: a.id,
-              name: a.name,
-              priceCents: a.priceCents,
-              durationDeltaMinutes: a.durationDeltaMinutes,
-            })),
+            .map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents })),
         );
       }
       if (categoriesRes.ok) {
@@ -422,6 +428,8 @@ export function AppointmentTypesConnected() {
       addOnOptions,
       categoryOptions,
       intakeFormOptions,
+      teamUserOptions,
+      currentUserId,
     };
   }, [
     bookingBaseUrl,
@@ -443,6 +451,8 @@ export function AppointmentTypesConnected() {
     addOnOptions,
     categoryOptions,
     intakeFormOptions,
+    teamUserOptions,
+    currentUserId,
     types,
     visibleTypes,
     workspaceSlug,
@@ -469,8 +479,6 @@ export function AppointmentTypesConnected() {
       onManageAvailability: () => router.push("/appointments/availability"),
       onManageStaff: () => router.push("/appointments/staff"),
       onManageLocations: () => router.push("/appointments/locations"),
-      onManageCategories: () => setCategoryDrawerOpen(true),
-      onCreateCategory: () => setCategoryDrawerOpen(true),
       onReorderTypes: reorderTypes,
       onMoveType: moveType,
       onRetry: load,
@@ -481,15 +489,5 @@ export function AppointmentTypesConnected() {
   if (loading) return <TypesLoading />;
   if (failed || !model) return <TypesError onRetry={load} />;
 
-  return (
-    <>
-      <AppointmentTypesView model={model} actions={actions} />
-      <CategoryManagerDrawer
-        open={categoryDrawerOpen}
-        onClose={() => setCategoryDrawerOpen(false)}
-        onCategoriesChange={setCategoryOptions}
-        onSelectCategoryId={(categoryId) => updateForm("categoryId", categoryId)}
-      />
-    </>
-  );
+  return <AppointmentTypesView model={model} actions={actions} />;
 }
