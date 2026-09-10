@@ -135,7 +135,9 @@ export function SlotDiagnosticsPanel({
             disabled={Boolean(context?.lockServiceName)}
             onChange={(e) => setServiceName(e.target.value)}
           >
-            {types.length === 0 ? (
+            {types.length === 0 && serviceName ? (
+              <option value={serviceName}>{serviceName}</option>
+            ) : types.length === 0 ? (
               <option value="">No booking types</option>
             ) : (
               types.map((t) => (
