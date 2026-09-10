@@ -9,6 +9,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const data = await getAvailability(auth.workspaceId, {
       serviceName: searchParams.get("serviceName") || undefined,
+      serviceId: searchParams.get("serviceId") || undefined,
+      staffId: searchParams.get("staffId") || undefined,
+      locationId: searchParams.get("locationId") || undefined,
+      durationMinutes: searchParams.get("durationMinutes")
+        ? Number(searchParams.get("durationMinutes"))
+        : undefined,
       daysAhead: Number(searchParams.get("daysAhead") || 14),
     });
     return NextResponse.json({ data });

@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-09-10",
+  "batch": "8E",
+  "wavesReconciled": "8D-1 through 8D-7",
+  "totalMasterRows": 308,
+  "v1Rows": 295,
+  "v2Rows": 11,
+  "statusCounts": {
+    "V1_COMPLETE": 257,
+    "V1_COMPLETE_RUNTIME_ONLY": 32,
+    "V1_CONTEXTUAL_FLOW_GAP": 1,
+    "V2_DEFERRED": 12,
+    "V1_PROVIDER_BLOCKED": 6
+  },
+  "backendReadyUiMissing": 0,
+  "uiPresentBackendGap": 0,
+  "commerceUniqueV1Features": 15,
+  "tempRoutesStillUniqueV1": 4,
+  "tempRoutesReadyForRetirement": 17,
+  "tempRoutesDiscovered": 22,
+  "residualImplementationRows": 1,
+  "implementationGapCount": 1,
+  "unassignedError": 0,
+  "outOfScopeError": 0,
+  "readyForRouteConvergence": "NO",
+  "readyForMasterBrowserCertification": "NO"
+}
