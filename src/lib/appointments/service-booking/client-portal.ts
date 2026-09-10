@@ -99,6 +99,8 @@ export async function resolveClientPortalSession(token: string) {
       endsAt: a.endsAt,
       status: a.status,
       metadata: { manageAppointmentUrl: a.manageAppointmentUrl },
+      manageIcsUrl: a.manageIcsUrl,
+      recurringSeriesId: a.recurringSeriesId,
       staffName: a.staffName,
       locationLabel: a.locationLabel,
       meetingLink: a.meetingLink,
@@ -111,6 +113,21 @@ export async function resolveClientPortalSession(token: string) {
         ...g,
         code: g.code && g.code.length > 4 ? `•••• ${g.code.slice(-4)}` : g.code ? "••••" : undefined,
       })),
+      memberships: entitlements.memberships.map((m: (typeof entitlements.memberships)[number]) => {
+        const meta = (m.metadata || {}) as {
+          cancelAtPeriodEnd?: boolean;
+          cancelRequestedAt?: string;
+        };
+        return {
+          id: m.id,
+          status: meta.cancelAtPeriodEnd ? "cancellation_scheduled" : m.status,
+          product: m.product,
+          currentPeriodEnd: m.currentPeriodEnd?.toISOString(),
+          pausedUntil: m.pausedUntil?.toISOString(),
+          cancelAtPeriodEnd: Boolean(meta.cancelAtPeriodEnd),
+          stripeSubscriptionId: m.stripeSubscriptionId,
+        };
+      }),
     },
     packagePurchaseHistory: packageLedgers
       .filter((e: (typeof packageLedgers)[number]) => e.kind === "purchase")

@@ -278,6 +278,7 @@ export async function createPlatformAppointment(
       priceCents?: number;
       displayOrder?: number;
     }>;
+    contactId?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -378,13 +379,23 @@ export async function createPlatformAppointment(
 
   const isStaffQuickCreate = input.source === "admin" && input.skipSms === true;
 
-  const contactId = await resolveOrCreateContact(workspaceId, {
-    firstName: input.firstName,
-    lastName: input.lastName,
-    phone: input.phone,
-    email: input.email,
-    consentSource: input.smsConsent ? "appointment_booking_sms" : "appointment_booking",
-  });
+  let contactId: string;
+  if (input.contactId) {
+    const existing = await prisma.contact.findFirst({
+      where: { id: input.contactId, workspaceId },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Contact not found");
+    contactId = input.contactId;
+  } else {
+    contactId = await resolveOrCreateContact(workspaceId, {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      email: input.email,
+      consentSource: input.smsConsent ? "appointment_booking_sms" : "appointment_booking",
+    });
+  }
 
   const confirmToken = publicToken();
   const cancelToken = publicToken();

@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 110
+**Total residual rows:** 97
 
 ## /appointments
 
@@ -320,14 +320,6 @@
 
 ## /appointments/gift-cards
 
-### 7-14 — Portal: gift balances
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/gift-cards
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=null
-
 ### 8-16 — Gift balance redemption at checkout
 - **Gap type:** V1_ADMIN_UI_GAP
 - **Section:** /appointments/gift-cards
@@ -336,39 +328,7 @@
 - **Priority:** P2
 - **Evidence:** /appointments/gift-cards; routeExists=true; backend=false
 
-### 8-17 — Gift balance redemption history
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/gift-cards
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=false
-
 ## /appointments/memberships
-
-### 8-10 — Membership lifecycle (pause/cancel/past_due)
-- **Gap type:** V1_BACKEND_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Membership customer pause/cancel API
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** portal view-only; routeExists=true; backend=false
-
-### 7-13 — Portal: memberships
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=null
-
-### 8-9 — Membership subscriptions
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/memberships
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=false
 
 ### 8-11 — Membership failed-payment suspension
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -424,14 +384,6 @@
 
 ## /appointments/packages
 
-### 7-15 — Portal: package usage history
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=null
-
 ### 8-1 — Packages & memberships hub
 - **Gap type:** V1_ADMIN_UI_GAP
 - **Section:** /appointments/packages
@@ -447,14 +399,6 @@
 - **Backend:** YES / PARTIAL
 - **Priority:** P2
 - **Evidence:** /appointments/packages; routeExists=true; backend=false
-
-### 8-4 — Package credits & ledger
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=true; backend=false
 
 ### 8-5 — Package lifecycle (restore on cancel)
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -876,56 +820,6 @@
 - **Priority:** P2
 - **Evidence:** NO; Create / edit workflow; routeExists=null; backend=false
 
-## CUSTOMER_PORTAL
-
-### 7-18 — Portal saved payment methods
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal add/remove saved card (Stripe Elements)
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** display only; routeExists=null; backend=null
-
-### 8-29 — Saved cards
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal saved card management
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** setup API exists, no portal UI; routeExists=null; backend=null
-
-### 7-4 — Recurring series cancel scopes
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=null; backend=true
-
-### 7-5 — Recurring series reschedule scopes
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=null; backend=true
-
-### 7-8 — ICS calendar download
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=null; backend=null
-
-### 7-19 — Legacy confirm / cancel / reschedule tokens
-- **Gap type:** V1_PORTAL_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Portal depth incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** /portal; routeExists=null; backend=null
-
 ## PARITY_TEMP
 
 ### 3-21 — Dynamic pricing by slot
@@ -952,7 +846,7 @@
 |-------|--------|------------:|
 | 8D-1 | Route convergence + wrong-placement (commerce hub → canonical pages) | 0 |
 | 8D-2 | Public booking payment + class/event + AI public flows | 0 |
-| 8D-3 | Portal depth (saved cards, membership self-service, household) | 12 |
+| 8D-3 | Portal depth (saved cards, membership self-service, household) | 0 |
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |
 | 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |
-| 8D-6 | Backend gaps (POS tax, invoice email/PDF, poll booking) | 6 |
+| 8D-6 | Backend gaps (POS tax, invoice email/PDF, poll booking) | 5 |

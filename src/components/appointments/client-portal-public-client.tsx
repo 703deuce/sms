@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PortalMembershipActions } from "@/components/appointments/portal-membership-actions";
+import { PortalPaymentMethodSection } from "@/components/appointments/portal-payment-method-section";
 
 type PortalSection = "home" | "appointments" | "products" | "payments" | "documents" | "profile";
 
@@ -14,6 +16,8 @@ type AppointmentRow = {
   meetingLink?: string | null;
   pendingApproval?: boolean;
   metadata?: { manageAppointmentUrl?: string };
+  manageIcsUrl?: string;
+  recurringSeriesId?: string | null;
   paymentSummary?: {
     balanceDueCents?: number;
     totalPriceCents?: number;
@@ -24,7 +28,7 @@ type AppointmentRow = {
 
 type PortalData = {
   workspace?: { slug?: string; name?: string; logoUrl?: string | null };
-  contact?: { firstName: string; lastName: string; email: string; phone: string };
+  contact?: { id?: string; firstName: string; lastName: string; email: string; phone: string };
   appointments: AppointmentRow[];
   upcomingAppointments?: AppointmentRow[];
   pastAppointments?: AppointmentRow[];
@@ -43,6 +47,8 @@ type PortalData = {
       status?: string;
       product?: { name?: string; billingInterval?: string };
       currentPeriodEnd?: string;
+      pausedUntil?: string;
+      cancelAtPeriodEnd?: boolean;
     }>;
   };
   packageUsageHistory?: Array<{
@@ -109,7 +115,13 @@ type PortalData = {
   household?: {
     id: string;
     name?: string | null;
-    members: Array<{ id: string; displayName?: string | null; role?: string | null }>;
+    members: Array<{
+      id: string;
+      contactId?: string | null;
+      displayName?: string | null;
+      role?: string | null;
+      isSelf?: boolean;
+    }>;
   } | null;
   workspaceSlug?: string;
 };
@@ -117,6 +129,9 @@ type PortalData = {
 type PaymentMethodInfo = {
   hasSavedCard: boolean;
   card?: { brand?: string; last4?: string; expMonth?: number; expYear?: number } | null;
+  stripePublishableKey?: string | null;
+  stripeAccount?: string | null;
+  providerConfigured?: boolean;
 };
 
 function formatMoney(cents: number) {
@@ -339,6 +354,12 @@ function ClientPortalTokenView({ token }: { token: string }) {
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
 
+  const loadPaymentMethods = useCallback(async () => {
+    const res = await fetch(`/api/public/portal/${token}/payment-methods`);
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) setPaymentMethod(json.data as PaymentMethodInfo);
+  }, [token]);
+
   const load = useCallback(async () => {
     setError(null);
     const res = await fetch(`/api/public/portal/${token}`);
@@ -357,18 +378,13 @@ function ClientPortalTokenView({ token }: { token: string }) {
         phone: resolved.contact.phone || "",
       });
     }
-  }, [token]);
+    await loadPaymentMethods();
+  }, [loadPaymentMethods, token]);
 
   useEffect(() => {
     void load().catch((err) =>
       setError(err instanceof Error ? err.message : "Failed to load"),
     );
-    void fetch(`/api/public/portal/${token}/payment-methods`)
-      .then(async (res) => {
-        const json = await res.json().catch(() => ({}));
-        if (res.ok) setPaymentMethod(json.data as PaymentMethodInfo);
-      })
-      .catch(() => undefined);
     void fetch(`/api/public/portal/${token}/wallet`)
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
@@ -508,7 +524,16 @@ function ClientPortalTokenView({ token }: { token: string }) {
                     href={nextAppointment.metadata.manageAppointmentUrl}
                     className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
                   >
-                    View
+                    Manage
+                  </a>
+                ) : null}
+                {nextAppointment.manageIcsUrl ? (
+                  <a
+                    href={nextAppointment.manageIcsUrl}
+                    className="rounded-md border px-3 py-1.5 text-sm"
+                    download
+                  >
+                    Add to calendar
                   </a>
                 ) : null}
                 {nextAppointment.meetingLink ? (
@@ -601,6 +626,9 @@ function ClientPortalTokenView({ token }: { token: string }) {
                       <p className="text-muted-foreground">{formatDate(a.startsAt)}</p>
                       {a.staffName ? <p className="text-muted-foreground">{a.staffName}</p> : null}
                       {a.locationLabel ? <p className="text-muted-foreground">{a.locationLabel}</p> : null}
+                      {a.recurringSeriesId ? (
+                        <p className="text-xs text-muted-foreground">Recurring series</p>
+                      ) : null}
                     </div>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{a.status}</span>
                   </div>
@@ -611,6 +639,11 @@ function ClientPortalTokenView({ token }: { token: string }) {
                     {a.metadata?.manageAppointmentUrl ? (
                       <a href={a.metadata.manageAppointmentUrl} className="text-sm font-medium text-primary underline">
                         Manage
+                      </a>
+                    ) : null}
+                    {a.manageIcsUrl ? (
+                      <a href={a.manageIcsUrl} className="text-sm text-muted-foreground underline" download>
+                        Add to calendar
                       </a>
                     ) : null}
                     {a.meetingLink ? (
@@ -676,6 +709,16 @@ function ClientPortalTokenView({ token }: { token: string }) {
                 })}
               </ul>
             )}
+            {(data.packagePurchaseHistory || []).length > 0 ? (
+              <HistoryTable
+                title="Purchase history"
+                rows={data.packagePurchaseHistory!.map((e) => ({
+                  date: formatDate(e.createdAt),
+                  activity: e.productName || "Package purchase",
+                  amount: typeof e.delta === "object" ? JSON.stringify(e.delta) : String(e.delta ?? ""),
+                }))}
+              />
+            ) : null}
             {(data.packageUsageHistory || []).length > 0 ? (
               <HistoryTable
                 title="Credit history"
@@ -705,6 +748,12 @@ function ClientPortalTokenView({ token }: { token: string }) {
                     {m.currentPeriodEnd ? (
                       <p className="text-muted-foreground">Renews {formatShortDate(m.currentPeriodEnd)}</p>
                     ) : null}
+                    <PortalMembershipActions
+                      portalToken={token}
+                      membership={m}
+                      onUpdated={() => void load()}
+                      onManagePayment={() => setSection("payments")}
+                    />
                   </li>
                 ))}
               </ul>
@@ -762,21 +811,11 @@ function ClientPortalTokenView({ token }: { token: string }) {
             ) : null}
           </section>
 
-          <section className="rounded-lg border p-4 text-sm">
-            <h2 className="font-semibold">Payment methods</h2>
-            {paymentMethod?.hasSavedCard && paymentMethod.card ? (
-              <p className="mt-2 text-muted-foreground">
-                {(paymentMethod.card.brand || "Card").toUpperCase()} •••• {paymentMethod.card.last4}
-                {paymentMethod.card.expMonth && paymentMethod.card.expYear
-                  ? ` · Expires ${String(paymentMethod.card.expMonth).padStart(2, "0")}/${paymentMethod.card.expYear}`
-                  : ""}
-              </p>
-            ) : (
-              <p className="mt-2 text-muted-foreground">
-                No saved payment method. Add one during your next paid booking if the business supports it.
-              </p>
-            )}
-          </section>
+          <PortalPaymentMethodSection
+            portalToken={token}
+            paymentMethod={paymentMethod}
+            onUpdated={() => void loadPaymentMethods()}
+          />
 
           <section>
             <h2 className="text-sm font-semibold">Payment history</h2>
@@ -919,11 +958,21 @@ function ClientPortalTokenView({ token }: { token: string }) {
             <section className="rounded-lg border p-4 text-sm">
               <h2 className="font-semibold">Household</h2>
               <p className="mt-1 text-muted-foreground">{data.household.name || "Family account"}</p>
-              <ul className="mt-3 space-y-1">
+              <ul className="mt-3 space-y-2">
                 {data.household.members.map((m) => (
-                  <li key={m.id}>
-                    {m.displayName || "Member"}
-                    {m.role ? ` · ${m.role}` : ""}
+                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {m.displayName || "Member"}
+                      {m.role ? ` · ${m.role}` : ""}
+                    </span>
+                    {m.contactId && !m.isSelf && slug ? (
+                      <a
+                        href={`${bookHref}?bookFor=${encodeURIComponent(m.contactId)}&portal=${encodeURIComponent(token)}`}
+                        className="text-sm font-medium text-primary underline"
+                      >
+                        Book appointment
+                      </a>
+                    ) : null}
                   </li>
                 ))}
               </ul>

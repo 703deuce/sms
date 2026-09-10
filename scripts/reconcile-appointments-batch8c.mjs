@@ -87,6 +87,12 @@ function routeExists(route) {
     if (parent.startsWith("/pay/") && existsSync(join(ROOT, "src/app/(public)/pay/[linkId]/page.tsx"))) {
       return true;
     }
+    if (parent.startsWith("/portal/") && existsSync(join(ROOT, "src/app/(public)/portal/[token]/page.tsx"))) {
+      return true;
+    }
+    if (clean === "/portal" && existsSync(join(ROOT, "src/app/(public)/portal/[token]/page.tsx"))) {
+      return true;
+    }
     return routeExists(parent);
   }
   return candidates.some((p) => existsSync(p));
@@ -154,9 +160,19 @@ const OVERRIDES = {
   "13-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 duplicate of 5-29 AI chat" },
   "13-5": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 duplicate of 5-30 email AI" },
   "20-4": { status: "V1_COMPLETE_RUNTIME_ONLY", gap: "", evidence: "Batch 8D-2 /api/public/book/[slug]/diagnostics API" },
-  // Portal gaps (post 8B-9)
-  "7-18": { status: "V1_PORTAL_UI_GAP", gap: "Portal add/remove saved card (Stripe Elements)", evidence: "display only", priority: "P1" },
-  "8-29": { status: "V1_PORTAL_UI_GAP", gap: "Portal saved card management", evidence: "setup API exists, no portal UI", priority: "P1" },
+  // Batch 8D-3 — portal residual completion
+  "7-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 manage recurring cancel scopes + portal manage links" },
+  "7-5": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 manage recurring reschedule scopes UI" },
+  "7-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 /api/public/manage/[token]/ics + portal Add to calendar" },
+  "7-13": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal membership lifecycle actions" },
+  "7-14": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal gift balances + redemption history" },
+  "7-15": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal package usage + purchase history" },
+  "7-18": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 PortalPaymentMethodSection Stripe add/remove" },
+  "7-19": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 legacy token pages promote manage link" },
+  "8-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal package credits ledger display" },
+  "8-9": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal membership subscriptions self-service" },
+  "8-17": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal gift redemption history" },
+  "8-29": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 portal saved card management UI" },
   // Batch 8D-1 — canonical absorption complete (temp routes preserved)
   "3-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 CategoryManagerDrawer on /appointments/types" },
   "3-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-1 /appointments/booking/forms ContractsAdminClient" },
@@ -179,7 +195,7 @@ const OVERRIDES = {
   "9-6": { status: "V1_BACKEND_GAP", gap: "Invoice email send", evidence: "gap queue 8B-6", priority: "P2" },
   "9-7": { status: "V1_BACKEND_GAP", gap: "Invoice PDF export polish", evidence: "gap queue 8B-6", priority: "P2" },
   "13-2": { status: "V1_BACKEND_GAP", gap: "Poll vote → appointment booking", evidence: "gap queue 8B-7", priority: "P2" },
-  "8-10": { status: "V1_BACKEND_GAP", gap: "Membership customer pause/cancel API", evidence: "portal view-only", priority: "P2" },
+  "8-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-3 /api/public/portal/[token]/memberships lifecycle API" },
   // Admin UI gaps
   "2-8": { status: "V1_ADMIN_UI_GAP", gap: "Calendar staff lanes / colors", evidence: "calendar-connected partial", priority: "P1" },
   "2-9": { status: "V1_ADMIN_UI_GAP", gap: "Calendar drag-reschedule", evidence: "not wired", priority: "P1" },

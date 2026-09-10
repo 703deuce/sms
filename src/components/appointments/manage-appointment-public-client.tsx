@@ -69,6 +69,7 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
   const [rescheduleAt, setRescheduleAt] = useState("");
   const [showReschedule, setShowReschedule] = useState(false);
   const [recurringScope, setRecurringScope] = useState<"this" | "future" | "all">("this");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [intakeDrafts, setIntakeDrafts] = useState<Record<string, Record<string, string>>>({});
 
   async function reload() {
@@ -154,29 +155,7 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
   const isRecurring = Boolean(data.recurringSeriesId);
 
   function downloadIcs() {
-    if (!data?.startsAt || !data?.serviceName) return;
-    const start = new Date(data.startsAt);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    const fmt = (d: Date) =>
-      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-    const serviceName = data.serviceName;
-    const body = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "BEGIN:VEVENT",
-      `DTSTART:${fmt(start)}`,
-      `DTEND:${fmt(end)}`,
-      `SUMMARY:${serviceName}`,
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ].join("\r\n");
-    const blob = new Blob([body], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "appointment.ics";
-    a.click();
-    URL.revokeObjectURL(url);
+    window.location.href = `/api/public/manage/${token}/ics`;
   }
 
   return (
@@ -398,23 +377,71 @@ export default function ManageAppointmentPage({ token }: { token: string }) {
             type="button"
             disabled={busy || data.status === "canceled"}
             className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
-            onClick={() => {
-              const msg = isRecurring
-                ? "Cancel this appointment? Choose whether to cancel this visit only, this and future visits, or the entire series."
-                : "Cancel this appointment?";
-              if (!window.confirm(msg)) return;
-              void act({
-                action: "cancel",
-                recurringScope: isRecurring ? recurringScope : undefined,
-              });
-            }}
+            onClick={() => setShowCancelConfirm(true)}
           >
             Cancel
           </button>
         ) : null}
       </div>
 
-      {isRecurring && data.permissions?.cancel ? (
+      {showCancelConfirm ? (
+        <section className="rounded-lg border p-4 text-sm" role="dialog" aria-labelledby="cancel-heading">
+          <h2 id="cancel-heading" className="font-semibold">
+            {isRecurring ? "Cancel recurring appointments" : "Cancel appointment"}
+          </h2>
+          <p className="mt-2 text-muted-foreground">
+            {isRecurring
+              ? "Choose whether to cancel this visit only, this and future visits, or the entire series."
+              : "This appointment will be canceled. You can book a new time from the business booking page."}
+          </p>
+          {isRecurring ? (
+            <fieldset className="mt-3">
+              <legend className="font-medium">Apply cancellation to</legend>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {[
+                  { id: "this", label: "This visit only" },
+                  { id: "future", label: "This and future" },
+                  { id: "all", label: "Entire series" },
+                ].map((opt) => (
+                  <label key={opt.id} className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="cancel-scope"
+                      checked={recurringScope === opt.id}
+                      onChange={() => setRecurringScope(opt.id as "this" | "future" | "all")}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-md bg-destructive px-4 py-2 text-sm text-destructive-foreground disabled:opacity-50"
+              onClick={() =>
+                void act({
+                  action: "cancel",
+                  recurringScope: isRecurring ? recurringScope : undefined,
+                }).then(() => setShowCancelConfirm(false))
+              }
+            >
+              Confirm cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-4 py-2 text-sm"
+              onClick={() => setShowCancelConfirm(false)}
+            >
+              Keep appointment
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {isRecurring && data.permissions?.cancel && !showCancelConfirm ? (
         <fieldset className="rounded-lg border p-4 text-sm">
           <legend className="px-1 font-medium">Recurring series</legend>
           <div className="mt-2 flex flex-wrap gap-3">

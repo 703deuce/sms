@@ -29,6 +29,8 @@ export type PortalAppointmentRow = {
   meetingLink?: string | null;
   pendingApproval?: boolean;
   manageAppointmentUrl?: string;
+  manageIcsUrl?: string;
+  recurringSeriesId?: string | null;
   attendeeCount?: number;
   paymentSummary?: {
     totalPriceCents?: number;
@@ -96,8 +98,12 @@ export async function buildPortalCustomerPayload(
   });
 
   const appointmentRows: PortalAppointmentRow[] = appointments.map((a: VoiceAppointment) => {
-    const meta = (a.metadata || {}) as AppointmentMetadata & { pendingApproval?: boolean };
+    const meta = (a.metadata || {}) as AppointmentMetadata & {
+      pendingApproval?: boolean;
+      recurringSeriesId?: string;
+    };
     const meetingLink = meta.meetingUrl || meta.joinUrl || meta.eventUrl || null;
+    const manageToken = meta.manageAppointmentUrl?.match(/\/manage\/([^/?#]+)/)?.[1];
     return {
       id: a.id,
       serviceName: a.serviceName,
@@ -109,6 +115,8 @@ export async function buildPortalCustomerPayload(
       meetingLink,
       pendingApproval: Boolean(meta.pendingApproval),
       manageAppointmentUrl: meta.manageAppointmentUrl,
+      manageIcsUrl: manageToken ? `/api/public/manage/${manageToken}/ics` : undefined,
+      recurringSeriesId: meta.recurringSeriesId || null,
       attendeeCount: meta.attendeeCount,
       paymentSummary: {
         totalPriceCents: meta.totalPriceCents,
@@ -270,6 +278,7 @@ export async function buildPortalCustomerPayload(
             contactId: m.contactId,
             displayName: m.displayName,
             role: m.role,
+            isSelf: m.contactId === contactId,
           })),
         }
       : null,

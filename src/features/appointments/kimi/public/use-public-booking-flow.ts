@@ -45,6 +45,7 @@ function formatPrice(payment?: PaymentRequirement) {
 export type { PublicBookingFlowOptions } from "./types";
 
 export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
+  const { bookForContactId, portalToken } = options;
   const {
     slug,
     initialServiceId,
@@ -803,6 +804,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       utm: Object.keys(utm).length ? utm : undefined,
       emailOtpVerified: otpVerified || undefined,
       singleUseToken: effectiveSingleUseToken,
+      bookForContactId: bookForContactId || undefined,
+      portalToken: portalToken || undefined,
     };
     if (extraRecipients.length) {
       payload.extraRecipients = extraRecipients

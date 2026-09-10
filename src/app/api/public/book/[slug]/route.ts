@@ -729,11 +729,30 @@ export async function POST(request: Request, { params }: Params) {
     const startsAtDate = new Date(startsAt);
     const endsAtDate = new Date(startsAtDate.getTime() + effectiveDuration * 60_000);
 
-    const contactIdBeforeBook = await resolveContactIdByPhone(
+    let contactIdBeforeBook = await resolveContactIdByPhone(
       workspace.id,
       phone,
       body.email ? String(body.email) : undefined,
     );
+
+    try {
+      const { resolveAuthorizedBookForContact } = await import(
+        "@/lib/appointments/service-booking/portal-booking-context"
+      );
+      const authorizedBookFor = await resolveAuthorizedBookForContact({
+        workspaceId: workspace.id,
+        portalToken: body.portalToken ? String(body.portalToken) : undefined,
+        bookForContactId: body.bookForContactId ? String(body.bookForContactId) : undefined,
+      });
+      if (authorizedBookFor) {
+        contactIdBeforeBook = authorizedBookFor;
+      }
+    } catch (bookForErr) {
+      return NextResponse.json(
+        { error: bookForErr instanceof Error ? bookForErr.message : "Unauthorized booking context" },
+        { status: 403 },
+      );
+    }
     try {
       const { assertMemberAccessForBookingType } = await import(
         "@/lib/appointments/service-booking/membership-lifecycle"
@@ -904,6 +923,7 @@ export async function POST(request: Request, { params }: Params) {
       intakeResponses,
       customFieldValues,
       multiServiceLines,
+      contactId: contactIdBeforeBook || undefined,
     };
 
     if (

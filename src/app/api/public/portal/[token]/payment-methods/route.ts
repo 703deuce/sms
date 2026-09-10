@@ -4,8 +4,10 @@ import { resolveClientPortalSession } from "@/lib/appointments/service-booking";
 import {
   attachSavedPaymentMethod,
   createSavedCardSetupIntent,
+  detachSavedPaymentMethod,
   getSavedPaymentMethodForContact,
 } from "@/lib/merchant-payments/saved-cards";
+import { getMerchantPaymentStatus } from "@/lib/merchant-payments/service";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -47,12 +49,17 @@ export async function GET(_request: Request, { params }: Params) {
       }
     }
 
+    const merchant = await getMerchantPaymentStatus(resolved.session.workspaceId);
+    const stripeConnection = merchant.connections.find((c) => c.provider === "STRIPE");
+
     return NextResponse.json({
       data: {
         hasSavedCard: Boolean(saved?.defaultPaymentMethodId),
         paymentMethodId: saved?.defaultPaymentMethodId || null,
         card,
-        providerConfigured: Boolean(saved?.stripeCustomerId),
+        providerConfigured: Boolean(saved?.stripeCustomerId || stripeConnection?.canAcceptPayments),
+        stripePublishableKey: merchant.stripePublishableKey,
+        stripeAccount: stripeConnection?.merchantAccountId || null,
       },
     });
   } catch (err) {
@@ -86,6 +93,15 @@ export async function POST(request: Request, { params }: Params) {
         workspaceId: resolved.session.workspaceId,
         contactId: resolved.session.contactId,
         paymentMethodId,
+      });
+      return NextResponse.json({ data: result });
+    }
+
+    if (action === "detach") {
+      const result = await detachSavedPaymentMethod({
+        workspaceId: resolved.session.workspaceId,
+        contactId: resolved.session.contactId,
+        paymentMethodId: body.paymentMethodId ? String(body.paymentMethodId) : undefined,
       });
       return NextResponse.json({ data: result });
     }
