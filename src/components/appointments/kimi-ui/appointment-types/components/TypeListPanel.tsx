@@ -35,7 +35,7 @@ export default function TypeListPanel({
       <div className="p-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-[14.5px] font-semibold">All appointment types</h2>
-          <span className="text-[11px] font-semibold bg-[#eef0ff] text-[#5b4bff] rounded-full px-2 py-0.5">
+          <span className="text-[11px] font-semibold bg-[#eef0ff] text-[#147d74] rounded-full px-2 py-0.5">
             {totalCount}
           </span>
         </div>
@@ -59,7 +59,7 @@ export default function TypeListPanel({
               <div
                 key={t.id}
                 className={`flex items-center gap-1 rounded-xl ${
-                  selected ? "bg-[#f0efff] ring-1 ring-[#dcd9ff]" : "hover:bg-[#f7f8fb]"
+                  selected ? "bg-[#f0efff] ring-1 ring-[#dcd9ff]" : "hover:bg-[#f7f8fa]"
                 }`}
               >
                 {onMoveType ? (

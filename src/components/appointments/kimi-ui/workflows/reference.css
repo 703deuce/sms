@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --background: #f6f7f9;

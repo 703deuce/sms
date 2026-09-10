@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 /* Transovo — Appointments List (golden list archetype)
    Professional, calm, medium-density operational SaaS. */
@@ -13,7 +14,7 @@
   --tv-accent: #3b4ee6;
   --tv-accent-hover: #2f3fd0;
   --tv-accent-foreground: #ffffff;
-  --tv-accent-soft: #eef0fe;
+  --tv-accent-soft: #dcefeb;
   --tv-ring: rgba(59, 78, 230, 0.35);
   --tv-danger: #d92d20;
   --tv-danger-hover: #b42318;
@@ -62,7 +63,7 @@
 }
 .tv-subtitle {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   color: var(--tv-text-muted);
 }
 .tv-pageheader__actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -108,7 +109,7 @@
   box-shadow: var(--tv-shadow-sm);
 }
 .tv-btn--danger:hover { background: var(--tv-danger-hover); }
-.tv-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.tv-btn--sm { height: 32px; padding: 0 12px; font-size: var(--appt-type-list, 0.8125rem); }
 .tv-textdanger { color: var(--tv-danger); }
 .tv-linkbtn {
   background: none; border: none; padding: 2px 4px;
@@ -331,7 +332,7 @@ select.tv-input {
   padding: 8px 10px;
   border: none; background: transparent;
   border-radius: 7px;
-  font-family: inherit; font-size: 13px; font-weight: 550;
+  font-family: inherit; font-size: var(--appt-type-list, 0.8125rem); font-weight: 550;
   color: var(--tv-text-secondary);
   text-align: left; cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
@@ -360,7 +361,7 @@ select.tv-input {
 .tv-empty__desc {
   margin: 6px 0 0;
   max-width: 380px;
-  font-size: 13px; line-height: 1.55; color: var(--tv-text-muted);
+  font-size: var(--appt-type-list, 0.8125rem); line-height: 1.55; color: var(--tv-text-muted);
 }
 .tv-empty__actions { display: flex; gap: 10px; margin-top: 18px; }
 
@@ -411,7 +412,7 @@ select.tv-input {
   padding: 18px 20px 0;
 }
 .tv-modal__title { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
-.tv-modal__desc { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--tv-text-muted); }
+.tv-modal__desc { margin: 4px 0 0; font-size: var(--appt-type-list, 0.8125rem); line-height: 1.5; color: var(--tv-text-muted); }
 .tv-modal__body { padding: 16px 20px 4px; }
 .tv-modal__foot {
   display: flex; justify-content: flex-end; gap: 10px;
@@ -505,7 +506,7 @@ select.tv-input {
   border: 1px solid var(--tv-border);
   border-radius: var(--tv-radius-sm);
   background: var(--tv-surface);
-  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--tv-text-secondary);
+  font-family: inherit; font-size: var(--appt-type-list, 0.8125rem); font-weight: 600; color: var(--tv-text-secondary);
   text-align: center;
   cursor: pointer;
   transition: border-color 0.13s ease, background 0.13s ease, color 0.13s ease;
@@ -559,7 +560,7 @@ select.tv-input {
 }
 .tv-drawer__section { padding: 14px 20px; border-bottom: 1px solid #eef0f3; }
 .tv-deflist { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.tv-deflist > div { display: flex; gap: 12px; font-size: 13px; }
+.tv-deflist > div { display: flex; gap: 12px; font-size: var(--appt-type-list, 0.8125rem); }
 .tv-deflist dt {
   width: 88px; flex-shrink: 0;
   color: var(--tv-text-muted); font-size: 12.5px;
@@ -585,7 +586,7 @@ select.tv-input {
   color: #f9fafb;
   padding: 10px 16px;
   border-radius: var(--tv-radius);
-  font-size: 13px; font-weight: 550;
+  font-size: var(--appt-type-list, 0.8125rem); font-weight: 550;
   box-shadow: var(--tv-shadow-md);
   animation: tv-toastin 0.18s ease;
   max-width: min(480px, 90vw);

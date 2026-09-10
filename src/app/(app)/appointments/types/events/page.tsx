@@ -14,7 +14,7 @@ export default function BookingTypesEventsPage() {
           </div>
           <Link
             href="/appointments/calendar"
-            className="text-sm font-medium text-[#5b4bff] hover:underline"
+            className="text-sm font-medium text-[#147d74] hover:underline"
           >
             View calendar →
           </Link>

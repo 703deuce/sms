@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --bg-page: #f5f6f8;
@@ -8,10 +9,10 @@
   --text-primary: #15181d;
   --text-secondary: #4b5563;
   --text-muted: #6b7280;
-  --accent: #4f46e5;
+  --accent: #147d74;
   --accent-hover: #4338ca;
-  --accent-soft: #eef0fe;
-  --accent-ring: rgba(79, 70, 229, 0.24);
+  --accent-soft: #dcefeb;
+  --accent-ring: rgba(20, 125, 116, 0.24);
   --success: #059669;
   --success-soft: #ecfdf5;
   --danger: #e11d48;

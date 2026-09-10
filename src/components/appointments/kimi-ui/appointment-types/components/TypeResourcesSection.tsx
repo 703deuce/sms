@@ -35,7 +35,7 @@ export function TypeResourcesSection({ form, resourceOptions, onFormChange }: Pr
         </div>
         <Link
           href="/appointments/booking/rooms-equipment"
-          className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
+          className="text-[12px] font-medium text-[#147d74] hover:underline shrink-0"
         >
           Manage rooms & equipment →
         </Link>
@@ -43,7 +43,7 @@ export function TypeResourcesSection({ form, resourceOptions, onFormChange }: Pr
       {resourceOptions.length === 0 ? (
         <p className="text-[12.5px] text-[#8a8fa3] rounded-xl border border-dashed border-[#e4e6ee] px-4 py-6 text-center">
           No resources yet.{" "}
-          <Link href="/appointments/booking/rooms-equipment" className="text-[#5b4bff] hover:underline">
+          <Link href="/appointments/booking/rooms-equipment" className="text-[#147d74] hover:underline">
             Create a room or equipment item
           </Link>{" "}
           to assign it here.
@@ -55,8 +55,8 @@ export function TypeResourcesSection({ form, resourceOptions, onFormChange }: Pr
               <label
                 className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 cursor-pointer ${
                   form.resourceIds.includes(resource.id)
-                    ? "border-[#5b4bff] bg-[#f7f6ff]"
-                    : "border-[#ecedf2] hover:bg-[#f7f8fb]"
+                    ? "border-[#147d74] bg-[#f7f6ff]"
+                    : "border-[#ecedf2] hover:bg-[#f7f8fa]"
                 }`}
               >
                 <span className="flex items-center gap-2.5">

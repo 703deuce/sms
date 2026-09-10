@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 .embed-root {
   --bg: #f4f5f8;
@@ -510,7 +511,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 700;
   color: var(--text);
 }
@@ -549,7 +550,7 @@
 }
 
 .eb-stepper__value {
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 700;
   min-width: 64px;
   text-align: center;
@@ -583,7 +584,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--card);
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-family: inherit;
   padding: 0 32px 0 12px;
   appearance: none;
@@ -628,7 +629,7 @@
 }
 
 .eb-cal__month {
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 700;
 }
 
@@ -734,7 +735,7 @@
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--card);
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 600;
   font-family: inherit;
   color: var(--text);
@@ -914,7 +915,7 @@ textarea.eb-input {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   color: var(--text);
   margin-top: 8px;
   cursor: pointer;
@@ -1047,7 +1048,7 @@ textarea.eb-input {
   max-width: 85%;
   border-radius: 12px;
   padding: 10px 13px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
 }
 

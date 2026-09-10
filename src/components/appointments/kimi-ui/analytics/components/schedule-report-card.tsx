@@ -34,7 +34,7 @@ export function ScheduleReportCard() {
   return (
     <Card className="p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
           <Mail size={18} />
         </div>
         <div>

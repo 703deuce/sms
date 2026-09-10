@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --bg: #f6f7f9;
@@ -129,7 +130,7 @@ button { font-family: inherit; }
   border: 0;
   background: transparent;
   padding: 5px 12px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 500;
   color: var(--text-secondary);
   border-radius: 6px;
@@ -166,7 +167,7 @@ button { font-family: inherit; }
 
 .label {
   display: block;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 6px;
@@ -380,7 +381,7 @@ button { font-family: inherit; }
   padding: 20px 22px 0;
 }
 .modal-header h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
-.modal-header p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
+.modal-header p { margin: 4px 0 0; font-size: var(--appt-type-list, 0.8125rem); color: var(--text-muted); }
 .modal-body { padding: 18px 22px; }
 .modal-footer {
   display: flex;
@@ -410,7 +411,7 @@ button { font-family: inherit; }
   color: var(--text-secondary);
   border-radius: var(--radius);
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 600;
   cursor: pointer;
   width: 100%;
@@ -550,7 +551,7 @@ button { font-family: inherit; }
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   cursor: pointer;
 }
 .vp-option:hover { border-color: var(--primary); }
@@ -612,7 +613,7 @@ button { font-family: inherit; }
   background: none;
   border: 0;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 500;
   color: var(--text);
   border-radius: 7px;

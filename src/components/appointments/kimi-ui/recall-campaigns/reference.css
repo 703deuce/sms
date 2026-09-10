@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --background: 0 0% 100%;
@@ -64,7 +65,7 @@ body {
 
 .rc-breadcrumb {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: hsl(var(--muted-foreground));
+  font-size: var(--appt-type-list, 0.8125rem); color: hsl(var(--muted-foreground));
 }
 .rc-breadcrumb strong { color: hsl(var(--foreground)); font-weight: 600; }
 
@@ -118,7 +119,7 @@ body {
   border: 1px solid hsl(var(--border));
   border-radius: 10px;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   color: hsl(var(--muted-foreground));
   line-height: 1.55;
 }
@@ -150,7 +151,7 @@ body {
   border: 1px solid hsl(var(--border));
   border-radius: 10px;
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
 }
 .rc-email-preview-header {
   background: #f8fafc;
@@ -212,7 +213,7 @@ body {
   display: flex; align-items: flex-start; gap: 10px;
   border-radius: 10px;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
 }
 .rc-banner-success { background: #e7f6ec; border: 1px solid #b9e4c7; color: #17723c; }

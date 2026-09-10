@@ -48,7 +48,7 @@ export default function StaffListPanel({
               type="button"
               onClick={() => onSelect(member.id)}
               className={`staff-list-item w-full rounded-xl px-3 py-3 text-left ${
-                selectedId === member.id ? "selected" : "hover:bg-[#f7f8fb]"
+                selectedId === member.id ? "selected" : "hover:bg-[#f7f8fa]"
               }`}
             >
               <div className="flex items-start justify-between gap-2">

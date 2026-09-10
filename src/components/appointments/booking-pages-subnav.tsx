@@ -33,8 +33,8 @@ export function BookingPagesSubnav() {
             href={link.href}
             className={`rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
               active
-                ? "bg-[#5b4bff]/10 text-[#5b4bff]"
-                : "text-[#6b7280] hover:bg-[#f7f8fb] hover:text-[#1a1d29]"
+                ? "bg-[#147d74]/10 text-[#147d74]"
+                : "text-[#6b7280] hover:bg-[#f7f8fa] hover:text-[#1a1d29]"
             }`}
             aria-current={active ? "page" : undefined}
           >

@@ -24,7 +24,7 @@ import type {
 
 function TypesLoading() {
   return (
-    <div className="reference-root min-h-screen bg-[#f7f8fb] p-6 font-sans animate-pulse">
+    <div className="reference-root min-h-screen bg-[#f7f8fa] p-6 font-sans animate-pulse">
       <div className="h-8 w-64 rounded bg-gray-200 mb-6" />
       <div className="flex gap-5">
         <div className="w-[300px] h-[520px] rounded-xl bg-white border border-[#ecedf2]" />
@@ -37,9 +37,9 @@ function TypesLoading() {
 
 function TypesError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="reference-root min-h-screen bg-[#f7f8fb] p-6 font-sans flex items-center justify-center">
+    <div className="reference-root min-h-screen bg-[#f7f8fa] p-6 font-sans flex items-center justify-center">
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load appointment types</h3>

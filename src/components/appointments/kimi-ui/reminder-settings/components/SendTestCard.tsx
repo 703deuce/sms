@@ -31,7 +31,7 @@ export default function SendTestCard({
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center gap-2">
-        <Send className="h-4 w-4 text-[#4f46e5]" />
+        <Send className="h-4 w-4 text-[#147d74]" />
         <h3 className="text-[14px] font-semibold text-foreground">Send yourself a test</h3>
       </div>
       <p className="mt-0.5 text-[12.5px] text-muted-foreground">
@@ -46,7 +46,7 @@ export default function SendTestCard({
           <input
             value={phone}
             onChange={(e) => onPhoneChange(e.target.value)}
-            className="h-9 w-full rounded-lg border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#4f46e5]/15"
+            className="h-9 w-full rounded-lg border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-[#147d74] focus:ring-2 focus:ring-[#147d74]/15"
           />
         </div>
         <div className="relative">
@@ -54,7 +54,7 @@ export default function SendTestCard({
           <button
             type="button"
             onClick={() => setOpen(!open)}
-            className="flex h-9 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#4f46e5]/15"
+            className="flex h-9 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-[#147d74] focus:ring-2 focus:ring-[#147d74]/15"
           >
             {selected?.label}
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -72,7 +72,7 @@ export default function SendTestCard({
                   className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-[12.5px] text-foreground hover:bg-accent"
                 >
                   {opt.label}
-                  {opt.key === stepKey && <Check className="h-3.5 w-3.5 text-[#4f46e5]" />}
+                  {opt.key === stepKey && <Check className="h-3.5 w-3.5 text-[#147d74]" />}
                 </button>
               ))}
             </div>
@@ -86,7 +86,7 @@ export default function SendTestCard({
         type="button"
         onClick={onSend}
         disabled={testing || !phone.trim()}
-        className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[#4f46e5] px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#4338ca] disabled:opacity-60"
+        className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-[#147d74] px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-[#4338ca] disabled:opacity-60"
       >
         {sent ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
         {sent ? 'Test sent!' : testing ? 'Sending…' : 'Send test SMS'}

@@ -1275,7 +1275,7 @@ function ThemeEditor({
   onSaved: () => void;
 }) {
   const terminology = (extra.terminology || {}) as Record<string, string>;
-  const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#5b4bff"));
+  const [primaryColor, setPrimaryColor] = useState(String(extra.primaryColor || "#147d74"));
   const [logoUrl, setLogoUrl] = useState(String(extra.logoUrl || ""));
   const [noIndex, setNoIndex] = useState(extra.noIndex === true);
   const [customDomain, setCustomDomain] = useState(String(extra.customDomain || ""));
@@ -1289,7 +1289,7 @@ function ThemeEditor({
 
   useEffect(() => {
     const t = (extra.terminology || {}) as Record<string, string>;
-    setPrimaryColor(String(extra.primaryColor || "#5b4bff"));
+    setPrimaryColor(String(extra.primaryColor || "#147d74"));
     setLogoUrl(String(extra.logoUrl || ""));
     setNoIndex(extra.noIndex === true);
     setCustomDomain(String(extra.customDomain || ""));

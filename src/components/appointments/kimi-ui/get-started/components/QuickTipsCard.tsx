@@ -27,7 +27,7 @@ export default function QuickTipsCard({ tips }: Props) {
                 height: 32,
                 borderRadius: 9,
                 background: "#f1efff",
-                color: "#5b4bd6",
+                color: "#147d74",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -55,7 +55,7 @@ export default function QuickTipsCard({ tips }: Props) {
           marginTop: 16,
           fontSize: 12.5,
           fontWeight: 600,
-          color: "#5b4bd6",
+          color: "#147d74",
           textDecoration: "none",
         }}
       >

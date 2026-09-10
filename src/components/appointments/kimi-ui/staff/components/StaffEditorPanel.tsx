@@ -139,7 +139,7 @@ export default function StaffEditorPanel({
                         type="button"
                         className={`rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors ${
                           selected
-                            ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                            ? "bg-[#147d74] text-white border-[#147d74]"
                             : "border-[#e4e6ee] text-[#3f4254] hover:border-[#d8d2ff]"
                         }`}
                         onClick={() => onToggleTypeId(t.id)}
@@ -165,7 +165,7 @@ export default function StaffEditorPanel({
                         type="button"
                         className={`rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors ${
                           selected
-                            ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                            ? "bg-[#147d74] text-white border-[#147d74]"
                             : "border-[#e4e6ee] text-[#3f4254] hover:border-[#d8d2ff]"
                         }`}
                         onClick={() => onToggleLocationId(l.id)}
@@ -215,7 +215,7 @@ export default function StaffEditorPanel({
                   )}
                   <button
                     type="button"
-                    className="ml-auto text-[12px] font-semibold text-[#5b4bff]"
+                    className="ml-auto text-[12px] font-semibold text-[#147d74]"
                     onClick={() => onSetCustomHours(day.key, !day.usesWorkspaceDefault)}
                   >
                     {day.usesWorkspaceDefault ? "Set custom" : "Use workspace default"}
@@ -223,7 +223,7 @@ export default function StaffEditorPanel({
                   {!day.usesWorkspaceDefault ? (
                     <button
                       type="button"
-                      className="text-[12px] text-[#5b4bff]"
+                      className="text-[12px] text-[#147d74]"
                       onClick={() => onAddWindow(day.key)}
                     >
                       + Add window

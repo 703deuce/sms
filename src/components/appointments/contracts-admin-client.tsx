@@ -183,7 +183,7 @@ export function ContractsAdminClient() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-md bg-[#147d74] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             disabled={saving}
             onClick={() => void save()}
           >
@@ -233,7 +233,7 @@ export function ContractsAdminClient() {
                     </td>
                     <td className="px-4 py-3">{row.active ? "Active" : "Inactive"}</td>
                     <td className="px-4 py-3">
-                      <button type="button" className="text-indigo-600 underline" onClick={() => startEdit(row)}>
+                      <button type="button" className="text-[#147d74] underline" onClick={() => startEdit(row)}>
                         Edit
                       </button>
                     </td>

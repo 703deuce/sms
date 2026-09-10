@@ -23,7 +23,7 @@ export default function AvailabilityView({ model, actions }: Props) {
       <div className="max-w-[1280px] mx-auto px-10 pt-9 pb-10">
         <div className="flex items-start justify-between mb-7 avail-fade-in">
           <div className="flex items-start gap-3.5">
-            <span className="w-10 h-10 rounded-full bg-[#efecfd] text-[#5b45e0] flex items-center justify-center mt-0.5 ring-4 ring-[#efecfd]/40">
+            <span className="w-10 h-10 rounded-full bg-[#dcefeb] text-[#147d74] flex items-center justify-center mt-0.5 ring-4 ring-[#dcefeb]/40">
               <Clock size={19} strokeWidth={2.1} />
             </span>
             <div>
@@ -37,7 +37,7 @@ export default function AvailabilityView({ model, actions }: Props) {
           </div>
           <button
             type="button"
-            className="avail-btn-ghost !bg-white border !border-[#e9e7f2] shadow-[0_1px_2px_rgba(28,26,46,0.05)] hover:!border-[#d9d5ec] hover:text-[#5b45e0] transition-colors"
+            className="avail-btn-ghost !bg-white border !border-[#e9e7f2] shadow-[0_1px_2px_rgba(28,26,46,0.05)] hover:!border-[#d9d5ec] hover:text-[#147d74] transition-colors"
           >
             <BookOpen size={13} />
             Learn about availability

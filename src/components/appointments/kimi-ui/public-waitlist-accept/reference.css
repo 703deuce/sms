@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --tv-bg-page: #f6f7f9;
@@ -7,9 +8,9 @@
   --tv-text-primary: #101828;
   --tv-text-secondary: #475467;
   --tv-text-muted: #667085;
-  --tv-accent: #4f46e5;
+  --tv-accent: #147d74;
   --tv-accent-strong: #4338ca;
-  --tv-accent-soft: #eef0fe;
+  --tv-accent-soft: #dcefeb;
   --tv-success: #047857;
   --tv-success-soft: #ecfdf5;
   --tv-success-border: #a7f3d0;
@@ -20,7 +21,7 @@
   --tv-radius-lg: 12px;
   --tv-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05);
   --tv-shadow-elevated: 0 8px 24px -8px rgba(16, 24, 40, 0.12);
-  --tv-focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.25);
+  --tv-focus-ring: 0 0 0 3px rgba(20, 125, 116, 0.25);
 }
 
 .tv-public-page {
@@ -58,7 +59,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 700;
 }
 
@@ -195,7 +196,7 @@
 
 .tv-detail-row dd {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 600;
   color: var(--tv-text-primary);
   text-align: right;
@@ -223,7 +224,7 @@
 .tv-hint-list li {
   display: flex;
   gap: 10px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
   color: var(--tv-text-muted);
 }

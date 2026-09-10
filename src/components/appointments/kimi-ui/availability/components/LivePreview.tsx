@@ -38,7 +38,7 @@ export default function LivePreview({ days }: { days: PreviewDayRow[] }) {
         ))}
       </div>
 
-      <button type="button" className="mt-3 inline-flex items-center gap-2 text-[13px] font-semibold text-[#5b45e0] hover:gap-3 transition-all">
+      <button type="button" className="mt-3 inline-flex items-center gap-2 text-[13px] font-semibold text-[#147d74] hover:gap-3 transition-all">
         View full calendar
         <ArrowRight size={15} />
       </button>

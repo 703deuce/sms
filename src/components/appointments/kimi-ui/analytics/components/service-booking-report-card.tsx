@@ -88,7 +88,7 @@ export function ServiceBookingReportCard({
     <Card id="service-booking-report" className={`p-5${highlighted ? " ring-2 ring-primary/30" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
             <FileBarChart2 size={18} aria-hidden />
           </div>
           <div>

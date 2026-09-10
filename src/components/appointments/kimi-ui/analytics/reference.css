@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 
 :root {
@@ -7,7 +8,7 @@
   --muted: #eef1f5;
   --muted-foreground: #64748b;
   --border: #e2e8f0;
-  --primary: #4f46e5;
+  --primary: #147d74;
   --primary-foreground: #ffffff;
 }
 
@@ -26,7 +27,7 @@ html, body {
 .border-border { border-color: var(--border); }
 .bg-primary { background: var(--primary); }
 .text-primary { color: var(--primary); }
-.bg-primary\/10 { background: rgba(79, 70, 229, 0.1); }
+.bg-primary\/10 { background: rgba(20, 125, 116, 0.1); }
 
 .surface {
   background: var(--card);

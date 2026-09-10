@@ -236,10 +236,10 @@ export function RefDecoHeroNumber({
 }) {
   const gradient =
     tint === "blue"
-      ? "from-sky-50 via-white to-indigo-50/80 border-sky-100"
+      ? "from-sky-50 via-white to-[#dcefeb]/80 border-sky-100"
       : tint === "green"
         ? "from-emerald-50 via-white to-teal-50/80 border-emerald-100"
-        : "from-indigo-50 via-white to-violet-50/80 border-indigo-100";
+        : "from-[#dcefeb] via-white to-[#dcefeb]/80 border-[#147d74]/20";
   return (
     <div className={cn("rounded-2xl border bg-gradient-to-br p-6 text-center shadow-sm", gradient)}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
@@ -297,7 +297,7 @@ export function RefDecoCallout({
       ? { wrap: "border-amber-200 bg-gradient-to-r from-amber-50/90 to-orange-50/50", tile: "tile-amber" as const }
       : variant === "success"
         ? { wrap: "border-emerald-200 bg-gradient-to-r from-emerald-50/90 to-teal-50/40", tile: "tile-green" as const }
-        : { wrap: "border-indigo-100 bg-gradient-to-r from-indigo-50/80 to-violet-50/40", tile: "tile-purple" as const };
+        : { wrap: "border-[#147d74]/20 bg-gradient-to-r from-[#dcefeb]/80 to-[#dcefeb]/40", tile: "tile-purple" as const };
   return (
     <div className={cn("ref-card flex items-start gap-3 border p-4", styles.wrap)}>
       <div className={`icon-tile ${styles.tile}`}>
@@ -334,8 +334,8 @@ export function RefDecoOptionCard({
       className={cn(
         "rounded-2xl border p-4 text-left transition-all",
         selected
-          ? "border-primary bg-primary/[0.04] shadow-[0_4px_14px_rgba(79,70,229,0.12)] ring-2 ring-primary/20"
-          : "border-gray-200 bg-white hover:border-indigo-200 hover:shadow-sm",
+          ? "border-primary bg-primary/[0.04] shadow-[0_4px_14px_rgba(20,125,116,0.12)] ring-2 ring-primary/20"
+          : "border-gray-200 bg-white hover:border-[#147d74]/30 hover:shadow-sm",
         disabled && "cursor-not-allowed opacity-60",
       )}
     >

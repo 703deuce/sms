@@ -16,7 +16,7 @@ export function FormsDocumentsClient() {
   const [tab, setTab] = useState<Tab>("intake");
 
   return (
-    <div className="min-h-full bg-[#f7f8fb]">
+    <div className="min-h-full bg-[#f7f8fa]">
       <div className="max-w-[1100px] mx-auto px-6 pt-6 pb-10">
         <header className="mb-6">
           <h1 className="text-[22px] font-bold text-[#1a1d29]">Forms & documents</h1>
@@ -34,7 +34,7 @@ export function FormsDocumentsClient() {
               aria-selected={tab === t.id}
               className={`rounded-lg px-4 py-2 text-[13px] font-medium border transition-colors ${
                 tab === t.id
-                  ? "bg-white border-[#5b4bff] text-[#5b4bff] shadow-sm"
+                  ? "bg-white border-[#147d74] text-[#147d74] shadow-sm"
                   : "bg-transparent border-[#ecedf2] text-[#3f4254] hover:bg-white"
               }`}
               onClick={() => setTab(t.id)}

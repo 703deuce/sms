@@ -77,7 +77,7 @@ export function SlotDiagnosticsDrawer({
           <button
             ref={closeButtonRef}
             type="button"
-            className="rounded-lg border border-[#e4e6ee] p-2 text-[#6b6f82] hover:bg-[#f7f8fb]"
+            className="rounded-lg border border-[#e4e6ee] p-2 text-[#6b6f82] hover:bg-[#f7f8fa]"
             onClick={handleClose}
             aria-label="Close availability diagnostics"
           >

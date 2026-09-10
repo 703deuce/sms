@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 /* Transovo public action surface — design tokens + layout primitives.
    Uses semantic class names mapped onto the Transovo token vocabulary. */
@@ -137,7 +138,7 @@ html, body {
 }
 .pub-subtext {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -356,7 +357,7 @@ html, body {
 }
 .done-subtext {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -404,7 +405,7 @@ html, body {
 }
 .error-message {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
   color: var(--text-secondary);
 }

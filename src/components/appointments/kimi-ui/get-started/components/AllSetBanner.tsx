@@ -26,7 +26,7 @@ export default function AllSetBanner({
           height: 44,
           borderRadius: 12,
           background: "#f1efff",
-          color: "#5b4bd6",
+          color: "#147d74",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

@@ -23,7 +23,7 @@ export default function SetupProgressCard({ progress, onboardingComplete }: Prop
               cy="32"
               r={R}
               fill="none"
-              stroke="#5b4bd6"
+              stroke="#147d74"
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray={C}
@@ -64,7 +64,7 @@ export default function SetupProgressCard({ progress, onboardingComplete }: Prop
                 width: `${percent}%`,
                 height: "100%",
                 borderRadius: 999,
-                background: "#5b4bd6",
+                background: "#147d74",
               }}
             />
           </div>

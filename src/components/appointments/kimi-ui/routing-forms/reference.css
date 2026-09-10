@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --background: 220 20% 98%;
@@ -118,7 +119,7 @@ select.input {
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 .btn-danger:hover { opacity: 0.92; }
-.btn-sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.btn-sm { height: 32px; padding: 0 12px; font-size: var(--appt-type-list, 0.8125rem); }
 .btn-icon { height: 32px; width: 32px; padding: 0; }
 
 .chip {
@@ -144,7 +145,7 @@ select.input {
   background: transparent;
   border-radius: 8px;
   padding: 9px 12px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-family: inherit;
   color: hsl(var(--foreground));
   cursor: pointer;
@@ -261,7 +262,7 @@ select.input {
   color: white;
   padding: 10px 16px;
   border-radius: 10px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 500;
   box-shadow: 0 8px 24px rgba(0,0,0,0.18);
   display: flex;

@@ -123,7 +123,7 @@ export function CreatePollModal({
         ) : meetingTypes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-[#ecedf2] px-3 py-3 text-[12.5px] text-[#8a8fa3]">
             <p className="mb-2">No Meeting Types are available to you.</p>
-            <a href="/appointments/types" className="text-[#5b4bff] font-medium hover:underline">
+            <a href="/appointments/types" className="text-[#147d74] font-medium hover:underline">
               View booking types
             </a>
           </div>

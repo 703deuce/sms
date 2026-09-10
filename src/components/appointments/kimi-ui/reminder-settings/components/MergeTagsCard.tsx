@@ -12,7 +12,7 @@ export default function MergeTagsCard({ tags }: { tags: string[] }) {
           <button
             key={tag}
             type="button"
-            className="rounded-md bg-[#eef2ff] px-2 py-1 text-[11.5px] font-medium text-[#4f46e5] transition-colors hover:bg-[#e0e7ff]"
+            className="rounded-md bg-[#eef2ff] px-2 py-1 text-[11.5px] font-medium text-[#147d74] transition-colors hover:bg-[#e0e7ff]"
           >
             {tag}
           </button>
@@ -21,7 +21,7 @@ export default function MergeTagsCard({ tags }: { tags: string[] }) {
       <a
         href="#"
         onClick={(e) => e.preventDefault()}
-        className="mt-3.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-[#4f46e5] hover:underline"
+        className="mt-3.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-[#147d74] hover:underline"
       >
         View all tags <ExternalLink className="h-3 w-3" />
       </a>

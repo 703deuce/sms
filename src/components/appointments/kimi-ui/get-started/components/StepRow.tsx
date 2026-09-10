@@ -38,7 +38,7 @@ export default function StepRow({ step, onNavigate }: Props) {
         {done ? (
           <CheckCircle2 size={22} color="#22c07a" fill="#e6f9f0" />
         ) : upNext ? (
-          <Clock size={22} color="#5b4bd6" />
+          <Clock size={22} color="#147d74" />
         ) : (
           <span
             style={{
@@ -69,7 +69,7 @@ export default function StepRow({ step, onNavigate }: Props) {
           justifyContent: "center",
           flexShrink: 0,
           background: done ? "#e6f9f0" : upNext ? "#f1efff" : "#f4f4f9",
-          color: done ? "#16a36a" : upNext ? "#5b4bd6" : "#9a9ab0",
+          color: done ? "#16a36a" : upNext ? "#147d74" : "#9a9ab0",
         }}
       >
         {iconMap[step.icon]}

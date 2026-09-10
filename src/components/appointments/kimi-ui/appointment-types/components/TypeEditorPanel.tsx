@@ -265,7 +265,7 @@ export default function TypeEditorPanel({
               />
               Active on booking page
             </label>
-            <div className="bg-[#f7f8fb] border border-[#ecedf2] rounded-xl p-3.5 w-[230px] shrink-0">
+            <div className="bg-[#f7f8fa] border border-[#ecedf2] rounded-xl p-3.5 w-[230px] shrink-0">
               <p className="text-[12px] font-semibold mb-1">Applies to</p>
               <p className="text-[11.5px] text-[#8a8fa3] leading-snug mb-2">
                 These rules apply to any calendar connected to this appointment type.
@@ -273,14 +273,14 @@ export default function TypeEditorPanel({
               <div className="flex flex-col gap-1.5">
                 <button
                   type="button"
-                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  className="text-[12px] font-medium text-[#147d74] hover:underline text-left"
                   onClick={onCheckAvailability}
                 >
                   Check availability
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  className="text-[12px] font-medium text-[#147d74] hover:underline text-left"
                   onClick={onManageAvailability}
                 >
                   Manage availability →
@@ -295,10 +295,10 @@ export default function TypeEditorPanel({
             <h3 className="text-[14px] font-semibold">Team & locations</h3>
           </div>
           <div className="flex gap-3">
-            <button type="button" className="text-[12px] font-medium text-[#5b4bff] hover:underline" onClick={onManageStaff}>
+            <button type="button" className="text-[12px] font-medium text-[#147d74] hover:underline" onClick={onManageStaff}>
               Manage staff →
             </button>
-            <button type="button" className="text-[12px] font-medium text-[#5b4bff] hover:underline" onClick={onManageLocations}>
+            <button type="button" className="text-[12px] font-medium text-[#147d74] hover:underline" onClick={onManageLocations}>
               Manage locations →
             </button>
           </div>
@@ -373,7 +373,7 @@ export default function TypeEditorPanel({
       <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#ecedf2] bg-white">
         <button
           type="button"
-          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e6ee] hover:bg-[#f7f8fb]"
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e6ee] hover:bg-[#f7f8fa]"
           onClick={onCancel}
         >
           Cancel

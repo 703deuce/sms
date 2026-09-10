@@ -20,7 +20,7 @@ import type { BookableStaffMember } from "@/lib/appointments/types";
 
 function StaffLoading() {
   return (
-    <div className="reference-root min-h-full bg-[#f7f8fb] p-8 font-sans animate-pulse">
+    <div className="reference-root min-h-full bg-[#f7f8fa] p-8 font-sans animate-pulse">
       <div className="max-w-[1280px] mx-auto space-y-5">
         <div className="h-8 w-48 rounded bg-gray-200" />
         <div className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)] gap-5">
@@ -34,9 +34,9 @@ function StaffLoading() {
 
 function StaffError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="reference-root min-h-full bg-[#f7f8fb] p-8 font-sans flex items-center justify-center">
+    <div className="reference-root min-h-full bg-[#f7f8fa] p-8 font-sans flex items-center justify-center">
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load staff</h3>

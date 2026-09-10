@@ -77,7 +77,7 @@ export function RoutingFormsPanel({ forms }: { forms: RoutingFormSummary[] }) {
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      i === 0 ? "bg-primary" : "bg-indigo-300",
+                      i === 0 ? "bg-primary" : "bg-[#b8e0db]",
                     )}
                     style={{ width: `${(form.routed / max) * 100}%` }}
                   />

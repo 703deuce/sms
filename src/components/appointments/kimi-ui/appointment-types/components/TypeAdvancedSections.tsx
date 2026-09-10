@@ -77,7 +77,7 @@ export default function TypeAdvancedSections({
               key={opt.value}
               className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${
                 form.staffAssignment === opt.value
-                  ? "border-[#5b4bff] bg-[#f7f6ff]"
+                  ? "border-[#147d74] bg-[#f7f6ff]"
                   : "border-[#ecedf2]"
               }`}
             >
@@ -111,7 +111,7 @@ export default function TypeAdvancedSections({
                     type="button"
                     className={`rounded-full px-3 py-1 text-[12px] font-medium border ${
                       selected
-                        ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                        ? "bg-[#147d74] text-white border-[#147d74]"
                         : "bg-white text-[#3f4254] border-[#e4e6ee]"
                     }`}
                     onClick={() =>
@@ -143,7 +143,7 @@ export default function TypeAdvancedSections({
                 type="button"
                 className={`rounded-full px-3 py-1 text-[12px] font-medium border ${
                   form.locationIds.includes(loc.id)
-                    ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                    ? "bg-[#147d74] text-white border-[#147d74]"
                     : "bg-white text-[#3f4254] border-[#e4e6ee]"
                 }`}
                 onClick={() => toggleLocationId(loc.id)}
@@ -161,7 +161,7 @@ export default function TypeAdvancedSections({
           <h3 className="text-[14px] font-semibold">Booking questions</h3>
           <button
             type="button"
-            className="text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
+            className="text-[12px] font-medium text-[#147d74] flex items-center gap-1"
             onClick={() => onFormChange("bookingQuestions", [...questions, newBookingQuestion()])}
           >
             <Plus size={14} /> Add question

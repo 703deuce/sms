@@ -31,8 +31,8 @@ export const appointmentTypes: AppointmentType[] = [
     price: 49,
     free: false,
     active: true,
-    color: "text-indigo-600",
-    bg: "bg-indigo-100",
+    color: "text-[#147d74]",
+    bg: "bg-[#dcefeb]",
     description:
       "A focused 30-minute session to discuss your needs and explore how we can help.",
     location: "In-office",

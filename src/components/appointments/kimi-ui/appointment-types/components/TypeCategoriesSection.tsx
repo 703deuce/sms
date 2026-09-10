@@ -35,7 +35,7 @@ export function TypeCategoriesSection({
           {onManageCategories ? (
             <button
               type="button"
-              className="text-[12px] font-medium text-[#5b4bff] hover:underline"
+              className="text-[12px] font-medium text-[#147d74] hover:underline"
               onClick={onManageCategories}
             >
               Manage categories
@@ -44,7 +44,7 @@ export function TypeCategoriesSection({
           {onCreateCategory ? (
             <button
               type="button"
-              className="text-[12px] font-medium text-[#5b4bff] hover:underline"
+              className="text-[12px] font-medium text-[#147d74] hover:underline"
               onClick={onCreateCategory}
             >
               Create category

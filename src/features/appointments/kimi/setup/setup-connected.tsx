@@ -36,7 +36,7 @@ function SetupError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="setup-page flex items-center justify-center min-h-[60vh]" style={{ background: "#f7f7fa" }}>
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load setup progress</h3>

@@ -161,7 +161,7 @@ export function CategoryManagerDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-[#8a8fa3] hover:bg-[#f7f8fb]"
+            className="rounded-lg p-2 text-[#8a8fa3] hover:bg-[#f7f8fa]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />

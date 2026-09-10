@@ -111,7 +111,7 @@ export function SlotDiagnosticsPanel({
         {variant === "drawer" && onOpenFullPage ? (
           <button
             type="button"
-            className="mt-2 text-[12px] font-medium text-[#5b4bff] hover:underline"
+            className="mt-2 text-[12px] font-medium text-[#147d74] hover:underline"
             onClick={onOpenFullPage}
           >
             Open full diagnostics page →
@@ -120,7 +120,7 @@ export function SlotDiagnosticsPanel({
         {variant === "drawer" && !onOpenFullPage ? (
           <Link
             href="/appointments/availability"
-            className="mt-2 inline-block text-[12px] font-medium text-[#5b4bff] hover:underline"
+            className="mt-2 inline-block text-[12px] font-medium text-[#147d74] hover:underline"
           >
             Open full diagnostics page →
           </Link>

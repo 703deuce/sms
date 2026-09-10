@@ -111,7 +111,7 @@ export default function TypePublishingSections({
               type="button"
               className={`rounded-xl border px-3 py-2 text-[12px] font-medium capitalize ${
                 form.visibility === v
-                  ? "border-[#5b4bff] bg-[#f7f6ff] text-[#5b4bff]"
+                  ? "border-[#147d74] bg-[#f7f6ff] text-[#147d74]"
                   : "border-[#ecedf2]"
               }`}
               onClick={() => onFormChange("visibility", v)}
@@ -135,7 +135,7 @@ export default function TypePublishingSections({
           <h3 className="text-[14px] font-semibold">Duration options</h3>
           <button
             type="button"
-            className="text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
+            className="text-[12px] font-medium text-[#147d74] flex items-center gap-1"
             onClick={addDurationOption}
           >
             <Plus size={14} /> Add duration
@@ -353,7 +353,7 @@ export default function TypePublishingSections({
                 return (
                   <label
                     key={member.id}
-                    className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-[#f7f8fb] cursor-pointer"
+                    className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-[#f7f8fa] cursor-pointer"
                   >
                     <input
                       type="checkbox"

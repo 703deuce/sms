@@ -199,7 +199,7 @@ function buildSummary(
     {
       icon: "globe",
       bg: "#efecfd",
-      color: "#5b45e0",
+      color: "#147d74",
       title: "Timezone",
       value: form.timezone,
     },
@@ -213,7 +213,7 @@ function buildSummary(
     {
       icon: "calendar",
       bg: "#efecfd",
-      color: "#5b45e0",
+      color: "#147d74",
       title: "Booking horizon",
       value: `${form.maximumDays} days`,
     },

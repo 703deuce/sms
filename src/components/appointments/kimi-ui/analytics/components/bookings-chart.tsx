@@ -61,7 +61,7 @@ export function BookingsChart({
               <div
                 className={cn(
                   "chart-bar w-full rounded-t-[3px]",
-                  hover === i ? "bg-primary" : "bg-indigo-200",
+                  hover === i ? "bg-primary" : "bg-[#dcefeb]",
                 )}
                 style={{ height: `${Math.max(3, (p.count / max) * 100)}%` }}
               />

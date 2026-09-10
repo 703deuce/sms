@@ -7,7 +7,7 @@ export { CalendarConnected };
 
 export function AppointmentsCalendarClient() {
   return (
-    <Suspense fallback={<div className="cal-page min-h-screen animate-pulse bg-[#f7f8fb]" aria-busy="true" />}>
+    <Suspense fallback={<div className="cal-page min-h-screen animate-pulse bg-[#f7f8fa]" aria-busy="true" />}>
       <CalendarConnected />
     </Suspense>
   );

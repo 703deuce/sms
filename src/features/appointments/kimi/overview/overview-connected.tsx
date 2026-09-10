@@ -15,7 +15,7 @@ import type { OverviewPageActions, OverviewPageModel } from "@/features/appointm
 
 function OverviewLoading() {
   return (
-    <div className="ref-root min-h-screen bg-[#f7f8fb] p-6 font-sans animate-pulse">
+    <div className="ref-root min-h-screen bg-[#f7f8fa] p-6 font-sans animate-pulse">
       <div className="h-8 w-48 rounded bg-gray-200 mb-6" />
       <div className="grid grid-cols-4 gap-5">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -32,9 +32,9 @@ function OverviewLoading() {
 
 function OverviewError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="ref-root min-h-screen bg-[#f7f8fb] p-6 font-sans flex items-center justify-center">
+    <div className="ref-root min-h-screen bg-[#f7f8fa] p-6 font-sans flex items-center justify-center">
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load your overview</h3>
@@ -123,7 +123,7 @@ export function OverviewConnected() {
   if (failed || !model) return <OverviewError onRetry={load} />;
 
   return (
-    <div className="ref-root min-h-screen bg-[#f7f8fb]">
+    <div className="ref-root min-h-screen bg-[#f7f8fa]">
       <div className="px-6 pt-6 max-w-[1280px] mx-auto">
         <AppointmentsGlobalSearch />
       </div>

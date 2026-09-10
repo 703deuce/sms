@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --background: 220 20% 98%;
@@ -136,7 +137,7 @@ body {
 
 .tv-btn-md { height: 36px; padding: 0 16px; font-size: 14px; }
 .tv-btn-lg { height: 40px; padding: 0 20px; font-size: 14px; }
-.tv-btn-sm { height: 32px; padding: 0 12px; font-size: 13px; }
+.tv-btn-sm { height: 32px; padding: 0 12px; font-size: var(--appt-type-list, 0.8125rem); }
 
 @keyframes tv-spin { to { transform: rotate(360deg); } }
 .tv-spinner {

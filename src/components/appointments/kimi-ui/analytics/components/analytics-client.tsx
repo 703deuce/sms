@@ -41,20 +41,20 @@ type LoadState = "loading" | "ready" | "error" | "empty";
 
 function buildMetrics(data: AnalyticsData): MetricDef[] {
   return [
-    { label: "Booked", value: formatNumber(data.booked), icon: CalendarPlus, tone: "bg-indigo-50 text-primary" },
+    { label: "Booked", value: formatNumber(data.booked), icon: CalendarPlus, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Confirmed", value: formatNumber(data.confirmed), icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Awaiting", value: formatNumber(data.awaiting), icon: Clock3, tone: "bg-sky-50 text-sky-600" },
     { label: "Canceled", value: formatNumber(data.canceled), icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-shows", value: formatNumber(data.noShow), icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
     { label: "Reschedule requests", value: formatNumber(data.rescheduleRequested), icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
     { label: "Confirmation rate", value: `${data.confirmationRate}%`, icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
-    { label: "Reminders sent", value: formatNumber(data.remindersSent), icon: Bell, tone: "bg-indigo-50 text-primary" },
+    { label: "Reminders sent", value: formatNumber(data.remindersSent), icon: Bell, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Completed", value: formatNumber(data.completed), icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Cancel rate", value: `${data.cancellationRate}%`, icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-show rate", value: `${data.noShowRate}%`, icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
     { label: "Reschedule rate", value: `${data.rescheduleRate}%`, icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
     { label: "Email opens", value: formatNumber(data.emailOpens), icon: Inbox, tone: "bg-sky-50 text-sky-600" },
-    { label: "UTM conversions", value: formatNumber(data.utmConversions), icon: BarChart3, tone: "bg-indigo-50 text-primary" },
+    { label: "UTM conversions", value: formatNumber(data.utmConversions), icon: BarChart3, tone: "bg-[#dcefeb] text-[#147d74]" },
   ];
 }
 
@@ -256,7 +256,7 @@ export function AnalyticsClient({
               <ScheduleReportCard />
               <Card className="p-5">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
                     <FileBarChart2 size={18} />
                   </div>
                   <div>

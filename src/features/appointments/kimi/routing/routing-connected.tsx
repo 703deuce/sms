@@ -6,7 +6,7 @@ import { LegacyRoutingRulesPanel } from "@/components/appointments/legacy-routin
 /** Legacy route shell — canonical editor lives on Booking → Routing. */
 export function RoutingConnected() {
   return (
-    <div className="min-h-screen bg-[#f7f8fb] p-6 font-sans">
+    <div className="min-h-screen bg-[#f7f8fa] p-6 font-sans">
       <div className="mx-auto max-w-3xl space-y-4">
         <header>
           <h1 className="text-2xl font-bold text-[#1a1d29]">Routing</h1>

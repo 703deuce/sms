@@ -246,7 +246,7 @@ export function DynamicPricingRulesEditor({
                 type="button"
                 className={`rounded-full px-3 py-1 text-[12px] font-medium border ${
                   selectedDays.includes(idx)
-                    ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                    ? "bg-[#147d74] text-white border-[#147d74]"
                     : "bg-white text-[#3f4254] border-[#e4e6ee]"
                 }`}
                 onClick={() =>
@@ -288,7 +288,7 @@ export function DynamicPricingRulesEditor({
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  className="text-[12px] text-[#5b4bff] font-medium"
+                  className="text-[12px] text-[#147d74] font-medium"
                   disabled={saving}
                   onClick={() => void toggleRule(rule, rule.active === false)}
                 >
@@ -315,7 +315,7 @@ export function DynamicPricingRulesEditor({
           <div className="flex flex-wrap gap-2 items-end">
             <input type="date" className="input" value={previewDate} onChange={(e) => setPreviewDate(e.target.value)} aria-label="Preview date" />
             <input type="time" className="input" value={previewTime} onChange={(e) => setPreviewTime(e.target.value)} aria-label="Preview time" />
-            <button type="button" className="text-[12px] font-medium text-[#5b4bff]" onClick={() => void runPreview()}>
+            <button type="button" className="text-[12px] font-medium text-[#147d74]" onClick={() => void runPreview()}>
               Preview price
             </button>
           </div>
