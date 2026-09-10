@@ -15,6 +15,10 @@ We are reorganizing the **Appointments** product so the full feature set is easy
 
 A large amount of the existing Transovo UI already looks correct and should be **preserved**.
 
+### Four bookable objects (2026-09-10)
+
+Booking admin uses **Meetings**, **Services**, **Classes**, and **Workshops** as first-class destinations under Booking — not a generic "Booking Types" hub. See `docs/APPOINTMENTS-FOUR-BOOKABLE-OBJECTS-IA.md`.
+
 ### Goals
 
 1. Put every feature in the correct user-facing place.

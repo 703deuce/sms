@@ -24,6 +24,7 @@ export async function upsertClassSeries(
     requireFullSeries?: boolean;
     recurrenceRule?: Record<string, unknown>;
     active?: boolean;
+    metadata?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
@@ -37,6 +38,7 @@ export async function upsertClassSeries(
     requireFullSeries: input.requireFullSeries ?? false,
     recurrenceRule: input.recurrenceRule,
     active: input.active ?? true,
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
   };
   if (input.id) {
     return prisma.classSeries.update({ where: { id: input.id, workspaceId }, data });

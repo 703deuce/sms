@@ -102,7 +102,7 @@ export function OverviewConnected() {
       onNewAppointment: () => router.push("/appointments/new"),
       onSendTestReminder: () => router.push("/appointments/reminders"),
       onConfigureAvailability: () => router.push("/appointments/availability"),
-      onManageTypes: () => router.push("/appointments/types"),
+      onManageTypes: () => router.push("/appointments/services"),
       onReviewIssues: () => {
         const first = data?.needsAttention?.[0]?.href;
         router.push(first || "/appointments");

@@ -39,7 +39,7 @@ const STEP_DEFS: Array<{
   {
     title: "Create an appointment type",
     detail: "Name, duration, location, and booking questions.",
-    href: "/appointments/types",
+    href: "/appointments/services",
     icon: "calendar-clock",
     done: (s) => s.typesCount > 0,
   },

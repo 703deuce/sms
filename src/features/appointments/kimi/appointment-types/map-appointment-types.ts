@@ -7,6 +7,7 @@ import type {
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
 import {
+  defaultConfigPatchForKind,
   resolveBookingTypeKind,
   type BookingTypeKind,
 } from "@/lib/appointments/booking-type-kind";
@@ -120,6 +121,28 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   addOnIds: [],
   permissions: [],
 };
+
+export function emptyFormForBookingTypeKind(kind: BookingTypeKind): AppointmentTypeFormState {
+  const patch = defaultConfigPatchForKind(kind);
+  const base = { ...EMPTY_APPOINTMENT_TYPE_FORM, bookingTypeKind: kind };
+  if (kind === "CLASS") {
+    return {
+      ...base,
+      groupBookingEnabled: true,
+      groupCapacity: patch.groupBooking?.capacity ?? 10,
+    };
+  }
+  if (kind === "MEETING") {
+    return {
+      ...base,
+      paymentMode: "none",
+      recurringEnabled: false,
+      groupBookingEnabled: false,
+      groupCapacity: 1,
+    };
+  }
+  return base;
+}
 
 function parsePrice(priceDisplay?: string): { price: number | null; free: boolean } {
   if (!priceDisplay?.trim()) return { price: null, free: true };

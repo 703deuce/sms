@@ -37,7 +37,10 @@ function calendarChildren(): NavItem["children"] {
 
 function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   const children = [
-    { label: "Booking Types", href: "/appointments/types" },
+    { label: "Meetings", href: "/appointments/meetings" },
+    { label: "Services", href: "/appointments/services" },
+    { label: "Classes", href: "/appointments/classes" },
+    { label: "Workshops", href: "/appointments/workshops" },
     { label: "Booking Pages", href: "/appointments/booking" },
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
@@ -45,9 +48,6 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
-  }
-  if (modules.classes) {
-    children.push({ label: "Classes", href: "/appointments/classes" });
   }
   children.push(
     { label: "Segments", href: "/appointments/segments" },
@@ -141,7 +141,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
     },
     {
       label: "Booking",
-      href: "/appointments/types",
+      href: "/appointments/services",
       icon: Globe,
       children: bookingChildren(modules),
     },
@@ -258,7 +258,7 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
   const items: NavItem[] = [
     { label: "Home", href: "/appointments/overview", icon: Home },
     { label: "Calendar", href: "/appointments/calendar", icon: Calendar },
-    { label: "Booking", href: "/appointments/types", icon: Globe },
+    { label: "Booking", href: "/appointments/services", icon: Globe },
   ];
 
   if (isConversationsInV1Nav()) {
@@ -286,10 +286,13 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/locations")) return "Locations";
   if (pathname.startsWith("/appointments/resources")) return "Resources";
   if (pathname.startsWith("/payments/invoices")) return "Invoices";
-  if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";
   if (pathname.startsWith("/appointments/reports/service-booking")) return "Service booking reports";
-  if (pathname.startsWith("/appointments/types")) return "Booking Types";
+  if (pathname.startsWith("/appointments/meetings")) return "Meetings";
+  if (pathname.startsWith("/appointments/services")) return "Services";
+  if (pathname.startsWith("/appointments/classes")) return "Classes";
+  if (pathname.startsWith("/appointments/workshops")) return "Workshops";
+  if (pathname.startsWith("/appointments/types")) return "Booking";
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
   if (pathname.startsWith("/appointments/routing")) return "Routing";

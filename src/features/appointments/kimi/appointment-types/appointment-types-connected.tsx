@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppointmentTypesView from "@/components/appointments/kimi-ui/appointment-types/page";
 import {
   buildSavePayload,
-  EMPTY_APPOINTMENT_TYPE_FORM,
+  emptyFormForBookingTypeKind,
   formStateFromApiType,
   mapApiTypesToItems,
   previewFromForm,
@@ -17,8 +17,11 @@ import type {
   AppointmentTypeFormState,
   AppointmentTypeItem,
   AppointmentTypesPageActions,
+  AppointmentTypesPageCopy,
   AppointmentTypesPageModel,
 } from "@/features/appointments/kimi/appointment-types/types";
+import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
 
 function TypesLoading() {
   return (
@@ -52,15 +55,43 @@ function TypesError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function AppointmentTypesConnected() {
+export type AppointmentTypesConnectedProps = {
+  /** When set, list and create are scoped to this booking type kind; archetype picker is hidden. */
+  lockedKind?: BookingTypeKind;
+  pageCopy?: Partial<AppointmentTypesPageCopy>;
+};
+
+const DEFAULT_PAGE_COPY: AppointmentTypesPageCopy = {
+  pageTitle: "Appointment Types",
+  pageDescription: "Manage the services you offer and how customers can book with you.",
+  createButtonLabel: "New appointment type",
+  listPanelTitle: "All appointment types",
+  listEmptyMessage: "No appointment types match.",
+  editorBackLabel: "Back to all types",
+  hideKindPicker: false,
+};
+
+export function AppointmentTypesConnected({
+  lockedKind,
+  pageCopy: pageCopyOverride,
+}: AppointmentTypesConnectedProps = {}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkTypeId = searchParams.get("id");
+  const pageCopy: AppointmentTypesPageCopy = {
+    ...DEFAULT_PAGE_COPY,
+    ...pageCopyOverride,
+    hideKindPicker: pageCopyOverride?.hideKindPicker ?? Boolean(lockedKind),
+  };
   const [apiTypes, setApiTypes] = useState<ApiAppointmentType[]>([]);
   const [workspaceSlug, setWorkspaceSlug] = useState("");
   const [bookingEnabled, setBookingEnabled] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [form, setForm] = useState<AppointmentTypeFormState>(EMPTY_APPOINTMENT_TYPE_FORM);
+  const [form, setForm] = useState<AppointmentTypeFormState>(() =>
+    emptyFormForBookingTypeKind(lockedKind ?? "SERVICE"),
+  );
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -181,17 +212,32 @@ export function AppointmentTypesConnected() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!loading && apiTypes.length > 0 && !selectedId && !isCreating) {
-      setSelectedId(apiTypes[0].id);
-      setForm(formStateFromApiType(apiTypes[0]));
-    }
-  }, [apiTypes, isCreating, loading, selectedId]);
+  const scopedApiTypes = useMemo(() => {
+    if (!lockedKind) return apiTypes;
+    return apiTypes.filter((row) => resolveBookingTypeKind(row.config) === lockedKind);
+  }, [apiTypes, lockedKind]);
 
-  const types = useMemo(
-    () => mapApiTypesToItems(apiTypes, { workspaceSlug, bookingEnabled }),
-    [apiTypes, bookingEnabled, workspaceSlug],
-  );
+  useEffect(() => {
+    if (loading || isCreating) return;
+    if (deepLinkTypeId) {
+      const row = scopedApiTypes.find((t) => t.id === deepLinkTypeId);
+      if (row && selectedId !== deepLinkTypeId) {
+        setSelectedId(deepLinkTypeId);
+        setForm(formStateFromApiType(row));
+      }
+      return;
+    }
+    if (scopedApiTypes.length > 0 && !selectedId) {
+      setSelectedId(scopedApiTypes[0].id);
+      setForm(formStateFromApiType(scopedApiTypes[0]));
+    }
+  }, [deepLinkTypeId, scopedApiTypes, isCreating, loading, selectedId]);
+
+  const types = useMemo(() => {
+    const mapped = mapApiTypesToItems(apiTypes, { workspaceSlug, bookingEnabled });
+    if (!lockedKind) return mapped;
+    return mapped.filter((type) => type.kind === lockedKind);
+  }, [apiTypes, bookingEnabled, lockedKind, workspaceSlug]);
 
   const visibleTypes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -266,9 +312,9 @@ export function AppointmentTypesConnected() {
   const startCreate = useCallback(() => {
     setSelectedId(null);
     setIsCreating(true);
-    setForm(EMPTY_APPOINTMENT_TYPE_FORM);
+    setForm(lockedKind ? emptyFormForBookingTypeKind(lockedKind) : emptyFormForBookingTypeKind("SERVICE"));
     setError("");
-  }, []);
+  }, [lockedKind]);
 
   const resetEditor = useCallback(() => {
     if (selectedId) {
@@ -293,12 +339,16 @@ export function AppointmentTypesConnected() {
     setSaving(true);
     setError("");
     const editingId = isCreating ? null : selectedId;
+    const payloadForm =
+      lockedKind && form.bookingTypeKind !== lockedKind
+        ? { ...form, bookingTypeKind: lockedKind }
+        : form;
     const res = await fetch(
       editingId ? `/api/appointments/types/${editingId}` : "/api/appointments/types",
       {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSavePayload(form)),
+        body: JSON.stringify(buildSavePayload(payloadForm)),
       },
     );
     if (!res.ok) {
@@ -314,7 +364,7 @@ export function AppointmentTypesConnected() {
     setSelectedId(saved.id);
     setForm(formStateFromApiType(saved));
     await load();
-  }, [form, isCreating, load, selectedId]);
+  }, [form, isCreating, load, lockedKind, selectedId]);
 
   const toggleActive = useCallback(
     async (active: boolean) => {
@@ -409,6 +459,7 @@ export function AppointmentTypesConnected() {
       addOnOptions,
       categoryOptions,
       intakeFormOptions,
+      pageCopy,
     };
   }, [
     bookingBaseUrl,
@@ -436,6 +487,7 @@ export function AppointmentTypesConnected() {
     isCreating,
     searchQuery,
     saving,
+    pageCopy,
   ]);
 
   const actions: AppointmentTypesPageActions = useMemo(

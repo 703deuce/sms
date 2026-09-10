@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { ClassSeriesAdminConnected } from "@/features/appointments/kimi/class-series/class-series-admin-connected";
 
 export default function ClassManagementPage() {
-  return <ServiceBookingAdminClient initialSection="classes" />;
+  return <ClassSeriesAdminConnected offeringKind="class" />;
 }
