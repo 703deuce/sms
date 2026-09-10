@@ -14,6 +14,7 @@ import { addInternalNote } from "@/lib/appointments/internal-notes";
 import { getPrisma } from "@/lib/db";
 import type { AppointmentMetadata } from "@/lib/appointments/types";
 import { suppressAppointmentReminders, resetAppointmentReminders } from "@/lib/appointments/reminder-state";
+import { appendTimeline } from "@/lib/appointments/settings";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -51,6 +52,51 @@ export async function PATCH(request: Request, { params }: Params) {
       suppressReminders?: boolean;
       extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
     };
+
+    if (body.action === "ensure_manage_link" || body.action === "regenerate_manage_link") {
+      const prisma = getPrisma();
+      const row = await prisma.voiceAppointment.findFirst({
+        where: { id, workspaceId: auth.workspaceId },
+      });
+      if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+      const { ensureManageAppointmentToken, manageAppointmentUrl } = await import(
+        "@/lib/appointments/service-booking/manage-appointment"
+      );
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
+      const { rawToken } = await ensureManageAppointmentToken(auth.workspaceId, id);
+      const manageUrl = manageAppointmentUrl(baseUrl, rawToken);
+      const issuedAt = new Date().toISOString();
+      const meta = appendTimeline((row.metadata || {}) as AppointmentMetadata, {
+        type: "manage_link",
+        label:
+          body.action === "regenerate_manage_link"
+            ? "Manage appointment link regenerated"
+            : "Manage appointment link issued",
+        detail: "Customer self-service link is ready to share.",
+        actor: auth.session.email || "Staff",
+      }) as AppointmentMetadata;
+
+      await prisma.voiceAppointment.update({
+        where: { id: row.id },
+        data: {
+          metadata: {
+            ...meta,
+            manageAppointmentUrl: manageUrl,
+            manageAppointmentTokenIssuedAt: issuedAt,
+          } as object,
+        },
+      });
+
+      const data = await getAppointment(auth.workspaceId, id);
+      return NextResponse.json({
+        data: {
+          ...data,
+          manageAppointmentUrl: manageUrl,
+          manageAppointmentTokenIssuedAt: issuedAt,
+        },
+      });
+    }
 
     if (body.suppressReminders !== undefined || body.extraRecipients !== undefined) {
       const prisma = getPrisma();
