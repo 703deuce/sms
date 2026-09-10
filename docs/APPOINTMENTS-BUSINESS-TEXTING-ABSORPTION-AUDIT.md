@@ -1,25 +1,34 @@
 # Appointments Business Texting Absorption Audit
 
 **Generated:** 2026-09-10  
-**Type:** Discovery / inventory — no implementation  
-**Scope:** Old SMS / Mass Texting product surfaces relevant to absorbing **business texting** into the Appointments product shell
+**Updated:** 2026-09-10 (Business Texting Phase 1 — approved scope expansion)  
+**Type:** Discovery / inventory + implementation tracking  
+**Scope:** Old SMS / Mass Texting product surfaces relevant to absorbing **Business Texting** into Appointments
 
 ## Executive summary
 
-Transovo’s legacy **SMS / Mass Texting** product is a full marketing + operations stack: campaigns, contacts/lists/segments, shared inbox, drip/automation, grow tools, A2P registration, and a BullMQ-backed send pipeline. **V1 launch hides mass messaging from nav** (`MASS_MESSAGING_IN_V1_NAV = false`) but **preserves all routes and runtime**.
+Transovo’s legacy **SMS / Mass Texting** product is a full marketing + operations stack. **Product decision (2026-09-10):** Appointments V1 now includes a **lightweight Business Texting layer** — selectively absorbing Campaigns + shared Contacts/Inbox into Appointments. This is **not** restoring the old standalone SMS product shell.
 
-Appointments already **reuses shared layers** for operational texting:
+| Flag | Value | Meaning |
+|------|-------|---------|
+| `MASS_MESSAGING_IN_V1_NAV` | `false` | Old SMS sidebar (Dashboard, Grow, Drips, etc.) stays hidden |
+| `BUSINESS_TEXTING_CAMPAIGNS_IN_V1_NAV` | `true` | Campaigns under Messages → `/appointments/campaigns` |
 
-| Capability | Appointments today | Legacy SMS source |
-|------------|-------------------|-------------------|
-| Contacts | `/contacts` in Appointments nav | Same canonical `Contact` model + `/api/contacts` |
-| Inbox | `/conversations` (“Messages”) | Same `Conversation` + `/api/inbox` |
-| Reminder SMS | `src/lib/appointments/reminder-delivery.ts` | Shared `src/lib/messaging/*` send gate |
-| Templates (appointment) | `/appointments/automations/templates` | Separate from mass `Template` model |
-| Messaging settings | Settings → Messaging (`/settings/messaging`) | Shared `MessagingRegistration` |
-| Recall campaigns | `/appointments/recall-campaigns` | Appointments-owned UI; may reuse campaign send infra |
+**Final certification is paused** until absorption completes — see `docs/APPOINTMENTS-BUSINESS-TEXTING-CERTIFICATION-PAUSE.md`.
 
-**Absorption strategy (recommended):** Treat Mass Texting as **shared infrastructure** under `src/lib/messaging/`, `src/lib/contacts/`, `src/lib/inbox/`, and `prisma` — expose **Appointments-native business texting** (reminders, recalls, 1:1, light broadcasts to segments) via Appointments nav; **hide** marketing-only surfaces (Grow, Playbooks, mass broadcast builder) unless/until product expands.
+Appointments **reuses shared layers**:
+
+| Capability | Appointments canonical | Legacy SMS source | Absorption tag |
+|------------|------------------------|-------------------|----------------|
+| Contacts | `/contacts` (+ Segments, Import, Fields) | Same `Contact` model | `REUSE_AS_IS` / absorb gaps only |
+| Inbox | `/conversations` | Same `Conversation` | `REUSE_AS_IS` |
+| **Campaigns** | **`/appointments/campaigns`** | `/campaigns` (preserved) | **`RESTYLE_AND_REUSE`** |
+| Reminder SMS | `reminder-delivery.ts` | `src/lib/messaging/*` | `SHARED_INFRA_ONLY` |
+| Templates | `/appointments/automations/templates` (preferred) | `/templates` | `MERGE_WITH_EXISTING` — audit |
+| Messaging setup | Settings → Messaging | A2P / sender registration | `ABSORB_INTO_APPOINTMENTS` |
+| Recall campaigns | `/appointments/recall-campaigns` | Campaign send infra | `SHARED_INFRA_ONLY` |
+
+**Do not restore:** SMS Dashboard, Send, Grow, Drips, Playbooks, standalone Reports, standalone Phone Numbers / Compliance nav, MCTB, Smart Routing, AI Receptionist.
 
 ### Reuse recommendation legend
 
@@ -63,7 +72,7 @@ Appointments already **reuses shared layers** for operational texting:
 | Settings → `/settings/messaging` | `/sms/compliance`, `/compliance/*` |
 | `/appointments/recall-campaigns` | `/campaigns` (broadcast) |
 
-**Recommendation:** Business texting in Appointments should **extend** `appointments-nav.ts` (e.g. under Reminders or new “Business texting” group) rather than re-enabling `sms-platform-nav`. Deep links to `/contacts/lists`, `/contacts/segments`, `/contacts/imports` can be **child routes** under Contacts.
+**Implemented (Phase 1 start):** `appointments-nav.ts` — Messages → Inbox + Campaigns (`/appointments/campaigns`). Contacts children: Contacts, Segments, Import, Fields. Flag: `BUSINESS_TEXTING_CAMPAIGNS_IN_V1_NAV`. Route helpers: `src/lib/products/business-texting-routes.ts`.
 
 ---
 
@@ -75,11 +84,13 @@ Appointments already **reuses shared layers** for operational texting:
 
 | Route | Page | Recommendation |
 |-------|------|----------------|
-| `/campaigns` | List (filtered tabs) | `HIDE_PRESERVE` — mass broadcast; not V1 Appointments |
-| `/campaigns/all`, `/drafts`, `/scheduled`, `/sending`, `/completed`, `/failed`, `/paused`, `/canceled`, `/recurring`, `/calendar` | Status filters | `HIDE_PRESERVE` |
-| `/campaigns/new`, `/campaigns/new/[category]`, `/campaigns/new/review`, `/campaigns/new/queue`, `/campaigns/new/success` | Create flow | `HIDE_PRESERVE` |
-| `/campaigns/[campaignId]` | Detail / results | `HIDE_PRESERVE` |
-| `/voice/campaigns` | Legacy voice campaigns | `HIDE_PRESERVE` / redirect |
+| `/appointments/campaigns` | List (canonical Appointments home) | **`RESTYLE_AND_REUSE`** — Messages nav entry |
+| `/appointments/campaigns/*` | Mirrors legacy campaign sub-routes | **`RESTYLE_AND_REUSE`** — inherits Appointments layout/theme |
+| `/campaigns` | List (legacy) | `BACKEND_ONLY_REUSE` — preserved until equivalence proven; not canonical nav |
+| `/campaigns/all`, `/drafts`, … | Status filters | `BACKEND_ONLY_REUSE` — legacy paths |
+| `/campaigns/new`, `/campaigns/new/review`, … | Create flow | `RESTYLE_AND_REUSE` — shared Kimi components + `business-texting-routes` |
+| `/campaigns/[campaignId]` | Detail / results | `RESTYLE_AND_REUSE` |
+| `/voice/campaigns` | Legacy voice campaigns | `DO_NOT_BRING_BACK` |
 
 #### Contacts (`/contacts`)
 
@@ -448,7 +459,11 @@ messaging_registration_advance | drip_campaign_step
 | P1 | `/appointments/recall-campaigns` | Wire to shared campaign send if not already; avoid mass-text billing UI |
 | P2 | Quick send (`/send/quick`) | Contextual action from contact/appointment detail |
 | P2 | Media library (`/messaging/media`) | Link from composer for MMS reminders |
-| P3 | Mass campaigns, Grow, Drip, Playbooks | Remain `HIDE_PRESERVE` until product expands |
+| **P0** | **Campaigns under Messages** | **`/appointments/campaigns`** — reuse Kimi UI + mass-texting runtime; Appointments shell |
+| P1 | Business Texting activation UI | Settings → Messaging — gate campaigns when no approved sender |
+| P1 | Contacts feature-diff | Absorb any SMS-only contact capabilities into `/contacts` only |
+| P2 | Template ownership | Prefer Automations → Templates; avoid duplicate sidebar |
+| P3 | Grow, Drip, Playbooks, old SMS Dashboard | `DO_NOT_BRING_BACK` |
 
 ---
 

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import CampaignsList from "@/components/kimi/campaigns/components/CampaignsList";
 import { CampaignNavTabs } from "@/components/campaigns/campaign-nav-tabs";
+import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
 import type { CampaignRowFilterKey } from "@/lib/campaigns/campaign-list-filters";
 import {
   campaignRowMatchesFilter,
@@ -30,6 +31,8 @@ export function CampaignsFilteredView({
   initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
+  const campaignsBasePath = useCampaignsBasePath();
+  const campaignsNewPath = useCampaignsPath("/new");
   const rowFilter = useMemo(() => {
     if (!rowFilterKey) return undefined;
     return (row: CampaignListRow) => campaignRowMatchesFilter(row, rowFilterKey);
@@ -48,9 +51,10 @@ export function CampaignsFilteredView({
         rowFilter={rowFilter}
         fetchStatus={fetchStatus}
         initialRows={filterCampaignRows(initialRows, rowFilterKey)}
+        campaignsBasePath={campaignsBasePath}
         onCreate={() => {
           startFreshComposeDraft();
-          router.push("/campaigns/new");
+          router.push(campaignsNewPath);
         }}
       />
     </div>

@@ -56,6 +56,7 @@ function statusPillVariant(status: string): string {
 export default function CampaignsList({
   onCreate,
   editCampaignPath,
+  campaignsBasePath = "/campaigns",
   rowFilter,
   fetchStatus,
   title = "Campaigns",
@@ -66,6 +67,7 @@ export default function CampaignsList({
 }: {
   onCreate: () => void;
   editCampaignPath?: (id: string) => string;
+  campaignsBasePath?: string;
   rowFilter?: (row: CampaignListRow) => boolean;
   fetchStatus?: string;
   title?: string;
@@ -75,6 +77,8 @@ export default function CampaignsList({
   initialRows?: CampaignListRow[];
 }) {
   const router = useRouter();
+  const detailPath = (id: string) => `${campaignsBasePath}/${id}`;
+  const defaultEditPath = (id: string) => `${campaignsBasePath}/new?edit=${id}`;
   const [rows, setRows] = useState<CampaignListRow[]>(initialRows);
   const [loading, setLoading] = useState(initialRows.length === 0);
   const retainInitialRef = useRef(initialRows.length > 0);
@@ -152,7 +156,7 @@ export default function CampaignsList({
       const newId = await duplicateCampaign(c.id);
       notify("Campaign cloned.");
       reload();
-      router.push(editCampaignPath ? editCampaignPath(newId) : `/campaigns/new?edit=${newId}`);
+      router.push(editCampaignPath ? editCampaignPath(newId) : defaultEditPath(newId));
     } catch (err) {
       notify(err instanceof Error ? err.message : "Could not clone campaign");
     }
@@ -313,7 +317,7 @@ export default function CampaignsList({
                 >
                   <div className="min-w-0">
                     <Link
-                      href={`/campaigns/${c.id}`}
+                      href={detailPath(c.id)}
                       onClick={(e) => e.stopPropagation()}
                       className="block truncate text-[14px] font-semibold text-slate-800 hover:text-indigo-600"
                     >
@@ -368,14 +372,17 @@ export default function CampaignsList({
                     </button>
                     {menuFor === c.id ? (
                       <div className="kebab-menu fade-in" onClick={(e) => e.stopPropagation()}>
-                        <Link href={`/campaigns/${c.id}`} onClick={() => setMenuFor(null)}>
+                        <Link href={detailPath(c.id)} onClick={() => setMenuFor(null)}>
                           <BarChart2 className="w-4 h-4" /> Analytics
                         </Link>
                         <button type="button" onClick={() => void clone(c)}>
                           <Copy className="w-4 h-4" /> Clone
                         </button>
                         {(norm === "draft" || norm === "scheduled" || norm === "paused") && (
-                          <Link href={`/campaigns/new?edit=${c.id}`} onClick={() => setMenuFor(null)}>
+                          <Link
+                            href={editCampaignPath ? editCampaignPath(c.id) : defaultEditPath(c.id)}
+                            onClick={() => setMenuFor(null)}
+                          >
                             <PencilLine className="w-4 h-4" /> Edit
                           </Link>
                         )}

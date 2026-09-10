@@ -13,6 +13,8 @@ import CreateCampaign from "@/components/kimi/campaigns/components/CreateCampaig
 import ReviewDetails from "@/components/kimi/campaigns/components/ReviewDetails";
 import { CampaignNavTabs } from "@/components/campaigns/campaign-nav-tabs";
 import { startFreshComposeDraft } from "@/lib/campaigns/compose-draft";
+import { useCampaignsBasePath, useCampaignsPath } from "@/hooks/use-campaigns-base-path";
+import { buildCampaignNavPaths } from "@/lib/products/business-texting-routes";
 
 export type CampaignsInitialView = "list" | "create" | "review";
 
@@ -25,19 +27,23 @@ export function KimiCampaignsConnected({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const campaignsBase = useCampaignsBasePath();
+  const campaignsListPath = useCampaignsPath();
+  const campaignsNewPath = useCampaignsPath("/new");
+  const campaignNavPaths = buildCampaignNavPaths(campaignsBase);
   const [listKey, setListKey] = useState(0);
   const prevPathRef = useRef(pathname);
 
   useEffect(() => {
     if (
       initialView === "list" &&
-      pathname === "/campaigns" &&
-      prevPathRef.current !== "/campaigns"
+      pathname === campaignsListPath &&
+      prevPathRef.current !== campaignsListPath
     ) {
       setListKey((k) => k + 1);
     }
     prevPathRef.current = pathname;
-  }, [pathname, initialView]);
+  }, [pathname, initialView, campaignsListPath]);
 
   const navShell = (content: ReactNode) => (
     <div className="kimi-surface kimi-campaigns">
@@ -49,15 +55,21 @@ export function KimiCampaignsConnected({
   );
 
   if (initialView === "create") {
-    return navShell(<CreateCampaign onCancel={() => router.push("/campaigns")} />);
+    return navShell(
+      <CreateCampaign
+        onCancel={() => router.push(campaignsListPath)}
+        paths={campaignNavPaths}
+      />,
+    );
   }
 
   if (initialView === "review") {
     return navShell(
       <ReviewDetails
         onPrev={(campaignId) =>
-          router.push(campaignId ? `/campaigns/new?edit=${campaignId}` : "/campaigns/new")
+          router.push(campaignId ? campaignNavPaths.editPath(campaignId) : campaignsNewPath)
         }
+        paths={campaignNavPaths}
       />,
     );
   }
@@ -66,9 +78,10 @@ export function KimiCampaignsConnected({
     <CampaignsList
       key={listKey}
       initialRows={initialRows}
+      campaignsBasePath={campaignsBase}
       onCreate={() => {
         startFreshComposeDraft();
-        router.push("/campaigns/new");
+        router.push(campaignsNewPath);
       }}
     />,
   );

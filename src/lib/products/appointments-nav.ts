@@ -17,6 +17,7 @@ import type { NavItem } from "@/lib/nav";
 import type { SchedulingModuleFlags } from "@/lib/products/scheduling-modules";
 import {
   isAnalyticsInV1Nav,
+  isBusinessTextingCampaignsInV1Nav,
   isContactsInV1Nav,
   isConversationsInV1Nav,
 } from "@/lib/products/v1-launch-nav";
@@ -168,16 +169,26 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
       label: "Contacts",
       href: "/contacts",
       icon: Users,
+      children: [
+        { label: "Contacts", href: "/contacts" },
+        { label: "Segments", href: "/contacts/segments" },
+        { label: "Import", href: "/contacts/imports" },
+        { label: "Fields", href: "/contacts/fields" },
+      ],
     });
   }
 
   if (isConversationsInV1Nav()) {
+    const messageChildren: NavItem["children"] = [{ label: "Inbox", href: "/conversations" }];
+    if (isBusinessTextingCampaignsInV1Nav()) {
+      messageChildren.push({ label: "Campaigns", href: "/appointments/campaigns" });
+    }
     items.push({
       label: "Messages",
       href: "/conversations",
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
-      children: [{ label: "Inbox", href: "/conversations" }],
+      children: messageChildren,
     });
   }
 
@@ -342,6 +353,10 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/meetings")) return "Recaps";
   if (pathname.startsWith("/payments")) return "Payments";
   if (pathname.startsWith("/conversations")) return "Messages";
+  if (pathname.startsWith("/appointments/campaigns")) return "Campaigns";
+  if (pathname.startsWith("/campaigns")) return "Campaigns";
+  if (pathname.startsWith("/contacts/imports")) return "Import";
+  if (pathname.startsWith("/contacts/fields")) return "Fields";
   if (pathname.startsWith("/contacts/lists")) return "Lists";
   if (pathname.startsWith("/contacts/segments")) return "Segments";
   if (pathname.startsWith("/contacts")) return "Contacts";
