@@ -27,6 +27,7 @@ export {
 } from "./appointments-service";
 export {
   listAppointmentTypes,
+  type ListedAppointmentType,
   upsertAppointmentType,
   createPlatformAppointment,
   updatePlatformAppointmentStatus,

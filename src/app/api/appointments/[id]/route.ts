@@ -9,6 +9,7 @@ import {
   reschedulePlatformAppointment,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
+import { enrichAppointmentDetail } from "@/lib/appointments/appointment-detail-enrichment";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
 import { addInternalNote } from "@/lib/appointments/internal-notes";
 import { getPrisma } from "@/lib/db";
@@ -32,7 +33,13 @@ export async function GET(_request: Request, { params }: Params) {
       timezone: data.timezone || config.timezone,
       weeklyHours: resolveWeeklyHours(config),
     });
-    return NextResponse.json({ data: { ...data, reminderSchedule } });
+    const enrichment = await enrichAppointmentDetail(auth.workspaceId, {
+      id: data.id,
+      serviceName: data.serviceName,
+      startsAt: data.startsAt,
+      metadata: data.metadata,
+    });
+    return NextResponse.json({ data: { ...data, reminderSchedule, enrichment } });
   } catch (err) {
     return jsonError(err, 500);
   }
