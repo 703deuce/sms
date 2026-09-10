@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import "@/components/appointments/kimi-ui/recalls/reference.css";
+import { RecallSavedViewsPanel } from "@/components/appointments/recall-saved-views-panel";
 import { RecallsHub } from "@/components/appointments/kimi-ui/recalls/components/RecallsHub";
 import type { RecallActivity, RecallStat } from "@/components/appointments/kimi-ui/recalls/types";
 
@@ -37,14 +38,19 @@ export function RecallsHubConnected() {
   }, [load]);
 
   return (
-    <RecallsHub
-      stats={data?.stats || []}
-      activity={data?.activity || []}
-      recallCampaignsMeta={data?.recallCampaignsMeta || ""}
-      noShowRecoveryMeta={data?.noShowRecoveryMeta || ""}
-      loading={loading}
-      refreshError={error}
-      onRefresh={load}
-    />
+    <>
+      <RecallsHub
+        stats={data?.stats || []}
+        activity={data?.activity || []}
+        recallCampaignsMeta={data?.recallCampaignsMeta || ""}
+        noShowRecoveryMeta={data?.noShowRecoveryMeta || ""}
+        loading={loading}
+        refreshError={error}
+        onRefresh={load}
+      />
+      <div className="tv-page pt-0">
+        <RecallSavedViewsPanel />
+      </div>
+    </>
   );
 }

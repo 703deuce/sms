@@ -118,6 +118,8 @@ export function ContractsAdminClient() {
       <header>
         <p className="text-sm text-muted-foreground">
           <Link href="/appointments/booking" className="underline">Booking Pages</Link>
+          {" / "}
+          <Link href="/appointments/booking/forms" className="underline">Forms & documents</Link>
           {" / "}Contracts
         </p>
         <h1 className="text-2xl font-semibold mt-1">Contracts</h1>
