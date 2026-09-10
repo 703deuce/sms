@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import type { AvailabilityFormState } from "@/features/appointments/kimi/availability/types";
 
 const INTERVAL_PRESETS = [10, 15, 20, 30, 45, 60] as const;
-const DENSITY_PRESETS = [10, 20, 25, 33, 50] as const;
 
 function parseFixedTimes(raw: string): string[] {
   return raw
@@ -53,8 +52,6 @@ export function SchedulingRulesSection({ form, onPatch, onSave, saving, saved }:
     !INTERVAL_PRESETS.includes(form.customStartIntervalMinutes as (typeof INTERVAL_PRESETS)[number])
       ? "custom"
       : String(form.customStartIntervalMinutes || "");
-  const densityEnabled = (form.availabilityDensityHidePercent ?? 0) > 0;
-
   function setFixedTimesList(times: string[]) {
     onPatch({ fixedStartTimes: times.join(", ") });
   }
@@ -68,10 +65,9 @@ export function SchedulingRulesSection({ form, onPatch, onSave, saving, saved }:
   return (
     <div className="avail-card p-6 space-y-8">
       <div>
-        <h2 className="text-[15px] font-bold text-[#1a1830]">Start time rules</h2>
+        <h2 className="text-[15px] font-bold text-[#1a1830]">Booking rules</h2>
         <p className="text-[12px] text-[#8a87a0] mt-1">
-          Control when customers may begin an appointment. These rules still respect staff, location,
-          resource, and calendar availability.
+          Control spacing and timing when generating appointment start times.
         </p>
       </div>
 
@@ -148,7 +144,7 @@ export function SchedulingRulesSection({ form, onPatch, onSave, saving, saved }:
       ) : (
         <div className="space-y-3">
           <label className="flex flex-col gap-1 text-[13px] font-medium" htmlFor="start-interval">
-            Start time interval
+            Appointment start interval
           </label>
           <select
             id="start-interval"
@@ -208,75 +204,9 @@ export function SchedulingRulesSection({ form, onPatch, onSave, saving, saved }:
         </p>
       ) : null}
 
-      <div className="space-y-3 border-t border-[#eceaf3] pt-6">
-        <h3 className="text-[13px] font-semibold">Advanced scheduling</h3>
-        <label className="flex items-start gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={densityEnabled}
-            onChange={(e) =>
-              onPatch({
-                availabilityDensityHidePercent: e.target.checked ? form.availabilityDensityHidePercent || 25 : undefined,
-              })
-            }
-          />
-          <span>
-            <span className="font-medium">Limit how many open times customers see</span>
-            <span className="block text-[12px] text-[#8a87a0]">
-              Transovo hides some otherwise available times from customers. Hidden times remain open
-              internally and may still be used by staff.
-            </span>
-          </span>
-        </label>
-        {densityEnabled ? (
-          <label className="flex flex-col gap-1 text-[12px] max-w-xs">
-            <span className="text-[#6b6880]">Hide approximately</span>
-            <select
-              className="input"
-              value={form.availabilityDensityHidePercent ?? 25}
-              onChange={(e) => onPatch({ availabilityDensityHidePercent: Number(e.target.value) })}
-            >
-              {DENSITY_PRESETS.map((p) => (
-                <option key={p} value={p}>{p}%</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <fieldset className="space-y-2">
-          <legend className="text-[13px] font-medium">Scheduling preference</legend>
-          <label className="flex items-center gap-2 text-[13px]">
-            <input
-              type="radio"
-              name="minimize-gaps"
-              checked={form.minimizeGapsMode === "off"}
-              onChange={() => onPatch({ minimizeGapsMode: "off" })}
-            />
-            Show all available times normally
-          </label>
-          <label className="flex items-start gap-2 text-[13px]">
-            <input
-              type="radio"
-              name="minimize-gaps"
-              checked={form.minimizeGapsMode === "prefer_compact"}
-              onChange={() => onPatch({ minimizeGapsMode: "prefer_compact" })}
-              className="mt-0.5"
-            />
-            <span>
-              Prefer times near existing appointments
-              <span className="block text-[12px] text-[#8a87a0]">
-                Preferred times appear first to help reduce gaps in your day. Availability rules are
-                still respected.
-              </span>
-            </span>
-          </label>
-        </fieldset>
-      </div>
-
       <div className="flex justify-end">
         <Button size="sm" onClick={onSave} disabled={saving}>
-          {saving ? "Saving…" : saved ? "Saved" : "Save scheduling rules"}
+          {saving ? "Saving…" : saved ? "Saved" : "Save booking rules"}
         </Button>
       </div>
     </div>

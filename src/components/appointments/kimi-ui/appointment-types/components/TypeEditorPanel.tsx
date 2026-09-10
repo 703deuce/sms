@@ -29,6 +29,7 @@ interface Props {
   categoryOptions?: Array<{ id: string; name: string }>;
   intakeFormOptions?: Array<{ id: string; name: string; active?: boolean }>;
   appointmentTypeId?: string | null;
+  hideKindPicker?: boolean;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -39,6 +40,7 @@ interface Props {
   onManageAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onCategoriesChanged?: () => void;
 }
 
 export default function TypeEditorPanel({
@@ -56,6 +58,7 @@ export default function TypeEditorPanel({
   categoryOptions = [],
   intakeFormOptions = [],
   appointmentTypeId = null,
+  hideKindPicker = false,
   onFormChange,
   onSave,
   onCancel,
@@ -63,6 +66,7 @@ export default function TypeEditorPanel({
   onManageAvailability,
   onManageStaff,
   onManageLocations,
+  onCategoriesChanged,
 }: Props) {
   const kindDefaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
@@ -79,11 +83,13 @@ export default function TypeEditorPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-        <BookingTypeKindPicker
-          form={form}
-          isCreating={isCreating}
-          onFormChange={onFormChange}
-        />
+        {hideKindPicker ? null : (
+          <BookingTypeKindPicker
+            form={form}
+            isCreating={isCreating}
+            onFormChange={onFormChange}
+          />
+        )}
 
         <section>
           <h3 className="text-[14px] font-semibold mb-4">Basic details</h3>
@@ -296,20 +302,29 @@ export default function TypeEditorPanel({
           form={form}
           categoryOptions={categoryOptions}
           onFormChange={onFormChange}
+          onCategoriesChanged={onCategoriesChanged}
         />
 
         <TypeResourcesSection
           form={form}
           resourceOptions={resourceOptions}
+          locationOptions={locationOptions}
           onFormChange={onFormChange}
+          onOptionsRefresh={onCategoriesChanged}
         />
 
-        <TypeAddOnsSection form={form} addOnOptions={addOnOptions} onFormChange={onFormChange} />
+        <TypeAddOnsSection
+          form={form}
+          addOnOptions={addOnOptions}
+          resourceOptions={resourceOptions}
+          onFormChange={onFormChange}
+        />
 
         <TypeIntakeFormsSection
           form={form}
           intakeFormOptions={intakeFormOptions}
           onFormChange={onFormChange}
+          onOptionsRefresh={onCategoriesChanged}
         />
 
         <TypeServicePhasesSection

@@ -30,6 +30,7 @@ import { BookingsChart } from "./bookings-chart";
 import { PopularTimes, PopularTypes } from "./popular-panel";
 import { ScheduleReportCard } from "./schedule-report-card";
 import { RoutingFormsPanel } from "./routing-forms-panel";
+import { RevenueMetricsPanel, ServiceBookingReportsPanel } from "./service-booking-reports-panel";
 
 const RANGE_OPTIONS: Array<{ value: 7 | 30; label: string }> = [
   { value: 7, label: "7 days" },
@@ -68,6 +69,7 @@ const SECTION_METRICS: Record<AnalyticsSection, string[]> = {
   ],
   reminders: ["Reminders sent", "Email opens", "Confirmation rate", "Booked"],
   automations: ["Reminders sent", "Reschedule requests", "No-shows", "UTM conversions"],
+  revenue: [],
   reports: [],
 };
 
@@ -213,7 +215,45 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
             </div>
           </div>
         </Card>
-      ) : state === "empty" || !data ? (
+      ) : (state === "empty" || !data) && section !== "revenue" && section !== "reports" ? (
+        <EmptyState
+          icon={<BarChart3 size={20} />}
+          title="No appointment data yet"
+          description="Analytics appear here once appointments are booked, confirmed, and completed in this workspace."
+          actionLabel="Create appointment"
+          onAction={() => {}}
+        />
+      ) : section === "revenue" ? (
+        <div className="fade-up space-y-5">
+          <RevenueMetricsPanel key={range} rangeDays={range} />
+        </div>
+      ) : section === "reports" ? (
+        <div className="fade-up space-y-5">
+          <ServiceBookingReportsPanel key={range} rangeDays={range} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <ScheduleReportCard />
+            <Card className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+                  <FileBarChart2 size={18} />
+                </div>
+                <div>
+                  <CardTitle>Export analytics summary</CardTitle>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    Download a CSV of appointment, reminder, and conversion metrics for the selected range.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting || !data}>
+                  <Download size={14} />
+                  {exporting ? "Exporting…" : `Export ${range}-day CSV`}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : !data ? (
         <EmptyState
           icon={<BarChart3 size={20} />}
           title="No appointment data yet"
@@ -230,37 +270,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
             ))}
           </div>
 
-          {section === "reports" ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ScheduleReportCard />
-              <Card className="p-5">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
-                    <FileBarChart2 size={18} />
-                  </div>
-                  <div>
-                    <CardTitle>Export data</CardTitle>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      Download a CSV of appointment, reminder, and conversion
-                      metrics for the selected range.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleExport}
-                    disabled={exporting}
-                  >
-                    <Download size={14} />
-                    {exporting ? "Exporting…" : `Export ${range}-day CSV`}
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          ) : (
-            <>
+          <>
               {/* Chart + side panels */}
               <div className="grid gap-4 lg:grid-cols-3">
                 <div className="lg:col-span-2">
@@ -350,8 +360,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                   <ScheduleReportCard />
                 )}
               </div>
-            </>
-          )}
+          </>
         </div>
       )}
     </div>

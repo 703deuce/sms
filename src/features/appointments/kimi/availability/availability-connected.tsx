@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CalendarIntegrationsCard } from "@/components/appointments/calendar-integrations-card";
 import AvailabilityView from "@/components/appointments/kimi-ui/availability/page";
 import {
   buildAvailabilityPageModel,
@@ -18,6 +17,8 @@ import type {
 } from "@/features/appointments/kimi/availability/types";
 import type { AppointmentPlatformConfig } from "@/lib/appointments/types";
 import { SchedulingRulesSection } from "@/features/appointments/kimi/availability/SchedulingRulesSection";
+import { SchedulePreferencesSection } from "@/features/appointments/kimi/availability/SchedulePreferencesSection";
+import { SpecialDatesSection } from "@/features/appointments/kimi/availability/SpecialDatesSection";
 import { SlotDiagnosticsPanel } from "@/features/appointments/kimi/availability/SlotDiagnosticsPanel";
 
 function AvailabilityLoading() {
@@ -57,6 +58,7 @@ export function AvailabilityConnected() {
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [calendarSummary, setCalendarSummary] = useState<string | undefined>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +78,21 @@ export function AvailabilityConnected() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    void fetch("/api/integrations/calendars")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        const connections = (json.data || []).filter((c: { provider?: string; config?: { blockingCalendarIds?: string[] } }) =>
+          ["google", "microsoft"].includes(String(c.provider || "")),
+        );
+        const blocking = connections
+          .filter((c: { config?: { blockingCalendarIds?: string[] } }) => (c.config?.blockingCalendarIds?.length ?? 0) > 0)
+          .map((c: { provider: string; name?: string }) => `${c.provider === "google" ? "Google Calendar" : "Microsoft Outlook"}${c.name ? ` — ${c.name}` : ""}`);
+        setCalendarSummary(blocking.length ? `Blocking events from: ${blocking.join(", ")}` : undefined);
+      })
+      .catch(() => setCalendarSummary(undefined));
+  }, []);
 
   const patchForm = useCallback((patch: Partial<AvailabilityFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -191,12 +208,21 @@ export function AvailabilityConnected() {
     <div>
       <AvailabilityView model={model} actions={actions} />
       <div className="max-w-[1280px] mx-auto px-10 pb-10 space-y-6">
+        <SpecialDatesSection form={form} onPatch={patchForm} onSave={save} saving={saving} />
         <SchedulingRulesSection
           form={form}
           onPatch={patchForm}
           onSave={save}
           saving={saving}
           saved={saved}
+        />
+        <SchedulePreferencesSection
+          form={form}
+          onPatch={patchForm}
+          onSave={save}
+          saving={saving}
+          saved={saved}
+          blockingCalendarSummary={calendarSummary}
         />
         <div className="avail-card p-6 space-y-4">
           <h2 className="text-[15px] font-bold">Workspace booking limits</h2>
@@ -300,116 +326,7 @@ export function AvailabilityConnected() {
             Add schedule from current hours
           </Button>
         </div>
-        <div className="avail-card p-6 space-y-4">
-          <h2 className="text-[15px] font-bold">Blackout dates</h2>
-          <p className="text-[12px] text-[#8a87a0]">
-            Days when no appointments can be booked (ISO dates, workspace timezone).
-          </p>
-          {form.blackoutDates.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">No blackout dates configured.</p>
-          ) : (
-            <ul className="space-y-2">
-              {form.blackoutDates.map((d) => (
-                <li key={d} className="flex items-center justify-between rounded-lg border px-3 py-2 text-[13px]">
-                  <span>{d}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      patchForm({ blackoutDates: form.blackoutDates.filter((x) => x !== d) })
-                    }
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap gap-2 items-end">
-            <div>
-              <label className="label" htmlFor="blackout-date">Date</label>
-              <input type="date" className="input mt-1" id="blackout-date" />
-            </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                const dateEl = document.getElementById("blackout-date") as HTMLInputElement | null;
-                const date = dateEl?.value;
-                if (!date) return;
-                patchForm({
-                  blackoutDates: [...new Set([...form.blackoutDates, date])].sort(),
-                });
-                if (dateEl) dateEl.value = "";
-              }}
-            >
-              Add blackout
-            </Button>
-          </div>
-        </div>
-        <div className="avail-card p-6 space-y-4">
-          <h2 className="text-[15px] font-bold">Holiday calendar</h2>
-          <p className="text-[12px] text-[#8a87a0]">
-            Closed dates applied across availability unless overridden.
-          </p>
-          {form.holidays.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">No holidays configured.</p>
-          ) : (
-            <ul className="space-y-2">
-              {form.holidays.map((h) => (
-                <li key={h.date} className="flex items-center justify-between rounded-lg border px-3 py-2 text-[13px]">
-                  <span>{h.date} — {h.name}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      patchForm({ holidays: form.holidays.filter((x) => x.date !== h.date) })
-                    }
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap gap-2 items-end">
-            <div>
-              <label className="label">Date</label>
-              <input
-                type="date"
-                className="input mt-1"
-                id="holiday-date"
-              />
-            </div>
-            <div className="flex-1 min-w-[160px]">
-              <label className="label">Name</label>
-              <input type="text" className="input w-full mt-1" id="holiday-name" placeholder="Holiday name" />
-            </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                const dateEl = document.getElementById("holiday-date") as HTMLInputElement | null;
-                const nameEl = document.getElementById("holiday-name") as HTMLInputElement | null;
-                const date = dateEl?.value;
-                const name = nameEl?.value?.trim();
-                if (!date || !name) return;
-                patchForm({
-                  holidays: [...form.holidays.filter((h) => h.date !== date), { date, name, closed: true }],
-                });
-                if (dateEl) dateEl.value = "";
-                if (nameEl) nameEl.value = "";
-              }}
-            >
-              Add holiday
-            </Button>
-          </div>
-          <div className="flex justify-end">
-            <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : saved ? "Saved" : "Save schedules & holidays"}
-            </Button>
-          </div>
-        </div>
         <SlotDiagnosticsPanel />
-        <CalendarIntegrationsCard />
       </div>
     </div>
   );

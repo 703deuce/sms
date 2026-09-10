@@ -144,6 +144,7 @@ export const analyticsTabs = [
   { id: "booking", label: "Booking" },
   { id: "reminders", label: "Reminders" },
   { id: "automations", label: "Automations" },
+  { id: "revenue", label: "Revenue" },
   { id: "reports", label: "Reports" },
 ] as const;
 
@@ -165,6 +166,10 @@ export const sectionMeta: Record<AnalyticsSection, { title: string; description:
   automations: {
     title: "Automation analytics",
     description: "Workflow execution and follow-up performance.",
+  },
+  revenue: {
+    title: "Revenue analytics",
+    description: "Collected payments, deposits, and service revenue for appointments.",
   },
   reports: {
     title: "Reports",

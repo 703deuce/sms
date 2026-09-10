@@ -3,7 +3,6 @@
 import { Clock, BookOpen } from "lucide-react";
 import BookingRules from "./components/BookingRules";
 import WeeklyHours from "./components/WeeklyHours";
-import DateOverrides from "./components/DateOverrides";
 import AvailabilitySummary from "./components/AvailabilitySummary";
 import LivePreview from "./components/LivePreview";
 import type {
@@ -57,16 +56,6 @@ export default function AvailabilityView({ model, actions }: Props) {
               onUpdateWindow={actions.onUpdateWindow}
               onAddWindow={actions.onAddWindow}
               onRemoveWindow={actions.onRemoveWindow}
-            />
-            <DateOverrides
-              overrides={model.overrides}
-              form={model.form}
-              onOverrideDateChange={actions.onOverrideDateChange}
-              onOverrideClosedChange={actions.onOverrideClosedChange}
-              onOverrideOpenChange={actions.onOverrideOpenChange}
-              onOverrideCloseChange={actions.onOverrideCloseChange}
-              onAddOverride={actions.onAddOverride}
-              onRemoveOverride={actions.onRemoveOverride}
             />
           </div>
 
