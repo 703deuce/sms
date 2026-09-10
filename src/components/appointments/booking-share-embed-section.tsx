@@ -41,7 +41,7 @@ function linkStatus(link: SingleUseLink): string {
 
 export function BookingShareEmbedSection({ workspaceSlug, workspaceName, types }: Props) {
   const [selectedTypeId, setSelectedTypeId] = useState("");
-  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const [_categories, setCategories] = useState<CategoryRow[]>([]);
   const [embedUrl, setEmbedUrl] = useState("");
   const [popupScript, setPopupScript] = useState("");
   const [singleUseLinks, setSingleUseLinks] = useState<SingleUseLink[]>([]);
