@@ -4,6 +4,10 @@
 **Generated:** 2026-09-09
 **Authority:** `docs/APPOINTMENTS-FEATURE-ABSORPTION-AUDIT.md`
 
+## Batch 8B-5 absorption (2026-09-10) — STATIC_PASS
+
+Absorbed into canonical UI (no browser UAT): Contact Detail panels (overview, packages/memberships, account credit, household, booking access, custom fields), contact merge modal, segments appointment conditions, import custom-field mapping, POS coupons + account credit + recent sales. **Remaining:** POS tax engine (BACKEND_GAP), full Stripe card capture at POS (provider integration), portal/public wallet waves, membership pause/cancel contextual actions where backend incomplete.
+
 Features that must be **added to or moved into** existing final pages (not new page creation).
 
 ## PAGE: /appointments
