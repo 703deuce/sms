@@ -3,6 +3,7 @@ import "server-only";
 import { getPrisma } from "@/lib/db";
 import { generateSecureToken, hashToken } from "./crypto";
 import { listEligibleEntitlementsForContact } from "./entitlements";
+import { buildPortalCustomerPayload } from "./portal-customer-payload";
 
 export async function createClientPortalSession(workspaceId: string, contactId: string) {
   const prisma = getPrisma();
@@ -76,34 +77,41 @@ export async function resolveClientPortalSession(token: string) {
     data: { lastUsedAt: new Date() },
   });
 
+  const customerPayload = await buildPortalCustomerPayload(
+    session.workspaceId,
+    session.contactId,
+    workspace?.slug,
+  );
+
   return {
-    session,
+    session: {
+      id: session.id,
+      workspaceId: session.workspaceId,
+      contactId: session.contactId,
+      expiresAt: session.expiresAt.toISOString(),
+    },
     workspaceSlug: workspace?.slug,
-    appointments: appointments.map((a: (typeof appointments)[number]) => ({
+    ...customerPayload,
+    appointments: customerPayload.appointments.map((a) => ({
       id: a.id,
       serviceName: a.serviceName,
-      startsAt: a.startsAt.toISOString(),
-      endsAt: a.endsAt?.toISOString(),
+      startsAt: a.startsAt,
+      endsAt: a.endsAt,
       status: a.status,
-      metadata: a.metadata as { manageAppointmentUrl?: string },
+      metadata: { manageAppointmentUrl: a.manageAppointmentUrl },
+      staffName: a.staffName,
+      locationLabel: a.locationLabel,
+      meetingLink: a.meetingLink,
+      pendingApproval: a.pendingApproval,
+      paymentSummary: a.paymentSummary,
     })),
-    upcomingAppointments: appointments
-      .filter((a: (typeof appointments)[number]) => a.startsAt > new Date() && !["canceled", "cancelled", "completed", "no_show"].includes(a.status))
-      .map((a: (typeof appointments)[number]) => ({
-        id: a.id,
-        serviceName: a.serviceName,
-        startsAt: a.startsAt.toISOString(),
-        status: a.status,
+    entitlements: {
+      ...entitlements,
+      gifts: entitlements.gifts.map((g: (typeof entitlements.gifts)[number]) => ({
+        ...g,
+        code: g.code && g.code.length > 4 ? `•••• ${g.code.slice(-4)}` : g.code ? "••••" : undefined,
       })),
-    pastAppointments: appointments
-      .filter((a: (typeof appointments)[number]) => a.startsAt <= new Date() || ["completed", "no_show", "canceled", "cancelled"].includes(a.status))
-      .map((a: (typeof appointments)[number]) => ({
-        id: a.id,
-        serviceName: a.serviceName,
-        startsAt: a.startsAt.toISOString(),
-        status: a.status,
-      })),
-    entitlements,
+    },
     packagePurchaseHistory: packageLedgers
       .filter((e: (typeof packageLedgers)[number]) => e.kind === "purchase")
       .map((e: (typeof packageLedgers)[number]) => ({
@@ -135,8 +143,22 @@ export async function resolveClientPortalSession(token: string) {
       provider: p.provider,
       appointmentId: p.appointmentId,
     })),
-    waitlist,
+    waitlist: waitlist.map((w: { id: string; serviceName?: string | null; status?: string }) => ({
+      id: w.id,
+      serviceName: w.serviceName,
+      status: w.status,
+    })),
   };
+}
+
+export async function revokeClientPortalSession(token: string) {
+  const prisma = getPrisma();
+  const session = await prisma.clientPortalSession.findUnique({
+    where: { tokenHash: hashToken(token) },
+  });
+  if (!session) return false;
+  await prisma.clientPortalSession.delete({ where: { id: session.id } });
+  return true;
 }
 
 export function clientPortalUrl(baseUrl: string, token: string) {
