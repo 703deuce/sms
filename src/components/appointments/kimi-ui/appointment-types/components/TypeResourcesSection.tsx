@@ -34,17 +34,17 @@ export function TypeResourcesSection({ form, resourceOptions, onFormChange }: Pr
           </p>
         </div>
         <Link
-          href="/appointments/resources"
+          href="/appointments/booking/rooms-equipment"
           className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
         >
-          Manage resources →
+          Manage rooms & equipment →
         </Link>
       </div>
       {resourceOptions.length === 0 ? (
         <p className="text-[12.5px] text-[#8a8fa3] rounded-xl border border-dashed border-[#e4e6ee] px-4 py-6 text-center">
           No resources yet.{" "}
-          <Link href="/appointments/resources" className="text-[#5b4bff] hover:underline">
-            Create a resource
+          <Link href="/appointments/booking/rooms-equipment" className="text-[#5b4bff] hover:underline">
+            Create a room or equipment item
           </Link>{" "}
           to assign it here.
         </p>

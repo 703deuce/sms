@@ -45,6 +45,7 @@ function formatPrice(payment?: PaymentRequirement) {
 export type { PublicBookingFlowOptions } from "./types";
 
 export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
+  const { bookForContactId, portalToken } = options;
   const {
     slug,
     initialServiceId,
@@ -144,6 +145,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [additionalServices, setAdditionalServices] = useState<PublicBookingType[]>([]);
   const [addingAdditionalService, setAddingAdditionalService] = useState(false);
   const [slotHoldId, setSlotHoldId] = useState("");
+  const [payWhatYouWantCents, setPayWhatYouWantCents] = useState<number | null>(null);
+  const [singleUseLinkError, setSingleUseLinkError] = useState("");
+  const [aiPendingSlot, setAiPendingSlot] = useState<PublicSlot | null>(null);
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -429,6 +433,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       setAttendeeCount(1);
       const opts = (normalized.durationOptions || []).filter((o) => o.active !== false && o.minutes > 0);
       setSelectedDuration(opts[0]?.minutes ?? normalized.durationMinutes);
+      const pwyw = normalized.config?.payment;
+      if (pwyw?.mode === "pay_what_you_want") {
+        setPayWhatYouWantCents(pwyw.payWhatYouWant?.suggestedCents ?? pwyw.payWhatYouWant?.minimumCents ?? 0);
+      } else {
+        setPayWhatYouWantCents(null);
+      }
       setStep("datetime");
       setSlotHoldId("");
       await fetchAvailability(normalized, opts[0]?.minutes ?? normalized.durationMinutes, {
@@ -541,10 +551,27 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
           const match = list.find((t) => t.id === (preselectTypeId || initialServiceId));
           if (match) void pickType(match);
         }
+        if (effectiveSingleUseToken) {
+          void fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "validate_single_use", singleUseToken: effectiveSingleUseToken }),
+          })
+            .then(async (r) => {
+              const json = await r.json();
+              if (!r.ok) throw new Error(json.error || "Invalid booking link");
+              const typeId = json.data?.appointmentTypeId as string | undefined;
+              if (typeId) {
+                const match = list.find((t) => t.id === typeId);
+                if (match) void pickType(match);
+              }
+            })
+            .catch((err: Error) => setSingleUseLinkError(err.message));
+        }
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [slug, initialServiceId, preselectTypeId, pickType, deepLinkStaffId, deepLinkLocationId]);
+  }, [slug, initialServiceId, preselectTypeId, pickType, deepLinkStaffId, deepLinkLocationId, effectiveSingleUseToken]);
 
   useEffect(() => {
     load();
@@ -620,20 +647,28 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     }
   }, [aiHistory, aiInput, selectedType, slug, types]);
 
-  const selectAiSlot = useCallback(
-    (slot: PublicSlot) => {
-      setStartsAt(slot.startsAt);
-      if (selectedType) setStep("info");
-      else if (types.length === 1) {
-        setSelectedType(types[0]);
-        setStep("info");
-      } else {
-        setStep("service");
-        setError("Please select a service type first.");
-      }
-    },
-    [selectedType, types],
-  );
+  const selectAiSlot = useCallback((slot: PublicSlot) => {
+    setAiPendingSlot(slot);
+    setError("");
+  }, []);
+
+  const confirmAiSlot = useCallback(() => {
+    if (!aiPendingSlot) return;
+    setStartsAt(aiPendingSlot.startsAt);
+    setAiPendingSlot(null);
+    if (selectedType) setStep("info");
+    else if (types.length === 1) {
+      setSelectedType(types[0]);
+      setStep("info");
+    } else {
+      setStep("service");
+      setError("Please select a service type first.");
+    }
+  }, [aiPendingSlot, selectedType, types]);
+
+  const cancelAiSlot = useCallback(() => {
+    setAiPendingSlot(null);
+  }, []);
 
   const joinWaitlist = useCallback(async (): Promise<boolean> => {
     if (!selectedType || !phone.trim() || !firstName.trim()) {
@@ -769,6 +804,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       utm: Object.keys(utm).length ? utm : undefined,
       emailOtpVerified: otpVerified || undefined,
       singleUseToken: effectiveSingleUseToken,
+      bookForContactId: bookForContactId || undefined,
+      portalToken: portalToken || undefined,
     };
     if (extraRecipients.length) {
       payload.extraRecipients = extraRecipients
@@ -804,6 +841,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     }
     if (couponCode.trim()) {
       payload.couponCode = couponCode.trim();
+    }
+    if (selectedType?.config?.payment?.mode === "pay_what_you_want" && payWhatYouWantCents != null) {
+      payload.payWhatYouWantCents = payWhatYouWantCents;
     }
     const addOnSelections = Object.entries(selectedAddOns)
       .filter(([, qty]) => qty > 0)
@@ -951,6 +991,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     workspace,
     loyaltyProgramId,
     loyaltyRedeemPoints,
+    couponCode,
+    payWhatYouWantCents,
   ]);
 
   const onPaymentSuccess = useCallback(async () => {
@@ -1078,6 +1120,12 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     verifyOtp,
     sendAiMessage,
     selectAiSlot,
+    aiPendingSlot,
+    confirmAiSlot,
+    cancelAiSlot,
+    payWhatYouWantCents,
+    setPayWhatYouWantCents,
+    singleUseLinkError,
     joinWaitlist,
     book,
     onPaymentSuccess,

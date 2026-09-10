@@ -47,9 +47,9 @@ export function RecallsHub({
             Recalls use your appointment history and booking types to reach out at the right time.
           </p>
         </div>
-        <a className="tv-btn tv-btn-primary" href="/appointments/recall-campaigns">
+        <a className="tv-btn tv-btn-primary" href="/appointments/automations/recall">
           <Plus size={15} />
-          New recall campaign
+          New recall automation
         </a>
       </header>
 
@@ -62,8 +62,8 @@ export function RecallsHub({
           title="Recall campaigns"
           description="Target customers with no future appointment by last visit or appointment type. Send an SMS reminder inviting them to book again."
           meta={recallCampaignsMeta || "Set up recall campaigns"}
-          cta="Open recall campaigns"
-          href="/appointments/recall-campaigns"
+          cta="Open recall automation"
+          href="/appointments/automations/recall"
         />
         <RecallFeatureCard
           icon={RefreshCcw}
@@ -71,7 +71,7 @@ export function RecallsHub({
           description="Automatically follow up after missed appointments and invite customers to rebook. Follow-ups stop when the customer replies or rebooks."
           meta={noShowRecoveryMeta || "Configure no-show recovery"}
           cta="Open no-show recovery"
-          href="/appointments/no-show-recovery"
+          href="/appointments/automations/no-show"
         />
       </div>
 

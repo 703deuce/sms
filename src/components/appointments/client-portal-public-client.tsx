@@ -1,53 +1,70 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { PortalMembershipActions } from "@/components/appointments/portal-membership-actions";
+import { PortalPaymentMethodSection } from "@/components/appointments/portal-payment-method-section";
+
+type PortalSection = "home" | "appointments" | "products" | "payments" | "documents" | "profile";
 
 type AppointmentRow = {
   id: string;
   serviceName?: string | null;
   startsAt?: string;
   status?: string;
+  staffName?: string | null;
+  locationLabel?: string | null;
+  meetingLink?: string | null;
+  pendingApproval?: boolean;
   metadata?: { manageAppointmentUrl?: string };
-};
-
-type PackageBalance = {
-  id: string;
-  product?: { name?: string };
-  remainingCredits?: Record<string, number>;
-  expiresAt?: string | null;
-};
-
-type GiftBalance = {
-  id: string;
-  code?: string;
-  balanceCents?: number;
-};
-
-type Membership = {
-  id: string;
-  status?: string;
-  product?: { name?: string; billingInterval?: string };
-};
-
-type LedgerEntry = {
-  id?: string;
-  kind?: string;
-  delta?: number;
-  note?: string;
-  createdAt?: string;
-  productName?: string;
+  manageIcsUrl?: string;
+  recurringSeriesId?: string | null;
+  paymentSummary?: {
+    balanceDueCents?: number;
+    totalPriceCents?: number;
+    amountPaidCents?: number;
+    paymentStatus?: string;
+  };
 };
 
 type PortalData = {
-  workspaceSlug?: string;
+  workspace?: { slug?: string; name?: string; logoUrl?: string | null };
+  contact?: { id?: string; firstName: string; lastName: string; email: string; phone: string };
   appointments: AppointmentRow[];
+  upcomingAppointments?: AppointmentRow[];
+  pastAppointments?: AppointmentRow[];
+  balanceDueAppointments?: AppointmentRow[];
   entitlements: {
-    packages?: PackageBalance[];
-    gifts?: GiftBalance[];
-    memberships?: Membership[];
+    packages?: Array<{
+      id: string;
+      product?: { name?: string };
+      remainingCredits?: Record<string, number>;
+      expiresAt?: string | null;
+      status?: string;
+    }>;
+    gifts?: Array<{ id: string; code?: string; balanceCents?: number; status?: string }>;
+    memberships?: Array<{
+      id: string;
+      status?: string;
+      product?: { name?: string; billingInterval?: string };
+      currentPeriodEnd?: string;
+      pausedUntil?: string;
+      cancelAtPeriodEnd?: boolean;
+    }>;
   };
-  packageUsageHistory?: LedgerEntry[];
-  packagePurchaseHistory?: LedgerEntry[];
+  packageUsageHistory?: Array<{
+    id?: string;
+    kind?: string;
+    delta?: unknown;
+    note?: string;
+    createdAt?: string;
+    productName?: string;
+  }>;
+  packagePurchaseHistory?: Array<{
+    id?: string;
+    createdAt?: string;
+    productName?: string;
+    delta?: unknown;
+  }>;
   paymentHistory?: Array<{
     id: string;
     amountCents?: number;
@@ -57,7 +74,64 @@ type PortalData = {
     provider?: string;
     appointmentId?: string;
   }>;
+  accountCreditHistory?: Array<{
+    id: string;
+    date: string;
+    activity: string;
+    amountCents: number;
+    balanceCents: number;
+  }>;
+  giftRedemptionHistory?: Array<{
+    id: string;
+    date: string;
+    activity: string;
+    amountCents: number;
+    maskedCode?: string;
+  }>;
+  invoices?: Array<{
+    id: string;
+    status: string;
+    totalCents: number;
+    balanceDueCents: number;
+    createdAt: string;
+    dueAt?: string | null;
+  }>;
+  outstandingInvoices?: Array<{
+    id: string;
+    balanceDueCents: number;
+    dueAt?: string | null;
+  }>;
+  documents?: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    appointmentId: string;
+    serviceName?: string | null;
+    date: string;
+    status: string;
+    detail?: string;
+  }>;
   waitlist?: Array<{ id: string; serviceName?: string; status?: string }>;
+  household?: {
+    id: string;
+    name?: string | null;
+    members: Array<{
+      id: string;
+      contactId?: string | null;
+      displayName?: string | null;
+      role?: string | null;
+      isSelf?: boolean;
+    }>;
+  } | null;
+  workspaceSlug?: string;
+};
+
+type PaymentMethodInfo = {
+  hasSavedCard: boolean;
+  card?: { brand?: string; last4?: string; expMonth?: number; expYear?: number } | null;
+  stripePublishableKey?: string | null;
+  stripeAccount?: string | null;
+  providerConfigured?: boolean;
 };
 
 function formatMoney(cents: number) {
@@ -66,23 +140,66 @@ function formatMoney(cents: number) {
 
 function formatDate(value?: string) {
   if (!value) return "—";
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatShortDate(value?: string) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function isWorkspaceSlugToken(token: string) {
   return token.length < 48 && /[a-z]/i.test(token) && !/^[a-f0-9]{32,}$/i.test(token);
 }
 
+function packageCreditsTotal(credits?: Record<string, number>) {
+  return Object.values(credits || {}).reduce((sum, n) => sum + (Number(n) || 0), 0);
+}
+
+function membershipStatusLabel(status?: string) {
+  switch (status) {
+    case "active":
+      return "Active";
+    case "past_due":
+      return "Past due";
+    case "paused":
+      return "Paused";
+    case "canceled":
+      return "Canceled";
+    case "cancellation_scheduled":
+      return "Cancellation scheduled";
+    default:
+      return status ? status.replace(/_/g, " ") : "Active";
+  }
+}
+
+const NAV: Array<{ id: PortalSection; label: string }> = [
+  { id: "home", label: "Home" },
+  { id: "appointments", label: "Appointments" },
+  { id: "products", label: "Packages & Memberships" },
+  { id: "payments", label: "Payments & Credit" },
+  { id: "documents", label: "Documents" },
+  { id: "profile", label: "Profile" },
+];
+
 function PortalSlugLogin({ slug }: { slug: string }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function sendCode() {
     setLoading(true);
     setMessage(null);
+    setError(null);
     const res = await fetch(`/api/public/portal/login/${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -91,16 +208,17 @@ function PortalSlugLogin({ slug }: { slug: string }) {
     setLoading(false);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMessage(json.error || "Could not send verification code");
+      setError(json.error || "Could not send verification code");
       return;
     }
     setOtpSent(true);
-    setMessage("Verification code sent — check your email for the magic link OTP.");
+    setMessage("Enter the 6-digit code sent to your email.");
   }
 
   async function verifyCode() {
     setLoading(true);
     setMessage(null);
+    setError(null);
     const res = await fetch(`/api/public/portal/login/${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,48 +227,71 @@ function PortalSlugLogin({ slug }: { slug: string }) {
     setLoading(false);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMessage(json.error || "Invalid verification code");
+      const msg = String(json.error || "");
+      if (/expired/i.test(msg)) setError("This code has expired. Request a new one.");
+      else if (/invalid/i.test(msg)) setError("Invalid code. Check the email and try again.");
+      else setError(msg || "Could not verify code");
       return;
     }
     const portalToken = String(json.data?.portalToken || "");
     if (!portalToken) {
-      setMessage("Portal session could not be created");
+      setError("Portal session could not be created");
       return;
     }
     window.location.href = `/portal/${portalToken}`;
   }
 
+  const bookHref = `/book/${encodeURIComponent(slug)}`;
+
   return (
     <main className="mx-auto max-w-md space-y-6 p-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">Client portal</h1>
+        <h1 className="text-2xl font-semibold">Your account</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in with your email. We&apos;ll send a one-time verification code (OTP) or magic link.
+          Sign in with your email. We&apos;ll send a one-time verification code.
         </p>
       </header>
       <div className="space-y-4 rounded-lg border p-4">
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Email</span>
-          <input
-            type="email"
-            className="rounded border px-3 py-2"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-        </label>
-        {otpSent ? (
+        {!otpSent ? (
           <label className="flex flex-col gap-1 text-sm">
-            <span>Verification code</span>
+            <span>Email address</span>
             <input
+              type="email"
               className="rounded border px-3 py-2"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              inputMode="numeric"
-              autoComplete="one-time-code"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
           </label>
-        ) : null}
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Enter the code sent to <span className="font-medium text-foreground">{email}</span>
+            </p>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Verification code</span>
+              <input
+                className="rounded border px-3 py-2 tracking-widest"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={8}
+              />
+            </label>
+            <button
+              type="button"
+              className="text-sm text-primary underline"
+              onClick={() => {
+                setOtpSent(false);
+                setCode("");
+                setError(null);
+              }}
+            >
+              Change email
+            </button>
+          </>
+        )}
         <div className="flex flex-wrap gap-2">
           {!otpSent ? (
             <button
@@ -159,21 +300,37 @@ function PortalSlugLogin({ slug }: { slug: string }) {
               disabled={loading || !email.trim()}
               onClick={() => void sendCode()}
             >
-              {loading ? "Sending…" : "Send verification code"}
+              {loading ? "Sending…" : "Send code"}
             </button>
           ) : (
-            <button
-              type="button"
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-              disabled={loading || !code.trim()}
-              onClick={() => void verifyCode()}
-            >
-              {loading ? "Verifying…" : "Sign in to portal"}
-            </button>
+            <>
+              <button
+                type="button"
+                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                disabled={loading || !code.trim()}
+                onClick={() => void verifyCode()}
+              >
+                {loading ? "Verifying…" : "Verify"}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-4 py-2 text-sm disabled:opacity-50"
+                disabled={loading}
+                onClick={() => void sendCode()}
+              >
+                Resend code
+              </button>
+            </>
           )}
         </div>
-        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">{error}</p>
+        ) : null}
+        {message ? <p className="text-sm text-muted-foreground" role="status">{message}</p> : null}
       </div>
+      <p className="text-center text-sm text-muted-foreground">
+        <a href={bookHref} className="underline">Return to booking page</a>
+      </p>
     </main>
   );
 }
@@ -188,63 +345,113 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
 function ClientPortalTokenView({ token }: { token: string }) {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hasSavedCard, setHasSavedCard] = useState(false);
-  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [section, setSection] = useState<PortalSection>("home");
+  const [appointmentFilter, setAppointmentFilter] = useState<"upcoming" | "past">("upcoming");
   const [walletBalanceCents, setWalletBalanceCents] = useState<number | null>(null);
+  const [walletHistory, setWalletHistory] = useState<PortalData["accountCreditHistory"]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodInfo | null>(null);
+  const [profileDraft, setProfileDraft] = useState({ firstName: "", lastName: "", phone: "" });
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const loadPaymentMethods = useCallback(async () => {
+    const res = await fetch(`/api/public/portal/${token}/payment-methods`);
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) setPaymentMethod(json.data as PaymentMethodInfo);
+  }, [token]);
+
+  const load = useCallback(async () => {
+    setError(null);
+    const res = await fetch(`/api/public/portal/${token}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Invalid portal link");
+    const resolved = json.data as PortalData;
+    setData({
+      ...resolved,
+      appointments: resolved.appointments || [],
+      entitlements: resolved.entitlements || {},
+    });
+    if (resolved.contact) {
+      setProfileDraft({
+        firstName: resolved.contact.firstName || "",
+        lastName: resolved.contact.lastName || "",
+        phone: resolved.contact.phone || "",
+      });
+    }
+    await loadPaymentMethods();
+  }, [loadPaymentMethods, token]);
 
   useEffect(() => {
-    void fetch(`/api/public/portal/${token}`)
-      .then(async (res) => {
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Invalid portal link");
-        const resolved = json.data;
-        setData({
-          workspaceSlug: resolved.workspaceSlug,
-          appointments: resolved.appointments || [],
-          entitlements: resolved.entitlements || {},
-          packageUsageHistory: resolved.packageUsageHistory || [],
-          packagePurchaseHistory: resolved.packagePurchaseHistory || [],
-          paymentHistory: resolved.paymentHistory || [],
-          waitlist: resolved.waitlist || [],
-        });
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
-
-    void fetch(`/api/public/portal/${token}/payment-methods`)
-      .then(async (res) => {
-        const json = await res.json().catch(() => ({}));
-        if (res.ok) setHasSavedCard(Boolean(json.data?.hasSavedCard));
-      })
-      .catch(() => undefined);
-
+    void load().catch((err) =>
+      setError(err instanceof Error ? err.message : "Failed to load"),
+    );
     void fetch(`/api/public/portal/${token}/wallet`)
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
-        if (res.ok) setWalletBalanceCents(Number(json.data?.balanceCents ?? 0));
+        if (res.ok) {
+          setWalletBalanceCents(Number(json.data?.balanceCents ?? 0));
+          setWalletHistory(json.data?.history || []);
+        }
       })
       .catch(() => undefined);
-  }, [token]);
+  }, [load, token]);
 
-  const upcoming = useMemo(() => {
-    const now = Date.now();
-    return (data?.appointments || [])
-      .filter((a) => a.startsAt && new Date(a.startsAt).getTime() >= now)
-      .sort((a, b) => new Date(a.startsAt!).getTime() - new Date(b.startsAt!).getTime());
-  }, [data]);
+  const slug = data?.workspace?.slug || data?.workspaceSlug;
+  const bookHref = slug ? `/book/${encodeURIComponent(slug)}` : "/book";
+  const storeHref = slug ? `/book/${encodeURIComponent(slug)}/store` : bookHref;
 
-  const past = useMemo(() => {
-    const now = Date.now();
-    return (data?.appointments || [])
-      .filter((a) => a.startsAt && new Date(a.startsAt).getTime() < now)
-      .sort((a, b) => new Date(b.startsAt!).getTime() - new Date(a.startsAt!).getTime())
-      .slice(0, 10);
-  }, [data]);
+  const upcoming = useMemo(
+    () => data?.upcomingAppointments || data?.appointments.filter((a) => a.startsAt && new Date(a.startsAt).getTime() >= Date.now()) || [],
+    [data],
+  );
+  const past = useMemo(
+    () => data?.pastAppointments || [],
+    [data],
+  );
+  const nextAppointment = upcoming[0];
+
+  async function signOut() {
+    await fetch(`/api/public/portal/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "sign_out" }),
+    });
+    if (slug) window.location.href = `/portal/${slug}`;
+    else window.location.href = "/book";
+  }
+
+  async function saveProfile() {
+    setProfileSaving(true);
+    setProfileMessage(null);
+    const res = await fetch(`/api/public/portal/${token}/profile`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profileDraft),
+    });
+    const json = await res.json().catch(() => ({}));
+    setProfileSaving(false);
+    if (!res.ok) {
+      setProfileMessage(json.error || "Could not save profile");
+      return;
+    }
+    setProfileMessage("Profile updated.");
+    void load();
+  }
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl p-6">
-        <h1 className="text-xl font-semibold">Client portal</h1>
-        <p className="mt-4 text-sm text-destructive">{error}</p>
+      <main className="mx-auto max-w-3xl space-y-4 p-6">
+        <h1 className="text-xl font-semibold">Your account</h1>
+        <p className="text-sm text-destructive" role="alert">
+          {/invalid|expired/i.test(error)
+            ? "This account link is no longer valid."
+            : error}
+        </p>
+        {slug ? (
+          <a href={bookHref} className="text-sm font-medium text-primary underline">
+            Return to booking page
+          </a>
+        ) : null}
       </main>
     );
   }
@@ -257,188 +464,606 @@ function ClientPortalTokenView({ token }: { token: string }) {
     );
   }
 
-  const bookHref = data.workspaceSlug ? `/book/${encodeURIComponent(data.workspaceSlug)}` : "/book";
-  const storeHref = data.workspaceSlug
-    ? `/book/${encodeURIComponent(data.workspaceSlug)}/store`
-    : "/book";
+  const businessName = data.workspace?.name || "Your business";
+  const customerName = [data.contact?.firstName, data.contact?.lastName].filter(Boolean).join(" ");
 
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-6">
-      <header className="space-y-3">
-        <h1 className="text-2xl font-semibold">Your account</h1>
-        <p className="text-sm text-muted-foreground">
-          Appointments, packages, memberships, and gift balances in one place.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <a
-            href={bookHref}
-            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+    <main className="mx-auto max-w-3xl space-y-6 p-4 pb-12 sm:p-6">
+      <header className="space-y-3 border-b pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold sm:text-2xl">{businessName}</h1>
+            {customerName ? (
+              <p className="text-sm text-muted-foreground">Signed in as {customerName}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="text-sm text-muted-foreground underline"
+            onClick={() => void signOut()}
           >
-            Book again
-          </a>
-          <a href={storeHref} className="rounded-md border px-4 py-2 text-sm">
-            Buy packages or memberships
-          </a>
+            Sign out
+          </button>
         </div>
+        <nav aria-label="Account sections" className="flex flex-wrap gap-2">
+          {NAV.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSection(item.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium sm:text-sm ${
+                section === item.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <section aria-labelledby="upcoming-heading">
-        <h2 id="upcoming-heading" className="text-lg font-medium">Upcoming appointments</h2>
-        <ul className="mt-3 divide-y rounded-lg border">
-          {upcoming.length === 0 ? (
-            <li className="p-4 text-sm text-muted-foreground">No upcoming appointments.</li>
-          ) : (
-            upcoming.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
-                <div>
-                  <p className="font-medium">{a.serviceName || "Appointment"}</p>
-                  <p className="text-muted-foreground">{formatDate(a.startsAt)}</p>
-                </div>
-                {a.metadata?.manageAppointmentUrl ? (
-                  <a href={a.metadata.manageAppointmentUrl} className="text-sm underline">
+      {section === "home" ? (
+        <div className="space-y-4">
+          {nextAppointment ? (
+            <section className="rounded-lg border p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Next appointment
+              </h2>
+              <p className="mt-2 text-lg font-semibold">{nextAppointment.serviceName}</p>
+              <p className="text-sm text-muted-foreground">{formatDate(nextAppointment.startsAt)}</p>
+              {nextAppointment.staffName ? (
+                <p className="text-sm text-muted-foreground">{nextAppointment.staffName}</p>
+              ) : null}
+              {nextAppointment.pendingApproval ? (
+                <p className="mt-2 text-sm text-amber-800">Pending approval</p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {nextAppointment.metadata?.manageAppointmentUrl ? (
+                  <a
+                    href={nextAppointment.metadata.manageAppointmentUrl}
+                    className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+                  >
                     Manage
                   </a>
                 ) : null}
+                {nextAppointment.manageIcsUrl ? (
+                  <a
+                    href={nextAppointment.manageIcsUrl}
+                    className="rounded-md border px-3 py-1.5 text-sm"
+                    download
+                  >
+                    Add to calendar
+                  </a>
+                ) : null}
+                {nextAppointment.meetingLink ? (
+                  <a
+                    href={nextAppointment.meetingLink}
+                    className="rounded-md border px-3 py-1.5 text-sm"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Join meeting
+                  </a>
+                ) : null}
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-lg border p-4 text-sm text-muted-foreground">
+              No upcoming appointments.{" "}
+              <a href={bookHref} className="font-medium text-primary underline">Book an appointment</a>
+            </section>
+          )}
+
+          <a
+            href={bookHref}
+            className="block rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm font-medium"
+          >
+            Book another appointment
+          </a>
+
+          {(data.entitlements.packages || []).length > 0 ? (
+            <SummaryCard
+              title="Packages"
+              body={`${data.entitlements.packages![0].product?.name || "Package"} · ${packageCreditsTotal(data.entitlements.packages![0].remainingCredits)} credits left`}
+              onClick={() => setSection("products")}
+            />
+          ) : null}
+
+          {(data.entitlements.memberships || []).length > 0 ? (
+            <SummaryCard
+              title="Membership"
+              body={`${data.entitlements.memberships![0].product?.name || "Membership"} · ${membershipStatusLabel(data.entitlements.memberships![0].status)}`}
+              onClick={() => setSection("products")}
+            />
+          ) : null}
+
+          {walletBalanceCents != null && walletBalanceCents > 0 ? (
+            <SummaryCard
+              title="Account credit"
+              body={formatMoney(walletBalanceCents)}
+              onClick={() => setSection("payments")}
+            />
+          ) : null}
+
+          {(data.balanceDueAppointments || []).length > 0 || (data.outstandingInvoices || []).length > 0 ? (
+            <SummaryCard
+              title="Balance due"
+              body={formatMoney(
+                (data.balanceDueAppointments || []).reduce(
+                  (s, a) => s + (a.paymentSummary?.balanceDueCents || 0),
+                  0,
+                ) +
+                  (data.outstandingInvoices || []).reduce((s, i) => s + (i.balanceDueCents || 0), 0),
+              )}
+              onClick={() => setSection("payments")}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      {section === "appointments" ? (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <FilterButton active={appointmentFilter === "upcoming"} onClick={() => setAppointmentFilter("upcoming")}>
+              Upcoming
+            </FilterButton>
+            <FilterButton active={appointmentFilter === "past"} onClick={() => setAppointmentFilter("past")}>
+              Past
+            </FilterButton>
+          </div>
+          <ul className="divide-y rounded-lg border">
+            {(appointmentFilter === "upcoming" ? upcoming : past).length === 0 ? (
+              <li className="p-4 text-sm text-muted-foreground">
+                {appointmentFilter === "upcoming" ? "No upcoming appointments." : "No past appointments yet."}
               </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <section aria-labelledby="wallet-heading">
-        <h2 id="wallet-heading" className="text-lg font-medium">Client wallet</h2>
-        <div className="mt-3 rounded-lg border p-4 text-sm">
-          {walletBalanceCents != null ? (
-            <p className="text-muted-foreground">
-              Available balance: <span className="font-medium text-foreground">{formatMoney(walletBalanceCents)}</span>
-            </p>
-          ) : (
-            <p className="text-muted-foreground">Wallet balance unavailable.</p>
-          )}
-        </div>
-      </section>
-
-      <section aria-labelledby="payment-heading">
-        <h2 id="payment-heading" className="text-lg font-medium">Payment methods</h2>
-        <div className="mt-3 rounded-lg border p-4 text-sm">
-          {hasSavedCard ? (
-            <p className="text-muted-foreground">A card is saved for faster checkout on your next booking.</p>
-          ) : (
-            <p className="text-muted-foreground">
-              No card on file yet. Save a card during your next paid booking, or ask the business to send a
-              payment link from your appointment.
-            </p>
-          )}
-          {paymentMessage ? <p className="mt-2 text-primary">{paymentMessage}</p> : null}
-        </div>
-      </section>
-
-      <section aria-labelledby="packages-heading">
-        <h2 id="packages-heading" className="text-lg font-medium">Packages</h2>
-        <ul className="mt-3 divide-y rounded-lg border">
-          {(data.entitlements.packages || []).length === 0 ? (
-            <li className="p-4 text-sm text-muted-foreground">No active packages.</li>
-          ) : (
-            data.entitlements.packages!.map((pkg) => {
-              const credits = pkg.remainingCredits || {};
-              const total = Object.values(credits).reduce((sum, n) => sum + n, 0);
-              return (
-                <li key={pkg.id} className="p-4 text-sm">
-                  <p className="font-medium">{pkg.product?.name || "Package"}</p>
-                  <p className="text-muted-foreground">{total} credits remaining</p>
-                  {pkg.expiresAt ? (
-                    <p className="text-muted-foreground">Expires {formatDate(pkg.expiresAt)}</p>
+            ) : (
+              (appointmentFilter === "upcoming" ? upcoming : past).map((a) => (
+                <li key={a.id} className="space-y-2 p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{a.serviceName || "Appointment"}</p>
+                      <p className="text-muted-foreground">{formatDate(a.startsAt)}</p>
+                      {a.staffName ? <p className="text-muted-foreground">{a.staffName}</p> : null}
+                      {a.locationLabel ? <p className="text-muted-foreground">{a.locationLabel}</p> : null}
+                      {a.recurringSeriesId ? (
+                        <p className="text-xs text-muted-foreground">Recurring series</p>
+                      ) : null}
+                    </div>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize">{a.status}</span>
+                  </div>
+                  {a.pendingApproval ? (
+                    <p className="text-xs text-amber-800">The business will confirm your request.</p>
                   ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {a.metadata?.manageAppointmentUrl ? (
+                      <a href={a.metadata.manageAppointmentUrl} className="text-sm font-medium text-primary underline">
+                        Manage
+                      </a>
+                    ) : null}
+                    {a.manageIcsUrl ? (
+                      <a href={a.manageIcsUrl} className="text-sm text-muted-foreground underline" download>
+                        Add to calendar
+                      </a>
+                    ) : null}
+                    {a.meetingLink ? (
+                      <a href={a.meetingLink} className="text-sm font-medium text-primary underline" target="_blank" rel="noreferrer">
+                        Join meeting
+                      </a>
+                    ) : null}
+                    <a href={bookHref} className="text-sm text-muted-foreground underline">Book again</a>
+                  </div>
                 </li>
-              );
-            })
-          )}
-        </ul>
-        {(data.packageUsageHistory || []).length > 0 ? (
-          <div className="mt-4">
-            <h3 className="text-sm font-medium">Package usage</h3>
+              ))
+            )}
+          </ul>
+          {(data.waitlist || []).length > 0 ? (
+            <section>
+              <h2 className="text-sm font-semibold">Waitlist</h2>
+              <ul className="mt-2 divide-y rounded-lg border text-sm">
+                {data.waitlist!.map((w) => (
+                  <li key={w.id} className="flex justify-between gap-4 p-3">
+                    <span>{w.serviceName || "Waitlist"}</span>
+                    <span className="text-muted-foreground capitalize">{w.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      {section === "products" ? (
+        <div className="space-y-6">
+          <ProductSection title="Packages">
+            {(data.entitlements.packages || []).length === 0 ? (
+              <EmptyNote>No active packages.</EmptyNote>
+            ) : (
+              <ul className="divide-y rounded-lg border text-sm">
+                {data.entitlements.packages!.map((pkg) => {
+                  const credits = packageCreditsTotal(pkg.remainingCredits);
+                  const expired = pkg.expiresAt && new Date(pkg.expiresAt).getTime() < Date.now();
+                  const depleted = credits <= 0;
+                  return (
+                    <li key={pkg.id} className="space-y-1 p-4">
+                      <p className="font-medium">{pkg.product?.name || "Package"}</p>
+                      <p className="text-muted-foreground">
+                        {depleted ? "0 credits remaining" : `${credits} credits remaining`}
+                      </p>
+                      {pkg.expiresAt ? (
+                        <p className="text-muted-foreground">
+                          {expired ? "Expired" : "Expires"} {formatShortDate(pkg.expiresAt)}
+                        </p>
+                      ) : null}
+                      {!depleted ? (
+                        <a href={bookHref} className="inline-block pt-1 text-sm font-medium text-primary underline">
+                          Book with package
+                        </a>
+                      ) : (
+                        <a href={storeHref} className="inline-block pt-1 text-sm text-muted-foreground underline">
+                          Buy again
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {(data.packagePurchaseHistory || []).length > 0 ? (
+              <HistoryTable
+                title="Purchase history"
+                rows={data.packagePurchaseHistory!.map((e) => ({
+                  date: formatDate(e.createdAt),
+                  activity: e.productName || "Package purchase",
+                  amount: typeof e.delta === "object" ? JSON.stringify(e.delta) : String(e.delta ?? ""),
+                }))}
+              />
+            ) : null}
+            {(data.packageUsageHistory || []).length > 0 ? (
+              <HistoryTable
+                title="Credit history"
+                rows={data.packageUsageHistory!.map((e) => ({
+                  date: formatDate(e.createdAt),
+                  activity: e.note || e.kind || "Activity",
+                  amount: typeof e.delta === "object" ? JSON.stringify(e.delta) : String(e.delta ?? ""),
+                }))}
+              />
+            ) : null}
+          </ProductSection>
+
+          <ProductSection title="Memberships">
+            {(data.entitlements.memberships || []).length === 0 ? (
+              <EmptyNote>No active membership.</EmptyNote>
+            ) : (
+              <ul className="divide-y rounded-lg border text-sm">
+                {data.entitlements.memberships!.map((m) => (
+                  <li key={m.id} className="space-y-1 p-4">
+                    <p className="font-medium">{m.product?.name || "Membership"}</p>
+                    <p className="text-muted-foreground">{membershipStatusLabel(m.status)}</p>
+                    {m.status === "past_due" ? (
+                      <p className="text-sm text-amber-800">
+                        Payment issue — membership benefits may be temporarily unavailable.
+                      </p>
+                    ) : null}
+                    {m.currentPeriodEnd ? (
+                      <p className="text-muted-foreground">Renews {formatShortDate(m.currentPeriodEnd)}</p>
+                    ) : null}
+                    <PortalMembershipActions
+                      portalToken={token}
+                      membership={m}
+                      onUpdated={() => void load()}
+                      onManagePayment={() => setSection("payments")}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ProductSection>
+
+          <ProductSection title="Gift cards">
+            {(data.entitlements.gifts || []).length === 0 ? (
+              <EmptyNote>No gift balances.</EmptyNote>
+            ) : (
+              <ul className="divide-y rounded-lg border text-sm">
+                {data.entitlements.gifts!.map((g) => (
+                  <li key={g.id} className="flex justify-between gap-4 p-4">
+                    <span>
+                      Gift card {g.code ? `•••• ${g.code.slice(-4)}` : ""}
+                    </span>
+                    <span className="font-medium">{formatMoney(g.balanceCents || 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(data.giftRedemptionHistory || []).length > 0 ? (
+              <HistoryTable
+                title="Redemption history"
+                rows={data.giftRedemptionHistory!.map((e) => ({
+                  date: formatDate(e.date),
+                  activity: e.activity,
+                  amount: formatMoney(Math.abs(e.amountCents)),
+                }))}
+              />
+            ) : null}
+          </ProductSection>
+        </div>
+      ) : null}
+
+      {section === "payments" ? (
+        <div className="space-y-6">
+          <section className="rounded-lg border p-4">
+            <h2 className="text-sm font-semibold">Account credit</h2>
+            <p className="mt-2 text-2xl font-semibold">
+              {walletBalanceCents != null ? formatMoney(walletBalanceCents) : "—"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Applied automatically at checkout when eligible.</p>
+            {(walletHistory || data.accountCreditHistory || []).length > 0 ? (
+              <HistoryTable
+                title="Account credit history"
+                rows={(walletHistory || data.accountCreditHistory || []).map((e) => ({
+                  date: formatDate(e.date),
+                  activity: e.activity,
+                  amount: `${e.amountCents >= 0 ? "+" : ""}${formatMoney(e.amountCents)}`,
+                  balance: formatMoney(e.balanceCents),
+                }))}
+                showBalance
+              />
+            ) : null}
+          </section>
+
+          <PortalPaymentMethodSection
+            portalToken={token}
+            paymentMethod={paymentMethod}
+            onUpdated={() => void loadPaymentMethods()}
+          />
+
+          <section>
+            <h2 className="text-sm font-semibold">Payment history</h2>
             <ul className="mt-2 divide-y rounded-lg border text-sm">
-              {data.packageUsageHistory!.map((entry, i) => (
-                <li key={entry.id || i} className="flex justify-between gap-4 p-3">
-                  <span>
-                    {formatDate(entry.createdAt)}
-                    {entry.productName ? ` · ${entry.productName}` : ""}
-                  </span>
-                  <span className="text-muted-foreground capitalize">{entry.kind || "adjustment"}</span>
+              {(data.paymentHistory || []).length === 0 ? (
+                <li className="p-4 text-muted-foreground">No payments yet.</li>
+              ) : (
+                data.paymentHistory!.map((p) => (
+                  <li key={p.id} className="flex justify-between gap-4 p-4">
+                    <span>
+                      {formatDate(p.createdAt)}
+                      {p.provider ? ` · ${p.provider}` : ""}
+                    </span>
+                    <span className="font-medium">
+                      {formatMoney(p.amountCents || 0)}
+                      {p.status ? ` · ${p.status}` : ""}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+
+          {(data.invoices || []).length > 0 ? (
+            <section>
+              <h2 className="text-sm font-semibold">Invoices</h2>
+              <ul className="mt-2 divide-y rounded-lg border text-sm">
+                {data.invoices!.map((inv) => (
+                  <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div>
+                      <p className="font-medium">{formatMoney(inv.totalCents)}</p>
+                      <p className="text-muted-foreground">{formatShortDate(inv.createdAt)} · {inv.status}</p>
+                      {(inv.balanceDueCents || 0) > 0 ? (
+                        <p className="text-muted-foreground">Due {formatMoney(inv.balanceDueCents)}</p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {(data.balanceDueAppointments || []).length > 0 ? (
+            <section>
+              <h2 className="text-sm font-semibold">Outstanding balances</h2>
+              <ul className="mt-2 divide-y rounded-lg border text-sm">
+                {data.balanceDueAppointments!.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <span>{a.serviceName}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">
+                        {formatMoney(a.paymentSummary?.balanceDueCents || 0)}
+                      </span>
+                      {a.metadata?.manageAppointmentUrl ? (
+                        <a href={a.metadata.manageAppointmentUrl} className="text-primary underline">
+                          Pay
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      {section === "documents" ? (
+        <div>
+          {(data.documents || []).length === 0 ? (
+            <EmptyNote>No documents on file yet.</EmptyNote>
+          ) : (
+            <ul className="divide-y rounded-lg border text-sm">
+              {data.documents!.map((doc) => (
+                <li key={doc.id} className="space-y-1 p-4">
+                  <p className="font-medium">{doc.title}</p>
+                  <p className="text-muted-foreground">
+                    {doc.serviceName || "Appointment"} · {formatShortDate(doc.date)}
+                  </p>
+                  <p className="text-muted-foreground capitalize">{doc.status}</p>
+                  {doc.detail ? <p className="text-xs text-muted-foreground">{doc.detail}</p> : null}
                 </li>
               ))}
             </ul>
-          </div>
-        ) : null}
-      </section>
-
-      <section aria-labelledby="payments-history-heading">
-        <h2 id="payments-history-heading" className="text-lg font-medium">Payments &amp; purchases</h2>
-        <ul className="mt-3 divide-y rounded-lg border">
-          {(data.paymentHistory || []).length === 0 ? (
-            <li className="p-4 text-sm text-muted-foreground">No payment history yet.</li>
-          ) : (
-            data.paymentHistory!.map((p) => (
-              <li key={p.id} className="flex justify-between gap-4 p-4 text-sm">
-                <span>
-                  {formatDate(p.createdAt)}
-                  {p.provider ? ` · ${p.provider}` : ""}
-                </span>
-                <span className="font-medium">
-                  {formatMoney(p.amountCents || 0)}
-                  {p.status ? ` · ${p.status}` : ""}
-                </span>
-              </li>
-            ))
           )}
-        </ul>
-      </section>
+        </div>
+      ) : null}
 
-      <section aria-labelledby="memberships-heading">
-        <h2 id="memberships-heading" className="text-lg font-medium">Memberships</h2>
-        <ul className="mt-3 divide-y rounded-lg border">
-          {(data.entitlements.memberships || []).length === 0 ? (
-            <li className="p-4 text-sm text-muted-foreground">No active memberships.</li>
-          ) : (
-            data.entitlements.memberships!.map((m) => (
-              <li key={m.id} className="p-4 text-sm">
-                <p className="font-medium">{m.product?.name || "Membership"}</p>
-                <p className="text-muted-foreground capitalize">{m.status || "active"}</p>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
+      {section === "profile" ? (
+        <div className="space-y-6">
+          <form
+            className="space-y-4 rounded-lg border p-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveProfile();
+            }}
+          >
+            <h2 className="text-sm font-semibold">Contact information</h2>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>First name</span>
+              <input
+                className="rounded border px-3 py-2"
+                value={profileDraft.firstName}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, firstName: e.target.value }))}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Last name</span>
+              <input
+                className="rounded border px-3 py-2"
+                value={profileDraft.lastName}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, lastName: e.target.value }))}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Phone</span>
+              <input
+                className="rounded border px-3 py-2"
+                value={profileDraft.phone}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, phone: e.target.value }))}
+                type="tel"
+              />
+            </label>
+            <p className="text-sm text-muted-foreground">
+              Email: {data.contact?.email || "—"} (contact the business to change login email)
+            </p>
+            <button
+              type="submit"
+              disabled={profileSaving}
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            >
+              {profileSaving ? "Saving…" : "Save changes"}
+            </button>
+            {profileMessage ? (
+              <p className="text-sm text-muted-foreground" role="status">{profileMessage}</p>
+            ) : null}
+          </form>
 
-      <section aria-labelledby="gifts-heading">
-        <h2 id="gifts-heading" className="text-lg font-medium">Gift certificates</h2>
-        <ul className="mt-3 divide-y rounded-lg border">
-          {(data.entitlements.gifts || []).length === 0 ? (
-            <li className="p-4 text-sm text-muted-foreground">No gift balances.</li>
-          ) : (
-            data.entitlements.gifts!.map((g) => (
-              <li key={g.id} className="p-4 text-sm">
-                <p className="font-medium">{g.code || "Gift certificate"}</p>
-                <p className="text-muted-foreground">{formatMoney(g.balanceCents || 0)} remaining</p>
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      {past.length > 0 ? (
-        <section aria-labelledby="past-heading">
-          <h2 id="past-heading" className="text-lg font-medium">Recent visits</h2>
-          <ul className="mt-3 divide-y rounded-lg border">
-            {past.map((a) => (
-              <li key={a.id} className="flex justify-between gap-4 p-4 text-sm">
-                <span>{a.serviceName || "Appointment"}</span>
-                <span className="text-muted-foreground">{formatDate(a.startsAt)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+          {data.household?.members?.length ? (
+            <section className="rounded-lg border p-4 text-sm">
+              <h2 className="font-semibold">Household</h2>
+              <p className="mt-1 text-muted-foreground">{data.household.name || "Family account"}</p>
+              <ul className="mt-3 space-y-2">
+                {data.household.members.map((m) => (
+                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {m.displayName || "Member"}
+                      {m.role ? ` · ${m.role}` : ""}
+                    </span>
+                    {m.contactId && !m.isSelf && slug ? (
+                      <a
+                        href={`${bookHref}?bookFor=${encodeURIComponent(m.contactId)}&portal=${encodeURIComponent(token)}`}
+                        className="text-sm font-medium text-primary underline"
+                      >
+                        Book appointment
+                      </a>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       ) : null}
     </main>
+  );
+}
+
+function SummaryCard({ title, body, onClick }: { title: string; body: string; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-lg border p-4 text-left transition hover:border-primary/40"
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="mt-1 text-sm font-medium">{body}</p>
+    </button>
+  );
+}
+
+function FilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-sm ${
+        active ? "bg-primary text-primary-foreground" : "bg-muted"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ProductSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+function EmptyNote({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-lg border p-4 text-sm text-muted-foreground">{children}</p>;
+}
+
+function HistoryTable({
+  title,
+  rows,
+  showBalance,
+}: {
+  title: string;
+  rows: Array<{ date: string; activity: string; amount: string; balance?: string }>;
+  showBalance?: boolean;
+}) {
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <table className="mt-2 w-full min-w-[280px] text-left text-sm">
+        <thead>
+          <tr className="border-b text-muted-foreground">
+            <th className="py-2 pr-2 font-medium">Date</th>
+            <th className="py-2 pr-2 font-medium">Activity</th>
+            <th className="py-2 pr-2 font-medium">Amount</th>
+            {showBalance ? <th className="py-2 font-medium">Balance</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-border/60">
+              <td className="py-2 pr-2">{row.date}</td>
+              <td className="py-2 pr-2">{row.activity}</td>
+              <td className="py-2 pr-2">{row.amount}</td>
+              {showBalance ? <td className="py-2">{row.balance}</td> : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
