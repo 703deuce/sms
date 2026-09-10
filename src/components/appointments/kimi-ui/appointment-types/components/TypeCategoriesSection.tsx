@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
+import { ServiceCategoriesDrawer } from "@/components/appointments/service-booking/service-categories-drawer";
 
 type Props = {
   form: AppointmentTypeFormState;
@@ -10,9 +11,12 @@ type Props = {
     key: K,
     value: AppointmentTypeFormState[K],
   ) => void;
+  onCategoriesChanged?: () => void;
 };
 
-export function TypeCategoriesSection({ form, categoryOptions, onFormChange }: Props) {
+export function TypeCategoriesSection({ form, categoryOptions, onFormChange, onCategoriesChanged }: Props) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   return (
     <section aria-labelledby="type-categories-heading">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -24,13 +28,20 @@ export function TypeCategoriesSection({ form, categoryOptions, onFormChange }: P
             Group this type on your public booking page and optionally show a service image.
           </p>
         </div>
-        <Link
-          href="/appointments/categories"
+        <button
+          type="button"
           className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
+          onClick={() => setDrawerOpen(true)}
         >
           Manage categories →
-        </Link>
+        </button>
       </div>
+      <ServiceCategoriesDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onChanged={onCategoriesChanged}
+        onCreated={(cat) => onFormChange("categoryId", cat.id)}
+      />
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="label" htmlFor="type-category">Category</label>

@@ -4,6 +4,7 @@ import {
   createSingleUseBookingLink,
   embedBookingUrl,
   popupBookingScript,
+  revokeSingleUseBookingLink,
 } from "@/lib/appointments/booking-links";
 import { loadAppointmentPlatformConfig } from "@/lib/appointments/settings";
 
@@ -27,6 +28,23 @@ export async function GET() {
         popupScript: slug ? popupBookingScript(slug) : null,
       },
     });
+  } catch (err) {
+    return jsonError(err, 500);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = await requireSession();
+    if ("error" in auth) return auth.error;
+    const { searchParams } = new URL(request.url);
+    const linkId = searchParams.get("id");
+    if (!linkId) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    const ok = await revokeSingleUseBookingLink(auth.workspaceId, linkId);
+    if (!ok) return NextResponse.json({ error: "Link not found" }, { status: 404 });
+    return NextResponse.json({ data: { revoked: true } });
   } catch (err) {
     return jsonError(err, 500);
   }

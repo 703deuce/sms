@@ -172,10 +172,17 @@ export function BookingConnected({ workspaceSlug, workspaceName }: Props) {
   if (loading) return <BookingLoading />;
   if (failed || !draft) return <BookingError onRetry={load} />;
 
+  const shareTypes = types.map((t) => ({
+    id: t.id,
+    name: t.name,
+    bookingTypeKind: (t as { bookingTypeKind?: string }).bookingTypeKind,
+  }));
+
   return (
     <BookingView
       model={draft}
       actions={actions}
+      shareTypes={shareTypes}
       saving={saving}
       saved={saved}
       copied={copied}

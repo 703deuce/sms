@@ -10,6 +10,7 @@ import {
   resolveBookingTypeKind,
   type BookingTypeKind,
 } from "@/lib/appointments/booking-type-kind";
+import { resolveClassPresentation } from "@/lib/appointments/booking-types-segments";
 import type {
   AppointmentTypeFormState,
   AppointmentTypeItem,
@@ -52,6 +53,7 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 
 export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   bookingTypeKind: "SERVICE",
+  classPresentation: "recurring_class",
   name: "",
   durationMinutes: 30,
   bufferMinutes: 0,
@@ -190,6 +192,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
   const payment = cfg.payment;
   return {
     bookingTypeKind: resolveBookingTypeKind(cfg),
+    classPresentation: resolveClassPresentation(cfg),
     name: type.name,
     durationMinutes: type.durationMinutes,
     bufferMinutes: type.bufferMinutes,
@@ -312,6 +315,8 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
 
   const config: AppointmentTypeConfig = {
     bookingTypeKind: form.bookingTypeKind,
+    classPresentation:
+      form.bookingTypeKind === "CLASS" ? form.classPresentation : undefined,
     description: form.description,
     location: form.location,
     locationId: form.locationId || undefined,

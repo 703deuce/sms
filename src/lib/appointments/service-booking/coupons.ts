@@ -84,3 +84,45 @@ export async function validateAndApplyCoupon(
 
   return { coupon, discountCents, redemptionId: redemption.id, totalCents: input.baseCents - discountCents };
 }
+
+export async function getCouponUsageSummary(workspaceId: string, couponId: string) {
+  const prisma = getPrisma();
+  const coupon = await prisma.appointmentCoupon.findFirst({
+    where: { id: couponId, workspaceId },
+  });
+  if (!coupon) throw new Error("Discount not found");
+  const used = await prisma.appointmentCouponRedemption.count({ where: { couponId } });
+  return {
+    used,
+    remaining: coupon.usageCap != null ? Math.max(0, coupon.usageCap - used) : null,
+  };
+}
+
+export async function duplicateCoupon(workspaceId: string, couponId: string) {
+  const prisma = getPrisma();
+  const source = await prisma.appointmentCoupon.findFirst({
+    where: { id: couponId, workspaceId },
+  });
+  if (!source) throw new Error("Discount not found");
+  const base = `${source.code}COPY`.slice(0, 18);
+  let code = base;
+  let n = 1;
+  while (await prisma.appointmentCoupon.findFirst({ where: { workspaceId, code } })) {
+    code = `${base}${n++}`.slice(0, 20);
+  }
+  return prisma.appointmentCoupon.create({
+    data: {
+      workspaceId,
+      code,
+      discountType: source.discountType,
+      discountValue: source.discountValue,
+      startsAt: source.startsAt,
+      expiresAt: source.expiresAt,
+      usageCap: source.usageCap,
+      onePerCustomer: source.onePerCustomer,
+      eligibleTargets: source.eligibleTargets,
+      active: false,
+      metadata: source.metadata,
+    },
+  });
+}

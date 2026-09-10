@@ -19,6 +19,13 @@ import type {
   AppointmentTypesPageActions,
   AppointmentTypesPageModel,
 } from "@/features/appointments/kimi/appointment-types/types";
+import {
+  defaultConfigForSegment,
+  segmentById,
+  typeBelongsToSegment,
+  type BookingTypesSegmentId,
+} from "@/lib/appointments/booking-types-segments";
+import { defaultConfigPatchForKind } from "@/lib/appointments/booking-type-kind";
 
 function TypesLoading() {
   return (
@@ -52,7 +59,17 @@ function TypesError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function AppointmentTypesConnected() {
+export type AppointmentTypesConnectedProps = {
+  segmentId?: BookingTypesSegmentId;
+  initialTypeId?: string | null;
+  initialCreate?: boolean;
+};
+
+export function AppointmentTypesConnected({
+  segmentId,
+  initialTypeId = null,
+  initialCreate = false,
+}: AppointmentTypesConnectedProps = {}) {
   const router = useRouter();
   const [apiTypes, setApiTypes] = useState<ApiAppointmentType[]>([]);
   const [workspaceSlug, setWorkspaceSlug] = useState("");
@@ -181,12 +198,65 @@ export function AppointmentTypesConnected() {
     load();
   }, [load]);
 
+  const startCreateForSegment = useCallback(
+    (segId: BookingTypesSegmentId) => {
+      const segment = segmentById(segId);
+      const kindPatch = defaultConfigPatchForKind(segment.bookingTypeKind);
+      const segmentPatch = defaultConfigForSegment(segment);
+      setSelectedId(null);
+      setIsCreating(true);
+      setForm({
+        ...EMPTY_APPOINTMENT_TYPE_FORM,
+        bookingTypeKind: segment.bookingTypeKind,
+        classPresentation: segment.classPresentation ?? "recurring_class",
+        groupBookingEnabled: Boolean(segmentPatch.groupBooking?.enabled),
+        groupCapacity: segmentPatch.groupBooking?.capacity ?? EMPTY_APPOINTMENT_TYPE_FORM.groupCapacity,
+        recurringEnabled: Boolean(segmentPatch.recurring?.enabled),
+        paymentMode:
+          segment.bookingTypeKind === "MEETING"
+            ? "none"
+            : EMPTY_APPOINTMENT_TYPE_FORM.paymentMode,
+        ...kindPatch,
+      } as AppointmentTypeFormState);
+      setError("");
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (!loading && apiTypes.length > 0 && !selectedId && !isCreating) {
-      setSelectedId(apiTypes[0].id);
-      setForm(formStateFromApiType(apiTypes[0]));
+    if (loading) return;
+    if (initialCreate && segmentId) {
+      startCreateForSegment(segmentId);
+      return;
     }
-  }, [apiTypes, isCreating, loading, selectedId]);
+    if (initialTypeId) {
+      const row = apiTypes.find((t) => t.id === initialTypeId);
+      if (row) {
+        setSelectedId(row.id);
+        setIsCreating(false);
+        setForm(formStateFromApiType(row));
+      }
+      return;
+    }
+    if (apiTypes.length > 0 && !selectedId && !isCreating) {
+      const firstInSegment = segmentId
+        ? apiTypes.find((t) => typeBelongsToSegment(t, segmentId))
+        : apiTypes[0];
+      if (firstInSegment) {
+        setSelectedId(firstInSegment.id);
+        setForm(formStateFromApiType(firstInSegment));
+      }
+    }
+  }, [
+    apiTypes,
+    initialCreate,
+    initialTypeId,
+    isCreating,
+    loading,
+    segmentId,
+    selectedId,
+    startCreateForSegment,
+  ]);
 
   const types = useMemo(
     () => mapApiTypesToItems(apiTypes, { workspaceSlug, bookingEnabled }),
@@ -196,6 +266,10 @@ export function AppointmentTypesConnected() {
   const visibleTypes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = types.filter((type) => {
+      if (segmentId) {
+        const row = apiTypes.find((t) => t.id === type.id);
+        if (!row || !typeBelongsToSegment(row, segmentId)) return false;
+      }
       if (!showInactive && !type.active) return false;
       if (!q) return true;
       return type.name.toLowerCase().includes(q);
@@ -205,7 +279,7 @@ export function AppointmentTypesConnected() {
       const bOrder = apiTypes.find((t) => t.id === b.id)?.config?.displayOrder ?? 999;
       return aOrder - bOrder;
     });
-  }, [searchQuery, showInactive, types, apiTypes]);
+  }, [apiTypes, searchQuery, segmentId, showInactive, types]);
 
   const reorderTypes = useCallback(
     async (orderedIds: string[]) => {
@@ -264,11 +338,15 @@ export function AppointmentTypesConnected() {
   );
 
   const startCreate = useCallback(() => {
+    if (segmentId) {
+      startCreateForSegment(segmentId);
+      return;
+    }
     setSelectedId(null);
     setIsCreating(true);
     setForm(EMPTY_APPOINTMENT_TYPE_FORM);
     setError("");
-  }, []);
+  }, [segmentId, startCreateForSegment]);
 
   const resetEditor = useCallback(() => {
     if (selectedId) {
@@ -409,6 +487,8 @@ export function AppointmentTypesConnected() {
       addOnOptions,
       categoryOptions,
       intakeFormOptions,
+      segmentLocked: Boolean(segmentId),
+      segmentTitle: segmentId ? segmentById(segmentId).title : undefined,
     };
   }, [
     bookingBaseUrl,
@@ -436,6 +516,7 @@ export function AppointmentTypesConnected() {
     isCreating,
     searchQuery,
     saving,
+    segmentId,
   ]);
 
   const actions: AppointmentTypesPageActions = useMemo(

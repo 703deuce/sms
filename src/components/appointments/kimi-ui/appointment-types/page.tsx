@@ -26,10 +26,12 @@ export default function AppointmentTypesView({ model, actions }: Props) {
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="min-w-0">
             <h1 className="text-[24px] leading-[30px] font-bold tracking-tight text-[#1a1d29]">
-              Appointment Types
+              {model.segmentTitle ?? "Appointment Types"}
             </h1>
             <p className="text-[13.5px] leading-[20px] text-[#8a8fa3] mt-1">
-              Manage the services you offer and how customers can book with you.
+              {model.segmentLocked
+                ? `Create or edit ${model.segmentTitle?.toLowerCase() ?? "booking types"} in this workspace.`
+                : "Manage the services you offer and how customers can book with you."}
             </p>
           </div>
           <div className="flex items-center gap-2.5 shrink-0 pt-0.5">
@@ -81,6 +83,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               categoryOptions={model.categoryOptions}
               intakeFormOptions={model.intakeFormOptions}
               appointmentTypeId={model.selectedId}
+              hideKindPicker={model.segmentLocked}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}
@@ -88,6 +91,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onManageAvailability={actions.onManageAvailability}
               onManageStaff={actions.onManageStaff}
               onManageLocations={actions.onManageLocations}
+              onCategoriesChanged={actions.onRetry}
             />
           </div>
           {selected ? (

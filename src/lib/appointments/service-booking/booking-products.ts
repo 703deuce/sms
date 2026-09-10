@@ -79,3 +79,26 @@ export async function fulfillBookingProductSale(
     contactId: input.contactId,
   };
 }
+
+export async function duplicateBookingProduct(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const source = await prisma.bookingProduct.findFirst({
+    where: { id: productId, workspaceId },
+  });
+  if (!source) throw new Error("Product not found");
+  return prisma.bookingProduct.create({
+    data: {
+      workspaceId,
+      name: `${source.name} (copy)`,
+      description: source.description,
+      sku: source.sku ? `${source.sku}-copy` : undefined,
+      priceCents: source.priceCents,
+      currency: source.currency,
+      quantityAvailable: source.quantityAvailable,
+      sellStandalone: source.sellStandalone,
+      eligibleTypeIds: source.eligibleTypeIds,
+      active: false,
+      displayOrder: source.displayOrder,
+    },
+  });
+}

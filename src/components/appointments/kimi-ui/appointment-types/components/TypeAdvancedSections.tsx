@@ -8,6 +8,7 @@ import {
   QUESTION_TYPE_OPTIONS,
   STAFF_ASSIGNMENT_OPTIONS,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
+import { CommerceAccessLinks } from "@/components/appointments/commerce/commerce-access-links";
 
 type Props = {
   form: AppointmentTypeFormState;
@@ -451,6 +452,8 @@ export default function TypeAdvancedSections({
           </div>
         ) : null}
       </section>
+
+      <CommerceAccessLinks />
 
       {/* Group & recurring */}
       <section>

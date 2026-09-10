@@ -48,6 +48,8 @@ export type SingleUseBookingLink = {
   usedCount: number;
   createdAt: string;
   createdBy?: string;
+  revokedAt?: string;
+  label?: string;
 };
 
 export type MeetingPollOption = {

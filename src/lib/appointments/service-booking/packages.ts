@@ -1,13 +1,30 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import type { PackageCreditRule } from "./types";
+import type { PackageCreditRule, PackageLifecyclePolicy } from "./types";
+import { packageBalanceSummary } from "./package-lifecycle";
 
 export async function listPackageProducts(workspaceId: string) {
   const prisma = getPrisma();
-  return prisma.packageProduct.findMany({
+  const products = await prisma.packageProduct.findMany({
     where: { workspaceId },
     orderBy: { name: "asc" },
+    include: {
+      balances: {
+        where: { status: { in: ["active", "exhausted"] } },
+        select: { id: true },
+      },
+    },
+  });
+  return products.map((product: (typeof products)[number]) => {
+    const { balances, ...rest } = product;
+    const creditRules = (rest.creditRules || []) as PackageCreditRule[];
+    const includedCredits = creditRules.reduce((sum, rule) => sum + rule.quantity, 0);
+    return {
+      ...rest,
+      customerCount: balances.length,
+      includedCredits,
+    };
   });
 }
 
@@ -24,6 +41,8 @@ export async function upsertPackageProduct(
     categoryId?: string;
     active?: boolean;
     standingSlotPolicy?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+    directPurchase?: boolean;
   },
 ) {
   const prisma = getPrisma();
@@ -43,6 +62,8 @@ export async function upsertPackageProduct(
     categoryId: input.categoryId,
     active: input.active ?? true,
     standingSlotPolicy: input.standingSlotPolicy,
+    metadata: input.metadata,
+    ...(input.directPurchase !== undefined ? { directPurchase: input.directPurchase } : {}),
   };
   if (input.id) {
     return prisma.packageProduct.update({ where: { id: input.id, workspaceId }, data });
@@ -101,4 +122,84 @@ export async function purchasePackageForContact(
 
 export function packagePurchaseUrl(baseUrl: string, workspaceSlug: string, packageSlug: string) {
   return `${baseUrl.replace(/\/$/, "")}/book/${workspaceSlug}/packages/${packageSlug}`;
+}
+
+export function getPackageLifecyclePolicy(
+  metadata: Record<string, unknown> | null | undefined,
+): PackageLifecyclePolicy {
+  const policy = (metadata as { lifecyclePolicy?: PackageLifecyclePolicy })?.lifecyclePolicy;
+  return policy || {};
+}
+
+export async function listPackageBalancesForProduct(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const balances = await prisma.packageBalance.findMany({
+    where: { workspaceId, productId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      product: { select: { name: true } },
+    },
+  });
+  type ContactLite = {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+    email: string | null;
+  };
+  const contactIds = [...new Set(balances.map((b: (typeof balances)[number]) => b.contactId))];
+  const contacts: ContactLite[] = contactIds.length
+    ? await prisma.contact.findMany({
+        where: { workspaceId, id: { in: contactIds } },
+        select: { id: true, firstName: true, lastName: true, phone: true, email: true },
+      })
+    : [];
+  const contactMap = new Map(contacts.map((c) => [c.id, c]));
+  return balances.map((balance: (typeof balances)[number]) => {
+    const remaining = (balance.remainingCredits || {}) as Record<string, number>;
+    const contact = contactMap.get(balance.contactId);
+    const name =
+      [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") ||
+      contact?.phone ||
+      contact?.email ||
+      "Customer";
+    return {
+      ...balance,
+      contactName: name,
+      creditsRemaining: packageBalanceSummary(remaining).totalRemaining,
+    };
+  });
+}
+
+export async function duplicatePackageProduct(workspaceId: string, productId: string) {
+  const prisma = getPrisma();
+  const source = await prisma.packageProduct.findFirst({
+    where: { id: productId, workspaceId },
+  });
+  if (!source) throw new Error("Package not found");
+  const baseSlug = `${source.slug}-copy`;
+  let slug = baseSlug;
+  let n = 1;
+  while (
+    await prisma.packageProduct.findFirst({ where: { workspaceId, slug } })
+  ) {
+    slug = `${baseSlug}-${n++}`;
+  }
+  return prisma.packageProduct.create({
+    data: {
+      workspaceId,
+      name: `${source.name} (copy)`,
+      slug,
+      description: source.description,
+      priceCents: source.priceCents,
+      currency: source.currency,
+      creditRules: source.creditRules,
+      expirationDays: source.expirationDays,
+      categoryId: source.categoryId,
+      active: false,
+      directPurchase: source.directPurchase,
+      standingSlotPolicy: source.standingSlotPolicy,
+      metadata: source.metadata,
+    },
+  });
 }
