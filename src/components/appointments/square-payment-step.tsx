@@ -11,6 +11,8 @@ type SquareConfig = {
   amountCents: number;
   currency: string;
   sandbox?: boolean;
+  totalCents?: number;
+  depositCents?: number;
 };
 
 declare global {
@@ -103,20 +105,43 @@ export function SquarePaymentStep({
   }
 
   const amount = (square.amountCents / 100).toFixed(2);
+  const total = square.totalCents ? (square.totalCents / 100).toFixed(2) : null;
+  const isDeposit = square.totalCents && square.totalCents > square.amountCents;
 
   return (
     <Card className="p-5 sm:p-6">
       <h2 className="font-display text-base font-semibold">Complete payment</h2>
-      <p className="mt-1 text-[13px] text-muted-foreground">
-        Pay ${amount} {square.currency} securely with Square. Card details are processed by Square — never stored by Transovo.
+      {isDeposit && total ? (
+        <dl className="mt-2 space-y-1 text-[13px]">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Total</dt>
+            <dd>${total} {square.currency}</dd>
+          </div>
+          <div className="flex justify-between gap-3 font-semibold">
+            <dt>Due today</dt>
+            <dd>${amount} {square.currency}</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Pay ${amount} {square.currency} securely with Square.
+        </p>
+      )}
+      <p className="mt-1 text-[12px] text-muted-foreground">
+        Card details are processed by Square — never stored by Transovo.
       </p>
       <div ref={cardRef} className="mt-4 min-h-[120px] rounded-lg border border-border p-3" />
       {loading ? <p className="mt-2 text-sm text-muted-foreground">Loading secure payment form…</p> : null}
-      {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
+      {error ? (
+        <div className="mt-3 space-y-2" role="alert">
+          <p className="text-sm text-rose-600">Payment wasn&apos;t completed. {error}</p>
+          <p className="text-[12px] text-muted-foreground">Your appointment details are saved — try again or use another card.</p>
+        </div>
+      ) : null}
       <div className="mt-6 flex gap-3">
-        <Button variant="outline" onClick={onCancel} disabled={paying}>Cancel</Button>
+        <Button variant="outline" onClick={onCancel} disabled={paying}>Back</Button>
         <Button className="flex-1" onClick={pay} disabled={loading || paying}>
-          {paying ? "Processing…" : `Pay $${amount}`}
+          {paying ? "Processing…" : error ? "Try again" : `Pay $${amount}`}
         </Button>
       </div>
     </Card>

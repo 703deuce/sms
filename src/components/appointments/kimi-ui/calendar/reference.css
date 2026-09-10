@@ -489,3 +489,66 @@
 .month-event.ev-followup { background: #fdf6e3; color: #8a5b00; }
 .month-event.ev-onboarding { background: #e9f9f1; color: #0f6b42; }
 .month-event.ev-canceled { background: #fdeef2; color: #9f1239; }
+
+.cal-filter-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+}
+.cal-filter-drawer {
+  width: min(360px, 100%);
+  height: 100%;
+  background: #fff;
+  padding: 20px;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+  overflow-y: auto;
+}
+.cal-filter-title { font-size: 16px; font-weight: 700; margin: 0 0 16px; }
+.cal-filter-group { margin-bottom: 16px; }
+.cal-filter-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cal-filter-options { display: flex; flex-direction: column; gap: 6px; }
+.cal-filter-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cal-filter-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.cal-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #fff;
+}
+.cal-filter-chip.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.cal-unavailable {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(148, 163, 184, 0.08),
+    rgba(148, 163, 184, 0.08) 6px,
+    rgba(148, 163, 184, 0.14) 6px,
+    rgba(148, 163, 184, 0.14) 12px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.week-event.dragging { opacity: 0.65; cursor: grabbing; }
+.week-event .ev-recurring { font-size: 10px; opacity: 0.85; margin-left: 4px; }
+.week-event .ev-capacity { font-size: 10px; opacity: 0.85; }
+.week-event[style*="border-left"] { border-left-width: 3px !important; border-left-style: solid !important; }
+.cal-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #111827;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 60;
+}
