@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Check, Copy, ExternalLink, Eye, Plus, Trash2 } from "lucide-react";
-import type { RoutingForm } from "../types";
-import { routingAnalytics, bookingTypes, staffMembers } from "../types";
+import type { RoutingForm, RoutingFormMeta } from "../types";
 import RuleEditor from "./RuleEditor";
 import PreviewModal from "./PreviewModal";
 
 type Props = {
   form: RoutingForm;
+  meta: RoutingFormMeta;
   workspaceSlug: string;
   saving: boolean;
   dirty: boolean;
@@ -23,12 +23,13 @@ const fieldTypes = [
   { value: "select", label: "Dropdown" },
 ] as const;
 
-export default function FormEditor({ form, workspaceSlug, saving, dirty, onChange, onSave, onDelete }: Props) {
+export default function FormEditor({ form, meta, workspaceSlug, saving, dirty, onChange, onSave, onDelete }: Props) {
   const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const analytics = routingAnalytics[form.id];
+  const analytics = meta.routingAnalytics[form.id];
   const publicUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/routing/${workspaceSlug}/${form.slug}`;
+  const { bookingTypes, staffMembers } = meta;
 
   function updateField(fi: number, patch: Partial<RoutingForm["fields"][number]>) {
     onChange({
@@ -58,8 +59,10 @@ export default function FormEditor({ form, workspaceSlug, saving, dirty, onChang
   }
 
   function openPublic() {
-    // Production: opens /routing/[slug]/[formSlug] in a new tab.
-    // Sandbox: show the designed public form preview instead.
+    if (form.active && workspaceSlug && form.slug) {
+      window.open(publicUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     setPreviewOpen(true);
   }
 
@@ -250,7 +253,7 @@ export default function FormEditor({ form, workspaceSlug, saving, dirty, onChang
       </div>
 
       {/* Rules */}
-      <RuleEditor form={form} onChange={onChange} />
+      <RuleEditor form={form} meta={meta} onChange={onChange} />
 
       {/* Analytics */}
       {analytics && (

@@ -3,6 +3,7 @@ export type AppointmentMetadata = {
   staffName?: string;
   location?: string;
   durationMinutes?: number;
+  pendingApproval?: boolean;
   lastCommunication?: {
     kind: "confirmation_sent" | "reminder_sent" | "customer_reply" | "reschedule_requested" | "none";
     at?: string;
@@ -53,6 +54,7 @@ const at = (offsetMs: number, hour: number, minute = 0) => {
 export const TABS = [
   { id: "today", label: "Today" },
   { id: "upcoming", label: "Upcoming" },
+  { id: "pending_approval", label: "Needs approval" },
   { id: "awaiting_confirmation", label: "Awaiting" },
   { id: "confirmed", label: "Confirmed" },
   { id: "reschedule_requested", label: "Reschedule" },

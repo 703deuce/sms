@@ -42,15 +42,15 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
   if (modules.commerce) {
-    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
-    children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
+    children.push({ label: "Packages", href: "/appointments/packages" });
+    children.push({ label: "Memberships", href: "/appointments/memberships" });
+    children.push({ label: "Gift certificates", href: "/appointments/gift-cards" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
   if (modules.classes) {
-    children.push({ label: "Classes", href: "/appointments/classes" });
+    children.push({ label: "Classes", href: "/appointments/types/classes" });
   }
   children.push(
-    { label: "Segments", href: "/appointments/segments" },
     { label: "Routing", href: "/appointments/routing-forms" },
     { label: "Team Booking", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
@@ -62,14 +62,17 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Staff", href: "/appointments/staff" },
     { label: "Locations", href: "/appointments/locations" },
-    { label: "Resources", href: "/appointments/resources" },
+    { label: "Rooms & equipment", href: "/appointments/booking/rooms-equipment" },
   ];
 }
 
 function remindersChildren(): NavItem["children"] {
   return [
     { label: "Reminder Sequences", href: "/appointments/reminders" },
+    { label: "Recall automation", href: "/appointments/automations/recall" },
+    { label: "No-show recovery", href: "/appointments/automations/no-show" },
     { label: "Templates", href: "/appointments/automations/templates" },
     { label: "Activity", href: "/appointments/automations/activity" },
   ];
@@ -101,6 +104,7 @@ function integrationsChildren(): NavItem["children"] {
   return [
     { label: "Calendars", href: "/integrations/calendars" },
     { label: "Payments", href: "/integrations/payments" },
+    { label: "Developer", href: "/integrations/developer" },
   ];
 }
 
@@ -252,13 +256,12 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   return items;
 }
 
-/** Bottom nav for mobile — primary appointment-platform destinations. */
+/** Bottom nav for mobile — primary appointment-platform destinations (4 slots + More). */
 export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {}): NavItem[] {
   const badge = options.conversationsBadge ?? 0;
   const items: NavItem[] = [
     { label: "Home", href: "/appointments/overview", icon: Home },
     { label: "Calendar", href: "/appointments/calendar", icon: Calendar },
-    { label: "Booking", href: "/appointments/types", icon: Globe },
   ];
 
   if (isConversationsInV1Nav()) {
@@ -274,6 +277,11 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
     items.push({ label: "Contacts", href: "/contacts", icon: Users });
   }
 
+  // Fill fourth slot with Booking when Messages/Contacts are hidden; never truncate Contacts.
+  if (items.length < 4) {
+    items.push({ label: "Booking", href: "/appointments/types", icon: Globe });
+  }
+
   return items.slice(0, 4);
 }
 
@@ -284,7 +292,15 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
+  if (pathname.startsWith("/appointments/booking/rooms-equipment")) return "Rooms & equipment";
   if (pathname.startsWith("/appointments/resources")) return "Resources";
+  if (pathname.startsWith("/appointments/packages")) return "Packages";
+  if (pathname.startsWith("/appointments/memberships")) return "Memberships";
+  if (pathname.startsWith("/appointments/gift-cards")) return "Gift certificates";
+  if (pathname.startsWith("/appointments/types/classes")) return "Classes";
+  if (pathname.startsWith("/appointments/booking/forms")) return "Forms & documents";
+  if (pathname.startsWith("/appointments/automations/recall")) return "Recall automation";
+  if (pathname.startsWith("/appointments/automations/no-show")) return "No-show recovery";
   if (pathname.startsWith("/payments/invoices")) return "Invoices";
   if (pathname.startsWith("/appointments/classes")) return "Classes";
   if (pathname.startsWith("/appointments/client-restrictions")) return "Client restrictions";

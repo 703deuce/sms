@@ -18,9 +18,11 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || undefined;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
+    const pendingApproval = searchParams.get("pendingApproval") === "1";
     const data = await listAppointments(auth.workspaceId, {
       status,
       q,
+      pendingApproval: pendingApproval || undefined,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
     });

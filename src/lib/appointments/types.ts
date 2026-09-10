@@ -78,6 +78,8 @@ export type BookableStaffMember = {
   customerSelectable?: boolean;
   appointmentTypeIds?: string[];
   locationIds?: string[];
+  /** Calendar display color (configured under Staff → Calendar Display) */
+  calendarColor?: string;
   /** Linked calendar connection for per-staff busy blocking */
   calendarConnectionId?: string;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
@@ -263,6 +265,12 @@ export type AppointmentPlatformConfig = {
   };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
+  /** Staff/service calendar color map consumed by /appointments/calendar */
+  calendarColors?: import("@/lib/appointments/service-booking/types").CalendarColorConfig;
+  /** Whether calendar tints events by staff or booking type */
+  calendarColorBy?: "staff" | "service";
+  /** Automatically offer open waitlist slots when a booking cancels */
+  waitlistAutoFill?: boolean;
 };
 
 /** Booking archetype — MEETING (minimal), SERVICE (commerce/recurrence), CLASS (group/capacity). */

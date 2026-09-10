@@ -241,6 +241,20 @@ export function PublicActionClient({
     <div className="pub-shell">
       <Brand businessName={appt?.businessName} />
 
+      {live && appt?.manageLink ? (
+        <Card className="mb-4 border-primary/30 bg-primary/5">
+          <p className="text-sm">
+            <strong>Manage everything in one place.</strong> Reschedule, pay a balance, update intake forms, or
+            download a calendar file from your appointment hub.
+          </p>
+          <div className="mt-3">
+            <Button variant="primary" onClick={() => window.location.assign(appt.manageLink!)}>
+              Open manage appointment
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       <Card>
         {done || alreadyConfirmed ? (
           /* ---- Success state (just completed, or link revisited after confirming) ---- */

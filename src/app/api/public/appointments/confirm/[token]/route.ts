@@ -5,6 +5,8 @@ import {
   findAppointmentByPublicToken,
   updatePlatformAppointmentStatus,
 } from "@/lib/appointments";
+import { resolveManageLinkFromMetadata } from "@/lib/appointments/settings";
+import type { AppointmentMetadata } from "@/lib/appointments/types";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -39,8 +41,12 @@ export async function GET(_request: Request, { params }: Params) {
     if (!row || (row.metadata as { confirmToken?: string })?.confirmToken !== token) {
       return NextResponse.json({ error: "Invalid token" }, { status: 404 });
     }
+    const meta = (row.metadata || {}) as AppointmentMetadata;
     return NextResponse.json({
-      data: buildPublicAppointmentCustomerPreview(row),
+      data: {
+        ...buildPublicAppointmentCustomerPreview(row),
+        manageLink: resolveManageLinkFromMetadata(meta, meta.rescheduleToken),
+      },
     });
   } catch (err) {
     return jsonError(err, 400);
