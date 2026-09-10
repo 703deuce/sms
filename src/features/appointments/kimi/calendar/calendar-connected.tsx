@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SlotDiagnosticsDrawer } from "@/features/appointments/kimi/availability/SlotDiagnosticsDrawer";
+import { datetimeLocalFromDateKey } from "@/features/appointments/kimi/availability/datetime-local";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/appointments/kimi-ui/calendar/page";
@@ -68,6 +70,7 @@ export function CalendarConnected() {
   const [rows, setRows] = useState<CalendarApiAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [slotDiagnosticsOpen, setSlotDiagnosticsOpen] = useState(false);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
@@ -162,6 +165,7 @@ export function CalendarConnected() {
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
+      onCheckAvailability: () => setSlotDiagnosticsOpen(true),
       onOpenAppointment: (id) => {
         if (id.startsWith("video:")) {
           router.push(`/video/rooms/${id.slice("video:".length)}/host`);
@@ -220,6 +224,17 @@ export function CalendarConnected() {
         </div>
       </div>
       <CalendarView model={model} actions={actions} />
+      <SlotDiagnosticsDrawer
+        open={slotDiagnosticsOpen}
+        onClose={() => setSlotDiagnosticsOpen(false)}
+        context={{
+          startsAt: datetimeLocalFromDateKey(selectedDayKey, 9, 0),
+        }}
+        onOpenFullPage={() => {
+          setSlotDiagnosticsOpen(false);
+          router.push("/appointments/availability");
+        }}
+      />
     </div>
   );
 }
