@@ -102,24 +102,36 @@ function mapUatToCertStatus(uatStatus: string): string {
   }
 }
 
+function sanitizeDetail(text: string): string {
+  return text
+    .replace(/https?:\/\/[^\s)]+/gi, "[URL_REDACTED]")
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[EMAIL_REDACTED]");
+}
+
 function inferFeatureStatus(row: Record<string, string>, uat: UatState | null): string {
   const provider = row.PROVIDER_DEPENDENCY?.trim();
   if (provider && provider !== "—" && provider !== "-") {
     return "PROVIDER_BLOCKED";
   }
   if (row.CURRENT_FINAL_STATUS === "V1_COMPLETE_RUNTIME_ONLY") {
-    if (uat) {
-      const pass = (uat.summary.BROWSER_PASS || 0) + (uat.summary.LIVE_PASS || 0);
-      const fail = uat.summary.FAIL || 0;
-      if (fail === 0 && pass > 0) return "RUNTIME_ONLY_PASS";
-    }
     return "RUNTIME_ONLY_PASS";
   }
-  if (!uat) return "ENVIRONMENT_BLOCKED";
-  const fail = uat.summary.FAIL || 0;
-  const pass = (uat.summary.BROWSER_PASS || 0) + (uat.summary.LIVE_PASS || 0);
-  if (fail > 0) return "FAIL_UI";
-  if (pass > 0) return "PASS";
+  if (!uat || !Object.keys(uat.results).length) {
+    return "ENVIRONMENT_BLOCKED";
+  }
+  const page = row.FINAL_ADMIN_CANONICAL_PAGE?.trim();
+  if (!page || page === "SHELL_RUNTIME") {
+    const pass = (uat.summary.BROWSER_PASS || 0) + (uat.summary.LIVE_PASS || 0);
+    return pass > 0 ? "RUNTIME_ONLY_PASS" : "ENVIRONMENT_BLOCKED";
+  }
+  const pageKey = page.split("?")[0].split("#")[0];
+  const related = Object.values(uat.results).filter((r) =>
+    r.detail.toLowerCase().includes(pageKey.toLowerCase().replace(/^\//, "")),
+  );
+  if (!related.length) return "ENVIRONMENT_BLOCKED";
+  if (related.some((r) => r.status === "FAIL")) return "FAIL_UI";
+  if (related.every((r) => r.status === "BROWSER_PASS" || r.status === "LIVE_PASS")) return "PASS";
+  if (related.some((r) => r.status === "PROVIDER_BLOCKED")) return "PROVIDER_BLOCKED";
   return "ENVIRONMENT_BLOCKED";
 }
 
@@ -176,7 +188,7 @@ function generateDocs(
           `## UAT-${r.id} — ${r.title}`,
           "",
           `- **Failure class:** REAL_UI_GAP`,
-          `- **Detail:** ${r.detail}`,
+          `- **Detail:** ${sanitizeDetail(r.detail)}`,
           `- **Severity:** P1`,
           "",
         );
@@ -187,27 +199,17 @@ function generateDocs(
   const routeFail = redirectResults.filter((r) => r.status !== "PASS").length;
   const uatFail = uat?.summary.FAIL || 0;
   const realUiGap = uatFail + routeFail;
-  const certified =
-    realUiGap === 0 &&
-    (uat?.summary.FAIL || 0) === 0 &&
-    routeFail === 0 &&
-    (uat?.summary.BROWSER_PASS || 0) + (uat?.summary.LIVE_PASS || 0) > 0
-      ? "NO"
-      : "NO";
-
-  // Recalculate certified properly
-  const passCount =
-    Object.values(statusCounts).reduce((a, b) => a + b, 0) -
-    (statusCounts.FAIL_UI || 0) -
-    (statusCounts.FAIL_RUNTIME || 0) -
-    (statusCounts.ENVIRONMENT_BLOCKED || 0);
+  const uatComplete = uat ? (uat.summary.NOT_RUN || 0) === 0 : false;
   const certifiedReady =
+    uatComplete &&
+    uatFail === 0 &&
+    routeFail === 0 &&
     (statusCounts.FAIL_UI || 0) === 0 &&
     (statusCounts.FAIL_RUNTIME || 0) === 0 &&
     (statusCounts.FAIL_ROUTE || 0) === 0 &&
-    routeFail === 0 &&
-    uatFail === 0 &&
-    (uat?.summary.BROWSER_PASS || 0) + (uat?.summary.PROVIDER_BLOCKED || 0) > 0
+    (statusCounts.FAIL_PERSISTENCE || 0) === 0 &&
+    (statusCounts.FAIL_AUTHORIZATION || 0) === 0 &&
+    (statusCounts.FAIL_ACCESSIBILITY || 0) === 0
       ? "YES"
       : "NO";
 
