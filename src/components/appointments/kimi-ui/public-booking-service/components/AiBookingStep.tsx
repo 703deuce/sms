@@ -19,7 +19,11 @@ export function AiBookingStep({
   loading,
   error,
   slots,
+  pendingSlot,
+  selectedTypeName,
   onSelectSlot,
+  onConfirmSlot,
+  onCancelPendingSlot,
   onBack,
 }: {
   timezone: string;
@@ -31,7 +35,11 @@ export function AiBookingStep({
   loading: boolean;
   error?: string;
   slots: Slot[];
+  pendingSlot?: Slot | null;
+  selectedTypeName?: string;
   onSelectSlot: (slot: Slot) => void;
+  onConfirmSlot?: () => void;
+  onCancelPendingSlot?: () => void;
   onBack: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -118,6 +126,21 @@ export function AiBookingStep({
           </div>
         ) : null}
       </div>
+
+      {pendingSlot ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4" role="region" aria-label="Confirm booking">
+          <p className="text-[13px] font-semibold text-foreground">Book this appointment?</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            {selectedTypeName ? `${selectedTypeName} · ` : ""}
+            {new Date(pendingSlot.startsAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}{" "}
+            {formatSlotTime(pendingSlot.startsAt, timezone)}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" onClick={() => onConfirmSlot?.()}>Confirm</Button>
+            <Button size="sm" variant="outline" onClick={() => onCancelPendingSlot?.()}>Choose another time</Button>
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <p className="px-1 text-[12px] text-destructive" role="alert">{error}</p>

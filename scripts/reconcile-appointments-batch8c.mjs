@@ -63,15 +63,30 @@ function parseCsv(text) {
 function routeExists(route) {
   if (!route || route === "N/A" || route === "—") return null;
   const clean = route.replace(/`/g, "").split("?")[0].replace(/\/$/, "");
+  if (clean === "PUBLIC_BOOKING") {
+    return existsSync(join(ROOT, "src/app/(public)/book/[slug]/page.tsx"));
+  }
   if (!clean.startsWith("/")) return null;
   const candidates = [
     join(ROOT, "src/app/(app)", clean.replace(/^\//, ""), "page.tsx"),
     join(ROOT, "src/app/(public)", clean.replace(/^\//, ""), "page.tsx"),
     join(ROOT, "src/app", clean.replace(/^\//, ""), "page.tsx"),
   ];
-  // dynamic segments: /appointments/[id] -> check parent
+  // dynamic segments: /appointments/[id] -> check parent or known public patterns
   if (clean.includes("[")) {
     const parent = clean.split("/").slice(0, -1).join("/");
+    if (parent.startsWith("/book/") && existsSync(join(ROOT, "src/app/(public)/book/[slug]/page.tsx"))) {
+      return true;
+    }
+    if (parent.startsWith("/manage/") && existsSync(join(ROOT, "src/app/(public)/manage/[token]/page.tsx"))) {
+      return true;
+    }
+    if (parent.startsWith("/poll/") && existsSync(join(ROOT, "src/app/(public)/poll/[pollId]/page.tsx"))) {
+      return true;
+    }
+    if (parent.startsWith("/pay/") && existsSync(join(ROOT, "src/app/(public)/pay/[linkId]/page.tsx"))) {
+      return true;
+    }
     return routeExists(parent);
   }
   return candidates.some((p) => existsSync(p));
@@ -103,14 +118,42 @@ const OVERRIDES = {
   // V2 deferred
   "8-22": { status: "V2_DEFERRED", gap: "Payment plans", evidence: "/appointments/payments V2_ONLY" },
   "8-23": { status: "V2_DEFERRED", gap: "Loyalty program", evidence: "V2 row" },
-  // Public gaps
-  "5-26": { status: "V1_PUBLIC_UI_GAP", gap: "Stripe checkout depth in public booking", evidence: "PUBLIC_WAVE_PENDING", priority: "P0" },
-  "5-27": { status: "V1_PUBLIC_UI_GAP", gap: "Square in-page payment in public flow", evidence: "PUBLIC_WAVE_PENDING", priority: "P0" },
-  "5-29": { status: "V1_PUBLIC_UI_GAP", gap: "Public AI booking chat customer flow", evidence: "admin only wired", priority: "P1" },
-  "5-30": { status: "V1_PUBLIC_UI_GAP", gap: "Public email AI booking", evidence: "channel card only", priority: "P1" },
-  "5-32": { status: "V1_PUBLIC_UI_GAP", gap: "Workshop/Event dedicated public flow (no EVENT kind)", evidence: "BACKEND_GAP", priority: "P1" },
-  "13-4": { status: "V1_PUBLIC_UI_GAP", gap: "Public AI chat booking", evidence: "duplicate of 5-29", priority: "P1" },
-  "8-28": { status: "V1_PUBLIC_UI_GAP", gap: "Deposits/full payment public depth", evidence: "PARTIAL", priority: "P0" },
+  // Batch 8D-2 — public booking residual completion
+  "3-23": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 class capacity display on /book/[slug]/classes" },
+  "5-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 DateTimeStep duration picker in public flow" },
+  "5-9": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 multiServiceLines in use-public-booking-flow" },
+  "5-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 lineStaffIds multi-staff in DateTimeStep" },
+  "5-11": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 session cart checkoutSession" },
+  "5-12": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 BookingQuestionField in InfoStep" },
+  "5-13": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 customFieldDefinitions in InfoStep" },
+  "5-14": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 public poll vote /poll/[pollId]" },
+  "5-15": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 add-on picker in InfoStep" },
+  "5-16": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 package/membership entitlements in InfoStep" },
+  "5-17": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 wallet credit toggle in InfoStep" },
+  "5-18": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 saved card toggle at public checkout" },
+  "5-19": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 recurring booking in InfoStep" },
+  "5-20": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 recurring preview API in InfoStep" },
+  "5-25": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 validate_single_use + singleUse query param" },
+  "5-26": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 Stripe checkout redirect + PaymentSummary" },
+  "5-27": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 SquarePaymentStep in-page + deposit breakdown" },
+  "5-29": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 AiBookingStep wired to /api/public/book/[slug]/ai" },
+  "5-30": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 /book/[slug]/ai-email public form" },
+  "5-31": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 PublicStoreCheckoutClient /book/[slug]/store" },
+  "5-32": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 /book/[slug]/events workshop enrollment" },
+  "7-2": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 manage-appointment-public-client reschedule" },
+  "7-3": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 manage-appointment-public-client cancel" },
+  "7-6": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 manage pay_balance Stripe redirect" },
+  "7-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 manage intake edit + upload" },
+  "7-9": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 manage book again link" },
+  "8-26": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 pay-what-you-want input + API validation" },
+  "8-28": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 PaymentSummary deposit/full/pay-later depth" },
+  "8-35": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 canonical /pay/[linkId] public payment link" },
+  "9-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 /book/[slug]/classes enrollment" },
+  "9-8": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 group party size + capacity validation" },
+  "9-9": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 formatCapacityLabel on classes/events" },
+  "13-4": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 duplicate of 5-29 AI chat" },
+  "13-5": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8D-2 duplicate of 5-30 email AI" },
+  "20-4": { status: "V1_COMPLETE_RUNTIME_ONLY", gap: "", evidence: "Batch 8D-2 /api/public/book/[slug]/diagnostics API" },
   // Portal gaps (post 8B-9)
   "7-18": { status: "V1_PORTAL_UI_GAP", gap: "Portal add/remove saved card (Stripe Elements)", evidence: "display only", priority: "P1" },
   "8-29": { status: "V1_PORTAL_UI_GAP", gap: "Portal saved card management", evidence: "setup API exists, no portal UI", priority: "P1" },
@@ -147,7 +190,6 @@ const OVERRIDES = {
   "3-8": { status: "V1_ADMIN_UI_GAP", gap: "Waitlist priority rules admin", evidence: "gap queue P0", priority: "P0" },
   "3-9": { status: "V1_ADMIN_UI_GAP", gap: "Waitlist priority rank in table", evidence: "gap queue P0", priority: "P0" },
   "1-3": { status: "V1_ADMIN_UI_GAP", gap: "Mobile bottom nav appointments", evidence: "PARTIAL", priority: "P2" },
-  "5-14": { status: "V1_PUBLIC_UI_GAP", gap: "Public poll vote page", evidence: "PUBLIC_WAVE_PENDING", priority: "P1" },
   "15-7": { status: "V1_ADMIN_UI_GAP", gap: "Per-booking-type permission editor", evidence: "STILL_MISSING", priority: "P2" },
   // Mock / placeholder
   "10-5": { status: "V1_MOCK_OR_PLACEHOLDER", gap: "Service-booking report JSON dump on temp route", evidence: "reports/service-booking", priority: "P2" },

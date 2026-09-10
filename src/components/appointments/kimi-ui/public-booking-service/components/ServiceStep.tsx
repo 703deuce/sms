@@ -82,12 +82,14 @@ export function ServiceStep({
   categories = [],
   activeCategorySlug,
   addingAdditional = false,
+  bookingSlug,
   onPick,
 }: {
   types: BookingType[];
   categories?: ServiceCategory[];
   activeCategorySlug?: string;
   addingAdditional?: boolean;
+  bookingSlug?: string;
   onPick: (type: BookingType) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
@@ -196,6 +198,23 @@ export function ServiceStep({
           <p className="text-sm text-muted-foreground">No services are available right now.</p>
         ) : null}
       </div>
+
+      {bookingSlug && !addingAdditional ? (
+        <nav className="mt-6 flex flex-wrap gap-3 border-t border-border pt-4 text-[13px]" aria-label="Other booking options">
+          <a href={`/book/${bookingSlug}/classes`} className="font-semibold text-primary hover:underline">
+            Browse classes
+          </a>
+          <a href={`/book/${bookingSlug}/events`} className="font-semibold text-primary hover:underline">
+            Events &amp; workshops
+          </a>
+          <a href={`/book/${bookingSlug}/store`} className="font-semibold text-primary hover:underline">
+            Packages &amp; gifts
+          </a>
+          <a href={`/book/${bookingSlug}/ai-email`} className="font-semibold text-primary hover:underline">
+            Email scheduling
+          </a>
+        </nav>
+      ) : null}
     </div>
   );
 }

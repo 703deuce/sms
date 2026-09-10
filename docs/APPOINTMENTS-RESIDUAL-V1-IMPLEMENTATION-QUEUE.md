@@ -2,7 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 145
+**Total residual rows:** 110
 
 ## /appointments
 
@@ -55,32 +55,6 @@
 - **Backend:** YES / LIKELY
 - **Priority:** P2
 - **Evidence:** /appointments/[id]; routeExists=true; backend=null
-
-## /appointments/ai-booking
-
-### 5-29 — Public AI booking chat
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/ai-booking
-- **Missing:** Public AI booking chat customer flow
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** admin only wired; routeExists=true; backend=true
-
-### 5-30 — Public email AI booking
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/ai-booking
-- **Missing:** Public email AI booking
-- **Backend:** YES / PARTIAL
-- **Priority:** P1
-- **Evidence:** channel card only; routeExists=true; backend=null
-
-### 13-4 — Public AI chat booking
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/ai-booking
-- **Missing:** Public AI chat booking
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** duplicate of 5-29; routeExists=true; backend=true
 
 ## /appointments/automations/activity
 
@@ -450,22 +424,6 @@
 
 ## /appointments/packages
 
-### 5-16 — Package / membership entitlements
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=true; backend=false
-
-### 5-31 — Public store (packages)
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/packages
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** `/book/[slug]/store`; routeExists=true; backend=false
-
 ### 7-15 — Portal: package usage history
 - **Gap type:** V1_PORTAL_UI_GAP
 - **Section:** /appointments/packages
@@ -549,22 +507,6 @@
 - **Backend:** YES / LIKELY
 - **Priority:** P2
 - **Evidence:** gap queue 8B-7; routeExists=true; backend=true
-
-### 5-11 — Multi-booking session (cart)
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/pos
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** DateTime cart; routeExists=true; backend=true
-
-### 5-19 — Recurring booking
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/pos
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=true; backend=true
 
 ### 7-1 — Manage appointment link
 - **Gap type:** V1_ADMIN_UI_GAP
@@ -766,30 +708,6 @@
 - **Priority:** P2
 - **Evidence:** /appointments/types/services; routeExists=false; backend=false
 
-### 5-9 — Multi-service chain
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** DateTime step; routeExists=false; backend=false
-
-### 5-10 — Multi-staff per service line
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Public book; routeExists=false; backend=false
-
-### 5-15 — Add-on selection
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /appointments/types/services
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=false; backend=false
-
 ## /appointments/waitlist
 
 ### 10-5 — Waitlist offer + atomic accept
@@ -906,16 +824,6 @@
 - **Priority:** P2
 - **Evidence:** `templates.ts`; routeExists=true; backend=false
 
-## /contacts/fields
-
-### 5-13 — Custom client fields
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** /contacts/fields
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=true; backend=false
-
 ## /integrations/calendars
 
 ### 17-1 — Google Calendar sync
@@ -986,14 +894,6 @@
 - **Priority:** P1
 - **Evidence:** setup API exists, no portal UI; routeExists=null; backend=null
 
-### 5-18 — Saved card on file
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** CUSTOMER_PORTAL
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=null; backend=null
-
 ### 7-4 — Recurring series cancel scopes
 - **Gap type:** V1_PORTAL_UI_GAP
 - **Section:** CUSTOMER_PORTAL
@@ -1036,192 +936,6 @@
 - **Priority:** P2
 - **Evidence:** PARITY_TEMP; routeExists=null; backend=false
 
-## PUBLIC_BOOKING
-
-### 5-26 — Stripe checkout
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Stripe checkout depth in public booking
-- **Backend:** YES / PARTIAL
-- **Priority:** P0
-- **Evidence:** PUBLIC_WAVE_PENDING; routeExists=null; backend=null
-
-### 5-27 — Square in-page payment
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Square in-page payment in public flow
-- **Backend:** YES / PARTIAL
-- **Priority:** P0
-- **Evidence:** PUBLIC_WAVE_PENDING; routeExists=null; backend=null
-
-### 8-28 — Deposits & full payment
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Deposits/full payment public depth
-- **Backend:** YES / PARTIAL
-- **Priority:** P0
-- **Evidence:** PARTIAL; routeExists=null; backend=null
-
-### 5-14 — Intake forms
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public poll vote page
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** PUBLIC_WAVE_PENDING; routeExists=null; backend=false
-
-### 5-32 — Public class enrollment
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Workshop/Event dedicated public flow (no EVENT kind)
-- **Backend:** YES / LIKELY
-- **Priority:** P1
-- **Evidence:** BACKEND_GAP; routeExists=null; backend=false
-
-### 3-23 — Class capacity display mode
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Public classes; routeExists=null; backend=false
-
-### 5-7 — Duration picker
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Public flow; routeExists=null; backend=null
-
-### 5-12 — Custom booking questions
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Public flow; routeExists=null; backend=null
-
-### 5-17 — Wallet balance at checkout
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=null; backend=false
-
-### 5-20 — Recurring date preview
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Info step; routeExists=null; backend=true
-
-### 5-25 — Single-use token links
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public customer flow not fully exposed
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** —; routeExists=null; backend=null
-
-### 7-2 — Reschedule via manage link
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Manage page; routeExists=null; backend=null
-
-### 7-3 — Cancel via manage link
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Manage page; routeExists=null; backend=null
-
-### 7-6 — Pay balance via manage link
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Manage page; routeExists=null; backend=false
-
-### 7-7 — Edit intake via manage link
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Manage page; routeExists=null; backend=false
-
-### 7-9 — Book again link
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Manage page; routeExists=null; backend=null
-
-### 8-26 — Pay-what-you-want / tipping
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** Type + public; routeExists=null; backend=false
-
-### 8-35 — SMS payment links
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** `/messaging/payments`; routeExists=null; backend=null
-
-### 9-4 — Public class enrollment
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** `/book/[slug]/classes`; routeExists=null; backend=null
-
-### 9-8 — Group capacity on types
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Public; routeExists=null; backend=false
-
-### 9-9 — Remaining spaces display
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public consumer incomplete
-- **Backend:** YES / LIKELY
-- **Priority:** P2
-- **Evidence:** Public classes; routeExists=null; backend=false
-
-### 13-5 — Public email AI handler
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public customer flow not fully exposed
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** —; routeExists=null; backend=null
-
-### 20-4 — Slot diagnostics API
-- **Gap type:** V1_PUBLIC_UI_GAP
-- **Section:** PUBLIC_BOOKING
-- **Missing:** Public customer flow not fully exposed
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** —; routeExists=null; backend=true
-
 ## SHELL_RUNTIME
 
 ### 1-3 — Mobile bottom nav
@@ -1237,7 +951,7 @@
 | Batch | Domain | Approx rows |
 |-------|--------|------------:|
 | 8D-1 | Route convergence + wrong-placement (commerce hub → canonical pages) | 0 |
-| 8D-2 | Public booking payment + class/event + AI public flows | 35 |
+| 8D-2 | Public booking payment + class/event + AI public flows | 0 |
 | 8D-3 | Portal depth (saved cards, membership self-service, household) | 12 |
 | 8D-4 | Operations (calendar, detail, waitlist) | admin gaps on ops pages |
 | 8D-5 | Automations canonical routes + voice reminder merge | wrong-placement automations |
