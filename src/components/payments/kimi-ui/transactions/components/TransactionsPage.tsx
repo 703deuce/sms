@@ -54,6 +54,7 @@ export function TransactionsPage() {
             appointmentTitle: String(row.appointmentTitle || "Appointment"),
             customerName: String(row.customerName || "Customer"),
             customerPhone: String(row.customerPhone || ""),
+            contactId: row.contactId ? String(row.contactId) : null,
             provider: (row.provider === "square" ? "square" : "stripe") as TransactionRow["provider"],
             status: String(row.status) as TransactionRow["status"],
             paymentMode: String(row.paymentMode) as TransactionRow["paymentMode"],
@@ -63,6 +64,10 @@ export function TransactionsPage() {
             refundAmountCents: Number(row.refundAmountCents || 0),
             paidAt: (row.paidAt as string | null) ?? null,
             createdAt: String(row.createdAt),
+            source: String(row.source || "Appointment"),
+            paymentMethodLabel: row.paymentMethodLabel ? String(row.paymentMethodLabel) : null,
+            failureReason: row.failureReason ? String(row.failureReason) : null,
+            providerPaymentId: row.providerPaymentId ? String(row.providerPaymentId) : null,
           }),
         );
         setRows(mapped);
@@ -133,7 +138,7 @@ export function TransactionsPage() {
         <div>
           <h1 className="tv-title">Transactions</h1>
           <p className="tv-subtitle">
-            Appointment payments collected through Stripe or Square.
+            View payments, refunds, and other money activity.
           </p>
         </div>
         <a href="/integrations/payments" className="tv-link tv-header-link">
@@ -207,12 +212,12 @@ export function TransactionsPage() {
             <div className="tv-state-icon tv-state-icon-brand">
               <CreditCard size={20} />
             </div>
-            <h3 className="tv-state-title">No payment transactions yet</h3>
+            <h3 className="tv-state-title">No transactions yet</h3>
             <p className="tv-state-desc">
-              When customers pay at booking or through a payment link, transactions will appear here.
+              Payments will appear here after customers or staff complete a sale.
             </p>
-            <a href="/integrations/payments" className="tv-btn tv-btn-primary">
-              Connect Stripe or Square
+            <a href="/integrations/payments" className="tv-btn tv-btn-secondary">
+              Manage payment providers
             </a>
           </div>
         ) : (
@@ -289,11 +294,11 @@ export function TransactionsPage() {
                     <tr>
                       <th scope="col">Date</th>
                       <th scope="col">Customer</th>
-                      <th scope="col">Provider</th>
+                      <th scope="col">Description</th>
+                      <th scope="col">Payment method</th>
                       <th scope="col">Status</th>
-                      <th scope="col">Mode</th>
                       <th scope="col" className="tv-th-right">Amount</th>
-                      <th scope="col">Appointment</th>
+                      <th scope="col">Source</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -309,14 +314,13 @@ export function TransactionsPage() {
                       >
                         <td className="tv-td-date">{formatWhen(row.paidAt || row.createdAt)}</td>
                         <td>
-                          <div className="tv-customer">
-                            <span className="tv-customer-name">{row.customerName}</span>
-                            <span className="tv-customer-sub">{row.appointmentTitle}</span>
-                          </div>
+                          <span className="tv-customer-name">{row.customerName}</span>
                         </td>
-                        <td>{providerLabel(row.provider)}</td>
+                        <td className="tv-td-muted">{row.appointmentTitle}</td>
+                        <td className="tv-td-muted">
+                          {row.paymentMethodLabel || providerLabel(row.provider)}
+                        </td>
                         <td><StatusChip status={row.status} /></td>
-                        <td className="tv-td-muted">{modeLabel[row.paymentMode] ?? row.paymentMode}</td>
                         <td className="tv-td-amount">
                           {formatMoney(row.amountPaidCents || row.totalPriceCents, row.currency)}
                           {row.refundAmountCents > 0 && (
@@ -325,15 +329,7 @@ export function TransactionsPage() {
                             </span>
                           )}
                         </td>
-                        <td>
-                          <a
-                            href={appointmentHref(row.appointmentId)}
-                            className="tv-link"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            View appointment
-                          </a>
-                        </td>
+                        <td className="tv-td-muted">{row.source}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -342,24 +338,6 @@ export function TransactionsPage() {
             )}
           </>
         )}
-      </div>
-
-      {/* Dev state switcher (sandbox only) */}
-      <div className="tv-devbar">
-        <span>Preview state:</span>
-        {(["normal", "loading", "empty", "no-results", "error", "readonly"] as PageState[]).map((s) => (
-          <button
-            key={s}
-            className={`tv-devbtn ${state === s ? "tv-devbtn-active" : ""}`}
-            onClick={() => {
-              if (s === "no-results") { setState("normal"); setQuery("zzzz-no-match"); }
-              else if (s === "loading") { setState("loading"); setTimeout(() => setState("normal"), 900); }
-              else { setState(s); if (s !== "normal") setSelected(null); if (s === "normal") setQuery(""); }
-            }}
-          >
-            {s}
-          </button>
-        ))}
       </div>
 
       {toast && (

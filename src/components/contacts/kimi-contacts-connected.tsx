@@ -24,6 +24,11 @@ import {
   type KimiImportResult,
 } from "@/lib/contacts/kimi-contacts-adapter";
 import { addContactsToList, removeContactsFromLists } from "@/lib/contacts/kimi-lists-adapter";
+import { ContactMergeModal } from "@/components/contacts/contact-merge-modal";
+import {
+  fetchCustomFields,
+  persistCustomFields,
+} from "@/lib/contacts/kimi-fields-adapter";
 
 type View = "list" | "create" | "import";
 
@@ -49,16 +54,16 @@ export function KimiContactsConnected({
   const [listOptions, setListOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [listLoading, setListLoading] = useState(false);
   const [serverFiltered, setServerFiltered] = useState(false);
-  const householdBanner = (
-    <div className="mx-6 mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">Household &amp; family accounts</span>
-      {" — "}
-      Link dependents and family members for shared booking, packages, and appointment history.
-      <a href="/appointments/commerce" className="ml-2 text-primary underline">
-        Manage households
-      </a>
-    </div>
-  );
+  const [mergeContact, setMergeContact] = useState<Contact | null>(null);
+  const [importFieldOptions, setImportFieldOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    void fetchCustomFields()
+      .then((fields) =>
+        setImportFieldOptions(fields.filter((f) => !f.system).map((f) => f.name)),
+      )
+      .catch(() => undefined);
+  }, []);
   const retainInitialContactsRef = useRef(initialContacts.length > 0);
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFilterRef = useRef<{ q: string; status: OptInStatus | "all" }>({
@@ -188,7 +193,6 @@ export function KimiContactsConnected({
             </button>
           </div>
         )}
-        {householdBanner}
         {view === "list" && (
           <ContactsList
             contacts={contacts}
@@ -212,6 +216,7 @@ export function KimiContactsConnected({
               await Promise.all(ids.map((id) => updateContact(id, { optInLabel: "Unsubscribed" })));
               await reload(latestFilterRef.current);
             }}
+            onMergeContact={(c) => setMergeContact(c)}
             savedToast={savedToast}
           />
         )}
@@ -221,6 +226,29 @@ export function KimiContactsConnected({
         {view === "import" && (
           <ImportWizard
             contactLists={contactLists}
+            extraFieldOptions={importFieldOptions}
+            onCreateCustomerField={async (name) => {
+              const existing = await fetchCustomFields();
+              const key = name.toLowerCase().replace(/\s+/g, "_");
+              const next = [
+                ...existing,
+                {
+                  key,
+                  name,
+                  type: "Text",
+                  required: false,
+                  usedIn: "Customer profiles",
+                  system: false,
+                },
+              ];
+              const saved = await persistCustomFields(next);
+              const created = saved.find((f) => f.name === name);
+              if (created) {
+                setImportFieldOptions(saved.filter((f) => !f.system).map((f) => f.name));
+                return created.name;
+              }
+              return name;
+            }}
             onCancel={() => setView("list")}
             onDone={() => setImportModal(true)}
             onImportFile={async (payload) => {
@@ -231,6 +259,21 @@ export function KimiContactsConnected({
           />
         )}
       </main>
+      {mergeContact ? (
+        <ContactMergeModal
+          primaryContact={{
+            id: mergeContact.id,
+            firstName: mergeContact.firstName,
+            lastName: mergeContact.lastName,
+            email: mergeContact.email,
+            phone: mergeContact.mobile,
+          }}
+          onClose={() => {
+            setMergeContact(null);
+            void reload(latestFilterRef.current);
+          }}
+        />
+      ) : null}
       {importModal && (
         <ImportStartedModal
           result={importResult}

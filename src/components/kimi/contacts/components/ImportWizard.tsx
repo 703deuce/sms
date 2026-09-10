@@ -78,11 +78,15 @@ export default function ImportWizard({
   onDone,
   onImportFile,
   contactLists = defaultContactLists,
+  extraFieldOptions = [],
+  onCreateCustomerField,
 }: {
   onCancel: () => void;
   onDone: () => void;
   onImportFile?: (payload: KimiImportPayload) => Promise<void>;
   contactLists?: string[];
+  extraFieldOptions?: string[];
+  onCreateCustomerField?: (name: string) => Promise<string | null>;
 }) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<string | null>(null);
@@ -166,6 +170,7 @@ export default function ImportWizard({
   ];
 
   const mappedCount = Object.values(mapping).filter((v) => v && v !== "None").length;
+  const fieldOptions = [...contactFieldOptions, ...extraFieldOptions.filter((f) => !contactFieldOptions.includes(f))];
 
   return (
     <div className="flex min-h-screen max-w-4xl flex-col px-8 pb-10 pt-6" ref={dropdownRef}>
@@ -276,7 +281,7 @@ export default function ImportWizard({
                       </button>
                       {openDropdown === col.name && (
                         <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card py-1.5 shadow-lg animate-in fade-in zoom-in-95 duration-100">
-                          {contactFieldOptions.map((opt) => (
+                          {fieldOptions.map((opt) => (
                             <button
                               key={opt}
                               onClick={() => {
@@ -289,6 +294,24 @@ export default function ImportWizard({
                               {assigned === opt && <Check className="h-3.5 w-3.5" />}
                             </button>
                           ))}
+                          {onCreateCustomerField ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const name = window.prompt("New customer field name", col.name);
+                                if (!name?.trim()) return;
+                                void onCreateCustomerField(name.trim()).then((created) => {
+                                  if (created) {
+                                    setMapping((prev) => ({ ...prev, [col.name]: created }));
+                                  }
+                                  setOpenDropdown(null);
+                                });
+                              }}
+                              className="flex w-full items-center gap-2 border-t border-border px-3.5 py-2 text-left text-[13px] font-medium text-primary hover:bg-primary/5"
+                            >
+                              + Create customer field
+                            </button>
+                          ) : null}
                         </div>
                       )}
                     </div>

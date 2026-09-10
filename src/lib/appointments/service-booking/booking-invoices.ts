@@ -75,6 +75,39 @@ export function invoicePublicPayUrl(baseUrl: string, payToken: string) {
   return `${baseUrl.replace(/\/$/, "")}/pay/invoice/${payToken}`;
 }
 
+export async function voidInvoice(workspaceId: string, invoiceId: string) {
+  const prisma = getPrisma();
+  const invoice = await prisma.bookingInvoice.findFirst({
+    where: { id: invoiceId, workspaceId },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status === "paid") throw new Error("Paid invoices cannot be voided");
+  if (invoice.status === "void") return invoice;
+
+  return prisma.bookingInvoice.update({
+    where: { id: invoiceId },
+    data: { status: "void" },
+    include: { lineItems: true },
+  });
+}
+
+export async function regenerateInvoicePayToken(workspaceId: string, invoiceId: string) {
+  const prisma = getPrisma();
+  const invoice = await prisma.bookingInvoice.findFirst({
+    where: { id: invoiceId, workspaceId },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.status === "void" || invoice.status === "paid") {
+    throw new Error("Cannot generate pay link for this invoice");
+  }
+  const rawToken = generateSecureToken();
+  await prisma.bookingInvoice.update({
+    where: { id: invoiceId },
+    data: { payTokenHash: hashToken(rawToken) },
+  });
+  return rawToken;
+}
+
 export async function getInvoiceByPayToken(payToken: string) {
   const prisma = getPrisma();
   const invoice = await prisma.bookingInvoice.findFirst({

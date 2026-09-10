@@ -69,6 +69,16 @@ export async function listOpenPosSessions(workspaceId: string) {
   });
 }
 
+export async function listRecentPosSessions(workspaceId: string, limit = 8) {
+  const prisma = getPrisma();
+  return prisma.posSession.findMany({
+    where: { workspaceId, status: "checked_out" },
+    include: { lineItems: true },
+    orderBy: { checkedOutAt: "desc" },
+    take: limit,
+  });
+}
+
 export async function addPosLineItem(
   workspaceId: string,
   sessionId: string,
@@ -150,6 +160,7 @@ export async function checkoutPosSession(
     contactId?: string;
     referralCode?: string;
     loyaltyProgramId?: string;
+    accountCreditCents?: number;
   },
 ) {
   const prisma = getPrisma();
@@ -253,6 +264,20 @@ export async function checkoutPosSession(
     }
   }
 
+  let accountCreditApplied = 0;
+  if (contactId && input?.accountCreditCents && input.accountCreditCents > 0) {
+    const { debitWallet } = await import("./client-wallet");
+    const applyCents = Math.min(input.accountCreditCents, session.totalCents);
+    if (applyCents > 0) {
+      await debitWallet(workspaceId, contactId, applyCents, {
+        note: `POS session ${sessionId}`,
+        referenceId: sessionId,
+        kind: "pos_payment",
+      });
+      accountCreditApplied = applyCents;
+    }
+  }
+
   const priorMeta = (session.metadata || {}) as Record<string, unknown>;
   return prisma.posSession.update({
     where: { id: sessionId },
@@ -260,7 +285,12 @@ export async function checkoutPosSession(
       status: "checked_out",
       checkedOutAt: new Date(),
       contactId: contactId || session.contactId,
-      metadata: { ...priorMeta, fulfillment },
+      metadata: {
+        ...priorMeta,
+        fulfillment,
+        accountCreditAppliedCents: accountCreditApplied,
+        taxBackendGap: true,
+      },
     },
     include: { lineItems: true },
   });

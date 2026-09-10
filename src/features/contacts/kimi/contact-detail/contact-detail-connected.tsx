@@ -8,9 +8,19 @@ import { ContactAppointmentsPanel } from "@/components/contacts/kimi-ui/contact-
 import { ContactActivityTimeline } from "@/components/contacts/kimi-ui/contact-detail/components/ContactActivityTimeline";
 import { ConnectedRecordsPanel } from "@/components/contacts/kimi-ui/contact-detail/components/ConnectedRecordsPanel";
 import { ContactProfileEdit } from "@/components/contacts/kimi-ui/contact-detail/components/ContactProfileEdit";
+import {
+  ContactAccountCreditPanel,
+  ContactBookingAccessPanel,
+  ContactCustomFieldsValuesCard,
+  ContactHouseholdPanel,
+  ContactOverviewPanel,
+  ContactPackagesMembershipsPanel,
+} from "@/components/contacts/kimi-ui/contact-detail/components/ContactCustomerPanels";
+import { ContactMergeModal } from "@/components/contacts/contact-merge-modal";
 import type { Contact as KimiContact } from "@/components/contacts/kimi-ui/contact-detail/types";
 import type { Contact } from "@/lib/types";
 import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
 
 function mapContact(contact: Contact): KimiContact {
   const custom = contact.customFields as { linkedin?: string; timezone?: string } | undefined;
@@ -43,6 +53,7 @@ function mapContact(contact: Contact): KimiContact {
 export function ContactDetailConnected({ contact }: { contact: Contact }) {
   const kimiContact = mapContact(contact);
   const custom = contact.customFields as { linkedin?: string; timezone?: string } | undefined;
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-6">
@@ -54,16 +65,22 @@ export function ContactDetailConnected({ contact }: { contact: Contact }) {
         Back to contacts
       </Link>
 
-      <ContactHeader contact={kimiContact} />
+      <ContactHeader contact={kimiContact} onMerge={() => setMergeOpen(true)} />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-6">
+          <ContactOverviewPanel contactId={contact.id} />
           <ContactAppointmentsPanel contactId={contact.id} />
+          <ContactPackagesMembershipsPanel contactId={contact.id} />
+          <ContactAccountCreditPanel contactId={contact.id} />
+          <ContactHouseholdPanel contactId={contact.id} />
           <ContactActivityTimeline contactId={contact.id} />
           <ConnectedRecordsPanel contactId={contact.id} />
         </div>
         <div className="space-y-6">
           <ContactProfileCard contact={kimiContact} />
+          <ContactCustomFieldsValuesCard customFields={contact.customFields} />
+          <ContactBookingAccessPanel contactId={contact.id} />
           <ContactProfileEdit
             contactId={contact.id}
             timezone={custom?.timezone ?? null}
@@ -71,6 +88,19 @@ export function ContactDetailConnected({ contact }: { contact: Contact }) {
           />
         </div>
       </div>
+
+      {mergeOpen ? (
+        <ContactMergeModal
+          primaryContact={{
+            id: contact.id,
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            email: contact.email,
+            phone: contact.phone,
+          }}
+          onClose={() => setMergeOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

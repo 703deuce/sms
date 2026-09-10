@@ -69,6 +69,22 @@ export async function loadExtendedAppointmentsAnalytics(
     return Boolean(utm?.source);
   }).length;
 
+  const payments = await prisma.appointmentMerchantPayment.findMany({
+    where: { workspaceId, createdAt: { gte: from } },
+    select: { amountPaidCents: true, refundAmountCents: true },
+  });
+  const revenueGrossCents = payments.reduce((s: number, p: DbRow) => s + p.amountPaidCents, 0);
+  const revenueRefundsCents = payments.reduce((s: number, p: DbRow) => s + p.refundAmountCents, 0);
+
+  const workflowExecutions = await prisma.appointmentWorkflowExecution.findMany({
+    where: { workspaceId, createdAt: { gte: from } },
+    select: { status: true },
+  });
+  const workflowRuns = workflowExecutions.length;
+  const workflowFailures = workflowExecutions.filter(
+    (e: DbRow) => String(e.status).toLowerCase() === "failed",
+  ).length;
+
   const platform = await loadAppointmentPlatformConfig(workspaceId);
   const routingForms = ((platform as { routingForms?: Array<{ id: string; name: string }> }).routingForms || []).map(
     (form) => {
@@ -103,6 +119,11 @@ export async function loadExtendedAppointmentsAnalytics(
     utmConversions,
     conversionRate: booked > 0 ? Math.round((confirmed / booked) * 100) : 0,
     routingForms,
+    revenueGrossCents,
+    revenueRefundsCents,
+    revenueNetCents: revenueGrossCents - revenueRefundsCents,
+    workflowRuns,
+    workflowFailures,
   };
 }
 
