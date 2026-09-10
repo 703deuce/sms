@@ -289,6 +289,7 @@ export function TeamPagesClient({ workspaceSlug }: { workspaceSlug: string }) {
                   page={p}
                   groups={groups}
                   types={types}
+                  workspaceSlug={workspaceSlug}
                   showUrl={workspaceSlug.length > 0}
                   onChange={(next) => setPages((prev) => prev.map((x) => (x.id === p.id ? next : x)))}
                   onBlurSave={() => savePage(p)}

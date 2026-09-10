@@ -3,7 +3,7 @@ import { NotetakerHomeClient } from "@/components/meetings/notetaker-home-client
 
 export default function VideoPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading AI Notetaker…</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading upcoming meetings…</div>}>
       <NotetakerHomeClient />
     </Suspense>
   );

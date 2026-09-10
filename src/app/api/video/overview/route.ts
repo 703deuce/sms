@@ -47,6 +47,7 @@ export async function GET() {
           title: s.title,
           status: s.status,
           meetingSource: s.meetingSource,
+          meetingPlatform: s.meetingPlatform,
           meetingUrl: s.meetingUrl,
           scheduledStartAt: s.scheduledStartAt?.toISOString() || null,
           appointmentId: s.appointmentId,

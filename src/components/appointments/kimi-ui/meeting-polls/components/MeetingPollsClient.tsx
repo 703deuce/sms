@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Vote, CheckCircle2, AlertCircle } from "lucide-react";
-import { MeetingPoll, PollStatus } from "../types";
+import { apiPollToUi, uiPollToApi, type MeetingPollUi, type PollUiStatus } from "@/lib/appointments/meeting-polls-present";
+import type { PollStatus } from "../types";
+
+type MeetingPoll = MeetingPollUi;
 import { Button, Input, EmptyState } from "./ui";
 import { PollRow } from "./PollCard";
 import { CreatePollModal } from "./CreatePollModal";
@@ -38,8 +41,9 @@ export function MeetingPollsClient() {
     fetch("/api/appointments/meeting-polls")
       .then((r) => r.json())
       .then((j) => {
-        setPolls(j.data || []);
-        setLoadState((j.data || []).length === 0 ? "empty" : "ready");
+        const rows = (j.data || []).map((p: Parameters<typeof apiPollToUi>[0]) => apiPollToUi(p));
+        setPolls(rows);
+        setLoadState(rows.length === 0 ? "empty" : "ready");
       })
       .catch(() => setLoadState("error"));
   }, []);
@@ -71,17 +75,22 @@ export function MeetingPollsClient() {
     const res = await fetch("/api/appointments/meeting-polls", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ poll }),
+      body: JSON.stringify({ poll: uiPollToApi(poll, "workspace") }),
     });
     if (!res.ok) throw new Error("save failed");
     const json = await res.json();
-    return json.data as MeetingPoll;
+    return apiPollToUi(json.data);
   }
 
   /** Book winner — from ConfirmTimeModal */
   async function bookWinningTime(poll: MeetingPoll, winningOptionId: string) {
     try {
-      const saved = await persistPoll({ ...poll, status: "scheduled", winningOptionId });
+      const saved = await persistPoll({
+        ...poll,
+        status: "scheduled",
+        winningOptionId,
+        bookedAppointmentId: poll.bookedAppointmentId,
+      });
       setPolls((ps) => ps.map((p) => (p.id === poll.id ? saved : p)));
       if (selected?.id === poll.id) setSelected(saved);
       setConfirmingPoll(null);
@@ -89,7 +98,7 @@ export function MeetingPollsClient() {
       const when = winner
         ? new Date(winner.startsAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
         : "";
-      showToast(`Poll closed — ${when} booked and invites sent.`);
+      showToast(when ? `Poll closed — ${when} selected.` : "Poll marked as scheduled.");
     } catch {
       showToast("Could not book the winning time.");
     }
@@ -134,7 +143,8 @@ export function MeetingPollsClient() {
       .then(() => fetch("/api/appointments/meeting-polls"))
       .then((r) => r.json())
       .then((j) => {
-        setPolls(j.data || []);
+        const rows = (j.data || []).map((p: Parameters<typeof apiPollToUi>[0]) => apiPollToUi(p));
+        setPolls(rows);
         setCreateOpen(false);
         showToast("Meeting poll created. Share the link to start collecting votes.");
       })

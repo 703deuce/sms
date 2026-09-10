@@ -37,7 +37,10 @@ export async function POST(request: Request) {
     }
 
     if (body.poll) {
-      const saved = await saveMeetingPoll(auth.workspaceId, body.poll);
+      const saved = await saveMeetingPoll(auth.workspaceId, {
+        ...body.poll,
+        workspaceId: auth.workspaceId,
+      });
       return NextResponse.json({ data: saved });
     }
 

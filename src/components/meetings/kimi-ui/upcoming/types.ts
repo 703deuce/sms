@@ -16,6 +16,9 @@ export type UpcomingSession = {
   /** Present when Transovo hosts the video room (host join available) */
   appointmentTitle?: string | null;
   participants?: string[];
+  hostJoinUrl?: string;
+  appointmentId?: string | null;
+  videoMeetingId?: string | null;
 };
 
 export type RecentRecap = {
@@ -25,9 +28,20 @@ export type RecentRecap = {
   meetingPlatform: MeetingPlatform;
 };
 
+export type VideoMeetingRow = {
+  id: string;
+  title: string | null;
+  status: string;
+  scheduledStartAt: string | null;
+  meetingUrl: string;
+  hostJoinUrl: string;
+  appointmentId: string | null;
+};
+
 export type OverviewData = {
-  entitlements: { aiNotetaker: boolean };
+  entitlements: { aiNotetaker: boolean; transovoVideo?: boolean };
   upcomingSessions: UpcomingSession[];
+  upcomingVideoMeetings?: VideoMeetingRow[];
   recentRecaps: RecentRecap[];
   /** Set when part of the overview (recaps) failed to load — degraded state */
   recapsDegraded?: boolean;
