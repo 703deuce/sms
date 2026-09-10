@@ -2,14 +2,18 @@ import {
   listHouseholdAccounts,
   createHouseholdAccount,
   addHouseholdMember,
+  resolveHouseholdForContact,
 } from "@/lib/appointments/service-booking";
 import { withAppointmentsAuth } from "@/lib/appointments/service-booking/api-helpers";
 
 export async function GET(request: Request) {
-  const payerContactId = new URL(request.url).searchParams.get("payerContactId") || undefined;
-  return withAppointmentsAuth("appointments.read", async ({ workspaceId }) =>
-    listHouseholdAccounts(workspaceId, payerContactId),
-  );
+  const url = new URL(request.url);
+  const payerContactId = url.searchParams.get("payerContactId") || undefined;
+  const contactId = url.searchParams.get("contactId") || undefined;
+  return withAppointmentsAuth("appointments.read", async ({ workspaceId }) => {
+    if (contactId) return resolveHouseholdForContact(workspaceId, contactId);
+    return listHouseholdAccounts(workspaceId, payerContactId);
+  });
 }
 
 export async function POST(request: Request) {

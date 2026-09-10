@@ -2,6 +2,7 @@ import {
   createPosSession,
   getPosSession,
   listOpenPosSessions,
+  listRecentPosSessions,
   addPosLineItem,
   removePosLineItem,
   checkoutPosSession,
@@ -15,6 +16,9 @@ export async function GET(request: Request) {
 
   return withAppointmentsAuth("appointments.read", async ({ workspaceId }) => {
     if (sessionId) return getPosSession(workspaceId, sessionId);
+    if (url.searchParams.get("recent") === "1") {
+      return listRecentPosSessions(workspaceId);
+    }
     return listOpenPosSessions(workspaceId);
   });
 }
@@ -38,6 +42,7 @@ export async function POST(request: Request) {
           contactId: body.contactId,
           referralCode: body.referralCode,
           loyaltyProgramId: body.loyaltyProgramId,
+          accountCreditCents: body.accountCreditCents,
         });
       case "void":
         return voidPosSession(workspaceId, body.sessionId);

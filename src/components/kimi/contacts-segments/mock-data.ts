@@ -49,6 +49,7 @@ export const lists: ContactList[] = [
 
 export const contactProperties = [
   { group: "Contact Fields", items: ["First Name","Last Name","Area Code","Email Address","Address","City","State","Province","Postal Code","Country","Source","Age","Birthday","Birth Month","Days Until Birthday","Opt-In Status","Timezone","Language","Created","Last Updated"] },
+  { group: "Appointments", items: ["Appointment status", "Booking type", "Has upcoming appointment"] },
   { group: "Custom Fields", items: ["Favorite Sports Team"] },
   { group: "Lists", items: ["List Membership"] },
   { group: "Links", items: ["Link Clicked"] },

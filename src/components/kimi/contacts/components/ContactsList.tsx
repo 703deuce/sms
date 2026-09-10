@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Users,
@@ -107,6 +108,7 @@ export default function ContactsList({
   onAddToLists,
   onRemoveFromLists,
   onUnsubscribeContacts,
+  onMergeContact,
   savedToast,
 }: {
   contacts?: Contact[];
@@ -121,6 +123,7 @@ export default function ContactsList({
   onAddToLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
   onRemoveFromLists?: (contactIds: string[], listIds: string[]) => void | Promise<void>;
   onUnsubscribeContacts?: (contactIds: string[]) => void | Promise<void>;
+  onMergeContact?: (contact: Contact) => void;
   savedToast: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -615,7 +618,9 @@ export default function ContactsList({
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
                             {initials(c)}
                           </span>
-                          <span className="max-w-[200px] truncate font-medium text-foreground">{contactName(c)}</span>
+                          <Link href={`/contacts/${c.id}`} className="max-w-[200px] truncate font-medium text-foreground hover:text-primary">
+                            {contactName(c)}
+                          </Link>
                         </div>
                       </td>
                       <td className="px-4 py-2.5 tabular-nums text-muted-foreground">{displayMobile(c.mobile)}</td>
@@ -633,6 +638,25 @@ export default function ContactsList({
                         </button>
                         {rowMenuFor === c.id && (
                           <div ref={rowMenuRef} className={`${menuCls} right-4 top-full z-40 mt-0.5 min-w-[180px]`}>
+                            <Link
+                              href={`/contacts/${c.id}`}
+                              className={menuItemCls}
+                              onClick={() => setRowMenuFor(null)}
+                            >
+                              View customer
+                            </Link>
+                            {onMergeContact ? (
+                              <button
+                                type="button"
+                                className={menuItemCls}
+                                onClick={() => {
+                                  setRowMenuFor(null);
+                                  onMergeContact(c);
+                                }}
+                              >
+                                Merge duplicate
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className={menuItemCls}

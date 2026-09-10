@@ -4,7 +4,8 @@ import type { Contact } from "../types";
 import { StatusChip, formatPhone } from "./ui";
 import { ContactBookingActions } from "./ContactBookingActions";
 import { ClickToCallButton } from "./ClickToCallButton";
-import { Building2, Mail, Phone, Tag } from "lucide-react";
+import { Building2, Mail, MoreHorizontal, Phone, Tag } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 function initialsOf(c: Contact) {
   const f = c.firstName?.trim()?.[0] || "";
@@ -12,7 +13,24 @@ function initialsOf(c: Contact) {
   return (f + l).toUpperCase() || c.phone.slice(-2);
 }
 
-export function ContactHeader({ contact }: { contact: Contact }) {
+export function ContactHeader({
+  contact,
+  onMerge,
+}: {
+  contact: Contact;
+  onMerge?: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   return (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
@@ -100,6 +118,64 @@ export function ContactHeader({ contact }: { contact: Contact }) {
             phone={contact.phone}
             email={contact.email}
           />
+          {onMerge ? (
+            <div ref={menuRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                aria-label="More actions"
+                onClick={() => setMenuOpen((v) => !v)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  padding: "6px 10px",
+                  fontSize: 12,
+                  background: "var(--card)",
+                }}
+              >
+                <MoreHorizontal style={{ width: 14, height: 14 }} />
+                More
+              </button>
+              {menuOpen ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "100%",
+                    marginTop: 4,
+                    minWidth: 180,
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "var(--card)",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                    zIndex: 20,
+                    padding: 4,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onMerge();
+                    }}
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      border: 0,
+                      background: "transparent",
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Merge duplicate
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

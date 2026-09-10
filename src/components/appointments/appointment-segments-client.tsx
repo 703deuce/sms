@@ -54,7 +54,8 @@ export function AppointmentSegmentsClient() {
       <header>
         <h1 className="text-2xl font-semibold">Appointment segments</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Appointment-derived audiences for follow-up messaging.
+          Recall and appointment-derived targeting presets. For reusable customer segments, use{" "}
+          <Link href="/contacts/segments" className="text-primary underline">Contacts → Segments</Link>.
         </p>
       </header>
 
