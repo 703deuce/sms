@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 /* Transovo public action surface — design tokens + layout primitives.
    Uses semantic class names mapped onto the Transovo token vocabulary. */
@@ -137,7 +138,7 @@ html, body {
 }
 .pub-subtext {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -213,8 +214,8 @@ html, body {
 .status-reschedule_requested .status-dot { background: #fb6514; }
 .status-canceled, .status-cancelled { background: #f2f4f7; color: #475467; border-color: #e4e7ec; }
 .status-canceled .status-dot, .status-cancelled .status-dot { background: #98a2b3; }
-.status-completed { background: #f4f3ff; color: #5925dc; border-color: #d9d6fe; }
-.status-completed .status-dot { background: #7a5af8; }
+.status-completed { background: #dcefeb; color: #10665f; border-color: rgba(20, 125, 116, 0.22); }
+.status-completed .status-dot { background: #147d74; }
 .status-no_show { background: #fef3f2; color: #b42318; border-color: #fecdca; }
 .status-no_show .status-dot { background: #f04438; }
 
@@ -356,7 +357,7 @@ html, body {
 }
 .done-subtext {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -404,7 +405,7 @@ html, body {
 }
 .error-message {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.5;
   color: var(--text-secondary);
 }

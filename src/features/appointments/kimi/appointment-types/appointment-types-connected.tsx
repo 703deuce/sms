@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SlotDiagnosticsDrawer } from "@/features/appointments/kimi/availability/SlotDiagnosticsDrawer";
+import { toDatetimeLocalValue } from "@/features/appointments/kimi/availability/datetime-local";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AppointmentTypesView from "@/components/appointments/kimi-ui/appointment-types/page";
@@ -22,7 +24,7 @@ import type {
 
 function TypesLoading() {
   return (
-    <div className="reference-root min-h-screen bg-[#f7f8fb] p-6 font-sans animate-pulse">
+    <div className="reference-root min-h-screen bg-[#f7f8fa] p-6 font-sans animate-pulse">
       <div className="h-8 w-64 rounded bg-gray-200 mb-6" />
       <div className="flex gap-5">
         <div className="w-[300px] h-[520px] rounded-xl bg-white border border-[#ecedf2]" />
@@ -35,9 +37,9 @@ function TypesLoading() {
 
 function TypesError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="reference-root min-h-screen bg-[#f7f8fb] p-6 font-sans flex items-center justify-center">
+    <div className="reference-root min-h-screen bg-[#f7f8fa] p-6 font-sans flex items-center justify-center">
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load appointment types</h3>
@@ -88,6 +90,7 @@ export function AppointmentTypesConnected() {
   const [intakeFormOptions, setIntakeFormOptions] = useState<
     Array<{ id: string; name: string; active?: boolean }>
   >([]);
+  const [slotDiagnosticsOpen, setSlotDiagnosticsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -454,6 +457,7 @@ export function AppointmentTypesConnected() {
         if (bookingBaseUrl) window.open(bookingBaseUrl, "_blank");
       },
       onManageAvailability: () => router.push("/appointments/availability"),
+      onCheckAvailability: () => setSlotDiagnosticsOpen(true),
       onManageStaff: () => router.push("/appointments/staff"),
       onManageLocations: () => router.push("/appointments/locations"),
       onReorderTypes: reorderTypes,
@@ -463,8 +467,32 @@ export function AppointmentTypesConnected() {
     [bookingBaseUrl, copyLink, load, moveType, resetEditor, router, save, selectType, startCreate, toggleActive, updateForm, reorderTypes],
   );
 
+  const diagnosticsStaffId =
+    form.collectiveStaffIds[0] ||
+    form.staffIds[0] ||
+    "";
+
   if (loading) return <TypesLoading />;
   if (failed || !model) return <TypesError onRetry={load} />;
 
-  return <AppointmentTypesView model={model} actions={actions} />;
+  return (
+    <>
+      <AppointmentTypesView model={model} actions={actions} />
+      <SlotDiagnosticsDrawer
+        open={slotDiagnosticsOpen}
+        onClose={() => setSlotDiagnosticsOpen(false)}
+        staffOptions={staffOptions}
+        context={{
+          serviceName: form.name.trim() || undefined,
+          startsAt: toDatetimeLocalValue(new Date()),
+          staffId: diagnosticsStaffId || undefined,
+          lockServiceName: Boolean(form.name.trim()),
+        }}
+        onOpenFullPage={() => {
+          setSlotDiagnosticsOpen(false);
+          router.push("/appointments/availability");
+        }}
+      />
+    </>
+  );
 }

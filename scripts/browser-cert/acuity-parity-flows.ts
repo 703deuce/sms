@@ -4,6 +4,7 @@
  */
 import type { BrowserFlow } from "./flows";
 import type { CertStatus } from "./lib";
+import { APPT_CANONICAL } from "./canonical-appointments-routes";
 import {
   adminAvailabilityPageLoads,
   adminIntakeFileFieldEditor,
@@ -169,7 +170,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: E,
     title: "Add-on changes price",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Add-ons/i, "UAT Add-on Price"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.types, /Add-ons/i, "UAT Add-on Price"),
   },
   staticFlow(E, "UAT-16", "Add-on changes duration", "FAIL", "Duration delta requires public book with slot comparison"),
   staticFlow(E, "UAT-17", "Add-on requires resource", "FAIL", "Resource-scoped add-on availability requires booking fixture"),
@@ -180,7 +181,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: F,
     title: "Intake form",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Intake forms/i, "UAT Intake Form"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.intakeForms, /Intake forms/i, "UAT Intake Form"),
   },
   {
     id: "UAT-19",
@@ -212,7 +213,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: H,
     title: "Basic membership subscription",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Memberships/i, "UAT Membership"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.memberships, /Memberships/i, "UAT Membership"),
   },
   staticFlow(H, "UAT-29", "Member-only service", "FAIL", "Requires member vs non-member public book comparison"),
   staticFlow(H, "UAT-30", "Member-only class", "FAIL", "Requires class enrollment comparison"),
@@ -226,7 +227,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: I,
     title: "Gift certificate redemption",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Gift certificates/i, "UAT Gift Cert"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.giftCards, /Gift/i, "UAT Gift Cert"),
   },
   staticFlow(I, "UAT-35", "Wallet payment / refund credit", "FAIL", "Wallet apply-at-checkout not automated this pass"),
 
@@ -245,7 +246,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: L,
     title: "Products for sale",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/commerce", /Packages/i, "UAT Product Proxy"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.pos, /Products/i, "UAT Product Proxy"),
   },
   {
     id: "UAT-42",
@@ -261,7 +262,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     batchId: M,
     title: "Class capacity",
     tier: "user-action",
-    run: (page) => commerceCreateItem(page, "/appointments/classes", /Classes/i, "UAT Class Cap"),
+    run: (page) => commerceCreateItem(page, APPT_CANONICAL.classes, /Classes/i, "UAT Class Cap"),
   },
   staticFlow(M, "UAT-44", "Remaining-space display modes", "FAIL", "Class display mode toggle not automated"),
   staticFlow(M, "UAT-45", "Class waitlist", "FAIL", "Waitlist join journey not automated"),
@@ -339,7 +340,7 @@ export const ACUITY_PARITY_UAT_FLOWS: BrowserFlow[] = [
     run: async (page) => {
       await ensureAppointmentsShell(page);
       await visitRoute(page, "/appointments/pos");
-      await visitRoute(page, "/appointments/commerce");
+      await visitRoute(page, APPT_CANONICAL.packages);
       await publicBookingFirstSteps(page);
       await remindersPreviewUserAction(page);
     },

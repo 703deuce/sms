@@ -80,6 +80,7 @@ export function AppointmentsList({
   onRetry,
   onCanceled,
   onRescheduled,
+  onApprovalAction,
   bookingTypes,
   staffNames,
   onCreateAppointment,
@@ -97,6 +98,7 @@ export function AppointmentsList({
   onRetry: () => void;
   onCanceled: (id: string) => void | Promise<void>;
   onRescheduled: (id: string, iso: string) => void | Promise<void>;
+  onApprovalAction?: (id: string, action: "approve" | "reject") => void | Promise<void>;
   bookingTypes: Array<{ id: string; name: string; durationMinutes: number; location?: string | null }>;
   staffNames: string[];
   onCreateAppointment: (payload: {
@@ -137,12 +139,20 @@ export function AppointmentsList({
 
   const openRow = (row: AppointmentRow) => setPreview(row);
 
-  const onRowAction = (row: AppointmentRow, action: string) => {
+  const onRowAction = async (row: AppointmentRow, action: string) => {
     if (action === "open") openRow(row);
     if (action === "message") onNavigateToMessage(row);
     if (action === "reschedule") { setPreview(null); setRescheduling(row); }
     if (action === "cancel") { setPreview(null); setCanceling(row); }
     if (action === "full") onNavigateToDetail(row.id);
+    if (action === "approve" && onApprovalAction) {
+      await onApprovalAction(row.id, "approve");
+      fire("Booking approved.");
+    }
+    if (action === "decline" && onApprovalAction) {
+      await onApprovalAction(row.id, "reject");
+      fire("Booking declined.");
+    }
   };
 
   const tabCount = (id: string) => {
@@ -321,7 +331,12 @@ export function AppointmentsList({
                       <span className="tv-muted">{lc}</span>
                     </div>
                     <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-                      <RowActionsMenu name={name} status={row.status} onAction={(a) => onRowAction(row, a)} />
+                      <RowActionsMenu
+                        name={name}
+                        status={row.status}
+                        pendingApproval={row.metadata?.pendingApproval}
+                        onAction={(a) => void onRowAction(row, a)}
+                      />
                     </div>
                   </div>
                 );

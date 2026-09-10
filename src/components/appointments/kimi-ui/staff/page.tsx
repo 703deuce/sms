@@ -20,7 +20,7 @@ export default function StaffView({ model, actions }: Props) {
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="flex items-start gap-3.5 min-w-0">
-            <span className="w-10 h-10 rounded-full bg-[#efecfd] text-[#5b45e0] flex items-center justify-center mt-0.5 ring-4 ring-[#efecfd]/40">
+            <span className="w-10 h-10 rounded-full bg-[#dcefeb] text-[#147d74] flex items-center justify-center mt-0.5 ring-4 ring-[#dcefeb]/40">
               <Users size={19} strokeWidth={2.1} />
             </span>
             <div>
@@ -61,6 +61,8 @@ export default function StaffView({ model, actions }: Props) {
               selectedTypeIds={selected.appointmentTypeIds || []}
               selectedLocationIds={selected.locationIds || []}
               dayRows={model.dayRows}
+              calendarColor={selected.calendarColor || "#147d74"}
+              roundRobinStats={model.roundRobinStats}
               saving={model.saving}
               saved={model.saved}
               error={model.error}
@@ -73,6 +75,7 @@ export default function StaffView({ model, actions }: Props) {
               onSetCustomHours={actions.onSetCustomHours}
               onUpdateWindow={actions.onUpdateWindow}
               onAddWindow={actions.onAddWindow}
+              onCalendarColorChange={actions.onCalendarColorChange}
               onSave={actions.onSave}
               onRemove={() => actions.onRemoveStaff(selected.id)}
             />

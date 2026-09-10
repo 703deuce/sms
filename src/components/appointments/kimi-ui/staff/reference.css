@@ -1,6 +1,7 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 .staff-page .staff-tab {
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 600;
   color: #8a8fa3;
   padding: 8px 14px;
@@ -8,8 +9,8 @@
   transition: background 0.15s, color 0.15s;
 }
 .staff-page .staff-tab.active {
-  background: #efecfd;
-  color: #5b4bff;
+  background: #dcefeb;
+  color: #147d74;
 }
 .staff-page .staff-list-item {
   border: 1px solid transparent;

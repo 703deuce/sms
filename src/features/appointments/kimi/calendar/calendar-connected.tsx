@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { SlotDiagnosticsDrawer } from "@/features/appointments/kimi/availability/SlotDiagnosticsDrawer";
+import { datetimeLocalFromDateKey } from "@/features/appointments/kimi/availability/datetime-local";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/appointments/kimi-ui/calendar/page";
@@ -41,7 +43,7 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="cal-page flex items-center justify-center min-h-screen">
       <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           <AlertTriangle className="h-5 w-5" />
         </div>
         <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load your calendar</h3>
@@ -68,6 +70,7 @@ export function CalendarConnected() {
   const [rows, setRows] = useState<CalendarApiAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [slotDiagnosticsOpen, setSlotDiagnosticsOpen] = useState(false);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
@@ -162,6 +165,7 @@ export function CalendarConnected() {
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
+      onCheckAvailability: () => setSlotDiagnosticsOpen(true),
       onOpenAppointment: (id) => {
         if (id.startsWith("video:")) {
           router.push(`/video/rooms/${id.slice("video:".length)}/host`);
@@ -220,6 +224,17 @@ export function CalendarConnected() {
         </div>
       </div>
       <CalendarView model={model} actions={actions} />
+      <SlotDiagnosticsDrawer
+        open={slotDiagnosticsOpen}
+        onClose={() => setSlotDiagnosticsOpen(false)}
+        context={{
+          startsAt: datetimeLocalFromDateKey(selectedDayKey, 9, 0),
+        }}
+        onOpenFullPage={() => {
+          setSlotDiagnosticsOpen(false);
+          router.push("/appointments/availability");
+        }}
+      />
     </div>
   );
 }

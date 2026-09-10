@@ -122,6 +122,7 @@
     "cert:acuity-parity-browser:preflight": "tsx scripts/run-acuity-parity-browser-uat.ts -- --preflight",
     "cert:appointments-master-browser": "tsx scripts/run-appointments-master-browser-uat.ts --",
     "cert:appointments-master-browser:preflight": "tsx scripts/run-appointments-master-browser-uat.ts -- --preflight",
+    "cert:appointments-batch8h1": "tsx scripts/run-batch8h1-master-browser-certification.ts",
     "cert:audit-browser-flow-classification": "tsx scripts/audit-browser-flow-classification.ts",
     "cert:reclassify-browser-oom": "tsx scripts/reclassify-browser-cert-oom-results.ts",
     "seed:appointments-mctb-browser-cert": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/seed-appointments-mctb-browser-cert.ts",

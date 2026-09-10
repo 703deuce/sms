@@ -92,8 +92,8 @@ export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
     "/appointments/calendar",
     "/appointments/waitlist",
     "/appointments/recalls",
-    "/appointments/recall-campaigns",
-    "/appointments/no-show-recovery",
+    "/appointments/automations/recall",
+    "/appointments/automations/no-show",
   ],
   booking: [
     "/appointments/types",
@@ -102,12 +102,10 @@ export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
     "/appointments/availability",
     "/appointments/ai-booking",
     "/appointments/routing-forms",
-    "/appointments/routing",
     "/appointments/polls",
   ],
   automations: [
     "/appointments/reminders",
-    "/appointments/voice-reminders",
     "/appointments/workflows",
     "/appointments/automations",
   ],

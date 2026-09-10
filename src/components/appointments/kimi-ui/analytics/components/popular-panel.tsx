@@ -27,7 +27,7 @@ export function PopularTypes({
               <div
                 className={cn(
                   "h-full rounded-full",
-                  i === 0 ? "bg-primary" : "bg-indigo-300",
+                  i === 0 ? "bg-primary" : "bg-[#b8e0db]",
                 )}
                 style={{ width: `${(t.count / max) * 100}%` }}
               />
@@ -64,7 +64,7 @@ export function PopularTimes({
             <div
               className={cn(
                 "w-full rounded-t-[3px]",
-                t.hour === peak.hour ? "bg-primary" : "bg-indigo-200",
+                t.hour === peak.hour ? "bg-primary" : "bg-[#dcefeb]",
               )}
               style={{ height: `${Math.max(4, (t.count / max) * 100)}%` }}
               title={`${formatHour(t.hour)}: ${t.count}`}

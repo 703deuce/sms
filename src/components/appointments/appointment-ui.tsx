@@ -29,8 +29,8 @@ const toneMap: Record<string, { chip: string; dot: string }> = {
     dot: "bg-slate-400",
   },
   completed: {
-    chip: "bg-violet-50 text-violet-700 ring-violet-600/15",
-    dot: "bg-violet-500",
+    chip: "bg-[#dcefeb] text-[#10665f] ring-[#147d74]/15",
+    dot: "bg-[#147d74]",
   },
   no_show: {
     chip: "bg-rose-50 text-rose-700 ring-rose-600/15",

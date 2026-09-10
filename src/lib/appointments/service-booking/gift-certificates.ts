@@ -84,6 +84,46 @@ export async function issueGiftCertificate(
   });
 }
 
+export async function listIssuedGiftCertificateBalances(workspaceId: string, query?: string) {
+  const prisma = getPrisma();
+  const where: {
+    workspaceId: string;
+    OR?: Array<{ code?: { contains: string; mode: "insensitive" } }>;
+  } = { workspaceId };
+  if (query?.trim()) {
+    const q = query.trim().toUpperCase();
+    where.OR = [{ code: { contains: q, mode: "insensitive" } }];
+  }
+  return prisma.giftCertificateBalance.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { product: { select: { id: true, name: true } } },
+  });
+}
+
+export async function getGiftCertificateLedger(balanceId: string) {
+  const prisma = getPrisma();
+  return prisma.giftCertificateLedgerEntry.findMany({
+    where: { balanceId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+}
+
+export async function lookupGiftCertificateByCode(workspaceId: string, code: string) {
+  const prisma = getPrisma();
+  const normalized = code.trim().toUpperCase();
+  const balance = await prisma.giftCertificateBalance.findFirst({
+    where: { workspaceId, code: normalized },
+    include: {
+      product: { select: { id: true, name: true } },
+      ledger: { orderBy: { createdAt: "desc" }, take: 20 },
+    },
+  });
+  return balance;
+}
+
 export async function redeemGiftCertificate(
   workspaceId: string,
   code: string,

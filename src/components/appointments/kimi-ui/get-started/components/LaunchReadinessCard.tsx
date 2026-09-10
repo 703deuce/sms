@@ -29,14 +29,14 @@ export default function LaunchReadinessCard({ readinessItems }: Props) {
           <path
             d={`M 20 95 A ${R} ${R} 0 0 1 160 95`}
             fill="none"
-            stroke="#5b4bd6"
+            stroke="#147d74"
             strokeWidth="11"
             strokeLinecap="round"
             strokeDasharray={C}
             strokeDashoffset={C * (1 - frac)}
           />
         </svg>
-        <div className="gauge-rocket" style={{ color: "#5b4bd6" }}>
+        <div className="gauge-rocket" style={{ color: "#147d74" }}>
           <Rocket size={30} fill="#dcd7ff" />
         </div>
       </div>
@@ -59,7 +59,7 @@ export default function LaunchReadinessCard({ readinessItems }: Props) {
             {item.state === "done" ? (
               <CheckCircle2 size={16} color="#22c07a" fill="#e6f9f0" />
             ) : item.state === "partial" ? (
-              <Loader size={15} color="#5b4bd6" />
+              <Loader size={15} color="#147d74" />
             ) : (
               <Circle size={15} color="#cfcfe0" />
             )}

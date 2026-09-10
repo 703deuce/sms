@@ -29,6 +29,7 @@ import { MetricCard, MetricSkeletonGrid, type MetricDef } from "./metric-card";
 import { BookingsChart } from "./bookings-chart";
 import { PopularTimes, PopularTypes } from "./popular-panel";
 import { ScheduleReportCard } from "./schedule-report-card";
+import { ServiceBookingReportCard } from "./service-booking-report-card";
 import { RoutingFormsPanel } from "./routing-forms-panel";
 
 const RANGE_OPTIONS: Array<{ value: 7 | 30; label: string }> = [
@@ -40,20 +41,20 @@ type LoadState = "loading" | "ready" | "error" | "empty";
 
 function buildMetrics(data: AnalyticsData): MetricDef[] {
   return [
-    { label: "Booked", value: formatNumber(data.booked), icon: CalendarPlus, tone: "bg-indigo-50 text-primary" },
+    { label: "Booked", value: formatNumber(data.booked), icon: CalendarPlus, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Confirmed", value: formatNumber(data.confirmed), icon: CheckCircle2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Awaiting", value: formatNumber(data.awaiting), icon: Clock3, tone: "bg-sky-50 text-sky-600" },
     { label: "Canceled", value: formatNumber(data.canceled), icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-shows", value: formatNumber(data.noShow), icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
-    { label: "Reschedule requests", value: formatNumber(data.rescheduleRequested), icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
+    { label: "Reschedule requests", value: formatNumber(data.rescheduleRequested), icon: RefreshCcw, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Confirmation rate", value: `${data.confirmationRate}%`, icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
-    { label: "Reminders sent", value: formatNumber(data.remindersSent), icon: Bell, tone: "bg-indigo-50 text-primary" },
+    { label: "Reminders sent", value: formatNumber(data.remindersSent), icon: Bell, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Completed", value: formatNumber(data.completed), icon: CalendarCheck2, tone: "bg-emerald-50 text-emerald-600" },
     { label: "Cancel rate", value: `${data.cancellationRate}%`, icon: CalendarX2, tone: "bg-rose-50 text-rose-600" },
     { label: "No-show rate", value: `${data.noShowRate}%`, icon: CalendarClock, tone: "bg-orange-50 text-orange-600" },
-    { label: "Reschedule rate", value: `${data.rescheduleRate}%`, icon: RefreshCcw, tone: "bg-violet-50 text-violet-600" },
+    { label: "Reschedule rate", value: `${data.rescheduleRate}%`, icon: RefreshCcw, tone: "bg-[#dcefeb] text-[#147d74]" },
     { label: "Email opens", value: formatNumber(data.emailOpens), icon: Inbox, tone: "bg-sky-50 text-sky-600" },
-    { label: "UTM conversions", value: formatNumber(data.utmConversions), icon: BarChart3, tone: "bg-indigo-50 text-primary" },
+    { label: "UTM conversions", value: formatNumber(data.utmConversions), icon: BarChart3, tone: "bg-[#dcefeb] text-[#147d74]" },
   ];
 }
 
@@ -104,7 +105,19 @@ function RangeToggle({
   );
 }
 
-export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
+export function AnalyticsClient({
+  section,
+  reportFocus,
+  reportFrom,
+  reportTo,
+  reportStatus,
+}: {
+  section: AnalyticsSection;
+  reportFocus?: "service-booking";
+  reportFrom?: string;
+  reportTo?: string;
+  reportStatus?: string;
+}) {
   const [range, setRange] = useState<7 | 30>(7);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -231,11 +244,19 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
           </div>
 
           {section === "reports" ? (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
+              <ServiceBookingReportCard
+                rangeDays={range}
+                highlighted={reportFocus === "service-booking"}
+                initialFrom={reportFrom}
+                initialTo={reportTo}
+                initialStatus={reportStatus}
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
               <ScheduleReportCard />
               <Card className="p-5">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-primary">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
                     <FileBarChart2 size={18} />
                   </div>
                   <div>
@@ -258,6 +279,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                   </Button>
                 </div>
               </Card>
+            </div>
             </div>
           ) : (
             <>
@@ -310,7 +332,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                 ) : section === "automations" ? (
                   <Card className="p-5">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#dcefeb] text-[#147d74]">
                         <Workflow size={18} />
                       </div>
                       <div>
@@ -332,7 +354,7 @@ export function AnalyticsClient({ section }: { section: AnalyticsSection }) {
                       {[
                         { label: "Confirmation rate", value: data.confirmationRate, tone: "bg-emerald-500" },
                         { label: "Conversion rate", value: data.conversionRate, tone: "bg-primary" },
-                        { label: "Reschedule rate", value: data.rescheduleRate, tone: "bg-violet-500" },
+                        { label: "Reschedule rate", value: data.rescheduleRate, tone: "bg-[#147d74]" },
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-baseline justify-between">

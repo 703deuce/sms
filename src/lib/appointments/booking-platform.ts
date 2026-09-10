@@ -278,6 +278,7 @@ export async function createPlatformAppointment(
       priceCents?: number;
       displayOrder?: number;
     }>;
+    contactId?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -378,13 +379,23 @@ export async function createPlatformAppointment(
 
   const isStaffQuickCreate = input.source === "admin" && input.skipSms === true;
 
-  const contactId = await resolveOrCreateContact(workspaceId, {
-    firstName: input.firstName,
-    lastName: input.lastName,
-    phone: input.phone,
-    email: input.email,
-    consentSource: input.smsConsent ? "appointment_booking_sms" : "appointment_booking",
-  });
+  let contactId: string;
+  if (input.contactId) {
+    const existing = await prisma.contact.findFirst({
+      where: { id: input.contactId, workspaceId },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Contact not found");
+    contactId = input.contactId;
+  } else {
+    contactId = await resolveOrCreateContact(workspaceId, {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      email: input.email,
+      consentSource: input.smsConsent ? "appointment_booking_sms" : "appointment_booking",
+    });
+  }
 
   const confirmToken = publicToken();
   const cancelToken = publicToken();
@@ -477,8 +488,10 @@ export async function createPlatformAppointment(
     });
   }
 
-  const metadata = appendTimeline(
-    resetAppointmentReminders({
+  const { attachBookingSourceMetadata } = await import(
+    "@/lib/appointments/service-booking/booking-source"
+  );
+  let bookingMeta = resetAppointmentReminders({
       source: input.source || "admin",
       inviteeName: `${input.firstName || ""} ${input.lastName || ""}`.trim(),
       inviteeEmail: input.email,
@@ -510,9 +523,18 @@ export async function createPlatformAppointment(
       rescheduleUrl: publicActionUrl("reschedule", rescheduleToken),
       reminderGeneration: 1,
       policySnapshot: buildPolicySnapshot(svcCfg),
-    }),
-    { type: "created", label: "Appointment created" },
-  );
+    });
+  if (input.source === "admin") {
+    bookingMeta = attachBookingSourceMetadata(
+      bookingMeta as Record<string, unknown>,
+      "staff_created",
+    ) as AppointmentMetadata;
+  }
+  const metadata = appendTimeline(bookingMeta, {
+    type: "created",
+    label: input.source === "admin" ? "Appointment created by staff" : "Appointment created",
+    detail: input.source === "admin" ? "Staff-created booking" : undefined,
+  });
 
   await prisma.voiceAppointment.update({
     where: { id: appointmentId },
@@ -598,14 +620,22 @@ export async function createPlatformAppointment(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "";
     const { rawToken } = await ensureManageAppointmentToken(workspaceId, appointmentId);
     const manageUrl = manageAppointmentUrl(baseUrl, rawToken);
+    const issuedAt = new Date().toISOString();
     await prisma.voiceAppointment.update({
       where: { id: appointmentId },
       data: {
-        metadata: {
-          ...metadata,
-          manageAppointmentUrl: manageUrl,
-          manageAppointmentTokenIssuedAt: new Date().toISOString(),
-        } as object,
+        metadata: appendTimeline(
+          {
+            ...metadata,
+            manageAppointmentUrl: manageUrl,
+            manageAppointmentTokenIssuedAt: issuedAt,
+          } as Record<string, unknown>,
+          {
+            type: "manage_link",
+            label: "Manage appointment link issued",
+            detail: "Customer self-service link is ready to share.",
+          },
+        ) as object,
       },
     });
   } catch (err) {

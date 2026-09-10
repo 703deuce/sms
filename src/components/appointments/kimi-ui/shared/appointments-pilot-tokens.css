@@ -1,0 +1,72 @@
+/**
+ * Appointments product theme — charcoal + restrained teal (matches /appointments/overview pilot).
+ * Import in reference.css and page-level styles; shell tokens live in appointments-overview-pilot.css.
+ */
+:root {
+  --appt-brand-primary: #1f2329;
+  --appt-brand-accent: #147d74;
+  --appt-brand-accent-hover: #10665f;
+  --appt-brand-accent-soft: #dcefeb;
+  --appt-surface: #ffffff;
+  --appt-surface-muted: #f7f8fa;
+  --appt-text-primary: #101418;
+  --appt-text-secondary: #6b7280;
+  --appt-border: #e5e7eb;
+  --appt-state-success: #15803d;
+  --appt-state-success-soft: #ecfdf3;
+  --appt-state-warning: #b45309;
+  --appt-state-warning-soft: #fffbeb;
+  --appt-state-error: #dc2626;
+  --appt-state-error-soft: #fef2f2;
+
+  /* Type scale — calm product density */
+  --appt-type-page-title: 1.625rem;
+  --appt-type-section: 1.0625rem;
+  --appt-type-section-minor: 0.9375rem;
+  --appt-type-stat: 1.625rem;
+  --appt-type-body: 0.875rem;
+  --appt-type-list: 0.8125rem;
+  --appt-type-label: 0.8125rem;
+  --appt-type-helper: 0.75rem;
+  --appt-type-button: 0.8125rem;
+  --appt-type-nav: 0.8125rem;
+
+  /* Legacy alias map — reference.css files use these names */
+  --brand: var(--appt-brand-accent);
+  --brand-dark: var(--appt-brand-accent-hover);
+  --primary: var(--appt-brand-accent);
+  --primary-hover: var(--appt-brand-accent-hover);
+  --primary-soft: var(--appt-brand-accent-soft);
+  --bg: var(--appt-surface-muted);
+  --card: var(--appt-surface);
+  --border: var(--appt-border);
+  --fg: var(--appt-text-primary);
+  --muted: var(--appt-text-secondary);
+  --accent: var(--appt-brand-accent);
+  --deco-brand: var(--appt-brand-accent);
+  --deco-brand-soft: var(--appt-brand-accent-soft);
+}
+
+.reference-root,
+.cal-page,
+.ref-deco-page {
+  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: var(--appt-type-body);
+  line-height: 1.4;
+  letter-spacing: -0.011em;
+  color: var(--appt-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.reference-root {
+  background: var(--appt-surface-muted);
+  min-height: 100vh;
+}
+
+.cal-page {
+  background: var(--appt-surface-muted);
+  color: var(--appt-text-primary);
+  font-size: var(--appt-type-list);
+  padding: 20px 24px 24px;
+  min-height: 100vh;
+}

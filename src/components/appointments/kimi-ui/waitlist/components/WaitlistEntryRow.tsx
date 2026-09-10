@@ -50,11 +50,17 @@ export function WaitlistEntryRow({
       <td>
         <div className="tv-cell-primary">
           {entry.serviceName || "Any service"}
+          {entry.priorityRank ? (
+            <span className="tv-cell-secondary" style={{ marginLeft: 8 }}>
+              Priority #{entry.priorityRank}
+            </span>
+          ) : null}
         </div>
         <div className="tv-cell-secondary">
           {entry.preferredDate
             ? `Prefers ${entry.preferredDate}`
             : "No preferred date"}
+          {entry.partySize && entry.partySize > 1 ? ` · Party of ${entry.partySize}` : ""}
         </div>
       </td>
       <td>
@@ -77,10 +83,22 @@ export function WaitlistEntryRow({
         </div>
       </td>
       <td className="tv-hide-sm">
+        {entry.priorityRank ? (
+          <div className="tv-cell-meta">#{entry.priorityRank}</div>
+        ) : (
+          <div className="tv-cell-secondary">Standard</div>
+        )}
+      </td>
+      <td className="tv-hide-sm">
         <div className="tv-cell-meta">Joined {formatJoined(entry.createdAt)}</div>
         {entry.notifiedAt ? (
           <div className="tv-cell-secondary">
             Notified {formatJoined(entry.notifiedAt)}
+          </div>
+        ) : null}
+        {entry.offerExpiresAt ? (
+          <div className="tv-cell-secondary">
+            Expires {formatJoined(entry.offerExpiresAt)}
           </div>
         ) : null}
       </td>
@@ -99,7 +117,7 @@ export function WaitlistEntryRow({
               aria-label={`Notify ${contactLabel} about an opening`}
             >
               <Bell aria-hidden="true" />
-              {acting ? "Sending…" : "Notify"}
+              {acting ? "Sending…" : "Send offer"}
             </button>
           ) : null}
           {!isActive ? (

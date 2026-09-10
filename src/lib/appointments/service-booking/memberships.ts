@@ -23,6 +23,7 @@ export async function upsertMembershipProduct(
     benefits?: MembershipBenefits;
     stripePriceId?: string;
     active?: boolean;
+    metadata?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
@@ -32,6 +33,14 @@ export async function upsertMembershipProduct(
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
+  let metadata = input.metadata;
+  if (input.id && input.metadata) {
+    const existing = await prisma.serviceMembershipProduct.findFirst({
+      where: { id: input.id, workspaceId },
+      select: { metadata: true },
+    });
+    metadata = { ...((existing?.metadata || {}) as Record<string, unknown>), ...input.metadata };
+  }
   const data = {
     name: input.name.trim(),
     slug,
@@ -41,6 +50,7 @@ export async function upsertMembershipProduct(
     benefits: input.benefits || {},
     stripePriceId: input.stripePriceId,
     active: input.active ?? true,
+    metadata,
   };
   if (input.id) {
     return prisma.serviceMembershipProduct.update({ where: { id: input.id, workspaceId }, data });
@@ -70,6 +80,32 @@ export async function startMembershipSubscription(
       benefitsSnapshot: product.benefits,
     },
   });
+}
+
+export async function listMembershipSubscriptionsForProduct(
+  workspaceId: string,
+  productId: string,
+) {
+  const prisma = getPrisma();
+  const subs = await prisma.serviceMembershipSubscription.findMany({
+    where: { workspaceId, productId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  type SubRow = (typeof subs)[number];
+  type ContactRow = { id: string; firstName: string | null; lastName: string | null; phone: string };
+  const contactIds = [...new Set(subs.map((s: SubRow) => s.contactId))];
+  const contacts: ContactRow[] = contactIds.length
+    ? await prisma.contact.findMany({
+        where: { workspaceId, id: { in: contactIds } },
+        select: { id: true, firstName: true, lastName: true, phone: true },
+      })
+    : [];
+  const contactMap = new Map(contacts.map((c: ContactRow) => [c.id, c]));
+  return subs.map((sub: SubRow) => ({
+    ...sub,
+    contact: contactMap.get(sub.contactId) || null,
+  }));
 }
 
 export async function markMembershipPastDue(subscriptionId: string) {

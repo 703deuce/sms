@@ -45,7 +45,7 @@ export default function ReminderCard({
   return (
     <div className="relative flex gap-4">
       <div className="flex flex-col items-center">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-[#4f46e5] shadow-sm">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-[#147d74] shadow-sm">
           <Icon className="h-4 w-4" />
         </div>
         <div className="w-px flex-1 bg-border" />
@@ -58,7 +58,7 @@ export default function ReminderCard({
               <h3 className="text-[14px] font-semibold text-foreground">
                 {reminder.index}. {reminder.title}
               </h3>
-              <span className="rounded-md bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#4f46e5]">
+              <span className="rounded-md bg-[#dcefeb] px-2 py-0.5 text-[11px] font-medium text-[#147d74]">
                 {reminder.badge}
               </span>
             </div>
@@ -69,7 +69,7 @@ export default function ReminderCard({
               type="button"
               onClick={onToggle}
               className={`relative h-5 w-9 rounded-full transition-colors ${
-                reminder.enabled ? 'bg-[#4f46e5]' : 'bg-[#d1d5db]'
+                reminder.enabled ? 'bg-[#147d74]' : 'bg-[#d1d5db]'
               }`}
               aria-label="Toggle reminder"
             >
@@ -161,7 +161,7 @@ export default function ReminderCard({
               value={reminder.template}
               onChange={(e) => onTemplateChange(e.target.value)}
               rows={4}
-              className="w-full resize-y rounded-lg border border-border bg-background p-3 text-[12.5px] leading-relaxed text-foreground outline-none focus:border-[#4f46e5] focus:ring-2 focus:ring-[#4f46e5]/15"
+              className="w-full resize-y rounded-lg border border-border bg-background p-3 text-[12.5px] leading-relaxed text-foreground outline-none focus:border-[#147d74] focus:ring-2 focus:ring-[#147d74]/15"
             />
             <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[11.5px] text-muted-foreground">
               {reminder.channel === 'sms' ? (

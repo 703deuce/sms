@@ -1,24 +1,94 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
+
+export type TeamUserOption = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
 
 type Props = {
   form: AppointmentTypeFormState;
   namedScheduleOptions?: Array<{ id: string; name: string }>;
   teamGroupOptions?: Array<{ id: string; name: string }>;
+  teamUserOptions?: TeamUserOption[];
+  currentUserId?: string;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
   ) => void;
 };
 
+type AccessMode = "everyone" | "selected";
+
+function deriveAccessMode(permissions: AppointmentTypeFormState["permissions"]): AccessMode {
+  const userRules = permissions.filter((p) => p.userId);
+  return userRules.length > 0 ? "selected" : "everyone";
+}
+
+function selectedUserIds(permissions: AppointmentTypeFormState["permissions"]): string[] {
+  return permissions.filter((p) => p.userId).map((p) => p.userId as string);
+}
+
 export default function TypePublishingSections({
   form,
   namedScheduleOptions = [],
   teamGroupOptions = [],
+  teamUserOptions = [],
+  currentUserId,
   onFormChange,
 }: Props) {
+  const accessMode = deriveAccessMode(form.permissions);
+  const selectedIds = selectedUserIds(form.permissions);
+
+  const selfLockout = useMemo(() => {
+    if (accessMode !== "selected" || !currentUserId) return false;
+    return !selectedIds.includes(currentUserId);
+  }, [accessMode, currentUserId, selectedIds]);
+
+  function setAccessMode(mode: AccessMode) {
+    if (mode === "everyone") {
+      onFormChange("permissions", []);
+      return;
+    }
+    if (selectedIds.length === 0 && currentUserId) {
+      onFormChange("permissions", [
+        { userId: currentUserId, canEdit: true, canBook: true, canView: true, role: "scheduler" },
+      ]);
+      return;
+    }
+    onFormChange(
+      "permissions",
+      selectedIds.map((userId) => ({
+        userId,
+        canEdit: true,
+        canBook: true,
+        canView: true,
+        role: "scheduler",
+      })),
+    );
+  }
+
+  function toggleTeamUser(userId: string) {
+    const next = new Set(selectedIds);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    onFormChange(
+      "permissions",
+      [...next].map((id) => ({
+        userId: id,
+        canEdit: true,
+        canBook: true,
+        canView: true,
+        role: "scheduler",
+      })),
+    );
+  }
+
   function addDurationOption() {
     const id = `dur_${Date.now()}`;
     onFormChange("durationOptions", [
@@ -41,7 +111,7 @@ export default function TypePublishingSections({
               type="button"
               className={`rounded-xl border px-3 py-2 text-[12px] font-medium capitalize ${
                 form.visibility === v
-                  ? "border-[#5b4bff] bg-[#f7f6ff] text-[#5b4bff]"
+                  ? "border-[#147d74] bg-[#dcefeb] text-[#147d74]"
                   : "border-[#ecedf2]"
               }`}
               onClick={() => onFormChange("visibility", v)}
@@ -65,7 +135,7 @@ export default function TypePublishingSections({
           <h3 className="text-[14px] font-semibold">Duration options</h3>
           <button
             type="button"
-            className="text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
+            className="text-[12px] font-medium text-[#147d74] flex items-center gap-1"
             onClick={addDurationOption}
           >
             <Plus size={14} /> Add duration
@@ -230,9 +300,10 @@ export default function TypePublishingSections({
       </section>
 
       <section>
-        <h3 className="text-[14px] font-semibold mb-3">Team ownership & permissions</h3>
+        <h3 className="text-[14px] font-semibold mb-1">Team access</h3>
         <p className="text-[12.5px] text-[#8a8fa3] mb-3">
-          Restrict editing and booking access. Team-owned types appear on team booking pages.
+          Control which team members can manage this booking type. Global role permissions still apply — this
+          only refines access for users who already have booking-management permission.
         </p>
         <div className="mb-3">
           <label className="label">Owning team / scheduling group</label>
@@ -247,71 +318,77 @@ export default function TypePublishingSections({
             ))}
           </select>
         </div>
-        {form.permissions.length === 0 ? (
-          <p className="text-[12px] text-[#8a8fa3] rounded-lg border border-dashed border-[#ecedf2] px-3 py-3">
-            No granular restrictions — all schedulers can manage this type.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {form.permissions.map((perm, i) => (
-              <div key={`${perm.role}-${perm.userId || perm.teamId || i}`} className="grid grid-cols-4 gap-2 items-center">
-                <select
-                  className="input"
-                  value={perm.role}
-                  onChange={(e) => {
-                    const next = [...form.permissions];
-                    next[i] = { ...perm, role: e.target.value as typeof perm.role };
-                    onFormChange("permissions", next);
-                  }}
-                >
-                  {(["owner", "admin", "scheduler", "viewer"] as const).map((role) => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
-                <input
-                  className="input"
-                  placeholder="User ID (optional)"
-                  value={perm.userId || ""}
-                  onChange={(e) => {
-                    const next = [...form.permissions];
-                    next[i] = { ...perm, userId: e.target.value || undefined };
-                    onFormChange("permissions", next);
-                  }}
-                />
-                <label className="flex items-center gap-1 text-[11px]">
-                  <input
-                    type="checkbox"
-                    checked={perm.canEdit !== false}
-                    onChange={(e) => {
-                      const next = [...form.permissions];
-                      next[i] = { ...perm, canEdit: e.target.checked };
-                      onFormChange("permissions", next);
-                    }}
-                  />
-                  Edit
-                </label>
-                <button
-                  type="button"
-                  onClick={() => onFormChange("permissions", form.permissions.filter((_, j) => j !== i))}
-                >
-                  <Trash2 size={14} className="text-[#a0a3b5]" />
-                </button>
-              </div>
-            ))}
+
+        <fieldset className="space-y-2 mb-3">
+          <legend className="label mb-1">Who can manage this booking type?</legend>
+          <label className="flex items-center gap-2 text-[12.5px]">
+            <input
+              type="radio"
+              name="type-access-mode"
+              checked={accessMode === "everyone"}
+              onChange={() => setAccessMode("everyone")}
+            />
+            Everyone with booking-management permission
+          </label>
+          <label className="flex items-center gap-2 text-[12.5px]">
+            <input
+              type="radio"
+              name="type-access-mode"
+              checked={accessMode === "selected"}
+              onChange={() => setAccessMode("selected")}
+            />
+            Selected team members
+          </label>
+        </fieldset>
+
+        {accessMode === "selected" ? (
+          <div className="rounded-lg border border-[#ecedf2] p-3 space-y-2">
+            {teamUserOptions.length === 0 ? (
+              <p className="text-[12px] text-[#8a8fa3]">
+                No active team users found. Add team members under Settings → Team.
+              </p>
+            ) : (
+              teamUserOptions.map((member) => {
+                const checked = selectedIds.includes(member.id);
+                return (
+                  <label
+                    key={member.id}
+                    className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-[#f7f8fa] cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={checked}
+                      onChange={() => toggleTeamUser(member.id)}
+                      aria-label={`Allow ${member.name} to manage this booking type`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[12.5px] font-medium text-[#1a1d29]">{member.name}</span>
+                      <span className="block text-[11.5px] text-[#8a8fa3]">
+                        {member.email} · {member.role}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })
+            )}
+            {selectedIds.length === 0 ? (
+              <p className="text-[12px] text-amber-700" role="status">
+                Select at least one team member, or switch back to everyone with booking-management permission.
+              </p>
+            ) : null}
           </div>
-        )}
-        <button
-          type="button"
-          className="mt-2 text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
-          onClick={() =>
-            onFormChange("permissions", [
-              ...form.permissions,
-              { role: "scheduler", canEdit: true, canBook: true, canView: true },
-            ])
-          }
-        >
-          <Plus size={14} /> Add permission rule
-        </button>
+        ) : null}
+
+        {selfLockout ? (
+          <div
+            className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900"
+            role="status"
+          >
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+            <span>You won&apos;t be able to manage this booking type after saving.</span>
+          </div>
+        ) : null}
       </section>
     </>
   );

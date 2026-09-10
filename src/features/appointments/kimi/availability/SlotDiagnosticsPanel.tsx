@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { SlotDiagnosticsPanelProps } from "@/features/appointments/kimi/availability/slot-diagnostics-types";
 
 type BookingType = { id: string; name: string };
 
@@ -24,11 +26,24 @@ const REASON_LABELS: Record<string, string> = {
   invalid_start_interval: "Not on the allowed start-time grid",
 };
 
-export function SlotDiagnosticsPanel() {
+function defaultDatetimeLocal(): string {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 1);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+export function SlotDiagnosticsPanel({
+  context,
+  staffOptions = [],
+  variant = "page",
+  onOpenFullPage,
+}: SlotDiagnosticsPanelProps) {
   const [types, setTypes] = useState<BookingType[]>([]);
-  const [serviceName, setServiceName] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [staffId, setStaffId] = useState("");
+  const [serviceName, setServiceName] = useState(context?.serviceName || "");
+  const [startsAt, setStartsAt] = useState(context?.startsAt || defaultDatetimeLocal());
+  const [staffId, setStaffId] = useState(context?.staffId || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{
@@ -44,10 +59,19 @@ export function SlotDiagnosticsPanel() {
       .then((json) => {
         const rows = (json.data || []) as BookingType[];
         setTypes(rows);
-        if (rows[0]?.name) setServiceName(rows[0].name);
+        if (context?.serviceName) {
+          setServiceName(context.serviceName);
+        } else if (rows[0]?.name) {
+          setServiceName(rows[0].name);
+        }
       })
       .catch(() => setTypes([]));
-  }, []);
+  }, [context?.serviceName]);
+
+  useEffect(() => {
+    if (context?.startsAt) setStartsAt(context.startsAt);
+    if (context?.staffId) setStaffId(context.staffId);
+  }, [context?.startsAt, context?.staffId]);
 
   const check = useCallback(async () => {
     if (!serviceName || !startsAt) {
@@ -71,8 +95,11 @@ export function SlotDiagnosticsPanel() {
     }
   }, [serviceName, startsAt, staffId]);
 
+  const wrapperClass =
+    variant === "page" ? "avail-card p-6 space-y-4" : "space-y-4";
+
   return (
-    <section className="avail-card p-6 space-y-4" aria-labelledby="slot-diagnostics-heading">
+    <section className={wrapperClass} aria-labelledby="slot-diagnostics-heading">
       <div>
         <h2 id="slot-diagnostics-heading" className="text-[15px] font-bold text-[#1a1830]">
           Diagnose availability
@@ -81,6 +108,23 @@ export function SlotDiagnosticsPanel() {
           See why a specific time is or is not offered to customers. Uses the same rules as public
           booking.
         </p>
+        {variant === "drawer" && onOpenFullPage ? (
+          <button
+            type="button"
+            className="mt-2 text-[12px] font-medium text-[#147d74] hover:underline"
+            onClick={onOpenFullPage}
+          >
+            Open full diagnostics page →
+          </button>
+        ) : null}
+        {variant === "drawer" && !onOpenFullPage ? (
+          <Link
+            href="/appointments/availability"
+            className="mt-2 inline-block text-[12px] font-medium text-[#147d74] hover:underline"
+          >
+            Open full diagnostics page →
+          </Link>
+        ) : null}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-[13px]">
@@ -88,9 +132,12 @@ export function SlotDiagnosticsPanel() {
           <select
             className="input"
             value={serviceName}
+            disabled={Boolean(context?.lockServiceName)}
             onChange={(e) => setServiceName(e.target.value)}
           >
-            {types.length === 0 ? (
+            {types.length === 0 && serviceName ? (
+              <option value={serviceName}>{serviceName}</option>
+            ) : types.length === 0 ? (
               <option value="">No booking types</option>
             ) : (
               types.map((t) => (
@@ -109,21 +156,30 @@ export function SlotDiagnosticsPanel() {
           />
         </label>
         <label className="flex flex-col gap-1 text-[13px] sm:col-span-2">
-          <span className="font-medium">Staff ID (optional)</span>
-          <input
-            className="input"
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            placeholder="Only if checking a specific staff member"
-          />
+          <span className="font-medium">Staff member (optional)</span>
+          {staffOptions.length > 0 ? (
+            <select className="input" value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+              <option value="">Any eligible staff</option>
+              {staffOptions.map((staff) => (
+                <option key={staff.id} value={staff.id}>{staff.name}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className="input"
+              value={staffId}
+              onChange={(e) => setStaffId(e.target.value)}
+              placeholder="Only if checking a specific staff member"
+            />
+          )}
         </label>
       </div>
       <Button type="button" size="sm" disabled={loading} onClick={() => void check()}>
         {loading ? "Checking…" : "Check slot"}
       </Button>
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
       {result ? (
-        <div className="rounded-lg border bg-[#faf9fc] p-4 space-y-3">
+        <div className="rounded-lg border bg-[#faf9fc] p-4 space-y-3" aria-live="polite">
           <p className="text-sm font-semibold">
             {result.available ? "Available" : "Unavailable"}
             {" — "}

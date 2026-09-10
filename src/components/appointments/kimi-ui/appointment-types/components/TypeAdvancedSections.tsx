@@ -8,9 +8,11 @@ import {
   QUESTION_TYPE_OPTIONS,
   STAFF_ASSIGNMENT_OPTIONS,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
+import { DynamicPricingRulesEditor } from "./DynamicPricingRulesEditor";
 
 type Props = {
   form: AppointmentTypeFormState;
+  appointmentTypeId?: string;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
@@ -22,6 +24,7 @@ type Props = {
 
 export default function TypeAdvancedSections({
   form,
+  appointmentTypeId,
   staffOptions,
   locationOptions,
   connectedPaymentProviders,
@@ -74,7 +77,7 @@ export default function TypeAdvancedSections({
               key={opt.value}
               className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${
                 form.staffAssignment === opt.value
-                  ? "border-[#5b4bff] bg-[#f7f6ff]"
+                  ? "border-[#147d74] bg-[#dcefeb]"
                   : "border-[#ecedf2]"
               }`}
             >
@@ -108,7 +111,7 @@ export default function TypeAdvancedSections({
                     type="button"
                     className={`rounded-full px-3 py-1 text-[12px] font-medium border ${
                       selected
-                        ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                        ? "bg-[#147d74] text-white border-[#147d74]"
                         : "bg-white text-[#3f4254] border-[#e4e6ee]"
                     }`}
                     onClick={() =>
@@ -140,7 +143,7 @@ export default function TypeAdvancedSections({
                 type="button"
                 className={`rounded-full px-3 py-1 text-[12px] font-medium border ${
                   form.locationIds.includes(loc.id)
-                    ? "bg-[#5b4bff] text-white border-[#5b4bff]"
+                    ? "bg-[#147d74] text-white border-[#147d74]"
                     : "bg-white text-[#3f4254] border-[#e4e6ee]"
                 }`}
                 onClick={() => toggleLocationId(loc.id)}
@@ -158,7 +161,7 @@ export default function TypeAdvancedSections({
           <h3 className="text-[14px] font-semibold">Booking questions</h3>
           <button
             type="button"
-            className="text-[12px] font-medium text-[#5b4bff] flex items-center gap-1"
+            className="text-[12px] font-medium text-[#147d74] flex items-center gap-1"
             onClick={() => onFormChange("bookingQuestions", [...questions, newBookingQuestion()])}
           >
             <Plus size={14} /> Add question
@@ -319,9 +322,10 @@ export default function TypeAdvancedSections({
           </div>
         </div>
         <div className="mt-6 rounded-xl border border-[#ecedf2] p-4">
-          <p className="text-[12px] font-semibold text-[#6b6f82] mb-2">Policy fees</p>
+          <p className="text-[12px] font-semibold text-[#6b6f82] mb-2">Policy fees (late cancel / no-show)</p>
           <p className="text-[12px] text-[#8a8fa3] mb-3">
-            Applies to late cancellations (after cutoff) and no-shows when a saved card is on file.
+            Cash fee applies to late cancellations (after cutoff) and no-shows when a saved card or wallet balance
+            is available. Package credit forfeiture is configured per package — not here.
           </p>
           <label className="flex items-center gap-2 text-[12px] mb-2">
             <input
@@ -450,6 +454,12 @@ export default function TypeAdvancedSections({
             </div>
           </div>
         ) : null}
+        <div className="mt-6 border-t border-[#ecedf2] pt-6">
+          <DynamicPricingRulesEditor
+            appointmentTypeId={appointmentTypeId}
+            basePriceCents={form.paymentPriceCents > 0 ? form.paymentPriceCents : undefined}
+          />
+        </div>
       </section>
 
       {/* Group & recurring */}

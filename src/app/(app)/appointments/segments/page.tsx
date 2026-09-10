@@ -1,5 +1,7 @@
-import { AppointmentSegmentsClient } from "@/components/appointments/appointment-segments-client";
+import { legacyAppointmentsRedirectPage } from "@/lib/products/appointments-legacy-redirect-page";
 
-export default function AppointmentSegmentsPage() {
-  return <AppointmentSegmentsClient />;
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export default function AppointmentSegmentsPage({ searchParams }: Props) {
+  return legacyAppointmentsRedirectPage({ pathname: "/appointments/segments", searchParams });
 }

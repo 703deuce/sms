@@ -1,3 +1,4 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 :root {
   --tv-bg: #f7f8fa;
@@ -7,8 +8,8 @@
   --tv-text: #111827;
   --tv-text-secondary: #4b5563;
   --tv-text-muted: #6b7280;
-  --tv-accent: #4f46e5;
-  --tv-accent-soft: #eef2ff;
+  --tv-accent: #147d74;
+  --tv-accent-soft: #dcefeb;
   --tv-success: #047857;
   --tv-success-soft: #ecfdf5;
   --tv-warning: #b45309;
@@ -63,7 +64,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   font-weight: 500;
   border-radius: 8px;
   padding: 8px 14px;
@@ -83,7 +84,7 @@ body {
   border-color: var(--tv-accent);
   color: #fff;
 }
-.tv-btn-primary:hover { background: #4338ca; }
+.tv-btn-primary:hover { background: #10665f; }
 
 .tv-icon-btn {
   display: inline-flex;
@@ -186,7 +187,7 @@ body {
 }
 .tv-card-desc {
   margin: 7px 0 0;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   line-height: 1.55;
   color: var(--tv-text-muted);
 }
@@ -216,7 +217,7 @@ body {
   border-radius: var(--tv-radius);
   overflow: hidden;
 }
-.tv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tv-table { width: 100%; border-collapse: collapse; font-size: var(--appt-type-list, 0.8125rem); }
 .tv-table th {
   text-align: left;
   font-size: 11px;
@@ -379,7 +380,7 @@ body {
   display: grid;
   grid-template-columns: 92px 1fr;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--appt-type-list, 0.8125rem);
   align-items: baseline;
 }
 .tv-detail-label {

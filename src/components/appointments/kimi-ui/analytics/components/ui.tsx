@@ -59,7 +59,7 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "h-8 px-3 text-[13px]" : "h-9 px-4 text-[13px]",
-        variant === "primary" && "bg-primary text-white hover:bg-indigo-600",
+        variant === "primary" && "bg-primary text-primary-foreground hover:bg-primary-hover",
         variant === "secondary" &&
           "border border-border bg-card text-foreground hover:bg-muted",
         variant === "ghost" && "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -87,7 +87,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
       {icon ? (
-        <div className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-primary">
+        <div className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-xl bg-[#dcefeb] text-[#147d74]">
           {icon}
         </div>
       ) : null}

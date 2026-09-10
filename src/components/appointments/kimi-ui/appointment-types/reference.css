@@ -1,10 +1,11 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 .reference-root {
-  --brand: #5b4bff;
-  --brand-dark: #4a3ae0;
-  background: #f7f8fb;
+  --brand: #147d74;
+  --brand-dark: #10665f;
+  background: var(--appt-surface-muted, #f7f8fa);
   color: #1e1e2d;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, -apple-system, sans-serif;
   min-height: 100vh;
 }
 .reference-root .card {
@@ -30,7 +31,7 @@
 }
 .reference-root .input:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(91, 75, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(20, 125, 116, 0.12);
 }
 .reference-root .label {
   font-size: 12.5px;
@@ -39,10 +40,16 @@
   margin-bottom: 6px;
   display: block;
 }
-.reference-root .checkbox {
-  width: 16px; height: 16px;
+.reference-root .checkbox,
+.reference-root .radio {
+  width: 16px;
+  height: 16px;
   accent-color: var(--brand);
   border-radius: 4px;
+}
+
+.reference-root .radio {
+  border-radius: 999px;
 }
 .reference-root .badge-active {
   background: #e7f9f0; color: #12a566;

@@ -1,6 +1,7 @@
+@import "../shared/appointments-pilot-tokens.css";
 @import "../overview/ref-deco.css";
 .setup-page {
-  --brand: #5b4bd6;
+  --brand: #147d74;
   --brand-600: #4f3fd1;
   --brand-50: #f1efff;
   --brand-100: #e6e2ff;
