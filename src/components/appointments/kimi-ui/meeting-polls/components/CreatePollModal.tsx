@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal, Button, Input, Label, Select } from "./ui";
-import { MeetingPoll } from "../types";
+import type { MeetingTypeOption } from "../types";
 
 type DraftOption = { date: string; time: string };
 
@@ -20,17 +20,38 @@ export function CreatePollModal({
   onCreate,
 }: {
   onClose: () => void;
-  onCreate: (poll: MeetingPoll) => void;
+  onCreate: (input: {
+    title: string;
+    appointmentTypeId: string;
+    options: Array<{ startsAt: string; endsAt: string }>;
+  }) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState("30");
-  const [location, setLocation] = useState("Zoom");
+  const [appointmentTypeId, setAppointmentTypeId] = useState("");
+  const [meetingTypes, setMeetingTypes] = useState<MeetingTypeOption[]>([]);
+  const [typesLoading, setTypesLoading] = useState(true);
   const [options, setOptions] = useState<DraftOption[]>([
     defaultOption(1, 10),
     defaultOption(2, 14),
   ]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTypesLoading(true);
+    fetch("/api/appointments/meeting-polls?eligibleMeetingTypes=1")
+      .then((r) => r.json())
+      .then((j) => {
+        const rows = (j.data || []) as MeetingTypeOption[];
+        setMeetingTypes(rows);
+        if (rows[0]) setAppointmentTypeId(rows[0].id);
+      })
+      .catch(() => setMeetingTypes([]))
+      .finally(() => setTypesLoading(false));
+  }, []);
+
+  const selectedType = meetingTypes.find((t) => t.id === appointmentTypeId);
+  const durationMinutes = selectedType?.durationMinutes || 30;
 
   const updateOption = (i: number, patch: Partial<DraftOption>) =>
     setOptions((opts) => opts.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
@@ -40,43 +61,34 @@ export function CreatePollModal({
 
   const canSubmit =
     title.trim().length > 0 &&
+    appointmentTypeId &&
     options.length >= 2 &&
     options.every((o) => o.date && o.time);
 
   async function submit() {
     if (!canSubmit) {
-      setError("Add a title and at least two time options.");
+      setError("Add a title, meeting type, and at least two time options.");
       return;
     }
     setSaving(true);
     setError("");
-    // Simulate POST /api/appointments/meeting-polls
-    await new Promise((r) => setTimeout(r, 600));
-    const durMs = Number(duration) * 60000;
-    const poll: MeetingPoll = {
-      id: `poll_${Math.random().toString(36).slice(2, 8)}`,
-      title: title.trim(),
-      status: "open",
-      createdAt: new Date().toISOString(),
-      closesAt: null,
-      location,
-      durationMinutes: Number(duration),
-      organizer: "You",
-      invitees: 0,
-      responded: 0,
-      shareUrl: `https://book.transovo.com/p/${title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32)}`,
-      options: options.map((o, i) => {
-        const start = new Date(`${o.date}T${o.time}:00`);
-        return {
-          id: `new_o${i}`,
-          startsAt: start.toISOString(),
-          endsAt: new Date(start.getTime() + durMs).toISOString(),
-          votes: 0,
-        };
-      }),
-    };
-    setSaving(false);
-    onCreate(poll);
+    const durMs = durationMinutes * 60000;
+    try {
+      await onCreate({
+        title: title.trim(),
+        appointmentTypeId,
+        options: options.map((o) => {
+          const start = new Date(`${o.date}T${o.time}:00`);
+          return {
+            startsAt: start.toISOString(),
+            endsAt: new Date(start.getTime() + durMs).toISOString(),
+          };
+        }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create poll.");
+      setSaving(false);
+    }
   }
 
   return (
@@ -87,7 +99,7 @@ export function CreatePollModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={!title.trim() || saving}>
+          <Button onClick={submit} disabled={!canSubmit || saving || typesLoading}>
             {saving ? "Creating…" : "Create poll"}
           </Button>
         </>
@@ -104,32 +116,36 @@ export function CreatePollModal({
         />
       </div>
 
-      <div className="field-row">
-        <div className="field">
-          <Label htmlFor="poll-duration">Duration</Label>
-          <Select id="poll-duration" value={duration} onChange={(e) => setDuration(e.target.value)}>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-            <option value="45">45 minutes</option>
-            <option value="60">1 hour</option>
+      <div className="field">
+        <Label htmlFor="poll-meeting-type">Meeting type</Label>
+        {typesLoading ? (
+          <p className="hint">Loading meeting types…</p>
+        ) : meetingTypes.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-[#ecedf2] px-3 py-3 text-[12.5px] text-[#8a8fa3]">
+            <p className="mb-2">No Meeting Types are available to you.</p>
+            <a href="/appointments/types" className="text-[#5b4bff] font-medium hover:underline">
+              View booking types
+            </a>
+          </div>
+        ) : (
+          <Select
+            id="poll-meeting-type"
+            value={appointmentTypeId}
+            onChange={(e) => setAppointmentTypeId(e.target.value)}
+          >
+            {meetingTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name} ({type.durationMinutes} min)
+              </option>
+            ))}
           </Select>
-        </div>
-        <div className="field">
-          <Label htmlFor="poll-location">Location</Label>
-          <Select id="poll-location" value={location} onChange={(e) => setLocation(e.target.value)}>
-            <option>Zoom</option>
-            <option>Google Meet</option>
-            <option>Microsoft Teams</option>
-            <option>Phone call</option>
-            <option>In person</option>
-          </Select>
-        </div>
+        )}
       </div>
 
       <div className="field">
         <Label>Time options</Label>
         <p className="hint" style={{ margin: "-2px 0 10px" }}>
-          Add at least two proposed times. Times are shown in your workspace timezone (Eastern Time).
+          Add at least two proposed times. Duration follows the selected meeting type ({durationMinutes} min).
         </p>
         {options.map((o, i) => (
           <div className="option-row" key={i}>
@@ -167,7 +183,7 @@ export function CreatePollModal({
       {error && (
         <div className="alert alert-error" role="alert">
           <div>
-            <div className="alert-title">Couldn't create poll</div>
+            <div className="alert-title">Couldn&apos;t create poll</div>
             {error}
           </div>
         </div>

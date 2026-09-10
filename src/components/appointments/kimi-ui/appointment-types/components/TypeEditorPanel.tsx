@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Info } from "lucide-react";
 import TypeAdvancedSections from "./TypeAdvancedSections";
-import TypePublishingSections from "./TypePublishingSections";
+import TypePublishingSections, { type TeamUserOption } from "./TypePublishingSections";
 import { BookingTypeKindPicker } from "./BookingTypeKindPicker";
 import { TypeResourcesSection } from "./TypeResourcesSection";
 import { TypeAddOnsSection } from "./TypeAddOnsSection";
@@ -24,6 +24,8 @@ interface Props {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions?: Array<{ id: string; name: string }>;
   teamGroupOptions?: Array<{ id: string; name: string }>;
+  teamUserOptions?: TeamUserOption[];
+  currentUserId?: string;
   resourceOptions?: Array<{ id: string; name: string; quantity?: number }>;
   addOnOptions?: Array<{ id: string; name: string; priceCents?: number }>;
   categoryOptions?: Array<{ id: string; name: string }>;
@@ -37,8 +39,11 @@ interface Props {
   onCancel: () => void;
   onBack: () => void;
   onManageAvailability: () => void;
+  onCheckAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  onManageCategories?: () => void;
+  onCreateCategory?: () => void;
 }
 
 export default function TypeEditorPanel({
@@ -51,6 +56,8 @@ export default function TypeEditorPanel({
   connectedPaymentProviders,
   namedScheduleOptions,
   teamGroupOptions,
+  teamUserOptions = [],
+  currentUserId,
   resourceOptions = [],
   addOnOptions = [],
   categoryOptions = [],
@@ -61,8 +68,11 @@ export default function TypeEditorPanel({
   onCancel,
   onBack,
   onManageAvailability,
+  onCheckAvailability,
   onManageStaff,
   onManageLocations,
+  onManageCategories,
+  onCreateCategory,
 }: Props) {
   const kindDefaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
@@ -260,13 +270,22 @@ export default function TypeEditorPanel({
               <p className="text-[11.5px] text-[#8a8fa3] leading-snug mb-2">
                 These rules apply to any calendar connected to this appointment type.
               </p>
-              <button
-                type="button"
-                className="text-[12px] font-medium text-[#5b4bff] hover:underline flex items-center gap-1"
-                onClick={onManageAvailability}
-              >
-                Manage availability →
-              </button>
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  onClick={onCheckAvailability}
+                >
+                  Check availability
+                </button>
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  onClick={onManageAvailability}
+                >
+                  Manage availability →
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -289,6 +308,8 @@ export default function TypeEditorPanel({
           form={form}
           namedScheduleOptions={namedScheduleOptions}
           teamGroupOptions={teamGroupOptions}
+          teamUserOptions={teamUserOptions}
+          currentUserId={currentUserId}
           onFormChange={onFormChange}
         />
 
@@ -296,6 +317,8 @@ export default function TypeEditorPanel({
           form={form}
           categoryOptions={categoryOptions}
           onFormChange={onFormChange}
+          onManageCategories={onManageCategories}
+          onCreateCategory={onCreateCategory}
         />
 
         <TypeResourcesSection
@@ -331,6 +354,7 @@ export default function TypeEditorPanel({
           <div className="px-5 pb-5 pt-2 space-y-8 border-t border-[#ecedf2]">
         <TypeAdvancedSections
           form={form}
+          appointmentTypeId={appointmentTypeId || undefined}
           staffOptions={staffOptions}
           locationOptions={locationOptions}
           connectedPaymentProviders={connectedPaymentProviders}

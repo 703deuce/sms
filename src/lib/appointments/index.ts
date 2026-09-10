@@ -70,6 +70,10 @@ export {
   type WorkspaceAppointmentRecord,
 } from "./domain";
 export {
+  resolveAppointmentRouting,
+  hasLegacyRoutingRules,
+} from "./appointment-routing";
+export {
   loadSchedulingContext,
   resolveStaffForBooking,
   resolveRoutingDestination,

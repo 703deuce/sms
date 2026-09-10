@@ -20,15 +20,125 @@ export type CalendarApiAppointment = {
   inviteeName: string | null;
   inviteePhone?: string | null;
   serviceName: string | null;
+  staffName?: string | null;
+  staffId?: string | null;
   startsAt: string;
   endsAt?: string | null;
   status: string;
   timezone: string | null;
+  location?: string | null;
   metadata?: { location?: string };
   standaloneVideoMeetingId?: string | null;
   standaloneMeetingSessionId?: string | null;
   meeting?: AppointmentMeetingIndicator;
+  recurringSeriesId?: string | null;
+  attendeeCount?: number;
+  bookingTypeKind?: string;
 };
+
+export type CalendarColorSource = {
+  colorBy: "staff" | "service";
+  staffColors: Record<string, string>;
+  serviceColors: Record<string, string>;
+  defaultStaffColor: string;
+  defaultServiceColor: string;
+};
+
+export type CalendarFilters = {
+  staff: string[];
+  services: string[];
+  locations: string[];
+  statuses: string[];
+};
+
+export type UnavailableBlock = {
+  day: number;
+  start: number;
+  duration: number;
+  label?: string;
+};
+
+const DEFAULT_STAFF_COLOR = "#93c5fd";
+const DEFAULT_SERVICE_COLOR = "#a78bfa";
+
+export function resolveEventColor(
+  row: CalendarApiAppointment,
+  source: CalendarColorSource,
+): string {
+  if (source.colorBy === "staff") {
+    const key = row.staffId || row.staffName || "";
+    return source.staffColors[key] || source.defaultStaffColor;
+  }
+  const serviceKey = row.serviceName || "";
+  return source.serviceColors[serviceKey] || source.defaultServiceColor;
+}
+
+export function applyCalendarFilters(
+  appointments: CalendarApiAppointment[],
+  filters: CalendarFilters,
+): CalendarApiAppointment[] {
+  return appointments.filter((row) => {
+    if (filters.staff.length && row.staffName && !filters.staff.includes(row.staffName)) {
+      return false;
+    }
+    if (
+      filters.services.length &&
+      row.serviceName &&
+      !filters.services.includes(row.serviceName)
+    ) {
+      return false;
+    }
+    if (filters.locations.length) {
+      const loc = row.location || row.metadata?.location || "";
+      if (loc && !filters.locations.includes(loc)) return false;
+    }
+    if (filters.statuses.length) {
+      const ui = mapUiStatus(row.status);
+      const normalized = filters.statuses.map((s) => s.toLowerCase());
+      if (!normalized.includes(ui) && !normalized.includes(row.status.toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+export function buildWeeklyUnavailableBlocks(
+  weekStart: Date,
+  weeklyHours?: Record<string, Array<{ open: string; close: string }>>,
+): UnavailableBlock[] {
+  if (!weeklyHours) return [];
+  const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const blocks: UnavailableBlock[] = [];
+  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    const day = addDays(weekStart, dayIndex);
+    const key = dayKeys[day.getDay()];
+    const ranges = weeklyHours[key] || [];
+    if (!ranges.length) {
+      blocks.push({ day: dayIndex, start: GRID_START, duration: HOURS.length, label: "Closed" });
+      continue;
+    }
+    const parseHour = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h + (m || 0) / 60;
+    };
+    let cursor = GRID_START;
+    const sorted = [...ranges].sort((a, b) => parseHour(a.open) - parseHour(b.open));
+    for (const range of sorted) {
+      const open = parseHour(range.open);
+      const close = parseHour(range.close);
+      if (open > cursor) {
+        blocks.push({ day: dayIndex, start: cursor, duration: open - cursor });
+      }
+      cursor = Math.max(cursor, close);
+    }
+    const end = GRID_START + HOURS.length;
+    if (cursor < end) {
+      blocks.push({ day: dayIndex, start: cursor, duration: end - cursor });
+    }
+  }
+  return blocks;
+}
 
 const HOUR_H = 56;
 const GRID_START = 8;
@@ -268,6 +378,12 @@ function mapWeekEvents(
         status: mapUiStatus(row.status),
         meeting: row.meeting,
         eventKind: row.eventKind,
+        colorDot: undefined,
+        isRecurring: Boolean(row.recurringSeriesId),
+        isClassOrEvent:
+          row.bookingTypeKind === "CLASS" ||
+          (typeof row.attendeeCount === "number" && row.attendeeCount > 1),
+        attendeeCount: row.attendeeCount,
       };
     });
 }
@@ -459,6 +575,9 @@ export type BuildCalendarPageModelInput = {
   view: CalendarViewMode;
   selectedDayKey: string;
   miniCalendarMonth: Date;
+  colorSource?: CalendarColorSource;
+  unavailableBlocks?: UnavailableBlock[];
+  showAvailabilityOverlay?: boolean;
 };
 
 function mapDayEvents(
@@ -552,6 +671,21 @@ function mapMonthDays(
   return cells;
 }
 
+function applyEventColors(
+  events: CalendarWeekEvent[],
+  appointments: CalendarApiAppointment[],
+  colorSource?: CalendarColorSource,
+): CalendarWeekEvent[] {
+  if (!colorSource) return events;
+  const byId = new Map(appointments.map((a) => [a.id, a]));
+  return events.map((ev) => {
+    const row = byId.get(ev.id);
+    return row
+      ? { ...ev, colorDot: resolveEventColor(row, colorSource) }
+      : ev;
+  });
+}
+
 export function buildCalendarPageModel(input: BuildCalendarPageModelInput): CalendarPageModel {
   const weekStart =
     input.view === "day"
@@ -565,10 +699,13 @@ export function buildCalendarPageModel(input: BuildCalendarPageModelInput): Cale
       : input.view === "week"
         ? mapWeekDays(weekStart)
         : mapWeekDays(weekStart);
-  const weekEvents =
+  const weekEvents = applyEventColors(
     input.view === "day"
       ? mapDayEvents(input.appointments, dateKey(input.cursor))
-      : mapWeekEvents(input.appointments, weekStart);
+      : mapWeekEvents(input.appointments, weekStart),
+    input.appointments,
+    input.colorSource,
+  );
   const monthDays =
     input.view === "month"
       ? mapMonthDays(input.cursor, input.appointments)
@@ -589,5 +726,7 @@ export function buildCalendarPageModel(input: BuildCalendarPageModelInput): Cale
     agenda: mapAgenda(input.appointments, input.selectedDayKey),
     nextAppointment: mapNextAppointment(input.appointments),
     timezoneLabel: timezoneLabel(),
+    unavailableBlocks: input.showAvailabilityOverlay ? input.unavailableBlocks || [] : [],
+    showAvailabilityOverlay: Boolean(input.showAvailabilityOverlay),
   };
 }

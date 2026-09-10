@@ -35,7 +35,7 @@ export function TypeIntakeFormsSection({ form, intakeFormOptions, onFormChange }
           </p>
         </div>
         <Link
-          href="/appointments"
+          href="/appointments/booking/forms"
           className="text-[12px] font-medium text-[#5b4bff] hover:underline shrink-0"
         >
           Manage forms →

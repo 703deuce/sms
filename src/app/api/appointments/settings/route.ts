@@ -22,6 +22,10 @@ export async function GET() {
     ]);
     return NextResponse.json({
       data,
+      currentUser: {
+        id: auth.session.userId,
+        email: auth.session.email || "",
+      },
       workspace: workspace
         ? {
             slug: workspace.slug,

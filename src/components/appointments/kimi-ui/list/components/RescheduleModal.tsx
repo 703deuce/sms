@@ -1,19 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "./Modal";
 import { formatDay, formatTime, type AppointmentRow } from "../list-types";
-
-const TIMES = ["9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "1:00 PM", "1:30 PM", "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM", "4:00 PM"];
-
-function nextDays(n: number) {
-  const out: Date[] = [];
-  const d = new Date();
-  while (out.length < n) {
-    d.setDate(d.getDate() + 1);
-    const day = d.getDay();
-    if (day !== 0) out.push(new Date(d)); // skip Sundays
-  }
-  return out;
-}
 
 export function RescheduleModal({
   row,
@@ -24,25 +11,46 @@ export function RescheduleModal({
   onClose: () => void;
   onRescheduled: (id: string, iso: string) => void | Promise<void>;
 }) {
-  const days = useMemo(() => nextDays(7), []);
-  const [dayIdx, setDayIdx] = useState(0);
-  const [slot, setSlot] = useState<string | null>(null);
+  const [slots, setSlots] = useState<Array<{ startsAt: string; endsAt?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!row?.serviceName) {
+      setSlots([]);
+      return;
+    }
+    setLoading(true);
+    setSelected(null);
+    fetch(
+      `/api/appointments/availability?serviceName=${encodeURIComponent(row.serviceName)}&daysAhead=14`,
+    )
+      .then((r) => r.json())
+      .then((json) => setSlots(json.data?.slots || []))
+      .catch(() => setSlots([]))
+      .finally(() => setLoading(false));
+  }, [row?.id, row?.serviceName]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, Array<{ startsAt: string; endsAt?: string }>>();
+    for (const slot of slots) {
+      const key = new Date(slot.startsAt).toDateString();
+      const list = map.get(key) || [];
+      list.push(slot);
+      map.set(key, list);
+    }
+    return [...map.entries()];
+  }, [slots]);
 
   if (!row) return null;
 
   const save = async () => {
-    if (!slot) return;
+    if (!selected) return;
     setSaving(true);
     try {
-      const d = new Date(days[dayIdx]);
-      const [time, mer] = slot.split(" ");
-      let [h, m] = time.split(":").map(Number);
-      if (mer === "PM" && h !== 12) h += 12;
-      if (mer === "AM" && h === 12) h = 0;
-      d.setHours(h, m, 0, 0);
-      await onRescheduled(row.id, d.toISOString());
-      setSlot(null);
+      await onRescheduled(row.id, selected);
+      setSelected(null);
       onClose();
     } finally {
       setSaving(false);
@@ -59,48 +67,39 @@ export function RescheduleModal({
       footer={
         <>
           <button type="button" className="tv-btn tv-btn--ghost" onClick={onClose}>Keep current time</button>
-          <button type="button" className="tv-btn tv-btn--primary" disabled={!slot || saving} onClick={save}>
+          <button type="button" className="tv-btn tv-btn--primary" disabled={!selected || saving} onClick={save}>
             {saving ? "Rescheduling…" : "Confirm new time"}
           </button>
         </>
       }
     >
-      <div className="tv-fieldlabel" style={{ marginBottom: 8 }}>Choose a day</div>
-      <div className="tv-daypicker" role="listbox" aria-label="Available days">
-        {days.map((d, i) => (
-          <button
-            key={d.toDateString()}
-            type="button"
-            role="option"
-            aria-selected={dayIdx === i}
-            className={dayIdx === i ? "tv-daypill tv-daypill--active" : "tv-daypill"}
-            onClick={() => { setDayIdx(i); setSlot(null); }}
-          >
-            <span className="tv-daypill__dow">{d.toLocaleDateString(undefined, { weekday: "short" })}</span>
-            <span className="tv-daypill__num">{d.getDate()}</span>
-          </button>
-        ))}
-      </div>
-      <div className="tv-fieldlabel" style={{ margin: "16px 0 8px" }}>
-        Available times — {days[dayIdx].toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} (Eastern)
-      </div>
-      <div className="tv-slotgrid" role="listbox" aria-label="Available times">
-        {TIMES.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="option"
-            aria-selected={slot === t}
-            className={slot === t ? "tv-slot tv-slot--active" : "tv-slot"}
-            onClick={() => setSlot(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-      <p className="tv-modalnote">
-        Rescheduling cancels the old reminder jobs, updates the calendar event, and sends the customer an updated confirmation with the new time.
-      </p>
+      {loading ? (
+        <p className="tv-muted">Loading available times…</p>
+      ) : grouped.length === 0 ? (
+        <p className="tv-muted">No available times found for this booking type in the next 14 days.</p>
+      ) : (
+        <div className="tv-stack" style={{ gap: 16 }}>
+          {grouped.map(([dayKey, daySlots]) => (
+            <div key={dayKey}>
+              <div className="tv-fieldlabel" style={{ marginBottom: 8 }}>
+                {formatDay(daySlots[0]!.startsAt, row.timezone)}
+              </div>
+              <div className="tv-slotgrid">
+                {daySlots.map((slot) => (
+                  <button
+                    key={slot.startsAt}
+                    type="button"
+                    className={selected === slot.startsAt ? "tv-slot tv-slot--active" : "tv-slot"}
+                    onClick={() => setSelected(slot.startsAt)}
+                  >
+                    {formatTime(slot.startsAt, row.timezone)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }
