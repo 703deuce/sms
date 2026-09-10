@@ -120,6 +120,45 @@ function detectPerTypeAccessEvidence() {
   );
 }
 
+function detectSlotDiagnosticsContextualEvidence() {
+  const drawer = join(ROOT, "src/features/appointments/kimi/availability/SlotDiagnosticsDrawer.tsx");
+  const panel = join(ROOT, "src/features/appointments/kimi/availability/SlotDiagnosticsPanel.tsx");
+  const typeEditor = join(
+    ROOT,
+    "src/components/appointments/kimi-ui/appointment-types/components/TypeEditorPanel.tsx",
+  );
+  const typesConnected = join(
+    ROOT,
+    "src/features/appointments/kimi/appointment-types/appointment-types-connected.tsx",
+  );
+  const calendarHeader = join(
+    ROOT,
+    "src/components/appointments/kimi-ui/calendar/components/CalendarHeader.tsx",
+  );
+  if (
+    !existsSync(drawer) ||
+    !existsSync(panel) ||
+    !existsSync(typeEditor) ||
+    !existsSync(typesConnected) ||
+    !existsSync(calendarHeader)
+  ) {
+    return false;
+  }
+  const typeEditorSrc = readFileSync(typeEditor, "utf8");
+  const typesConnectedSrc = readFileSync(typesConnected, "utf8");
+  const calendarHeaderSrc = readFileSync(calendarHeader, "utf8");
+  const panelSrc = readFileSync(panel, "utf8");
+  return (
+    typeEditorSrc.includes("onCheckAvailability") &&
+    typeEditorSrc.includes("Check availability") &&
+    typesConnectedSrc.includes("SlotDiagnosticsDrawer") &&
+    typesConnectedSrc.includes("lockServiceName") &&
+    calendarHeaderSrc.includes("onCheckAvailability") &&
+    panelSrc.includes("staffOptions") &&
+    panelSrc.includes("lockServiceName")
+  );
+}
+
 function detectMeetingPollPermissionEvidence() {
   const api = join(ROOT, "src/app/api/appointments/meeting-polls/route.ts");
   const access = join(ROOT, "src/lib/appointments/meeting-poll-access.ts");
@@ -332,8 +371,7 @@ const OVERRIDES = {
   // Batch 8F-3 — booking permissions + meeting polls (evidence-detected; see classifyRow)
   "15-7": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8F-3 per-type team access + poll authorization" },
   // Mock / placeholder
-  // Contextual
-  "3-20": { status: "V1_CONTEXTUAL_FLOW_GAP", gap: "Service → create staff contextual return", evidence: "contextual audit", priority: "P2" },
+  // Contextual (3-20 evidence-detected in classifyRow when SlotDiagnosticsDrawer wired)
   // Complete via 8B waves (STATIC_PASS)
   "7-10": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8B-9 portal IA" },
   "7-11": { status: "V1_COMPLETE", gap: "", evidence: "Batch 8B-9 appointments section" },
@@ -512,6 +550,24 @@ function classifyRow(row) {
       gap: "",
       evidence: "Batch 8F-3 TypePublishingSections team access + CreatePollModal meeting type selector + meeting-poll-access authorization",
       nextAction: "Browser certification when ready",
+    };
+  }
+  if (id === "3-20" && detectSlotDiagnosticsContextualEvidence()) {
+    return {
+      status: "V1_COMPLETE",
+      gap: "",
+      evidence:
+        "Batch 8F-4 SlotDiagnosticsDrawer contextual entry from Type editor + Calendar with prefilled context; canonical /appointments/availability panel",
+      nextAction: "Browser certification when ready",
+    };
+  }
+  if (id === "3-20") {
+    return {
+      status: "V1_CONTEXTUAL_FLOW_GAP",
+      gap: "Contextual entry to slot diagnostics from Service/Calendar with prefilled context",
+      evidence: "contextual audit; canonical SlotDiagnosticsPanel without contextual drawer entry",
+      nextAction: "Implement SlotDiagnosticsDrawer from Type editor and Calendar",
+      priority: "P2",
     };
   }
   if (OVERRIDES[id]) {
@@ -918,6 +974,13 @@ See queue doc § Proposed 8D batches (route convergence → public → portal �
   for (const [area, st] of portalChecklist) portalSection += `| ${area} | ${st} |\n`;
 
   const contextualFlows = [
+    [
+      "SERVICE/CALENDAR → SLOT DIAGNOSTICS",
+      detectSlotDiagnosticsContextualEvidence() ? "COMPLETE" : "PARTIAL",
+      detectSlotDiagnosticsContextualEvidence() ? "—" : "NO_CONTEXTUAL_ENTRY",
+      "Type editor + Calendar → SlotDiagnosticsDrawer",
+      detectSlotDiagnosticsContextualEvidence() ? "—" : "P2",
+    ],
     ["SERVICE → STAFF", "PARTIAL", "NO_CREATE", "Type editor", "P2"],
     ["SERVICE → INTAKE FORM", "PARTIAL", "NO_AUTO_SELECT", "Forms contextual", "P2"],
     ["CONTACT → PACKAGE", "COMPLETE", "—", "Contact detail", "—"],

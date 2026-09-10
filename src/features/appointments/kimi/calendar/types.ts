@@ -144,6 +144,7 @@ export type CalendarPageActions = {
   onNext: () => void;
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
+  onCheckAvailability: () => void;
   onOpenAppointment: (id: string) => void;
   onSelectDay: (dateKey: string) => void;
   onMiniCalendarPrev: () => void;

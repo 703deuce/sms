@@ -2,17 +2,7 @@
 
 **Generated:** 2026-09-10
 **Type:** Mechanical reconciliation — implementation work only
-**Total residual rows:** 1
-
-## /appointments/availability
-
-### 3-20 — Slot diagnostics
-- **Gap type:** V1_CONTEXTUAL_FLOW_GAP
-- **Section:** /appointments/availability
-- **Missing:** Service → create staff contextual return
-- **Backend:** YES / PARTIAL
-- **Priority:** P2
-- **Evidence:** contextual audit; routeExists=true; backend=true
+**Total residual rows:** 0
 
 ## Proposed residual implementation batches (8D series)
 

@@ -95,6 +95,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onCancel={actions.onCancel}
               onBack={actions.onBackToList}
               onManageAvailability={actions.onManageAvailability}
+              onCheckAvailability={actions.onCheckAvailability}
               onManageStaff={actions.onManageStaff}
               onManageLocations={actions.onManageLocations}
               onManageCategories={actions.onManageCategories}

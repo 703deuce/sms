@@ -10,10 +10,7 @@ type Props = {
   onNext: () => void;
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
-  onOpenFilters?: () => void;
-  activeFilterCount?: number;
-  showAvailabilityOverlay?: boolean;
-  onToggleAvailabilityOverlay?: () => void;
+  onCheckAvailability: () => void;
 };
 
 const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
@@ -30,10 +27,7 @@ export default function CalendarHeader({
   onNext,
   onViewChange,
   onNewAppointment,
-  onOpenFilters,
-  activeFilterCount = 0,
-  showAvailabilityOverlay = false,
-  onToggleAvailabilityOverlay,
+  onCheckAvailability,
 }: Props) {
   return (
     <div className="cal-header">
@@ -60,26 +54,6 @@ export default function CalendarHeader({
           <span className="btn-range-label">{rangeLabel}</span>
           <ChevronDown size={14} />
         </button>
-        {onOpenFilters ? (
-          <button
-            type="button"
-            className={`cal-filter-chip ${activeFilterCount ? "active" : ""}`}
-            onClick={onOpenFilters}
-            aria-label={`Filter calendar${activeFilterCount ? `, ${activeFilterCount} active` : ""}`}
-          >
-            Filters{activeFilterCount ? ` ${activeFilterCount}` : ""}
-          </button>
-        ) : null}
-        {onToggleAvailabilityOverlay ? (
-          <button
-            type="button"
-            className={`cal-filter-chip ${showAvailabilityOverlay ? "active" : ""}`}
-            onClick={onToggleAvailabilityOverlay}
-            aria-pressed={showAvailabilityOverlay}
-          >
-            {showAvailabilityOverlay ? "Hide availability" : "Show availability"}
-          </button>
-        ) : null}
         <div className="view-toggle" role="group" aria-label="Calendar view">
           {VIEW_OPTIONS.map((opt) => (
             <button
@@ -93,6 +67,9 @@ export default function CalendarHeader({
             </button>
           ))}
         </div>
+        <button type="button" className="btn-today" onClick={onCheckAvailability}>
+          Check availability
+        </button>
         <button type="button" className="btn-primary" onClick={onNewAppointment}>
           <Plus size={16} /> New appointment
         </button>

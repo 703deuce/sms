@@ -28,10 +28,7 @@ export default function CalendarPage({ model, actions }: Props) {
         onNext={actions.onNext}
         onViewChange={actions.onViewChange}
         onNewAppointment={actions.onNewAppointment}
-        onOpenFilters={actions.onOpenFilters}
-        activeFilterCount={actions.activeFilterCount}
-        showAvailabilityOverlay={model.showAvailabilityOverlay}
-        onToggleAvailabilityOverlay={actions.onToggleAvailabilityOverlay}
+        onCheckAvailability={actions.onCheckAvailability}
       />
       <StatCards stats={model.stats} />
       <div className="cal-main">
@@ -43,11 +40,9 @@ export default function CalendarPage({ model, actions }: Props) {
             typeColors={model.typeColors}
             nowLine={model.nowLine}
             timezoneLabel={model.timezoneLabel}
-            unavailableBlocks={model.unavailableBlocks}
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
-            onRescheduleEvent={actions.onRescheduleEvent}
           />
         ) : model.view === "month" ? (
           <MonthCalendar
@@ -65,11 +60,9 @@ export default function CalendarPage({ model, actions }: Props) {
             typeColors={model.typeColors}
             nowLine={model.nowLine}
             timezoneLabel={model.timezoneLabel}
-            unavailableBlocks={model.unavailableBlocks}
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
-            onRescheduleEvent={actions.onRescheduleEvent}
           />
         )}
         <aside className="cal-side">

@@ -1,32 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { SlotDiagnosticsDrawer } from "@/features/appointments/kimi/availability/SlotDiagnosticsDrawer";
+import { datetimeLocalFromDateKey } from "@/features/appointments/kimi/availability/datetime-local";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/appointments/kimi-ui/calendar/page";
-import CalendarFiltersDrawer from "@/components/appointments/kimi-ui/calendar/components/CalendarFiltersDrawer";
 import "@/components/appointments/kimi-ui/calendar/reference.css";
 import {
   addDays,
-  applyCalendarFilters,
   buildCalendarPageModel,
-  buildWeeklyUnavailableBlocks,
   dateKey,
   getCalendarRange,
   startOfWeek,
   type CalendarApiAppointment,
-  type CalendarColorSource,
-  type CalendarFilters,
 } from "@/features/appointments/kimi/calendar/map-calendar";
 import type { CalendarPageActions, CalendarPageModel, CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
-
-const EMPTY_FILTERS: CalendarFilters = {
-  staff: [],
-  services: [],
-  locations: [],
-  statuses: [],
-};
 
 function CalendarLoading() {
   return (
@@ -68,19 +58,11 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function parseDateKey(value: string | null): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const parsed = new Date(`${value}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 export function CalendarConnected() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const deepLinkDate = parseDateKey(searchParams.get("date"));
-  const [cursor, setCursor] = useState(() => startOfWeek(deepLinkDate ?? new Date()));
+  const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<CalendarViewMode>("week");
-  const [selectedDayKey, setSelectedDayKey] = useState(() => dateKey(deepLinkDate ?? new Date()));
+  const [selectedDayKey, setSelectedDayKey] = useState(() => dateKey(new Date()));
   const [miniCalendarMonth, setMiniCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -88,25 +70,9 @@ export function CalendarConnected() {
   const [rows, setRows] = useState<CalendarApiAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [filters, setFilters] = useState<CalendarFilters>(EMPTY_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [showAvailability, setShowAvailability] = useState(false);
-  const [colorSource, setColorSource] = useState<CalendarColorSource | null>(null);
-  const [weeklyHours, setWeeklyHours] = useState<
-    Record<string, Array<{ open: string; close: string }>> | undefined
-  >();
-  const [toast, setToast] = useState<string | null>(null);
+  const [slotDiagnosticsOpen, setSlotDiagnosticsOpen] = useState(false);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
-
-  useEffect(() => {
-    const linked = parseDateKey(searchParams.get("date"));
-    if (!linked) return;
-    const key = dateKey(linked);
-    setSelectedDayKey(key);
-    setCursor(startOfWeek(linked));
-    setMiniCalendarMonth(new Date(linked.getFullYear(), linked.getMonth(), 1));
-  }, [searchParams]);
 
   const loadMeetingIndicators = useCallback(async (appointments: CalendarApiAppointment[]) => {
     const ids = appointments
@@ -125,57 +91,6 @@ export function CalendarConnected() {
           ? row.meeting
           : indicators[row.id] || row.meeting,
     }));
-  }, []);
-
-  const loadSettings = useCallback(() => {
-    fetch("/api/appointments/settings")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (!json?.data) return;
-        const config = json.data;
-        const staffColors: Record<string, string> = {
-          ...(config.calendarColors?.staffColors || {}),
-        };
-        for (const member of config.staff || []) {
-          if (member.calendarColor) {
-            staffColors[member.id] = member.calendarColor;
-            staffColors[member.name] = member.calendarColor;
-          }
-        }
-        const serviceColors: Record<string, string> = {
-          ...(config.calendarColors?.serviceColors || {}),
-        };
-        setColorSource({
-          colorBy: config.calendarColorBy === "staff" ? "staff" : "service",
-          staffColors,
-          serviceColors,
-          defaultStaffColor: config.calendarColors?.defaultStaffColor || "#93c5fd",
-          defaultServiceColor: config.calendarColors?.defaultServiceColor || "#a78bfa",
-        });
-        setWeeklyHours(config.weeklyHours);
-      })
-      .catch(() => {});
-    fetch("/api/appointments/types")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        const types = json?.data || [];
-        setColorSource((prev) => {
-          const base = prev || {
-            colorBy: "service" as const,
-            staffColors: {},
-            serviceColors: {},
-            defaultStaffColor: "#93c5fd",
-            defaultServiceColor: "#a78bfa",
-          };
-          const serviceColors = { ...base.serviceColors };
-          for (const t of types) {
-            const color = t.config?.calendarColor || t.config?.color;
-            if (color && t.name) serviceColors[t.name] = color;
-          }
-          return { ...base, serviceColors };
-        });
-      })
-      .catch(() => {});
   }, []);
 
   const load = useCallback(() => {
@@ -200,74 +115,19 @@ export function CalendarConnected() {
   }, [loadMeetingIndicators, range.from, range.to]);
 
   useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
-
-  useEffect(() => {
     load();
   }, [load]);
-
-  const filteredRows = useMemo(
-    () => applyCalendarFilters(rows, filters),
-    [filters, rows],
-  );
-
-  const filterOptions = useMemo(() => {
-    const staff = new Set<string>();
-    const services = new Set<string>();
-    const locations = new Set<string>();
-    for (const row of rows) {
-      if (row.staffName) staff.add(row.staffName);
-      if (row.serviceName) services.add(row.serviceName);
-      const loc = row.location || row.metadata?.location;
-      if (loc) locations.add(loc);
-    }
-    const toOptions = (values: Set<string>) =>
-      [...values].sort().map((v) => ({ value: v, label: v }));
-    return {
-      staff: toOptions(staff),
-      services: toOptions(services),
-      locations: toOptions(locations),
-      statuses: [
-        { value: "confirmed", label: "Confirmed" },
-        { value: "pending", label: "Pending" },
-        { value: "canceled", label: "Canceled" },
-      ],
-    };
-  }, [rows]);
-
-  const activeFilterCount =
-    filters.staff.length +
-    filters.services.length +
-    filters.locations.length +
-    filters.statuses.length;
-
-  const weekStart =
-    view === "day" ? new Date(cursor) : view === "week" ? cursor : startOfWeek(new Date(selectedDayKey));
 
   const model: CalendarPageModel | null = useMemo(
     () =>
       buildCalendarPageModel({
-        appointments: filteredRows,
+        appointments: rows,
         cursor,
         view,
         selectedDayKey,
         miniCalendarMonth,
-        colorSource: colorSource || undefined,
-        showAvailabilityOverlay: showAvailability,
-        unavailableBlocks: buildWeeklyUnavailableBlocks(weekStart, weeklyHours),
       }),
-    [
-      colorSource,
-      cursor,
-      filteredRows,
-      miniCalendarMonth,
-      selectedDayKey,
-      showAvailability,
-      view,
-      weekStart,
-      weeklyHours,
-    ],
+    [cursor, miniCalendarMonth, rows, selectedDayKey, view],
   );
 
   const shift = useCallback(
@@ -281,29 +141,6 @@ export function CalendarConnected() {
       );
     },
     [view],
-  );
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    window.setTimeout(() => setToast(null), 3200);
-  }, []);
-
-  const rescheduleEvent = useCallback(
-    async (id: string, startsAt: string) => {
-      const res = await fetch(`/api/appointments/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        showToast(json.error || "That time isn't available.");
-        throw new Error("reschedule failed");
-      }
-      showToast("Appointment rescheduled.");
-      load();
-    },
-    [load, showToast],
   );
 
   const actions: CalendarPageActions = useMemo(
@@ -328,6 +165,7 @@ export function CalendarConnected() {
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
+      onCheckAvailability: () => setSlotDiagnosticsOpen(true),
       onOpenAppointment: (id) => {
         if (id.startsWith("video:")) {
           router.push(`/video/rooms/${id.slice("video:".length)}/host`);
@@ -357,31 +195,13 @@ export function CalendarConnected() {
       },
       onShowCalendarSettings: () => router.push("/appointments/availability"),
       onRetry: load,
-      onSlotClick: ({ dateKey: slotKey, hour }) => {
-        const d = new Date(slotKey);
+      onSlotClick: ({ dateKey, hour }) => {
+        const d = new Date(dateKey);
         d.setHours(hour, 0, 0, 0);
         router.push(`/appointments/new?startsAt=${encodeURIComponent(d.toISOString())}`);
       },
-      onRescheduleEvent: async ({ id, startsAt }) => {
-        try {
-          await rescheduleEvent(id, startsAt);
-        } catch {
-          /* toast shown */
-        }
-      },
-      onToggleAvailabilityOverlay: () => setShowAvailability((v) => !v),
-      onOpenFilters: () => setFiltersOpen(true),
-      activeFilterCount,
     }),
-    [
-      activeFilterCount,
-      load,
-      rescheduleEvent,
-      router,
-      selectedDayKey,
-      shift,
-      view,
-    ],
+    [load, router, selectedDayKey, shift, view],
   );
 
   if (loading) return <CalendarLoading />;
@@ -404,17 +224,17 @@ export function CalendarConnected() {
         </div>
       </div>
       <CalendarView model={model} actions={actions} />
-      <CalendarFiltersDrawer
-        open={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        staffOptions={filterOptions.staff}
-        serviceOptions={filterOptions.services}
-        locationOptions={filterOptions.locations}
-        statusOptions={filterOptions.statuses}
-        filters={filters}
-        onChange={setFilters}
+      <SlotDiagnosticsDrawer
+        open={slotDiagnosticsOpen}
+        onClose={() => setSlotDiagnosticsOpen(false)}
+        context={{
+          startsAt: datetimeLocalFromDateKey(selectedDayKey, 9, 0),
+        }}
+        onOpenFullPage={() => {
+          setSlotDiagnosticsOpen(false);
+          router.push("/appointments/availability");
+        }}
       />
-      {toast ? <div className="cal-toast" role="status">{toast}</div> : null}
     </div>
   );
 }

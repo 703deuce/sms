@@ -39,6 +39,7 @@ interface Props {
   onCancel: () => void;
   onBack: () => void;
   onManageAvailability: () => void;
+  onCheckAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
   onManageCategories?: () => void;
@@ -67,6 +68,7 @@ export default function TypeEditorPanel({
   onCancel,
   onBack,
   onManageAvailability,
+  onCheckAvailability,
   onManageStaff,
   onManageLocations,
   onManageCategories,
@@ -268,13 +270,22 @@ export default function TypeEditorPanel({
               <p className="text-[11.5px] text-[#8a8fa3] leading-snug mb-2">
                 These rules apply to any calendar connected to this appointment type.
               </p>
-              <button
-                type="button"
-                className="text-[12px] font-medium text-[#5b4bff] hover:underline flex items-center gap-1"
-                onClick={onManageAvailability}
-              >
-                Manage availability →
-              </button>
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  onClick={onCheckAvailability}
+                >
+                  Check availability
+                </button>
+                <button
+                  type="button"
+                  className="text-[12px] font-medium text-[#5b4bff] hover:underline text-left"
+                  onClick={onManageAvailability}
+                >
+                  Manage availability →
+                </button>
+              </div>
             </div>
           </div>
         </section>
