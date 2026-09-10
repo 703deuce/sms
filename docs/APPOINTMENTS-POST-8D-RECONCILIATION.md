@@ -29,8 +29,8 @@ Mechanical re-audit of all **308** master ledger rows from current codebase:
 | **OUT_OF_SCOPE_ERROR** | 0 |
 | **UNASSIGNED_ERROR** | 0 |
 | Residual implementation rows | 0 |
-| Commerce unique V1 (temp) | 15 |
-| Temp routes with unique V1 | 4 |
+| Commerce unique V1 (temp) | 0 |
+| Temp routes with unique V1 | 3 |
 | Backend ready / UI missing | 0 |
 | UI present / backend gap | 0 |
 

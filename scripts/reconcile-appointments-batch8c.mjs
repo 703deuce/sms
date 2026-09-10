@@ -22,6 +22,13 @@ const OUT_8D_LEDGER = join(ROOT, "docs/APPOINTMENTS-POST-8D-LEDGER.csv");
 const OUT_8D_QUEUE = join(ROOT, "docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md");
 const OUT_8D_TEMP = join(ROOT, "docs/APPOINTMENTS-POST-8D-TEMP-ROUTE-AUDIT.md");
 const OUT_8D_JSON = join(ROOT, "docs/APPOINTMENTS-POST-8D-CLOSURE-SUMMARY.json");
+// Batch 8G-0 — final pre-convergence reconciliation artifacts
+const OUT_8G0_RECON = join(ROOT, "docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-RECONCILIATION.md");
+const OUT_8G0_LEDGER = join(ROOT, "docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-LEDGER.csv");
+const OUT_8G0_TEMP = join(ROOT, "docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md");
+const OUT_8G0_RETIREMENT = join(ROOT, "docs/APPOINTMENTS-FINAL-ROUTE-RETIREMENT-MAP.md");
+const OUT_8G0_JSON = join(ROOT, "docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-CLOSURE-SUMMARY.json");
+const OUT_8G0_RESIDUALS = join(ROOT, "docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-RESIDUALS.md");
 
 function parseCsv(text) {
   const rows = [];
@@ -437,38 +444,269 @@ function commerceCanonicalAdminComplete() {
     "src/components/appointments/gift-cards-admin-client.tsx",
     "src/components/appointments/discounts-admin-client.tsx",
     "src/app/(app)/appointments/discounts/page.tsx",
+    "src/app/(app)/appointments/packages/page.tsx",
+    "src/app/(app)/appointments/memberships/page.tsx",
+    "src/app/(app)/appointments/gift-cards/page.tsx",
   ];
   return required.every((rel) => existsSync(join(ROOT, rel)));
 }
 
-const TEMP_ROUTE_CLASSIFICATION = {
+function detectWorkspacePolicyOnlyOnTempRoute() {
+  const policiesPage = join(ROOT, "src/app/(app)/appointments/policies/page.tsx");
+  const policiesClient = join(ROOT, "src/components/appointments/appointments-policies-client.tsx");
+  if (!existsSync(policiesPage) || !existsSync(policiesClient)) return false;
+  const src = readFileSync(policiesClient, "utf8");
+  return (
+    src.includes("cancellationPolicyText") &&
+    src.includes("noShowPolicyText") &&
+    src.includes("/api/appointments/settings")
+  );
+}
+
+function detectAcuityReportsOnlyOnTempRoute() {
+  const hub = join(ROOT, "src/components/appointments/service-booking-admin-client.tsx");
+  const reporting = join(ROOT, "src/lib/appointments/service-booking/reporting.ts");
+  const analytics = join(ROOT, "src/components/appointments/kimi-ui/analytics/components/analytics-client.tsx");
+  if (!existsSync(hub) || !existsSync(reporting)) return false;
+  const hubSrc = readFileSync(hub, "utf8");
+  const analyticsSrc = existsSync(analytics) ? readFileSync(analytics, "utf8") : "";
+  return hubSrc.includes('section === "reports"') && !analyticsSrc.includes("loadAcuityStyleReports");
+}
+
+function detectLegacyRoutingRulesOnlyOnTempRoute() {
+  const routingPage = join(ROOT, "src/features/appointments/kimi/routing/routing-connected.tsx");
+  const publicBook = join(ROOT, "src/app/api/public/book/[slug]/route.ts");
+  if (!existsSync(routingPage) || !existsSync(publicBook)) return false;
+  const routingSrc = readFileSync(routingPage, "utf8");
+  const publicSrc = readFileSync(publicBook, "utf8");
+  return routingSrc.includes("routingRules") && publicSrc.includes("resolveRoutingDestination");
+}
+
+function countRouteReferences(route) {
+  try {
+    const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const out = execSync(
+      `rg -l "${escaped}" src scripts docs --glob '!docs/APPOINTMENTS-*' --glob '!node_modules/**' 2>/dev/null | wc -l`,
+      { encoding: "utf8", cwd: ROOT },
+    ).trim();
+    return Number(out) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Mechanical temp-route metadata for 8G-0 audit (feature IDs + retirement planning) */
+const TEMP_ROUTE_METADATA = {
   "/appointments/commerce": {
-    classification: commerceCanonicalAdminComplete() ? "READY_FOR_RETIREMENT" : "STILL_HAS_UNIQUE_V1",
-    unique: commerceCanonicalAdminComplete() ? 0 : 12,
-    canonical: "Split to packages/memberships/gift-cards/discounts/pos",
+    purpose: "Legacy ServiceBookingAdminClient mega-hub (packages, memberships, gifts, coupons, etc.)",
+    featureIdsBefore: ["8-1", "8-3", "8-5", "8-6", "8-7", "8-11", "8-12", "8-13", "8-14", "8-16", "8-18", "8-33"],
+    featureIdsNow: [],
+    v2Only: [],
+    redirectType: "section-aware",
+    queryPreserve: "?section= → map to canonical child",
+    compatNotes: "Root → /appointments/packages; deep links with section= need mapping table",
   },
-  "/appointments/service-booking": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Alias hub entry — canonical pages exist" },
-  "/appointments/policies": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/types Advanced tab" },
-  "/appointments/client-restrictions": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts/[id] Booking Access" },
-  "/appointments/coupons": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/discounts" },
-  "/appointments/payments": { classification: "V2_ONLY", unique: 1, canonical: "V2 deferred — /appointments/payments" },
-  "/appointments/contracts": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking/forms" },
-  "/appointments/booking/contracts": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate of /appointments/booking/forms" },
-  "/appointments/categories": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/types" },
-  "/appointments/segments": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts/segments + /appointments/recalls" },
-  "/appointments/scheduled": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments" },
-  "/appointments/recall-campaigns": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/automations/recall" },
-  "/appointments/no-show-recovery": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/automations/no-show" },
-  "/appointments/commerce/contact-merge": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/contacts merge modal" },
-  "/appointments/booking/share": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking hub" },
-  "/appointments/booking/branding": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking hub" },
-  "/appointments/reports/service-booking": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/analytics/reports" },
-  "/appointments/classes": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/types/classes" },
-  "/appointments/resources": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/booking/rooms-equipment" },
-  "/appointments/routing": { classification: "STILL_HAS_UNIQUE_V1", unique: 1, canonical: "/appointments/routing-forms" },
-  "/appointments/voice-reminders": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "/appointments/reminders" },
-  "/appointments/restrictions": { classification: "READY_FOR_RETIREMENT", unique: 0, canonical: "Duplicate client-restrictions" },
+  "/appointments/policies": {
+    purpose: "Workspace-global cancellation/no-show policy text + late-cancel window/fee",
+    featureIdsBefore: ["workspace-policy"],
+    featureIdsNow: ["workspace-policy"],
+    v2Only: [],
+    redirectType: "301",
+    queryPreserve: "none",
+    compatNotes: "Per-type policy text exists on TypeAdvancedSections; workspace-global editor still only here",
+  },
+  "/appointments/reports/service-booking": {
+    purpose: "Acuity-style loadAcuityStyleReports JSON/CSV dump",
+    featureIdsBefore: ["16-6"],
+    featureIdsNow: ["16-6"],
+    v2Only: [],
+    redirectType: "301",
+    queryPreserve: "from/to query if present",
+    compatNotes: "/appointments/analytics/reports has ScheduleReportCard + analytics CSV — not loadAcuityStyleReports panel",
+  },
+  "/appointments/routing": {
+    purpose: "Legacy workspace routingRules[] editor consumed by public booking resolveRoutingDestination",
+    featureIdsBefore: ["15-2"],
+    featureIdsNow: ["15-2"],
+    v2Only: [],
+    redirectType: "compat-wrapper-or-301",
+    queryPreserve: "none",
+    compatNotes: "Distinct from routing-forms (15-1); public book API still reads settings.routingRules",
+  },
+  "/appointments/payments": {
+    purpose: "Payment plans / V2 commerce",
+    featureIdsBefore: [],
+    featureIdsNow: [],
+    v2Only: ["8-22"],
+    redirectType: "hide-nav",
+    queryPreserve: "n/a",
+    compatNotes: "V2_DEFERRED — retain route, remove from V1 nav",
+  },
 };
+
+function buildDynamicTempRouteClassification() {
+  const commerceReady = commerceCanonicalAdminComplete();
+  const policiesUnique = detectWorkspacePolicyOnlyOnTempRoute();
+  const reportsUnique = detectAcuityReportsOnlyOnTempRoute();
+  const routingUnique = detectLegacyRoutingRulesOnlyOnTempRoute();
+  return {
+    "/appointments/commerce": {
+      classification: commerceReady ? "READY_FOR_RETIREMENT" : "STILL_HAS_UNIQUE_V1",
+      unique: commerceReady ? 0 : 12,
+      uniqueFeatureIds: commerceReady ? [] : ["8-1", "8-3", "8-5", "8-6", "8-7", "8-11", "8-12", "8-13", "8-14", "8-16", "8-18", "8-33"],
+      canonical: "/appointments/packages (+ memberships, gift-cards, discounts, pos)",
+      uniqueBefore: 12,
+    },
+    "/appointments/service-booking": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "Alias hub entry — canonical pages exist",
+      uniqueBefore: 0,
+    },
+    "/appointments/policies": {
+      classification: policiesUnique ? "STILL_HAS_UNIQUE_V1" : "READY_FOR_RETIREMENT",
+      unique: policiesUnique ? 1 : 0,
+      uniqueFeatureIds: policiesUnique ? ["workspace-policy"] : [],
+      canonical: "/appointments/types → Policies (per-type) + /appointments/booking for workspace defaults",
+      uniqueBefore: 1,
+    },
+    "/appointments/client-restrictions": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/contacts/[id] Booking Access",
+      uniqueBefore: 0,
+    },
+    "/appointments/coupons": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/discounts",
+      uniqueBefore: 0,
+    },
+    "/appointments/payments": {
+      classification: "V2_ONLY",
+      unique: 0,
+      uniqueFeatureIds: [],
+      v2FeatureIds: ["8-22"],
+      canonical: "V2 deferred — hide from V1 nav",
+      uniqueBefore: 1,
+    },
+    "/appointments/contracts": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/booking/forms",
+      uniqueBefore: 0,
+    },
+    "/appointments/booking/contracts": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "Duplicate of /appointments/booking/forms",
+      uniqueBefore: 0,
+    },
+    "/appointments/categories": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/types",
+      uniqueBefore: 0,
+    },
+    "/appointments/segments": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/contacts/segments + /appointments/recalls",
+      uniqueBefore: 0,
+    },
+    "/appointments/scheduled": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments",
+      uniqueBefore: 0,
+    },
+    "/appointments/recall-campaigns": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/automations/recall",
+      uniqueBefore: 0,
+    },
+    "/appointments/no-show-recovery": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/automations/no-show",
+      uniqueBefore: 0,
+    },
+    "/appointments/commerce/contact-merge": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/contacts merge modal",
+      uniqueBefore: 0,
+    },
+    "/appointments/booking/share": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/booking hub",
+      uniqueBefore: 0,
+    },
+    "/appointments/booking/branding": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/booking hub",
+      uniqueBefore: 0,
+    },
+    "/appointments/reports/service-booking": {
+      classification: reportsUnique ? "STILL_HAS_UNIQUE_V1" : "READY_FOR_RETIREMENT",
+      unique: reportsUnique ? 1 : 0,
+      uniqueFeatureIds: reportsUnique ? ["16-6"] : [],
+      canonical: "/appointments/analytics/reports",
+      uniqueBefore: 1,
+    },
+    "/appointments/classes": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/types/classes",
+      uniqueBefore: 0,
+    },
+    "/appointments/resources": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/booking/rooms-equipment",
+      uniqueBefore: 0,
+    },
+    "/appointments/routing": {
+      classification: routingUnique ? "COMPATIBILITY_REQUIRED" : "READY_FOR_RETIREMENT",
+      unique: routingUnique ? 1 : 0,
+      uniqueFeatureIds: routingUnique ? ["15-2"] : [],
+      canonical: "/appointments/routing-forms (15-1) — legacy rules need migration or compat editor",
+      uniqueBefore: 1,
+    },
+    "/appointments/voice-reminders": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "/appointments/reminders",
+      uniqueBefore: 0,
+    },
+    "/appointments/restrictions": {
+      classification: "READY_FOR_RETIREMENT",
+      unique: 0,
+      uniqueFeatureIds: [],
+      canonical: "Duplicate client-restrictions",
+      uniqueBefore: 0,
+    },
+  };
+}
 
 function discoverAppointmentRoutes() {
   const base = join(ROOT, "src/app/(app)/appointments");
@@ -492,25 +730,93 @@ function discoverAppointmentRoutes() {
 }
 
 function buildTempRoutesAudit() {
+  const classification = buildDynamicTempRouteClassification();
   const discovered = discoverAppointmentRoutes();
-  const known = new Set(Object.keys(TEMP_ROUTE_CLASSIFICATION));
   const rows = [];
   for (const route of discovered) {
     if (CANONICAL_APPOINTMENTS_ROUTES.has(route)) continue;
     if (route.match(/\/\[id\]/)) continue; // detail routes are canonical patterns
     if (route.includes("/workflows/")) continue; // workflow editor subroutes
-    const meta = TEMP_ROUTE_CLASSIFICATION[route];
+    const meta = classification[route];
     if (meta) {
       rows.push({ route, ...meta });
     } else {
-      rows.push({ route, classification: "UNKNOWN", unique: 0, canonical: "Manual IA review required" });
+      rows.push({
+        route,
+        classification: "UNKNOWN_ERROR",
+        unique: 0,
+        uniqueFeatureIds: [],
+        canonical: "Manual IA review required",
+        uniqueBefore: 0,
+      });
     }
   }
   // Include known temp routes even if page removed
-  for (const [route, meta] of Object.entries(TEMP_ROUTE_CLASSIFICATION)) {
+  for (const [route, meta] of Object.entries(classification)) {
     if (!rows.find((r) => r.route === route)) rows.push({ route, ...meta });
   }
   return rows.sort((a, b) => a.route.localeCompare(b.route));
+}
+
+function enrichTempRoutesWithReferences(tempRouteAudit) {
+  return tempRouteAudit.map((t) => {
+    const refs = countRouteReferences(t.route);
+    const meta = TEMP_ROUTE_METADATA[t.route] || {};
+    return {
+      ...t,
+      internalReferences: refs,
+      externalCompatRisk: ["STILL_HAS_UNIQUE_V1", "COMPATIBILITY_REQUIRED"].includes(t.classification)
+        ? "YES"
+        : "NO",
+      purpose: meta.purpose || "",
+      redirectType: meta.redirectType || (t.classification === "READY_FOR_RETIREMENT" ? "301" : "TBD"),
+      queryPreserve: meta.queryPreserve || "none",
+      compatNotes: meta.compatNotes || "",
+    };
+  });
+}
+
+function buildRouteRetirementMap(enrichedTempRoutes) {
+  const sectionMap = {
+    packages: "/appointments/packages",
+    memberships: "/appointments/memberships",
+    gifts: "/appointments/gift-cards",
+    coupons: "/appointments/discounts",
+    addons: "/appointments/types",
+    products: "/appointments/pos",
+    resources: "/appointments/booking/rooms-equipment",
+    classes: "/appointments/types/classes",
+    intake: "/appointments/booking/forms",
+    theme: "/appointments/booking",
+    reports: "/appointments/analytics/reports",
+    webhooks: "/integrations/developer",
+    invoices: "/payments/invoices",
+    dynamicPricing: "/appointments/types/services",
+  };
+  const rows = [];
+  for (const t of enrichedTempRoutes) {
+    if (t.classification === "V2_ONLY" || t.classification === "OUT_OF_SCOPE_ONLY") continue;
+    let destination = t.canonical;
+    let redirectType = t.redirectType || "301";
+    let queryPreserve = t.queryPreserve || "none";
+    if (t.route === "/appointments/commerce") {
+      destination = "/appointments/packages (default); section-aware map for deep links";
+      redirectType = "section-aware-301";
+      queryPreserve = Object.entries(sectionMap)
+        .map(([k, v]) => `section=${k}→${v}`)
+        .join("; ");
+    }
+    rows.push({
+      oldRoute: t.route,
+      canonicalDestination: destination,
+      redirectType,
+      queryPreserve,
+      compatNotes: t.compatNotes || "",
+      retirementStatus: t.classification,
+      uniqueV1Now: t.uniqueFeatureIds || [],
+    });
+  }
+  return rows;
 }
 
 const TEMP_ROUTES = [
@@ -696,13 +1002,28 @@ function main() {
   );
 
   const tempRouteAudit = buildTempRoutesAudit();
-  const commerceUnique = tempRouteAudit
-    .filter((t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "PARTIALLY_ABSORBED")
+  const enrichedTempRoutes = enrichTempRoutesWithReferences(tempRouteAudit);
+  const commerceRoute = enrichedTempRoutes.find((t) => t.route === "/appointments/commerce");
+  const policiesRoute = enrichedTempRoutes.find((t) => t.route === "/appointments/policies");
+  const reportsRoute = enrichedTempRoutes.find((t) => t.route === "/appointments/reports/service-booking");
+  const routingRoute = enrichedTempRoutes.find((t) => t.route === "/appointments/routing");
+  const commerceUnique = commerceRoute?.unique || 0;
+  const commerceUniqueFeatureIds = commerceRoute?.uniqueFeatureIds || [];
+  const policiesUniqueFeatureIds = policiesRoute?.uniqueFeatureIds || [];
+  const serviceBookingReportUnique = reportsRoute?.unique || 0;
+  const serviceBookingReportFeatureIds = reportsRoute?.uniqueFeatureIds || [];
+  const oldRoutingUnique = routingRoute?.unique || 0;
+  const oldRoutingFeatureIds = routingRoute?.uniqueFeatureIds || [];
+  const tempUniqueRoutes = enrichedTempRoutes.filter(
+    (t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED",
+  ).length;
+  const tempUniqueFunctionCount = enrichedTempRoutes
+    .filter((t) => t.classification === "STILL_HAS_UNIQUE_V1" || t.classification === "COMPATIBILITY_REQUIRED")
     .reduce((s, t) => s + (t.unique || 0), 0);
-  const tempUniqueRoutes = tempRouteAudit.filter((t) => t.classification === "STILL_HAS_UNIQUE_V1").length;
-  const tempNoUniqueRemaining = tempRouteAudit.filter(
+  const tempNoUniqueRemaining = enrichedTempRoutes.filter(
     (t) => t.classification === "READY_FOR_RETIREMENT" || t.classification === "NO_UNIQUE_V1_REMAINING",
   ).length;
+  const retirementMap = buildRouteRetirementMap(enrichedTempRoutes);
 
   const backendReadyUiMissing = reconciled.filter((r) => r.BACKEND_PRESENT === "YES" && ["V1_ADMIN_UI_GAP", "V1_PUBLIC_UI_GAP", "V1_PORTAL_UI_GAP"].includes(r.CURRENT_FINAL_STATUS));
   const uiPresentBackendGap = reconciled.filter((r) => r.UI_PRESENT === "YES" && r.CURRENT_FINAL_STATUS === "V1_BACKEND_GAP");
@@ -749,16 +1070,20 @@ function main() {
   writeFileSync(OUT_QUEUE, queueMd);
 
   // Temp route audit
-  let tempMd = `# Appointments — Temporary Route Unique-Feature Audit (Batch ${BATCH_MODE})\n\n**Generated:** 2026-09-10\n**Method:** Filesystem discovery under \`src/app/(app)/appointments/**\` + IA classification\n\n`;
-  tempMd += `| Route | Classification | Unique V1 functions | Canonical destination |\n|-------|----------------|--------------------:|------------------------|\n`;
-  for (const t of tempRouteAudit) {
-    tempMd += `| \`${t.route}\` | ${t.classification} | ${t.unique ?? 0} | ${t.canonical} |\n`;
+  let tempMd = `# Appointments — Temporary Route Unique-Feature Audit (Batch ${BATCH_MODE})\n\n**Generated:** 2026-09-10\n**Method:** Filesystem discovery + mechanical evidence checks + internal reference scan\n\n`;
+  tempMd += `| Route | Classification | Unique V1 (before→now) | Feature IDs (now) | Canonical destination | Internal refs |\n|-------|----------------|------------------------:|-------------------|------------------------|--------------:|\n`;
+  for (const t of enrichedTempRoutes) {
+    const ids = (t.uniqueFeatureIds || []).join(", ") || "—";
+    tempMd += `| \`${t.route}\` | ${t.classification} | ${t.uniqueBefore ?? "?"}→${t.unique ?? 0} | ${ids} | ${t.canonical} | ${t.internalReferences ?? 0} |\n`;
   }
-  tempMd += `\n**Commerce unique required V1 count (estimate):** ${commerceUnique}\n`;
-  tempMd += `**Temp routes with unique V1 (STILL_HAS_UNIQUE_V1):** ${tempUniqueRoutes}\n`;
-  const tempRoutesReadyForRetirement = tempRouteAudit.filter((t) => t.classification === "READY_FOR_RETIREMENT").length;
+  tempMd += `\n**Commerce unique required V1:** ${commerceUnique} (${commerceUniqueFeatureIds.join(", ") || "none"})\n`;
+  tempMd += `**Policies unique required V1:** ${policiesUniqueFeatureIds.length} (${policiesUniqueFeatureIds.join(", ") || "none"})\n`;
+  tempMd += `**Service-booking report unique required V1:** ${serviceBookingReportUnique} (${serviceBookingReportFeatureIds.join(", ") || "none"})\n`;
+  tempMd += `**Old routing unique required V1:** ${oldRoutingUnique} (${oldRoutingFeatureIds.join(", ") || "none"})\n`;
+  tempMd += `**Temp routes blocking convergence (STILL_HAS_UNIQUE_V1 + COMPATIBILITY_REQUIRED):** ${tempUniqueRoutes}\n`;
+  const tempRoutesReadyForRetirement = enrichedTempRoutes.filter((t) => t.classification === "READY_FOR_RETIREMENT").length;
   tempMd += `**Temp routes ready for retirement:** ${tempRoutesReadyForRetirement}\n`;
-  tempMd += `**Temp routes discovered (non-canonical):** ${tempRouteAudit.length}\n`;
+  tempMd += `**Temp routes discovered (non-canonical):** ${enrichedTempRoutes.length}\n`;
   writeFileSync(OUT_TEMP, tempMd);
 
   const wrongPlacement = counts.V1_WRONG_PLACEMENT || 0;
@@ -795,7 +1120,20 @@ function main() {
     unassignedError: reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "UNASSIGNED_ERROR").length,
     outOfScopeError: reconciled.filter((r) => r.CURRENT_FINAL_STATUS === "OUT_OF_SCOPE_ERROR").length,
     readyForRouteConvergence:
-      commerceUnique === 0 && tempUniqueRoutes === 0 && wrongPlacement === 0 ? "YES" : "NO",
+      commerceUnique === 0 &&
+      tempUniqueRoutes === 0 &&
+      tempUniqueFunctionCount === 0 &&
+      wrongPlacement === 0 &&
+      (counts.V1_DUPLICATE_CONFLICT || 0) === 0
+        ? "YES"
+        : "NO",
+    commerceUniqueFeatureIds,
+    policiesUniqueFeatureIds,
+    serviceBookingReportUnique,
+    serviceBookingReportFeatureIds,
+    oldRoutingUnique,
+    oldRoutingFeatureIds,
+    tempUniqueFunctionCount,
     readyForMasterBrowserCertification: implementationGapCount === 0 ? "YES" : "NO",
   };
   writeFileSync(OUT_JSON, JSON.stringify(summary, null, 2) + "\n");
@@ -1139,6 +1477,174 @@ See \`docs/APPOINTMENTS-POST-8D-RESIDUAL-QUEUE.md\` § Proposed next implementat
 *Source inventory: \`docs/APPOINTMENTS-MASTER-FEATURE-INVENTORY.md\` · Reconciliation script: \`scripts/reconcile-appointments-batch8c.mjs\`*
 `;
   writeFileSync(OUT_8D_RECON, recon8d);
+
+  // --- Batch 8G-0: Final pre-convergence master reconciliation ---
+  if (BATCH_MODE === "8G0") {
+    summary.batch = "8G0";
+    summary.wavesReconciled = "8D-1 through 8D-7 + 8F-1 through 8F-4";
+    writeFileSync(OUT_8G0_LEDGER, csvOut);
+    writeFileSync(OUT_8G0_JSON, JSON.stringify(summary, null, 2) + "\n");
+    writeFileSync(OUT_8G0_TEMP, tempMd.replace(`Batch ${BATCH_MODE}`, "Batch 8G-0 FINAL PRE-CONVERGENCE"));
+
+    let retirementMd = `# Appointments — Final Route Retirement Map (Batch 8G-0)\n\n`;
+    retirementMd += `**Generated:** 2026-09-10  \n`;
+    retirementMd += `**Purpose:** Prepared for 8G-1 — do NOT apply redirects until implementation + temp-route gates pass.\n\n`;
+    retirementMd += `| Old route | Canonical destination | Redirect type | Query/param preservation | Retirement status | Unique V1 IDs (now) |\n`;
+    retirementMd += `|-----------|----------------------|---------------|--------------------------|-------------------|---------------------|\n`;
+    for (const row of retirementMap) {
+      retirementMd += `| \`${row.oldRoute}\` | ${row.canonicalDestination} | ${row.redirectType} | ${row.queryPreserve} | ${row.retirementStatus} | ${(row.uniqueV1Now || []).join(", ") || "—"} |\n`;
+    }
+    retirementMd += `\n## Section-aware commerce redirects (8G-1)\n\n`;
+    retirementMd += `| section= query | Destination |\n|----------------|-------------|\n`;
+    for (const [section, dest] of Object.entries({
+      packages: "/appointments/packages",
+      memberships: "/appointments/memberships",
+      gifts: "/appointments/gift-cards",
+      coupons: "/appointments/discounts",
+      products: "/appointments/pos",
+      addons: "/appointments/types",
+      resources: "/appointments/booking/rooms-equipment",
+      classes: "/appointments/types/classes",
+      intake: "/appointments/booking/forms",
+      theme: "/appointments/booking",
+      reports: "/appointments/analytics/reports",
+      webhooks: "/integrations/developer",
+      invoices: "/payments/invoices",
+      dynamicPricing: "/appointments/types/services",
+    })) {
+      retirementMd += `| \`${section}\` | \`${dest}\` |\n`;
+    }
+    retirementMd += `\n## Compatibility notes\n\n`;
+    for (const t of enrichedTempRoutes.filter((r) => r.compatNotes)) {
+      retirementMd += `- **\`${t.route}\`:** ${t.compatNotes}\n`;
+    }
+    writeFileSync(OUT_8G0_RETIREMENT, retirementMd);
+
+    const blockers = [];
+    if (commerceUnique > 0) blockers.push(`Commerce unique V1: ${commerceUniqueFeatureIds.join(", ")}`);
+    if (policiesUniqueFeatureIds.length) blockers.push(`Policies unique V1: ${policiesUniqueFeatureIds.join(", ")}`);
+    if (serviceBookingReportUnique > 0) blockers.push(`Service-booking report unique V1: ${serviceBookingReportFeatureIds.join(", ")}`);
+    if (oldRoutingUnique > 0) blockers.push(`Legacy routing unique V1: ${oldRoutingFeatureIds.join(", ")}`);
+    if (wrongPlacement > 0) blockers.push(`V1_WRONG_PLACEMENT rows: ${wrongPlacement}`);
+    if ((counts.V1_DUPLICATE_CONFLICT || 0) > 0) blockers.push(`V1_DUPLICATE_CONFLICT rows: ${counts.V1_DUPLICATE_CONFLICT}`);
+    for (const r of residual) {
+      blockers.push(`${r.FEATURE_ID} — ${r.FEATURE_NAME} (${r.CURRENT_FINAL_STATUS})`);
+    }
+
+    const recon8g0 = `# Appointments Final Pre-Convergence Reconciliation (Batch 8G-0)
+
+**Generated:** 2026-09-10  
+**Type:** Mechanical implementation reconciliation — NOT browser UAT  
+**Waves reconciled:** 8D-1 through 8D-7 · 8F-1 Commerce admin depth · 8F-2 Operations admin · 8F-3 Booking permissions + polls · 8F-4 Contextual flow completion
+
+## Executive summary
+
+Full **308-row** mechanical re-audit from current codebase after all 8F implementation batches (integrated on \`cursor/batch8g0-pre-convergence-reconcile-709b\`).
+
+| Metric | Count |
+|--------|------:|
+| **Total master rows** | ${reconciled.length} |
+| **V1 rows** | ${v1Rows.length} |
+| **V2 rows** | ${v2Rows.length} |
+| **V1_COMPLETE** | ${counts.V1_COMPLETE || 0} |
+| **V1_COMPLETE_RUNTIME_ONLY** | ${counts.V1_COMPLETE_RUNTIME_ONLY || 0} |
+| **V1_PROVIDER_BLOCKED** | ${counts.V1_PROVIDER_BLOCKED || 0} |
+| **V1_ADMIN_UI_GAP** | ${counts.V1_ADMIN_UI_GAP || 0} |
+| **V1_PUBLIC_UI_GAP** | ${counts.V1_PUBLIC_UI_GAP || 0} |
+| **V1_PORTAL_UI_GAP** | ${counts.V1_PORTAL_UI_GAP || 0} |
+| **V1_CONTEXTUAL_FLOW_GAP** | ${counts.V1_CONTEXTUAL_FLOW_GAP || 0} |
+| **V1_BACKEND_GAP** | ${counts.V1_BACKEND_GAP || 0} |
+| **V1_PERSISTENCE_GAP** | ${counts.V1_PERSISTENCE_GAP || 0} |
+| **V1_MOCK_OR_PLACEHOLDER** | ${counts.V1_MOCK_OR_PLACEHOLDER || 0} |
+| **V1_WRONG_PLACEMENT** | ${counts.V1_WRONG_PLACEMENT || 0} |
+| **V1_DUPLICATE_CONFLICT** | ${counts.V1_DUPLICATE_CONFLICT || 0} |
+| **V2_DEFERRED** | ${counts.V2_DEFERRED || 0} |
+| **OUT_OF_SCOPE_ERROR** | ${summary.outOfScopeError} |
+| **UNASSIGNED_ERROR** | ${summary.unassignedError} |
+| Residual implementation rows | ${residual.length} |
+| Backend ready / UI missing | ${backendReadyUiMissing.length} |
+| UI present / backend gap | ${uiPresentBackendGap.length} |
+
+### Special checks (mechanical)
+
+| Check | Unique required V1 | Remaining IDs |
+|-------|-------------------:|---------------|
+| **Commerce** (\`/appointments/commerce\`) | ${commerceUnique} | ${commerceUniqueFeatureIds.join(", ") || "—"} |
+| **Policies** (\`/appointments/policies\`) | ${policiesUniqueFeatureIds.length} | ${policiesUniqueFeatureIds.join(", ") || "—"} |
+| **Service-booking report** | ${serviceBookingReportUnique} | ${serviceBookingReportFeatureIds.join(", ") || "—"} |
+| **Legacy routing** | ${oldRoutingUnique} | ${oldRoutingFeatureIds.join(", ") || "—"} |
+
+### Readiness gates
+
+| Gate | Result | Blockers |
+|------|--------|----------|
+| **READY_FOR_ROUTE_CONVERGENCE** | **${summary.readyForRouteConvergence}** | ${blockers.length ? blockers.join("; ") : "None"} |
+| **READY_FOR_MASTER_BROWSER_CERTIFICATION** | **${summary.readyForMasterBrowserCertification}** | ${implementationGapCount > 0 ? `${implementationGapCount} implementation gap statuses` : "None (provider-blocked + runtime-only excepted)"} |
+
+${summary.readyForRouteConvergence === "YES" ? "\n> **Next batch:** 8G-1 — FINAL ROUTE CONVERGENCE + LEGACY RETIREMENT\n" : "\n> **Route convergence blocked.** Resolve temp-route unique V1 or migrate to canonical destinations before 8G-1.\n"}
+
+${summary.readyForMasterBrowserCertification === "YES" ? "> **Master browser certification:** Implementation gaps are zero, but route convergence must complete first. Do NOT run master browser certification until after 8G-1.\n" : ""}
+
+## Temp route summary
+
+- **Blocking routes (unique V1 / compatibility):** ${tempUniqueRoutes}
+- **Ready for retirement:** ${tempRoutesReadyForRetirement}
+- **Discovered non-canonical routes:** ${enrichedTempRoutes.length}
+
+See \`docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md\` and \`docs/APPOINTMENTS-FINAL-ROUTE-RETIREMENT-MAP.md\`.
+
+## Navigation / link audit (temp routes)
+
+| Route | Internal references | External/historical risk |
+|-------|--------------------:|--------------------------|
+${enrichedTempRoutes
+  .filter((t) => ["STILL_HAS_UNIQUE_V1", "COMPATIBILITY_REQUIRED", "READY_FOR_RETIREMENT"].includes(t.classification))
+  .map((t) => `| \`${t.route}\` | ${t.internalReferences} | ${t.externalCompatRisk} |`)
+  .join("\n")}
+
+## Artifacts
+
+| File | Purpose |
+|------|---------|
+| \`docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-LEDGER.csv\` | Full 308-row current-state ledger |
+| \`docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-TEMP-ROUTE-AUDIT.md\` | Temp route mechanical audit |
+| \`docs/APPOINTMENTS-FINAL-ROUTE-RETIREMENT-MAP.md\` | 8G-1 redirect/retirement plan (not applied) |
+| \`docs/APPOINTMENTS-FINAL-PRE-CONVERGENCE-CLOSURE-SUMMARY.json\` | Machine-readable counts |
+
+---
+
+*Source inventory: \`docs/APPOINTMENTS-MASTER-FEATURE-INVENTORY.md\` · Script: \`scripts/reconcile-appointments-batch8c.mjs\` · Run: \`RECONCILE_BATCH=8G0 node scripts/reconcile-appointments-batch8c.mjs\`*
+`;
+    writeFileSync(OUT_8G0_RECON, recon8g0);
+
+    if (residual.length > 0 || implementationGapCount > 0) {
+      let residualsMd = `# Appointments — Final Pre-Convergence Residuals (Batch 8G-0)\n\n`;
+      residualsMd += `**Generated:** 2026-09-10  \n`;
+      residualsMd += `**Implementation gaps remaining:** ${implementationGapCount}  \n`;
+      residualsMd += `**Do not proceed to route convergence until these are closed.**\n\n`;
+      residualsMd += `| Feature ID | Feature | Gap status | Canonical page | Exact missing behavior | Backend | Priority |\n`;
+      residualsMd += `|------------|---------|------------|----------------|------------------------|---------|----------|\n`;
+      for (const r of residual) {
+        residualsMd += `| ${r.FEATURE_ID} | ${r.FEATURE_NAME} | ${r.CURRENT_FINAL_STATUS} | ${r.FINAL_ADMIN_CANONICAL_PAGE || r.FINAL_PUBLIC_SURFACE || r.FINAL_PORTAL_SURFACE} | ${r.EXACT_REMAINING_GAP} | ${r.BACKEND_PRESENT}/${r.BACKEND_COMPLETE_ENOUGH} | ${r.PRIORITY || "P2"} |\n`;
+      }
+      if (residual.length === 0 && implementationGapCount === 0) {
+        residualsMd += `| — | — | — | — | No master-row implementation gaps | — | — |\n`;
+      }
+      residualsMd += `\n## Route convergence blockers (not implementation gaps)\n\n`;
+      residualsMd += `These temp routes still hold unique required V1 — address in pre-8G-1 absorption or 8G-1 compat wrappers:\n\n`;
+      for (const t of enrichedTempRoutes.filter(
+        (r) => r.classification === "STILL_HAS_UNIQUE_V1" || r.classification === "COMPATIBILITY_REQUIRED",
+      )) {
+        residualsMd += `### \`${t.route}\`\n`;
+        residualsMd += `- **Classification:** ${t.classification}\n`;
+        residualsMd += `- **Unique V1 IDs:** ${(t.uniqueFeatureIds || []).join(", ") || "—"}\n`;
+        residualsMd += `- **Canonical destination:** ${t.canonical}\n`;
+        residualsMd += `- **Internal references:** ${t.internalReferences}\n`;
+        residualsMd += `- **Notes:** ${t.compatNotes || "—"}\n\n`;
+      }
+      writeFileSync(OUT_8G0_RESIDUALS, residualsMd);
+    }
+  }
 
   console.log(`Batch ${BATCH_MODE} reconciliation complete`);
   console.log(JSON.stringify(summary, null, 2));
