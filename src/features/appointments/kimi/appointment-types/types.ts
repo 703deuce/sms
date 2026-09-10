@@ -155,6 +155,7 @@ export type AppointmentTypesPageActions = {
   onCopyLink: (id: string) => void;
   onViewBookingPage: () => void;
   onManageAvailability: () => void;
+  onCheckAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
   onReorderTypes: (orderedIds: string[]) => void;
