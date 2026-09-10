@@ -61,6 +61,8 @@ export default function StaffView({ model, actions }: Props) {
               selectedTypeIds={selected.appointmentTypeIds || []}
               selectedLocationIds={selected.locationIds || []}
               dayRows={model.dayRows}
+              calendarColor={selected.calendarColor || "#5b4bff"}
+              roundRobinStats={model.roundRobinStats}
               saving={model.saving}
               saved={model.saved}
               error={model.error}
@@ -73,6 +75,7 @@ export default function StaffView({ model, actions }: Props) {
               onSetCustomHours={actions.onSetCustomHours}
               onUpdateWindow={actions.onUpdateWindow}
               onAddWindow={actions.onAddWindow}
+              onCalendarColorChange={actions.onCalendarColorChange}
               onSave={actions.onSave}
               onRemove={() => actions.onRemoveStaff(selected.id)}
             />

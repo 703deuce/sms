@@ -12,6 +12,7 @@ export type AppointmentPreview = {
   businessName?: string | null;
   staffName?: string | null;
   durationMinutes?: number | null;
+  manageLink?: string | null;
 };
 
 export type Slot = { startsAt: string; endsAt: string };
