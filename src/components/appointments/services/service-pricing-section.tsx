@@ -257,28 +257,23 @@ export function ServicePricingSection({
         </div>
 
         {!isFree ? (
-          <div className="ws-choice-config mt-4">
-            <div className="max-w-[14rem]">
-              <Field label="Price" htmlFor="svc-price" hint="Shown to customers before they book.">
-                <div className="ws-money-field">
-                  <span aria-hidden>$</span>
-                  <input
-                    id="svc-price"
-                    className="input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={dollars(form.paymentPriceCents)}
-                    onChange={(e) =>
-                      applyPrice(
-                        Math.round((Number(e.target.value) || 0) * 100),
-                        form.paymentMode,
-                      )
-                    }
-                  />
-                </div>
-              </Field>
-            </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Price" htmlFor="svc-price" hint="Shown to customers before they book.">
+              <div className="ws-money-field">
+                <span aria-hidden>$</span>
+                <input
+                  id="svc-price"
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={dollars(form.paymentPriceCents)}
+                  onChange={(e) =>
+                    applyPrice(Math.round((Number(e.target.value) || 0) * 100), form.paymentMode)
+                  }
+                />
+              </div>
+            </Field>
           </div>
         ) : null}
       </SectionCard>
@@ -290,7 +285,7 @@ export function ServicePricingSection({
           description="When the money is collected."
           icon={CreditCard}
         >
-          <div className="ws-choice-grid">
+          <div className="ws-choice-grid is-triple">
             {PAYMENT_CARDS.map((card) => {
               const blocked = card.value !== "none" && !hasProvider;
               return (
