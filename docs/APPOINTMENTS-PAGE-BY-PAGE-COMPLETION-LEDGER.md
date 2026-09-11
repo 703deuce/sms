@@ -343,3 +343,44 @@ No object-list sidebar and no vertical section rail.
 
 - Stripe `customer.subscription.*` and `invoice.payment_*` events sync membership status, renewals, past_due, and recovery
 - Class/workshop member pricing at registration remains pay-on-arrival (class checkout not card-connected)
+
+---
+
+## AVAILABILITY (`/appointments/availability`) — operational scheduling expansion
+
+Reuses existing route, `PATCH /api/appointments/settings`, `generateNativeSlots`, overrides, and
+staff availability runtime. UI rebuilt as a wide pilot workspace (no second sidebar, horizontal
+sections, Services-style density).
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING PAGE REUSE | PASS | Same route + settings API + slot engine; Kimi purple layout replaced, not backend |
+| LAYOUT | PASS | Global sidebar + `max-w-[1560px]` workspace; no object-list rail |
+| HORIZONTAL SPACE | PASS | Full-width tables for staff/services/overrides |
+| DENSITY | PASS | Thin weekly day rows; compact panels |
+| OVERVIEW | PASS | Coverage, health, assignment summary, engine-backed preview |
+| WEEKLY HOURS | PASS | Intervals, copy Monday, timezone → settings PATCH |
+| STAFF ASSIGNMENTS | PASS | Table + drawer; staff hours/services/locations → settings PATCH |
+| SERVICE AVAILABILITY | PASS | Table + drawer; links to Service editor for canonical edits |
+| LOCATIONS & RESOURCES | PASS | Read canonical locations/resources + manage links |
+| OVERRIDES | PASS | Platform date overrides CRUD; blackouts/holidays visible |
+| BOOKING RULES | PASS | Notice, horizon, limits, SchedulingRulesSection |
+| CALENDAR CONFLICTS | PASS | Staff connection status + integrations link |
+| SLOT PREVIEW | PASS | `GET /api/appointments/availability` + diagnostics fallback |
+| COMPONENT MATRIX | PASS | `APPOINTMENTS-AVAILABILITY-COMPONENT-CONNECTION-MATRIX.md` |
+| RUNTIME PRECEDENCE | PASS | `APPOINTMENTS-AVAILABILITY-RUNTIME-PRECEDENCE.md` |
+| PUBLIC BOOKING MATCH | BLOCKED | Full E2E slot parity tests not run in this pass |
+| SCREENSHOTS | BLOCKED | Capture batch not run yet |
+| PHASE-AWARE OCCUPANCY | FAIL | `staff-phase-occupancy` not wired into slot engine (pre-existing) |
+| PREVIEW LOCATION PARAM | PASS | Preview passes `locationId` and `staffId` to availability API |
+
+**Counts:** `BROKEN = 0`, `NO_OP = 0`, `PLACEHOLDER = 0`
+
+**Overall:** `APPOINTMENTS_AVAILABILITY_PAGE_COMPLETE: NO` — blocked on screenshot verification, public-booking parity tests, preview `locationId` wiring, and pre-existing phase-aware engine gap.
+
+### Defects / follow-ups
+
+- Wire `locationId` through `AvailabilitySlotPreview` → `/api/appointments/availability`.
+- Staff-specific date overrides: runtime supports; add UI or deep-link to Staff editor overrides.
+- Named schedule editor remains list-only (pre-existing); assign via type `namedScheduleId` on Service.
+- Availability engine latency (per-slot queries) remains a shared platform issue (see Meetings ledger).
