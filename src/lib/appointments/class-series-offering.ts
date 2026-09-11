@@ -59,6 +59,17 @@ export type ClassSeriesMetadata = {
   registrationClosesAt?: string;
   timezone?: string;
   showRemainingSpots?: boolean;
+
+  /* --- workshop-only ---------------------------------------------------
+   * A workshop states where it happens in its own right: a class inherits a
+   * room from the business, an event may be online or at a one-off venue.
+   */
+  locationMode?: "in_person" | "virtual" | "custom";
+  virtualUrl?: string;
+  locationNote?: string;
+  /** Set when the operator calls the whole workshop off, which is not the same
+   *  as deactivating it: registration stops but the history is kept. */
+  cancelledAt?: string;
 };
 
 export function parseClassSeriesMetadata(metadata: unknown): ClassSeriesMetadata {
@@ -103,7 +114,7 @@ export const CLASS_SERIES_OFFERING_UI = {
     editorBackLabel: "Back to workshops",
     publicPathSuffix: "workshops",
     registerVerb: "Register",
-    occurrenceLabel: "Workshop session",
+    occurrenceLabel: "Workshop date",
   },
 } as const;
 

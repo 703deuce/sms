@@ -1,6 +1,31 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import {
+  resolveClassSeriesOfferingKind,
+  type ClassSeriesOfferingKind,
+} from "@/lib/appointments/class-series-offering";
+
+/**
+ * Classes and workshops are the same table told apart by `metadata.kind`, so
+ * every entry point that can reach a series takes the kind it expects. Passing
+ * it is what stops `/appointments/workshops` editing a class, and the check
+ * lives on the server because the client filter alone is only a convenience.
+ */
+export type OfferingScope = ClassSeriesOfferingKind | undefined;
+
+const KIND_NOUN: Record<ClassSeriesOfferingKind, string> = {
+  class: "Class",
+  workshop: "Workshop",
+};
+
+function noun(kind: OfferingScope): string {
+  return kind ? KIND_NOUN[kind] : "Class";
+}
+
+function matchesKind(metadata: unknown, kind: OfferingScope): boolean {
+  return !kind || resolveClassSeriesOfferingKind(metadata) === kind;
+}
 
 /**
  * The database accessor is an untyped Supabase shim, so rows come back as
@@ -23,13 +48,61 @@ const CONTACT_LITE_SELECT = {
   phone: true,
 } as const;
 
-export async function listClassSeries(workspaceId: string) {
+export type ClassSeriesListRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  capacity: number;
+  staffId: string | null;
+  locationId: string | null;
+  requireFullSeries: boolean;
+  active: boolean;
+  recurrenceRule: unknown;
+  metadata: unknown;
+  occurrences: Array<{
+    id: string;
+    seriesId: string;
+    startsAt: Date;
+    endsAt: Date;
+    capacity: number | null;
+    status: string;
+  }>;
+};
+
+export async function listClassSeries(
+  workspaceId: string,
+  kind?: OfferingScope,
+): Promise<ClassSeriesListRow[]> {
   const prisma = getPrisma();
-  return prisma.classSeries.findMany({
+  const rows: ClassSeriesListRow[] = await prisma.classSeries.findMany({
     where: { workspaceId },
     include: { occurrences: { orderBy: { startsAt: "asc" }, take: 20 } },
     orderBy: { name: "asc" },
   });
+  // The kind lives inside a JSON column, so it cannot be part of the query.
+  // Filtering here still makes the server the authority — the caller never
+  // sees a row of the wrong kind.
+  return kind ? rows.filter((row) => matchesKind(row.metadata, kind)) : rows;
+}
+
+/**
+ * Live registrations per series. A workshop sells one place for the whole
+ * event, so its list row counts the series rather than the busiest session —
+ * the occurrences the list query returns carry no counts of their own.
+ */
+export async function countSeriesRegistrations(
+  workspaceId: string,
+  seriesIds: string[],
+): Promise<Map<string, number>> {
+  if (seriesIds.length === 0) return new Map();
+  const prisma = getPrisma();
+  const counts: Array<{ seriesId: string; _count: { seriesId: number } }> =
+    await prisma.classEnrollment.groupBy({
+      by: ["seriesId"],
+      where: { workspaceId, seriesId: { in: seriesIds }, status: "enrolled" },
+      _count: { seriesId: true },
+    });
+  return new Map(counts.map((c) => [c.seriesId, c._count.seriesId]));
 }
 
 export async function upsertClassSeries(
@@ -68,18 +141,26 @@ export async function upsertClassSeries(
 }
 
 /** One series with its occurrences and live enrollment counts, for the editor. */
-export async function getClassSeries(workspaceId: string, seriesId: string) {
+export async function getClassSeries(workspaceId: string, seriesId: string, kind?: OfferingScope) {
   const prisma = getPrisma();
   const series = await prisma.classSeries.findFirst({ where: { id: seriesId, workspaceId } });
-  if (!series) throw new Error("Class not found");
+  if (!series || !matchesKind(series.metadata, kind)) {
+    throw new Error(`${noun(kind)} not found`);
+  }
   const occurrences = await listOccurrencesForSeries(workspaceId, seriesId);
   return { ...series, occurrences };
 }
 
-export async function deleteClassSeries(workspaceId: string, seriesId: string) {
+export async function deleteClassSeries(
+  workspaceId: string,
+  seriesId: string,
+  kind?: OfferingScope,
+) {
   const prisma = getPrisma();
   const series = await prisma.classSeries.findFirst({ where: { id: seriesId, workspaceId } });
-  if (!series) throw new Error("Class not found");
+  if (!series || !matchesKind(series.metadata, kind)) {
+    throw new Error(`${noun(kind)} not found`);
+  }
   const enrolled = await prisma.classEnrollment.count({
     where: { workspaceId, seriesId, status: "enrolled" },
   });
@@ -87,11 +168,58 @@ export async function deleteClassSeries(workspaceId: string, seriesId: string) {
   // class anyone is booked into is deactivated instead.
   if (enrolled > 0) {
     throw new Error(
-      `${enrolled} registration${enrolled === 1 ? "" : "s"} exist for this class. Deactivate it instead.`,
+      `${enrolled} registration${enrolled === 1 ? "" : "s"} exist for this ${noun(kind).toLowerCase()}. Deactivate it instead.`,
     );
   }
   await prisma.classSeries.delete({ where: { id: seriesId } });
   return { id: seriesId, deleted: true };
+}
+
+/**
+ * Throws unless the series behind an occurrence, enrollment or waitlist entry
+ * is of the expected kind. Every write the Workshops page can reach goes
+ * through here, so a workshop request cannot mutate a class by id.
+ */
+export async function assertSeriesKind(
+  workspaceId: string,
+  kind: OfferingScope,
+  ref: { seriesId?: string; occurrenceId?: string; enrollmentId?: string; entryId?: string },
+): Promise<void> {
+  if (!kind) return;
+  const prisma = getPrisma();
+  let seriesId = ref.seriesId;
+
+  if (!seriesId && ref.occurrenceId) {
+    const occ = await prisma.classOccurrence.findFirst({
+      where: { id: ref.occurrenceId, workspaceId },
+      select: { seriesId: true },
+    });
+    seriesId = occ?.seriesId ?? undefined;
+  }
+  if (!seriesId && ref.enrollmentId) {
+    const enrollment = await prisma.classEnrollment.findFirst({
+      where: { id: ref.enrollmentId, workspaceId },
+      select: { seriesId: true },
+    });
+    seriesId = enrollment?.seriesId ?? undefined;
+  }
+  if (!seriesId && ref.entryId) {
+    const entry = await prisma.appointmentWaitlistEntry.findFirst({
+      where: { id: ref.entryId, workspaceId },
+      select: { metadata: true },
+    });
+    const meta = (entry?.metadata ?? {}) as { classSeriesId?: string };
+    seriesId = meta.classSeriesId;
+  }
+
+  if (!seriesId) throw new Error(`${noun(kind)} not found`);
+  const series = await prisma.classSeries.findFirst({
+    where: { id: seriesId, workspaceId },
+    select: { metadata: true },
+  });
+  if (!series || !matchesKind(series.metadata, kind)) {
+    throw new Error(`${noun(kind)} not found`);
+  }
 }
 
 export async function listOccurrencesForSeries(workspaceId: string, seriesId: string) {
@@ -151,10 +279,11 @@ export async function updateClassOccurrence(
   });
 }
 
+/** Refuses a full or unscheduled occurrence, and reports which series it is on. */
 async function assertOccurrenceCapacity(
   workspaceId: string,
   occurrenceId: string,
-): Promise<void> {
+): Promise<{ seriesId: string }> {
   const prisma = getPrisma();
   const occ = await prisma.classOccurrence.findFirst({
     where: { id: occurrenceId, workspaceId, status: "scheduled" },
@@ -166,6 +295,7 @@ async function assertOccurrenceCapacity(
     where: { workspaceId, occurrenceId, status: "enrolled" },
   });
   if (enrolled >= cap) throw new Error("This session is full");
+  return { seriesId: String(occ.seriesId) };
 }
 
 export async function generateClassOccurrences(
@@ -231,12 +361,15 @@ export async function enrollInClass(
     return enrollments;
   }
   if (!input.occurrenceId) throw new Error("occurrenceId required");
-  await assertOccurrenceCapacity(workspaceId, input.occurrenceId);
+  const { seriesId } = await assertOccurrenceCapacity(workspaceId, input.occurrenceId);
   return prisma.classEnrollment.create({
     data: {
       workspaceId,
       occurrenceId: input.occurrenceId,
-      seriesId: input.seriesId,
+      // Derived rather than taken from the caller: the public page registers
+      // by occurrence alone, and an enrollment with no series is invisible to
+      // every series-level view — which is the only view a workshop has.
+      seriesId: input.seriesId || seriesId,
       contactId: input.contactId,
       status: "enrolled",
     },
@@ -424,7 +557,10 @@ export async function joinClassWaitlist(
   const series = await prisma.classSeries.findFirst({
     where: { id: input.seriesId, workspaceId },
   });
-  if (!series) throw new Error("Class not found");
+  // The message reaches the public page, and the kind is unknown here because
+  // the row is what could not be found, so it stays neutral rather than
+  // calling a workshop a class in front of a customer.
+  if (!series) throw new Error("Registration is no longer available");
   const contact: ContactLite | null = await prisma.contact.findFirst({
     where: { id: input.contactId, workspaceId },
     select: CONTACT_LITE_SELECT,
