@@ -13,13 +13,20 @@ export async function POST(request: Request, { params }: Params) {
     const workspace = await resolveWorkspaceBySlug(slug);
     if (!workspace) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
+    const prisma = getPrisma();
     const body = (await request.json()) as { action?: string; email?: string; code?: string };
     const email = String(body.email || "").trim().toLowerCase();
     if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
 
     if (body.action !== "verify") {
-      const result = await sendBookingEmailOtp(workspace.id, email);
-      return NextResponse.json({ data: result });
+      const contact = await prisma.contact.findFirst({
+        where: { workspaceId: workspace.id, email },
+        select: { id: true },
+      });
+      if (contact) await sendBookingEmailOtp(workspace.id, email);
+      return NextResponse.json({
+        data: { message: "If we find an account for that email, we'll send a sign-in code." },
+      });
     }
 
     const code = String(body.code || "").trim();
@@ -29,21 +36,26 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 });
     }
 
-    const prisma = getPrisma();
     const contact = await prisma.contact.findFirst({
       where: { workspaceId: workspace.id, email },
     });
     if (!contact) {
-      return NextResponse.json({ error: "No account found for this email" }, { status: 404 });
+      return NextResponse.json({
+        data: { message: "If we find an account for that email, we'll send a sign-in code." },
+      });
     }
 
     const session = await createClientPortalSession(workspace.id, contact.id);
-    return NextResponse.json({
+    const { clientPortalSetCookieHeader } = await import("@/lib/appointments/client-portal/cookie");
+    const res = NextResponse.json({
       data: {
-        portalToken: session.rawToken,
+        ok: true,
         expiresAt: session.expiresAt.toISOString(),
+        redirect: "/client",
       },
     });
+    res.headers.set("Set-Cookie", clientPortalSetCookieHeader(session.rawToken));
+    return res;
   } catch (err) {
     return jsonError(err, 400);
   }

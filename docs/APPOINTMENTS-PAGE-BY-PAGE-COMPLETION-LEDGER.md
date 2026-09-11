@@ -599,3 +599,24 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, identity, parity, matrix |
 
 **Overall:** `APPOINTMENTS_CLIENTS_ADMIN_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–26, directory filters, custom fields, pending forms, embedded messages, calendar contact preselect, export, full invoice view)
+
+## CLIENT PORTAL (`/client`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_AUTH_REUSE | PASS | `clientPortalSession` + booking OTP |
+| CANONICAL_CLIENT_IDENTITY | PASS | Same `Contact` |
+| TENANT_ISOLATION | PASS | Session `workspaceId` on all queries |
+| OBJECT_AUTHORIZATION | PASS | `assertAppointmentOwnedBySession` |
+| MAGIC_LINK / SESSION | PASS | Cookie + legacy token exchange |
+| PORTAL_HOME | PASS | Next appointment, tasks, access |
+| APPOINTMENTS | PASS | Tabs + detail route |
+| RESCHEDULE / CANCEL | PARTIAL | Canonical via API; full availability UI via `/manage` |
+| PAYMENTS | PARTIAL | Pay balance + history |
+| FORMS / INVOICES | FAIL / GAP | Submitted list only |
+| PROFILE | PASS | Safe fields; email read-only |
+| SECURITY | PARTIAL | Unauthenticated mint removed; rate limit GAP |
+| E2E / SCREENSHOTS | BLOCKED | — |
+| DOCS | PASS | Audit, auth matrix, security, parity |
+
+**Overall:** `APPOINTMENTS_CLIENT_PORTAL_COMPLETE: NO` (E2E 1–35, screenshots 01–33, pending forms, invoices, in-portal slot reschedule, rate limits, cross-tenant Playwright proof)

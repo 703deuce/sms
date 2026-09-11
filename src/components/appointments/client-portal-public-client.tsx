@@ -112,12 +112,11 @@ function PortalSlugLogin({ slug }: { slug: string }) {
       setMessage(json.error || "Invalid verification code");
       return;
     }
-    const portalToken = String(json.data?.portalToken || "");
-    if (!portalToken) {
-      setMessage("Portal session could not be created");
+    if (json.data?.ok) {
+      window.location.href = json.data.redirect || "/client";
       return;
     }
-    window.location.href = `/portal/${portalToken}`;
+    setMessage("Portal session could not be created");
   }
 
   return (
@@ -188,13 +187,26 @@ export default function ClientPortalPublicClient({ token }: { token: string }) {
 function ClientPortalTokenView({ token }: { token: string }) {
   const [data, setData] = useState<PortalData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exchanging, setExchanging] = useState(true);
   const [hasSavedCard, setHasSavedCard] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [walletBalanceCents, setWalletBalanceCents] = useState<number | null>(null);
 
   useEffect(() => {
-    void fetch(`/api/public/portal/${token}`)
-      .then(async (res) => {
+    void (async () => {
+      try {
+        const exchange = await fetch("/api/client/portal/auth/exchange", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (exchange.ok) {
+          window.location.href = "/client";
+          return;
+        }
+        setExchanging(false);
+        const res = await fetch(`/api/public/portal/${token}`);
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Invalid portal link");
         const resolved = json.data;
@@ -207,8 +219,10 @@ function ClientPortalTokenView({ token }: { token: string }) {
           paymentHistory: resolved.paymentHistory || [],
           waitlist: resolved.waitlist || [],
         });
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      }
+    })();
 
     void fetch(`/api/public/portal/${token}/payment-methods`)
       .then(async (res) => {
@@ -239,6 +253,14 @@ function ClientPortalTokenView({ token }: { token: string }) {
       .sort((a, b) => new Date(b.startsAt!).getTime() - new Date(a.startsAt!).getTime())
       .slice(0, 10);
   }, [data]);
+
+  if (exchanging && !error) {
+    return (
+      <main className="mx-auto max-w-3xl p-6">
+        <p className="text-sm text-muted-foreground">Opening your account…</p>
+      </main>
+    );
+  }
 
   if (error) {
     return (
