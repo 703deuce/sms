@@ -2157,6 +2157,13 @@
   padding: 0 1.25rem;
 }
 
+/* Narrow screens get the select instead; six tabs cannot be scanned in 390px. */
+@media (max-width: 639px) {
+  .ws-pilot .ws-section-tabs {
+    display: none;
+  }
+}
+
 @media (min-width: 640px) {
   .ws-pilot .ws-section-tabs {
     padding: 0 1.75rem;

@@ -16,7 +16,9 @@ type Props = {
  * workspace keeps its full width and the sections run across the top.
  *
  * Both responsive presentations live here so a caller cannot mount one without
- * the other and end up showing two navigations at once.
+ * the other and end up showing two navigations at once. Which one shows is
+ * decided in the stylesheet rather than with a utility class, because
+ * `.ws-section-tabs` sets `display` itself and would win against one.
  */
 export function ServiceLocalNav({ active, onChange, attention }: Props) {
   const activeSection = SERVICE_SECTIONS.find((s) => s.id === active);
@@ -47,7 +49,7 @@ export function ServiceLocalNav({ active, onChange, attention }: Props) {
         ) : null}
       </div>
 
-      <nav className="ws-section-tabs hidden sm:flex" aria-label="Service sections">
+      <nav className="ws-section-tabs" aria-label="Service sections">
         {SERVICE_SECTIONS.map((section) => (
           <button
             key={section.id}
