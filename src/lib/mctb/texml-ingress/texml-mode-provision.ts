@@ -5,13 +5,10 @@ import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import { MCTB_CONSENT_MODE_EXISTING } from "@/lib/mctb/consent-mode";
 import { greetingTokenForE164 } from "@/lib/phone/voicemail-active-greeting";
 import { routingTokenForE164 } from "@/lib/mctb/texml-ingress/routing-profile";
-import { MCTB_TEXML_DEFAULT_APP_ID } from "./constants";
+import { resolveFrozenMctbTexmlAppId } from "./constants";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
-import {
-  ensureMctbTexmlApplication,
-  mctbTexmlEntryVoiceUrl,
-  routePhoneToTexmlApp,
-} from "./texml-route";
+import { switchDidToMctbTexmlIngress } from "./provision";
+import { frozenMctbTexmlProductionVoiceUrl, mctbTexmlEntryVoiceUrl } from "./texml-route";
 
 export type MctbTexmlHandlerMode = "press_1" | "voicemail";
 
@@ -26,7 +23,7 @@ export function resolveMctbTexmlHandlerMode(input: {
 }
 
 /**
- * Save-time: point DID at the **frozen** certified MCTB TeXML ingress (same as 866).
+ * Save-time: apply the **same** frozen TeXML ingress as 866 cert (app + mctb-entry cert=D).
  * @see docs/MCTB_FINAL_PRODUCTION_PIPELINE.md — app 3037587396909598261 + mctb-entry
  */
 export async function provisionMctbPhoneTexmlIngressMode(input: {
@@ -53,18 +50,18 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
     consentMode: input.consentMode,
     automationActive: input.automationActive,
   });
-  const voiceUrl = mctbTexmlEntryVoiceUrl();
-  const texmlAppId = await ensureMctbTexmlApplication({
-    friendlyName: "MCTB TeXML Ingress",
-    preferredAppId:
-      process.env.MCTB_TEXML_APP_ID?.trim() || MCTB_TEXML_DEFAULT_APP_ID,
+
+  const switchResult = await switchDidToMctbTexmlIngress({
+    workspaceId: input.workspaceId,
+    phoneNumberId: input.phoneNumberId,
+    preferredTexmlAppId: resolveFrozenMctbTexmlAppId(),
+    mctbRole: "customer_mctb",
   });
 
-  await routePhoneToTexmlApp({
-    e164: phone.e164,
-    providerNumberId: phone.providerNumberId,
-    texmlAppId,
-  });
+  const voiceUrl = mctbTexmlEntryVoiceUrl();
+  const texmlAppId =
+    switchResult.verify.texmlAppId ||
+    String((switchResult.texmlRoute as { texmlAppId?: string }).texmlAppId || "");
 
   const settings =
     phone.settingsJson && typeof phone.settingsJson === "object"
@@ -85,6 +82,7 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
           texmlHandlerMode: handlerMode,
           texmlVoiceUrl: voiceUrl,
           texmlAppId,
+          frozenVoiceUrl: frozenMctbTexmlProductionVoiceUrl(),
           greetingToken: greetingTokenForE164(phone.e164),
           routingToken: routingTokenForE164(phone.e164),
         },
@@ -103,8 +101,10 @@ export async function provisionMctbPhoneTexmlIngressMode(input: {
       e164: phone.e164,
       handlerMode,
       voiceUrl,
+      frozenVoiceUrl: frozenMctbTexmlProductionVoiceUrl(),
       texmlAppId,
       pipeline: "mctb_texml_final_v1",
+      verifyOk: switchResult.verify.ok,
     }),
   );
 

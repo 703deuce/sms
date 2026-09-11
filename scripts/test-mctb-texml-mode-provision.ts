@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { buildInstantPress1Texml } from "../src/lib/mctb/texml-ingress/instant-press1-texml";
 import { buildInstantVoicemailTexml } from "../src/lib/mctb/texml-ingress/instant-voicemail-texml";
 import { resolveMctbTexmlHandlerMode } from "../src/lib/mctb/texml-ingress/texml-mode-provision";
-import { mctbTexmlEntryVoiceUrl } from "../src/lib/mctb/texml-ingress/texml-route";
+import {
+  frozenMctbTexmlProductionVoiceUrl,
+  mctbTexmlEntryVoiceUrl,
+} from "../src/lib/mctb/texml-ingress/texml-route";
 import { MCTB_TEXML_DEFAULT_APP_ID } from "../src/lib/mctb/texml-ingress/constants";
 import { MCTB_CONSENT_MODE_EXISTING, MCTB_CONSENT_MODE_VERIFIED } from "../src/lib/mctb/consent-mode";
 
@@ -49,6 +52,11 @@ async function main() {
 
   test("frozen default TeXML app id matches 866 cert", () => {
     assert.equal(MCTB_TEXML_DEFAULT_APP_ID, "3037587396909598261");
+  });
+
+  test("frozen production voice_url matches 866 cert D (mctb-entry, no query)", () => {
+    assert.equal(frozenMctbTexmlProductionVoiceUrl(), mctbTexmlEntryVoiceUrl());
+    assert.doesNotMatch(frozenMctbTexmlProductionVoiceUrl(), /mctb-press-1|mctb-voicemail|\?cert=/);
   });
 
   test("instant press-1 TeXML builds synchronously", () => {

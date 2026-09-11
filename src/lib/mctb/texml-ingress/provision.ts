@@ -5,6 +5,7 @@ import { mergePhoneCapabilitySettings } from "@/lib/numbers/phone-capabilities";
 import { syncVoiceAgentPhoneAssignment } from "@/lib/voice/agent-phone";
 import { scrubCompetingIngressTelephonyFields } from "@/lib/mctb/voice-ingress-guard";
 import { invalidateMctbTexmlIngressCache } from "./config-cache";
+import { resolveFrozenMctbTexmlAppId } from "./constants";
 import {
   MCTB_TEXML_ROUTING_MODE,
   MCTB_TEXML_ROUTING_OWNER,
@@ -103,7 +104,8 @@ export async function switchDidToMctbTexmlIngress(input: {
   telephony.state = "active";
   telephony.lastError = null;
   telephony.lastProvisionedAt = new Date().toISOString();
-  telephony.telnyxTexmlAppId = telephony.telnyxTexmlAppId || null;
+  // Never reuse a stale per-mode app id from DB — always rebind to frozen cert app.
+  delete telephony.telnyxTexmlAppId;
   settings.telephony = scrubCompetingIngressTelephonyFields(telephony);
   settings.routingOwner = MCTB_TEXML_ROUTING_OWNER;
   settings.mctbSipIngress = true;
@@ -113,10 +115,7 @@ export async function switchDidToMctbTexmlIngress(input: {
     e164: phone.e164,
     providerNumberId: phone.providerNumberId,
     friendlyName: input.friendlyName,
-    preferredTexmlAppId:
-      input.preferredTexmlAppId ||
-      String(telephony.telnyxTexmlAppId || "") ||
-      null,
+    preferredTexmlAppId: resolveFrozenMctbTexmlAppId(input.preferredTexmlAppId),
   });
 
   telephony.telnyxTexmlAppId = texmlRoute.texmlAppId;
