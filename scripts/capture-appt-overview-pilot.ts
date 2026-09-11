@@ -1,5 +1,5 @@
 /**
- * Appointments pilot screenshots — overview + booking types art direction.
+ * Appointments pilot screenshots — overview + four-object booking pages.
  * Usage: DEV_AUTH_BYPASS=1 UI_AGENT_BASE_URL=http://localhost:3000 npx tsx scripts/capture-appt-overview-pilot.ts
  */
 import { mkdirSync } from "node:fs";
@@ -26,29 +26,28 @@ const SHOTS: Shot[] = [
     heading: "Overview",
   },
   {
-    file: "booking-types-landing-desktop-after.png",
-    path: "/appointments/types",
-    waitFor: ".appt-overview-pilot .appt-pilot-type-card, .appt-overview-pilot [role='list']",
-    heading: "Booking Types",
+    file: "services-desktop.png",
+    path: "/appointments/services",
+    waitFor: ".reference-root",
+    heading: "Services",
   },
   {
-    file: "booking-types-landing-mobile-after.png",
-    path: "/appointments/types",
-    viewport: { width: 390, height: 844 },
-    waitFor: ".appt-overview-pilot .appt-pilot-type-card, .appt-overview-pilot [role='list']",
-    heading: "Booking Types",
-  },
-  {
-    file: "booking-types-meetings-list.png",
-    path: "/appointments/types/meetings",
-    waitFor: ".appt-overview-pilot .ref-deco-page-head, .appt-overview-pilot .appt-pilot-empty-state, .appt-overview-pilot .appt-pilot-data-table",
+    file: "meetings-desktop.png",
+    path: "/appointments/meetings",
+    waitFor: ".reference-root",
     heading: "Meetings",
   },
   {
-    file: "booking-types-create-meeting-editor.png",
-    path: "/appointments/types/editor?segment=meetings&create=1",
-    waitFor: ".appt-overview-pilot .appt-pilot-subheader-bar, .appt-overview-pilot .reference-root",
-    heading: "Appointment Types",
+    file: "classes-desktop.png",
+    path: "/appointments/classes",
+    waitFor: ".reference-root, [class*='class-series']",
+    heading: "Classes",
+  },
+  {
+    file: "workshops-desktop.png",
+    path: "/appointments/workshops",
+    waitFor: ".reference-root, [class*='class-series']",
+    heading: "Workshops",
   },
 ];
 
