@@ -12,6 +12,7 @@ import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appo
 import { defaultConfigForSegment, segmentById } from "@/lib/appointments/booking-types-segments";
 import { defaultConfigPatchForKind } from "@/lib/appointments/booking-type-kind";
 import { isMeetingRow } from "@/lib/appointments/meetings/meeting-display";
+import { newLocation, newStaffMember } from "@/features/appointments/kimi/shared/platform-settings-types";
 
 export type MeetingEditorOptions = {
   staffOptions: Array<{ id: string; name: string }>;
@@ -19,6 +20,35 @@ export type MeetingEditorOptions = {
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;
   namedScheduleOptions: Array<{ id: string; name: string }>;
 };
+
+type SettingsPayload = {
+  data?: {
+    staff?: Array<{ id: string; name: string; active?: boolean }>;
+    locations?: Array<{ id: string; name: string; active?: boolean }>;
+    namedSchedules?: Array<{ id: string; name: string }>;
+    bookingEnabled?: boolean;
+  };
+  workspace?: { slug?: string | null } | null;
+};
+
+function optionsFromSettings(
+  json: SettingsPayload,
+  payments: { providers?: Array<{ provider: "stripe" | "square"; label?: string; connected?: boolean }> },
+): MeetingEditorOptions {
+  const platform = json.data || {};
+  return {
+    staffOptions: (platform.staff || [])
+      .filter((s) => s.active !== false)
+      .map((s) => ({ id: s.id, name: s.name })),
+    locationOptions: (platform.locations || [])
+      .filter((l) => l.active !== false)
+      .map((l) => ({ id: l.id, name: l.name })),
+    connectedPaymentProviders: (payments.providers || [])
+      .filter((p) => p.connected)
+      .map((p) => ({ provider: p.provider, label: p.label || p.provider })),
+    namedScheduleOptions: (platform.namedSchedules || []).map((s) => ({ id: s.id, name: s.name })),
+  };
+}
 
 export function useMeetingEditor(meetingId: string | null) {
   const router = useRouter();
@@ -70,31 +100,12 @@ export function useMeetingEditor(meetingId: string | null) {
       if (!typesRes.ok || !settingsRes.ok) throw new Error("load failed");
 
       const typesJson = await typesRes.json();
-      const settingsJson = await settingsRes.json();
+      const settingsJson = (await settingsRes.json()) as SettingsPayload;
       const paymentsJson = paymentsRes.ok ? await paymentsRes.json() : { providers: [] };
 
-      const platform = settingsJson.data?.platform || settingsJson.platform || {};
-      setWorkspaceSlug(settingsJson.data?.workspaceSlug || settingsJson.workspaceSlug || "");
-      setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled ?? settingsJson.bookingEnabled));
-
-      setOptions({
-        staffOptions: (platform.staff || [])
-          .filter((s: { active?: boolean }) => s.active !== false)
-          .map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })),
-        locationOptions: (platform.locations || [])
-          .filter((l: { active?: boolean }) => l.active !== false)
-          .map((l: { id: string; name: string }) => ({ id: l.id, name: l.name })),
-        connectedPaymentProviders: (paymentsJson.providers || [])
-          .filter((p: { connected?: boolean }) => p.connected)
-          .map((p: { provider: "stripe" | "square"; label?: string }) => ({
-            provider: p.provider,
-            label: p.label || p.provider,
-          })),
-        namedScheduleOptions: (platform.namedSchedules || []).map((s: { id: string; name: string }) => ({
-          id: s.id,
-          name: s.name,
-        })),
-      });
+      setWorkspaceSlug(settingsJson.workspace?.slug || "");
+      setBookingEnabled(Boolean(settingsJson.data?.bookingEnabled));
+      setOptions(optionsFromSettings(settingsJson, paymentsJson));
 
       if (isCreating) {
         initCreateForm();
@@ -221,6 +232,65 @@ export function useMeetingEditor(meetingId: string | null) {
     [form, meetingId, updateForm],
   );
 
+  /**
+   * Creates a bookable staff member from inside the editor so an empty host list
+   * never forces the user out to /appointments/staff and lose an unsaved draft.
+   */
+  const addStaffMember = useCallback(
+    async (name: string): Promise<string | null> => {
+      const trimmed = name.trim();
+      if (!trimmed) return null;
+      const current = await fetch("/api/appointments/settings");
+      if (!current.ok) return null;
+      const currentJson = (await current.json()) as SettingsPayload;
+      const existing = currentJson.data?.staff || [];
+      const member = { ...newStaffMember(), name: trimmed };
+      const res = await fetch("/api/appointments/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staff: [...existing, member] }),
+      });
+      if (!res.ok) return null;
+      const saved = (await res.json()) as { data?: SettingsPayload["data"] };
+      const savedStaff = saved.data?.staff || [];
+      const created = savedStaff.find((s) => s.name === trimmed) || member;
+      setOptions((prev) => ({
+        ...prev,
+        staffOptions: savedStaff
+          .filter((s) => s.active !== false)
+          .map((s) => ({ id: s.id, name: s.name })),
+      }));
+      return created.id;
+    },
+    [],
+  );
+
+  const addLocation = useCallback(async (name: string): Promise<string | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const current = await fetch("/api/appointments/settings");
+    if (!current.ok) return null;
+    const currentJson = (await current.json()) as SettingsPayload;
+    const existing = currentJson.data?.locations || [];
+    const location = { ...newLocation(), name: trimmed };
+    const res = await fetch("/api/appointments/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locations: [...existing, location] }),
+    });
+    if (!res.ok) return null;
+    const saved = (await res.json()) as { data?: SettingsPayload["data"] };
+    const savedLocations = saved.data?.locations || [];
+    const created = savedLocations.find((l) => l.name === trimmed) || location;
+    setOptions((prev) => ({
+      ...prev,
+      locationOptions: savedLocations
+        .filter((l) => l.active !== false)
+        .map((l) => ({ id: l.id, name: l.name })),
+    }));
+    return created.id;
+  }, []);
+
   const copyBookingLink = useCallback(async () => {
     if (!bookingLink) return;
     try {
@@ -257,6 +327,8 @@ export function useMeetingEditor(meetingId: string | null) {
     save,
     duplicate,
     setEnabled,
+    addStaffMember,
+    addLocation,
     copyBookingLink,
     previewBooking,
   };

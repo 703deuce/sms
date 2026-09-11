@@ -280,6 +280,8 @@ export type AppointmentTypeConfig = {
   description?: string;
   location?: string;
   locationId?: string;
+  /** Join URL for link-based meeting methods (Zoom, Webex, custom link). */
+  meetingLink?: string;
   priceDisplay?: string;
   bookingHours?: string;
   minimumBookingNoticeMinutes?: number;

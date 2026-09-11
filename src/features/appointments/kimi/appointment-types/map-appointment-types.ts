@@ -17,7 +17,6 @@ import type {
   AppointmentTypeItem,
   AppointmentTypeQuestion,
 } from "./types";
-import { newBookingQuestion } from "../shared/platform-settings-types";
 
 export type ApiAppointmentType = {
   id: string;
@@ -62,6 +61,7 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   location: "",
   locationId: "",
   locationIds: [],
+  meetingLink: "",
   priceDisplay: "",
   showPriceOnBooking: true,
   bookingHours: "Mon-Fri 09:00-17:00",
@@ -223,6 +223,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     location: cfg.location || "",
     locationId: cfg.locationId || "",
     locationIds: cfg.locationIds || [],
+    meetingLink: cfg.meetingLink || "",
     priceDisplay: cfg.priceDisplay || "",
     showPriceOnBooking: Boolean(cfg.priceDisplay),
     bookingHours: cfg.bookingHours || "Mon-Fri 09:00-17:00",
@@ -344,6 +345,7 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
     location: form.location,
     locationId: form.locationId || undefined,
     locationIds: form.locationIds.length ? form.locationIds : undefined,
+    meetingLink: form.meetingLink?.trim() || undefined,
     priceDisplay: form.showPriceOnBooking ? form.priceDisplay : "",
     bookingHours: form.bookingHours,
     minimumBookingNoticeMinutes: form.minimumBookingNoticeMinutes,

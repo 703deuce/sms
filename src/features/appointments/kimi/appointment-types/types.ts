@@ -46,6 +46,7 @@ export type AppointmentTypeFormState = {
   location: string;
   locationId: string;
   locationIds: string[];
+  meetingLink: string;
   priceDisplay: string;
   showPriceOnBooking: boolean;
   bookingHours: string;

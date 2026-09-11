@@ -20,18 +20,23 @@ function KpiCell({
   icon: Icon,
   label,
   value,
+  unset,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
+  unset?: boolean;
 }) {
   return (
     <div className="ws-kpi-cell">
-      <div className="flex items-center gap-1.5">
-        <Icon className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden />
-        <p className="ws-kpi-label">{label}</p>
-      </div>
-      <p className="ws-kpi-value truncate">{value}</p>
+      <p className="ws-kpi-label">
+        <Icon className="h-3 w-3" aria-hidden />
+        {label}
+      </p>
+      {/* title carries the full string because narrow columns must ellipsize */}
+      <p className={`ws-kpi-value${unset ? " is-unset" : ""}`} title={value}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -45,24 +50,19 @@ export function MeetingSummaryStrip({ form, staffNames, namedScheduleOptions }: 
     },
     staffNames,
   );
+  const method = meetingMethodLabel({ location: form.location });
+  const schedule = availabilityScheduleLabel(form.namedScheduleId, namedScheduleOptions);
+  const price = priceLabel({
+    payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
+  });
 
   return (
     <div className="ws-kpi-strip" aria-label="Meeting summary">
       <KpiCell icon={Clock} label="Duration" value={formatDurationMinutes(form.durationMinutes)} />
       <KpiCell icon={User} label="Host" value={host} />
-      <KpiCell icon={Video} label="Method" value={meetingMethodLabel({ location: form.location })} />
-      <KpiCell
-        icon={Calendar}
-        label="Availability"
-        value={availabilityScheduleLabel(form.namedScheduleId, namedScheduleOptions)}
-      />
-      <KpiCell
-        icon={DollarSign}
-        label="Price"
-        value={priceLabel({
-          payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
-        })}
-      />
+      <KpiCell icon={Video} label="Method" value={method} unset={method === "Not set"} />
+      <KpiCell icon={Calendar} label="Availability" value={schedule} />
+      <KpiCell icon={DollarSign} label="Price" value={price} />
     </div>
   );
 }

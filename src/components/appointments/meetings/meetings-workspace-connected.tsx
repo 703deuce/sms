@@ -1,22 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, Video } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, CalendarCheck, ChevronDown, Link2, Users, Video } from "lucide-react";
 import Link from "next/link";
 import { useMeetingEditor } from "@/features/appointments/kimi/meetings/use-meeting-editor";
 import { typeBelongsToSegment, type ApiTypeRow } from "@/lib/appointments/booking-types-segments";
+import {
+  meetingSetupSteps,
+  sectionsNeedingAttention,
+} from "@/lib/appointments/meetings/meeting-setup";
 import { MeetingObjectHeader } from "./meeting-object-header";
 import { MeetingSummaryStrip } from "./meeting-summary-strip";
 import { MeetingLocalNav } from "./meeting-local-nav";
 import { MeetingSectionWorkspace } from "./meeting-section-workspace";
 import { MeetingsListPanel } from "./meetings-list-panel";
-import type { MeetingSectionId } from "./meeting-section-types";
+import { MEETING_SECTIONS, type MeetingSectionId } from "./meeting-section-types";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
+import "@/components/appointments/kimi-ui/shared/meetings-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
+
+const SHELL_CLASS =
+  "appt-overview-pilot bookable-workspace-pilot meetings-workspace-pilot appt-pilot-workspace ref-root";
+
+const VALID_SECTIONS = new Set<string>(MEETING_SECTIONS.map((s) => s.id));
 
 type Props = {
   meetingId: string | null;
@@ -24,14 +34,36 @@ type Props = {
 
 export function MeetingsWorkspaceConnected({ meetingId }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const editor = useMeetingEditor(meetingId);
   const [listRows, setListRows] = useState<ApiTypeRow[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listFailed, setListFailed] = useState(false);
   const [search, setSearch] = useState("");
-  const [section, setSection] = useState<MeetingSectionId>("overview");
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(false);
+
+  // Section lives in the URL so a refresh, a back button or a shared link all
+  // land on the same part of the editor.
+  const sectionParam = searchParams.get("section");
+  const section: MeetingSectionId =
+    sectionParam && VALID_SECTIONS.has(sectionParam)
+      ? (sectionParam as MeetingSectionId)
+      : "overview";
+
+  const setSection = useCallback(
+    (next: MeetingSectionId) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "overview") params.delete("section");
+      else params.set("section", next);
+      const query = params.toString();
+      router.replace(
+        `/appointments/meetings/${meetingId}${query ? `?${query}` : ""}`,
+        { scroll: false },
+      );
+    },
+    [meetingId, router, searchParams],
+  );
 
   const loadList = useCallback(async () => {
     setListLoading(true);
@@ -63,6 +95,11 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
     return map;
   }, [editor.options.staffOptions]);
 
+  const attention = useMemo(
+    () => sectionsNeedingAttention(meetingSetupSteps(editor.form)),
+    [editor.form],
+  );
+
   const selectMeeting = useCallback(
     (id: string) => {
       router.push(`/appointments/meetings/${id}`);
@@ -71,12 +108,9 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
     [router],
   );
 
-  const shellClass =
-    "appt-overview-pilot bookable-workspace-pilot appt-pilot-workspace ref-root";
-
   if (editor.loading && meetingId) {
     return (
-      <div className={`${shellClass} min-h-full animate-pulse p-6`}>
+      <div className={`${SHELL_CLASS} min-h-full animate-pulse p-6`}>
         <div className="h-8 w-48 rounded bg-[var(--border)]" />
         <div className="mt-6 h-[480px] rounded-xl border border-[var(--border)] bg-[var(--surface)]" />
       </div>
@@ -85,10 +119,10 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
 
   if (meetingId && editor.failed) {
     return (
-      <div className={`${shellClass} flex min-h-full items-center justify-center p-6`}>
-        <div className="max-w-md text-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12">
+      <div className={`${SHELL_CLASS} flex min-h-full items-center justify-center p-6`}>
+        <div className="max-w-md rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
           <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
-          <p className="mt-3 text-[15px] font-semibold">Meeting not found</p>
+          <p className="mt-3 text-[0.9375rem] font-semibold">Meeting not found</p>
           <Link href="/appointments/meetings" className="appt-pilot-muted-link mt-4 inline-block">
             Back to Meetings
           </Link>
@@ -98,49 +132,79 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
   }
 
   if (!meetingId) {
+    const hasMeetings = meetings.length > 0;
     return (
-      <div className={`${shellClass} flex min-h-[calc(100vh-4rem)]`}>
-        <MeetingsListPanel
-          meetings={meetings}
-          selectedId={null}
-          search={search}
-          onSearch={setSearch}
-          onSelect={selectMeeting}
-          loading={listLoading}
-        />
+      <div className={`${SHELL_CLASS} flex min-h-[calc(100vh-4rem)]`}>
+        <div className="hidden lg:block">
+          <MeetingsListPanel
+            meetings={meetings}
+            selectedId={null}
+            search={search}
+            onSearch={setSearch}
+            onSelect={selectMeeting}
+            loading={listLoading}
+          />
+        </div>
         <div className="ws-empty-state flex-1">
           {listFailed ? (
             <>
-              <p className="text-[14px] font-medium text-[var(--text-primary)]">Could not load meetings</p>
-              <button type="button" className="appt-pilot-primary-btn mt-4" onClick={() => void loadList()}>
+              <div className="ws-empty-icon">
+                <AlertTriangle className="h-6 w-6" aria-hidden />
+              </div>
+              <h2 className="ws-empty-title">Could not load meetings</h2>
+              <p className="ws-empty-body">
+                The meetings list did not respond. Your data is safe — try again.
+              </p>
+              <button
+                type="button"
+                className="appt-pilot-primary-btn mt-6"
+                onClick={() => void loadList()}
+              >
                 Retry
               </button>
-            </>
-          ) : meetings.length === 0 && !listLoading ? (
-            <>
-              <div className="ws-empty-icon">
-                <Video className="h-6 w-6" aria-hidden />
-              </div>
-              <h2 className="mt-4 text-[18px] font-semibold text-[var(--text-primary)]">Schedule bookable meetings</h2>
-              <p className="mt-2 max-w-sm text-[13px] text-[var(--text-secondary)]">
-                Meetings are one-on-one or team calls customers can book — discovery calls, consultations, demos, and more.
-              </p>
-              <Link href="/appointments/meetings/new" className="appt-pilot-primary-btn mt-6 inline-flex">
-                Create meeting
-              </Link>
             </>
           ) : (
             <>
               <div className="ws-empty-icon">
                 <Video className="h-6 w-6" aria-hidden />
               </div>
-              <h2 className="mt-4 text-[18px] font-semibold text-[var(--text-primary)]">Select a meeting</h2>
-              <p className="mt-2 max-w-sm text-[13px] text-[var(--text-secondary)]">
-                Choose a meeting from the list to manage availability, hosts, and booking rules.
+              <h2 className="ws-empty-title">
+                {hasMeetings ? "Select a meeting" : "Schedule bookable meetings"}
+              </h2>
+              <p className="ws-empty-body">
+                {hasMeetings
+                  ? "Pick a meeting from the list to edit its availability, hosts, questions and booking rules."
+                  : "Meetings are one-to-one or team calls customers book themselves — discovery calls, consultations and demos."}
               </p>
+              <div className="ws-empty-hints">
+                <span className="ws-empty-hint">
+                  <CalendarCheck className="h-4 w-4" aria-hidden />
+                  Slots follow your availability
+                </span>
+                <span className="ws-empty-hint">
+                  <Users className="h-4 w-4" aria-hidden />
+                  Route to the right host
+                </span>
+                <span className="ws-empty-hint">
+                  <Link2 className="h-4 w-4" aria-hidden />
+                  Share one booking link
+                </span>
+              </div>
               <Link href="/appointments/meetings/new" className="appt-pilot-primary-btn mt-6 inline-flex">
                 Create meeting
               </Link>
+              {hasMeetings ? (
+                <div className="mt-6 w-full max-w-xs lg:hidden">
+                  <MeetingsListPanel
+                    meetings={meetings}
+                    selectedId={null}
+                    search={search}
+                    onSearch={setSearch}
+                    onSelect={selectMeeting}
+                    loading={listLoading}
+                  />
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -149,7 +213,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
   }
 
   return (
-    <div className={`${shellClass} flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row`}>
+    <div className={`${SHELL_CLASS} flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row`}>
       <div className={`${mobileListOpen ? "block" : "hidden"} lg:block`}>
         <MeetingsListPanel
           meetings={meetings}
@@ -166,9 +230,11 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
           <button
             type="button"
             className="appt-pilot-outline-btn flex-1 justify-between"
+            aria-expanded={mobileListOpen}
             onClick={() => setMobileListOpen((v) => !v)}
           >
-            {editor.form.name || "Select meeting"}
+            <span className="truncate">{editor.form.name || "Select meeting"}</span>
+            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
           </button>
         </div>
 
@@ -181,11 +247,18 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
           copied={editor.copied}
           menuOpen={menuOpen}
           onMenuToggle={() => setMenuOpen((v) => !v)}
+          onMenuClose={() => setMenuOpen(false)}
           onSave={() => void editor.save().then(() => void loadList())}
           onPreview={editor.previewBooking}
           onCopyLink={() => void editor.copyBookingLink()}
-          onDuplicate={() => void editor.duplicate().then(() => void loadList())}
-          onToggleActive={() => void editor.setEnabled(!editor.form.enabled)}
+          onDuplicate={() => {
+            setMenuOpen(false);
+            void editor.duplicate().then(() => void loadList());
+          }}
+          onToggleActive={() => {
+            setMenuOpen(false);
+            void editor.setEnabled(!editor.form.enabled).then(() => void loadList());
+          }}
         />
 
         <MeetingSummaryStrip
@@ -195,8 +268,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
         />
 
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <MeetingLocalNav active={section} onChange={setSection} mobile />
-          <MeetingLocalNav active={section} onChange={setSection} />
+          <MeetingLocalNav active={section} onChange={setSection} attention={attention} />
           <MeetingSectionWorkspace
             section={section}
             form={editor.form}
@@ -207,6 +279,8 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
             onNavigateSection={setSection}
             onPreview={editor.previewBooking}
             onCopyLink={() => void editor.copyBookingLink()}
+            onAddStaff={editor.addStaffMember}
+            onAddLocation={editor.addLocation}
             copied={editor.copied}
           />
         </div>

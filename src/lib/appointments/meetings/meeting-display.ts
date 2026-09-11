@@ -1,6 +1,7 @@
 import type { AppointmentTypeConfig, StaffAssignmentMode } from "@/lib/appointments/types";
 import type { ApiTypeRow } from "@/lib/appointments/booking-types-segments";
 import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import { methodDef } from "@/lib/appointments/meetings/meeting-methods";
 
 const ASSIGNMENT_LABELS: Record<StaffAssignmentMode, string> = {
   any_eligible: "Any available host",
@@ -18,7 +19,7 @@ export function isMeetingRow(row: ApiTypeRow): boolean {
 export function meetingMethodLabel(config?: AppointmentTypeConfig | null): string {
   const loc = config?.location?.trim();
   if (!loc) return "Not set";
-  return loc;
+  return methodDef(loc)?.label || loc;
 }
 
 export function hostAssignmentLabel(
