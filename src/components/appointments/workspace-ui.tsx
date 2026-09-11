@@ -6,13 +6,18 @@ import { ChevronDown, X } from "lucide-react";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
+/**
+ * A section of a workspace: heading, one line of context, then its controls,
+ * closed by a rule. Deliberately not a card — the workspace already sits in a
+ * panel, and wrapping each group in its own bordered surface stacks borders
+ * inside borders and pushes everything into a tall column of boxes.
+ */
 export function SectionCard({
   id,
   title,
   description,
   icon: Icon,
   action,
-  flush,
   children,
 }: {
   id: string;
@@ -20,26 +25,21 @@ export function SectionCard({
   description?: string;
   icon?: IconType;
   action?: React.ReactNode;
-  flush?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="ws-card" aria-labelledby={id}>
-      <div className="ws-card-head">
-        {Icon ? (
-          <span className="ws-card-icon" aria-hidden>
-            <Icon className="h-4 w-4" />
-          </span>
-        ) : null}
+    <section className="ws-flat-section" aria-labelledby={id}>
+      <div className="ws-flat-head">
         <div className="min-w-0 flex-1">
-          <h2 id={id} className="ws-card-title">
+          <h2 id={id} className="ws-flat-title">
+            {Icon ? <Icon className="ws-flat-title-icon h-4 w-4" aria-hidden /> : null}
             {title}
           </h2>
-          {description ? <p className="ws-card-desc">{description}</p> : null}
+          {description ? <p className="ws-flat-desc">{description}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className={flush ? "ws-card-body-flush" : "ws-card-body"}>{children}</div>
+      <div className="ws-flat-body">{children}</div>
     </section>
   );
 }

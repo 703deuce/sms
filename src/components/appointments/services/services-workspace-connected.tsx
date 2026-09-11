@@ -358,16 +358,14 @@ export function ServicesWorkspaceConnected({ serviceId }: Props) {
           nextAvailable={nextAvailable}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <ServiceLocalNav active={section} onChange={setSection} attention={attention} />
-          <ServiceSectionWorkspace
-            section={section}
-            editor={editor}
-            staffNames={staffNames}
-            locationNames={locationNames}
-            onNavigateSection={setSection}
-          />
-        </div>
+        <ServiceLocalNav active={section} onChange={setSection} attention={attention} />
+        <ServiceSectionWorkspace
+          section={section}
+          editor={editor}
+          staffNames={staffNames}
+          locationNames={locationNames}
+          onNavigateSection={setSection}
+        />
       </div>
     </div>
   );

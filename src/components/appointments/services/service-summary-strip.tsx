@@ -18,28 +18,21 @@ type Props = {
   nextAvailable: NextAvailable;
 };
 
-function KpiCell({
+function MetaItem({
   icon: Icon,
   label,
   value,
-  unset,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-  unset?: boolean;
 }) {
   return (
-    <div className="ws-kpi-cell">
-      <p className="ws-kpi-label">
-        <Icon className="h-3 w-3" aria-hidden />
-        {label}
-      </p>
-      {/* title carries the full string because narrow columns must ellipsize */}
-      <p className={`ws-kpi-value${unset ? " is-unset" : ""}`} title={value}>
-        {value}
-      </p>
-    </div>
+    <span className="ws-meta-item">
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="sr-only">{label}: </span>
+      <strong>{value}</strong>
+    </span>
   );
 }
 
@@ -68,6 +61,11 @@ function locationValue(
   );
 }
 
+/**
+ * A single line of the facts an operator checks constantly. It stays one line
+ * because it sits between the header and the section tabs, and anything taller
+ * pushes the actual work below the fold.
+ */
 export function ServiceSummaryStrip({
   form,
   staffNames,
@@ -78,15 +76,10 @@ export function ServiceSummaryStrip({
   // Phases are the authoritative duration when present — the same rule the
   // slot engine applies — so the strip must not report the base duration.
   const duration = phaseTotalMinutes > 0 ? phaseTotalMinutes : form.durationMinutes;
-  const location = locationValue(form, locationNames);
-  const price = servicePriceLabel({
-    payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
-    priceDisplay: form.priceDisplay,
-  });
 
   return (
-    <div className="ws-kpi-strip" aria-label="Service summary">
-      <KpiCell
+    <div className="ws-meta-strip" aria-label="Service summary">
+      <MetaItem
         icon={Clock}
         label="Duration"
         value={
@@ -95,15 +88,17 @@ export function ServiceSummaryStrip({
             : formatDurationMinutes(duration)
         }
       />
-      <KpiCell icon={Users} label="Staff" value={staffValue(form, staffNames)} />
-      <KpiCell icon={MapPin} label="Location" value={location} unset={location === "—"} />
-      <KpiCell icon={Tag} label="Price" value={price} />
-      <KpiCell
-        icon={CalendarClock}
-        label="Next available"
-        value={nextAvailable.label}
-        unset={nextAvailable.state !== "ready"}
+      <MetaItem icon={Users} label="Staff" value={staffValue(form, staffNames)} />
+      <MetaItem icon={MapPin} label="Location" value={locationValue(form, locationNames)} />
+      <MetaItem
+        icon={Tag}
+        label="Price"
+        value={servicePriceLabel({
+          payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
+          priceDisplay: form.priceDisplay,
+        })}
       />
+      <MetaItem icon={CalendarClock} label="Next available" value={nextAvailable.label} />
     </div>
   );
 }

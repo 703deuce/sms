@@ -1,35 +1,29 @@
 "use client";
 
-import { Clock, LayoutGrid, MapPin, Settings2, UserRound, Wallet } from "lucide-react";
 import { SERVICE_SECTIONS, type ServiceSectionId } from "./service-section-types";
-
-const ICONS: Record<ServiceSectionId, React.ComponentType<{ className?: string }>> = {
-  overview: LayoutGrid,
-  scheduling: Clock,
-  "staff-place": MapPin,
-  "pricing-access": Wallet,
-  "customer-setup": UserRound,
-  advanced: Settings2,
-};
 
 type Props = {
   active: ServiceSectionId;
   onChange: (id: ServiceSectionId) => void;
-  /** Sections with an unresolved setup blocker, flagged in the rail. */
+  /** Sections with an unresolved setup blocker, flagged in the strip. */
   attention?: Set<ServiceSectionId>;
 };
 
 /**
- * Both responsive presentations of the same navigation live here — a vertical
- * rail on desktop, a dropdown on smaller screens — so a caller cannot mount one
- * without the other and end up with two navigations at once.
+ * Section navigation sits horizontally under the object header. The app already
+ * spends two columns on vertical navigation — the product sidebar and the
+ * service list — and a third rail beside them reads as a wall of menus, so the
+ * workspace keeps its full width and the sections run across the top.
+ *
+ * Both responsive presentations live here so a caller cannot mount one without
+ * the other and end up showing two navigations at once.
  */
 export function ServiceLocalNav({ active, onChange, attention }: Props) {
   const activeSection = SERVICE_SECTIONS.find((s) => s.id === active);
 
   return (
     <>
-      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 lg:hidden">
+      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 sm:hidden">
         <label className="sr-only" htmlFor="service-section-select">
           Service section
         </label>
@@ -53,33 +47,25 @@ export function ServiceLocalNav({ active, onChange, attention }: Props) {
         ) : null}
       </div>
 
-      <nav className="ws-local-nav hidden lg:block" aria-label="Service sections">
-        <p className="ws-local-nav-heading">Configure</p>
-        <ul className="space-y-0.5">
-          {SERVICE_SECTIONS.map((section) => {
-            const Icon = ICONS[section.id];
-            return (
-              <li key={section.id}>
-                <button
-                  type="button"
-                  onClick={() => onChange(section.id)}
-                  aria-current={active === section.id ? "page" : undefined}
-                  className="ws-local-nav-btn"
-                  title={section.description}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                  <span className="truncate">{section.label}</span>
-                  {attention?.has(section.id) ? (
-                    <span
-                      className="ws-local-nav-flag"
-                      aria-label={`${section.label} needs attention`}
-                    />
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="ws-section-tabs hidden sm:flex" aria-label="Service sections">
+        {SERVICE_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => onChange(section.id)}
+            aria-current={active === section.id ? "page" : undefined}
+            className="ws-section-tab"
+            title={section.description}
+          >
+            {section.label}
+            {attention?.has(section.id) ? (
+              <span
+                className="ws-section-tab-flag"
+                aria-label={`${section.label} needs attention`}
+              />
+            ) : null}
+          </button>
+        ))}
       </nav>
     </>
   );

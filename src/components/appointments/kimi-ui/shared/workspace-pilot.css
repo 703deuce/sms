@@ -507,10 +507,28 @@
 /* ============================================================
    Choice cards — meeting method, host strategy, payment mode
    ============================================================ */
+/*
+ * Two across by default. Auto-fill packed these into three or four narrow
+ * columns on a wide screen, which wrapped every helper line and turned a row
+ * of options into a block of tall tiles. Two columns keeps each option wide
+ * enough that its description fits on one line.
+ */
 .ws-pilot .ws-choice-grid {
   display: grid;
   gap: 0.625rem;
-  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Three short options read better side by side than two-and-one. */
+.ws-pilot .ws-choice-grid.is-triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .ws-pilot .ws-choice-grid,
+  .ws-pilot .ws-choice-grid.is-triple {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ws-pilot .ws-choice-card {
@@ -2075,4 +2093,304 @@
 .ws-pilot .ws-addon-card[aria-pressed="true"] {
   border-color: var(--ws-accent-border);
   background: var(--ws-accent-soft);
+}
+
+/* ============================================================
+   FLAT SECTIONS
+   The workspace is already a panel. Groups inside it are separated by a rule
+   and their own heading rather than by another bordered surface, so borders
+   never nest and the page reads as rows rather than a stack of boxes.
+   ============================================================ */
+
+.ws-pilot .ws-flat-section {
+  margin: 0;
+  padding: 1.375rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.ws-pilot .ws-flat-section:first-child {
+  padding-top: 0;
+}
+
+.ws-pilot .ws-flat-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.ws-pilot .ws-flat-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.ws-pilot .ws-flat-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-flat-title-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-flat-desc {
+  margin-top: 0.1875rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-flat-body {
+  margin-top: 0.875rem;
+}
+
+/* ============================================================
+   HORIZONTAL SECTION TABS
+   ============================================================ */
+
+.ws-pilot .ws-section-tabs {
+  gap: 0;
+  padding: 0 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .ws-pilot .ws-section-tabs {
+    padding: 0 1.75rem;
+  }
+}
+
+.ws-pilot .ws-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.6875rem 0.875rem;
+}
+
+.ws-pilot .ws-section-tab:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: -2px;
+  border-radius: 0.375rem;
+}
+
+.ws-pilot .ws-section-tab-flag {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 9999px;
+  background: var(--state-warning, #b7791f);
+}
+
+/* ============================================================
+   ONE-LINE META STRIP
+   ============================================================ */
+
+.ws-pilot .ws-meta-strip {
+  gap: 0.375rem 0.875rem;
+  padding: 0.4375rem 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .ws-pilot .ws-meta-strip {
+    padding: 0.4375rem 1.75rem;
+  }
+}
+
+.ws-pilot .ws-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-width: 0;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-meta-item + .ws-meta-item::before {
+  content: "";
+  margin-right: 0.5rem;
+  width: 1px;
+  height: 0.75rem;
+  background: var(--border);
+}
+
+.ws-pilot .ws-meta-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Content column: use the width freed by dropping the vertical rail. */
+.ws-pilot .ws-section-col {
+  max-width: 64rem;
+}
+
+/* ============================================================
+   OVERVIEW OPERATIONAL ROWS
+   ============================================================ */
+
+.ws-pilot .ws-customer-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-customer-preview-label {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-setup-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 1rem;
+  margin: 0;
+  padding-bottom: 1.125rem;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--type-helper);
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-setup-progress .done {
+  color: var(--state-success);
+}
+
+/* ============================================================
+   ADVANCED MODULES
+   ============================================================ */
+
+/*
+ * Four facts across one row. Stacking these as expandable rows made a short
+ * section scroll, and every module's summary is two words — it does not need
+ * a full-width row to itself.
+ */
+.ws-pilot .ws-advanced-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .ws-pilot .ws-advanced-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ws-pilot .ws-advanced-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ws-pilot .ws-advanced-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.875rem 1rem;
+}
+
+.ws-pilot .ws-advanced-card.selected {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+}
+
+.ws-pilot .ws-advanced-card .ws-advanced-row-value {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-pilot .ws-advanced-link {
+  align-self: flex-start;
+  margin-top: 0.375rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ws-pilot .ws-advanced-link:hover {
+  text-decoration: underline;
+}
+
+.ws-pilot .ws-advanced-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.ws-pilot .ws-advanced-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-advanced-panel-title svg {
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-advanced-effects {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* Wide and short: each effect is one label and one line of plain English. */
+.ws-pilot .ws-advanced-effects-grid {
+  display: grid;
+  gap: 0.5rem 1.5rem;
+  margin: 0.75rem 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .ws-pilot .ws-advanced-effects-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ws-pilot .ws-advanced-effect {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+  font-size: var(--type-helper);
+}
+
+.ws-pilot .ws-advanced-effect dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  width: 8.5rem;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-advanced-effect dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
 }
