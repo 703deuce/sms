@@ -49,6 +49,11 @@ type Props = {
   phases: ServicePhase[];
   resourceOptions: ResourceOption[];
   namedScheduleOptions: Array<{ id: string; name: string }>;
+  workspaceDefaults: {
+    startIntervalMinutes: number;
+    minimumNoticeMinutes: number;
+    maximumDaysAhead: number;
+  };
   /** Phases live on a saved row, so the timeline is unavailable while creating. */
   serviceSaved: boolean;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
@@ -111,6 +116,7 @@ export function ServiceSchedulingSection({
   phases,
   resourceOptions,
   namedScheduleOptions,
+  workspaceDefaults,
   serviceSaved,
   onFormChange,
   onSavePhase,
@@ -121,6 +127,7 @@ export function ServiceSchedulingSection({
   const [phaseSaving, setPhaseSaving] = useState(false);
   const [newStart, setNewStart] = useState("09:00");
 
+  const workspaceStartInterval = workspaceDefaults.startIntervalMinutes;
   const phaseTotal = phases.reduce((sum, p) => sum + p.durationMinutes, 0);
   const effectiveDuration = phases.length > 0 ? phaseTotal : form.durationMinutes;
   const blockedTotal = form.bufferBeforeMinutes + effectiveDuration + form.bufferAfterMinutes;
@@ -371,7 +378,11 @@ export function ServiceSchedulingSection({
               />
               <span className="min-w-0">
                 <span className="ws-radio-label block">{mode.label}</span>
-                <span className="ws-field-hint block">{mode.helper}</span>
+                <span className="ws-field-hint block">
+                  {mode.value === "standard" && workspaceStartInterval > 0
+                    ? `Your workspace starts everything on a ${workspaceStartInterval}-minute grid, so this service follows that.`
+                    : mode.helper}
+                </span>
               </span>
             </label>
           ))}
@@ -489,8 +500,8 @@ export function ServiceSchedulingSection({
             htmlFor="svc-min-notice"
             hint={
               form.minimumBookingNoticeMinutes > 0
-                ? "Overrides the workspace default for this service."
-                : "0 uses the workspace default."
+                ? `Overrides the workspace default of ${workspaceDefaults.minimumNoticeMinutes} min.`
+                : `0 inherits the workspace default of ${workspaceDefaults.minimumNoticeMinutes} min.`
             }
           >
             <NumberField
@@ -509,8 +520,8 @@ export function ServiceSchedulingSection({
             htmlFor="svc-horizon"
             hint={
               form.maximumBookingDaysAhead > 0
-                ? "Overrides the workspace default for this service."
-                : "0 uses the workspace default."
+                ? `Overrides the workspace default of ${workspaceDefaults.maximumDaysAhead} days.`
+                : `0 inherits the workspace default of ${workspaceDefaults.maximumDaysAhead} days.`
             }
           >
             <NumberField

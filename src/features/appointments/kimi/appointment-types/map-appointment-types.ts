@@ -159,6 +159,27 @@ function parsePrice(priceDisplay?: string): { price: number | null; free: boolea
   return { price: numeric, free: false };
 }
 
+/**
+ * Mirror of what the runtime enforces: the extended policy wins where it is
+ * present, so the editor shows that rather than a stale basic copy.
+ */
+function effectiveCancellationPolicy(cfg: AppointmentTypeConfig): CancellationPolicy {
+  const extended = cfg.extendedCancellationPolicy;
+  if (!extended) return cfg.cancellationPolicy || { allowed: "anytime" };
+  if (extended.allowed === "disabled") return { allowed: "disabled" };
+  if (extended.allowed === "until_before") {
+    const cutoff = extended.cutoff;
+    const hours =
+      cutoff?.unit === "minutes"
+        ? Math.round((cutoff.value ?? 60) / 60)
+        : cutoff?.unit === "days"
+          ? (cutoff.value ?? 1) * 24
+          : (cutoff?.value ?? 24);
+    return { allowed: "until_hours_before", cutoffHours: hours };
+  }
+  return { allowed: "anytime" };
+}
+
 function slugify(name: string, id: string) {
   const fromName = name
     .toLowerCase()
@@ -251,7 +272,7 @@ export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeF
     staffAssignment: cfg.staffAssignment || "any_eligible",
     staffIds: cfg.staffIds || [],
     collectiveStaffIds: cfg.collectiveStaffIds || [],
-    cancellationPolicy: cfg.cancellationPolicy || { allowed: "anytime" },
+    cancellationPolicy: effectiveCancellationPolicy(cfg),
     reschedulePolicy: cfg.reschedulePolicy || { allowed: "anytime" },
     extendedCancellationPolicy: cfg.extendedCancellationPolicy || { allowed: "anytime" },
     paymentMode: payment?.mode || "none",
@@ -328,7 +349,14 @@ export function previewFromForm(form: AppointmentTypeFormState, selected: Appoin
 }
 
 function buildPaymentConfig(form: AppointmentTypeFormState): PaymentRequirement | undefined {
-  if (form.paymentMode === "none") return { mode: "none" };
+  // A pay-in-person service still has a price. Keeping the amount on the config
+  // rather than only in the display string means it survives a round trip;
+  // nothing is charged because the amount due is derived from the mode.
+  if (form.paymentMode === "none") {
+    return form.paymentPriceCents > 0
+      ? { mode: "none", priceCents: form.paymentPriceCents, currency: form.paymentCurrency || "usd" }
+      : { mode: "none" };
+  }
   return {
     mode: form.paymentMode,
     provider: form.paymentProvider || undefined,
@@ -337,6 +365,28 @@ function buildPaymentConfig(form: AppointmentTypeFormState): PaymentRequirement 
     depositPercent: form.paymentDepositPercent || undefined,
     currency: form.paymentCurrency || "usd",
   };
+}
+
+/**
+ * The runtime prefers `extendedCancellationPolicy` over `cancellationPolicy`
+ * and only falls back when it is absent, so the extended copy has to carry the
+ * same decision. Its own extras — the customer-facing text, after-cutoff
+ * behaviour and late fee — are kept.
+ */
+function alignedExtendedCancellation(
+  form: AppointmentTypeFormState,
+): AppointmentTypeFormState["extendedCancellationPolicy"] {
+  const extended = form.extendedCancellationPolicy;
+  const basic = form.cancellationPolicy;
+  if (basic.allowed === "disabled") return { ...extended, allowed: "disabled", cutoff: undefined };
+  if (basic.allowed === "until_hours_before") {
+    return {
+      ...extended,
+      allowed: "until_before",
+      cutoff: { enabled: true, unit: "hours", value: basic.cutoffHours ?? 24 },
+    };
+  }
+  return { ...extended, allowed: "anytime", cutoff: undefined };
 }
 
 export function buildSavePayload(form: AppointmentTypeFormState) {
@@ -389,7 +439,7 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
     collectiveStaffIds: form.collectiveStaffIds.length ? form.collectiveStaffIds : undefined,
     cancellationPolicy: form.cancellationPolicy as CancellationPolicy,
     reschedulePolicy: form.reschedulePolicy as ReschedulePolicy,
-    extendedCancellationPolicy: form.extendedCancellationPolicy,
+    extendedCancellationPolicy: alignedExtendedCancellation(form),
     payment: buildPaymentConfig(form),
     groupBooking: form.groupBookingEnabled
       ? { enabled: true, capacity: Math.max(2, form.groupCapacity) }

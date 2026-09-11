@@ -111,16 +111,18 @@ function ruleCondition(rule: PriceRuleOption): string {
   switch (rule.ruleType) {
     case "day_of_week": {
       const days = (c.days as number[]) || [];
-      return days.length ? `on ${days.map((d) => DAY_LABELS[d]).join(", ")}` : "on selected days";
+      return days.length
+        ? `the appointment is on ${days.map((d) => DAY_LABELS[d]).join(", ")}`
+        : "the appointment is on selected days";
     }
     case "time_of_day":
-      return `between ${c.startHour ?? 0}:00 and ${c.endHour ?? 0}:00`;
+      return `the appointment starts between ${c.startHour ?? 0}:00 and ${c.endHour ?? 0}:00`;
     case "early_bird":
       return `booked ${c.minDaysAhead ?? 7}+ days ahead`;
     case "last_minute":
       return `booked within ${c.maxHoursAhead ?? 24} hours`;
     case "appointment_type":
-      return "for this service";
+      return "the customer books this service";
     default:
       return rule.ruleType;
   }
@@ -519,7 +521,7 @@ export function ServicePricingSection({
                   <span className="min-w-0 flex-1">
                     <span className="ws-rule-name block truncate">{rule.name}</span>
                     <span className="ws-rule-logic block">
-                      <em className="ws-rule-kw">If</em> booked {ruleCondition(rule)}{" "}
+                      <em className="ws-rule-kw">If</em> {ruleCondition(rule)}{" "}
                       <em className="ws-rule-kw">then</em> {ruleEffect(rule)}
                     </span>
                   </span>

@@ -100,6 +100,12 @@ export type ServiceEditorOptions = {
   packageOptions: PackageOption[];
   membershipOptions: MembershipOption[];
   priceRuleOptions: PriceRuleOption[];
+  /** Workspace-wide scheduling defaults a service inherits unless it overrides them. */
+  workspaceDefaults: {
+    startIntervalMinutes: number;
+    minimumNoticeMinutes: number;
+    maximumDaysAhead: number;
+  };
 };
 
 const EMPTY_OPTIONS: ServiceEditorOptions = {
@@ -114,14 +120,17 @@ const EMPTY_OPTIONS: ServiceEditorOptions = {
   packageOptions: [],
   membershipOptions: [],
   priceRuleOptions: [],
+  workspaceDefaults: { startIntervalMinutes: 0, minimumNoticeMinutes: 0, maximumDaysAhead: 0 },
 };
 
 type SettingsPlatform = {
-  workspaceSlug?: string;
   bookingEnabled?: boolean;
   staff?: Array<{ id: string; name: string; role?: string; active?: boolean; customerSelectable?: boolean }>;
   locations?: Array<{ id: string; name: string; kind?: string; address?: string; active?: boolean }>;
   namedSchedules?: Array<{ id: string; name: string }>;
+  minimumBookingNoticeMinutes?: number;
+  maximumBookingDaysAhead?: number;
+  schedulingLimits?: { customStartIntervalMinutes?: number };
 };
 
 function draftStorageKey(serviceId: string | null): string {
@@ -243,7 +252,10 @@ export function useServiceEditor(
     ]);
     if (!settingsRes.ok) throw new Error("settings failed");
 
-    const settingsJson = (await settingsRes.json()) as { data?: SettingsPlatform } & SettingsPlatform;
+    const settingsJson = (await settingsRes.json()) as {
+      data?: SettingsPlatform;
+      workspace?: { slug?: string };
+    } & SettingsPlatform;
     const platform = settingsJson.data || settingsJson;
     const paymentsJson = paymentsRes.ok
       ? ((await paymentsRes.json()) as {
@@ -332,9 +344,14 @@ export function useServiceEditor(
         adjustmentValue: Number(r.adjustmentValue ?? 0),
         active: r.active !== false,
       })),
+      workspaceDefaults: {
+        startIntervalMinutes: platform.schedulingLimits?.customStartIntervalMinutes || 0,
+        minimumNoticeMinutes: platform.minimumBookingNoticeMinutes || 0,
+        maximumDaysAhead: platform.maximumBookingDaysAhead || 0,
+      },
     };
 
-    setWorkspaceSlug(platform.workspaceSlug || "");
+    setWorkspaceSlug(settingsJson.workspace?.slug || "");
     setBookingEnabled(Boolean(platform.bookingEnabled));
     setOptions(next);
   }, []);

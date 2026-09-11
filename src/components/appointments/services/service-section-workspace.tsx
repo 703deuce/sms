@@ -58,6 +58,7 @@ export function ServiceSectionWorkspace({
             phases={editor.phases}
             resourceOptions={editor.options.resourceOptions}
             namedScheduleOptions={editor.options.namedScheduleOptions}
+            workspaceDefaults={editor.options.workspaceDefaults}
             serviceSaved={Boolean(editor.serviceId)}
             onFormChange={onFormChange}
             onSavePhase={editor.savePhase}
