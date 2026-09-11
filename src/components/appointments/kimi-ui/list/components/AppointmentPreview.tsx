@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import {
@@ -58,9 +59,31 @@ export function AppointmentPreview({
         </div>
 
         <div className="tv-drawer__actions">
-          <button type="button" className="tv-btn tv-btn--primary tv-btn--sm" onClick={() => onAction("message")}>Message</button>
-          {isActive && <button type="button" className="tv-btn tv-btn--outline tv-btn--sm" onClick={() => onAction("reschedule")}>Reschedule</button>}
-          {isActive && <button type="button" className="tv-btn tv-btn--ghost tv-btn--sm tv-textdanger" onClick={() => onAction("cancel")}>Cancel</button>}
+          {!row.id.startsWith("enroll:") && (
+            <button type="button" className="tv-btn tv-btn--primary tv-btn--sm" onClick={() => onAction("full")}>
+              Open full appointment
+            </button>
+          )}
+          {row.contact?.id && (
+            <Link href={`/appointments/clients/${row.contact.id}`} className="tv-btn tv-btn--outline tv-btn--sm">
+              Open client
+            </Link>
+          )}
+          {(row.balanceDueCents ?? 0) > 0 && !row.id.startsWith("enroll:") && (
+            <Link
+              href={`/appointments/point-of-sale?appointmentId=${encodeURIComponent(row.id)}`}
+              className="tv-btn tv-btn--outline tv-btn--sm"
+            >
+              Collect balance
+            </Link>
+          )}
+          <button type="button" className="tv-btn tv-btn--ghost tv-btn--sm" onClick={() => onAction("message")}>Message</button>
+          {isActive && !row.id.startsWith("enroll:") && (
+            <button type="button" className="tv-btn tv-btn--outline tv-btn--sm" onClick={() => onAction("reschedule")}>Reschedule</button>
+          )}
+          {isActive && !row.id.startsWith("enroll:") && (
+            <button type="button" className="tv-btn tv-btn--ghost tv-btn--sm tv-textdanger" onClick={() => onAction("cancel")}>Cancel</button>
+          )}
         </div>
 
         <div className="tv-drawer__section">
@@ -68,9 +91,11 @@ export function AppointmentPreview({
           <dl className="tv-deflist">
             <div><dt>Phone</dt><dd>{formatPhone(row.inviteePhone) || "—"}</dd></div>
             <div><dt>Email</dt><dd>{row.inviteeEmail ?? "—"}</dd></div>
-            <div><dt>Staff</dt><dd>{row.metadata.staffName ?? "—"}</dd></div>
+            <div><dt>Staff</dt><dd>{row.staffLabel || row.metadata.staffName || "—"}</dd></div>
+            <div><dt>Type</dt><dd>{row.domainLabel ?? "Service"}</dd></div>
+            <div><dt>Payment</dt><dd>{row.paymentLabel ?? "—"}</dd></div>
             <div><dt>Duration</dt><dd>{row.metadata.durationMinutes ? `${row.metadata.durationMinutes} min` : "—"}</dd></div>
-            <div><dt>Location</dt><dd>{row.metadata.location ?? "—"}</dd></div>
+            <div><dt>Location</dt><dd>{row.locationLabel || row.metadata.location || "—"}</dd></div>
             <div><dt>Source</dt><dd>{row.metadata.source === "booking_page" ? "Booking page" : row.metadata.source === "manual" ? "Created manually" : row.metadata.source === "import" ? "Imported" : "AI Booking"}</dd></div>
           </dl>
         </div>

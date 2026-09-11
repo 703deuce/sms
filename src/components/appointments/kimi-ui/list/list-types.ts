@@ -17,6 +17,13 @@ export type AppointmentRow = {
   inviteeEmail: string | null;
   serviceName: string | null;
   startsAt: string;
+  endsAt?: string | null;
+  domainLabel?: string;
+  staffLabel?: string;
+  locationLabel?: string | null;
+  paymentLabel?: string | null;
+  attentionSummary?: string | null;
+  balanceDueCents?: number;
   status:
     | "confirmed"
     | "awaiting_confirmation"
@@ -51,13 +58,11 @@ const at = (offsetMs: number, hour: number, minute = 0) => {
 };
 
 export const TABS = [
-  { id: "today", label: "Today" },
   { id: "upcoming", label: "Upcoming" },
-  { id: "awaiting_confirmation", label: "Awaiting" },
-  { id: "confirmed", label: "Confirmed" },
-  { id: "reschedule_requested", label: "Reschedule" },
-  { id: "canceled", label: "Canceled" },
+  { id: "today", label: "Today" },
   { id: "past", label: "Past" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "attention", label: "Needs attention" },
   { id: "all", label: "All" },
 ] as const;
 

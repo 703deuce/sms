@@ -678,3 +678,29 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, occupancy, precedence, capacity, parity, matrix |
 
 **Overall:** `APPOINTMENTS_RESOURCES_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–24, per-booking multi-unit quantity, resource-level transaction lock, class occurrence reservation, team/routing proof, custom resource hours)
+
+## CALENDAR (`/appointments/calendar`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_PAGE_PRESERVATION | PASS | Same route, custom grid retained |
+| VISUAL_REDESIGN / PREMIUM | PARTIAL | Teal tokens, compact summary strip, drawer |
+| LAYOUT | PASS | No extra permanent sidebar; drawer overlay |
+| DENSITY | PASS | Stat cards → thin strip |
+| DAY / WEEK / MONTH | PASS | Legacy components |
+| AGENDA_VIEW | PASS | `AgendaListView` |
+| FILTERS | PARTIAL | Staff, location, resource, status, type, search |
+| CLASS / WORKSHOP | PASS | `classOccurrence` projection |
+| TEAM_BOOKINGS | PASS | `teamStaffIds` filter + label |
+| QUICK_DETAIL | PASS | `CalendarEventDrawer` |
+| CREATE_APPOINTMENT | PASS | Slot + toolbar |
+| CANONICAL_CANCEL / RESCHEDULE | PARTIAL | Drawer cancel; reschedule via appointment page |
+| PAYMENT / POS | PARTIAL | Balance label + POS link |
+| EXTERNAL_EVENTS | GAP | Not on grid |
+| DRAG_RESCHEDULE | N/A | |
+| STAFF_COLUMNS | GAP | |
+| BLOCK_TIME | PARTIAL | Availability link |
+| E2E / SCREENSHOTS | BLOCKED | |
+| DOCS | PASS | Audit, contracts, parity, matrix, status |
+
+**Overall:** `APPOINTMENTS_CALENDAR_PAGE_COMPLETE: NO` (E2E 1–35, screenshots 01–34, drag reschedule, external busy grid, forms batch, staff columns, waitlist, full regression proof)

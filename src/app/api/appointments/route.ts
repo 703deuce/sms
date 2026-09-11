@@ -4,9 +4,9 @@ import { jsonError } from "@/lib/api-auth";
 import { requireAppointmentsAccess } from "@/lib/api-appointments-auth";
 import {
   createPlatformAppointment,
-  listAppointments,
   listAppointmentTypes,
 } from "@/lib/appointments";
+import { buildAppointmentsDirectory } from "@/lib/appointments/list/appointments-list-workspace";
 import { assertEventTypeAccess } from "@/lib/appointments/org-permissions";
 
 export async function GET(request: Request) {
@@ -18,13 +18,23 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || undefined;
     const from = searchParams.get("from");
     const to = searchParams.get("to");
-    const data = await listAppointments(auth.workspaceId, {
+    const tab = searchParams.get("tab") || undefined;
+    const staffIds = searchParams.get("staffIds");
+    const { rows, summary } = await buildAppointmentsDirectory(auth.workspaceId, {
+      tab,
       status,
       q,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
+      staffIds: staffIds ? staffIds.split(",").filter(Boolean) : undefined,
+      locationId: searchParams.get("locationId") || undefined,
+      resourceId: searchParams.get("resourceId") || undefined,
+      domainType: searchParams.get("domainType") || undefined,
+      payment: searchParams.get("payment") || undefined,
+      attention: searchParams.get("attention") === "1",
+      take: searchParams.get("take") ? Number(searchParams.get("take")) : undefined,
     });
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: rows, summary });
   } catch (err) {
     return jsonError(err, 500);
   }

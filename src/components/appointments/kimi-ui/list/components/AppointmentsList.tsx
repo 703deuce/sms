@@ -12,7 +12,6 @@ import {
 import { AppointmentStatusBadge } from "./AppointmentStatusBadge";
 import { RowActionsMenu } from "./RowActionsMenu";
 import { EmptyState } from "./EmptyState";
-import { NewAppointmentModal } from "./NewAppointmentModal";
 import { RescheduleModal } from "./RescheduleModal";
 import { CancelAppointmentModal } from "./CancelAppointmentModal";
 import { AppointmentPreview } from "./AppointmentPreview";
@@ -86,6 +85,8 @@ export function AppointmentsList({
   onNavigateToDetail,
   onNavigateToMessage,
   onNavigateToBooking,
+  onNavigateCalendar,
+  onToggleFilters,
 }: {
   tab: string;
   onTabChange: (t: string) => void;
@@ -99,22 +100,14 @@ export function AppointmentsList({
   onRescheduled: (id: string, iso: string) => void | Promise<void>;
   bookingTypes: Array<{ id: string; name: string; durationMinutes: number; location?: string | null }>;
   staffNames: string[];
-  onCreateAppointment: (payload: {
-    inviteeName: string;
-    inviteePhone: string | null;
-    inviteeEmail: string | null;
-    serviceName: string;
-    startsAt: string;
-    staffName: string;
-    notes: string;
-    sendSms: boolean;
-  }) => Promise<void>;
+  onCreateAppointment: () => void | Promise<void>;
   onNavigateToDetail: (id: string) => void;
   onNavigateToMessage: (row: AppointmentRow) => void;
   onNavigateToBooking: () => void;
+  onNavigateCalendar?: () => void;
+  onToggleFilters?: () => void;
 }) {
   const [toast, setToast] = useState<string | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
   const [preview, setPreview] = useState<AppointmentRow | null>(null);
   const [rescheduling, setRescheduling] = useState<AppointmentRow | null>(null);
   const [canceling, setCanceling] = useState<AppointmentRow | null>(null);
@@ -156,13 +149,29 @@ export function AppointmentsList({
       {/* Page header */}
       <div className="tv-pageheader">
         <div>
-          <h1 className="tv-title">Scheduled Appointments</h1>
-          <p className="tv-subtitle">Operational list of booked events and their reminder status.</p>
+          <h1 className="tv-title">Appointments</h1>
+          <p className="tv-subtitle">Manage upcoming, completed, cancelled, and past bookings.</p>
         </div>
         <div className="tv-pageheader__actions">
-          <button type="button" className="tv-btn tv-btn--primary" onClick={() => setNewOpen(true)}>
+          {onNavigateCalendar && (
+            <button type="button" className="tv-btn tv-btn--outline" onClick={onNavigateCalendar}>
+              Calendar
+            </button>
+          )}
+          {onToggleFilters && (
+            <button type="button" className="tv-btn tv-btn--ghost" onClick={onToggleFilters}>
+              Filters
+            </button>
+          )}
+          <button
+            type="button"
+            className="tv-btn tv-btn--primary"
+            onClick={() => {
+              void onCreateAppointment();
+            }}
+          >
             <CalendarPlusIcon />
-            New Appointment
+            New appointment
           </button>
         </div>
       </div>
@@ -243,8 +252,8 @@ export function AppointmentsList({
             icon={<CalendarIcon />}
             title="No appointments yet"
             description="Appointments appear here when customers book through your booking page or you add one manually."
-            actionLabel="New Appointment"
-            onAction={() => setNewOpen(true)}
+            actionLabel="New appointment"
+            onAction={() => void onCreateAppointment()}
             secondaryLabel="Set up booking page"
             onSecondary={onNavigateToBooking}
           />
@@ -258,7 +267,7 @@ export function AppointmentsList({
             title={q ? `No appointments match “${q}”` : "No appointments in this view"}
             description={q ? "Try a different name, phone number, email, or service." : "Try a different filter or create an appointment."}
             actionLabel={q ? "Clear search" : "New Appointment"}
-            onAction={() => (q ? onSearch("") : setNewOpen(true))}
+            onAction={() => (q ? onSearch("") : void onCreateAppointment())}
             secondaryLabel={q ? undefined : "Clear filters"}
             onSecondary={q ? undefined : () => { onTabChange("all"); onSearch(""); }}
           />
@@ -268,11 +277,14 @@ export function AppointmentsList({
       {state === "ready" && rows.length > 0 && (
         <div className="tv-surface">
           <div className="tv-tablehead tv-rowgrid" role="row">
-            <span role="columnheader">Customer</span>
-            <span role="columnheader">Date &amp; time</span>
-            <span role="columnheader">Booking type</span>
+            <span role="columnheader">Date / time</span>
+            <span role="columnheader">Client</span>
+            <span role="columnheader">Booking</span>
+            <span role="columnheader">Staff</span>
+            <span role="columnheader">Location</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader">Reminder</span>
+            <span role="columnheader">Payment</span>
+            <span role="columnheader">Attention</span>
             <span role="columnheader" className="tv-sronly">Actions</span>
           </div>
           {grouped.map(([day, dayRows]) => (
@@ -294,6 +306,13 @@ export function AppointmentsList({
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRow(row); } }}
                     aria-label={`Open preview: ${name}, ${row.serviceName ?? "appointment"}, ${formatDay(row.startsAt, row.timezone)} at ${formatTime(row.startsAt, row.timezone)}`}
                   >
+                    <div className="tv-cellstack">
+                      <span className="tv-strong">{formatDay(row.startsAt, row.timezone)}</span>
+                      <span className="tv-muted">
+                        {formatTime(row.startsAt, row.timezone)}
+                        {row.metadata.durationMinutes ? ` · ${row.metadata.durationMinutes} min` : ""}
+                      </span>
+                    </div>
                     <div className="tv-cellcustomer">
                       <span className="tv-avatar" aria-hidden>{initials(row.inviteeName)}</span>
                       <div className="tv-cellstack">
@@ -302,24 +321,16 @@ export function AppointmentsList({
                       </div>
                     </div>
                     <div className="tv-cellstack">
-                      <span className="tv-strong">{formatDay(row.startsAt, row.timezone)}</span>
-                      <span className="tv-muted">
-                        {formatTime(row.startsAt, row.timezone)}
-                        {row.metadata.durationMinutes ? ` · ${row.metadata.durationMinutes} min` : ""}
-                      </span>
-                    </div>
-                    <div className="tv-cellstack">
                       <span className="tv-strong">{row.serviceName ?? "—"}</span>
-                      <span className="tv-muted">{row.metadata.staffName ?? ""}</span>
+                      <span className="tv-muted">{row.domainLabel ?? "Service"}</span>
                     </div>
-                    <div><AppointmentStatusBadge status={row.status} /></div>
                     <div className="tv-cellstack">
-                      <span className="tv-reminder">
-                        <ReminderDot status={row.reminderStatus} />
-                        {reminderLabel(row.reminderStatus)}
-                      </span>
-                      <span className="tv-muted">{lc}</span>
+                      <span className="tv-strong">{row.staffLabel || row.metadata.staffName || "—"}</span>
                     </div>
+                    <div className="tv-muted">{row.locationLabel || row.metadata.location || "—"}</div>
+                    <div><AppointmentStatusBadge status={row.status} /></div>
+                    <div className="tv-muted">{row.paymentLabel || "—"}</div>
+                    <div className="tv-muted">{row.attentionSummary || "—"}</div>
                     <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                       <RowActionsMenu name={name} status={row.status} onAction={(a) => onRowAction(row, a)} />
                     </div>
@@ -331,16 +342,6 @@ export function AppointmentsList({
         </div>
       )}
 
-      <NewAppointmentModal
-        open={newOpen}
-        bookingTypes={bookingTypes}
-        staffNames={staffNames}
-        onClose={() => setNewOpen(false)}
-        onCreate={async (payload) => {
-          await onCreateAppointment(payload);
-          fire(`Appointment created for ${payload.inviteeName}. Confirmation and reminders scheduled.`);
-        }}
-      />
       <RescheduleModal
         row={rescheduling}
         onClose={() => setRescheduling(null)}
