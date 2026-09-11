@@ -111,6 +111,7 @@ export function ServiceSectionWorkspace({
             intakeFormOptions={editor.options.intakeFormOptions}
             onFormChange={onFormChange}
             onAddIntakeForm={editor.addIntakeForm}
+            serviceId={editor.serviceId}
           />
         </div>
       ) : null}

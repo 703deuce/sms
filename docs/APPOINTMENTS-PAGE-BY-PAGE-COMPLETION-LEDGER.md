@@ -408,3 +408,24 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | SCREENSHOTS | BLOCKED | Not captured |
 
 **Overall:** `APPOINTMENTS_PRICING_PAYMENTS_PAGE_COMPLETE: NO`
+
+## FORMS & DOCUMENTS (`/appointments/forms-documents`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| LAYOUT | PASS | Full-width workspace; horizontal `ws-section-tabs`; no permanent object-list sidebar |
+| DENSITY | PASS | Library/submissions/assignments use `ws-table` compact rows |
+| FORM_BUILDER_REUSE | PASS | `IntakeFormFieldBuilder` shared with service-booking intake admin + `/forms-documents/[id]/builder` |
+| LIBRARY | PASS | Search, filters, types, status, row actions |
+| ASSIGNMENTS | PASS | Grouped table + modal PATCH `config.intakeFormIds` (bidirectional with offering editors) |
+| SUBMISSIONS | PASS | Workspace aggregate + detail drawer API |
+| COMPLETION | PARTIAL | Unsigned contract rows; post-booking intake pending not derived |
+| DOCUMENTS | PASS | Intake waivers + link to contract templates |
+| COMPLETION RULES UI | PARTIAL | Timing options shown; only during-booking enforced in runtime |
+| PUBLIC | PASS | Existing public booking Info step (not rebuilt) |
+| CONTEXTUAL CREATE | PASS | Service “Create & edit in builder” with `returnTo` |
+| DOCS | PASS | Parity audit + component matrix |
+| E2E TESTS 1–20 | BLOCKED | Not run in this pass |
+| SCREENSHOTS 01–19 | BLOCKED | Not captured |
+
+**Overall:** `APPOINTMENTS_FORMS_DOCUMENTS_PAGE_COMPLETE: NO` — blocked on E2E tests, screenshots, post-booking/due timing runtime, class/workshop public form presentation gaps (pre-existing), contact/appointment unified submission chips, conditional field visibility on public renderer.

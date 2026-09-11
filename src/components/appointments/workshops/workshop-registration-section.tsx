@@ -505,7 +505,7 @@ export function WorkshopRegistrationSection({
             <span>
               Answers to registration questions are not stored against a workshop registration yet,
               so they are not shown here.{" "}
-              <Link href="/appointments/booking/forms" className="ws-text-btn">
+              <Link href="/appointments/forms-documents" className="ws-text-btn">
                 Manage forms
               </Link>
             </span>

@@ -184,7 +184,7 @@ export function ClassCustomerSection({ form, options, onFormChange, onAddIntakeF
           flush
           actions={
             <>
-              <Link href="/appointments/booking/forms" className="ws-text-btn">
+              <Link href="/appointments/forms-documents" className="ws-text-btn">
                 Manage forms
               </Link>
               <button type="button" className="ws-text-btn" onClick={() => setFormModal(true)}>

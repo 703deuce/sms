@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
@@ -46,6 +47,7 @@ type Props = {
     value: AppointmentTypeFormState[K],
   ) => void;
   onAddIntakeForm: (name: string) => Promise<string | null>;
+  serviceId?: string | null;
 };
 
 type Draft = { question: BookingQuestion; index: number | null; optionsText: string };
@@ -66,7 +68,9 @@ export function ServiceCustomerSection({
   intakeFormOptions,
   onFormChange,
   onAddIntakeForm,
+  serviceId,
 }: Props) {
+  const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [questionError, setQuestionError] = useState("");
   const [formModal, setFormModal] = useState(false);
@@ -114,7 +118,7 @@ export function ServiceCustomerSection({
     setDraft(null);
   }
 
-  async function createForm() {
+  async function createForm(openBuilder: boolean) {
     setBusy(true);
     const id = await onAddIntakeForm(formName);
     setBusy(false);
@@ -122,6 +126,14 @@ export function ServiceCustomerSection({
     onFormChange("intakeFormIds", [...form.intakeFormIds, id]);
     setFormName("");
     setFormModal(false);
+    if (openBuilder) {
+      const returnTo = serviceId
+        ? `/appointments/services/${serviceId}?section=customer-setup`
+        : "/appointments/forms-documents";
+      router.push(
+        `/appointments/forms-documents/${id}/builder?returnTo=${encodeURIComponent(returnTo)}`,
+      );
+    }
   }
 
   return (
@@ -238,10 +250,10 @@ export function ServiceCustomerSection({
         ) : null}
 
         <p className="ws-field-hint mt-3">
-          <Link href="/appointments/booking/contracts" className="appt-pilot-muted-link">
-            Manage forms
+          <Link href="/appointments/forms-documents" className="appt-pilot-muted-link">
+            Forms &amp; Documents
           </Link>{" "}
-          to edit questions, which are shared with every service using the form.
+          library — edits apply to every offering using the form.
         </p>
       </SectionCard>
 
@@ -477,11 +489,19 @@ export function ServiceCustomerSection({
               </button>
               <button
                 type="button"
+                className="appt-pilot-outline-btn"
+                disabled={!formName.trim() || busy}
+                onClick={() => void createForm(false)}
+              >
+                {busy ? "Creating…" : "Create & attach"}
+              </button>
+              <button
+                type="button"
                 className="appt-pilot-primary-btn"
                 disabled={!formName.trim() || busy}
-                onClick={() => void createForm()}
+                onClick={() => void createForm(true)}
               >
-                {busy ? "Creating…" : "Create form"}
+                {busy ? "Creating…" : "Create & edit in builder"}
               </button>
             </>
           }

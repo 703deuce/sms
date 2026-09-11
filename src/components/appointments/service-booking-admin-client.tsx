@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { IntakeField, IntakeFieldType } from "@/lib/appointments/service-booking/types";
-import { createId } from "@/lib/supabase/id";
+import type { IntakeField } from "@/lib/appointments/service-booking/types";
+import { IntakeFormFieldBuilder } from "@/components/appointments/intake-forms/intake-form-field-builder";
 
 type Section =
   | "categories"
@@ -361,18 +361,6 @@ export function ServiceBookingAdminClient({
   );
 }
 
-const INTAKE_FIELD_TYPES: Array<{ value: IntakeFieldType; label: string }> = [
-  { value: "text", label: "Short text" },
-  { value: "textarea", label: "Long text" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone" },
-  { value: "select", label: "Dropdown" },
-  { value: "file", label: "File upload" },
-  { value: "image", label: "Image upload" },
-  { value: "signature", label: "Signature" },
-  { value: "agreement", label: "Agreement" },
-];
-
 function IntakeFormsPanel({
   items,
   onReload,
@@ -382,46 +370,8 @@ function IntakeFormsPanel({
 }) {
   const forms = items as Array<{ id: string; name: string; fields?: IntakeField[] }>;
   const [selectedId, setSelectedId] = useState<string | null>(forms[0]?.id ?? null);
-  const [fields, setFields] = useState<IntakeField[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   const selected = forms.find((f) => f.id === selectedId) || null;
-
-  useEffect(() => {
-    setFields(selected?.fields || []);
-  }, [selected]);
-
-  function addField(type: IntakeFieldType) {
-    setFields((prev) => [
-      ...prev,
-      {
-        id: createId(),
-        label: type === "file" ? "Upload a file" : type === "image" ? "Upload an image" : "New question",
-        type,
-        required: false,
-      },
-    ]);
-  }
-
-  async function saveFields() {
-    if (!selected) return;
-    setSaving(true);
-    setMessage(null);
-    const res = await fetch(SECTION_API.intake, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selected.id, name: selected.name, fields }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setMessage(json.error || "Save failed");
-      return;
-    }
-    setMessage("Saved");
-    onReload();
-  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
@@ -444,90 +394,12 @@ function IntakeFormsPanel({
       </ul>
 
       {selected ? (
-        <div className="space-y-4 rounded-lg border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">{selected.name}</h2>
-            <div className="flex flex-wrap gap-2">
-              {INTAKE_FIELD_TYPES.map((type) => (
-                <button
-                  key={type.value}
-                  type="button"
-                  className="rounded border px-2 py-1 text-xs"
-                  onClick={() => addField(type.value)}
-                >
-                  + {type.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <ul className="space-y-3">
-            {fields.length === 0 ? (
-              <li className="text-sm text-muted-foreground">Add fields including file or image upload types.</li>
-            ) : (
-              fields.map((field, index) => (
-                <li key={field.id} className="grid gap-2 rounded border p-3 sm:grid-cols-[1fr_160px_auto]">
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span>Label</span>
-                    <input
-                      className="rounded border px-3 py-2"
-                      value={field.label}
-                      onChange={(e) =>
-                        setFields((prev) =>
-                          prev.map((f, i) => (i === index ? { ...f, label: e.target.value } : f)),
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm">
-                    <span>Type</span>
-                    <select
-                      className="rounded border px-3 py-2"
-                      value={field.type}
-                      onChange={(e) =>
-                        setFields((prev) =>
-                          prev.map((f, i) =>
-                            i === index ? { ...f, type: e.target.value as IntakeFieldType } : f,
-                          ),
-                        )
-                      }
-                    >
-                      {INTAKE_FIELD_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-end gap-2 pb-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={field.required === true}
-                      onChange={(e) =>
-                        setFields((prev) =>
-                          prev.map((f, i) => (i === index ? { ...f, required: e.target.checked } : f)),
-                        )
-                      }
-                    />
-                    Required
-                  </label>
-                </li>
-              ))
-            )}
-          </ul>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
-              disabled={saving}
-              onClick={() => void saveFields()}
-            >
-              {saving ? "Saving…" : "Save fields"}
-            </button>
-            {message ? <span className="text-sm text-muted-foreground">{message}</span> : null}
-          </div>
-        </div>
+        <IntakeFormFieldBuilder
+          formId={selected.id}
+          formName={selected.name}
+          initialFields={selected.fields || []}
+          onSaved={onReload}
+        />
       ) : (
         <div className="rounded-lg border p-8 text-sm text-muted-foreground">Select a form to edit fields.</div>
       )}
