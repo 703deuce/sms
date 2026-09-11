@@ -260,6 +260,8 @@ export type AppointmentPlatformConfig = {
     confirmation: ReminderStepConfig;
     reminder24h: ReminderStepConfig;
     reminder2h: ReminderStepConfig;
+    /** Optional extra timed steps — same runtime as core reminders. */
+    additionalSteps?: Array<ReminderStepConfig & { id: string }>;
   };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;

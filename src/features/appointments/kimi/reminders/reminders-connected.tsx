@@ -2,36 +2,35 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import ReminderSettingsView from "@/components/appointments/kimi-ui/reminder-settings/page";
 import {
+  addAdditionalReminderStep,
   buildRemindersPageModel,
   patchReminderAdvanced,
-  patchReminderEnabled,
-  patchReminderTemplate,
   patchReminderChannel,
+  patchReminderEnabled,
+  patchReminderMinutesBefore,
+  patchReminderTemplate,
+  removeReminderStep,
   resetReminderTemplate,
   type RemindersApiConfig,
   type ReminderPreviewMap,
 } from "@/features/appointments/kimi/reminders/map-reminders";
-import type {
-  ReminderStepKey,
-  RemindersPageActions,
-  RemindersPageModel,
-} from "@/features/appointments/kimi/reminders/types";
+import { listReminderStepIds, resolveReminderStep } from "@/lib/appointments/reminders/reminders-config";
+import { DEFAULT_PLATFORM_CONFIG, type AppointmentPlatformConfig } from "@/lib/appointments/types";
+import { RemindersWorkspaceConnected } from "@/components/appointments/reminders/reminders-workspace-connected";
+import type { ReminderStepKey } from "./types";
+import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
+
+const SHELL =
+  "appt-overview-pilot bookable-workspace-pilot ws-pilot appt-pilot-workspace ref-root";
 
 function RemindersLoading() {
   return (
-    <div className="reminder-settings-page mx-auto max-w-[1100px] px-8 py-7 font-sans animate-pulse">
-      <div className="h-8 w-56 rounded bg-gray-200 mb-6" />
-      <div className="grid grid-cols-2 gap-4">
-        <div className="h-40 rounded-xl bg-gray-100" />
-        <div className="h-40 rounded-xl bg-gray-100" />
-      </div>
-      <div className="mt-6 space-y-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-48 rounded-xl bg-gray-100" />
-        ))}
+    <div className={`${SHELL} min-h-full bg-[var(--surface-muted)] p-8`}>
+      <div className="mx-auto max-w-[1560px] animate-pulse space-y-4">
+        <div className="h-10 w-56 rounded bg-[var(--surface)]" />
+        <div className="h-12 rounded bg-[var(--surface)]" />
+        <div className="h-96 rounded bg-[var(--surface)]" />
       </div>
     </div>
   );
@@ -39,26 +38,25 @@ function RemindersLoading() {
 
 function RemindersError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="reminder-settings-page mx-auto max-w-[1100px] px-8 py-7 font-sans flex items-center justify-center min-h-[60vh]">
-      <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-          <AlertTriangle className="h-5 w-5" />
-        </div>
-        <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load reminder settings</h3>
-        <p className="mt-1.5 text-[13px] text-gray-500">
-          Something went wrong while fetching your reminder templates.
-        </p>
-        <Button size="sm" className="mt-5" onClick={onRetry}>Try again</Button>
+    <div className={`${SHELL} flex min-h-full items-center justify-center bg-[var(--surface-muted)] p-8`}>
+      <div className="max-w-md rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-[var(--accent)]" />
+        <h3 className="font-semibold">Could not load reminder settings</h3>
+        <button type="button" className="appt-pilot-primary-btn mt-4" onClick={onRetry}>Try again</button>
       </div>
     </div>
   );
 }
 
-async function loadPreviews(): Promise<ReminderPreviewMap> {
-  const keys: ReminderStepKey[] = ["confirmation", "reminder24h", "reminder2h"];
+function asPlatformConfig(config: RemindersApiConfig): AppointmentPlatformConfig {
+  return { ...DEFAULT_PLATFORM_CONFIG, timezone: config.timezone, reminders: config.reminders };
+}
+
+async function loadPreviews(config: RemindersApiConfig): Promise<ReminderPreviewMap> {
+  const keys = listReminderStepIds(asPlatformConfig(config));
   const entries = await Promise.all(
     keys.map(async (key) => {
-      const res = await fetch(`/api/appointments/reminders/test?step=${key}`);
+      const res = await fetch(`/api/appointments/reminders/test?step=${encodeURIComponent(key)}`);
       if (!res.ok) return [key, ""] as const;
       const json = await res.json();
       return [key, json.data?.preview || ""] as const;
@@ -90,11 +88,17 @@ export function RemindersConnected() {
       })
       .then(async (json) => {
         const data = json.data;
-        setConfig({
+        const nextConfig: RemindersApiConfig = {
           timezone: data.timezone,
-          reminders: data.reminders,
-        });
-        const nextPreviews = await loadPreviews();
+          reminders: {
+            confirmation: data.reminders.confirmation,
+            reminder24h: data.reminders.reminder24h,
+            reminder2h: data.reminders.reminder2h,
+            additionalSteps: data.reminders.additionalSteps || [],
+          },
+        };
+        setConfig(nextConfig);
+        const nextPreviews = await loadPreviews(nextConfig);
         setPreviews(nextPreviews);
       })
       .catch(() => setFailed(true))
@@ -105,13 +109,13 @@ export function RemindersConnected() {
     load();
   }, [load]);
 
-  const model: RemindersPageModel | null = useMemo(
+  const model = useMemo(
     () => (config ? buildRemindersPageModel(config, previews) : null),
     [config, previews],
   );
 
   const refreshPreview = useCallback(async (stepKey: ReminderStepKey) => {
-    const res = await fetch(`/api/appointments/reminders/test?step=${stepKey}`);
+    const res = await fetch(`/api/appointments/reminders/test?step=${encodeURIComponent(stepKey)}`);
     if (!res.ok) return;
     const json = await res.json();
     if (json.data?.preview) {
@@ -119,53 +123,79 @@ export function RemindersConnected() {
     }
   }, []);
 
-  const actions: RemindersPageActions = useMemo(
-    () => ({
-      onSave: async () => {
-        if (!config) return;
-        setSaving(true);
+  const save = useCallback(async () => {
+    if (!config) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/appointments/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reminders: config.reminders, timezone: config.timezone }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      setSaved(true);
+      const nextPreviews = await loadPreviews(config);
+      setPreviews(nextPreviews);
+    } catch {
+      setSaved(false);
+    } finally {
+      setSaving(false);
+    }
+  }, [config]);
+
+  if (loading) return <RemindersLoading />;
+  if (failed || !model || !config) return <RemindersError onRetry={load} />;
+
+  return (
+    <RemindersWorkspaceConnected
+      model={model}
+      saved={saved}
+      saving={saving}
+      onSave={() => void save()}
+      onToggle={(stepKey) => {
+        const step = resolveReminderStep(asPlatformConfig(config), stepKey);
+        if (!step) return;
+        setConfig(patchReminderEnabled(config, stepKey, !step.enabled));
         setSaved(false);
-        try {
-          const res = await fetch("/api/appointments/settings", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reminders: config.reminders, timezone: config.timezone }),
-          });
-          if (!res.ok) throw new Error("save failed");
-          setSaved(true);
-          const nextPreviews = await loadPreviews();
-          setPreviews(nextPreviews);
-        } catch {
-          setSaved(false);
-        } finally {
-          setSaving(false);
-        }
-      },
-      onToggle: (stepKey) => {
-        if (!config) return;
-        const enabled = !config.reminders[stepKey].enabled;
-        setConfig(patchReminderEnabled(config, stepKey, enabled));
-        setSaved(false);
-      },
-      onTemplateChange: (stepKey, template) => {
-        if (!config) return;
+      }}
+      onTemplateChange={(stepKey, template) => {
         setConfig(patchReminderTemplate(config, stepKey, template));
         setSaved(false);
-      },
-      onChannelChange: (stepKey, channel) => {
-        if (!config) return;
+      }}
+      onChannelChange={(stepKey, channel) => {
         setConfig(patchReminderChannel(config, stepKey, channel));
         setSaved(false);
-      },
-      onResetTemplate: (stepKey) => {
-        if (!config) return;
+      }}
+      onResetTemplate={(stepKey) => {
         setConfig(resetReminderTemplate(config, stepKey));
         setSaved(false);
         void refreshPreview(stepKey);
-      },
-      onTestPhoneChange: setTestPhone,
-      onTestStepChange: setTestStep,
-      onSendTest: async () => {
+      }}
+      onMinutesBeforeChange={(stepKey, minutes) => {
+        setConfig(patchReminderMinutesBefore(config, stepKey, minutes));
+        setSaved(false);
+      }}
+      onAddStep={() => {
+        setConfig(addAdditionalReminderStep(config));
+        setSaved(false);
+      }}
+      onRemoveStep={(stepKey) => {
+        setConfig(removeReminderStep(config, stepKey));
+        setSaved(false);
+      }}
+      onAdvancedChange={(stepKey, patch) => {
+        setConfig(patchReminderAdvanced(config, stepKey, patch));
+        setSaved(false);
+      }}
+      testPhone={testPhone}
+      testStep={testStep}
+      testing={testing}
+      testSent={testSent}
+      testError={testError}
+      onTestPhoneChange={setTestPhone}
+      onTestStepChange={setTestStep}
+      onSendTest={async () => {
         if (!testPhone.trim()) return;
         setTesting(true);
         setTestError("");
@@ -188,31 +218,7 @@ export function RemindersConnected() {
         } finally {
           setTesting(false);
         }
-      },
-      onRetry: load,
-      onAdvancedChange: (stepKey, patch) => {
-        if (!config) return;
-        setConfig(patchReminderAdvanced(config, stepKey, patch));
-        setSaved(false);
-      },
-    }),
-    [config, load, refreshPreview, testPhone, testStep],
-  );
-
-  if (loading) return <RemindersLoading />;
-  if (failed || !model) return <RemindersError onRetry={load} />;
-
-  return (
-    <ReminderSettingsView
-      model={model}
-      actions={actions}
-      saved={saved}
-      saving={saving}
-      testPhone={testPhone}
-      testStep={testStep}
-      testing={testing}
-      testSent={testSent}
-      testError={testError}
+      }}
     />
   );
 }

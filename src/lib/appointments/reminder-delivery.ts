@@ -23,9 +23,8 @@ import {
   sendReminderEmailWithTracking,
   sendInternationalAppointmentSms,
 } from "@/lib/appointments/reminder-engine";
+import type { CoreReminderStepKey } from "@/lib/appointments/reminders/reminders-config";
 import { resolveWeeklyHours } from "@/lib/appointments/availability-engine-policy";
-
-type ReminderStepKey = "confirmation" | "reminder24h" | "reminder2h";
 
 async function resolveAppointmentCalendarConnectionId(
   workspaceId: string,
@@ -73,7 +72,7 @@ function shouldSkipStepNow(step: ReminderStepConfig, fireAt: Date, weeklyHours: 
 
 function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>) {
   const steps: Array<{
-    key: ReminderStepKey;
+    key: string;
     timelineType: string;
     minutesBefore: number;
     immediate?: boolean;
@@ -90,7 +89,7 @@ function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointme
     });
   }
 
-  for (const key of ["reminder24h", "reminder2h"] as ReminderStepKey[]) {
+  for (const key of ["reminder24h", "reminder2h"] as CoreReminderStepKey[]) {
     const step = config.reminders[key];
     if (!step.enabled) continue;
     const minutesBefore = step.minutesBefore || (key === "reminder24h" ? 1440 : 120);
@@ -99,6 +98,17 @@ function configuredReminderSteps(config: Awaited<ReturnType<typeof loadAppointme
       timelineType: reminderTimelineType(key, minutesBefore),
       minutesBefore,
       step,
+    });
+  }
+
+  for (const extra of config.reminders.additionalSteps || []) {
+    if (!extra.enabled) continue;
+    const minutesBefore = extra.minutesBefore ?? 60;
+    steps.push({
+      key: extra.id,
+      timelineType: reminderTimelineType(extra.id, minutesBefore),
+      minutesBefore,
+      step: extra,
     });
   }
 
@@ -518,7 +528,7 @@ export function previewReminderMessage(input: {
 
 export async function sendTestReminderSms(
   workspaceId: string,
-  input: { stepKey: "confirmation" | "reminder24h" | "reminder2h"; phone: string },
+  input: { stepKey: string; phone: string },
 ) {
   const prisma = getPrisma();
   const [platform, workspace] = await Promise.all([
@@ -528,7 +538,9 @@ export async function sendTestReminderSms(
       select: { displayName: true, name: true },
     }),
   ]);
-  const step = platform.reminders[input.stepKey];
+  const { resolveReminderStep } = await import("@/lib/appointments/reminders/reminders-config");
+  const step = resolveReminderStep(platform, input.stepKey);
+  if (!step) throw new Error("Reminder step not found");
   if (!step.enabled) throw new Error("This reminder step is disabled");
   const body = `[TEST] ${previewReminderMessage({
     step,
@@ -547,6 +559,7 @@ export function buildReminderSchedule(input: {
     confirmation: ReminderStepConfig;
     reminder24h: ReminderStepConfig;
     reminder2h: ReminderStepConfig;
+    additionalSteps?: Array<ReminderStepConfig & { id: string }>;
   };
   timezone?: string;
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
@@ -555,6 +568,7 @@ export function buildReminderSchedule(input: {
     { key: "confirmation", step: input.config.confirmation },
     { key: "reminder24h", step: input.config.reminder24h },
     { key: "reminder2h", step: input.config.reminder2h },
+    ...(input.config.additionalSteps || []).map((s) => ({ key: s.id, step: s })),
   ];
   const preview = buildFutureReminderSchedule({
     startsAt: input.startsAt,

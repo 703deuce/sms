@@ -1,6 +1,7 @@
 import type { ReminderChannel } from "@/lib/appointments/types";
+import type { ReminderStepId } from "@/lib/appointments/reminders/reminders-config";
 
-export type ReminderStepKey = "confirmation" | "reminder24h" | "reminder2h";
+export type ReminderStepKey = ReminderStepId;
 
 export type ReminderItem = {
   id: string;
@@ -24,6 +25,8 @@ export type ReminderItem = {
   skipClosedDays?: boolean;
   stopOnReply?: boolean;
   attachIcs?: boolean;
+  minutesBefore?: number;
+  isCustom?: boolean;
 };
 
 export type ReminderTestOption = {
@@ -44,6 +47,9 @@ export type RemindersPageActions = {
   onTemplateChange: (stepKey: ReminderStepKey, template: string) => void;
   onChannelChange: (stepKey: ReminderStepKey, channel: ReminderChannel) => void;
   onResetTemplate: (stepKey: ReminderStepKey) => void;
+  onMinutesBeforeChange: (stepKey: ReminderStepKey, minutes: number) => void;
+  onAddStep: () => void;
+  onRemoveStep: (stepKey: ReminderStepKey) => void;
   onTestPhoneChange: (phone: string) => void;
   onTestStepChange: (stepKey: ReminderStepKey) => void;
   onSendTest: () => void;
@@ -57,6 +63,15 @@ export type RemindersPageActions = {
       skipOffHours: boolean;
       stopOnReply: boolean;
       attachIcs: boolean;
+      label: string;
     }>,
   ) => void;
 };
+
+export type RemindersSectionId =
+  | "overview"
+  | "sequence"
+  | "assignment"
+  | "templates"
+  | "activity"
+  | "settings";

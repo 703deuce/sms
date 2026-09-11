@@ -12,16 +12,17 @@ export async function GET(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const { searchParams } = new URL(request.url);
-    const stepKey = (searchParams.get("step") || "confirmation") as
-      | "confirmation"
-      | "reminder24h"
-      | "reminder2h";
+    const stepKey = searchParams.get("step") || "confirmation";
     const platform = await loadAppointmentPlatformConfig(auth.workspaceId);
     const ws = await getPrisma().workspace.findUnique({
       where: { id: auth.workspaceId },
       select: { displayName: true, name: true },
     });
-    const step = platform.reminders[stepKey];
+    const { resolveReminderStep } = await import("@/lib/appointments/reminders/reminders-config");
+    const step = resolveReminderStep(platform, stepKey);
+    if (!step) {
+      return NextResponse.json({ error: "Unknown reminder step" }, { status: 404 });
+    }
     const preview = previewReminderMessage({
       step,
       platform,
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     const auth = await requireSession();
     if ("error" in auth) return auth.error;
     const body = (await request.json()) as {
-      stepKey?: "confirmation" | "reminder24h" | "reminder2h";
+      stepKey?: string;
       phone?: string;
     };
     if (!body.phone?.trim()) {

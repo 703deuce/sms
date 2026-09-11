@@ -41,6 +41,7 @@ export async function loadAppointmentPlatformConfig(
         ...DEFAULT_PLATFORM_CONFIG.reminders.reminder2h,
         ...(stored.reminders?.reminder2h || {}),
       },
+      additionalSteps: stored.reminders?.additionalSteps || [],
     },
     voiceReminders: stored.voiceReminders
       ? ({
@@ -63,6 +64,16 @@ export async function saveAppointmentPlatformConfig(
     reminders: {
       ...current.reminders,
       ...(patch.reminders || {}),
+      confirmation: patch.reminders?.confirmation
+        ? { ...current.reminders.confirmation, ...patch.reminders.confirmation }
+        : current.reminders.confirmation,
+      reminder24h: patch.reminders?.reminder24h
+        ? { ...current.reminders.reminder24h, ...patch.reminders.reminder24h }
+        : current.reminders.reminder24h,
+      reminder2h: patch.reminders?.reminder2h
+        ? { ...current.reminders.reminder2h, ...patch.reminders.reminder2h }
+        : current.reminders.reminder2h,
+      additionalSteps: patch.reminders?.additionalSteps ?? current.reminders.additionalSteps,
     },
     voiceReminders: patch.voiceReminders ?? current.voiceReminders,
     schedulingLimits: patch.schedulingLimits
