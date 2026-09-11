@@ -8,7 +8,33 @@ export type SlotPricingInput = {
   appointmentTypeId?: string;
   staffId?: string;
   locationId?: string;
+  /**
+   * Business timezone. Day-of-week and time-of-day rules describe the operator's
+   * clock, so without it a late-evening slot lands on the wrong weekday.
+   */
+  timezone?: string;
 };
+
+/** Weekday (0 = Sunday) and hour as they read on the business clock. */
+function localDayAndHour(date: Date, timezone?: string): { day: number; hour: number } {
+  if (!timezone) return { day: date.getUTCDay(), hour: date.getUTCHours() };
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      hour: "numeric",
+      hour12: false,
+    }).formatToParts(date);
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? NaN);
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const day = days.indexOf(weekday);
+    if (day < 0 || Number.isNaN(hour)) return { day: date.getUTCDay(), hour: date.getUTCHours() };
+    return { day, hour: hour % 24 };
+  } catch {
+    return { day: date.getUTCDay(), hour: date.getUTCHours() };
+  }
+}
 
 export type PricingAdjustment = {
   ruleId: string;
@@ -67,19 +93,19 @@ function ruleMatches(
   startsAt: Date,
 ) {
   const conditions = (rule.conditions || {}) as Record<string, unknown>;
+  const local = localDayAndHour(startsAt, slot.timezone);
 
   switch (rule.ruleType) {
     case "day_of_week": {
       const days = conditions.days as number[] | undefined;
       if (!days?.length) return false;
-      return days.includes(startsAt.getUTCDay());
+      return days.includes(local.day);
     }
     case "time_of_day": {
       const startHour = conditions.startHour as number | undefined;
       const endHour = conditions.endHour as number | undefined;
       if (startHour == null || endHour == null) return false;
-      const hour = startsAt.getUTCHours();
-      return hour >= startHour && hour < endHour;
+      return local.hour >= startHour && local.hour < endHour;
     }
     case "appointment_type": {
       const typeIds = conditions.appointmentTypeIds as string[] | undefined;

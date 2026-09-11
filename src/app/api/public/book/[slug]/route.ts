@@ -751,6 +751,7 @@ export async function POST(request: Request, { params }: Params) {
           appointmentTypeId: resolvedType?.id || serviceId,
           locationId,
           staffId,
+          timezone: config.timezone,
         });
         if (priced.finalPriceCents !== priced.basePriceCents) {
           effectivePayment = {
