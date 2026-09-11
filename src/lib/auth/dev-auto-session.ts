@@ -54,12 +54,15 @@ export async function resolveDevAutoSession(): Promise<DevAutoSession | null> {
       return null;
     }
 
-    let membership = memberships[0];
+    type MembershipRow = { workspaceId: string; workspace: { type: string } };
+    let membership = memberships[0] as MembershipRow;
     const { resolvePreferredBusinessWorkspaceId } = await import(
       "@/lib/workspace/preferred-business-workspace"
     );
     const preferredId = await resolvePreferredBusinessWorkspaceId(user.id, membership.workspaceId);
-    const preferred = memberships.find((m) => m.workspaceId === preferredId);
+    const preferred = (memberships as MembershipRow[]).find(
+      (m) => m.workspaceId === preferredId,
+    );
     if (preferred) membership = preferred;
 
     const access = await getUserProductAccess(user.id);
