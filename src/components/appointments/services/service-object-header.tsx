@@ -1,18 +1,30 @@
 "use client";
 
-import { Briefcase, Check, Copy, ExternalLink, Globe, MoreHorizontal } from "lucide-react";
+import { useEffect, useRef } from "react";
+import {
+  AlertCircle,
+  Briefcase,
+  Check,
+  Copy,
+  ExternalLink,
+  EyeOff,
+  Globe,
+  MoreHorizontal,
+  Power,
+} from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 
 type Props = {
   form: AppointmentTypeFormState;
+  categoryName: string;
   saveStatus: "saved" | "dirty" | "saving" | "error";
   saving: boolean;
-  isCreating: boolean;
   error?: string;
   bookingLink: string | null;
   copied: boolean;
   menuOpen: boolean;
   onMenuToggle: () => void;
+  onMenuClose: () => void;
   onSave: () => void;
   onPreview: () => void;
   onCopyLink: () => void;
@@ -22,125 +34,155 @@ type Props = {
 
 export function ServiceObjectHeader({
   form,
+  categoryName,
   saveStatus,
   saving,
-  isCreating,
   error,
   bookingLink,
   copied,
   menuOpen,
   onMenuToggle,
+  onMenuClose,
   onSave,
   onPreview,
   onCopyLink,
   onDuplicate,
   onToggleActive,
 }: Props) {
-  const isSaved = saveStatus === "saved" && !isCreating;
-  const saveLabel =
-    saveStatus === "saving"
-      ? "Saving…"
-      : saveStatus === "dirty" || saveStatus === "error"
-        ? "Save changes"
-        : "Saved";
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const title = isCreating ? "Create service" : form.name || "Untitled service";
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) onMenuClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onMenuClose();
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen, onMenuClose]);
+
+  const unsaved = saveStatus === "dirty" || saveStatus === "error";
+  const publiclyBookable = form.enabled && form.visibility === "public";
 
   return (
     <header className="ws-object-header">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="ws-object-icon" aria-hidden>
-            <Briefcase className="h-5 w-5" />
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="ws-object-icon" aria-hidden>
+            <Briefcase className="h-4 w-4" />
+          </span>
           <div className="min-w-0">
-            <h1 className="truncate text-[20px] font-semibold tracking-tight text-[var(--text-primary)]">
-              {title}
-            </h1>
-            {!isCreating ? (
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px]">
-                <span className="ws-badge-neutral">Service</span>
-                <span className={form.enabled ? "ws-badge-active" : "ws-badge-neutral"}>
-                  {form.enabled ? <Check className="h-3 w-3" aria-hidden /> : null}
-                  {form.enabled ? "Active" : "Inactive"}
+            <h1 className="ws-object-title">{form.name || "Untitled service"}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="ws-object-kind">
+                Service{categoryName ? ` · ${categoryName}` : ""}
+              </span>
+              <span className={`ws-chip ${form.enabled ? "ws-chip-success" : "ws-chip-neutral"}`}>
+                {form.enabled ? <Check className="h-3 w-3" aria-hidden /> : null}
+                {form.enabled ? "Active" : "Inactive"}
+              </span>
+              {publiclyBookable ? (
+                <span className="ws-chip ws-chip-neutral">
+                  <Globe className="h-3 w-3" aria-hidden />
+                  Publicly bookable
                 </span>
-                {form.visibility === "public" && form.enabled ? (
-                  <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
-                    <Globe className="h-3 w-3" aria-hidden />
-                    Publicly bookable
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
+              ) : (
+                <span className="ws-chip ws-chip-neutral">
+                  <EyeOff className="h-3 w-3" aria-hidden />
+                  {form.enabled ? "Not listed publicly" : "Not bookable"}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {bookingLink ? (
             <>
               <button type="button" className="appt-pilot-outline-btn" onClick={onPreview}>
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                View booking page
+                <span className="hidden sm:inline">View booking page</span>
+                <span className="sm:hidden">View</span>
               </button>
-              <button type="button" className="appt-pilot-outline-btn" onClick={onCopyLink}>
-                <Copy className="h-3.5 w-3.5" aria-hidden />
+              <button
+                type="button"
+                className="appt-pilot-outline-btn"
+                onClick={onCopyLink}
+                aria-label="Copy booking link"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" aria-hidden />
+                )}
                 {copied ? "Copied" : "Copy link"}
               </button>
             </>
           ) : null}
-          <button
-            type="button"
-            className={isSaved ? "ws-saved-btn" : "ws-saved-btn is-dirty"}
-            disabled={saving || (saveStatus !== "dirty" && saveStatus !== "error" && !isCreating)}
-            onClick={onSave}
-          >
-            {isSaved ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
-            {isCreating ? (saving ? "Creating…" : "Create service") : saveLabel}
-          </button>
-          {!isCreating ? (
-            <div className="relative">
-              <button
-                type="button"
-                className="appt-pilot-outline-btn px-2.5"
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                aria-label="More actions"
-                onClick={onMenuToggle}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-              {menuOpen ? (
-                <div
-                  className="absolute right-0 z-20 mt-1 min-w-[11rem] rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg"
-                  role="menu"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-muted)]"
-                    onClick={onDuplicate}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-muted)]"
-                    onClick={onToggleActive}
-                  >
-                    {form.enabled ? "Deactivate" : "Activate"}
-                  </button>
-                </div>
+
+          {unsaved || saving ? (
+            <button
+              type="button"
+              className="appt-pilot-primary-btn"
+              disabled={saving}
+              onClick={onSave}
+            >
+              {saveStatus === "error" ? (
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden />
               ) : null}
-            </div>
-          ) : null}
+              {saving ? "Saving…" : saveStatus === "error" ? "Retry save" : "Save changes"}
+            </button>
+          ) : (
+            <span className="ws-save-state" role="status">
+              <Check className="h-3.5 w-3.5 text-[var(--state-success)]" aria-hidden />
+              Saved
+            </span>
+          )}
+
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              className="appt-pilot-outline-btn px-2.5"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label="More actions"
+              onClick={onMenuToggle}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen ? (
+              <div className="ws-menu" role="menu">
+                <button type="button" role="menuitem" className="ws-menu-item" onClick={onDuplicate}>
+                  <Copy className="h-3.5 w-3.5" aria-hidden />
+                  Duplicate service
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`ws-menu-item${form.enabled ? " danger" : ""}`}
+                  onClick={onToggleActive}
+                >
+                  <Power className="h-3.5 w-3.5" aria-hidden />
+                  {form.enabled ? "Deactivate" : "Activate"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
+
       {error ? (
         <p
-          className="mt-3 rounded-lg border border-[var(--state-error)]/30 bg-[var(--state-error-soft)] px-3 py-2 text-[13px] text-[var(--state-error)]"
+          className="mt-3 flex items-center gap-2 rounded-lg border border-[rgba(199,72,72,0.3)] bg-[var(--state-error-soft)] px-3 py-2 text-[var(--type-list)] text-[var(--state-error)]"
           role="alert"
         >
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
         </p>
       ) : null}
