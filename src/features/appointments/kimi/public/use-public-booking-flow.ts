@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appointmentSmsConsentDisclosure } from "@/lib/appointments/sms-consent-disclosure";
 import type {
   PublicBookingCategory,
@@ -501,6 +501,18 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
     [slug, selectedType],
   );
 
+  /*
+   * pickType() sets selectedType, which pickType itself depends on. Reading it
+   * through a ref keeps load() referentially stable, otherwise preselecting a
+   * type from the URL re-creates load, re-fires its effect, and the page
+   * refetches forever without ever clearing its loading state.
+   */
+  const pickTypeRef = useRef(pickType);
+  useEffect(() => {
+    pickTypeRef.current = pickType;
+  });
+  const preselectApplied = useRef(false);
+
   const load = useCallback(() => {
     setLoading(true);
     setError("");
@@ -537,14 +549,17 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
         setLocationOptions(json.data.locations || []);
         if (deepLinkStaffId) setSelectedStaffId(deepLinkStaffId);
         if (deepLinkLocationId) setSelectedLocationId(deepLinkLocationId);
-        if (initialServiceId || preselectTypeId) {
+        if ((initialServiceId || preselectTypeId) && !preselectApplied.current) {
           const match = list.find((t) => t.id === (preselectTypeId || initialServiceId));
-          if (match) void pickType(match);
+          if (match) {
+            preselectApplied.current = true;
+            void pickTypeRef.current(match);
+          }
         }
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [slug, initialServiceId, preselectTypeId, pickType, deepLinkStaffId, deepLinkLocationId]);
+  }, [slug, initialServiceId, preselectTypeId, deepLinkStaffId, deepLinkLocationId]);
 
   useEffect(() => {
     load();
