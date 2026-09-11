@@ -154,7 +154,10 @@ export async function GET(_request: Request, { params }: Params) {
       .filter((s) => s.active !== false && s.customerSelectable !== false)
       .map((s) => ({
         id: s.id,
-        name: s.name,
+        name: s.publicDisplayName || s.name,
+        title: s.title || s.role || undefined,
+        bio: s.bio || undefined,
+        avatarUrl: s.avatarUrl || undefined,
       }));
     const locations = (config.locations || []).filter((l) => l.active !== false).map((l) => ({
       id: l.id,

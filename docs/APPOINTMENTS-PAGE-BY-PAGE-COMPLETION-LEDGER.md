@@ -548,3 +548,26 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, scoring, parity, matrix |
 
 **Overall:** `APPOINTMENTS_MEETING_POLLS_PAGE_COMPLETE: NO` (E2E tests 1–25, screenshots 01–22, poll invite email delivery, suggest-from-availability UI)
+
+## STAFF (`/appointments/staff`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_BACKEND_REUSE | PASS | `BookableStaffMember`, settings PATCH, availability + calendar read models |
+| VISUAL | PASS | Pilot tokens; full-width directory + detail |
+| LAYOUT | PASS | No object-list sidebar; horizontal detail nav |
+| DENSITY | PASS | Compact table + modules |
+| STAFF_DIRECTORY | PASS | Workspace API + summary strip |
+| STAFF_CREATE | PASS | 3-step modal → POST |
+| PROFILE | PASS | Detail public + overview |
+| SERVICE_ASSIGNMENTS | PASS | Sync `staff-service-sync` |
+| LOCATION_ASSIGNMENTS | PASS | `syncStaffLocationAssignments` |
+| AVAILABILITY_LINKAGE | PASS | Summary only; link to Availability |
+| CALENDAR_STATUS | PASS | Integrations connection read |
+| DEACTIVATION | PASS | Future appointment guard |
+| ACCOUNT_INVITE | PARTIAL | Team settings link |
+| PHOTO | PARTIAL | URL field only |
+| E2E / SCREENSHOTS | BLOCKED | — |
+| DOCS | PASS | Audit, parity, matrix |
+
+**Overall:** `APPOINTMENTS_STAFF_PAGE_COMPLETE: NO` (E2E 1–28, screenshots 01–22, avatar upload, staff ordering, full account invite wiring)

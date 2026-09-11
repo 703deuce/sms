@@ -109,6 +109,17 @@ export type BookableStaffMember = {
   weeklyHours?: Record<string, Array<{ open: string; close: string }>>;
   dateOverrides?: DateOverride[];
   blackoutDates?: string[];
+  /** Customer-facing display name (falls back to `name`) */
+  publicDisplayName?: string;
+  /** Job / role label shown to customers */
+  title?: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  avatarUrl?: string;
+  /** Legacy alias used in some editors */
+  role?: string;
+  createdAt?: string;
 };
 
 export type AppointmentLocation = {
