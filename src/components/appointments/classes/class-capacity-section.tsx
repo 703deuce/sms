@@ -52,6 +52,14 @@ const ATTENDANCE_LABEL: Record<string, string> = {
   late_cancel: "Late cancel",
 };
 
+const WAITLIST_STATUS_LABEL: Record<string, string> = {
+  active: "Waiting",
+  offered: "Seat offered",
+  converted: "Registered",
+  expired: "Offer expired",
+  removed: "Removed",
+};
+
 function accessLabel(registrant: ClassRegistrant, form: ClassFormState): string {
   if (registrant.access) return registrant.access;
   return form.isFree ? "Free" : "Due on arrival";
@@ -461,6 +469,7 @@ export function ClassCapacitySection({
           title="Waitlist"
           description={`${waitlist.length} waiting · position is arrival order`}
           onClose={() => setWaitlistOpen(false)}
+          wide
           footer={
             <button
               type="button"
@@ -515,7 +524,7 @@ export function ClassCapacitySection({
                       <span
                         className={`ws-chip ${entry.status === "offered" ? "ws-chip-warning" : "ws-chip-neutral"}`}
                       >
-                        {entry.status}
+                        {WAITLIST_STATUS_LABEL[entry.status] || entry.status}
                       </span>
                     </td>
                     <td>{new Date(entry.createdAt).toLocaleDateString()}</td>

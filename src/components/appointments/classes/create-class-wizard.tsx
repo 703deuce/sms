@@ -37,6 +37,7 @@ import {
   describeClassRecurrence,
   expandClassRecurrence,
   WEEKDAY_LABELS,
+  withStartDate,
 } from "@/lib/appointments/classes/class-recurrence";
 import { classPriceLabel, formatSessionRange } from "@/lib/appointments/classes/class-summary";
 import {
@@ -507,7 +508,12 @@ export function CreateClassWizard() {
                       id="wiz-cls-date"
                       type="date"
                       value={rule.startDate}
-                      onChange={(e) => setRule("startDate", e.target.value)}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          recurrence: withStartDate(prev.recurrence, e.target.value),
+                        }))
+                      }
                     />
                   </Field>
                   <Field label="Start time" htmlFor="wiz-cls-time">

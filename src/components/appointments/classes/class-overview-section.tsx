@@ -306,6 +306,7 @@ export function ClassOverviewSection({
               <p className="ws-summary-row-label">Registered</p>
               <div className="ws-stat">
                 <span className="ws-stat-value">{registrantCount}</span>
+                <span className="ws-stat-unit">all sessions</span>
               </div>
             </div>
             <div>

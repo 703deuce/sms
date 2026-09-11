@@ -2752,6 +2752,13 @@
   white-space: nowrap;
 }
 
+/* Two actions in one cell run together without this. Spaced with a margin
+   rather than a flex gap so the cell stays a table cell and keeps its row
+   alignment. */
+.ws-pilot .ws-table td.ws-cell-actions > * + * {
+  margin-left: 0.875rem;
+}
+
 .ws-pilot .ws-table .ws-cell-num {
   width: 3rem;
   color: var(--text-tertiary);
@@ -2780,6 +2787,14 @@
   background: var(--surface);
   box-shadow: var(--ws-shadow-overlay);
   animation: ws-drawer-in 0.16s ease-out;
+}
+
+/*
+ * A six-column table does not fit the field-list width, and clipping the
+ * Actions column would hide the only controls the waitlist has.
+ */
+.ws-pilot .ws-drawer.is-wide {
+  width: min(100%, 46rem);
 }
 
 @keyframes ws-drawer-in {
@@ -2967,7 +2982,11 @@
   border-color: var(--ws-accent-border);
 }
 
-.ws-pilot .ws-people-card[aria-pressed="true"] {
+/* The card is a radio inside the instructor and location groups and a plain
+   toggle in the wizard, so selection is read off whichever attribute the
+   caller's role actually allows. */
+.ws-pilot .ws-people-card[aria-pressed="true"],
+.ws-pilot .ws-people-card[aria-checked="true"] {
   border-color: var(--ws-accent);
   background: var(--ws-accent-soft);
 }
@@ -2987,7 +3006,8 @@
   color: var(--ws-accent);
 }
 
-.ws-pilot .ws-people-card[aria-pressed="true"] .ws-people-avatar {
+.ws-pilot .ws-people-card[aria-pressed="true"] .ws-people-avatar,
+.ws-pilot .ws-people-card[aria-checked="true"] .ws-people-avatar {
   background: var(--surface);
 }
 

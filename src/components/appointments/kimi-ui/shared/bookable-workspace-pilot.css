@@ -414,6 +414,9 @@
 .bookable-workspace-pilot .ws-empty-state {
   display: flex;
   flex: 1;
+  /* Without this the flex item takes its min-content width, and on a phone the
+     hint tiles push the whole empty state wider than the screen. */
+  min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;

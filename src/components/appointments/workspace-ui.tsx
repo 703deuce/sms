@@ -89,12 +89,15 @@ export function Drawer({
   description,
   onClose,
   footer,
+  wide,
   children,
 }: {
   title: string;
   description?: string;
   onClose: () => void;
   footer?: React.ReactNode;
+  /** For a drawer holding a table rather than a field list. */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -121,7 +124,7 @@ export function Drawer({
         }}
       >
         <div
-          className="ws-drawer"
+          className={wide ? "ws-drawer is-wide" : "ws-drawer"}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}

@@ -160,8 +160,10 @@ export function ClassesWorkspaceConnected({ classId }: Props) {
   if (!classId) {
     const hasClasses = listRows.length > 0;
     return (
-      <div className={`${SHELL_CLASS} flex min-h-[calc(100vh-4rem)]`}>
-        <div className="hidden lg:block">
+      <div className={`${SHELL_CLASS} flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row`}>
+        {/* One list, not one per breakpoint: two copies would be two "Classes
+            list" landmarks and two sets of the same controls. */}
+        <div className={hasClasses ? "block" : "hidden lg:block"}>
           <ClassesListPanel
             classes={listRows}
             selectedId={null}
@@ -217,18 +219,6 @@ export function ClassesWorkspaceConnected({ classId }: Props) {
               <Link href="/appointments/classes/new" className="appt-pilot-primary-btn mt-6 inline-flex">
                 Create class
               </Link>
-              {hasClasses ? (
-                <div className="mt-6 w-full max-w-xs lg:hidden">
-                  <ClassesListPanel
-                    classes={listRows}
-                    selectedId={null}
-                    search={search}
-                    onSearch={setSearch}
-                    onSelect={selectClass}
-                    loading={listLoading}
-                  />
-                </div>
-              ) : null}
             </>
           )}
         </div>

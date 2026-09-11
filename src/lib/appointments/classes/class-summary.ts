@@ -19,7 +19,6 @@ export function formatSessionTime(iso: string): string {
 }
 
 export function formatSessionRange(startsAt: string, endsAt: string): string {
-  const start = new Date(startsAt);
   const end = new Date(endsAt);
   const time = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   return `${formatSessionTime(startsAt)} – ${time}`;

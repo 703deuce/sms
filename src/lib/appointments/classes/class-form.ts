@@ -5,6 +5,7 @@ import {
 } from "@/lib/appointments/class-series-offering";
 import {
   EMPTY_RECURRENCE,
+  inferClassRecurrence,
   parseClassRecurrence,
 } from "@/lib/appointments/classes/class-recurrence";
 
@@ -151,6 +152,20 @@ export function classFormFromRow(row: ClassSeriesRow): ClassFormState {
       : [];
   const isFree = meta.isFree !== false && !(meta.priceCents && meta.priceCents > 0);
 
+  const stored = parseClassRecurrence(row.recurrenceRule);
+  const recurrence = stored.startDate
+    ? stored
+    : (inferClassRecurrence(row.occurrences || []) ?? stored);
+
+  // A class created before the timezone moved into metadata still carries it on
+  // the recurrence rule, and the schedule editor should not claim UTC for it.
+  const legacyTimezone =
+    row.recurrenceRule &&
+    typeof row.recurrenceRule === "object" &&
+    typeof (row.recurrenceRule as { timezone?: unknown }).timezone === "string"
+      ? (row.recurrenceRule as { timezone: string }).timezone
+      : "";
+
   return {
     name: row.name || "",
     description: row.description || "",
@@ -159,12 +174,12 @@ export function classFormFromRow(row: ClassSeriesRow): ClassFormState {
     locationId: row.locationId || "",
     active: row.active !== false,
     requireFullSeries: row.requireFullSeries === true,
-    recurrence: parseClassRecurrence(row.recurrenceRule),
+    recurrence,
 
     visibility: meta.visibility === "hidden" ? "hidden" : "public",
     imageUrl: meta.imageUrl || "",
     category: meta.category || "",
-    timezone: meta.timezone || "",
+    timezone: meta.timezone || legacyTimezone,
 
     isFree,
     priceCents: Number(meta.priceCents ?? 0) || 0,

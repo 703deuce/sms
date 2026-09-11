@@ -2,7 +2,7 @@
 
 import { CreditCard, Gift, Info, Layers, Lock, Tag } from "lucide-react";
 import Link from "next/link";
-import { Field, Panel, Switch, TextInput } from "@/components/appointments/workspace-ui";
+import { Field, Panel, Switch } from "@/components/appointments/workspace-ui";
 import type { ClassFormState } from "@/lib/appointments/classes/class-form";
 import type { ClassEditorOptions } from "@/features/appointments/kimi/classes/use-class-editor";
 import { formatMoney } from "@/lib/appointments/classes/class-summary";

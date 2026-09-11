@@ -125,7 +125,6 @@ export function ClassPeoplePlaceSection({
                 className="ws-people-card"
                 role="radio"
                 aria-checked={!form.staffId}
-                aria-pressed={!form.staffId}
                 onClick={() => onFormChange("staffId", "")}
               >
                 <span className="ws-people-avatar" aria-hidden>
@@ -143,7 +142,6 @@ export function ClassPeoplePlaceSection({
                   className="ws-people-card"
                   role="radio"
                   aria-checked={form.staffId === staff.id}
-                  aria-pressed={form.staffId === staff.id}
                   onClick={() => onFormChange("staffId", staff.id)}
                 >
                   <span className="ws-people-avatar" aria-hidden>
@@ -198,7 +196,6 @@ export function ClassPeoplePlaceSection({
                 className="ws-people-card"
                 role="radio"
                 aria-checked={!form.locationId}
-                aria-pressed={!form.locationId}
                 onClick={() => onFormChange("locationId", "")}
               >
                 <span className="ws-people-avatar" aria-hidden>
@@ -216,7 +213,6 @@ export function ClassPeoplePlaceSection({
                   className="ws-people-card"
                   role="radio"
                   aria-checked={form.locationId === location.id}
-                  aria-pressed={form.locationId === location.id}
                   onClick={() => onFormChange("locationId", location.id)}
                 >
                   <span className="ws-people-avatar" aria-hidden>

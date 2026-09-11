@@ -57,6 +57,75 @@ export function parseClassRecurrence(value: unknown): typeof EMPTY_RECURRENCE {
 }
 
 /**
+ * Applies a new start date, moving a lone weekday selection to match it.
+ *
+ * The weekday defaults to the day the class was started on, so picking a
+ * Monday start date and leaving Friday ticked would quietly produce Friday
+ * sessions. A single selection is treated as the default and follows the date;
+ * two or more days are a deliberate choice and are left alone.
+ */
+export function withStartDate(
+  rule: typeof EMPTY_RECURRENCE,
+  startDate: string,
+): typeof EMPTY_RECURRENCE {
+  const next = { ...rule, startDate };
+  if (!startDate || rule.weekdays.length !== 1) return next;
+  const [y, m, d] = startDate.split("-").map(Number);
+  if (!y || !m || !d) return next;
+  const weekday = new Date(y, m - 1, d).getDay();
+  return rule.weekdays[0] === weekday ? next : { ...next, weekdays: [weekday] };
+}
+
+/**
+ * Reads a pattern back off the sessions a class already has.
+ *
+ * Classes created before the rule was stored, or created by an import, have
+ * real sessions and no recurrence. Showing "Not scheduled" for a class that
+ * plainly runs every Tuesday is worse than a good guess, and the guess is only
+ * ever a starting point: nothing is rewritten until the operator generates
+ * sessions.
+ */
+export function inferClassRecurrence(
+  occurrences: Array<{ startsAt: string; endsAt: string }>,
+): typeof EMPTY_RECURRENCE | null {
+  const sorted = [...occurrences]
+    .map((o) => ({ start: new Date(o.startsAt), end: new Date(o.endsAt) }))
+    .filter((o) => !Number.isNaN(o.start.getTime()) && !Number.isNaN(o.end.getTime()))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  if (sorted.length === 0) return null;
+
+  const first = sorted[0];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const base = {
+    ...EMPTY_RECURRENCE,
+    startDate: `${first.start.getFullYear()}-${pad(first.start.getMonth() + 1)}-${pad(first.start.getDate())}`,
+    startTime: `${pad(first.start.getHours())}:${pad(first.start.getMinutes())}`,
+    durationMinutes: Math.max(
+      5,
+      Math.round((first.end.getTime() - first.start.getTime()) / 60_000),
+    ),
+    endsMode: "after" as const,
+    endsAfter: sorted.length,
+  };
+
+  if (sorted.length === 1) {
+    return { ...base, pattern: "one_time", endsAfter: 1 };
+  }
+
+  const gapDays = Math.round(
+    (sorted[1].start.getTime() - first.start.getTime()) / 86_400_000,
+  );
+  const repeat =
+    gapDays <= 1 ? "daily" : gapDays >= 27 ? "monthly" : gapDays >= 12 ? "biweekly" : "weekly";
+  const weekdays =
+    repeat === "weekly" || repeat === "biweekly"
+      ? [...new Set(sorted.map((o) => o.start.getDay()))].sort()
+      : [];
+
+  return { ...base, repeat, weekdays };
+}
+
+/**
  * Built from the date and time parts rather than `new Date(iso)` so the result
  * is anchored to the browser's zone. The class timezone is recorded separately;
  * converting here would silently shift every session an operator just typed.

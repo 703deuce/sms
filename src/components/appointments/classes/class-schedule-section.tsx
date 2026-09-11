@@ -23,6 +23,7 @@ import {
   describeClassRecurrence,
   expandClassRecurrence,
   WEEKDAY_LABELS,
+  withStartDate,
 } from "@/lib/appointments/classes/class-recurrence";
 import { formatSessionRange } from "@/lib/appointments/classes/class-summary";
 
@@ -104,6 +105,10 @@ export function ClassScheduleSection({
     onFormChange("recurrence", { ...rule, [key]: value });
   }
 
+  function setStartDate(value: string) {
+    onFormChange("recurrence", withStartDate(rule, value));
+  }
+
   function toggleWeekday(day: number) {
     const next = rule.weekdays.includes(day)
       ? rule.weekdays.filter((d) => d !== day)
@@ -182,7 +187,7 @@ export function ClassScheduleSection({
                 id="cls-start-date"
                 type="date"
                 value={rule.startDate}
-                onChange={(e) => setRule("startDate", e.target.value)}
+                onChange={(e) => setStartDate(e.target.value)}
               />
             </Field>
             <Field label="Start time" htmlFor="cls-start-time">
