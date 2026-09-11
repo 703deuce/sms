@@ -1,6 +1,32 @@
 /** Customer-facing offering kind for ClassSeries rows (workshops use event-style registration). */
 export type ClassSeriesOfferingKind = "class" | "workshop";
 
+/** How a class repeats. Persisted on `class_series.recurrence_rule`. */
+export type ClassRecurrence = {
+  pattern?: "one_time" | "repeating";
+  startDate?: string;
+  startTime?: string;
+  durationMinutes?: number;
+  repeat?: "daily" | "weekly" | "biweekly" | "monthly";
+  /** 0 = Sunday, matching `Date.getDay()`. */
+  weekdays?: number[];
+  endsMode?: "never" | "on" | "after";
+  endsOn?: string;
+  endsAfter?: number;
+};
+
+/**
+ * A question asked at registration. Same shape as the appointment booking
+ * question so the two can share editors and, later, one renderer.
+ */
+export type ClassBookingQuestion = {
+  id: string;
+  label: string;
+  type: "text" | "textarea" | "select" | "checkbox" | "phone" | "email";
+  required?: boolean;
+  options?: string[];
+};
+
 /** Extended ClassSeries metadata persisted in `class_series.metadata` JSON. */
 export type ClassSeriesMetadata = {
   kind?: ClassSeriesOfferingKind | "event";
@@ -9,6 +35,8 @@ export type ClassSeriesMetadata = {
   category?: string;
   priceCents?: number;
   isFree?: boolean;
+  /** How a seat is paid for. Only `free` and `on_site` have a runtime today. */
+  paymentMode?: "free" | "on_site";
   packageProductIds?: string[];
   membershipProductIds?: string[];
   memberOnly?: boolean;
@@ -16,7 +44,14 @@ export type ClassSeriesMetadata = {
   waitlistAutoPromote?: boolean;
   waitlistOfferExpiresHours?: number;
   intakeFormId?: string;
+  intakeFormIds?: string[];
+  bookingQuestions?: ClassBookingQuestion[];
+  requireEmail?: boolean;
+  requirePhone?: boolean;
+  requireLastName?: boolean;
+  resourceIds?: string[];
   cancellationPolicy?: string;
+  cancellationWindowHours?: number;
   termsUrl?: string;
   admissionEnabled?: boolean;
   confirmationMessage?: string;
