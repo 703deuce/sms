@@ -12,11 +12,15 @@ import {
   type ClassSeriesRow,
 } from "@/lib/appointments/classes/class-form";
 import { resolveClassSeriesOfferingKind } from "@/lib/appointments/class-series-offering";
-import type { PackageCreditRule } from "@/lib/appointments/service-booking/types";
+import type { MembershipBenefits, PackageCreditRule } from "@/lib/appointments/service-booking/types";
 import {
   packageIncludesOffering,
   togglePackageForOffering,
 } from "@/features/appointments/kimi/packages/use-package-editor";
+import {
+  membershipIncludesOffering,
+  toggleMembershipForOffering,
+} from "@/features/appointments/kimi/memberships/use-membership-editor";
 import type { PlannedOccurrence } from "@/lib/appointments/classes/class-recurrence";
 import {
   newLocation,
@@ -56,7 +60,13 @@ export type ClassEditorOptions = {
   resourceOptions: Array<{ id: string; name: string; quantity: number }>;
   intakeFormOptions: Array<{ id: string; name: string; fieldCount: number }>;
   packageOptions: Array<{ id: string; name: string; priceCents: number; creditRules: PackageCreditRule[] }>;
-  membershipOptions: Array<{ id: string; name: string; priceCents: number; billingInterval: string }>;
+  membershipOptions: Array<{
+    id: string;
+    name: string;
+    priceCents: number;
+    billingInterval: string;
+    benefits: MembershipBenefits;
+  }>;
 };
 
 const EMPTY_OPTIONS: ClassEditorOptions = {
@@ -213,6 +223,7 @@ export function useClassEditor(classId: string | null) {
           name: String(m.name),
           priceCents: Number(m.priceCents ?? 0),
           billingInterval: String(m.billingInterval || "month"),
+          benefits: (m.benefits as MembershipBenefits) || {},
         })),
     });
   }, []);
@@ -620,6 +631,43 @@ export function useClassEditor(classId: string | null) {
     [classId, form.name, options.packageOptions],
   );
 
+  const eligibleMembershipIds = useMemo(() => {
+    if (!classId) return [];
+    return options.membershipOptions
+      .filter((m) =>
+        membershipIncludesOffering(m.benefits, { kind: "class", id: classId }),
+      )
+      .map((m) => m.id);
+  }, [classId, options.membershipOptions]);
+
+  const toggleMembership = useCallback(
+    async (membershipId: string, granted: boolean) => {
+      if (!classId) return;
+      const membership = options.membershipOptions.find((m) => m.id === membershipId);
+      if (!membership) return;
+      try {
+        const benefits = await toggleMembershipForOffering({
+          membershipId: membership.id,
+          membershipName: membership.name,
+          priceCents: membership.priceCents,
+          billingInterval: membership.billingInterval,
+          benefits: membership.benefits,
+          offering: { id: classId, name: form.name, kind: "class", meta: "Class" },
+          granted,
+        });
+        setOptions((prev) => ({
+          ...prev,
+          membershipOptions: prev.membershipOptions.map((m) =>
+            m.id === membershipId ? { ...m, benefits } : m,
+          ),
+        }));
+      } catch {
+        setError("Could not update membership access");
+      }
+    },
+    [classId, form.name, options.membershipOptions],
+  );
+
   return {
     classId,
     isCreating,
@@ -656,5 +704,7 @@ export function useClassEditor(classId: string | null) {
     previewBooking,
     eligiblePackageIds,
     togglePackage,
+    eligibleMembershipIds,
+    toggleMembership,
   };
 }

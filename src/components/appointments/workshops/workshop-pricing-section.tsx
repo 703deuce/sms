@@ -11,7 +11,9 @@ type Props = {
   form: WorkshopFormState;
   options: WorkshopEditorOptions;
   eligiblePackageIds: string[];
+  eligibleMembershipIds: string[];
   onTogglePackage: (id: string, granted: boolean) => Promise<void>;
+  onToggleMembership: (id: string, granted: boolean) => Promise<void>;
   onFormChange: <K extends keyof WorkshopFormState>(key: K, value: WorkshopFormState[K]) => void;
 };
 
@@ -46,19 +48,12 @@ export function WorkshopPricingSection({
   form,
   options,
   eligiblePackageIds,
+  eligibleMembershipIds,
   onTogglePackage,
+  onToggleMembership,
   onFormChange,
 }: Props) {
   const dollars = (form.priceCents / 100).toFixed(2);
-
-  function toggleMembership(id: string) {
-    onFormChange(
-      "membershipProductIds",
-      form.membershipProductIds.includes(id)
-        ? form.membershipProductIds.filter((m) => m !== id)
-        : [...form.membershipProductIds, id],
-    );
-  }
 
   return (
     <div className="ws-section-wide">
@@ -210,7 +205,7 @@ export function WorkshopPricingSection({
           className="ws-span-6"
           flush
           actions={
-            <Link href="/appointments/commerce" className="ws-text-btn">
+            <Link href="/appointments/memberships" className="ws-text-btn">
               Manage memberships
             </Link>
           }
@@ -226,8 +221,8 @@ export function WorkshopPricingSection({
                   key={membership.id}
                   name={membership.name}
                   meta={`${formatMoney(membership.priceCents)} / ${membership.billingInterval}`}
-                  granted={form.membershipProductIds.includes(membership.id)}
-                  onToggle={() => toggleMembership(membership.id)}
+                  granted={eligibleMembershipIds.includes(membership.id)}
+                  onToggle={() => void onToggleMembership(membership.id, eligibleMembershipIds.includes(membership.id))}
                 />
               ))}
             </div>
@@ -243,12 +238,12 @@ export function WorkshopPricingSection({
             label="Members only"
             description="Only customers on one of the memberships above may register."
           />
-          {eligiblePackageIds.length + form.membershipProductIds.length > 0 ? (
+          {eligiblePackageIds.length + eligibleMembershipIds.length > 0 ? (
             <p className="ws-gap-note mt-3">
               <Info className="h-3.5 w-3.5" aria-hidden />
               <span>
-                Package eligibility is stored on the package itself, so it stays in sync with the
-                Packages page. Customers with an eligible package can apply a credit when they register.
+                Package and membership eligibility is stored on the product itself, so it stays in
+                sync with Packages and Memberships. Active members can register for eligible workshops.
               </span>
             </p>
           ) : null}
@@ -256,8 +251,8 @@ export function WorkshopPricingSection({
             <p className="ws-gap-note mt-3">
               <Lock className="h-3.5 w-3.5" aria-hidden />
               <span>
-                Members-only is recorded on the workshop, and the public page does not check
-                membership before registering. Keep the workshop hidden if that check has to hold.
+                Members-only registration is enforced server-side for active memberships on eligible workshops.
+                Past-due members are denied until payment recovers.
               </span>
             </p>
           ) : null}

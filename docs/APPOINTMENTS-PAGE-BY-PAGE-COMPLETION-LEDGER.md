@@ -292,9 +292,10 @@ No object-list sidebar and no vertical section rail.
 | ELIGIBILITY | PASS | Canonical `creditRules` on `PackageProduct`; Services/Classes/Workshops toggle the same record |
 | CUSTOMER PACKAGES | PASS | Ownership table, detail drawer, manual credit adjustment via ledger |
 | ACTIVITY | PASS | Package ledger table per product |
-| BOOKING (SERVICES) | PASS (existing) | Service checkout redeems via `bookingTypeId` credit key — unchanged |
-| BOOKING (CLASSES/WORKSHOPS) | N/A | Eligibility syncs bidirectionally; registration does not redeem credits yet (stated in UI) |
-| MEETINGS | N/A | No package redemption runtime for meetings |
+| BOOKING (SERVICES) | PASS | Service checkout redeems via `bookingTypeId` or pooled default credits |
+| BOOKING (CLASSES/WORKSHOPS) | PASS | Public registration applies `packageBalanceId`; credit deducted on enrollment with rollback on failure |
+| MEETINGS | PASS | Meetings appear in package eligibility; redemption uses the existing appointment checkout path |
+| PURCHASE LIMITS | PASS | `metadata.maxPurchasesPerCustomer` enforced in `purchasePackageForContact` |
 
 **Counts:** `BROKEN = 0`, `NO_OP = 0`, `PLACEHOLDER = 0`
 
@@ -302,6 +303,5 @@ No object-list sidebar and no vertical section rail.
 
 ### Known gaps, stated in the UI
 
-- Class and workshop registration does not draw down package credits at checkout yet.
-- Per-customer purchase limits are not enforced server-side.
-- Meetings are not exposed in eligibility because checkout does not support them.
+- Cancelling a class or workshop registration does not automatically restore a package credit yet.
+- Membership redemption at class/workshop registration is still not connected.

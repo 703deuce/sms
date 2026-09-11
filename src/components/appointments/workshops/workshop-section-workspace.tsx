@@ -94,7 +94,9 @@ export function WorkshopSectionWorkspace({
           form={editor.form}
           options={editor.options}
           eligiblePackageIds={editor.eligiblePackageIds}
+          eligibleMembershipIds={editor.eligibleMembershipIds}
           onTogglePackage={editor.togglePackage}
+          onToggleMembership={editor.toggleMembership}
           onFormChange={editor.updateForm}
         />
       ) : null}

@@ -19,11 +19,15 @@ import {
   newLocation,
   newStaffMember,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
-import type { PackageCreditRule } from "@/lib/appointments/service-booking/types";
+import type { MembershipBenefits, PackageCreditRule } from "@/lib/appointments/service-booking/types";
 import {
   packageIncludesOffering,
   togglePackageForOffering,
 } from "@/features/appointments/kimi/packages/use-package-editor";
+import {
+  membershipIncludesOffering,
+  toggleMembershipForOffering,
+} from "@/features/appointments/kimi/memberships/use-membership-editor";
 
 const API = "/api/appointments/service-booking/workshops";
 
@@ -63,6 +67,7 @@ export type WorkshopEditorOptions = {
     name: string;
     priceCents: number;
     billingInterval: string;
+    benefits: MembershipBenefits;
   }>;
 };
 
@@ -220,6 +225,7 @@ export function useWorkshopEditor(workshopId: string | null) {
           name: String(m.name),
           priceCents: Number(m.priceCents ?? 0),
           billingInterval: String(m.billingInterval || "month"),
+          benefits: (m.benefits as MembershipBenefits) || {},
         })),
     });
   }, []);
@@ -692,6 +698,43 @@ export function useWorkshopEditor(workshopId: string | null) {
     [form.name, options.packageOptions, workshopId],
   );
 
+  const eligibleMembershipIds = useMemo(() => {
+    if (!workshopId) return [];
+    return options.membershipOptions
+      .filter((m) =>
+        membershipIncludesOffering(m.benefits, { kind: "workshop", id: workshopId }),
+      )
+      .map((m) => m.id);
+  }, [options.membershipOptions, workshopId]);
+
+  const toggleMembership = useCallback(
+    async (membershipId: string, granted: boolean) => {
+      if (!workshopId) return;
+      const membership = options.membershipOptions.find((m) => m.id === membershipId);
+      if (!membership) return;
+      try {
+        const benefits = await toggleMembershipForOffering({
+          membershipId: membership.id,
+          membershipName: membership.name,
+          priceCents: membership.priceCents,
+          billingInterval: membership.billingInterval,
+          benefits: membership.benefits,
+          offering: { id: workshopId, name: form.name, kind: "workshop", meta: "Workshop" },
+          granted,
+        });
+        setOptions((prev) => ({
+          ...prev,
+          membershipOptions: prev.membershipOptions.map((m) =>
+            m.id === membershipId ? { ...m, benefits } : m,
+          ),
+        }));
+      } catch {
+        setError("Could not update membership access");
+      }
+    },
+    [form.name, options.membershipOptions, workshopId],
+  );
+
   return {
     workshopId,
     isCreating,
@@ -732,6 +775,8 @@ export function useWorkshopEditor(workshopId: string | null) {
     previewBooking,
     eligiblePackageIds,
     togglePackage,
+    eligibleMembershipIds,
+    toggleMembership,
   };
 }
 

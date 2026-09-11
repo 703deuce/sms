@@ -125,7 +125,10 @@ export type MembershipBenefits = {
   includedCredits?: PackageCreditRule[];
   percentDiscount?: number;
   fixedDiscountCents?: number;
+  /** Service / meeting booking type IDs this membership grants access to. */
   memberOnlyTypeIds?: string[];
+  /** Class / workshop series IDs this membership grants access to. */
+  memberOnlyClassSeriesIds?: string[];
   earlyBookingDays?: number;
   multiLocationIds?: string[];
   householdSharing?: boolean;

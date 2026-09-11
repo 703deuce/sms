@@ -334,7 +334,25 @@ export async function enrollInClass(
   },
 ) {
   const prisma = getPrisma();
+  const { assertMemberAccessForClassSeries } = await import("./membership-lifecycle");
+  const { parseClassSeriesMetadata } = await import("@/lib/appointments/class-series-offering");
+
+  async function assertSeriesMembership(seriesId: string) {
+    const series = await prisma.classSeries.findFirst({
+      where: { id: seriesId, workspaceId },
+      select: { metadata: true },
+    });
+    const meta = parseClassSeriesMetadata(series?.metadata);
+    await assertMemberAccessForClassSeries(
+      workspaceId,
+      input.contactId,
+      seriesId,
+      meta.memberOnly === true,
+    );
+  }
+
   if (input.enrollFullSeries && input.seriesId) {
+    await assertSeriesMembership(input.seriesId);
     const occurrences = await prisma.classOccurrence.findMany({
       where: { workspaceId, seriesId: input.seriesId, status: "scheduled" },
     });
@@ -362,6 +380,7 @@ export async function enrollInClass(
   }
   if (!input.occurrenceId) throw new Error("occurrenceId required");
   const { seriesId } = await assertOccurrenceCapacity(workspaceId, input.occurrenceId);
+  await assertSeriesMembership(input.seriesId || seriesId);
   return prisma.classEnrollment.create({
     data: {
       workspaceId,
