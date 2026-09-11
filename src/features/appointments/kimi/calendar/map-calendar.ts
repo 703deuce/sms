@@ -14,9 +14,20 @@ import type {
   AppointmentMeetingIndicator,
 } from "./types";
 
+export type CalendarDomainType =
+  | "service"
+  | "meeting"
+  | "class"
+  | "workshop"
+  | "block"
+  | "external_busy"
+  | "video"
+  | "notetaker";
+
 export type CalendarApiAppointment = {
   id: string;
-  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
+  eventKind?: "appointment" | "standalone_video" | "standalone_notetaker" | "class_occurrence";
+  domainType?: CalendarDomainType;
   inviteeName: string | null;
   inviteePhone?: string | null;
   serviceName: string | null;
@@ -24,10 +35,23 @@ export type CalendarApiAppointment = {
   endsAt?: string | null;
   status: string;
   timezone: string | null;
-  metadata?: { location?: string };
+  metadata?: Record<string, unknown>;
   standaloneVideoMeetingId?: string | null;
   standaloneMeetingSessionId?: string | null;
   meeting?: AppointmentMeetingIndicator;
+  contactId?: string | null;
+  staffIds?: string[];
+  staffLabel?: string;
+  locationId?: string | null;
+  locationLabel?: string | null;
+  resourceLabels?: string[];
+  balanceDueCents?: number;
+  paymentLabel?: string;
+  registrationSummary?: string;
+  pendingFormsCount?: number;
+  attentionFlags?: string[];
+  seriesId?: string;
+  occurrenceId?: string;
 };
 
 const HOUR_H = 56;
@@ -38,11 +62,13 @@ const HOURS = [
 ];
 
 export const TYPE_COLORS: Record<string, CalendarTypeColor> = {
-  consultation: { label: "Consultation", dot: "#a78bfa" },
-  call: { label: "Call", dot: "#93c5fd" },
-  followup: { label: "Follow-up", dot: "#fcd34d" },
-  onboarding: { label: "Onboarding", dot: "#6ee7b7" },
-  canceled: { label: "Canceled", dot: "#f9a8d4" },
+  service: { label: "Service", dot: "#0d9488" },
+  meeting: { label: "Meeting", dot: "#0284c7" },
+  class: { label: "Class", dot: "#059669" },
+  workshop: { label: "Workshop", dot: "#d97706" },
+  video: { label: "Video", dot: "#6366f1" },
+  notetaker: { label: "Notetaker", dot: "#64748b" },
+  canceled: { label: "Canceled", dot: "#94a3b8" },
 };
 
 export function startOfWeek(d: Date) {
@@ -64,6 +90,13 @@ export function dateKey(d: Date) {
 }
 
 export function getCalendarRange(cursor: Date, view: CalendarViewMode) {
+  if (view === "agenda") {
+    const from = new Date(cursor);
+    from.setHours(0, 0, 0, 0);
+    const to = addDays(from, 14);
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }
   if (view === "day") {
     const from = new Date(cursor);
     from.setHours(0, 0, 0, 0);
@@ -87,6 +120,12 @@ function formatRangeLabel(cursor: Date, view: CalendarViewMode) {
       day: "numeric",
       year: "numeric",
     });
+  }
+  if (view === "agenda") {
+    const end = addDays(cursor, 13);
+    const start = cursor.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const finish = end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `${start} – ${finish}`;
   }
   if (view === "week") {
     const end = addDays(cursor, 6);
@@ -113,13 +152,14 @@ function mapUiStatus(status: string): "confirmed" | "pending" | "canceled" {
   return "pending";
 }
 
-function mapEventType(serviceName: string | null, status: string): CalendarWeekEvent["type"] {
-  if (mapUiStatus(status) === "canceled") return "canceled";
-  const name = (serviceName || "").toLowerCase();
-  if (name.includes("onboard")) return "onboarding";
-  if (name.includes("follow")) return "followup";
-  if (name.includes("call") || name.includes("demo")) return "call";
-  return "consultation";
+function mapEventType(row: CalendarApiAppointment): CalendarWeekEvent["type"] {
+  if (mapUiStatus(row.status) === "canceled") return "canceled";
+  if (row.domainType === "meeting") return "meeting";
+  if (row.domainType === "class") return "class";
+  if (row.domainType === "workshop") return "workshop";
+  if (row.eventKind === "standalone_video") return "video";
+  if (row.eventKind === "standalone_notetaker") return "notetaker";
+  return "service";
 }
 
 function formatDuration(startsAt: string, endsAt?: string | null) {
@@ -243,19 +283,24 @@ function mapWeekEvents(
       const endHour = row.endsAt
         ? decimalHour(row.endsAt, row.timezone)
         : startHour + 0.5;
-      const type = mapEventType(row.serviceName, row.status);
+      const type = mapEventType(row);
       const title =
-        row.eventKind === "standalone_video"
-          ? row.serviceName || "Transovo Video"
-          : row.eventKind === "standalone_notetaker"
-            ? row.serviceName || "AI Notetaker"
-            : row.serviceName || "Appointment";
+        row.eventKind === "class_occurrence"
+          ? row.serviceName || "Class"
+          : row.eventKind === "standalone_video"
+            ? row.serviceName || "Transovo Video"
+            : row.eventKind === "standalone_notetaker"
+              ? row.serviceName || "AI Notetaker"
+              : row.serviceName || "Appointment";
       const name =
-        row.eventKind === "standalone_video"
-          ? "Video meeting"
-          : row.eventKind === "standalone_notetaker"
-            ? row.inviteeName || "External meeting"
-            : row.inviteeName || "Customer";
+        row.eventKind === "class_occurrence"
+          ? row.registrationSummary || row.inviteeName || "Class session"
+          : row.eventKind === "standalone_video"
+            ? "Video meeting"
+            : row.eventKind === "standalone_notetaker"
+              ? row.inviteeName || "External meeting"
+              : row.inviteeName || "Customer";
+      const subtitle = [row.staffLabel, row.locationLabel].filter(Boolean).join(" · ");
       return {
         id: row.id,
         day: Math.max(0, Math.min(6, dayIndex)),
@@ -268,6 +313,11 @@ function mapWeekEvents(
         status: mapUiStatus(row.status),
         meeting: row.meeting,
         eventKind: row.eventKind,
+        subtitle,
+        staffLabel: row.staffLabel,
+        locationLabel: row.locationLabel,
+        paymentLabel: row.paymentLabel,
+        attentionFlags: row.attentionFlags,
       };
     });
 }
@@ -353,19 +403,23 @@ function mapAgenda(
     .filter((row) => dateKey(new Date(row.startsAt)) === selectedDayKey)
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     .map((row) => {
-      const type = mapEventType(row.serviceName, row.status);
+      const type = mapEventType(row);
       const title =
-        row.eventKind === "standalone_video"
-          ? row.serviceName || "Transovo Video"
-          : row.eventKind === "standalone_notetaker"
-            ? row.serviceName || "AI Notetaker"
-            : row.serviceName || "Appointment";
+        row.eventKind === "class_occurrence"
+          ? row.serviceName || "Class"
+          : row.eventKind === "standalone_video"
+            ? row.serviceName || "Transovo Video"
+            : row.eventKind === "standalone_notetaker"
+              ? row.serviceName || "AI Notetaker"
+              : row.serviceName || "Appointment";
       const name =
-        row.eventKind === "standalone_video"
-          ? "Video meeting"
-          : row.eventKind === "standalone_notetaker"
-            ? row.inviteeName || "External meeting"
-            : row.inviteeName || "Customer";
+        row.eventKind === "class_occurrence"
+          ? row.registrationSummary || "Class session"
+          : row.eventKind === "standalone_video"
+            ? "Video meeting"
+            : row.eventKind === "standalone_notetaker"
+              ? row.inviteeName || "External meeting"
+              : row.inviteeName || "Customer";
       return {
         id: row.id,
         time: formatAppointmentTime(row.startsAt, row.timezone),
@@ -373,7 +427,7 @@ function mapAgenda(
         title,
         name,
         status: mapUiStatus(row.status),
-        dot: TYPE_COLORS[type]?.dot || TYPE_COLORS.consultation.dot,
+        dot: TYPE_COLORS[type]?.dot || TYPE_COLORS.service.dot,
         meeting: row.meeting,
         eventKind: row.eventKind,
       };
@@ -506,19 +560,15 @@ function mapMonthDays(
       .filter((row) => dateKey(new Date(row.startsAt)) === key)
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
       .map((row) => {
-        const type = mapEventType(row.serviceName, row.status);
+        const type = mapEventType(row);
         const title =
-          row.eventKind === "standalone_video"
-            ? row.serviceName || "Transovo Video"
-            : row.eventKind === "standalone_notetaker"
-              ? row.serviceName || "AI Notetaker"
-              : row.serviceName || "Appointment";
+          row.eventKind === "class_occurrence"
+            ? row.serviceName || "Class"
+            : row.serviceName || "Appointment";
         const name =
-          row.eventKind === "standalone_video"
-            ? "Video meeting"
-            : row.eventKind === "standalone_notetaker"
-              ? row.inviteeName || "External meeting"
-              : row.inviteeName || "Customer";
+          row.eventKind === "class_occurrence"
+            ? row.registrationSummary || "Class"
+            : row.inviteeName || "Customer";
         return {
           id: row.id,
           timeLabel: formatAppointmentTime(row.startsAt, row.timezone),

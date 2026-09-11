@@ -16,6 +16,7 @@ const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
   { value: "day", label: "Day" },
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
+  { value: "agenda", label: "Agenda" },
 ];
 
 export default function CalendarHeader({

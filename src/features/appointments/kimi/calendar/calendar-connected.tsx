@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CalendarView from "@/components/appointments/kimi-ui/calendar/page";
+import CalendarHeader from "@/components/appointments/kimi-ui/calendar/components/CalendarHeader";
 import "@/components/appointments/kimi-ui/calendar/reference.css";
+import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
+import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import {
   addDays,
   buildCalendarPageModel,
@@ -15,42 +18,46 @@ import {
   type CalendarApiAppointment,
 } from "@/features/appointments/kimi/calendar/map-calendar";
 import type { CalendarPageActions, CalendarPageModel, CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
+import { CalendarFilterBar, type CalendarFilters } from "@/components/appointments/calendar/calendar-filter-bar";
+import { CalendarEventDrawer } from "@/components/appointments/calendar/calendar-event-drawer";
+import { AgendaListView } from "@/components/appointments/calendar/agenda-list-view";
 
-function CalendarLoading() {
+const VIEW_KEY = "tv-calendar-view";
+const FILTER_KEY = "tv-calendar-filters";
+
+function loadView(): CalendarViewMode {
+  if (typeof window === "undefined") return "week";
+  const v = localStorage.getItem(VIEW_KEY);
+  if (v === "day" || v === "week" || v === "month" || v === "agenda") return v;
+  return "week";
+}
+
+function loadFilters(): CalendarFilters {
+  try {
+    const raw = localStorage.getItem(FILTER_KEY);
+    if (raw) return JSON.parse(raw) as CalendarFilters;
+  } catch {
+    /* ignore */
+  }
+  return { q: "", staffIds: [], locationId: "", resourceId: "", status: "all", domainType: "all" };
+}
+
+function CalendarLoadingShell() {
   return (
-    <div className="cal-page animate-pulse">
-      <div className="h-10 w-64 rounded bg-gray-200 mb-4" />
-      <div className="grid grid-cols-5 gap-3 mb-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="stat-card h-20" />
-        ))}
-      </div>
-      <div className="cal-main">
-        <div className="week-card h-[640px]" />
-        <div className="cal-side">
-          <div className="card h-56" />
-          <div className="card h-72" />
-          <div className="card h-64" />
-        </div>
-      </div>
+    <div className="cal-page appt-overview-pilot animate-pulse min-h-[70vh]">
+      <div className="h-12 rounded bg-[var(--surface)] mb-3" />
+      <div className="h-[520px] rounded bg-[var(--surface)]" />
     </div>
   );
 }
 
 function CalendarError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="cal-page flex items-center justify-center min-h-screen">
-      <div className="max-w-md text-center rounded-xl border border-dashed border-gray-200 bg-white px-6 py-12">
-        <div className="mb-3.5 mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-          <AlertTriangle className="h-5 w-5" />
-        </div>
-        <h3 className="text-sm font-semibold text-gray-900">We couldn&apos;t load your calendar</h3>
-        <p className="mt-1.5 text-[13px] text-gray-500">
-          Something went wrong while fetching appointments for this range.
-        </p>
-        <Button size="sm" className="mt-5" onClick={onRetry}>
-          Try again
-        </Button>
+    <div className="cal-page flex min-h-[60vh] items-center justify-center">
+      <div className="max-w-md rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-[var(--accent)]" />
+        <h3 className="text-sm font-semibold">Couldn&apos;t load calendar</h3>
+        <Button size="sm" className="mt-4" onClick={onRetry}>Try again</Button>
       </div>
     </div>
   );
@@ -58,22 +65,49 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
 
 export function CalendarConnected() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
-  const [view, setView] = useState<CalendarViewMode>("week");
+  const [view, setView] = useState<CalendarViewMode>(() => loadView());
   const [selectedDayKey, setSelectedDayKey] = useState(() => dateKey(new Date()));
   const [miniCalendarMonth, setMiniCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [rows, setRows] = useState<CalendarApiAppointment[]>([]);
+  const [rowById, setRowById] = useState<Map<string, CalendarApiAppointment>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [filters, setFilters] = useState<CalendarFilters>(() => loadFilters());
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [workspace, setWorkspace] = useState<{
+    staff: Array<{ id: string; name: string }>;
+    locations: Array<{ id: string; name: string }>;
+    resources: Array<{ id: string; name: string }>;
+    services: Array<{ id: string; name: string }>;
+  } | null>(null);
+  const [drawerId, setDrawerId] = useState<string | null>(null);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
+  useEffect(() => {
+    fetch("/api/appointments/calendar/workspace")
+      .then((r) => r.json())
+      .then((json) => setWorkspace(json.data || null))
+      .catch(() => setWorkspace(null));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_KEY, view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem(FILTER_KEY, JSON.stringify(filters));
+  }, [filters]);
+
   const loadMeetingIndicators = useCallback(async (appointments: CalendarApiAppointment[]) => {
     const ids = appointments
-      .filter((row) => !row.eventKind || row.eventKind === "appointment")
+      .filter((row) => row.eventKind === "appointment" || !row.eventKind)
       .map((row) => row.id);
     if (!ids.length) return appointments;
     const params = new URLSearchParams({ ids: ids.join(",") });
@@ -91,12 +125,20 @@ export function CalendarConnected() {
   }, []);
 
   const load = useCallback(() => {
-    setLoading(true);
+    setRefreshing(true);
+    if (!rows.length) setLoading(true);
     setFailed(false);
     const params = new URLSearchParams({
       from: range.from.toISOString(),
       to: range.to.toISOString(),
     });
+    if (filters.q) params.set("q", filters.q);
+    if (filters.staffIds.length) params.set("staffIds", filters.staffIds.join(","));
+    if (filters.locationId) params.set("locationId", filters.locationId);
+    if (filters.resourceId) params.set("resourceId", filters.resourceId);
+    if (filters.status !== "all") params.set("status", filters.status);
+    if (filters.domainType !== "all") params.set("domainType", filters.domainType);
+
     fetch(`/api/calendar/events?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error("calendar fetch failed");
@@ -106,21 +148,34 @@ export function CalendarConnected() {
         const appointments = (json.data || []) as CalendarApiAppointment[];
         const enriched = await loadMeetingIndicators(appointments);
         setRows(enriched);
+        setRowById(new Map(enriched.map((r) => [r.id, r])));
       })
       .catch(() => setFailed(true))
-      .finally(() => setLoading(false));
-  }, [loadMeetingIndicators, range.from, range.to]);
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
+  }, [filters, loadMeetingIndicators, range.from, range.to, rows.length]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const apptId = searchParams.get("appointmentId");
+    if (apptId) setDrawerId(apptId);
+    const contactId = searchParams.get("contactId");
+    if (contactId && !searchParams.get("appointmentId")) {
+      router.push(`/appointments/new?contactId=${encodeURIComponent(contactId)}`);
+    }
+  }, [router, searchParams]);
 
   const model: CalendarPageModel | null = useMemo(
     () =>
       buildCalendarPageModel({
         appointments: rows,
         cursor,
-        view,
+        view: view === "agenda" ? "week" : view,
         selectedDayKey,
         miniCalendarMonth,
       }),
@@ -129,22 +184,25 @@ export function CalendarConnected() {
 
   const shift = useCallback(
     (direction: -1 | 1) => {
-      setCursor((c) =>
-        view === "day"
-          ? addDays(c, direction)
-          : view === "week"
-            ? addDays(c, direction * 7)
-            : new Date(c.getFullYear(), c.getMonth() + direction, 1),
-      );
+      setCursor((c) => {
+        if (view === "agenda") return addDays(c, direction * 14);
+        if (view === "day") return addDays(c, direction);
+        if (view === "week") return addDays(c, direction * 7);
+        return new Date(c.getFullYear(), c.getMonth() + direction, 1);
+      });
     },
     [view],
   );
+
+  const openEvent = useCallback((id: string) => {
+    setDrawerId(id);
+  }, []);
 
   const actions: CalendarPageActions = useMemo(
     () => ({
       onToday: () => {
         const today = new Date();
-        setCursor(view === "week" ? startOfWeek(today) : today);
+        setCursor(view === "week" ? startOfWeek(today) : view === "agenda" ? today : today);
         setSelectedDayKey(dateKey(today));
         setMiniCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
       },
@@ -152,27 +210,21 @@ export function CalendarConnected() {
       onNext: () => shift(1),
       onViewChange: (nextView) => {
         setView(nextView);
+        localStorage.setItem(VIEW_KEY, nextView);
         if (nextView === "week") {
           setCursor(startOfWeek(new Date(selectedDayKey)));
         } else if (nextView === "month") {
           const selected = new Date(selectedDayKey);
           setCursor(new Date(selected.getFullYear(), selected.getMonth(), 1));
+        } else if (nextView === "agenda") {
+          setCursor(new Date(selectedDayKey));
         } else {
           setCursor(new Date(selectedDayKey));
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
-      onOpenAppointment: (id) => {
-        if (id.startsWith("video:")) {
-          router.push(`/video/rooms/${id.slice("video:".length)}/host`);
-          return;
-        }
-        if (id.startsWith("meeting:")) {
-          router.push(`/meetings/${id.slice("meeting:".length)}`);
-          return;
-        }
-        router.push(`/appointments/${id}`);
-      },
+      onOpenAppointment: openEvent,
+      onSelectEvent: openEvent,
       onSelectDay: (key) => {
         setSelectedDayKey(key);
         const d = new Date(key);
@@ -191,35 +243,76 @@ export function CalendarConnected() {
       },
       onShowCalendarSettings: () => router.push("/appointments/availability"),
       onRetry: load,
-      onSlotClick: ({ dateKey, hour }) => {
-        const d = new Date(dateKey);
+      onSlotClick: ({ dateKey: dk, hour }) => {
+        const d = new Date(dk);
         d.setHours(hour, 0, 0, 0);
-        router.push(`/appointments/new?startsAt=${encodeURIComponent(d.toISOString())}`);
+        const q = new URLSearchParams({ startsAt: d.toISOString() });
+        if (filters.staffIds[0]) q.set("staffId", filters.staffIds[0]);
+        if (filters.locationId) q.set("locationId", filters.locationId);
+        router.push(`/appointments/new?${q.toString()}`);
       },
     }),
-    [load, router, selectedDayKey, shift, view],
+    [filters.locationId, filters.staffIds, load, openEvent, router, selectedDayKey, shift, view],
   );
 
-  if (loading) return <CalendarLoading />;
-  if (failed || !model) return <CalendarError onRetry={load} />;
+  const agendaRangeLabel = useMemo(() => {
+    const { from, to } = getCalendarRange(cursor, "agenda");
+    const a = from.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const b = to.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `${a} – ${b}`;
+  }, [cursor]);
+
+  if (loading && !rows.length) return <CalendarLoadingShell />;
+  if (failed && !rows.length) return <CalendarError onRetry={load} />;
+  if (!model) return <CalendarError onRetry={load} />;
 
   return (
-    <div>
-      <div className="cal-page border-b border-gray-200 bg-white px-10 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            Recurring appointment series — schedule repeat visits and edit the full series from one place.
+    <div className="appt-overview-pilot bookable-workspace-pilot cal-page-shell">
+      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs lg:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[var(--text-muted)]">
+            Operational schedule — services, classes, team bookings, and resources in one view.
           </p>
-          <button
-            type="button"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
-            onClick={() => router.push("/appointments/new?recurring=1")}
-          >
-            New recurring series
-          </button>
+          <div className="flex gap-2">
+            <button type="button" className="appt-pilot-secondary-btn" onClick={() => setFiltersOpen((v) => !v)}>
+              {filtersOpen ? "Hide filters" : "Filters"}
+            </button>
+            <button type="button" className="appt-pilot-secondary-btn" onClick={() => router.push("/appointments/availability?section=overrides")}>
+              Block time
+            </button>
+          </div>
         </div>
       </div>
-      <CalendarView model={model} actions={actions} />
+      <CalendarFilterBar
+        workspace={workspace}
+        filters={filters}
+        onChange={setFilters}
+        collapsed={!filtersOpen}
+      />
+      {refreshing && <div className="cal-refresh-bar" aria-live="polite">Updating…</div>}
+      {view === "agenda" ? (
+        <div className="cal-page cal-page-agenda">
+          <CalendarHeader
+            rangeLabel={agendaRangeLabel}
+            view={view}
+            onToday={actions.onToday}
+            onPrev={actions.onPrev}
+            onNext={actions.onNext}
+            onViewChange={actions.onViewChange}
+            onNewAppointment={actions.onNewAppointment}
+          />
+          <div className="px-4 pb-6 lg:px-6">
+            <AgendaListView rows={rows} onSelect={openEvent} />
+          </div>
+        </div>
+      ) : (
+        <CalendarView model={model} actions={actions} headerView={view} hideStatCards />
+      )}
+      <CalendarEventDrawer
+        event={drawerId ? rowById.get(drawerId) || rows.find((r) => r.id === drawerId) || null : null}
+        onClose={() => setDrawerId(null)}
+        onRefresh={load}
+      />
     </div>
   );
 }

@@ -15,21 +15,30 @@ import type { CalendarPageActions, CalendarPageModel } from "@/features/appointm
 type Props = {
   model: CalendarPageModel;
   actions: CalendarPageActions;
+  headerView?: CalendarPageModel["view"] | "agenda";
+  hideStatCards?: boolean;
 };
 
-export default function CalendarPage({ model, actions }: Props) {
+export default function CalendarPage({ model, actions, headerView, hideStatCards }: Props) {
+  const activeView = (headerView || model.view) as CalendarPageModel["view"] | "agenda";
   return (
     <div className="cal-page">
       <CalendarHeader
         rangeLabel={model.rangeLabel}
-        view={model.view}
+        view={activeView}
         onToday={actions.onToday}
         onPrev={actions.onPrev}
         onNext={actions.onNext}
         onViewChange={actions.onViewChange}
         onNewAppointment={actions.onNewAppointment}
       />
-      <StatCards stats={model.stats} />
+      {!hideStatCards ? <StatCards stats={model.stats} /> : (
+        <div className="cal-summary-strip">
+          <span><strong>{model.stats[0]?.value || 0}</strong> in range</span>
+          <span><strong>{model.stats[1]?.value || 0}</strong> confirmed</span>
+          <span><strong>{model.stats[2]?.value || 0}</strong> pending</span>
+        </div>
+      )}
       <div className="cal-main">
         {model.view === "day" ? (
           <DayCalendar

@@ -1,4 +1,4 @@
-export type CalendarViewMode = "day" | "week" | "month";
+export type CalendarViewMode = "day" | "week" | "month" | "agenda";
 
 export type CalendarStatItem = {
   icon: "calendar" | "check" | "clock" | "x" | "users";
@@ -37,7 +37,12 @@ export type CalendarWeekEvent = {
   timeLabel: string;
   title: string;
   name: string;
-  type: "consultation" | "call" | "followup" | "onboarding" | "canceled";
+  type: "service" | "meeting" | "class" | "workshop" | "video" | "notetaker" | "canceled";
+  subtitle?: string;
+  staffLabel?: string;
+  locationLabel?: string;
+  paymentLabel?: string;
+  attentionFlags?: string[];
   status: "confirmed" | "pending" | "canceled";
   meeting?: AppointmentMeetingIndicator;
   eventKind?: "appointment" | "standalone_video" | "standalone_notetaker";
@@ -132,6 +137,7 @@ export type CalendarPageActions = {
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
   onOpenAppointment: (id: string) => void;
+  onSelectEvent?: (id: string) => void;
   onSelectDay: (dateKey: string) => void;
   onMiniCalendarPrev: () => void;
   onMiniCalendarNext: () => void;

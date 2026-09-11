@@ -97,6 +97,7 @@ export default function DayCalendar({
                 <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
+              {ev.subtitle ? <div className="ev-meta">{ev.subtitle}</div> : null}
               <CalendarMeetingBadges
                 meeting={ev.meeting}
                 appointmentId={ev.id}
