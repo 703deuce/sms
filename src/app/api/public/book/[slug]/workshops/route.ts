@@ -27,6 +27,13 @@ export async function POST(request: Request, { params }: Params) {
     const { slug } = await params;
     const workspace = await resolveWorkspaceBySlug(slug);
     if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Listing workshops already refuses when the booking page is switched off.
+    // Registering has to refuse as well, or a page loaded while it was still on
+    // can keep taking registrations after it is turned off.
+    const config = await loadAppointmentPlatformConfig(workspace.id);
+    if (!config.bookingEnabled) {
+      return NextResponse.json({ error: "Booking disabled" }, { status: 403 });
+    }
 
     const body = await request.json();
     const phone = String(body.phone || "").trim();
@@ -71,20 +78,23 @@ export async function POST(request: Request, { params }: Params) {
     const rowIndex = body.rowIndex != null ? Number(body.rowIndex) : undefined;
     const colIndex = body.colIndex != null ? Number(body.colIndex) : undefined;
 
+    const { resolveClassSeriesOfferingKind } = await import(
+      "@/lib/appointments/class-series-offering"
+    );
+    let seriesForRegistration: { id: string; metadata: unknown } | null = null;
+
     if (occurrenceId) {
       const occ = await prisma.classOccurrence.findFirst({
         where: { id: occurrenceId, workspaceId: workspace.id },
         include: { series: true },
       });
       if (!occ?.series) {
-        return NextResponse.json({ error: "Workshop session not found" }, { status: 404 });
+        return NextResponse.json({ error: "Workshop date not found" }, { status: 404 });
       }
-      const { resolveClassSeriesOfferingKind } = await import(
-        "@/lib/appointments/class-series-offering"
-      );
       if (resolveClassSeriesOfferingKind(occ.series.metadata) !== "workshop") {
-        return NextResponse.json({ error: "Invalid workshop session" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid workshop date" }, { status: 400 });
       }
+      seriesForRegistration = { id: occ.series.id, metadata: occ.series.metadata };
 
       const seatMap = await prisma.classSeatMap.findFirst({
         where: { workspaceId: workspace.id, occurrenceId, active: true },
@@ -95,14 +105,59 @@ export async function POST(request: Request, { params }: Params) {
           { status: 400 },
         );
       }
+    } else if (body.seriesId) {
+      // Without this a class id posted to the workshops endpoint would enrol
+      // somebody in the class, since the kind was only ever checked via an
+      // occurrence.
+      const series = await prisma.classSeries.findFirst({
+        where: { id: String(body.seriesId), workspaceId: workspace.id },
+      });
+      if (!series) return NextResponse.json({ error: "Workshop not found" }, { status: 404 });
+      if (resolveClassSeriesOfferingKind(series.metadata) !== "workshop") {
+        return NextResponse.json({ error: "Workshop not found" }, { status: 404 });
+      }
+      seriesForRegistration = { id: series.id, metadata: series.metadata };
     }
 
-    const enrollment = await enrollInClass(workspace.id, {
-      contactId,
-      occurrenceId,
-      seriesId: body.seriesId ? String(body.seriesId) : undefined,
-      enrollFullSeries: body.enrollFullSeries === true,
-    });
+    // The registration window and a called-off workshop are settings on the
+    // workshop, so they are enforced here rather than only hidden in the UI — a
+    // stale page must not be able to register somebody after the fact.
+    if (seriesForRegistration) {
+      const { classRegistrationClosedReason } = await import(
+        "@/lib/appointments/public-group-offering"
+      );
+      const closed = classRegistrationClosedReason(seriesForRegistration.metadata);
+      if (closed) return NextResponse.json({ error: closed }, { status: 400 });
+    }
+
+    let enrollment;
+    try {
+      enrollment = await enrollInClass(workspace.id, {
+        contactId,
+        occurrenceId,
+        seriesId: body.seriesId ? String(body.seriesId) : undefined,
+        enrollFullSeries: body.enrollFullSeries === true,
+      });
+    } catch (err) {
+      // A workshop with a waitlist turns "full" into a place in the queue
+      // rather than a dead end. Without one the capacity error stands.
+      const message = err instanceof Error ? err.message : "Registration failed";
+      const { parseClassSeriesMetadata } = await import(
+        "@/lib/appointments/class-series-offering"
+      );
+      if (!seriesForRegistration || !message.toLowerCase().includes("full")) throw err;
+      if (parseClassSeriesMetadata(seriesForRegistration.metadata).waitlistEnabled !== true) {
+        throw err;
+      }
+
+      const { joinClassWaitlist } = await import("@/lib/appointments/service-booking/classes");
+      const entry = await joinClassWaitlist(workspace.id, {
+        seriesId: seriesForRegistration.id,
+        occurrenceId,
+        contactId,
+      });
+      return NextResponse.json({ data: { waitlisted: true, entry } }, { status: 202 });
+    }
 
     let seatReservation = null;
     if (seatMapId && rowIndex != null && colIndex != null && contactId) {

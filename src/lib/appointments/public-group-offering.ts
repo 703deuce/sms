@@ -47,6 +47,10 @@ export function classRegistrationClosedReason(
   now = new Date(),
 ): string | null {
   const meta = parseClassSeriesMetadata(metadata);
+  // Calling a workshop off is not the same as deactivating it — the row stays
+  // readable so existing registrations keep their history — so the refusal has
+  // to be stated here too.
+  if (meta.cancelledAt) return "This workshop has been cancelled";
   if (meta.registrationOpensAt && new Date(meta.registrationOpensAt) > now) {
     return `Registration opens ${new Date(meta.registrationOpensAt).toLocaleString()}`;
   }

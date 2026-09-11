@@ -157,7 +157,9 @@ export function PublicGroupEnrollmentClient({
       const seatLabel = seat?.seatLabel ? ` Seat ${seat.seatLabel} reserved.` : "";
       setMessage(
         json.data?.waitlisted
-          ? "That session is full, so you are on the waitlist. We will contact you if a place opens."
+          ? offeringKind === "workshop"
+            ? "This workshop is full, so you are on the waitlist. We will contact you if a place opens."
+            : "That session is full, so you are on the waitlist. We will contact you if a place opens."
           : // A class with its own confirmation wording replaces the generic
             // line entirely, which is the point of setting one.
             confirmation ||
