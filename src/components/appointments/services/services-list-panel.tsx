@@ -125,14 +125,10 @@ export function ServicesListPanel({
                 ? `Nothing matches “${search.trim()}”.`
                 : categoryId
                   ? "No services in this category."
-                  : "Create a service customers can schedule with your business."}
+                  : // The workspace canvas beside this list carries the full
+                    // invitation, so the rail only says where things will land.
+                    "Services you create appear here."}
             </p>
-            {!q && !categoryId ? (
-              <Link href="/appointments/services/new" className="ws-list-new-btn mt-4 inline-flex">
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-                Create service
-              </Link>
-            ) : null}
           </div>
         ) : (
           <ul className="space-y-1" role="listbox" aria-label="Service objects">

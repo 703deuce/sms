@@ -89,7 +89,9 @@ export function ServiceAdvancedSection({
   onFormChange,
   onAddAddOn,
 }: Props) {
-  const [open, setOpen] = useState<ModuleId | null>(null);
+  // Add-ons open first: it is the module operators reach for most, and leaving
+  // every module shut hands the section a page of empty canvas.
+  const [open, setOpen] = useState<ModuleId | null>("addons");
   const [addOnModal, setAddOnModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [addOnDraft, setAddOnDraft] = useState({ name: "", price: 0, minutes: 0 });
