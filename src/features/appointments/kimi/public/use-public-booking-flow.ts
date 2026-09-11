@@ -144,6 +144,13 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const [additionalServices, setAdditionalServices] = useState<PublicBookingType[]>([]);
   const [addingAdditionalService, setAddingAdditionalService] = useState(false);
   const [slotHoldId, setSlotHoldId] = useState("");
+  // Read while taking the next hold, so a customer changing their mind is not
+  // blocked by the five-minute hold they left on the slot they just left.
+  const slotHoldIdRef = useRef("");
+  const rememberSlotHoldId = useCallback((next: string) => {
+    slotHoldIdRef.current = next;
+    setSlotHoldId(next);
+  }, []);
 
   const effectiveSingleUseToken = singleUseToken || urlSingleUseToken || undefined;
   const deepLinkStaffId = initialStaffId || "";
@@ -353,8 +360,9 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
 
   const selectSlot = useCallback(
     async (iso: string) => {
+      const previousHoldId = slotHoldIdRef.current;
       setStartsAt(iso);
-      setSlotHoldId("");
+      rememberSlotHoldId("");
       if (!selectedType || !iso) return;
       try {
         const res = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
@@ -369,10 +377,11 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
             staffId: selectedStaffId || undefined,
             locationId: selectedLocationId || undefined,
             phone: phone || undefined,
+            previousHoldId: previousHoldId || undefined,
           }),
         });
         const json = await res.json();
-        if (res.ok && json.data?.holdId) setSlotHoldId(String(json.data.holdId));
+        if (res.ok && json.data?.holdId) rememberSlotHoldId(String(json.data.holdId));
         const baseCents = selectedType.config?.payment?.priceCents;
         if (baseCents && baseCents > 0) {
           const priceRes = await fetch(`/api/public/book/${encodeURIComponent(slug)}`, {
@@ -407,6 +416,7 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       selectedStaffId,
       selectedLocationId,
       phone,
+      rememberSlotHoldId,
     ],
   );
 
@@ -437,6 +447,8 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
       const opts = (normalized.durationOptions || []).filter((o) => o.active !== false && o.minutes > 0);
       setSelectedDuration(opts[0]?.minutes ?? normalized.durationMinutes);
       setStep("datetime");
+      // The ref deliberately keeps the last hold id. That hold is still live on
+      // the server, and the next hold_slot call is what releases it.
       setSlotHoldId("");
       await fetchAvailability(normalized, opts[0]?.minutes ?? normalized.durationMinutes, {
         staffId: deepLinkStaffId || undefined,

@@ -473,7 +473,18 @@ export async function POST(request: Request, { params }: Params) {
         return NextResponse.json({ error: "Invalid start time" }, { status: 400 });
       }
       const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
-      const { holdAppointmentSlot } = await import("@/lib/voice/calendar/slot-holds");
+      const { holdAppointmentSlot, releaseAppointmentHold } = await import(
+        "@/lib/voice/calendar/slot-holds"
+      );
+      // A visitor moving between times leaves a five-minute hold behind on each
+      // one. Releasing the hold they are walking away from keeps them from
+      // colliding with themselves when they come back to it.
+      const previousHoldId = body.previousHoldId ? String(body.previousHoldId) : "";
+      if (previousHoldId) {
+        await releaseAppointmentHold({ workspaceId: workspace.id, holdId: previousHoldId }).catch(
+          () => undefined,
+        );
+      }
       const hold = await holdAppointmentSlot({
         workspaceId: workspace.id,
         phone: body.phone ? String(body.phone) : undefined,
