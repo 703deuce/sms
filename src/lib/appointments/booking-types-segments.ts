@@ -34,8 +34,8 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
     description:
       "Schedule calls, consultations, demos, interviews, and other one-on-one or team meetings.",
     examples: "Discovery call · Sales demo · Interview · Consultation",
-    listHref: "/appointments/types/meetings",
-    createHref: "/appointments/types/editor?segment=meetings&create=1",
+    listHref: "/appointments/meetings",
+    createHref: "/appointments/meetings/new",
     bookingTypeKind: "MEETING",
   },
   {
@@ -43,8 +43,8 @@ export const BOOKING_TYPES_SEGMENTS: BookingTypesSegment[] = [
     title: "Services",
     description:
       "Book provider-based appointments such as training, tutoring, salon services, massage, inspections, repairs, photography, and private sessions.",
-    listHref: "/appointments/types/services",
-    createHref: "/appointments/types/editor?segment=services&create=1",
+    listHref: "/appointments/services",
+    createHref: "/appointments/services/new",
     bookingTypeKind: "SERVICE",
   },
   {
