@@ -4,7 +4,10 @@ import type {
   ReschedulePolicy,
   StaffAssignmentMode,
 } from "@/lib/appointments/types";
-import type { ExtendedCancellationPolicy } from "@/lib/appointments/service-booking/types";
+import type {
+  ExtendedCancellationPolicy,
+  SchedulingLimitsConfig,
+} from "@/lib/appointments/service-booking/types";
 import type { BookingTypeKind } from "@/lib/appointments/booking-type-kind";
 import type { ClassPresentation } from "@/lib/appointments/booking-types-segments";
 
@@ -42,6 +45,21 @@ export type AppointmentTypeFormState = {
   name: string;
   durationMinutes: number;
   bufferMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  /**
+   * Start-time policy. `standard` steps by duration, `interval` by a custom
+   * step, `fixed` only offers the listed wall-clock times.
+   */
+  startTimeMode: "standard" | "interval" | "fixed";
+  customStartIntervalMinutes: number;
+  fixedStartTimes: string[];
+  /**
+   * Scheduling limits the Services editor does not own (cancellation cutoffs,
+   * density, gap minimisation). Carried through saves so editing start times
+   * never silently drops settings written by another surface.
+   */
+  schedulingLimits: SchedulingLimitsConfig;
   description: string;
   location: string;
   locationId: string;

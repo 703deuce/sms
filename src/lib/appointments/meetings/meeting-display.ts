@@ -43,13 +43,7 @@ export function meetingIsActive(row: ApiTypeRow): boolean {
   return row.config?.enabled !== false && row.active !== false;
 }
 
-export function formatDurationMinutes(minutes: number): string {
-  if (!minutes || minutes < 1) return "—";
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-}
+export { formatDurationMinutes } from "@/lib/appointments/duration-display";
 
 export function priceLabel(config?: AppointmentTypeConfig | null): string {
   const mode = config?.payment?.mode;

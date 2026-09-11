@@ -57,6 +57,12 @@ export const EMPTY_APPOINTMENT_TYPE_FORM: AppointmentTypeFormState = {
   name: "",
   durationMinutes: 30,
   bufferMinutes: 0,
+  bufferBeforeMinutes: 0,
+  bufferAfterMinutes: 0,
+  startTimeMode: "standard",
+  customStartIntervalMinutes: 15,
+  fixedStartTimes: [],
+  schedulingLimits: {},
   description: "",
   location: "",
   locationId: "",
@@ -213,12 +219,23 @@ export function mapApiTypesToItems(
 export function formStateFromApiType(type: ApiAppointmentType): AppointmentTypeFormState {
   const cfg = type.config;
   const payment = cfg.payment;
+  const limits = cfg.schedulingLimits;
+  const fixedStarts = limits?.fixedStartTimes;
+  const customInterval = limits?.customStartIntervalMinutes ?? 0;
   return {
     bookingTypeKind: resolveBookingTypeKind(cfg),
     classPresentation: resolveClassPresentation(cfg),
     name: type.name,
     durationMinutes: type.durationMinutes,
     bufferMinutes: type.bufferMinutes,
+    bufferBeforeMinutes: cfg.bufferBeforeMinutes ?? 0,
+    // The engine falls back to the bufferMinutes column when the config value
+    // is absent, so the form has to read the same fallback to stay honest.
+    bufferAfterMinutes: cfg.bufferAfterMinutes ?? type.bufferMinutes ?? 0,
+    startTimeMode: fixedStarts?.enabled ? "fixed" : customInterval > 0 ? "interval" : "standard",
+    customStartIntervalMinutes: customInterval > 0 ? customInterval : 15,
+    fixedStartTimes: fixedStarts?.times || [],
+    schedulingLimits: limits || {},
     description: cfg.description || "",
     location: cfg.location || "",
     locationId: cfg.locationId || "",
@@ -337,8 +354,23 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
       active: q.active !== false,
     }));
 
+  const validFixedStarts = form.fixedStartTimes
+    .map((t) => t.trim())
+    .filter((t) => /^\d{1,2}:\d{2}$/.test(t));
+
   const config: AppointmentTypeConfig = {
     bookingTypeKind: form.bookingTypeKind,
+    bufferBeforeMinutes: form.bufferBeforeMinutes || undefined,
+    bufferAfterMinutes: form.bufferAfterMinutes || undefined,
+    schedulingLimits: {
+      ...form.schedulingLimits,
+      customStartIntervalMinutes:
+        form.startTimeMode === "interval" ? form.customStartIntervalMinutes : undefined,
+      fixedStartTimes:
+        form.startTimeMode === "fixed"
+          ? { enabled: true, times: validFixedStarts }
+          : undefined,
+    },
     classPresentation:
       form.bookingTypeKind === "CLASS" ? form.classPresentation : undefined,
     description: form.description,
@@ -433,7 +465,9 @@ export function buildSavePayload(form: AppointmentTypeFormState) {
   return {
     name: form.name,
     durationMinutes: form.durationMinutes,
-    bufferMinutes: form.bufferMinutes,
+    // The column is the engine's fallback for the after-buffer, so keep the two
+    // in step rather than letting them drift apart.
+    bufferMinutes: form.bufferAfterMinutes || form.bufferMinutes,
     config,
   };
 }
