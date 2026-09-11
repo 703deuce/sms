@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, CreditCard, ExternalLink, MessageSquare, Share2 } from "lucide-react";
+import { CreditCard, ExternalLink, MessageSquare, Share2 } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { priceLabel } from "@/lib/appointments/meetings/meeting-display";
-import { Field, Module, NumberField, SelectInput, Switch, TextArea, TextInput } from "@/components/appointments/workspace-ui";
+import { Field, NumberField, SelectInput, Switch, TextArea, TextInput } from "@/components/appointments/workspace-ui";
 
 type ModuleId = "payment" | "confirmation" | "redirect";
 
@@ -19,10 +19,14 @@ type Props = {
   bookingLink: string | null;
 };
 
-const VISIBILITY_LABELS: Record<AppointmentTypeFormState["visibility"], string> = {
-  public: "Listed on your booking page",
-  unlisted: "Only reachable by direct link",
-  secret: "Hidden from customers",
+/**
+ * The card is a quarter of the row, so it states the setting, not its meaning.
+ * The select spells each one out in full.
+ */
+const VISIBILITY_SHORT: Record<AppointmentTypeFormState["visibility"], string> = {
+  public: "Public",
+  unlisted: "Unlisted",
+  secret: "Secret",
 };
 
 export function MeetingAdvancedSection({
@@ -38,23 +42,81 @@ export function MeetingAdvancedSection({
     setOpen((current) => (current === id ? null : id));
   }
 
-  return (
-    <div>
-      <h2 className="ws-section-heading">Advanced</h2>
-      <p className="ws-section-sub">
-        Payment, confirmation and visibility. Each opens in place — nothing here is shown twice.
-      </p>
+  /**
+   * The four modules read as one row of facts an operator scans, not four tall
+   * boxes they scroll past. Opening one swaps its configuration in underneath
+   * the row, so the row itself never grows and the form gets the full width.
+   */
+  const cards: Array<{
+    id: ModuleId | null;
+    label: string;
+    value: string;
+    action: string;
+    href?: string;
+  }> = [
+    {
+      id: "payment",
+      label: "Payment",
+      value: priceLabel({
+        payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
+      }),
+      action: "Manage",
+    },
+    {
+      id: "confirmation",
+      label: "Confirmation",
+      value: form.confirmationHeadline || "Default confirmation",
+      action: "Configure",
+    },
+    {
+      id: "redirect",
+      label: "Visibility",
+      value: VISIBILITY_SHORT[form.visibility],
+      action: "Manage",
+    },
+    {
+      id: null,
+      label: "Reminders",
+      value: "Workspace reminders",
+      action: "Open reminders",
+      href: "/appointments/automations",
+    },
+  ];
 
-      <div className="mt-4">
-        <Module
-          open={open === "payment"}
-          onToggle={() => toggle("payment")}
-          icon={CreditCard}
-          title="Payment"
-          value={priceLabel({
-            payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
-          })}
-        >
+  return (
+    <div className="ws-section-col">
+      <div className="ws-advanced-grid">
+        {cards.map((card) => (
+          <div
+            key={card.label}
+            className={`ws-advanced-card${card.id && open === card.id ? " selected" : ""}`}
+          >
+            <p className="ws-advanced-row-label">{card.label}</p>
+            <p className="ws-advanced-row-value">{card.value}</p>
+            {card.href ? (
+              <Link href={card.href} className="ws-advanced-link">
+                {card.action}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="ws-advanced-link"
+                aria-expanded={open === card.id}
+                onClick={() => toggle(card.id as ModuleId)}
+              >
+                {open === card.id ? "Close" : card.action}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {open === "payment" ? (
+        <section className="ws-advanced-panel" aria-label="Payment">
+          <h3 className="ws-advanced-panel-title">
+            <CreditCard className="h-4 w-4" aria-hidden />
+            Payment
+          </h3>
           <div className="space-y-4">
             <Field label="Payment mode" htmlFor="adv-pay-mode">
               <SelectInput
@@ -125,15 +187,15 @@ export function MeetingAdvancedSection({
               </div>
             ) : null}
           </div>
-        </Module>
+        </section>
+      ) : null}
 
-        <Module
-          open={open === "confirmation"}
-          onToggle={() => toggle("confirmation")}
-          icon={MessageSquare}
-          title="Confirmation"
-          value={form.confirmationHeadline || "Default confirmation message"}
-        >
+      {open === "confirmation" ? (
+        <section className="ws-advanced-panel" aria-label="Confirmation">
+          <h3 className="ws-advanced-panel-title">
+            <MessageSquare className="h-4 w-4" aria-hidden />
+            Confirmation
+          </h3>
           <div className="space-y-4">
             <Field label="Headline" htmlFor="adv-conf-head">
               <TextInput
@@ -153,15 +215,15 @@ export function MeetingAdvancedSection({
               />
             </Field>
           </div>
-        </Module>
+        </section>
+      ) : null}
 
-        <Module
-          open={open === "redirect"}
-          onToggle={() => toggle("redirect")}
-          icon={Share2}
-          title="Visibility & redirect"
-          value={VISIBILITY_LABELS[form.visibility]}
-        >
+      {open === "redirect" ? (
+        <section className="ws-advanced-panel" aria-label="Visibility and redirect">
+          <h3 className="ws-advanced-panel-title">
+            <Share2 className="h-4 w-4" aria-hidden />
+            Visibility &amp; redirect
+          </h3>
           <div className="space-y-4">
             <Field label="Visibility" htmlFor="adv-visibility">
               <SelectInput
@@ -205,25 +267,8 @@ export function MeetingAdvancedSection({
               </div>
             ) : null}
           </div>
-        </Module>
-
-        <div className="ws-module">
-          <div className="ws-module-trigger" role="presentation">
-            <span className="ws-module-icon" aria-hidden>
-              <Bell className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="ws-module-title block">Reminders</span>
-              <span className="ws-module-value block">
-                Managed once for the whole workspace, not per meeting.
-              </span>
-            </span>
-            <Link href="/appointments/automations" className="appt-pilot-outline-btn shrink-0">
-              Open reminders
-            </Link>
-          </div>
-        </div>
-      </div>
+        </section>
+      ) : null}
     </div>
   );
 }
