@@ -775,6 +775,46 @@ export async function POST(request: Request, { params }: Params) {
         // Dynamic pricing optional — base price stands
       }
     }
+    let membershipBenefitForBooking:
+      | {
+          subscriptionId: string;
+          productName?: string;
+          benefitKind: "included" | "discount";
+          discountCents: number;
+        }
+      | undefined;
+    if (effectivePayment && effectivePayment.mode !== "none" && contactIdBeforeBook) {
+      try {
+        const bookingTypeId = resolvedType?.id || serviceId;
+        if (bookingTypeId) {
+          const { resolveMembershipPriceAdjustment } = await import(
+            "@/lib/appointments/service-booking/membership-booking"
+          );
+          const membershipPrice = await resolveMembershipPriceAdjustment({
+            workspaceId: workspace.id,
+            contactId: contactIdBeforeBook,
+            bookingTypeId,
+            basePriceCents: effectivePayment.priceCents || 0,
+          });
+          if (membershipPrice.benefitKind !== "none" && membershipPrice.discountCents > 0) {
+            effectivePayment = {
+              ...effectivePayment,
+              priceCents: membershipPrice.adjustedPriceCents,
+            };
+            if (membershipPrice.membershipSubscriptionId) {
+              membershipBenefitForBooking = {
+                subscriptionId: membershipPrice.membershipSubscriptionId,
+                productName: membershipPrice.membershipProductName,
+                benefitKind: membershipPrice.benefitKind,
+                discountCents: membershipPrice.discountCents,
+              };
+            }
+          }
+        }
+      } catch {
+        // Membership pricing is optional — base price stands
+      }
+    }
     if (effectivePayment && effectivePayment.mode !== "none" && addOnSelections?.length) {
       const catalog = await listBookingAddOns(workspace.id);
       const selectedAddOnRows = addOnSelections
@@ -912,6 +952,31 @@ export async function POST(request: Request, { params }: Params) {
     const appointmentId = String(result.appointmentId || "");
     const contactId = String(result.contactId || "");
 
+    const membershipBenefit = membershipBenefitForBooking;
+    const bookingTypeId = resolvedType?.id || serviceId;
+    if (appointmentId && membershipBenefit?.subscriptionId && bookingTypeId) {
+      const { recordMembershipBookingUsage } = await import(
+        "@/lib/appointments/service-booking/membership-booking"
+      );
+      await recordMembershipBookingUsage({
+        subscriptionId: membershipBenefit.subscriptionId,
+        bookingTypeId,
+        appointmentId,
+        benefitKind: membershipBenefit.benefitKind,
+      });
+      if ((effectivePayment?.priceCents ?? 0) <= 0) {
+        const { markAppointmentPaidByMembership } = await import(
+          "@/lib/appointments/service-booking/membership-booking"
+        );
+        await markAppointmentPaidByMembership(workspace.id, appointmentId, {
+          amountCentsWaived: membershipBenefit.discountCents || 0,
+          subscriptionId: membershipBenefit.subscriptionId,
+          productName: membershipBenefit.productName,
+          benefitKind: membershipBenefit.benefitKind,
+        });
+      }
+    }
+
     if (appointmentId && body.holdId) {
       const { convertHoldToAppointment } = await import("@/lib/voice/calendar/slot-holds");
       await convertHoldToAppointment({
@@ -973,7 +1038,10 @@ export async function POST(request: Request, { params }: Params) {
       };
       appointmentId?: string;
     } = { paymentRequired: false, checkoutUrl: null, checkoutConfigured: true };
-    const paymentWaivedByEntitlement = Boolean(entitlementOutcome?.paymentWaived);
+    const membershipPaymentWaived =
+      Boolean(membershipBenefit?.subscriptionId) && (effectivePayment?.priceCents ?? 0) <= 0;
+    const paymentWaivedByEntitlement =
+      Boolean(entitlementOutcome?.paymentWaived) || membershipPaymentWaived;
     let paymentHandled = paymentWaivedByEntitlement;
     let paymentDue = effectivePayment ? { ...effectivePayment } : undefined;
     const loyaltyRedeemPoints = Math.max(0, Math.floor(Number(body.loyaltyRedeemPoints || 0)));

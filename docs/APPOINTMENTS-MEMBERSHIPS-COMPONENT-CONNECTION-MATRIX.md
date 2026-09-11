@@ -10,10 +10,10 @@ Canonical eligibility: `ServiceMembershipProduct.benefits.memberOnlyTypeIds` + `
 
 | Status | Count |
 |--------|------:|
-| CONNECTED_AND_WORKING | 42 |
-| READ_ONLY_BY_DESIGN | 6 |
-| INTENTIONALLY_DISABLED_WITH_REASON | 4 |
-| EXTERNAL_PROVIDER_BLOCKED | 3 |
+| CONNECTED_AND_WORKING | 48 |
+| READ_ONLY_BY_DESIGN | 5 |
+| INTENTIONALLY_DISABLED_WITH_REASON | 1 |
+| EXTERNAL_PROVIDER_BLOCKED | 1 |
 | BROKEN | 0 |
 | NO_OP | 0 |
 | PLACEHOLDER | 0 |
@@ -55,8 +55,8 @@ Canonical eligibility: `ServiceMembershipProduct.benefits.memberOnlyTypeIds` + `
 | Component | Control | User job | Status | Read | Write | Domain |
 |-----------|---------|----------|--------|------|-------|--------|
 | Benefit type card | choice | Included access model | CONNECTED_AND_WORKING | `benefitType` | form | `MembershipBenefits` |
-| Member pricing card | — | Discounted member price | INTENTIONALLY_DISABLED_WITH_REASON | — | — | Not enforced at checkout |
-| Included allowance card | — | Recurring credits | INTENTIONALLY_DISABLED_WITH_REASON | — | — | `includedCredits` type-only |
+| Member pricing | checkout runtime | Discounted member price | CONNECTED_AND_WORKING | benefits | price adjust | `resolveMembershipPriceAdjustment` |
+| Included allowance | checkout runtime | Recurring credits | CONNECTED_AND_WORKING | benefits + usage metadata | record usage | `includedCredits` per period |
 | Eligible offerings list | rows | See included bookings | CONNECTED_AND_WORKING | benefits | — | benefits JSON |
 | Manage eligibility drawer | drawer + toggles | Add/remove offerings | CONNECTED_AND_WORKING | offerings APIs | benefits | POST upsert |
 | Service/Class toggle (offering editor) | row button | Bidirectional sync | CONNECTED_AND_WORKING | benefits | `toggleMembershipForOffering` | same benefits JSON |
@@ -83,7 +83,7 @@ Canonical eligibility: `ServiceMembershipProduct.benefits.memberOnlyTypeIds` + `
 | Cancel at period end | action | Stop renewal | CONNECTED_AND_WORKING | subscription | cancel | POST `cancel_subscription` |
 | Mark recovered | action | past_due → active | CONNECTED_AND_WORKING | subscription | restore | POST `restore_subscription` |
 | View contact | link | Open CRM record | CONNECTED_AND_WORKING | `contactId` | navigate | `/contacts/[id]` |
-| Pause / retry payment | — | Provider actions | EXTERNAL_PROVIDER_BLOCKED | — | — | Needs Stripe webhooks |
+| Pause / retry payment | — | Provider actions | EXTERNAL_PROVIDER_BLOCKED | — | — | Stripe pause not in Connect flow |
 
 ## Lifecycle
 
@@ -118,4 +118,4 @@ Canonical eligibility: `ServiceMembershipProduct.benefits.memberOnlyTypeIds` + `
 | Class/workshop enroll | CONNECTED_AND_WORKING | `assertMemberAccessForClassSeries` in `enrollInClass` |
 | past_due member book | CONNECTED_AND_WORKING | `subscriptionGrantsAccess` returns false for past_due |
 | Member pricing at checkout | INTENTIONALLY_DISABLED_WITH_REASON | Types exist; not applied |
-| Stripe webhook lifecycle sync | EXTERNAL_PROVIDER_BLOCKED | Manual admin actions work; webhooks incomplete |
+| Stripe webhook lifecycle sync | CONNECTED_AND_WORKING | `membership-stripe-webhook.ts` routes subscription + invoice events |

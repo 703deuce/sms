@@ -1,8 +1,9 @@
 "use client";
 
-import { CreditCard, Gift, Info, Layers, Lock, Tag } from "lucide-react";
+import { useState } from "react";
+import { CreditCard, Gift, Info, Layers, Lock, Plus, Tag } from "lucide-react";
 import Link from "next/link";
-import { Field, Panel, Switch } from "@/components/appointments/workspace-ui";
+import { Field, Modal, Panel, SelectInput, Switch, TextInput } from "@/components/appointments/workspace-ui";
 import type { ClassFormState } from "@/lib/appointments/classes/class-form";
 import type { ClassEditorOptions } from "@/features/appointments/kimi/classes/use-class-editor";
 import { formatMoney } from "@/lib/appointments/classes/class-summary";
@@ -14,6 +15,12 @@ type Props = {
   eligibleMembershipIds: string[];
   onTogglePackage: (id: string, granted: boolean) => Promise<void>;
   onToggleMembership: (id: string, granted: boolean) => Promise<void>;
+  onCreateMembershipQuick?: (input: {
+    name: string;
+    priceCents: number;
+    billingInterval: string;
+  }) => Promise<string | null>;
+  classId: string | null;
   onFormChange: <K extends keyof ClassFormState>(key: K, value: ClassFormState[K]) => void;
 };
 
@@ -56,8 +63,17 @@ export function ClassPricingSection({
   eligibleMembershipIds,
   onTogglePackage,
   onToggleMembership,
+  onCreateMembershipQuick,
+  classId,
   onFormChange,
 }: Props) {
+  const [membershipQuickOpen, setMembershipQuickOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [membershipQuickDraft, setMembershipQuickDraft] = useState({
+    name: "",
+    priceCents: 7900,
+    billingInterval: "month",
+  });
   const dollars = (form.priceCents / 100).toFixed(2);
 
   return (
@@ -154,9 +170,15 @@ export function ClassPricingSection({
           className="ws-span-6"
           flush
           actions={
-            <Link href="/appointments/memberships" className="ws-text-btn">
-              Manage memberships
-            </Link>
+            onCreateMembershipQuick ? (
+              <button type="button" className="ws-text-btn" onClick={() => setMembershipQuickOpen(true)}>
+                Create membership
+              </button>
+            ) : (
+              <Link href="/appointments/memberships" className="ws-text-btn">
+                Manage memberships
+              </Link>
+            )
           }
         >
           {options.membershipOptions.length === 0 ? (
@@ -211,6 +233,87 @@ export function ClassPricingSection({
           ) : null}
         </Panel>
       </div>
+
+      {membershipQuickOpen && onCreateMembershipQuick ? (
+        <Modal
+          title="Create membership"
+          description="Creates a membership and automatically includes this class."
+          onClose={() => setMembershipQuickOpen(false)}
+          footer={
+            <>
+              <button
+                type="button"
+                className="appt-pilot-outline-btn"
+                onClick={() => setMembershipQuickOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="appt-pilot-primary-btn"
+                disabled={busy || !membershipQuickDraft.name.trim() || !classId}
+                onClick={() => {
+                  setBusy(true);
+                  void onCreateMembershipQuick(membershipQuickDraft)
+                    .then((id) => {
+                      if (id) setMembershipQuickOpen(false);
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {busy ? "Creating…" : "Create & attach"}
+              </button>
+            </>
+          }
+        >
+          {!classId ? (
+            <p className="ws-field-hint">Save the class first, then create a membership for it.</p>
+          ) : (
+            <div className="space-y-3">
+              <Field label="Membership name" htmlFor="cls-quick-mem-name">
+                <TextInput
+                  id="cls-quick-mem-name"
+                  value={membershipQuickDraft.name}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                />
+              </Field>
+              <Field label="Price" htmlFor="cls-quick-mem-price">
+                <TextInput
+                  id="cls-quick-mem-price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={(membershipQuickDraft.priceCents / 100).toFixed(2)}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({
+                      ...prev,
+                      priceCents: Math.round((Number(e.target.value) || 0) * 100),
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Billing interval" htmlFor="cls-quick-mem-interval">
+                <SelectInput
+                  id="cls-quick-mem-interval"
+                  value={membershipQuickDraft.billingInterval}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({
+                      ...prev,
+                      billingInterval: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="month">Monthly</option>
+                  <option value="quarter">Quarterly</option>
+                  <option value="year">Annual</option>
+                </SelectInput>
+              </Field>
+            </div>
+          )}
+        </Modal>
+      ) : null}
     </div>
   );
 }

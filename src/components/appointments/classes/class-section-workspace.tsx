@@ -94,10 +94,12 @@ export function ClassSectionWorkspace({
         <ClassPricingSection
           form={editor.form}
           options={editor.options}
+          classId={editor.classId}
           eligiblePackageIds={editor.eligiblePackageIds}
           eligibleMembershipIds={editor.eligibleMembershipIds}
           onTogglePackage={editor.togglePackage}
           onToggleMembership={editor.toggleMembership}
+          onCreateMembershipQuick={editor.createMembershipQuick}
           onFormChange={editor.updateForm}
         />
       ) : null}

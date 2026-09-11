@@ -425,6 +425,13 @@ export async function startMembershipSubscription(
   });
   if (!product) throw new Error("Membership product not found");
 
+  if (stripeSubscriptionId) {
+    const existing = await prisma.serviceMembershipSubscription.findFirst({
+      where: { stripeSubscriptionId },
+    });
+    if (existing) return existing;
+  }
+
   const periodEnd = new Date();
   const interval = product.billingInterval.toLowerCase();
   if (interval === "year" || interval === "annual" || interval === "yearly") {

@@ -304,4 +304,42 @@ No object-list sidebar and no vertical section rail.
 ### Known gaps, stated in the UI
 
 - Cancelling a class or workshop registration does not automatically restore a package credit yet.
-- Membership redemption at class/workshop registration is still not connected.
+- Membership access at class/workshop registration is now enforced; member-price discounts at checkout remain deferred.
+
+---
+
+## MEMBERSHIPS (`/appointments/memberships`) — rebuilt catalog + editor pass
+
+Full-width catalog table at `/appointments/memberships`. Dedicated full-width editor at
+`/appointments/memberships/[membershipId]`. Four-step create wizard at `/appointments/memberships/new`.
+No object-list sidebar and no vertical section rail.
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| LAYOUT | PASS | Global sidebar + wide workspace only; no membership object-list rail |
+| HORIZONTAL SPACE | PASS | Full-width catalog table; editor uses twelve-track grid |
+| DENSITY | PASS | Compact rows, thin summary strip, horizontal section tabs |
+| CATALOG | PASS | Search, status/interval filters, sort, row actions, summary metrics |
+| CREATE | PASS | Four-step wizard (Basics / Access / Price & billing / Review) |
+| EDIT | PASS | Six horizontal sections with `?section=` URL sync |
+| ACCESS | PASS | Canonical `benefits.memberOnlyTypeIds` + `memberOnlyClassSeriesIds`; bidirectional Service/Class/Workshop toggles |
+| PRICING & BILLING | PASS | Recurring price, interval, purchase availability, cancellation policy |
+| MEMBERS | PASS | Subscription table, detail drawer, cancel/recover actions |
+| LIFECYCLE | PASS | past_due denies booking access; recovery restores active |
+| ACTIVITY | PASS | Derived lifecycle table from subscriptions + metadata |
+| BOOKING (SERVICES) | PASS | `assertMemberAccessForBookingType` on public book |
+| BOOKING (CLASSES/WORKSHOPS) | PASS | `assertMemberAccessForClassSeries` in `enrollInClass` |
+| CONTACT CONNECTION | PASS | Member drawer links to `/contacts/[id]` |
+| CONTEXTUAL CREATE | PASS | Quick-create modal from Service + Class pricing sections |
+| CUSTOMER PORTAL | PASS | Existing portal reads memberships via entitlements |
+| RECURRING PURCHASE | PASS | Stripe store checkout + webhook lifecycle sync for membership subs |
+| MEMBER PRICING | PASS | Included access + discounts + `includedCredits` enforced at service checkout |
+
+**Counts:** `BROKEN = 0`, `NO_OP = 0`, `PLACEHOLDER = 0`
+
+**Overall:** `APPOINTMENTS_MEMBERSHIPS_PAGE_COMPLETE: YES` (pending live screenshot verification)
+
+### Notes
+
+- Stripe `customer.subscription.*` and `invoice.payment_*` events sync membership status, renewals, past_due, and recovery
+- Class/workshop member pricing at registration remains pay-on-arrival (class checkout not card-connected)

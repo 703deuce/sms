@@ -75,7 +75,7 @@ export async function restoreMembershipAfterPaymentRecovery(subscriptionId: stri
 }
 
 export function membershipEntitlementsActive(status: string): boolean {
-  return status === "active";
+  return status === "active" || status === "trialing";
 }
 
 export function isMemberOnlyType(

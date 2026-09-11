@@ -79,8 +79,8 @@ export function MembershipAccessSection({ benefits, offerings, onToggle }: Props
             </button>
           </div>
           <p className="ws-gap-note mt-3">
-            Member pricing discounts and recurring credit allowances are not enforced at checkout yet.
-            Access is enforced server-side for active members on eligible bookings.
+            Included access and member discounts apply at service checkout. Recurring credit allowances
+            reset each billing period. Access is enforced server-side for active members only.
           </p>
         </Panel>
       </div>

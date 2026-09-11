@@ -39,6 +39,8 @@ export * from "./staff-phase-occupancy";
 export * from "./package-lifecycle";
 export * from "./group-registration-entitlements";
 export * from "./membership-lifecycle";
+export * from "./membership-booking";
+export * from "./membership-stripe-webhook";
 export * from "./booking-contracts";
 export * from "./booking-invoices";
 export * from "./booking-products";

@@ -158,6 +158,17 @@ async function routeSubscriptionEvent(
   if (isMarketplaceStripeSubscription(subscription)) {
     return handleMarketplaceSubscriptionStripeEvent(subscription);
   }
+
+  const { isMembershipStripeSubscription, handleMembershipSubscriptionStripeEvent } = await import(
+    "@/lib/appointments/service-booking/membership-stripe-webhook"
+  );
+  if (isMembershipStripeSubscription(subscription)) {
+    return {
+      subsystem: "membership_booking" as const,
+      ...(await handleMembershipSubscriptionStripeEvent(subscription, eventType)),
+    };
+  }
+
   await updateWorkspacePlanFromSubscription(subscription);
   return { subsystem: "saas_billing" as const };
 }
@@ -172,6 +183,15 @@ async function routeInvoicePaid(invoice: Stripe.Invoice) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         if (isMarketplaceStripeSubscription(subscription)) {
           return handleMarketplaceSubscriptionInvoicePaid(invoice);
+        }
+        const { isMembershipStripeSubscription, handleMembershipInvoicePaid } = await import(
+          "@/lib/appointments/service-booking/membership-stripe-webhook"
+        );
+        if (isMembershipStripeSubscription(subscription)) {
+          return {
+            subsystem: "membership_booking" as const,
+            ...(await handleMembershipInvoicePaid(invoice)),
+          };
         }
       } catch {
         // fall through to SaaS billing invoice handler
@@ -191,6 +211,15 @@ async function routeInvoiceFailed(invoice: Stripe.Invoice) {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         if (isMarketplaceStripeSubscription(subscription)) {
           return handleMarketplaceSubscriptionInvoiceFailed(invoice);
+        }
+        const { isMembershipStripeSubscription, handleMembershipInvoiceFailed } = await import(
+          "@/lib/appointments/service-booking/membership-stripe-webhook"
+        );
+        if (isMembershipStripeSubscription(subscription)) {
+          return {
+            subsystem: "membership_booking" as const,
+            ...(await handleMembershipInvoiceFailed(invoice)),
+          };
         }
       } catch {
         // ignore

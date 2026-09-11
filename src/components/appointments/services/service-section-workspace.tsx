@@ -97,6 +97,7 @@ export function ServiceSectionWorkspace({
             onFormChange={onFormChange}
             onTogglePackage={editor.togglePackage}
             onToggleMembership={editor.toggleMembership}
+            onCreateMembershipQuick={editor.createMembershipQuick}
             onSavePriceRule={editor.savePriceRule}
             onDeactivatePriceRule={editor.deactivatePriceRule}
           />

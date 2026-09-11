@@ -846,6 +846,57 @@ export function useServiceEditor(
     [options.membershipOptions, serviceId],
   );
 
+  const createMembershipQuick = useCallback(
+    async (input: { name: string; priceCents: number; billingInterval: string }) => {
+      if (!serviceId) {
+        setError("Save the service before creating a membership");
+        return null;
+      }
+      const benefits: MembershipBenefits = { memberOnlyTypeIds: [serviceId] };
+      const res = await fetch("/api/appointments/service-booking/memberships", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: input.name.trim(),
+          priceCents: input.priceCents,
+          billingInterval: input.billingInterval,
+          benefits,
+          active: true,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: {
+          id: string;
+          name: string;
+          priceCents: number;
+          billingInterval: string;
+          benefits: MembershipBenefits;
+        };
+        error?: string;
+      };
+      if (!res.ok || !json.data) {
+        setError(json.error || "Could not create membership");
+        return null;
+      }
+      const row = json.data;
+      setOptions((prev) => ({
+        ...prev,
+        membershipOptions: [
+          ...prev.membershipOptions,
+          {
+            id: row.id,
+            name: row.name,
+            priceCents: row.priceCents,
+            billingInterval: row.billingInterval,
+            benefits: row.benefits,
+          },
+        ],
+      }));
+      return row.id;
+    },
+    [serviceId],
+  );
+
   const savePriceRule = useCallback(
     async (rule: {
       id?: string;
@@ -946,6 +997,7 @@ export function useServiceEditor(
     addIntakeForm,
     togglePackage,
     toggleMembership,
+    createMembershipQuick,
     savePriceRule,
     deactivatePriceRule,
   };

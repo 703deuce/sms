@@ -48,6 +48,11 @@ type Props = {
   ) => void;
   onTogglePackage: (id: string, granted: boolean) => Promise<void>;
   onToggleMembership: (id: string, granted: boolean) => Promise<void>;
+  onCreateMembershipQuick?: (input: {
+    name: string;
+    priceCents: number;
+    billingInterval: string;
+  }) => Promise<string | null>;
   onSavePriceRule: (rule: {
     id?: string;
     name: string;
@@ -148,10 +153,17 @@ export function ServicePricingSection({
   onFormChange,
   onTogglePackage,
   onToggleMembership,
+  onCreateMembershipQuick,
   onSavePriceRule,
   onDeactivatePriceRule,
 }: Props) {
   const [entitlementModal, setEntitlementModal] = useState<"package" | "membership" | null>(null);
+  const [membershipQuickOpen, setMembershipQuickOpen] = useState(false);
+  const [membershipQuickDraft, setMembershipQuickDraft] = useState({
+    name: "",
+    priceCents: 7900,
+    billingInterval: "month",
+  });
   const [ruleModal, setRuleModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ruleDraft, setRuleDraft] = useState({
@@ -604,6 +616,100 @@ export function ServicePricingSection({
               ),
             )}
           </ul>
+          {entitlementModal === "membership" && onCreateMembershipQuick ? (
+            <button
+              type="button"
+              className="ws-text-btn mt-3"
+              onClick={() => {
+                setEntitlementModal(null);
+                setMembershipQuickOpen(true);
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Create membership
+            </button>
+          ) : null}
+        </Modal>
+      ) : null}
+
+      {membershipQuickOpen && onCreateMembershipQuick ? (
+        <Modal
+          title="Create membership"
+          description="Creates a membership and automatically includes this service."
+          onClose={() => setMembershipQuickOpen(false)}
+          footer={
+            <>
+              <button
+                type="button"
+                className="appt-pilot-outline-btn"
+                onClick={() => setMembershipQuickOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="appt-pilot-primary-btn"
+                disabled={busy || !membershipQuickDraft.name.trim() || !serviceId}
+                onClick={() => {
+                  setBusy(true);
+                  void onCreateMembershipQuick(membershipQuickDraft)
+                    .then((id) => {
+                      if (id) setMembershipQuickOpen(false);
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {busy ? "Creating…" : "Create & attach"}
+              </button>
+            </>
+          }
+        >
+          {!serviceId ? (
+            <p className="ws-field-hint">Save the service first, then create a membership for it.</p>
+          ) : (
+            <div className="space-y-3">
+              <Field label="Membership name" htmlFor="quick-mem-name">
+                <TextInput
+                  id="quick-mem-name"
+                  value={membershipQuickDraft.name}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                />
+              </Field>
+              <Field label="Price" htmlFor="quick-mem-price">
+                <TextInput
+                  id="quick-mem-price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={(membershipQuickDraft.priceCents / 100).toFixed(2)}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({
+                      ...prev,
+                      priceCents: Math.round((Number(e.target.value) || 0) * 100),
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Billing interval" htmlFor="quick-mem-interval">
+                <SelectInput
+                  id="quick-mem-interval"
+                  value={membershipQuickDraft.billingInterval}
+                  onChange={(e) =>
+                    setMembershipQuickDraft((prev) => ({
+                      ...prev,
+                      billingInterval: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="month">Monthly</option>
+                  <option value="quarter">Quarterly</option>
+                  <option value="year">Annual</option>
+                </SelectInput>
+              </Field>
+            </div>
+          )}
         </Modal>
       ) : null}
 
