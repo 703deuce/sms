@@ -1,0 +1,99 @@
+/**
+ * Shared pilot tokens — imported by object workspaces (Meetings, Services, Classes).
+ * Scoped under .appt-pilot-workspace; color values inherit from .appt-overview-pilot when nested.
+ */
+.appt-pilot-workspace {
+  --workspace-list-width: min(100%, 300px);
+  --workspace-list-min: 260px;
+  --workspace-list-max: 320px;
+  --workspace-tab-height: 2.75rem;
+}
+
+.appt-pilot-workspace .appt-section-tabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 1rem;
+  scrollbar-width: none;
+}
+
+.appt-pilot-workspace .appt-section-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.appt-pilot-workspace .appt-section-tab {
+  flex-shrink: 0;
+  position: relative;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.appt-pilot-workspace .appt-section-tab:hover {
+  color: var(--text-primary);
+}
+
+.appt-pilot-workspace .appt-section-tab[aria-current="page"] {
+  color: var(--brand-accent);
+  font-weight: 600;
+}
+
+.appt-pilot-workspace .appt-section-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand-accent);
+}
+
+.appt-pilot-workspace .appt-object-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.625rem;
+  background: var(--brand-accent);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.appt-pilot-workspace .appt-advanced-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.appt-pilot-workspace .appt-advanced-card-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.appt-pilot-workspace .appt-advanced-card-value {
+  margin-top: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.appt-pilot-workspace .appt-advanced-card-action {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--brand-accent);
+}

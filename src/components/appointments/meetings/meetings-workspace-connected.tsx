@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Video } from "lucide-react";
 import Link from "next/link";
 import { useMeetingEditor } from "@/features/appointments/kimi/meetings/use-meeting-editor";
 import { typeBelongsToSegment, type ApiTypeRow } from "@/lib/appointments/booking-types-segments";
@@ -13,6 +13,7 @@ import { MeetingSectionWorkspace } from "./meeting-section-workspace";
 import { MeetingsListPanel } from "./meetings-list-panel";
 import type { MeetingSectionId } from "./meeting-section-types";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
+import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
@@ -70,9 +71,12 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
     [router],
   );
 
+  const shellClass =
+    "appt-overview-pilot bookable-workspace-pilot appt-pilot-workspace ref-root";
+
   if (editor.loading && meetingId) {
     return (
-      <div className="appt-overview-pilot ref-root min-h-full animate-pulse p-6">
+      <div className={`${shellClass} min-h-full animate-pulse p-6`}>
         <div className="h-8 w-48 rounded bg-[var(--border)]" />
         <div className="mt-6 h-[480px] rounded-xl border border-[var(--border)] bg-[var(--surface)]" />
       </div>
@@ -81,7 +85,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
 
   if (meetingId && editor.failed) {
     return (
-      <div className="appt-overview-pilot ref-root flex min-h-full items-center justify-center p-6">
+      <div className={`${shellClass} flex min-h-full items-center justify-center p-6`}>
         <div className="max-w-md text-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-6 py-12">
           <AlertTriangle className="mx-auto h-5 w-5 text-[var(--brand-accent)]" />
           <p className="mt-3 text-[15px] font-semibold">Meeting not found</p>
@@ -95,7 +99,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
 
   if (!meetingId) {
     return (
-      <div className="appt-overview-pilot ref-root flex min-h-[calc(100vh-4rem)]">
+      <div className={`${shellClass} flex min-h-[calc(100vh-4rem)]`}>
         <MeetingsListPanel
           meetings={meetings}
           selectedId={null}
@@ -104,7 +108,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
           onSelect={selectMeeting}
           loading={listLoading}
         />
-        <div className="flex flex-1 flex-col items-center justify-center bg-[var(--surface-muted)] p-8 text-center">
+        <div className="ws-empty-state flex-1">
           {listFailed ? (
             <>
               <p className="text-[14px] font-medium text-[var(--text-primary)]">Could not load meetings</p>
@@ -114,7 +118,10 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
             </>
           ) : meetings.length === 0 && !listLoading ? (
             <>
-              <h2 className="text-[18px] font-semibold text-[var(--text-primary)]">Schedule bookable meetings</h2>
+              <div className="ws-empty-icon">
+                <Video className="h-6 w-6" aria-hidden />
+              </div>
+              <h2 className="mt-4 text-[18px] font-semibold text-[var(--text-primary)]">Schedule bookable meetings</h2>
               <p className="mt-2 max-w-sm text-[13px] text-[var(--text-secondary)]">
                 Meetings are one-on-one or team calls customers can book — discovery calls, consultations, demos, and more.
               </p>
@@ -124,7 +131,16 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
             </>
           ) : (
             <>
-              <p className="text-[14px] text-[var(--text-secondary)]">Select a meeting from the list to edit.</p>
+              <div className="ws-empty-icon">
+                <Video className="h-6 w-6" aria-hidden />
+              </div>
+              <h2 className="mt-4 text-[18px] font-semibold text-[var(--text-primary)]">Select a meeting</h2>
+              <p className="mt-2 max-w-sm text-[13px] text-[var(--text-secondary)]">
+                Choose a meeting from the list to manage availability, hosts, and booking rules.
+              </p>
+              <Link href="/appointments/meetings/new" className="appt-pilot-primary-btn mt-6 inline-flex">
+                Create meeting
+              </Link>
             </>
           )}
         </div>
@@ -133,7 +149,7 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
   }
 
   return (
-    <div className="appt-overview-pilot ref-root flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
+    <div className={`${shellClass} flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row`}>
       <div className={`${mobileListOpen ? "block" : "hidden"} lg:block`}>
         <MeetingsListPanel
           meetings={meetings}

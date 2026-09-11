@@ -28,7 +28,7 @@ type Props = {
 export function MeetingLocalNav({ active, onChange, mobile }: Props) {
   if (mobile) {
     return (
-      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
+      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 lg:hidden">
         <label className="sr-only" htmlFor="meeting-section-select">Section</label>
         <select
           id="meeting-section-select"
@@ -45,10 +45,7 @@ export function MeetingLocalNav({ active, onChange, mobile }: Props) {
   }
 
   return (
-    <nav
-      className="hidden w-[200px] shrink-0 border-r border-[var(--border)] bg-[var(--surface)] p-3 lg:block"
-      aria-label="Meeting sections"
-    >
+    <nav className="ws-local-nav hidden lg:block" aria-label="Meeting sections">
       <ul className="space-y-0.5">
         {MEETING_SECTIONS.map((section) => {
           const Icon = ICONS[section.id];
@@ -59,11 +56,7 @@ export function MeetingLocalNav({ active, onChange, mobile }: Props) {
                 type="button"
                 onClick={() => onChange(section.id)}
                 aria-current={isActive ? "page" : undefined}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition ${
-                  isActive
-                    ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)] ring-1 ring-[var(--brand-accent)]/20"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
-                }`}
+                className="ws-local-nav-btn"
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden />
                 {section.label}

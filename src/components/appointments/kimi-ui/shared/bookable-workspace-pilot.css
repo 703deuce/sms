@@ -1,0 +1,628 @@
+/**
+ * Bookable object workspaces (Meetings, Services) — Sep 10 artifact restoration.
+ * Green accent shell scoped under .bookable-workspace-pilot
+ */
+.bookable-workspace-pilot {
+  --ws-accent: #0f6b52;
+  --ws-accent-hover: #0d5c47;
+  --ws-accent-soft: #e9f5ef;
+  --ws-accent-border: #b8dcc8;
+  --ws-accent-rgb: 15, 107, 82;
+  --brand-accent: var(--ws-accent);
+  --brand-accent-hover: var(--ws-accent-hover);
+  --brand-accent-soft: var(--ws-accent-soft);
+  --brand-accent-border: var(--ws-accent-border);
+  --workspace-list-width: min(100%, 300px);
+  --workspace-list-min: 260px;
+  --workspace-list-max: 320px;
+}
+
+.bookable-workspace-pilot .ws-list-panel {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+@media (min-width: 1024px) {
+  .bookable-workspace-pilot .ws-list-panel {
+    width: var(--workspace-list-width);
+    min-width: var(--workspace-list-min);
+    max-width: var(--workspace-list-max);
+  }
+}
+
+.bookable-workspace-pilot .ws-list-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--ws-accent);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.15s ease;
+}
+
+.bookable-workspace-pilot .ws-list-new-btn:hover {
+  background: var(--ws-accent-hover);
+}
+
+.bookable-workspace-pilot .ws-list-item {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.bookable-workspace-pilot .ws-list-item:hover {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.bookable-workspace-pilot .ws-list-item[aria-selected="true"] {
+  border-color: rgba(var(--ws-accent-rgb), 0.35);
+  background: var(--ws-accent-soft);
+  box-shadow: 0 0 0 1px rgba(var(--ws-accent-rgb), 0.12);
+}
+
+.bookable-workspace-pilot .ws-object-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem 1.5rem;
+}
+
+.bookable-workspace-pilot .ws-object-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  border-radius: 0.625rem;
+  background: var(--ws-accent);
+  color: #fff;
+}
+
+.bookable-workspace-pilot .ws-badge-neutral {
+  border-radius: 9999px;
+  background: var(--surface-muted);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-badge-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  background: var(--state-success-soft);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--state-success);
+}
+
+.bookable-workspace-pilot .ws-saved-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--ws-accent-border);
+  background: var(--surface);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-saved-btn.is-dirty {
+  border-color: transparent;
+  background: var(--ws-accent);
+  color: #fff;
+}
+
+.bookable-workspace-pilot .ws-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 0.5rem 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-meta-strip strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.25rem 1rem;
+}
+
+.bookable-workspace-pilot .ws-kpi-cell {
+  min-width: 0;
+  flex: 1 1 7rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.bookable-workspace-pilot .ws-kpi-cell + .ws-kpi-cell {
+  border-left: 1px solid var(--border);
+}
+
+.bookable-workspace-pilot .ws-kpi-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-kpi-value {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-section-tabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 1rem;
+  scrollbar-width: none;
+}
+
+.bookable-workspace-pilot .ws-section-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.bookable-workspace-pilot .ws-section-tab {
+  flex-shrink: 0;
+  position: relative;
+  border: none;
+  background: transparent;
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bookable-workspace-pilot .ws-section-tab:hover {
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-section-tab[aria-current="page"] {
+  color: var(--ws-accent);
+  font-weight: 600;
+}
+
+.bookable-workspace-pilot .ws-section-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0;
+  left: 0.5rem;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-local-nav {
+  width: 11.5rem;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.75rem;
+}
+
+.bookable-workspace-pilot .ws-local-nav-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0.625rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bookable-workspace-pilot .ws-local-nav-btn:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-local-nav-btn[aria-current="page"] {
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+  box-shadow: inset 0 0 0 1px rgba(var(--ws-accent-rgb), 0.12);
+}
+
+.bookable-workspace-pilot .ws-flat-section {
+  margin-bottom: 1.5rem;
+}
+
+.bookable-workspace-pilot .ws-flat-section h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-flat-section .ws-flat-desc {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-setup-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-setup-progress .done {
+  color: var(--state-success);
+}
+
+.bookable-workspace-pilot .ws-side-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem;
+}
+
+.bookable-workspace-pilot .ws-side-card-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-checklist-item.done {
+  color: var(--state-success);
+}
+
+.bookable-workspace-pilot .ws-assignment-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .bookable-workspace-pilot .ws-assignment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.bookable-workspace-pilot .ws-assignment-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.bookable-workspace-pilot .ws-assignment-card:hover {
+  border-color: var(--ws-accent-border);
+}
+
+.bookable-workspace-pilot .ws-assignment-card.selected {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+}
+
+.bookable-workspace-pilot .ws-assignment-card .ws-assignment-check {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+  color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-payment-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bookable-workspace-pilot .ws-payment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bookable-workspace-pilot .ws-payment-card.selected {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+}
+
+.bookable-workspace-pilot .ws-advanced-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+}
+
+.bookable-workspace-pilot .ws-advanced-row-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-advanced-row-value {
+  margin-top: 0.125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-advanced-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-muted);
+  padding: 2rem;
+  text-align: center;
+}
+
+.bookable-workspace-pilot .ws-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-resource-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-intake-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+}
+
+.bookable-workspace-pilot .ws-wizard-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.bookable-workspace-pilot .ws-wizard-progress span {
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: var(--border);
+}
+
+.bookable-workspace-pilot .ws-wizard-progress span.done {
+  background: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-wizard-summary {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 1rem;
+}
+
+.bookable-workspace-pilot .ws-wizard-summary h4 {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .appt-pilot-primary-btn {
+  background: var(--ws-accent);
+  border-color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .appt-pilot-primary-btn:hover {
+  background: var(--ws-accent-hover);
+  border-color: var(--ws-accent-hover);
+}
+
+.bookable-workspace-pilot .appt-pilot-outline-btn:focus-visible,
+.bookable-workspace-pilot .appt-pilot-primary-btn:focus-visible {
+  outline-color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .appt-pilot-muted-link {
+  color: var(--ws-accent);
+}
+
+.bookable-workspace-pilot .ws-customer-preview {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.5rem 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-setup-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.875rem 0;
+}
+
+.bookable-workspace-pilot .ws-setup-summary-row:last-child {
+  border-bottom: none;
+}
+
+.bookable-workspace-pilot .ws-setup-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.bookable-workspace-pilot .ws-setup-summary-value {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.bookable-workspace-pilot .ws-core-booking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.875rem 1rem;
+}
+
+.bookable-workspace-pilot .ws-overview-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .bookable-workspace-pilot .ws-overview-grid.has-side {
+    grid-template-columns: minmax(0, 1fr) 17.5rem;
+  }
+}
+
+.bookable-workspace-pilot .ws-wizard-shell {
+  margin: 0 auto;
+  max-width: 56rem;
+  padding: 1.5rem 1rem 2rem;
+}
+
+.bookable-workspace-pilot .ws-wizard-layout {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .bookable-workspace-pilot .ws-wizard-layout {
+    grid-template-columns: minmax(0, 1fr) 15rem;
+    align-items: start;
+  }
+}
+
+.bookable-workspace-pilot .ws-wizard-card {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1.25rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.bookable-workspace-pilot .ws-wizard-muted-box {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  padding: 1rem;
+}
+
+.bookable-workspace-pilot .ws-advanced-landing-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.bookable-workspace-pilot .ws-advanced-landing-card:hover {
+  border-color: var(--ws-accent-border);
+}
+
+.bookable-workspace-pilot .ws-advanced-landing-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}

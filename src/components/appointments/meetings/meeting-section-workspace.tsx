@@ -1,12 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Copy, ExternalLink } from "lucide-react";
+import {
+  Bell,
+  Check,
+  Circle,
+  CreditCard,
+  Eye,
+  MessageSquare,
+} from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import type { MeetingEditorOptions } from "@/features/appointments/kimi/meetings/use-meeting-editor";
 import {
   MeetingConfirmationSection,
-  MeetingDetailsSection,
   MeetingDurationSection,
   MeetingHostsSection,
   MeetingMethodSection,
@@ -45,140 +52,123 @@ type Props = {
 
 function OverviewSection({
   form,
-  options,
   staffNames,
-  bookingLink,
   onFormChange,
-  onNavigateSection,
-  onPreview,
-  onCopyLink,
-  copied,
-}: Omit<Props, "section">) {
+}: Pick<Props, "form" | "staffNames" | "onFormChange">) {
+  const host = hostAssignmentLabel(
+    {
+      staffAssignment: form.staffAssignment,
+      staffIds: form.staffIds,
+      collectiveStaffIds: form.collectiveStaffIds,
+    },
+    staffNames,
+  );
+  const method = meetingMethodLabel({ location: form.location });
+  const hasName = form.name.trim().length > 0;
+  const hasDuration = form.durationMinutes >= 5;
+  const hasAvailability = true;
+  const hasHost =
+    form.staffAssignment === "any_eligible" ||
+    form.staffIds.length > 0 ||
+    form.collectiveStaffIds.length > 0;
+  const hasMethod = Boolean(form.location?.trim());
+
+  const setupSteps = [
+    { label: "Basic details", done: hasName },
+    { label: "Duration", done: hasDuration },
+    { label: "Availability", done: hasAvailability },
+    { label: "Host strategy", done: hasHost },
+    { label: "Meeting method", done: hasMethod },
+  ];
+
   return (
-    <div className="space-y-6 max-w-[880px]">
-      <SectionCard id="overview-details" title="Meeting details" description="Name and description customers see.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <PilotLabel htmlFor="ov-name">Name</PilotLabel>
-            <PilotInput
-              id="ov-name"
-              value={form.name}
-              onChange={(e) => onFormChange("name", e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <PilotLabel htmlFor="ov-desc">Description</PilotLabel>
-            <PilotTextarea
-              id="ov-desc"
-              rows={3}
-              value={form.description}
-              onChange={(e) => onFormChange("description", e.target.value)}
-            />
-          </div>
-          <div>
-            <PilotLabel htmlFor="ov-duration">Duration (minutes)</PilotLabel>
-            <PilotInput
-              id="ov-duration"
-              type="number"
-              min={5}
-              value={form.durationMinutes}
-              onChange={(e) => onFormChange("durationMinutes", Number(e.target.value) || 30)}
-            />
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard id="overview-public" title="Public booking" description="How customers find and book this meeting.">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[12px] font-medium ${
-              form.enabled
-                ? "bg-[var(--state-success-soft)] text-[var(--state-success)]"
-                : "bg-[var(--surface-muted)] text-[var(--text-secondary)]"
-            }`}
-          >
-            {form.enabled ? "Active" : "Inactive"}
-          </span>
-          <span className="text-[12px] text-[var(--text-secondary)] capitalize">
-            Visibility: {form.visibility}
-          </span>
-        </div>
-        {bookingLink ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="appt-pilot-outline-btn" onClick={onPreview}>
-              <ExternalLink className="h-3.5 w-3.5" aria-hidden /> Open booking page
-            </button>
-            <button type="button" className="appt-pilot-outline-btn" onClick={onCopyLink}>
-              <Copy className="h-3.5 w-3.5" aria-hidden /> {copied ? "Copied" : "Copy link"}
-            </button>
-          </div>
-        ) : (
-          <p className="mt-2 text-[12px] text-[var(--text-secondary)]">Save the meeting to generate a public link.</p>
-        )}
-        <p className="mt-3 text-[13px] text-[var(--text-primary)]">
-          Method: <strong>{meetingMethodLabel({ location: form.location })}</strong>
-        </p>
-      </SectionCard>
-
-      <SectionCard id="overview-setup" title="Setup summary" description="Jump to any section to finish configuration.">
-        <dl className="divide-y divide-[var(--border)] rounded-xl border border-[var(--border)]">
-          {[
-            {
-              label: "Availability",
-              value: availabilityScheduleLabel(form.namedScheduleId, options.namedScheduleOptions),
-              section: "availability" as MeetingSectionId,
-            },
-            {
-              label: "Host",
-              value: hostAssignmentLabel(
-                {
-                  staffAssignment: form.staffAssignment,
-                  staffIds: form.staffIds,
-                  collectiveStaffIds: form.collectiveStaffIds,
-                },
-                staffNames,
-              ),
-              section: "hosts-method" as MeetingSectionId,
-            },
-            {
-              label: "Meeting method",
-              value: meetingMethodLabel({ location: form.location }),
-              section: "hosts-method" as MeetingSectionId,
-            },
-            {
-              label: "Questions",
-              value: String(form.bookingQuestions.length),
-              section: "questions" as MeetingSectionId,
-            },
-            {
-              label: "Booking rules",
-              value: form.bookingApprovalRequired ? "Approval required" : "Workspace defaults",
-              section: "booking-rules" as MeetingSectionId,
-            },
-            {
-              label: "Price",
-              value: priceLabel({
-                payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
-              }),
-              section: "advanced" as MeetingSectionId,
-            },
-          ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <dt className="text-[11px] font-medium text-[var(--text-secondary)]">{row.label}</dt>
-                <dd className="truncate text-[13px] font-semibold text-[var(--text-primary)]">{row.value}</dd>
-              </div>
-              <button
-                type="button"
-                className="shrink-0 text-[12px] font-semibold text-[var(--brand-accent)] hover:underline"
-                onClick={() => onNavigateSection(row.section)}
-              >
-                Edit
-              </button>
+    <div className="ws-overview-grid has-side">
+      <div className="space-y-6">
+        <SectionCard id="overview-details" title="Meeting details" description="Name and description customers see.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <PilotLabel htmlFor="ov-name">Name</PilotLabel>
+              <PilotInput
+                id="ov-name"
+                value={form.name}
+                onChange={(e) => onFormChange("name", e.target.value)}
+              />
             </div>
-          ))}
-        </dl>
-      </SectionCard>
+            <div>
+              <PilotLabel htmlFor="ov-duration">Duration (minutes)</PilotLabel>
+              <PilotInput
+                id="ov-duration"
+                type="number"
+                min={5}
+                value={form.durationMinutes}
+                onChange={(e) => onFormChange("durationMinutes", Number(e.target.value) || 30)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <PilotLabel htmlFor="ov-desc">Description</PilotLabel>
+              <PilotTextarea
+                id="ov-desc"
+                rows={3}
+                value={form.description}
+                onChange={(e) => onFormChange("description", e.target.value)}
+              />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard id="overview-public" title="Public booking" description="How customers find and book this meeting.">
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
+            <span className={form.enabled ? "ws-badge-active" : "ws-badge-neutral"}>
+              {form.enabled ? "Active" : "Inactive"}
+            </span>
+            <span className="text-[var(--text-secondary)]">|</span>
+            <span className="capitalize text-[var(--text-secondary)]">Visibility: {form.visibility}</span>
+            <span className="text-[var(--text-secondary)]">|</span>
+            <span className="text-[var(--text-secondary)]">Method: <strong className="text-[var(--text-primary)]">{method}</strong></span>
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--text-secondary)]">
+            Save this meeting to generate a shareable public booking link.
+          </p>
+        </SectionCard>
+      </div>
+
+      <div className="space-y-4">
+        <div className="ws-side-card">
+          <div className="flex items-center gap-2">
+            <Eye className="h-4 w-4 text-[var(--text-secondary)]" aria-hidden />
+            <p className="ws-side-card-label">Customer sees</p>
+          </div>
+          <p className="mt-3 text-[15px] font-semibold text-[var(--text-primary)]">
+            {form.name || "Untitled meeting"}
+          </p>
+          <dl className="mt-3 space-y-2 text-[12px]">
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-secondary)]">Duration</dt>
+              <dd className="font-medium text-[var(--text-primary)]">{formatDurationMinutes(form.durationMinutes)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-secondary)]">Host</dt>
+              <dd className="font-medium text-[var(--text-primary)]">{host}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-[var(--text-secondary)]">Method</dt>
+              <dd className="font-medium text-[var(--text-primary)]">{method}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="ws-side-card">
+          <p className="ws-side-card-label">Meeting setup</p>
+          <ul className="mt-3 space-y-2">
+            {setupSteps.map((step) => (
+              <li key={step.label} className={`ws-checklist-item${step.done ? " done" : ""}`}>
+                {step.done ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Circle className="h-3.5 w-3.5" aria-hidden />}
+                {step.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
@@ -188,48 +178,75 @@ function AdvancedLanding({
   onFormChange,
   options,
   bookingLink,
-  onNavigateSection,
-}: Pick<Props, "form" | "onFormChange" | "options" | "bookingLink" | "onNavigateSection">) {
+}: Pick<Props, "form" | "onFormChange" | "options" | "bookingLink">) {
   const price = priceLabel({
     payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },
   });
+  const [showPayment, setShowPayment] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   return (
     <div className="space-y-4 max-w-[880px]">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-3">
         <button
           type="button"
-          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-left transition hover:border-[var(--brand-accent)]/30"
-          onClick={() => onNavigateSection("advanced")}
+          className="ws-advanced-landing-card"
+          onClick={() => setShowPayment((v) => !v)}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Payment</p>
-          <p className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">{price}</p>
-          <span className="mt-2 inline-block text-[12px] font-semibold text-[var(--brand-accent)]">Configure</span>
+          <div className="ws-advanced-landing-icon">
+            <CreditCard className="h-4 w-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="ws-advanced-row-label">Payment</p>
+            <p className="ws-advanced-row-value">{price}</p>
+            <span className="ws-advanced-link mt-1 inline-block">Configure</span>
+          </div>
         </button>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Confirmation</p>
-          <p className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">
-            {form.confirmationHeadline || "Default confirmation"}
-          </p>
-        </div>
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:col-span-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Reminders</p>
-          <p className="mt-1 text-[13px] text-[var(--text-primary)]">Use workspace reminder automations.</p>
-          <Link href="/appointments/automations" className="mt-2 inline-block text-[12px] font-semibold text-[var(--brand-accent)] hover:underline">
-            Manage reminders
-          </Link>
+
+        <button
+          type="button"
+          className="ws-advanced-landing-card"
+          onClick={() => setShowConfirmation((v) => !v)}
+        >
+          <div className="ws-advanced-landing-icon">
+            <MessageSquare className="h-4 w-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="ws-advanced-row-label">Confirmation</p>
+            <p className="ws-advanced-row-value">{form.confirmationHeadline || "Default confirmation"}</p>
+            <span className="ws-advanced-link mt-1 inline-block">Configure</span>
+          </div>
+        </button>
+
+        <div className="ws-advanced-landing-card">
+          <div className="ws-advanced-landing-icon">
+            <Bell className="h-4 w-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="ws-advanced-row-label">Reminders</p>
+            <p className="ws-advanced-row-value">Workspace reminders</p>
+            <Link href="/appointments/automations" className="ws-advanced-link mt-1 inline-block">
+              Manage reminders
+            </Link>
+          </div>
         </div>
       </div>
-      <MeetingPaymentSection
-        form={form}
-        onFormChange={onFormChange}
-        connectedPaymentProviders={options.connectedPaymentProviders}
-      />
-      <MeetingConfirmationSection
-        form={form}
-        onFormChange={onFormChange}
-        bookingLink={bookingLink}
-      />
+
+      {showPayment ? (
+        <MeetingPaymentSection
+          form={form}
+          onFormChange={onFormChange}
+          connectedPaymentProviders={options.connectedPaymentProviders}
+        />
+      ) : null}
+
+      {showConfirmation ? (
+        <MeetingConfirmationSection
+          form={form}
+          onFormChange={onFormChange}
+          bookingLink={bookingLink}
+        />
+      ) : null}
     </div>
   );
 }
@@ -238,7 +255,7 @@ export function MeetingSectionWorkspace(props: Props) {
   const { section, form, options, onFormChange } = props;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+    <div className="flex-1 overflow-y-auto bg-[var(--surface-muted)] px-4 py-5 sm:px-6">
       {section === "overview" ? <OverviewSection {...props} /> : null}
       {section === "availability" ? (
         <div className="max-w-[880px]">
@@ -269,9 +286,7 @@ export function MeetingSectionWorkspace(props: Props) {
           <MeetingRulesSection form={form} onFormChange={onFormChange} />
         </div>
       ) : null}
-      {section === "advanced" ? (
-        <AdvancedLanding {...props} />
-      ) : null}
+      {section === "advanced" ? <AdvancedLanding {...props} /> : null}
     </div>
   );
 }

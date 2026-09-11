@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Video } from "lucide-react";
 import {
   buildSavePayload,
   EMPTY_APPOINTMENT_TYPE_FORM,
@@ -25,11 +25,52 @@ import {
   meetingMethodLabel,
 } from "@/lib/appointments/meetings/meeting-display";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
+import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 
 const STEPS = ["Basics", "How you'll meet", "Availability", "Review"] as const;
+
+function MeetingSoFarSummary({
+  form,
+  staffNames,
+}: {
+  form: AppointmentTypeFormState;
+  staffNames: Map<string, string>;
+}) {
+  const host = form.staffIds[0]
+    ? staffNames.get(form.staffIds[0]) || "Selected host"
+    : hostAssignmentLabel(
+        {
+          staffAssignment: form.staffAssignment,
+          staffIds: form.staffIds,
+          collectiveStaffIds: form.collectiveStaffIds,
+        },
+        staffNames,
+      );
+
+  return (
+    <div className="ws-wizard-summary">
+      <h4>Meeting so far</h4>
+      <p className="mt-2 text-[15px] font-semibold text-[var(--text-primary)]">
+        {form.name.trim() || "Untitled"}
+      </p>
+      <dl className="mt-3 space-y-2 text-[12px]">
+        {[
+          ["Duration", formatDurationMinutes(form.durationMinutes)],
+          ["Host", host],
+          ["Method", meetingMethodLabel({ location: form.location })],
+        ].map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3">
+            <dt className="text-[var(--text-secondary)]">{k}</dt>
+            <dd className="font-semibold text-[var(--text-primary)]">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 export function CreateMeetingWizard() {
   const router = useRouter();
@@ -119,163 +160,166 @@ export function CreateMeetingWizard() {
 
   if (loading) {
     return (
-      <div className="appt-overview-pilot ref-root min-h-full animate-pulse p-6">
-        <div className="mx-auto max-w-xl h-96 rounded-xl bg-[var(--surface)]" />
+      <div className="appt-overview-pilot bookable-workspace-pilot ref-root min-h-full animate-pulse p-6">
+        <div className="mx-auto max-w-3xl h-96 rounded-xl bg-[var(--surface)]" />
       </div>
     );
   }
 
   return (
-    <div className="appt-overview-pilot ref-root min-h-full px-4 py-6 sm:px-8">
-      <Link href="/appointments/meetings" className="appt-pilot-back-link">
-        <ArrowLeft size={14} aria-hidden /> Meetings
-      </Link>
+    <div className="appt-overview-pilot bookable-workspace-pilot ref-root min-h-full bg-[var(--surface-muted)]">
+      <div className="ws-wizard-shell">
+        <Link href="/appointments/meetings" className="appt-pilot-back-link inline-flex items-center gap-1 text-[13px]">
+          <ArrowLeft size={14} aria-hidden /> Meetings
+        </Link>
 
-      <div className="mx-auto mt-4 max-w-xl">
-        <h1 className="text-[22px] font-semibold text-[var(--text-primary)]">Create meeting</h1>
-        <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
-          Step {step + 1} of {STEPS.length} — {STEPS[step]}
-        </p>
+        <div className="mt-4 flex items-start gap-3">
+          <div className="ws-object-icon">
+            <Video className="h-5 w-5" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-[22px] font-semibold text-[var(--text-primary)]">Create meeting</h1>
+            <p className="mt-0.5 text-[13px] text-[var(--text-secondary)]">
+              Step {step + 1} of {STEPS.length} — {STEPS[step]}
+            </p>
+          </div>
+        </div>
 
-        <ol className="mt-6 flex gap-2" aria-label="Wizard progress">
-          {STEPS.map((label, i) => (
-            <li
-              key={label}
-              className={`h-1.5 flex-1 rounded-full ${
-                i <= step ? "bg-[var(--brand-accent)]" : "bg-[var(--border)]"
-              }`}
-              aria-current={i === step ? "step" : undefined}
-            >
-              <span className="sr-only">{label}</span>
-            </li>
+        <div className="ws-wizard-progress mt-6" aria-label="Wizard progress">
+          {STEPS.map((_, i) => (
+            <span key={i} className={i <= step ? "done" : ""} />
           ))}
-        </ol>
+        </div>
 
-        <div className="mt-8 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          {step === 0 ? (
-            <div className="space-y-4">
-              <div>
-                <PilotLabel htmlFor="wiz-name">Meeting name</PilotLabel>
-                <PilotInput
-                  id="wiz-name"
-                  value={form.name}
-                  onChange={(e) => update("name", e.target.value)}
-                  placeholder="Discovery call"
-                />
+        <div className="ws-wizard-layout mt-6">
+          <div className="ws-wizard-card">
+            {step === 0 ? (
+              <div className="space-y-4">
+                <div>
+                  <PilotLabel htmlFor="wiz-name">Meeting name</PilotLabel>
+                  <PilotInput
+                    id="wiz-name"
+                    value={form.name}
+                    onChange={(e) => update("name", e.target.value)}
+                    placeholder="Discovery call"
+                  />
+                </div>
+                <div>
+                  <PilotLabel htmlFor="wiz-duration">Duration (minutes)</PilotLabel>
+                  <PilotInput
+                    id="wiz-duration"
+                    type="number"
+                    min={5}
+                    value={form.durationMinutes}
+                    onChange={(e) => update("durationMinutes", Number(e.target.value) || 30)}
+                  />
+                </div>
+                <div>
+                  <PilotLabel htmlFor="wiz-desc">Description (optional)</PilotLabel>
+                  <PilotTextarea
+                    id="wiz-desc"
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => update("description", e.target.value)}
+                  />
+                </div>
               </div>
-              <div>
-                <PilotLabel htmlFor="wiz-duration">Duration (minutes)</PilotLabel>
-                <PilotInput
-                  id="wiz-duration"
-                  type="number"
-                  min={5}
-                  value={form.durationMinutes}
-                  onChange={(e) => update("durationMinutes", Number(e.target.value) || 30)}
-                />
-              </div>
-              <div>
-                <PilotLabel htmlFor="wiz-desc">Description (optional)</PilotLabel>
-                <PilotTextarea
-                  id="wiz-desc"
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => update("description", e.target.value)}
-                />
-              </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {step === 1 ? (
-            <div className="space-y-4">
-              <div>
-                <PilotLabel>Host</PilotLabel>
-                {staffOptions.length === 0 ? (
-                  <p className="text-[13px] text-[var(--state-warning)]">
-                    Add a host in{" "}
-                    <Link href="/appointments/staff" className="appt-pilot-muted-link">Staff</Link> first.
-                  </p>
-                ) : (
+            {step === 1 ? (
+              <div className="space-y-4">
+                <div>
+                  <PilotLabel>Host</PilotLabel>
+                  {staffOptions.length === 0 ? (
+                    <p className="text-[13px] text-[var(--state-warning)]">
+                      Add a host in{" "}
+                      <Link href="/appointments/staff" className="appt-pilot-muted-link">Staff</Link> first.
+                    </p>
+                  ) : (
+                    <PilotSelect
+                      value={form.staffIds[0] || ""}
+                      onChange={(e) => update("staffIds", e.target.value ? [e.target.value] : [])}
+                    >
+                      <option value="">Any available staff</option>
+                      {staffOptions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </PilotSelect>
+                  )}
+                </div>
+                <div>
+                  <PilotLabel>Meeting method</PilotLabel>
                   <PilotSelect
-                    value={form.staffIds[0] || ""}
-                    onChange={(e) => update("staffIds", e.target.value ? [e.target.value] : [])}
+                    value={form.location}
+                    onChange={(e) => {
+                      update("location", e.target.value);
+                      update("transovoVideoEnabled", e.target.value === "Transovo Video");
+                    }}
                   >
-                    <option value="">Select host</option>
-                    {staffOptions.map((s) => (
+                    <option value="">Select method</option>
+                    <option value="Google Meet">Google Meet</option>
+                    <option value="Zoom">Zoom</option>
+                    <option value="Microsoft Teams">Microsoft Teams</option>
+                    <option value="Transovo Video">Transovo Video</option>
+                    <option value="Phone call">Phone</option>
+                    <option value="In person">In person</option>
+                    <option value="Custom meeting link">Custom</option>
+                  </PilotSelect>
+                </div>
+              </div>
+            ) : null}
+
+            {step === 2 ? (
+              <div className="space-y-4">
+                <div>
+                  <PilotLabel>Availability schedule</PilotLabel>
+                  <PilotSelect
+                    value={form.namedScheduleId}
+                    onChange={(e) => update("namedScheduleId", e.target.value)}
+                  >
+                    <option value="">Workspace default hours</option>
+                    {namedScheduleOptions.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </PilotSelect>
-                )}
-              </div>
-              <div>
-                <PilotLabel>Meeting method</PilotLabel>
-                <PilotSelect
-                  value={form.location}
-                  onChange={(e) => {
-                    update("location", e.target.value);
-                    update("transovoVideoEnabled", e.target.value === "Transovo Video");
-                  }}
-                >
-                  <option value="">Select method</option>
-                  <option value="Google Meet">Google Meet</option>
-                  <option value="Zoom">Zoom</option>
-                  <option value="Microsoft Teams">Microsoft Teams</option>
-                  <option value="Transovo Video">Transovo Video</option>
-                  <option value="Phone call">Phone</option>
-                  <option value="In person">In person</option>
-                  <option value="Custom meeting link">Custom</option>
-                </PilotSelect>
-              </div>
-            </div>
-          ) : null}
-
-          {step === 2 ? (
-            <div className="space-y-4">
-              <div>
-                <PilotLabel>Availability schedule</PilotLabel>
-                <PilotSelect
-                  value={form.namedScheduleId}
-                  onChange={(e) => update("namedScheduleId", e.target.value)}
-                >
-                  <option value="">Workspace default hours</option>
-                  {namedScheduleOptions.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </PilotSelect>
-              </div>
-              <p className="rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
-                Customers will see open slots based on this schedule and your workspace availability rules.
-              </p>
-            </div>
-          ) : null}
-
-          {step === 3 ? (
-            <dl className="space-y-3 text-[13px]">
-              {[
-                ["Meeting", form.name],
-                ["Duration", formatDurationMinutes(form.durationMinutes)],
-                [
-                  "Host",
-                  form.staffIds[0]
-                    ? staffNames.get(form.staffIds[0]) || "Selected host"
-                    : "Not set",
-                ],
-                ["Method", meetingMethodLabel({ location: form.location })],
-                [
-                  "Availability",
-                  availabilityScheduleLabel(form.namedScheduleId, namedScheduleOptions),
-                ],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-4 border-b border-[var(--border)] pb-2">
-                  <dt className="text-[var(--text-secondary)]">{k}</dt>
-                  <dd className="font-semibold text-[var(--text-primary)]">{v}</dd>
                 </div>
-              ))}
-            </dl>
-          ) : null}
+                <p className="rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+                  Customers will see open slots based on this schedule and your workspace availability rules.
+                </p>
+              </div>
+            ) : null}
 
-          {error ? (
-            <p className="mt-4 text-[13px] text-[var(--state-error)]" role="alert">{error}</p>
-          ) : null}
+            {step === 3 ? (
+              <dl className="space-y-3 text-[13px]">
+                {[
+                  ["Meeting", form.name],
+                  ["Duration", formatDurationMinutes(form.durationMinutes)],
+                  [
+                    "Host",
+                    form.staffIds[0]
+                      ? staffNames.get(form.staffIds[0]) || "Selected host"
+                      : "Any available staff",
+                  ],
+                  ["Method", meetingMethodLabel({ location: form.location })],
+                  [
+                    "Availability",
+                    availabilityScheduleLabel(form.namedScheduleId, namedScheduleOptions),
+                  ],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 border-b border-[var(--border)] pb-2">
+                    <dt className="text-[var(--text-secondary)]">{k}</dt>
+                    <dd className="font-semibold text-[var(--text-primary)]">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+
+            {error ? (
+              <p className="mt-4 text-[13px] text-[var(--state-error)]" role="alert">{error}</p>
+            ) : null}
+          </div>
+
+          <MeetingSoFarSummary form={form} staffNames={staffNames} />
         </div>
 
         <div className="mt-6 flex justify-between gap-3">

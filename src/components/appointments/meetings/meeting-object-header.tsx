@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, ExternalLink, MoreHorizontal } from "lucide-react";
+import { Check, Copy, ExternalLink, Globe, MoreHorizontal, Video } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 
 type Props = {
@@ -34,30 +34,34 @@ export function MeetingObjectHeader({
   onDuplicate,
   onToggleActive,
 }: Props) {
+  const isSaved = saveStatus === "saved";
   const saveLabel =
     saveStatus === "saving" ? "Saving…" : saveStatus === "dirty" ? "Save changes" : "Saved";
 
   return (
-    <header className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-4 sm:px-6">
+    <header className="ws-object-header">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="truncate text-[20px] font-semibold tracking-tight text-[var(--text-primary)]">
-            {form.name || "Untitled meeting"}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px]">
-            <span className="font-medium text-[var(--text-secondary)]">Meeting</span>
-            <span
-              className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
-                form.enabled
-                  ? "bg-[var(--state-success-soft)] text-[var(--state-success)]"
-                  : "bg-[var(--surface-muted)] text-[var(--text-secondary)]"
-              }`}
-            >
-              {form.enabled ? "Active" : "Inactive"}
-            </span>
-            {form.visibility === "public" && form.enabled ? (
-              <span className="text-[var(--text-secondary)]">· Publicly bookable</span>
-            ) : null}
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="ws-object-icon" aria-hidden>
+            <Video className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-[20px] font-semibold tracking-tight text-[var(--text-primary)]">
+              {form.name || "Untitled meeting"}
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px]">
+              <span className="ws-badge-neutral">Meeting</span>
+              <span className={form.enabled ? "ws-badge-active" : "ws-badge-neutral"}>
+                {form.enabled ? <Check className="h-3 w-3" aria-hidden /> : null}
+                {form.enabled ? "Active" : "Inactive"}
+              </span>
+              {form.visibility === "public" && form.enabled ? (
+                <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
+                  <Globe className="h-3 w-3" aria-hidden />
+                  Publicly bookable
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -76,10 +80,11 @@ export function MeetingObjectHeader({
           ) : null}
           <button
             type="button"
-            className="appt-pilot-primary-btn"
+            className={isSaved ? "ws-saved-btn" : "ws-saved-btn is-dirty"}
             disabled={saving || (saveStatus !== "dirty" && saveStatus !== "error")}
             onClick={onSave}
           >
+            {isSaved ? <Check className="h-3.5 w-3.5" aria-hidden /> : null}
             {saveLabel}
           </button>
           <div className="relative">
@@ -111,6 +116,7 @@ export function MeetingObjectHeader({
                   role="menuitem"
                   className="block w-full px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-muted)]"
                   onClick={onToggleActive}
+                >
                   {form.enabled ? "Deactivate" : "Activate"}
                 </button>
               </div>

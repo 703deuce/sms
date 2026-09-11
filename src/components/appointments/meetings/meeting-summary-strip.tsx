@@ -1,5 +1,6 @@
 "use client";
 
+import { Calendar, Clock, DollarSign, User, Video } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import {
   availabilityScheduleLabel,
@@ -15,44 +16,48 @@ type Props = {
   namedScheduleOptions: Array<{ id: string; name: string }>;
 };
 
-function Cell({ label, value }: { label: string; value: string }) {
+function KpiCell({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="min-w-0 flex-1 px-3 py-2 first:pl-0 last:pr-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{label}</p>
-      <p className="mt-0.5 truncate text-[13px] font-semibold text-[var(--text-primary)]">{value}</p>
+    <div className="ws-kpi-cell">
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-[var(--text-secondary)]" aria-hidden />
+        <p className="ws-kpi-label">{label}</p>
+      </div>
+      <p className="ws-kpi-value truncate">{value}</p>
     </div>
   );
 }
 
 export function MeetingSummaryStrip({ form, staffNames, namedScheduleOptions }: Props) {
-  const hostIds = form.staffAssignment === "collective" ? form.collectiveStaffIds : form.staffIds;
-  const hostName =
-    hostIds.length === 1
-      ? staffNames.get(hostIds[0]) || "1 host"
-      : hostIds.length > 1
-        ? `${hostIds.length} hosts`
-        : hostAssignmentLabel(
-            {
-              staffAssignment: form.staffAssignment,
-              staffIds: form.staffIds,
-              collectiveStaffIds: form.collectiveStaffIds,
-            },
-            staffNames,
-          ).split("·")[0]?.trim() || "Any host";
+  const host = hostAssignmentLabel(
+    {
+      staffAssignment: form.staffAssignment,
+      staffIds: form.staffIds,
+      collectiveStaffIds: form.collectiveStaffIds,
+    },
+    staffNames,
+  );
 
   return (
-    <div
-      className="flex flex-wrap items-stretch divide-x divide-[var(--border)] border-b border-[var(--border)] bg-[var(--surface-muted)]/60 px-4 py-1 sm:px-6"
-      aria-label="Meeting summary"
-    >
-      <Cell label="Duration" value={formatDurationMinutes(form.durationMinutes)} />
-      <Cell label="Host" value={hostName} />
-      <Cell label="Method" value={meetingMethodLabel({ location: form.location })} />
-      <Cell
+    <div className="ws-kpi-strip" aria-label="Meeting summary">
+      <KpiCell icon={Clock} label="Duration" value={formatDurationMinutes(form.durationMinutes)} />
+      <KpiCell icon={User} label="Host" value={host} />
+      <KpiCell icon={Video} label="Method" value={meetingMethodLabel({ location: form.location })} />
+      <KpiCell
+        icon={Calendar}
         label="Availability"
         value={availabilityScheduleLabel(form.namedScheduleId, namedScheduleOptions)}
       />
-      <Cell
+      <KpiCell
+        icon={DollarSign}
         label="Price"
         value={priceLabel({
           payment: { mode: form.paymentMode, priceCents: form.paymentPriceCents },

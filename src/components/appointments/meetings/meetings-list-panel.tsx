@@ -30,17 +30,11 @@ export function MeetingsListPanel({
   const filtered = meetings.filter((m) => !q || m.name.toLowerCase().includes(q));
 
   return (
-    <aside
-      className="flex h-full w-full flex-col border-r border-[var(--border)] bg-[var(--surface)] lg:w-[min(100%,300px)] lg:min-w-[260px] lg:max-w-[320px]"
-      aria-label="Meetings list"
-    >
+    <aside className="ws-list-panel" aria-label="Meetings list">
       <div className="border-b border-[var(--border)] px-4 py-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Meetings</h2>
-          <Link
-            href="/appointments/meetings/new"
-            className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-2.5 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[var(--brand-accent-hover,#10665f)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-accent)]"
-          >
+          <Link href="/appointments/meetings/new" className="ws-list-new-btn">
             <Plus className="h-3.5 w-3.5" aria-hidden />
             New
           </Link>
@@ -71,10 +65,7 @@ export function MeetingsListPanel({
             <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
               Create a meeting customers can book online.
             </p>
-            <Link
-              href="/appointments/meetings/new"
-              className="mt-4 inline-flex items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-3 py-2 text-[12px] font-semibold text-white"
-            >
+            <Link href="/appointments/meetings/new" className="ws-list-new-btn mt-4 inline-flex">
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Create meeting
             </Link>
@@ -83,7 +74,7 @@ export function MeetingsListPanel({
           <ul className="space-y-1" role="listbox" aria-label="Meeting objects">
             {filtered.map((m) => {
               const active = selectedId === m.id;
-              const duration = formatDurationMinutes(m.durationMinutes ?? m.config?.durationMinutes ?? 30);
+              const duration = formatDurationMinutes(m.durationMinutes ?? 30);
               const method = meetingMethodLabel(m.config);
               return (
                 <li key={m.id}>
@@ -92,11 +83,7 @@ export function MeetingsListPanel({
                     role="option"
                     aria-selected={active}
                     onClick={() => onSelect(m.id)}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                      active
-                        ? "border-[var(--brand-accent)]/40 bg-[var(--brand-accent-soft)] shadow-sm ring-1 ring-[var(--brand-accent)]/15"
-                        : "border-transparent hover:border-[var(--border)] hover:bg-[var(--surface-muted)]"
-                    }`}
+                    className="ws-list-item"
                   >
                     <p className="truncate text-[13px] font-semibold text-[var(--text-primary)]">{m.name}</p>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--text-secondary)]">
