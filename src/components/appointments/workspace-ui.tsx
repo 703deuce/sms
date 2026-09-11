@@ -141,6 +141,8 @@ export function ChoiceCard({
   name,
   helper,
   status,
+  disabled,
+  disabledReason,
   onSelect,
 }: {
   selected: boolean;
@@ -148,10 +150,19 @@ export function ChoiceCard({
   name: string;
   helper?: string;
   status?: React.ReactNode;
+  disabled?: boolean;
+  disabledReason?: string;
   onSelect: () => void;
 }) {
   return (
-    <button type="button" className="ws-choice-card" aria-pressed={selected} onClick={onSelect}>
+    <button
+      type="button"
+      className="ws-choice-card"
+      aria-pressed={selected}
+      disabled={disabled}
+      title={disabled ? disabledReason : undefined}
+      onClick={onSelect}
+    >
       <span className="ws-choice-icon" aria-hidden>
         <Icon className="h-3.5 w-3.5" />
       </span>

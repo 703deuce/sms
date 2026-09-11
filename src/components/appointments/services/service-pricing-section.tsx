@@ -291,19 +291,27 @@ export function ServicePricingSection({
           icon={CreditCard}
         >
           <div className="ws-choice-grid">
-            {PAYMENT_CARDS.map((card) => (
-              <ChoiceCard
-                key={card.value}
-                selected={paymentValue === card.value}
-                icon={card.icon}
-                name={card.label}
-                helper={card.helper}
-                onSelect={() => applyPrice(form.paymentPriceCents, card.value)}
-              />
-            ))}
+            {PAYMENT_CARDS.map((card) => {
+              const blocked = card.value !== "none" && !hasProvider;
+              return (
+                <ChoiceCard
+                  key={card.value}
+                  selected={paymentValue === card.value}
+                  icon={card.icon}
+                  name={card.label}
+                  helper={card.helper}
+                  disabled={blocked}
+                  disabledReason="Connect Stripe or Square before charging for this service."
+                  status={
+                    blocked ? <span className="ws-chip is-muted">Needs a provider</span> : undefined
+                  }
+                  onSelect={() => applyPrice(form.paymentPriceCents, card.value)}
+                />
+              );
+            })}
           </div>
 
-          {paymentValue !== "none" && !hasProvider ? (
+          {!hasProvider ? (
             <div className="ws-nudge mt-4">
               <span className="ws-nudge-icon" aria-hidden>
                 <CreditCard className="h-4 w-4" />
@@ -313,7 +321,8 @@ export function ServicePricingSection({
                   No payment provider connected
                 </p>
                 <p className="ws-field-hint">
-                  Saving will be rejected until Stripe or Square can accept charges.{" "}
+                  This service can still carry a price and be paid in person. Charging at checkout
+                  stays unavailable until Stripe or Square can accept charges.{" "}
                   <Link href="/settings/business" className="appt-pilot-muted-link">
                     Connect a provider
                   </Link>

@@ -450,8 +450,11 @@ export function useServiceEditor(
     if (state.paymentMode !== "none" && state.paymentPriceCents <= 0) {
       return "Set a price above $0 to collect payment";
     }
-    if (state.paymentMode === "deposit" && state.paymentDepositCents > state.paymentPriceCents) {
-      return "Deposit cannot be more than the price";
+    if (state.paymentMode === "deposit") {
+      if (state.paymentDepositCents <= 0) return "Set a deposit above $0";
+      if (state.paymentDepositCents > state.paymentPriceCents) {
+        return "Deposit cannot be more than the price";
+      }
     }
     if (state.startTimeMode === "fixed" && state.fixedStartTimes.filter(Boolean).length === 0) {
       return "Add at least one fixed start time";
@@ -502,20 +505,26 @@ export function useServiceEditor(
 
   const duplicate = useCallback(async (): Promise<string | null> => {
     if (!serviceId) return null;
+    const copy = { ...form, name: `${form.name.trim()} (copy)` };
+    const message = validate(copy);
+    if (message) {
+      setError(message);
+      setSaveStatus("error");
+      return null;
+    }
     setSaving(true);
-    const payload = buildSavePayload({
-      ...form,
-      name: `${form.name.trim()} (copy)`,
-      bookingTypeKind: "SERVICE",
-    });
+    setError("");
+    const payload = buildSavePayload({ ...copy, bookingTypeKind: "SERVICE" });
     const res = await fetch("/api/appointments/types", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
       setSaving(false);
-      setError("Could not duplicate service");
+      setError(json.error || "Could not duplicate service");
+      setSaveStatus("error");
       return null;
     }
     const json = (await res.json()) as { data: ApiAppointmentType };
@@ -539,7 +548,7 @@ export function useServiceEditor(
     setSaving(false);
     router.push(`/appointments/services/${json.data.id}`);
     return json.data.id;
-  }, [form, phases, router, serviceId]);
+  }, [form, phases, router, serviceId, validate]);
 
   const setEnabled = useCallback(
     async (enabled: boolean) => {

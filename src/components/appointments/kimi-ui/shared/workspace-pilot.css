@@ -544,6 +544,17 @@
   outline-offset: 2px;
 }
 
+.ws-pilot .ws-choice-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-choice-card:disabled:hover {
+  border-color: var(--border);
+  box-shadow: none;
+}
+
 .ws-pilot .ws-choice-icon {
   display: flex;
   width: 1.75rem;
