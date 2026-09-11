@@ -429,3 +429,21 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | SCREENSHOTS 01–19 | BLOCKED | Not captured |
 
 **Overall:** `APPOINTMENTS_FORMS_DOCUMENTS_PAGE_COMPLETE: NO` — blocked on E2E tests, screenshots, post-booking/due timing runtime, class/workshop public form presentation gaps (pre-existing), contact/appointment unified submission chips, conditional field visibility on public renderer.
+
+## REMINDERS (`/appointments/reminders`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING ENGINE REUSE | PASS | `reminder-delivery.ts`, `booking-platform.ts` unchanged scan logic; `additionalSteps` extension only |
+| LAYOUT | PASS | Full-width workspace; horizontal sections; no second sidebar |
+| SEQUENCE UI | PASS | Thin timeline rows + drawer (replaces three tall cards) |
+| CUSTOM TIMING | PASS | Inline minutes/hours/days + advanced time-of-day |
+| ADD STEP | PASS | `additionalSteps` persisted (max 8) |
+| SMS / EMAIL | PASS | Existing channels preserved |
+| ACTIVITY | PARTIAL | Timeline-derived; not full provider delivery log |
+| ASSIGNMENT / OVERRIDE | GAP | Default sequence only; honest assignment table |
+| E2E TESTS | BLOCKED | Not run |
+| SCREENSHOTS | BLOCKED | Not captured |
+| DOCS | PASS | Existing system audit, parity, matrix |
+
+**Overall:** `APPOINTMENTS_REMINDERS_PAGE_COMPLETE: NO`
