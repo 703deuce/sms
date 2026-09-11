@@ -1,5 +1,5 @@
-import { ClassSeriesAdminConnected } from "@/features/appointments/kimi/class-series/class-series-admin-connected";
+import { WorkshopsWorkspaceConnected } from "@/components/appointments/workshops/workshops-workspace-connected";
 
 export default function AppointmentsWorkshopsPage() {
-  return <ClassSeriesAdminConnected offeringKind="workshop" />;
+  return <WorkshopsWorkspaceConnected workshopId={null} />;
 }

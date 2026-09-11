@@ -2734,18 +2734,25 @@
   white-space: nowrap;
 }
 
-.ws-pilot .ws-table tbody td {
+/* A row header is still a cell. Left alone the browser centres it and bolds
+   it, which pushed the customer name out of line with its own column head. */
+.ws-pilot .ws-table tbody td,
+.ws-pilot .ws-table tbody th {
   padding: 0.5625rem 0.875rem;
   border-bottom: 1px solid var(--border-soft);
   color: var(--text-primary);
+  text-align: left;
+  font-weight: 400;
   vertical-align: middle;
 }
 
-.ws-pilot .ws-table tbody tr:last-child td {
+.ws-pilot .ws-table tbody tr:last-child td,
+.ws-pilot .ws-table tbody tr:last-child th {
   border-bottom: 0;
 }
 
-.ws-pilot .ws-table tbody tr:hover td {
+.ws-pilot .ws-table tbody tr:hover td,
+.ws-pilot .ws-table tbody tr:hover th {
   background: var(--surface-muted);
 }
 
@@ -3055,4 +3062,282 @@
   margin-top: 0.0625rem;
   flex-shrink: 0;
   color: var(--text-tertiary);
+}
+
+/* ============================================================
+   Workshops — event vocabulary
+   ============================================================ */
+
+/*
+ * A thin segmented row under the list search. Workshops sort themselves into
+ * "already happened" and "still to run" far more sharply than classes do, so
+ * the filter earns its line; it stays one line tall so the list itself keeps
+ * the panel.
+ */
+.ws-pilot .ws-list-filters {
+  display: flex;
+  gap: 0.125rem;
+  margin-top: 0.5rem;
+  border-radius: var(--ws-radius-control);
+  background: var(--surface-muted);
+  padding: 0.125rem;
+}
+
+.ws-pilot .ws-list-filter {
+  flex: 1 1 0;
+  min-width: 0;
+  border: none;
+  border-radius: calc(var(--ws-radius-control) - 0.125rem);
+  background: transparent;
+  padding: 0.25rem 0.125rem;
+  font-size: var(--type-helper);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ws-pilot .ws-list-filter:hover {
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-list-filter[aria-selected="true"] {
+  background: var(--surface);
+  box-shadow: var(--ws-shadow-raised);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/*
+ * The date is the identity of an event, so it gets a calendar-tile treatment
+ * rather than another line of text. Fixed width keeps a column of them aligned
+ * however long the month abbreviation is.
+ */
+.ws-pilot .ws-event-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ws-pilot .ws-date-block {
+  display: flex;
+  width: 3.25rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ws-accent-border);
+  border-radius: var(--ws-radius-tile);
+  background: var(--ws-accent-soft);
+  padding: 0.375rem 0;
+  line-height: 1.1;
+}
+
+.ws-pilot .ws-date-block.is-compact {
+  width: 2.75rem;
+  padding: 0.25rem 0;
+}
+
+.ws-pilot .ws-date-block-month {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ws-accent);
+}
+
+.ws-pilot .ws-date-block-day {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-pilot .ws-date-block.is-compact .ws-date-block-day {
+  font-size: 1rem;
+}
+
+/*
+ * Sessions of a multi-day workshop are one event read in order, not a set of
+ * independent rows, so a rule runs behind them. Same row geometry as
+ * `.ws-row-item` — a workshop with eight days should still be one screen.
+ */
+.ws-pilot .ws-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-pilot .ws-timeline::before {
+  content: "";
+  position: absolute;
+  top: 1.75rem;
+  bottom: 1.75rem;
+  left: 1.3125rem;
+  width: 1px;
+  background: var(--border);
+}
+
+.ws-pilot .ws-timeline-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0.5rem 0.875rem 0.5rem 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.ws-pilot .ws-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.ws-pilot .ws-timeline-item:hover {
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-timeline-marker {
+  position: relative;
+  z-index: 1;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ws-accent);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.ws-pilot .ws-timeline-item:hover .ws-timeline-marker {
+  box-shadow: 0 0 0 3px var(--surface-muted);
+}
+
+.ws-pilot .ws-timeline-item.is-cancelled .ws-timeline-marker {
+  background: var(--text-tertiary);
+}
+
+.ws-pilot .ws-timeline-item.is-cancelled .ws-date-block {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-timeline-item.is-cancelled .ws-date-block-month,
+.ws-pilot .ws-timeline-item.is-cancelled .ws-date-block-day {
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-timeline-item.is-cancelled .ws-row-primary {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+/*
+ * Check-in is pressed on a phone at a door, so it is a real target rather than
+ * a text link, but it still has to sit inside a table cell without making the
+ * row taller than the rows around it.
+ */
+.ws-pilot .ws-checkin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 0.25rem 0.625rem;
+  font-size: var(--type-helper);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.ws-pilot .ws-checkin-btn:hover {
+  border-color: var(--ws-accent-border);
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-checkin-btn.is-on {
+  border-color: transparent;
+  background: var(--state-success-soft);
+  color: var(--state-success);
+}
+
+/* Four or five numbers across the top of a panel, before the controls. */
+.ws-pilot .ws-inline-metrics {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  border-radius: var(--ws-radius-tile);
+  background: var(--surface-muted);
+  padding: 0.625rem 0.875rem;
+}
+
+/* A row that is itself the control, rather than a row containing one. */
+.ws-pilot .ws-row-item.is-selectable {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-pilot .ws-row-item.is-selectable[aria-pressed="true"],
+.ws-pilot .ws-row-item.is-selectable[aria-checked="true"] {
+  background: var(--ws-accent-soft);
+  box-shadow: inset 2px 0 0 var(--ws-accent);
+}
+
+.ws-pilot .ws-text-btn.is-danger {
+  color: var(--state-error);
+}
+
+.ws-pilot .ws-text-btn.is-danger:hover {
+  color: var(--state-error);
+  text-decoration: underline;
+}
+
+/*
+ * Confirmation that something was created, shown once on arrival. It is not a
+ * queue of notifications, so it is a single fixed strip and it dismisses.
+ */
+.ws-pilot .ws-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(58, 145, 115, 0.25);
+  background: var(--state-success-soft);
+  padding: 0.5rem 1.5rem;
+  font-size: var(--type-list);
+  font-weight: 500;
+  color: var(--state-success);
+}
+
+.ws-pilot .ws-toast button {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 0;
+}
+
+/*
+ * Three options inside a half-width panel leave about 140px each, which is not
+ * enough for an icon, a name and a description on one line. Here the name sits
+ * beside the icon and the description drops underneath it.
+ */
+.ws-pilot .ws-choice-grid.is-tight .ws-choice-card {
+  display: grid;
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.125rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0.5625rem 0.625rem;
+}
+
+.ws-pilot .ws-choice-grid.is-tight .ws-choice-help {
+  grid-column: 2;
 }
