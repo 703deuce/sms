@@ -36,29 +36,56 @@ export function parseHm(value: string): number | null {
   return h * 60 + min;
 }
 
+/**
+ * A two-week slot scan asks these questions once per candidate start, and
+ * building an `Intl.DateTimeFormat` is far more expensive than using one, so
+ * the formatters are cached per zone.
+ */
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormatter(key: string, build: () => Intl.DateTimeFormat): Intl.DateTimeFormat {
+  let fmt = formatterCache.get(key);
+  if (!fmt) {
+    fmt = build();
+    formatterCache.set(key, fmt);
+  }
+  return fmt;
+}
+
 export function dayKeyInTimezone(iso: string, timezone: string): string {
-  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long" })
+  const weekday = cachedFormatter(
+    `weekday:${timezone}`,
+    () => new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "long" }),
+  )
     .format(new Date(iso))
     .toLowerCase();
   return weekday;
 }
 
 export function dateKeyInTimezone(iso: string, timezone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(iso));
+  return cachedFormatter(
+    `date:${timezone}`,
+    () =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }),
+  ).format(new Date(iso));
 }
 
 export function minutesInTimezone(iso: string, timezone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(iso));
+  const parts = cachedFormatter(
+    `time:${timezone}`,
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+  ).formatToParts(new Date(iso));
   const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
   const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
   return hour * 60 + minute;

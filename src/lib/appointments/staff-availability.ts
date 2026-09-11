@@ -22,6 +22,13 @@ import type {
 } from "@/lib/appointments/scheduling-capabilities";
 import { getPrisma } from "@/lib/db";
 import type { CalendarConfig } from "@/lib/calendar/providers";
+// Imported statically: this is called once per candidate slot, and resolving
+// the module on every call dominated the cost of a two-week availability scan.
+import {
+  addCalendarDays,
+  wallTimeInZoneToUtc,
+  zonedDateParts,
+} from "@/lib/voice/calendar/timezone-slots";
 
 export function resolveNamedSchedule(
   platform: Awaited<ReturnType<typeof loadAppointmentPlatformConfig>>,
@@ -103,6 +110,66 @@ export function slotWithinWindows(
   return false;
 }
 
+const BUSY_STATUSES_EXCLUDED = ["canceled", "cancelled", "completed", "no_show"];
+
+/**
+ * Every appointment that can block a slot in one window, loaded once.
+ *
+ * Scanning two weeks of candidate starts asks the same conflict question a few
+ * hundred times; issuing a query per question is what made availability take
+ * twenty seconds. The rows are small and the window is bounded, so they are
+ * fetched once and the overlap test runs in memory against the same
+ * inclusive bounds the query used.
+ */
+export type AppointmentBusyIndex = {
+  byStaff: Map<string, Array<{ start: number; end: number }>>;
+  all: Array<{ start: number; end: number }>;
+};
+
+export async function loadAppointmentBusyIndex(
+  workspaceId: string,
+  from: Date,
+  to: Date,
+  excludeAppointmentId?: string,
+): Promise<AppointmentBusyIndex> {
+  const prisma = getPrisma();
+  const rows = await prisma.voiceAppointment.findMany({
+    where: {
+      workspaceId,
+      id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
+      status: { notIn: BUSY_STATUSES_EXCLUDED },
+      startsAt: { lte: to },
+      endsAt: { gte: from },
+    },
+    select: { startsAt: true, endsAt: true, metadata: true },
+  });
+
+  const index: AppointmentBusyIndex = { byStaff: new Map(), all: [] };
+  for (const row of rows) {
+    // A null end never satisfied `endsAt >= bufferedStart`, so it never blocked
+    // a slot and must not start doing so here.
+    if (!row.endsAt) continue;
+    const interval = { start: row.startsAt.getTime(), end: row.endsAt.getTime() };
+    index.all.push(interval);
+    const staffId = (row.metadata as { staffId?: unknown } | null)?.staffId;
+    if (typeof staffId === "string" && staffId) {
+      const bucket = index.byStaff.get(staffId);
+      if (bucket) bucket.push(interval);
+      else index.byStaff.set(staffId, [interval]);
+    }
+  }
+  return index;
+}
+
+export function busyIndexHasConflict(
+  intervals: Array<{ start: number; end: number }> | undefined,
+  bufferedStart: number,
+  bufferedEnd: number,
+): boolean {
+  if (!intervals?.length) return false;
+  return intervals.some((i) => i.start <= bufferedEnd && i.end >= bufferedStart);
+}
+
 export async function getStaffAppointmentConflicts(
   workspaceId: string,
   staffId: string,
@@ -111,15 +178,23 @@ export async function getStaffAppointmentConflicts(
   bufferBeforeMs: number,
   bufferAfterMs: number,
   excludeAppointmentId?: string,
+  busyIndex?: AppointmentBusyIndex,
 ): Promise<boolean> {
-  const prisma = getPrisma();
   const bufferedStart = new Date(start.getTime() - bufferBeforeMs);
   const bufferedEnd = new Date(end.getTime() + bufferAfterMs);
+  if (busyIndex) {
+    return busyIndexHasConflict(
+      busyIndex.byStaff.get(staffId),
+      bufferedStart.getTime(),
+      bufferedEnd.getTime(),
+    );
+  }
+  const prisma = getPrisma();
   const conflict = await prisma.voiceAppointment.findFirst({
     where: {
       workspaceId,
       id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
-      status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
+      status: { notIn: BUSY_STATUSES_EXCLUDED },
       startsAt: { lte: bufferedEnd },
       endsAt: { gte: bufferedStart },
       metadata: { path: ["staffId"], equals: staffId },
@@ -193,8 +268,8 @@ export async function isStaffAvailableAtSlot(input: {
   svcCfg?: AppointmentTypeConfig;
   externalBusy?: Array<{ start: Date; end: Date }>;
   excludeAppointmentId?: string;
+  busyIndex?: AppointmentBusyIndex;
 }): Promise<boolean> {
-  const { zonedDateParts } = await import("@/lib/voice/calendar/timezone-slots");
   const parts = zonedDateParts(input.startsAt, input.timezone);
   const dateKey = dateKeyFromParts(parts.year, parts.month, parts.day);
   const dayName = dayKeyInTimezone(input.startsAt.toISOString(), input.timezone);
@@ -219,6 +294,7 @@ export async function isStaffAvailableAtSlot(input: {
       input.bufferBeforeMs,
       input.bufferAfterMs,
       input.excludeAppointmentId,
+      input.busyIndex,
     )
   ) {
     return false;
@@ -248,6 +324,8 @@ export async function filterStaffAvailableForSlot(
     svcCfg?: AppointmentTypeConfig;
     mode: "any" | "all";
     excludeAppointmentId?: string;
+    busyIndex?: AppointmentBusyIndex;
+    externalBusyByStaff?: Map<string, Array<{ start: Date; end: Date }>>;
   },
 ): Promise<BookableStaffMember[]> {
   const available: BookableStaffMember[] = [];
@@ -264,6 +342,8 @@ export async function filterStaffAvailableForSlot(
       platform: opts.platform,
       svcCfg: opts.svcCfg,
       excludeAppointmentId: opts.excludeAppointmentId,
+      busyIndex: opts.busyIndex,
+      externalBusy: opts.externalBusyByStaff?.get(member.id),
     });
     if (ok) available.push(member);
   }
@@ -288,9 +368,6 @@ export async function countStaffOpenSlots(
   const counts = new Map<string, number>();
   for (const member of staff) counts.set(member.id, 0);
 
-  const { addCalendarDays, wallTimeInZoneToUtc, zonedDateParts } = await import(
-    "@/lib/voice/calendar/timezone-slots"
-  );
   const startParts = zonedDateParts(dayStart, opts.timezone);
   const endParts = zonedDateParts(dayEnd, opts.timezone);
 

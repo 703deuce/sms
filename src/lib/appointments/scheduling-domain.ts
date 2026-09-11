@@ -379,6 +379,115 @@ export async function checkBookingLimits(
   return { allowed: true };
 }
 
+/**
+ * The same limit questions asked for every candidate start in a slot scan,
+ * answered from one read.
+ *
+ * The buckets deliberately mirror `checkBookingLimits`: server-local calendar
+ * day, the week that day falls in, and its month. Changing the bucketing here
+ * would change which slots are offered, so it does not change.
+ */
+export type BookingLimitCounts = {
+  perDay: Map<string, number>;
+  perTypePerDay: Map<string, number>;
+  perWeek: Map<string, number>;
+  perMonth: Map<string, number>;
+};
+
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function localWeekKey(date: Date): string {
+  const weekStart = new Date(date);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  return localDayKey(weekStart);
+}
+
+function localMonthKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+export function bookingLimitsAreSet(limits?: BookingLimitConfig): boolean {
+  if (!limits) return false;
+  return Boolean(
+    limits.maxBookingsPerDay ||
+      limits.maxPerTypePerDay ||
+      limits.maxBookingsPerWeek ||
+      limits.maxBookingsPerMonth,
+  );
+}
+
+export async function loadBookingLimitCounts(
+  workspaceId: string,
+  from: Date,
+  to: Date,
+): Promise<BookingLimitCounts> {
+  // Week and month buckets reach past the slot range, so the read is widened
+  // to whole months rather than under-counting at the edges.
+  const rangeStart = new Date(from.getFullYear(), from.getMonth(), 1);
+  const rangeEnd = new Date(to.getFullYear(), to.getMonth() + 1, 1);
+  const prisma = getPrisma();
+  const rows = await prisma.voiceAppointment.findMany({
+    where: {
+      workspaceId,
+      startsAt: { gte: rangeStart, lt: rangeEnd },
+      status: { notIn: ["canceled", "cancelled"] },
+    },
+    select: { startsAt: true, serviceName: true },
+  });
+
+  const counts: BookingLimitCounts = {
+    perDay: new Map(),
+    perTypePerDay: new Map(),
+    perWeek: new Map(),
+    perMonth: new Map(),
+  };
+  const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) || 0) + 1);
+  for (const row of rows) {
+    const day = localDayKey(row.startsAt);
+    bump(counts.perDay, day);
+    bump(counts.perTypePerDay, `${row.serviceName ?? ""}|${day}`);
+    bump(counts.perWeek, localWeekKey(row.startsAt));
+    bump(counts.perMonth, localMonthKey(row.startsAt));
+  }
+  return counts;
+}
+
+export function checkBookingLimitsFromCounts(
+  counts: BookingLimitCounts,
+  serviceName: string,
+  startsAt: Date,
+  limits?: BookingLimitConfig,
+): { allowed: boolean; reason?: string } {
+  if (!limits) return { allowed: true };
+  const day = localDayKey(startsAt);
+
+  if (limits.maxBookingsPerDay && (counts.perDay.get(day) || 0) >= limits.maxBookingsPerDay) {
+    return { allowed: false, reason: "Daily booking limit reached" };
+  }
+  if (
+    limits.maxPerTypePerDay &&
+    (counts.perTypePerDay.get(`${serviceName}|${day}`) || 0) >= limits.maxPerTypePerDay
+  ) {
+    return { allowed: false, reason: "Appointment type daily limit reached" };
+  }
+  if (
+    limits.maxBookingsPerWeek &&
+    (counts.perWeek.get(localWeekKey(startsAt)) || 0) >= limits.maxBookingsPerWeek
+  ) {
+    return { allowed: false, reason: "Weekly booking limit reached" };
+  }
+  if (
+    limits.maxBookingsPerMonth &&
+    (counts.perMonth.get(localMonthKey(startsAt)) || 0) >= limits.maxBookingsPerMonth
+  ) {
+    return { allowed: false, reason: "Monthly booking limit reached" };
+  }
+  return { allowed: true };
+}
+
 /** Group booking capacity check. */
 export async function checkGroupCapacity(
   workspaceId: string,

@@ -171,6 +171,56 @@ export async function generateNativeSlots(
     console.warn("[appointments] external busy lookup failed", err);
   }
 
+  // Everything that can rule a slot out is read once for the whole range.
+  // Asking per candidate start turned a two-week lookup into hundreds of round
+  // trips and made the page wait twenty seconds for its first bookable time.
+  const { loadAppointmentBusyIndex, getStaffExternalBusy } = await import(
+    "@/lib/appointments/staff-availability"
+  );
+  const { bookingLimitsAreSet, checkBookingLimitsFromCounts, loadBookingLimitCounts } =
+    await import("@/lib/appointments/scheduling-domain");
+  const busyWindowStart = new Date(now.getTime() - bufferBefore - durationMinutes * 60_000);
+  const busyWindowEnd = new Date(rangeEnd.getTime() + bufferAfter + durationMinutes * 60_000);
+  const busyIndex = await loadAppointmentBusyIndex(
+    workspaceId,
+    busyWindowStart,
+    busyWindowEnd,
+    input.excludeAppointmentId,
+  );
+  const externalBusyByStaff = new Map<string, Array<{ start: Date; end: Date }>>();
+  for (const member of eligibleStaff) {
+    externalBusyByStaff.set(
+      member.id,
+      member.calendarConnectionId
+        ? await getStaffExternalBusy(workspaceId, member, busyWindowStart, busyWindowEnd)
+        : [],
+    );
+  }
+  const limitsApply = bookingLimitsAreSet(bookingLimits);
+  const limitCounts = limitsApply
+    ? await loadBookingLimitCounts(workspaceId, busyWindowStart, busyWindowEnd)
+    : null;
+
+  // Group capacity counts share the range but not the status filter, so they
+  // are tallied separately rather than reusing the busy index.
+  const reservedByStart = new Map<number, number>();
+  if (svcCfg.groupBooking?.enabled) {
+    const reserved = await prisma.voiceAppointment.findMany({
+      where: {
+        workspaceId,
+        serviceName: input.serviceName,
+        startsAt: { gte: busyWindowStart, lte: busyWindowEnd },
+        status: { notIn: ["canceled", "cancelled"] },
+        ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
+      },
+      select: { startsAt: true },
+    });
+    for (const row of reserved) {
+      const key = row.startsAt.getTime();
+      reservedByStart.set(key, (reservedByStart.get(key) || 0) + 1);
+    }
+  }
+
   function overlapsExternalBusy(start: Date, end: Date) {
     const bufferedStart = new Date(start.getTime() - bufferBefore);
     const bufferedEnd = new Date(end.getTime() + bufferAfter);
@@ -260,38 +310,24 @@ export async function generateNativeSlots(
           : 1;
 
         if (capacity > 1) {
-          const { checkGroupCapacity } = await import("@/lib/appointments/scheduling-domain");
-          const group = await checkGroupCapacity(
-            workspaceId,
-            input.serviceName,
-            start,
-            capacity,
-            input.excludeAppointmentId,
-          );
-          if (!group.available) continue;
+          if ((reservedByStart.get(start.getTime()) || 0) >= capacity) continue;
         } else if (!needsStaffCheck) {
-          const conflict = await prisma.voiceAppointment.findFirst({
-            where: {
-              workspaceId,
-              id: input.excludeAppointmentId ? { not: input.excludeAppointmentId } : undefined,
-              startsAt: { lte: new Date(end.getTime() + bufferAfter) },
-              endsAt: { gte: new Date(start.getTime() - bufferBefore) },
-              status: { notIn: ["canceled", "cancelled", "completed", "no_show"] },
-            },
-          });
+          const conflict = busyIndex.all.some(
+            (i) =>
+              i.start <= end.getTime() + bufferAfter && i.end >= start.getTime() - bufferBefore,
+          );
           if (conflict) continue;
         }
 
         if (overlapsExternalBusy(start, end)) continue;
 
-        const { checkBookingLimits } = await import("@/lib/appointments/scheduling-domain");
-        const limitCheck = await checkBookingLimits(
-          workspaceId,
-          input.serviceName,
-          start,
-          bookingLimits,
-        );
-        if (!limitCheck.allowed) continue;
+        if (
+          limitCounts &&
+          !checkBookingLimitsFromCounts(limitCounts, input.serviceName, start, bookingLimits)
+            .allowed
+        ) {
+          continue;
+        }
 
         if (needsStaffCheck && eligibleStaff.length) {
           const mode = staffAssignment === "collective" ? "all" : "any";
@@ -309,6 +345,8 @@ export async function generateNativeSlots(
               svcCfg,
               mode,
               excludeAppointmentId: input.excludeAppointmentId,
+              busyIndex,
+              externalBusyByStaff,
             },
           );
           if (!availableStaff.length) continue;

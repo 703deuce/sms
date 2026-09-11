@@ -1,18 +1,35 @@
+/**
+ * Constructing an `Intl.DateTimeFormat` costs milliseconds, and a two-week
+ * availability scan asks for date parts thousands of times in one request.
+ * There are only ever a handful of zones in play, so the formatters are built
+ * once and reused.
+ */
+const partsFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function partsFormatter(timeZone: string): Intl.DateTimeFormat {
+  let fmt = partsFormatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    partsFormatters.set(timeZone, fmt);
+  }
+  return fmt;
+}
+
 /** Calendar date parts in a specific IANA timezone. */
 export function zonedDateParts(
   date: Date,
   timeZone: string,
 ): { year: number; month: number; day: number; weekday: string; hour: number; minute: number } {
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  const fmt = partsFormatter(timeZone);
   const parts = Object.fromEntries(
     fmt
       .formatToParts(date)
