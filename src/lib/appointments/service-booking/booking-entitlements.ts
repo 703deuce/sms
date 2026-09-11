@@ -57,7 +57,15 @@ export async function lookupBookingEntitlements(input: {
     .filter((pkg: (typeof packages)[number]) => {
       if (pkg.expiresAt && pkg.expiresAt.getTime() < now) return false;
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
-      return resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName) != null;
+      if (resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName) != null) {
+        return true;
+      }
+      // A pooled package can still cover a listed service or meeting when credits
+      // live in the default bucket and the product lists the booking type.
+      if (!input.bookingTypeId) return false;
+      const rules = (pkg.product?.creditRules || []) as import("./types").PackageCreditRule[];
+      const listed = rules.some((rule) => rule.bookingTypeId === input.bookingTypeId);
+      return listed && packageCreditsRemaining(credits) > 0;
     })
     .map((pkg: (typeof packages)[number]) => {
       const credits = (pkg.remainingCredits || {}) as Record<string, number>;
@@ -160,10 +168,18 @@ export async function applyBookingEntitlement(input: {
     const credits = (balance.remainingCredits || {}) as Record<string, number>;
     const creditKey =
       resolvePackageCreditKey(credits, input.bookingTypeId, input.serviceName) || "default";
+    if ((credits[creditKey] ?? 0) <= 0) throw new Error("No package credits remaining");
+
+    if (creditKey === "default" && input.bookingTypeId) {
+      const rules = (balance.product?.creditRules || []) as import("./types").PackageCreditRule[];
+      if (!rules.some((rule) => rule.bookingTypeId === input.bookingTypeId)) {
+        throw new Error("This package cannot be used for this booking");
+      }
+    }
 
     await redeemPackageCredit(
       balance.id,
-      input.bookingTypeId || input.serviceName || "default",
+      input.bookingTypeId || input.serviceName || "booking",
       input.appointmentId,
       creditKey,
     );

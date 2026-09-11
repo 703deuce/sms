@@ -14,6 +14,8 @@ import {
 } from "@/lib/appointments/packages/package-form";
 import type { PackageCreditRule } from "@/lib/appointments/service-booking/types";
 import { isServiceRow } from "@/lib/appointments/services/service-display";
+import { resolveBookingTypeKind } from "@/lib/appointments/booking-type-kind";
+import type { AppointmentTypeConfig } from "@/lib/appointments/types";
 import { resolveClassSeriesOfferingKind } from "@/lib/appointments/class-series-offering";
 
 const API = "/api/appointments/service-booking/packages";
@@ -43,7 +45,7 @@ export type PackageActivityView = {
 export type OfferingOption = {
   id: string;
   name: string;
-  kind: "service" | "class" | "workshop";
+  kind: "service" | "meeting" | "class" | "workshop";
   meta: string;
 };
 
@@ -97,6 +99,16 @@ export function usePackageEditor(packageId: string | null) {
 
     const offerings: OfferingOption[] = [];
     for (const row of (typesJson.data || []) as Array<Record<string, unknown>>) {
+      const kind = resolveBookingTypeKind((row.config as AppointmentTypeConfig | null) || null);
+      if (kind === "MEETING") {
+        offerings.push({
+          id: String(row.id),
+          name: String(row.name),
+          kind: "meeting",
+          meta: String(row.durationMinutes ?? "") ? `${row.durationMinutes} min` : "Meeting",
+        });
+        continue;
+      }
       if (!isServiceRow(row as never)) continue;
       offerings.push({
         id: String(row.id),
@@ -217,9 +229,11 @@ export function usePackageEditor(packageId: string | null) {
       const key =
         offering.kind === "service"
           ? "eligibleServiceIds"
-          : offering.kind === "workshop"
-            ? "eligibleWorkshopIds"
-            : "eligibleClassIds";
+          : offering.kind === "meeting"
+            ? "eligibleMeetingIds"
+            : offering.kind === "workshop"
+              ? "eligibleWorkshopIds"
+              : "eligibleClassIds";
       setForm((prev) => {
         const current = prev[key];
         const next = included
@@ -338,7 +352,12 @@ export async function togglePackageForOffering(input: {
 }): Promise<PackageCreditRule[]> {
   const rules = [...input.packageRules];
   const without = rules.filter((rule) => {
-    if (input.offering.kind === "service") return rule.bookingTypeId !== input.offering.id;
+    if (input.offering.kind === "service") {
+      return !(rule.bookingTypeId === input.offering.id && rule.label !== "Meeting");
+    }
+    if (input.offering.kind === "meeting") {
+      return !(rule.bookingTypeId === input.offering.id && rule.label === "Meeting");
+    }
     return !(
       rule.classSeriesId === input.offering.id &&
       rule.label === (input.offering.kind === "workshop" ? "Workshop" : "Class")
@@ -349,12 +368,14 @@ export async function togglePackageForOffering(input: {
       ? [
           ...without,
           input.offering.kind === "service"
-            ? { bookingTypeId: input.offering.id, quantity: 0, label: input.offering.name }
-            : {
-                classSeriesId: input.offering.id,
-                quantity: 0,
-                label: input.offering.kind === "workshop" ? "Workshop" : "Class",
-              },
+            ? { bookingTypeId: input.offering.id, quantity: 0, label: "Service" }
+            : input.offering.kind === "meeting"
+              ? { bookingTypeId: input.offering.id, quantity: 0, label: "Meeting" }
+              : {
+                  classSeriesId: input.offering.id,
+                  quantity: 0,
+                  label: input.offering.kind === "workshop" ? "Workshop" : "Class",
+                },
         ]
       : without;
   const res = await fetch(API, {
@@ -368,7 +389,7 @@ export async function togglePackageForOffering(input: {
 
 export function packageIncludesOffering(
   rules: PackageCreditRule[],
-  offering: { kind: "service" | "class" | "workshop"; id: string },
+  offering: { kind: "service" | "meeting" | "class" | "workshop"; id: string },
 ): boolean {
   return packageGrantsOffering(rules, offering);
 }

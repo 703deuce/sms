@@ -75,6 +75,12 @@ export function PublicGroupEnrollmentClient({
   const [seatMap, setSeatMap] = useState<SeatMapData | null>(null);
   const [seatMapLoading, setSeatMapLoading] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState<SeatCell | null>(null);
+  const [packagePrompt, setPackagePrompt] = useState<{
+    occurrenceId: string;
+    packages: Array<{ id: string; productName: string; creditsRemaining: number }>;
+    seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string };
+  } | null>(null);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,9 +128,32 @@ export function PublicGroupEnrollmentClient({
     }
   }
 
+  async function loadPackages(occurrenceId: string) {
+    const res = await fetch(apiBase, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "entitlements",
+        occurrenceId,
+        firstName,
+        lastName,
+        phone,
+        email: email || undefined,
+      }),
+    });
+    const json = await res.json();
+    return (json.data?.packages || []) as Array<{
+      id: string;
+      productName: string;
+      creditsRemaining: number;
+    }>;
+  }
+
   async function enroll(
     occurrenceId: string,
     seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string },
+    packageBalanceId?: string,
+    skipPackageLookup = false,
   ) {
     const occurrence = occurrences.find((o) => o.id === occurrenceId);
     const confirmation = occurrence
@@ -138,6 +167,18 @@ export function PublicGroupEnrollmentClient({
     setError(null);
     setMessage(null);
     try {
+      let packageId = packageBalanceId;
+      if (!packageId && !skipPackageLookup) {
+        const packages = await loadPackages(occurrenceId);
+        if (packages.length === 1) packageId = packages[0].id;
+        if (packages.length > 1) {
+          setPackagePrompt({ occurrenceId, packages, seat });
+          setSelectedPackageId(packages[0].id);
+          setBusy(false);
+          return;
+        }
+      }
+
       const res = await fetch(apiBase, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,6 +188,7 @@ export function PublicGroupEnrollmentClient({
           lastName,
           phone,
           email: email || undefined,
+          packageBalanceId: packageId || undefined,
           seatMapId: seat?.seatMapId,
           rowIndex: seat?.rowIndex,
           colIndex: seat?.colIndex,
@@ -159,6 +201,7 @@ export function PublicGroupEnrollmentClient({
       // Only an online workshop returns one, and only to the person who has
       // just taken a place.
       const joinLine = json.data?.joinUrl ? ` Join here: ${json.data.joinUrl}` : "";
+      const packageLine = json.data?.packageApplied ? " One package credit was applied." : "";
       setMessage(
         (json.data?.waitlisted
           ? offeringKind === "workshop"
@@ -169,8 +212,11 @@ export function PublicGroupEnrollmentClient({
             confirmation ||
             (offeringKind === "workshop"
               ? `You are registered for this workshop.${seatLabel} We will send a confirmation if messaging is enabled.`
-              : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`)) + joinLine,
+              : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`)) +
+          packageLine +
+          joinLine,
       );
+      setPackagePrompt(null);
       setSeatPickerOpen(false);
       setPendingOccurrence(null);
       setSelectedSeat(null);
@@ -261,6 +307,55 @@ export function PublicGroupEnrollmentClient({
         >
           {error}
         </p>
+      ) : null}
+
+      {packagePrompt ? (
+        <section className="rounded-lg border p-4 space-y-3" aria-label="Use a package">
+          <h2 className="text-sm font-semibold">Use a package</h2>
+          <p className="text-sm text-muted-foreground">
+            You have more than one package that works for this booking. Choose which credit to use.
+          </p>
+          <label className="text-sm block">
+            <span className="text-muted-foreground">Package</span>
+            <select
+              className="mt-1 h-9 w-full rounded-md border px-2"
+              value={selectedPackageId}
+              onChange={(e) => setSelectedPackageId(e.target.value)}
+            >
+              {packagePrompt.packages.map((pkg) => (
+                <option key={pkg.id} value={pkg.id}>
+                  {pkg.productName} · {pkg.creditsRemaining} left
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md border px-4 py-2 text-sm"
+              onClick={() => {
+                void enroll(packagePrompt.occurrenceId, packagePrompt.seat, undefined, true);
+                setPackagePrompt(null);
+              }}
+            >
+              Pay normally
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+              onClick={() => {
+                void enroll(
+                  packagePrompt.occurrenceId,
+                  packagePrompt.seat,
+                  selectedPackageId,
+                );
+                setPackagePrompt(null);
+              }}
+            >
+              Use package
+            </button>
+          </div>
+        </section>
       ) : null}
 
       {seatPickerOpen && pendingOccurrence ? (

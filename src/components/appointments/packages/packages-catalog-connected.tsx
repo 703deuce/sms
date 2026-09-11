@@ -31,6 +31,7 @@ function eligibleLabel(rules: PackageCreditRule[]): string {
   const summary = eligibilitySummary(rules);
   const parts: string[] = [];
   if (summary.services) parts.push(`${summary.services} Service${summary.services === 1 ? "" : "s"}`);
+  if (summary.meetings) parts.push(`${summary.meetings} Meeting${summary.meetings === 1 ? "" : "s"}`);
   if (summary.classes) parts.push(`${summary.classes} Class${summary.classes === 1 ? "" : "es"}`);
   if (summary.workshops) parts.push(`${summary.workshops} Workshop${summary.workshops === 1 ? "" : "s"}`);
   return parts.length ? parts.join(" · ") : "None yet";

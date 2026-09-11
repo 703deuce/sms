@@ -51,9 +51,10 @@ export async function listEligibleEntitlementsForContact(workspaceId: string, co
 
 export async function redeemPackageCredit(
   balanceId: string,
-  bookingTypeId: string,
-  appointmentId: string,
+  referenceLabel: string,
+  referenceId: string,
   creditKey = "default",
+  note?: string,
 ) {
   const prisma = getPrisma();
   const balance = await prisma.packageBalance.findUnique({ where: { id: balanceId } });
@@ -64,17 +65,21 @@ export async function redeemPackageCredit(
   if (current <= 0) throw new Error("No package credits remaining");
 
   const next = { ...remaining, [creditKey]: current - 1 };
+  const exhausted = Object.values(next).every((v) => v <= 0);
   await prisma.packageBalance.update({
     where: { id: balanceId },
-    data: { remainingCredits: next },
+    data: {
+      remainingCredits: next,
+      status: exhausted ? "exhausted" : balance.status,
+    },
   });
   await prisma.packageLedgerEntry.create({
     data: {
       balanceId,
       kind: "redeem",
       delta: { [creditKey]: -1 },
-      appointmentId,
-      note: `Redeemed for booking type ${bookingTypeId}`,
+      appointmentId: referenceId,
+      note: note || `Redeemed for ${referenceLabel}`,
     },
   });
   return { balanceId, remaining: next };

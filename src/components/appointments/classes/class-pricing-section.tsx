@@ -204,7 +204,7 @@ export function ClassPricingSection({
             <p className="ws-gap-note mt-3">
               <Info className="h-3.5 w-3.5" aria-hidden />
               Package eligibility is stored on the package itself, so it stays in sync with the
-              Packages page. Class registration does not draw down a package credit at checkout yet.
+              Packages page. Customers with an eligible package can apply a credit when they register.
             </p>
           ) : null}
           {form.memberOnly ? (

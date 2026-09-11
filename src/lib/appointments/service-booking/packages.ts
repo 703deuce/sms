@@ -373,6 +373,16 @@ export async function purchasePackageForContact(
   });
   if (!product) throw new Error("Package not found");
 
+  const meta = (product.metadata || {}) as { maxPurchasesPerCustomer?: number };
+  if (meta.maxPurchasesPerCustomer && meta.maxPurchasesPerCustomer > 0) {
+    const owned = await prisma.packageBalance.count({
+      where: { workspaceId, productId, contactId },
+    });
+    if (owned >= meta.maxPurchasesPerCustomer) {
+      throw new Error("You already own the maximum number of this package");
+    }
+  }
+
   const rules = (product.creditRules || []) as PackageCreditRule[];
   const remainingCredits: Record<string, number> = {};
   // Eligibility-only rules carry quantity 0; only positive quantities mint credits.

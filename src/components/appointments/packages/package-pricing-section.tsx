@@ -104,11 +104,20 @@ export function PackagePricingSection({ form, onFormChange }: Props) {
         </Panel>
 
         <Panel title="Purchase limits" icon={Ticket} className="ws-span-6">
-          <p className="ws-gap-note">
-            <Info className="h-3.5 w-3.5" aria-hidden />
-            Per-customer purchase limits are not enforced by the runtime yet. This package can be bought
-            multiple times unless you handle it manually.
-          </p>
+          <Field label="Maximum per customer" htmlFor="pkg-max-purchases" hint="Leave blank for no limit.">
+            <NumberField
+              id="pkg-max-purchases"
+              min={1}
+              suffix="packages"
+              value={form.maxPurchasesPerCustomer ?? ""}
+              onChange={(e) =>
+                onFormChange(
+                  "maxPurchasesPerCustomer",
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
+            />
+          </Field>
         </Panel>
       </div>
     </div>

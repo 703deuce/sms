@@ -37,6 +37,7 @@ export * from "./fixed-start-times";
 export * from "./availability-density";
 export * from "./staff-phase-occupancy";
 export * from "./package-lifecycle";
+export * from "./group-registration-entitlements";
 export * from "./membership-lifecycle";
 export * from "./booking-contracts";
 export * from "./booking-invoices";

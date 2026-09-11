@@ -36,6 +36,40 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const body = await request.json();
+
+    if (body.action === "entitlements") {
+      const { resolveContactIdByPhone } = await import(
+        "@/lib/appointments/service-booking/booking-entitlements"
+      );
+      const { lookupGroupRegistrationEntitlements } = await import(
+        "@/lib/appointments/service-booking/group-registration-entitlements"
+      );
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const phone = String(body.phone || "").trim();
+      if (!phone) return NextResponse.json({ data: { packages: [] } });
+      const contactId = await resolveContactIdByPhone(
+        workspace.id,
+        phone,
+        body.email ? String(body.email) : undefined,
+      );
+      if (!contactId) return NextResponse.json({ data: { packages: [] } });
+      const occurrenceId = body.occurrenceId ? String(body.occurrenceId) : undefined;
+      if (!occurrenceId) return NextResponse.json({ data: { packages: [] } });
+      const occ = await prisma.classOccurrence.findFirst({
+        where: { id: occurrenceId, workspaceId: workspace.id },
+        include: { series: true },
+      });
+      if (!occ?.series) return NextResponse.json({ data: { packages: [] } });
+      const entitlements = await lookupGroupRegistrationEntitlements({
+        workspaceId: workspace.id,
+        contactId,
+        classSeriesId: occ.series.id,
+        offeringKind: "class",
+      });
+      return NextResponse.json({ data: entitlements });
+    }
+
     const phone = String(body.phone || "").trim();
     const firstName = String(body.firstName || "").trim();
     const lastName = String(body.lastName || "").trim();
@@ -166,7 +200,34 @@ export async function POST(request: Request, { params }: Params) {
       });
     }
 
-    return NextResponse.json({ data: { enrollment, seatReservation } }, { status: 201 });
+    let packageApplied = null;
+    const enrollmentId = Array.isArray(enrollment) ? enrollment[0]?.id : enrollment?.id;
+    if (body.packageBalanceId && seriesForRegistration && enrollmentId) {
+      const { applyGroupRegistrationEntitlement } = await import(
+        "@/lib/appointments/service-booking/group-registration-entitlements"
+      );
+      const { updateClassEnrollment } = await import(
+        "@/lib/appointments/service-booking/classes"
+      );
+      try {
+        packageApplied = await applyGroupRegistrationEntitlement({
+          workspaceId: workspace.id,
+          contactId,
+          classSeriesId: seriesForRegistration.id,
+          offeringKind: "class",
+          enrollmentId,
+          packageBalanceId: String(body.packageBalanceId),
+        });
+      } catch (err) {
+        await updateClassEnrollment(workspace.id, enrollmentId, { status: "cancelled" });
+        throw err;
+      }
+    }
+
+    return NextResponse.json(
+      { data: { enrollment, seatReservation, packageApplied } },
+      { status: 201 },
+    );
   } catch (err) {
     return jsonError(err, 400);
   }

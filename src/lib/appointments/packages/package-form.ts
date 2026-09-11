@@ -12,8 +12,10 @@ export type PackageFormState = {
   active: boolean;
   directPurchase: boolean;
   eligibleServiceIds: string[];
+  eligibleMeetingIds: string[];
   eligibleClassIds: string[];
   eligibleWorkshopIds: string[];
+  maxPurchasesPerCustomer: number | null;
 };
 
 export const EMPTY_PACKAGE_FORM: PackageFormState = {
@@ -28,8 +30,10 @@ export const EMPTY_PACKAGE_FORM: PackageFormState = {
   active: true,
   directPurchase: true,
   eligibleServiceIds: [],
+  eligibleMeetingIds: [],
   eligibleClassIds: [],
   eligibleWorkshopIds: [],
+  maxPurchasesPerCustomer: null,
 };
 
 export type PackageProductApiRow = {
@@ -42,7 +46,12 @@ export type PackageProductApiRow = {
   expirationDays: number | null;
   active: boolean;
   directPurchase: boolean;
-  metadata?: { creditUnitLabel?: string; expirationMode?: string; expirationDate?: string } | null;
+  metadata?: {
+    creditUnitLabel?: string;
+    expirationMode?: string;
+    expirationDate?: string;
+    maxPurchasesPerCustomer?: number;
+  } | null;
   ownerCount?: number;
 };
 
@@ -71,7 +80,14 @@ export function packageFormFromRow(row: PackageProductApiRow): PackageFormState 
     expirationDate: String(meta.expirationDate || ""),
     active: row.active,
     directPurchase: row.directPurchase,
-    eligibleServiceIds: rules.filter((r) => r.bookingTypeId).map((r) => String(r.bookingTypeId)),
+    maxPurchasesPerCustomer:
+      typeof meta.maxPurchasesPerCustomer === "number" ? meta.maxPurchasesPerCustomer : null,
+    eligibleServiceIds: rules
+      .filter((r) => r.bookingTypeId && r.label !== "Meeting")
+      .map((r) => String(r.bookingTypeId)),
+    eligibleMeetingIds: rules
+      .filter((r) => r.bookingTypeId && r.label === "Meeting")
+      .map((r) => String(r.bookingTypeId)),
     eligibleClassIds: rules
       .filter((r) => r.classSeriesId && r.label !== "Workshop")
       .map((r) => String(r.classSeriesId)),
@@ -91,6 +107,9 @@ export function buildCreditRules(form: PackageFormState): PackageCreditRule[] {
   }
   for (const id of form.eligibleServiceIds) {
     rules.push({ bookingTypeId: id, quantity: 0, label: "Service" });
+  }
+  for (const id of form.eligibleMeetingIds) {
+    rules.push({ bookingTypeId: id, quantity: 0, label: "Meeting" });
   }
   for (const id of form.eligibleClassIds) {
     rules.push({ classSeriesId: id, quantity: 0, label: "Class" });
@@ -117,6 +136,7 @@ export function packageSavePayload(form: PackageFormState, id?: string) {
       creditUnitLabel: form.creditUnitLabel,
       expirationMode: form.expirationMode,
       expirationDate: form.expirationMode === "fixed" ? form.expirationDate : undefined,
+      maxPurchasesPerCustomer: form.maxPurchasesPerCustomer || undefined,
     },
   };
 }
@@ -127,6 +147,7 @@ export function validatePackageForm(form: PackageFormState): string | null {
   if (form.priceCents < 0) return "Price cannot be negative";
   if (
     form.eligibleServiceIds.length +
+      form.eligibleMeetingIds.length +
       form.eligibleClassIds.length +
       form.eligibleWorkshopIds.length ===
     0
@@ -144,14 +165,16 @@ export function validatePackageForm(form: PackageFormState): string | null {
 
 export function eligibilitySummary(rules: PackageCreditRule[]): {
   services: number;
+  meetings: number;
   classes: number;
   workshops: number;
   total: number;
 } {
-  const services = rules.filter((r) => r.bookingTypeId).length;
+  const services = rules.filter((r) => r.bookingTypeId && r.label !== "Meeting").length;
+  const meetings = rules.filter((r) => r.bookingTypeId && r.label === "Meeting").length;
   const classes = rules.filter((r) => r.classSeriesId && r.label === "Class").length;
   const workshops = rules.filter((r) => r.classSeriesId && r.label === "Workshop").length;
-  return { services, classes, workshops, total: services + classes + workshops };
+  return { services, meetings, classes, workshops, total: services + meetings + classes + workshops };
 }
 
 export function formatMoney(cents: number): string {
@@ -160,10 +183,13 @@ export function formatMoney(cents: number): string {
 
 export function packageGrantsOffering(
   rules: PackageCreditRule[],
-  offering: { kind: "service" | "class" | "workshop"; id: string },
+  offering: { kind: "service" | "meeting" | "class" | "workshop"; id: string },
 ): boolean {
   if (offering.kind === "service") {
-    return rules.some((r) => r.bookingTypeId === offering.id);
+    return rules.some((r) => r.bookingTypeId === offering.id && r.label !== "Meeting");
+  }
+  if (offering.kind === "meeting") {
+    return rules.some((r) => r.bookingTypeId === offering.id && r.label === "Meeting");
   }
   const label = offering.kind === "workshop" ? "Workshop" : "Class";
   return rules.some((r) => r.classSeriesId === offering.id && r.label === label);

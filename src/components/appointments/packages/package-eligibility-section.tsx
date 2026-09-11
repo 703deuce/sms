@@ -15,6 +15,7 @@ type Props = {
 
 const GROUPS = [
   { key: "service", label: "Services", icon: Briefcase },
+  { key: "meeting", label: "Meetings", icon: Briefcase },
   { key: "class", label: "Classes", icon: CalendarDays },
   { key: "workshop", label: "Workshops", icon: Presentation },
 ] as const;
@@ -45,7 +46,7 @@ function OfferingRow({
 
 export function PackageEligibilitySection({ creditRules, offerings, onToggle }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [filter, setFilter] = useState<"all" | "service" | "class" | "workshop">("all");
+  const [filter, setFilter] = useState<"all" | "service" | "meeting" | "class" | "workshop">("all");
   const [search, setSearch] = useState("");
 
   const included = useMemo(
@@ -102,8 +103,8 @@ export function PackageEligibilitySection({ creditRules, offerings, onToggle }: 
           })
         )}
         <p className="ws-gap-note mt-3">
-          Services redeem at appointment checkout today. Classes and workshops share the same
-          eligibility record, but class registration does not draw down package credits at checkout yet.
+          Services and meetings redeem at appointment checkout. Classes and workshops redeem when
+          the customer selects a package on the public registration page.
         </p>
       </Panel>
 
@@ -114,7 +115,7 @@ export function PackageEligibilitySection({ creditRules, offerings, onToggle }: 
         onClose={() => setDrawerOpen(false)}
       >
         <div className="mb-3 flex flex-wrap gap-2">
-          {(["all", "service", "class", "workshop"] as const).map((value) => (
+          {(["all", "service", "meeting", "class", "workshop"] as const).map((value) => (
             <button
               key={value}
               type="button"

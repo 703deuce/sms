@@ -243,13 +243,12 @@ export function WorkshopPricingSection({
             label="Members only"
             description="Only customers on one of the memberships above may register."
           />
-          {form.packageProductIds.length + form.membershipProductIds.length > 0 ? (
+          {eligiblePackageIds.length + form.membershipProductIds.length > 0 ? (
             <p className="ws-gap-note mt-3">
               <Info className="h-3.5 w-3.5" aria-hidden />
               <span>
-                Packages and memberships are recorded against this workshop, but a registration
-                does not draw down a package credit at checkout yet. Redemption still has to be
-                handled at the desk.
+                Package eligibility is stored on the package itself, so it stays in sync with the
+                Packages page. Customers with an eligible package can apply a credit when they register.
               </span>
             </p>
           ) : null}
