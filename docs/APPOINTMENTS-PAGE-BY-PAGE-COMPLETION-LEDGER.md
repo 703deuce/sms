@@ -508,3 +508,43 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, pricing order, parity, matrix |
 
 **Overall:** `APPOINTMENTS_POINT_OF_SALE_PAGE_COMPLETE: NO`
+
+## MEETING POLLS (`/appointments/meeting-polls`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_BACKEND_REUSE | PASS | `createPlatformAppointment`, availability, timezone utils |
+| VISUAL_ADMIN | PASS | Pilot tokens; library table + detail sections |
+| VISUAL_PUBLIC | PASS | `/book/{slug}/poll/vote/{token}` |
+| LAYOUT | PASS | Full-width; no local vertical nav |
+| DENSITY | PASS | Compact tables + matrix |
+| POLL_LIBRARY | PASS | Workspace API + table |
+| CREATE_POLL | PASS | 3-step modal → POST |
+| TIME_OPTIONS | PASS | ISO instants via `wallTimeInZoneToUtc` |
+| ORGANIZER_AVAILABILITY | PARTIAL | Finalize recheck only; no suggest UI |
+| PARTICIPANTS | PASS | Add + table |
+| GUEST_VOTING | PASS | Public vote API |
+| SHARE_LINK | PASS | `shareToken` + copy |
+| YES_MAYBE_NO | PASS | Response model |
+| RESPONSE_EDITING | PASS | Resubmit while open |
+| RESPONSE_MATRIX | PASS | Detail section |
+| BEST_TIME_SCORING | PASS | `scoring.ts` + doc |
+| DEADLINE | PARTIAL | Stored; auto-close behavior basic |
+| NON_RESPONDER_REMINDERS | PARTIAL | Activity only |
+| TIMEZONE | PASS | Organizer + participant selector |
+| DST | PASS | Wall-time → UTC helper |
+| CALENDAR_OVERLAY | GAP | Not on public vote |
+| PRIVACY | PARTIAL | Settings flags |
+| CLOSE / CANCEL / EXPIRE | PASS | Actions + derive |
+| FINALIZATION | PASS | Server finalize action |
+| AVAILABILITY_RECHECK | PASS | `filterStaffAvailableForSlot` |
+| CANONICAL_MEETING_CREATION | PASS | `createPlatformAppointment` |
+| MEETING_INVITES | PASS | Confirmation pipeline |
+| VIDEO_METHOD | PASS | On finalize only |
+| COHOST_AVAILABILITY | N/A | |
+| IDEMPOTENCY | PASS | `finalizeIdempotencyKey` |
+| ACTIVITY | PASS | Append-only log |
+| E2E / SCREENSHOTS | BLOCKED | Not run this pass |
+| DOCS | PASS | Audit, scoring, parity, matrix |
+
+**Overall:** `APPOINTMENTS_MEETING_POLLS_PAGE_COMPLETE: NO` (E2E tests 1–25, screenshots 01–22, poll invite email delivery, suggest-from-availability UI)
