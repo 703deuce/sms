@@ -12,6 +12,11 @@ import {
   type ClassSeriesRow,
 } from "@/lib/appointments/classes/class-form";
 import { resolveClassSeriesOfferingKind } from "@/lib/appointments/class-series-offering";
+import type { PackageCreditRule } from "@/lib/appointments/service-booking/types";
+import {
+  packageIncludesOffering,
+  togglePackageForOffering,
+} from "@/features/appointments/kimi/packages/use-package-editor";
 import type { PlannedOccurrence } from "@/lib/appointments/classes/class-recurrence";
 import {
   newLocation,
@@ -50,7 +55,7 @@ export type ClassEditorOptions = {
   locationOptions: Array<{ id: string; name: string; kind?: string; address?: string }>;
   resourceOptions: Array<{ id: string; name: string; quantity: number }>;
   intakeFormOptions: Array<{ id: string; name: string; fieldCount: number }>;
-  packageOptions: Array<{ id: string; name: string; priceCents: number }>;
+  packageOptions: Array<{ id: string; name: string; priceCents: number; creditRules: PackageCreditRule[] }>;
   membershipOptions: Array<{ id: string; name: string; priceCents: number; billingInterval: string }>;
 };
 
@@ -195,7 +200,12 @@ export function useClassEditor(classId: string | null) {
       })),
       packageOptions: packages
         .filter((p) => p.active !== false)
-        .map((p) => ({ id: String(p.id), name: String(p.name), priceCents: Number(p.priceCents ?? 0) })),
+        .map((p) => ({
+          id: String(p.id),
+          name: String(p.name),
+          priceCents: Number(p.priceCents ?? 0),
+          creditRules: (p.creditRules as PackageCreditRule[]) || [],
+        })),
       membershipOptions: memberships
         .filter((m) => m.active !== false)
         .map((m) => ({
@@ -575,6 +585,41 @@ export function useClassEditor(classId: string | null) {
     if (bookingLink) window.open(bookingLink, "_blank", "noopener");
   }, [bookingLink]);
 
+  const eligiblePackageIds = useMemo(() => {
+    if (!classId) return [];
+    return options.packageOptions
+      .filter((pkg) =>
+        packageIncludesOffering(pkg.creditRules, { kind: "class", id: classId }),
+      )
+      .map((pkg) => pkg.id);
+  }, [classId, options.packageOptions]);
+
+  const togglePackage = useCallback(
+    async (packageId: string, granted: boolean) => {
+      if (!classId) return;
+      const pkg = options.packageOptions.find((p) => p.id === packageId);
+      if (!pkg) return;
+      try {
+        const rules = await togglePackageForOffering({
+          packageId: pkg.id,
+          packageName: pkg.name,
+          packageRules: pkg.creditRules,
+          offering: { id: classId, name: form.name, kind: "class", meta: "Class" },
+          granted,
+        });
+        setOptions((prev) => ({
+          ...prev,
+          packageOptions: prev.packageOptions.map((p) =>
+            p.id === packageId ? { ...p, creditRules: rules } : p,
+          ),
+        }));
+      } catch {
+        setError("Could not update package eligibility");
+      }
+    },
+    [classId, form.name, options.packageOptions],
+  );
+
   return {
     classId,
     isCreating,
@@ -609,5 +654,7 @@ export function useClassEditor(classId: string | null) {
     addIntakeForm,
     copyBookingLink,
     previewBooking,
+    eligiblePackageIds,
+    togglePackage,
   };
 }

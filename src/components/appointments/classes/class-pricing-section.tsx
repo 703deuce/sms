@@ -10,6 +10,8 @@ import { formatMoney } from "@/lib/appointments/classes/class-summary";
 type Props = {
   form: ClassFormState;
   options: ClassEditorOptions;
+  eligiblePackageIds: string[];
+  onTogglePackage: (id: string, granted: boolean) => Promise<void>;
   onFormChange: <K extends keyof ClassFormState>(key: K, value: ClassFormState[K]) => void;
 };
 
@@ -45,17 +47,14 @@ function EntitlementRow({
   );
 }
 
-export function ClassPricingSection({ form, options, onFormChange }: Props) {
+export function ClassPricingSection({
+  form,
+  options,
+  eligiblePackageIds,
+  onTogglePackage,
+  onFormChange,
+}: Props) {
   const dollars = (form.priceCents / 100).toFixed(2);
-
-  function togglePackage(id: string) {
-    onFormChange(
-      "packageProductIds",
-      form.packageProductIds.includes(id)
-        ? form.packageProductIds.filter((p) => p !== id)
-        : [...form.packageProductIds, id],
-    );
-  }
 
   function toggleMembership(id: string) {
     onFormChange(
@@ -130,7 +129,7 @@ export function ClassPricingSection({ form, options, onFormChange }: Props) {
           className="ws-span-6"
           flush
           actions={
-            <Link href="/appointments/commerce" className="ws-text-btn">
+            <Link href="/appointments/packages" className="ws-text-btn">
               Manage packages
             </Link>
           }
@@ -146,8 +145,8 @@ export function ClassPricingSection({ form, options, onFormChange }: Props) {
                   key={pkg.id}
                   name={pkg.name}
                   meta={formatMoney(pkg.priceCents)}
-                  granted={form.packageProductIds.includes(pkg.id)}
-                  onToggle={() => togglePackage(pkg.id)}
+                  granted={eligiblePackageIds.includes(pkg.id)}
+                  onToggle={() => void onTogglePackage(pkg.id, eligiblePackageIds.includes(pkg.id))}
                 />
               ))}
             </div>
@@ -201,12 +200,11 @@ export function ClassPricingSection({ form, options, onFormChange }: Props) {
               description="Customers take every session rather than picking one."
             />
           </div>
-          {form.packageProductIds.length + form.membershipProductIds.length > 0 ? (
+          {eligiblePackageIds.length + form.membershipProductIds.length > 0 ? (
             <p className="ws-gap-note mt-3">
               <Info className="h-3.5 w-3.5" aria-hidden />
-              Packages and memberships are recorded against this class, but a class registration
-              does not draw down a package credit at checkout yet. Redemption still has to be
-              handled at the desk.
+              Package eligibility is stored on the package itself, so it stays in sync with the
+              Packages page. Class registration does not draw down a package credit at checkout yet.
             </p>
           ) : null}
           {form.memberOnly ? (

@@ -94,6 +94,8 @@ export function ClassSectionWorkspace({
         <ClassPricingSection
           form={editor.form}
           options={editor.options}
+          eligiblePackageIds={editor.eligiblePackageIds}
+          onTogglePackage={editor.togglePackage}
           onFormChange={editor.updateForm}
         />
       ) : null}

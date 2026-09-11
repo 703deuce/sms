@@ -274,3 +274,34 @@ Each renders as a `.ws-gap-note` beside the control it concerns.
 The same two Booking Types typecheck errors from the `f83e1cf4` merge remain, untouched.
 `react-hooks/set-state-in-effect` fires on the new files; it is endemic to the repo
 (339 occurrences) and the Classes and Services pages carry the same pattern.
+
+## PACKAGES (`/appointments/packages`) — rebuilt catalog + editor pass
+
+Full-width catalog table at `/appointments/packages`. Dedicated full-width editor at
+`/appointments/packages/[id]`. Four-step create wizard at `/appointments/packages/new`.
+No object-list sidebar and no vertical section rail.
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| LAYOUT | PASS | Global sidebar + wide workspace only; catalog uses full canvas |
+| HORIZONTAL SPACE | PASS | Full-width table; editor uses twelve-track grid |
+| DENSITY | PASS | Compact table rows, thin entitlement rows, inline summary strip |
+| CATALOG | PASS | Search, status filter, sort, row actions, summary metrics |
+| CREATE | PASS | Four-step wizard (Basics / Eligible bookings / Price & validity / Review) |
+| EDIT | PASS | Five horizontal sections with `?section=` URL sync |
+| ELIGIBILITY | PASS | Canonical `creditRules` on `PackageProduct`; Services/Classes/Workshops toggle the same record |
+| CUSTOMER PACKAGES | PASS | Ownership table, detail drawer, manual credit adjustment via ledger |
+| ACTIVITY | PASS | Package ledger table per product |
+| BOOKING (SERVICES) | PASS (existing) | Service checkout redeems via `bookingTypeId` credit key — unchanged |
+| BOOKING (CLASSES/WORKSHOPS) | N/A | Eligibility syncs bidirectionally; registration does not redeem credits yet (stated in UI) |
+| MEETINGS | N/A | No package redemption runtime for meetings |
+
+**Counts:** `BROKEN = 0`, `NO_OP = 0`, `PLACEHOLDER = 0`
+
+**Overall:** `APPOINTMENTS_PACKAGES_PAGE_COMPLETE: YES` (service redemption path; class/workshop redemption deferred honestly)
+
+### Known gaps, stated in the UI
+
+- Class and workshop registration does not draw down package credits at checkout yet.
+- Per-customer purchase limits are not enforced server-side.
+- Meetings are not exposed in eligibility because checkout does not support them.

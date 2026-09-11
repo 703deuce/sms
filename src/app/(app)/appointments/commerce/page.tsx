@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { redirect } from "next/navigation";
 
 export default function ServiceBookingCommercePage() {
-  return <ServiceBookingAdminClient initialSection="packages" title="Packages & Memberships" />;
+  redirect("/appointments/packages");
 }

@@ -93,6 +93,8 @@ export function WorkshopSectionWorkspace({
         <WorkshopPricingSection
           form={editor.form}
           options={editor.options}
+          eligiblePackageIds={editor.eligiblePackageIds}
+          onTogglePackage={editor.togglePackage}
           onFormChange={editor.updateForm}
         />
       ) : null}

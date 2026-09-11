@@ -19,6 +19,11 @@ import {
   newLocation,
   newStaffMember,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
+import type { PackageCreditRule } from "@/lib/appointments/service-booking/types";
+import {
+  packageIncludesOffering,
+  togglePackageForOffering,
+} from "@/features/appointments/kimi/packages/use-package-editor";
 
 const API = "/api/appointments/service-booking/workshops";
 
@@ -52,7 +57,7 @@ export type WorkshopEditorOptions = {
   locationOptions: Array<{ id: string; name: string; kind?: string; address?: string }>;
   resourceOptions: Array<{ id: string; name: string; quantity: number }>;
   intakeFormOptions: Array<{ id: string; name: string; fieldCount: number }>;
-  packageOptions: Array<{ id: string; name: string; priceCents: number }>;
+  packageOptions: Array<{ id: string; name: string; priceCents: number; creditRules: PackageCreditRule[] }>;
   membershipOptions: Array<{
     id: string;
     name: string;
@@ -206,6 +211,7 @@ export function useWorkshopEditor(workshopId: string | null) {
           id: String(p.id),
           name: String(p.name),
           priceCents: Number(p.priceCents ?? 0),
+          creditRules: (p.creditRules as PackageCreditRule[]) || [],
         })),
       membershipOptions: memberships
         .filter((m) => m.active !== false)
@@ -651,6 +657,41 @@ export function useWorkshopEditor(workshopId: string | null) {
     if (bookingLink) window.open(bookingLink, "_blank", "noopener");
   }, [bookingLink]);
 
+  const eligiblePackageIds = useMemo(() => {
+    if (!workshopId) return [];
+    return options.packageOptions
+      .filter((pkg) =>
+        packageIncludesOffering(pkg.creditRules, { kind: "workshop", id: workshopId }),
+      )
+      .map((pkg) => pkg.id);
+  }, [options.packageOptions, workshopId]);
+
+  const togglePackage = useCallback(
+    async (packageId: string, granted: boolean) => {
+      if (!workshopId) return;
+      const pkg = options.packageOptions.find((p) => p.id === packageId);
+      if (!pkg) return;
+      try {
+        const rules = await togglePackageForOffering({
+          packageId: pkg.id,
+          packageName: pkg.name,
+          packageRules: pkg.creditRules,
+          offering: { id: workshopId, name: form.name, kind: "workshop", meta: "Workshop" },
+          granted,
+        });
+        setOptions((prev) => ({
+          ...prev,
+          packageOptions: prev.packageOptions.map((p) =>
+            p.id === packageId ? { ...p, creditRules: rules } : p,
+          ),
+        }));
+      } catch {
+        setError("Could not update package eligibility");
+      }
+    },
+    [form.name, options.packageOptions, workshopId],
+  );
+
   return {
     workshopId,
     isCreating,
@@ -689,6 +730,8 @@ export function useWorkshopEditor(workshopId: string | null) {
     addIntakeForm,
     copyBookingLink,
     previewBooking,
+    eligiblePackageIds,
+    togglePackage,
   };
 }
 

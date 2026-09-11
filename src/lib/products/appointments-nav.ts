@@ -45,7 +45,8 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
     { label: "Share & embed", href: "/appointments/booking/share" },
   ];
   if (modules.commerce) {
-    children.push({ label: "Packages & Memberships", href: "/appointments/commerce" });
+    children.push({ label: "Packages", href: "/appointments/packages" });
+    children.push({ label: "Memberships", href: "/appointments/commerce" });
     children.push({ label: "Contact merge", href: "/appointments/commerce/contact-merge" });
     children.push({ label: "POS checkout", href: "/appointments/pos" });
   }
@@ -281,7 +282,8 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/overview")) return "Home";
   if (pathname.startsWith("/appointments/calendar")) return "Calendar";
   if (pathname.startsWith("/appointments/recalls")) return "Recalls";
-  if (pathname.startsWith("/appointments/commerce")) return "Packages & Memberships";
+  if (pathname.startsWith("/appointments/packages")) return "Packages";
+  if (pathname.startsWith("/appointments/commerce")) return "Memberships";
   if (pathname.startsWith("/appointments/categories")) return "Categories";
   if (pathname.startsWith("/appointments/locations")) return "Locations";
   if (pathname.startsWith("/appointments/resources")) return "Resources";

@@ -431,7 +431,7 @@ export function ServicePricingSection({
                   Add package
                 </button>
               ) : (
-                <Link href="/appointments/commerce" className="ws-text-btn mt-2">
+                <Link href="/appointments/packages" className="ws-text-btn mt-2">
                   <Plus className="h-3.5 w-3.5" aria-hidden />
                   Manage packages
                 </Link>

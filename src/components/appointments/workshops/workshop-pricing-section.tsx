@@ -10,6 +10,8 @@ import { formatMoney } from "@/lib/appointments/workshops/workshop-summary";
 type Props = {
   form: WorkshopFormState;
   options: WorkshopEditorOptions;
+  eligiblePackageIds: string[];
+  onTogglePackage: (id: string, granted: boolean) => Promise<void>;
   onFormChange: <K extends keyof WorkshopFormState>(key: K, value: WorkshopFormState[K]) => void;
 };
 
@@ -40,17 +42,14 @@ function EntitlementRow({
   );
 }
 
-export function WorkshopPricingSection({ form, options, onFormChange }: Props) {
+export function WorkshopPricingSection({
+  form,
+  options,
+  eligiblePackageIds,
+  onTogglePackage,
+  onFormChange,
+}: Props) {
   const dollars = (form.priceCents / 100).toFixed(2);
-
-  function togglePackage(id: string) {
-    onFormChange(
-      "packageProductIds",
-      form.packageProductIds.includes(id)
-        ? form.packageProductIds.filter((p) => p !== id)
-        : [...form.packageProductIds, id],
-    );
-  }
 
   function toggleMembership(id: string) {
     onFormChange(
@@ -181,7 +180,7 @@ export function WorkshopPricingSection({ form, options, onFormChange }: Props) {
           className="ws-span-6"
           flush
           actions={
-            <Link href="/appointments/commerce" className="ws-text-btn">
+            <Link href="/appointments/packages" className="ws-text-btn">
               Manage packages
             </Link>
           }
@@ -197,8 +196,8 @@ export function WorkshopPricingSection({ form, options, onFormChange }: Props) {
                   key={pkg.id}
                   name={pkg.name}
                   meta={formatMoney(pkg.priceCents)}
-                  granted={form.packageProductIds.includes(pkg.id)}
-                  onToggle={() => togglePackage(pkg.id)}
+                  granted={eligiblePackageIds.includes(pkg.id)}
+                  onToggle={() => void onTogglePackage(pkg.id, eligiblePackageIds.includes(pkg.id))}
                 />
               ))}
             </div>
