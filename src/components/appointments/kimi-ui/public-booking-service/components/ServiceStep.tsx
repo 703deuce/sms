@@ -52,7 +52,7 @@ function ServiceCard({ type, onPick }: { type: BookingType; onPick: (type: Booki
               {type.config?.groupBooking?.enabled ? (
                 <span className="inline-flex items-center gap-1">
                   <Users className="h-3.5 w-3.5" />
-                  Up to {type.config.groupBooking.maxAttendees}
+                  Up to {type.config.groupBooking.capacity}
                 </span>
               ) : null}
             </div>

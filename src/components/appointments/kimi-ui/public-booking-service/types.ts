@@ -34,7 +34,7 @@ export type BookingType = {
     staffIds?: string[];
     locationIds?: string[];
     payment?: PaymentRequirement;
-    groupBooking?: { enabled: boolean; maxAttendees: number };
+    groupBooking?: { enabled: boolean; capacity: number };
     recurring?: { enabled: boolean; allowedFrequencies: string[]; maxOccurrences: number };
   };
 };
@@ -123,7 +123,7 @@ export const bookingTypes: BookingType[] = [
       staffAssignment: "specific",
       staffIds: ["st-2"],
       payment: { mode: "deposit", priceCents: 34900, depositPercent: 25, currency: "usd" },
-      groupBooking: { enabled: true, maxAttendees: 2 },
+      groupBooking: { enabled: true, capacity: 2 },
     },
   },
   {

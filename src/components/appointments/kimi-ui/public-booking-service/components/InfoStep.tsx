@@ -515,7 +515,7 @@ export function InfoStep({
             value={attendeeCount}
             onChange={(e) => setAttendeeCount(Number(e.target.value))}
           >
-            {Array.from({ length: group.maxAttendees }, (_, i) => i + 1).map((n) => (
+            {Array.from({ length: group.capacity }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>{n} {n === 1 ? "person" : "people"}</option>
             ))}
           </select>
