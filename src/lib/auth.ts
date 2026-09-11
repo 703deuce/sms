@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { resolveDevAutoSession } from "@/lib/auth/dev-auto-session";
 import { getPrisma } from "@/lib/db";
 
 export const SESSION_COOKIE = "transovo_session";
@@ -17,12 +18,15 @@ export type Session = {
 export async function getSession(): Promise<Session | null> {
   const jar = await cookies();
   const raw = jar.get(SESSION_COOKIE)?.value;
-  if (!raw) return null;
-  try {
-    return JSON.parse(decodeURIComponent(raw)) as Session;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      return JSON.parse(decodeURIComponent(raw)) as Session;
+    } catch {
+      return null;
+    }
   }
+  const dev = await resolveDevAutoSession();
+  return dev?.session ?? null;
 }
 
 export async function getActiveWorkspaceType(): Promise<WorkspaceTypeCookie> {
@@ -33,8 +37,11 @@ export async function getActiveWorkspaceType(): Promise<WorkspaceTypeCookie> {
 export async function getActiveWorkspaceId() {
   const jar = await cookies();
   const fromCookie = jar.get(WORKSPACE_COOKIE)?.value;
+  const dev = await resolveDevAutoSession();
+  if (dev && !fromCookie) return dev.workspaceId;
+
   const session = await getSession();
-  if (!session) return fromCookie || "";
+  if (!session) return fromCookie || dev?.workspaceId || "";
 
   try {
     const { resolvePreferredBusinessWorkspaceId } = await import(
