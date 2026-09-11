@@ -38,6 +38,8 @@ export async function POST(request: Request) {
           contactId: body.contactId,
           referralCode: body.referralCode,
           loyaltyProgramId: body.loyaltyProgramId,
+          paymentMethod: body.paymentMethod,
+          idempotencyKey: body.idempotencyKey,
         });
       case "void":
         return voidPosSession(workspaceId, body.sessionId);

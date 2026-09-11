@@ -86,6 +86,7 @@ export const APPOINTMENTS_STATIC_SEGMENTS = new Set([
   "no-show-recovery",
   "team-pages",
   "team-booking",
+  "point-of-sale",
   "enterprise",
   "ai-booking",
   "automations",

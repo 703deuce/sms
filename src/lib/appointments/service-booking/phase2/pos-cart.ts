@@ -150,6 +150,8 @@ export async function checkoutPosSession(
     contactId?: string;
     referralCode?: string;
     loyaltyProgramId?: string;
+    paymentMethod?: "cash" | "external" | "card";
+    idempotencyKey?: string;
   },
 ) {
   const prisma = getPrisma();
@@ -216,6 +218,22 @@ export async function checkoutPosSession(
           totalCents: line.totalCents,
           recorded: true,
         });
+        break;
+      }
+      case "appointment_balance": {
+        if (!line.referenceId) throw new Error("Appointment balance line requires appointment id");
+        const meta = (line.metadata || {}) as { idempotencyKey?: string; method?: string };
+        const { collectAppointmentBalancePayment } = await import(
+          "@/lib/appointments/service-booking/manage-payments"
+        );
+        const result = await collectAppointmentBalancePayment(workspaceId, line.referenceId, {
+          amountCents: line.totalCents,
+          method:
+            (meta.method as "cash" | "external" | "card") || input?.paymentMethod || "cash",
+          idempotencyKey: meta.idempotencyKey || input?.idempotencyKey,
+          note: line.description,
+        });
+        fulfillment.push({ lineId: line.id, kind: line.kind, result });
         break;
       }
       case "tip":

@@ -1,5 +1,5 @@
-import { PosCartAdminClient } from "@/components/appointments/pos-cart-admin-client";
+import { redirect } from "next/navigation";
 
-export default function AppointmentsPosPage() {
-  return <PosCartAdminClient />;
+export default function AppointmentsPosRedirectPage() {
+  redirect("/appointments/point-of-sale");
 }

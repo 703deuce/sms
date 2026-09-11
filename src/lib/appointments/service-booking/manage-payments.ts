@@ -28,6 +28,103 @@ export async function getManageAppointmentPaymentSummary(workspaceId: string, ap
   };
 }
 
+/** POS / admin: collect outstanding balance with server-side revalidation (cents). */
+export async function collectAppointmentBalancePayment(
+  workspaceId: string,
+  appointmentId: string,
+  input: {
+    amountCents: number;
+    method: "cash" | "external" | "card";
+    idempotencyKey?: string;
+    note?: string;
+  },
+) {
+  const prisma = getPrisma();
+  const summary = await getManageAppointmentPaymentSummary(workspaceId, appointmentId);
+  if (summary.balanceDueCents <= 0) {
+    throw new Error("No balance due on this appointment");
+  }
+  if (input.amountCents <= 0 || input.amountCents > summary.balanceDueCents) {
+    throw new Error("Invalid collection amount for current balance");
+  }
+
+  if (input.idempotencyKey) {
+    const dup = await prisma.appointmentMerchantPayment.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (dup) return { paymentId: dup.id, appointmentId, amountCents: input.amountCents, duplicate: true };
+  }
+
+  const row = await prisma.voiceAppointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+  });
+  if (!row) throw new Error("Appointment not found");
+
+  const meta = (row.metadata || {}) as Record<string, unknown>;
+  const totalPriceCents = summary.totalPriceCents || Number(meta.totalPriceCents || 0);
+  const prevPaid = Number(meta.paymentAmountCents || meta.depositPaidCents || 0);
+  const newPaid = prevPaid + input.amountCents;
+  const newBalance = Math.max(0, totalPriceCents - newPaid);
+
+  const { createPaymentRecord, updatePaymentRecord } = await import(
+    "@/lib/merchant-payments/payment-record-store"
+  );
+  const { syncAppointmentPaymentMetadata } = await import("@/lib/merchant-payments/appointment-lifecycle");
+
+  const record = await createPaymentRecord({
+    workspaceId,
+    appointmentId,
+    provider: "STRIPE",
+    paymentMode: newBalance > 0 ? "deposit" : "full",
+    currency: "usd",
+    totalPriceCents: totalPriceCents || newPaid,
+    amountDueCents: input.amountCents,
+    balanceDueCents: newBalance,
+    idempotencyKey: input.idempotencyKey,
+  });
+
+  const paid = await updatePaymentRecord(record.id, {
+    status: input.method === "card" ? "pending" : "succeeded",
+    amountPaidCents: input.amountCents,
+    balanceDueCents: newBalance,
+    paidAt: input.method === "card" ? undefined : new Date(),
+    metadata: { posMethod: input.method, note: input.note },
+  });
+
+  if (input.method !== "card") {
+    await syncAppointmentPaymentMetadata(workspaceId, appointmentId, {
+      ...paid,
+      amountPaidCents: newPaid,
+      balanceDueCents: newBalance,
+      status: newBalance > 0 ? "partially_paid" : "succeeded",
+    } as import("@/lib/merchant-payments/payment-record-store").PaymentRecord);
+
+    const { appendTimeline } = await import("@/lib/appointments/settings");
+    await prisma.voiceAppointment.update({
+      where: { id: appointmentId },
+      data: {
+        metadata: appendTimeline(
+          {
+            ...meta,
+            paymentAmountCents: newPaid,
+            depositPaidCents: Number(meta.depositPaidCents || 0) || undefined,
+            balanceDueCents: newBalance,
+            paymentStatus: newBalance > 0 ? "partially_paid" : "paid",
+            paidAt: newBalance === 0 ? new Date().toISOString() : meta.paidAt,
+          },
+          {
+            type: "pos_balance_collected",
+            label: "Balance collected at POS",
+            detail: `$${(input.amountCents / 100).toFixed(2)} via ${input.method}`,
+          },
+        ) as object,
+      },
+    });
+  }
+
+  return { paymentId: paid.id, appointmentId, amountCents: input.amountCents, balanceDueCents: newBalance };
+}
+
 export async function createManageAppointmentPaymentCheckout(
   workspaceId: string,
   appointmentId: string,

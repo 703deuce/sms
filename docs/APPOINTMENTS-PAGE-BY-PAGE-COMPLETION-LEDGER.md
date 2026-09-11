@@ -494,3 +494,17 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, algorithm, precedence, parity, matrix |
 
 **Overall:** `APPOINTMENTS_TEAM_BOOKING_PAGE_COMPLETE: NO`
+
+## POINT OF SALE (`/appointments/point-of-sale`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING BACKEND REUSE | PASS | pos-cart + store-checkout + merchant payments |
+| APPOINTMENT BALANCE | PARTIAL | `collectAppointmentBalancePayment` + revalidation |
+| LAYOUT | PASS | ~65/35 sale workspace; horizontal sections |
+| CARD-PRESENT | N/A | Documented CNP only |
+| MEMBERSHIP SUBSCRIPTION | PARTIAL | fulfillStorePurchase path |
+| E2E / SCREENSHOTS | BLOCKED | — |
+| DOCS | PASS | Audit, pricing order, parity, matrix |
+
+**Overall:** `APPOINTMENTS_POINT_OF_SALE_PAGE_COMPLETE: NO`
