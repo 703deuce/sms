@@ -165,6 +165,112 @@ to `AppointmentTypesConnected`, which accepts none of them, and
 `AppointmentTypesPageModel` requires a `segmentLocked` the connected component never
 builds). Both come from the `f83e1cf4` merge and are untouched by this pass.
 
-`POST /api/public/book/[slug]/workshops` has the same missing `bookingEnabled` guard that
-was just closed on the classes route. It is left for the Workshops pass rather than
-touched here, and it is recorded so it is not lost.
+`POST /api/public/book/[slug]/workshops` had the same missing `bookingEnabled` guard that
+was closed on the classes route. It was left for the Workshops pass rather than touched
+here. **Resolved** — see the Workshops defect table below.
+
+## WORKSHOPS (`/appointments/workshops`) — rebuilt layout pass
+
+Verified with Playwright and direct API calls against the dev server in workspace
+`harbor-home`, using `Winter Pottery Intensive` (one date, 12 spots, 9 registrations,
+3 checked in, 3 waitlisted, $85), `Two-Day Watercolour Retreat` (three consecutive dates,
+free), `Founders Networking Night` (online, 40 spots), `Autumn Sourdough Basics` (past)
+and `Indigo Dyeing Masterclass`, which was created through the wizard during this pass.
+
+### Space rule
+
+`[GLOBAL SIDEBAR] [WORKSHOP LIST 250px] [WORKSHOP WORKSPACE — everything else]`. One
+global sidebar, one narrow object list, no third vertical column. The workspace is four
+horizontal layers: identity header, event summary strip, horizontal section tabs, section
+body. Registrant detail and waitlist management open in an overlay drawer rather than
+taking a column.
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| VISUAL | PASS | Four horizontal layers; twelve-track section grid; screenshots 01–20 |
+| HORIZONTAL SPACE USAGE | PASS | Registration puts status / capacity / window across one row above a full-width registrant table and a full-width waitlist; pricing pairs price with payment and packages with memberships; place puts location beside host; Advanced is a 6/6/6/6 quad |
+| COMPACTNESS / DENSITY | PASS | Additional dates are thin timeline rows with a date tile and a marker, not cards; the summary strip is one six-cell line; registrant rows are single-line; long lists scroll inside their panel |
+| COMPONENT INVENTORY | PASS | `APPOINTMENTS-WORKSHOPS-COMPONENT-CONNECTION-MATRIX.md`, twenty columns per interactive component |
+| COMPONENT CONNECTIONS | PASS | Every control traced to a field, a request and a runtime consequence |
+| CREATE | PASS | Four-step wizard creates the workshop **and its date** in one action, then opens Overview with a `Workshop created` toast; if the date fails the workshop is still opened and the toast says so |
+| EDIT | PASS | All seven sections drive one editor hook; section is URL-addressable via `?section=` |
+| SAVE | PASS | Dirty-gated upsert; clean state renders as a `role="status"` indicator, not a button |
+| PERSISTENCE | PASS | Name, category, capacity, price, host, location, waitlist and questions survive a full reload and are present in the API row |
+| CAPACITY ENFORCEMENT | PASS | Server-side in `assertOccurrenceCapacity`; a full date is refused before an enrollment is written |
+| DATE CHANGE SAFETY | PASS | Moving or cancelling a date with registrations warns with the live count and states plainly that nobody is messaged |
+| WAITLIST | PASS | A full workshop converts a public registration into a waitlist join returning `202`; the operator gives the spot from Manage, which reruns the capacity check |
+| PUBLIC/RUNTIME | PASS | Price, remaining spots, visibility, registration window, cancelled state and the custom confirmation all affect `/book/harbor-home/workshops`; an online workshop now reads `Online` and the joining link is returned only to the person who registered |
+| ROUTE INTEGRITY | PASS | Ten refusal checks in both directions — a class id under `/appointments/workshops/`, and every workshop API action against a class id, return `Workshop not found` / `Class not found` |
+| TERMINOLOGY | PASS | No `Class`, `Class session` or `Join class` string reaches a workshop surface; `occurrenceLabel` is `Workshop date` |
+| EMPTY STATES | PASS | No-selection state with hints; no-matches vs no-workshops in the list; contextual add-host, add-location, add-resource and new-form |
+| ERROR STATES | PASS | Per-step wizard validation; save failure offers Retry save; delete with registrations is refused server-side |
+| RESPONSIVE | PASS | Tab strip only above `640px`, `<select>` only below; grid spans collapse at `1100px` and stack at `700px`; no horizontal overflow at 390px |
+| ACCESSIBILITY | PASS | axe wcag2a/aa clean on all seven sections, the list and the four wizard steps, apart from the global header's notification badge, which is byte-identical on Classes and Services |
+| CONSOLE/NETWORK | PASS | 0 console errors and 0 responses ≥ 400 across every section, both drawers, three modals, the wizard and the public page |
+
+**Counts:** `BROKEN = 0`, `NO_OP = 0`, `PLACEHOLDER = 0`
+
+**Overall:** `APPOINTMENTS_WORKSHOPS_PAGE_COMPLETE: YES`
+
+### Visual scorecard
+
+| Category | Score |
+|----------|-------|
+| Visual hierarchy | 5 |
+| Premium feel | 4 |
+| Horizontal space usage | 5 |
+| Compactness / density | 5 |
+| Iconography | 5 |
+| Home design parity | 4 |
+| Event-management clarity | 5 |
+| Interaction polish | 4 |
+| Responsive polish | 5 |
+
+### Defects fixed in this pass
+
+| Defect | Cause | Fix |
+|--------|-------|-----|
+| Workshops rendered the Classes admin component with an `offeringKind` prop | There was no Workshops page, only a relabelled Classes one | A Workshops workspace, list, header, strip, nav, seven sections and a wizard of its own; the three dead `class-series` files deleted |
+| Public registration wrote an enrollment with no `seriesId` | `enrollInClass` took the series from the caller, and the public page registers by date alone | `assertOccurrenceCapacity` returns the series and the enrollment derives it; eight existing rows backfilled |
+| Every list row read `0 / 12` | The list query returns dates, and a date carries no count | `countSeriesRegistrations` groups enrollments by series; a workshop is full across the whole event, not per date |
+| A class id posted to the workshops endpoint with `seriesId` alone enrolled somebody in the class | The kind was only ever checked through an occurrence | The `seriesId`-only path loads the row and checks `resolveClassSeriesOfferingKind` |
+| Turning the booking page off hid workshops but still let people register | The `bookingEnabled` guard was on the workshops `GET` only | The same guard on `POST` |
+| The registration window and the cancelled flag were advertised and never enforced publicly | Neither was read on the write path | `publicGroupRegistrationClosedReason` covers both, and the shared helper refuses a cancelled workshop |
+| A full waitlist-enabled workshop dead-ended | The capacity error was returned as-is | The public route converts it into a waitlist join returning `202` |
+| The public page never said where a workshop happens | `PublicGroupSeries` carried no place | `placeLabel` resolves a named location, a custom note, or `Online`; the joining link is deliberately not public and is returned only in the registration response |
+| A missing workshop was refused with `Class not found` in front of a customer | The waitlist helper is shared and assumed a class | A kind-neutral `Registration is no longer available` |
+| Registrant names rendered centred and bold | `.ws-table` had no `tbody th` rule, so `<th scope="row">` kept the browser default | Explicit `text-align: left; font-weight: 400` on `tbody th` |
+| Three location-mode cards were unreadable in a half-width panel | Icon, name and help were flex siblings sharing ~140px | `.ws-choice-grid.is-tight` puts the name beside the icon and drops the help beneath it |
+| The Place section claimed the virtual link was shown with the workshop | It was not surfaced publicly at all | Implemented `placeLabel` and the private `joinUrl`, then rewrote the note to describe exactly that |
+
+### Known gaps, stated in the UI rather than faked
+
+Each renders as a `.ws-gap-note` beside the control it concerns.
+
+- **No online card payment at workshop registration.** A priced workshop is pay-on-arrival
+  and the amount owed is recorded.
+- **Packages and memberships grant access but are not redeemed**, and `memberOnly` is not
+  checked before a public registration.
+- **Registration questions and attached forms are not presented publicly**, and no answers
+  are stored against a registration, so the registrant drawer says so rather than showing
+  an empty answers list.
+- **Admission is manual.** Check-in is marked by hand and persists. `ClassAdmissionTicket`
+  exists in the schema but nothing issues or scans one, so no QR decoration is drawn.
+- **Automatic waitlist promotion has no scheduler.** The operator gives the spot from
+  Manage, which runs the same capacity check.
+- **Nothing messages anybody.** Cancelling a workshop, cancelling a date, moving a date or
+  cancelling a registration all say so in the confirmation instead of implying a notice
+  went out, and no refund is promised.
+- **Timezone is recorded and displayed, not applied.** Times are entered in the browser's
+  zone and are not converted.
+- **Resources do not block double booking.** They are recorded for planning.
+- **The cancellation window is recorded and displayed**, and there is no self-service
+  cancellation for a workshop registration, so nothing enforces it.
+- **Duplicate copies configuration only** — never registrants, payments, tickets,
+  check-ins or attendance.
+
+### Pre-existing, outside Workshops
+
+The same two Booking Types typecheck errors from the `f83e1cf4` merge remain, untouched.
+`react-hooks/set-state-in-effect` fires on the new files; it is endemic to the repo
+(339 occurrences) and the Classes and Services pages carry the same pattern.

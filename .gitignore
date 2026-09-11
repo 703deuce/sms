@@ -72,3 +72,4 @@ public/voicemail/
 # Playwright run output
 /test-results/
 /playwright-report/
+.tmp-verify/
