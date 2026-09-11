@@ -367,7 +367,36 @@ export async function createPlatformAppointment(
     await assertResourcesAvailable(workspaceId, resolvedResourceIds, startsAtDate, endsAtDate);
   }
 
-  if (!input.staffId || !input.staffName) {
+  let teamAssignment: import("@/lib/appointments/team-booking/types").ResolvedTeamAssignment | null =
+    null;
+  const { isTeamBookingEnabled } = await import("@/lib/appointments/team-booking/team-booking-model");
+  const teamBookingActive = isTeamBookingEnabled(svcCfg);
+
+  if (teamBookingActive) {
+    const { resolveTeamAtSlot } = await import("@/lib/appointments/team-booking/team-runtime");
+    teamAssignment = await resolveTeamAtSlot({
+      workspaceId,
+      serviceName,
+      startsAt: startsAtDate,
+      endsAt: endsAtDate,
+      timezone: platform.timezone,
+      durationMinutes,
+      bufferBeforeMs: (svcCfg.bufferBeforeMinutes ?? 0) * 60_000,
+      bufferAfterMs: (svcCfg.bufferAfterMinutes ?? 0) * 60_000,
+      svcCfg,
+      locationId: input.locationId,
+      preferredLeadStaffId: input.staffId,
+    });
+    if (!teamAssignment) {
+      throw new Error("No valid team available for this time");
+    }
+    const lead = (platform.staff || []).find((s) => s.id === teamAssignment!.primaryStaffId);
+    input = {
+      ...input,
+      staffId: teamAssignment.primaryStaffId,
+      staffName: lead?.name || input.staffName,
+    };
+  } else if (!input.staffId || !input.staffName) {
     const { loadSchedulingContext, resolveStaffForBooking } = await import(
       "@/lib/appointments/scheduling-domain"
     );
@@ -502,6 +531,9 @@ export async function createPlatformAppointment(
       notes: input.notes,
       bookingAnswers: input.bookingAnswers,
       staffId: input.staffId,
+      primaryStaffId: teamAssignment?.primaryStaffId || input.staffId,
+      teamStaffIds: teamAssignment?.staffIds,
+      teamAssignments: teamAssignment?.assignments,
       locationId: input.locationId,
       location: input.locationName,
       locationKind,

@@ -151,8 +151,15 @@ export async function loadAppointmentBusyIndex(
     if (!row.endsAt) continue;
     const interval = { start: row.startsAt.getTime(), end: row.endsAt.getTime() };
     index.all.push(interval);
-    const staffId = (row.metadata as { staffId?: unknown } | null)?.staffId;
-    if (typeof staffId === "string" && staffId) {
+    const meta = row.metadata as { staffId?: unknown; teamStaffIds?: unknown } | null;
+    const staffIds: string[] = [];
+    if (typeof meta?.staffId === "string" && meta.staffId) staffIds.push(meta.staffId);
+    if (Array.isArray(meta?.teamStaffIds)) {
+      for (const id of meta.teamStaffIds) {
+        if (typeof id === "string" && id && !staffIds.includes(id)) staffIds.push(id);
+      }
+    }
+    for (const staffId of staffIds) {
       const bucket = index.byStaff.get(staffId);
       if (bucket) bucket.push(interval);
       else index.byStaff.set(staffId, [interval]);

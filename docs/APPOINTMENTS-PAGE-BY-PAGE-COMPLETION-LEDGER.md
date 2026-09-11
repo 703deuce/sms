@@ -475,3 +475,22 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | SCREENSHOTS 01–18 | BLOCKED | Not captured |
 
 **Overall:** `APPOINTMENTS_ROUTING_PAGE_COMPLETE: NO`
+
+## TEAM BOOKING (`/appointments/team-booking`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING BACKEND REUSE | PASS | Collective + availability engine; routing RR scoring |
+| COMBINATION SOLVER | PASS | Backtracking distinct-staff assignments |
+| JOINT SLOT GENERATION | PARTIAL | `resolveTeamAtSlot` in `generateNativeSlots` |
+| TRANSACTIONAL TEAM COMMIT | PARTIAL | `createPlatformAppointment` team metadata |
+| BUSY INDEX ALL STAFF | PARTIAL | `teamStaffIds` indexed |
+| LAYOUT / DENSITY | PASS | Horizontal sections, wide tables |
+| SERVICE EDITOR SYNC | PARTIAL | Collective mode; structured requirements API |
+| AVAILABILITY SIMULATOR | PASS | POST simulate uses real engine |
+| RESCHEDULE / REASSIGN | GAP | Not implemented |
+| PUBLIC LEAD SELECTION | GAP | — |
+| E2E / SCREENSHOTS | BLOCKED | — |
+| DOCS | PASS | Audit, algorithm, precedence, parity, matrix |
+
+**Overall:** `APPOINTMENTS_TEAM_BOOKING_PAGE_COMPLETE: NO`

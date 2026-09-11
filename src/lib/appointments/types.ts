@@ -281,6 +281,8 @@ export type AppointmentPlatformConfig = {
   /** Workspace defaults for staff assignment routing (Services/Meetings may override). */
   staffRouting?: StaffRoutingConfig;
   teamBookingPages?: import("@/lib/appointments/scheduling-capabilities").TeamBookingPage[];
+  teamBookingTemplates?: import("@/lib/appointments/team-booking/types").TeamBookingTemplate[];
+  teamBookingDefaults?: import("@/lib/appointments/team-booking/types").TeamBookingServiceConfig;
   organizationPolicy?: import("@/lib/appointments/scheduling-capabilities").OrganizationSchedulingPolicy;
   singleUseLinks?: import("@/lib/appointments/scheduling-capabilities").SingleUseBookingLink[];
   meetingPolls?: import("@/lib/appointments/scheduling-capabilities").MeetingPoll[];
@@ -355,6 +357,8 @@ export type AppointmentTypeConfig = {
   staffIds?: string[];
   groupCapacity?: number;
   collectiveStaffIds?: string[];
+  /** Multi-staff team booking requirements (distinct from single-staff routing). */
+  teamBooking?: import("@/lib/appointments/team-booking/types").TeamBookingServiceConfig;
   locationIds?: string[];
   bookingLimits?: BookingLimitConfig;
   cancellationPolicy?: CancellationPolicy;
@@ -407,6 +411,10 @@ export type AppointmentMetadata = {
   location?: string;
   locationId?: string;
   staffId?: string;
+  /** All staff participating in a team booking (includes primary). */
+  teamStaffIds?: string[];
+  teamAssignments?: Array<{ requirementId: string; staffId: string; label?: string }>;
+  primaryStaffId?: string;
   paymentStatus?: string;
   paymentProvider?: string;
   paymentAmountCents?: number;

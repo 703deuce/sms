@@ -73,7 +73,11 @@ export async function generateNativeSlots(
     durationMinutes?: number;
     excludeAppointmentId?: string;
   },
-): Promise<{ slots: AvailabilitySlot[]; staffBySlot?: Record<string, string> }> {
+): Promise<{
+  slots: AvailabilitySlot[];
+  staffBySlot?: Record<string, string>;
+  teamBySlot?: Record<string, import("@/lib/appointments/team-booking/types").ResolvedTeamAssignment>;
+}> {
   const { addCalendarDays, wallTimeInZoneToUtc, zonedDateParts } = await import(
     "@/lib/voice/calendar/timezone-slots"
   );
@@ -158,6 +162,12 @@ export async function generateNativeSlots(
   const prisma = getPrisma();
   const slots: AvailabilitySlot[] = [];
   const staffBySlot: Record<string, string> = {};
+  const teamBySlot: Record<
+    string,
+    import("@/lib/appointments/team-booking/types").ResolvedTeamAssignment
+  > = {};
+  const { isTeamBookingEnabled } = await import("@/lib/appointments/team-booking/team-booking-model");
+  const teamBookingActive = isTeamBookingEnabled(svcCfg);
 
   const rangeStart = zonedDateParts(now, tz);
   const rangeEndDay = addCalendarDays(rangeStart.year, rangeStart.month, rangeStart.day, days);
@@ -330,31 +340,53 @@ export async function generateNativeSlots(
         }
 
         if (needsStaffCheck && eligibleStaff.length) {
-          const mode = staffAssignment === "collective" ? "all" : "any";
-          const availableStaff = await filterStaffAvailableForSlot(
-            workspaceId,
-            eligibleStaff,
-            start,
-            end,
-            {
+          if (teamBookingActive) {
+            const { resolveTeamAtSlot } = await import("@/lib/appointments/team-booking/team-runtime");
+            const team = await resolveTeamAtSlot({
+              workspaceId,
+              serviceName: input.serviceName,
+              startsAt: start,
+              endsAt: end,
               timezone: tz,
               durationMinutes,
               bufferBeforeMs: bufferBefore,
               bufferAfterMs: bufferAfter,
-              platform,
               svcCfg,
-              mode,
-              excludeAppointmentId: input.excludeAppointmentId,
+              locationId: input.locationId,
+              preferredLeadStaffId: input.staffId,
               busyIndex,
               externalBusyByStaff,
-            },
-          );
-          if (!availableStaff.length) continue;
-          staffBySlot[start.toISOString()] = availableStaff[0]!.id;
+            });
+            if (!team) continue;
+            staffBySlot[start.toISOString()] = team.primaryStaffId;
+            teamBySlot[start.toISOString()] = team;
+          } else {
+            const mode = staffAssignment === "collective" ? "all" : "any";
+            const availableStaff = await filterStaffAvailableForSlot(
+              workspaceId,
+              eligibleStaff,
+              start,
+              end,
+              {
+                timezone: tz,
+                durationMinutes,
+                bufferBeforeMs: bufferBefore,
+                bufferAfterMs: bufferAfter,
+                platform,
+                svcCfg,
+                mode,
+                excludeAppointmentId: input.excludeAppointmentId,
+                busyIndex,
+                externalBusyByStaff,
+              },
+            );
+            if (!availableStaff.length) continue;
+            staffBySlot[start.toISOString()] = availableStaff[0]!.id;
+          }
         }
 
         slots.push({ startsAt: start.toISOString(), endsAt: end.toISOString() });
-        if (slots.length >= maxSlots) return { slots, staffBySlot };
+        if (slots.length >= maxSlots) return { slots, staffBySlot, teamBySlot };
       }
     }
   }
@@ -396,7 +428,7 @@ export async function generateNativeSlots(
   let finalSlots = filterSlotsToFixedStartTimes(slots, fixedStartConfig, tz);
   finalSlots = applyAvailabilityDensityHide(finalSlots, densityHidePercent, workspaceId);
 
-  return { slots: finalSlots, staffBySlot };
+  return { slots: finalSlots, staffBySlot, teamBySlot };
 }
 
 /** Explain which staff members are available at a specific slot. */

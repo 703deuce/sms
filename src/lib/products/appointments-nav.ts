@@ -55,7 +55,8 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   children.push(
     { label: "Segments", href: "/appointments/segments" },
     { label: "Routing forms", href: "/appointments/routing-forms" },
-    { label: "Team Booking", href: "/appointments/team-pages" },
+    { label: "Team Booking", href: "/appointments/team-booking" },
+    { label: "Team pages", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
     { label: "AI Booking", href: "/appointments/ai-booking" },
   );
@@ -302,6 +303,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/availability")) return "Availability";
   if (pathname.startsWith("/appointments/routing-forms")) return "Routing";
   if (pathname.startsWith("/appointments/routing")) return "Routing";
+  if (pathname.startsWith("/appointments/team-booking")) return "Team Booking";
   if (pathname.startsWith("/appointments/team-pages")) return "Team Booking";
   if (pathname.startsWith("/appointments/booking/contracts")) return "Contracts";
   if (pathname.startsWith("/appointments/booking/branding")) return "Booking appearance";

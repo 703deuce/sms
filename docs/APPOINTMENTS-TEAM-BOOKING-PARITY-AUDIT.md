@@ -1,0 +1,30 @@
+# Team Booking Parity Audit
+
+| Capability | Status |
+|------------|--------|
+| MULTIPLE STAFF PER BOOKING | PARTIAL — metadata + collective |
+| PRIMARY STAFF | PASS — `primaryStaffId` / `staffId` |
+| REQUIRED SECONDARY STAFF | PARTIAL — structured requirements + legacy collective |
+| OPTIONAL STAFF | GAP — model only |
+| SPECIFIC STAFF REQUIREMENT | PASS |
+| ANY ELIGIBLE STAFF | PASS |
+| STAFF POOL | PARTIAL — scheduling groups |
+| ROLE-BASED REQUIREMENT | N/A — labels only |
+| MULTIPLE FROM ONE POOL | GAP |
+| DISTINCT-STAFF CONSTRAINT | PASS — solver |
+| SERVICE-SPECIFIC TEAM CONFIG | PARTIAL — API + service editor collective |
+| MEETING CO-HOST | PARTIAL — collective hosts |
+| JOINT AVAILABILITY | PARTIAL — solver in slot loop |
+| LOCATION INTERSECTION | PASS |
+| RESOURCE INTERSECTION | PASS (canonical) |
+| CALENDAR-CONFLICT INTERSECTION | PARTIAL — busy index extended |
+| PHASE-SPECIFIC PARTICIPATION | N/A |
+| PUBLIC TEAM SLOT GENERATION | PARTIAL — via `generateNativeSlots` |
+| LEAD STAFF CUSTOMER CHOICE | GAP |
+| AUTO TEAM ASSIGNMENT | PARTIAL |
+| ROUTING INTEGRATION | PARTIAL — RR scoring |
+| RESCHEDULE PRESERVATION | GAP |
+| REASSIGNMENT | GAP |
+| CALENDAR BLOCKING FOR ALL STAFF | PARTIAL — busy index |
+| CONCURRENCY SAFETY | PARTIAL |
+| ACTIVITY/AUDIT HISTORY | PARTIAL |
