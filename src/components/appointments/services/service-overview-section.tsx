@@ -3,11 +3,11 @@
 import { useState } from "react";
 import {
   Check,
+  Circle,
   Clock,
   Copy,
   ExternalLink,
   Eye,
-  Info,
   LayoutGrid,
   MapPin,
   Plus,
@@ -139,213 +139,208 @@ export function ServiceOverviewSection({
     }
   }
 
+  /** What still stands between this service and a customer being able to book it. */
+  const setupSteps: Array<{ label: string; done: boolean }> = [
+    { label: "Basic details", done: Boolean(form.name.trim()) },
+    { label: "Duration", done: form.durationMinutes >= 5 },
+    { label: "Availability", done: Boolean(form.namedScheduleId) || form.enabled },
+    {
+      label: "Staff",
+      done:
+        form.staffAssignment === "any_eligible" ||
+        (form.staffAssignment === "collective"
+          ? form.collectiveStaffIds.length > 0
+          : form.staffIds.length > 0),
+    },
+    { label: "Location", done: form.locationIds.length > 0 || Boolean(form.location) },
+  ];
+
   return (
-    <div className="ws-overview-grid grid has-side">
-      <div className="space-y-5">
-        <SectionCard
-          id="service-details"
-          title="Service details"
-          description="What customers are booking."
-          icon={LayoutGrid}
-        >
-          <div className="space-y-4">
-            <Field label="Name" htmlFor="svc-name">
-              <TextInput
-                id="svc-name"
-                value={form.name}
-                placeholder="Deep Tissue Massage"
-                onChange={(e) => onFormChange("name", e.target.value)}
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Category"
-                htmlFor="svc-category"
-                hint={
-                  <button type="button" className="ws-text-btn" onClick={() => setCategoryModal(true)}>
-                    <Plus className="h-3 w-3" aria-hidden />
-                    New category
-                  </button>
-                }
-              >
-                <SelectInput
-                  id="svc-category"
-                  value={form.categoryId}
-                  onChange={(e) => onFormChange("categoryId", e.target.value)}
-                >
-                  <option value="">No category</option>
-                  {options.categoryOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </SelectInput>
-              </Field>
-              <Field label="Image URL" htmlFor="svc-image" hint="Shown on the public booking page.">
-                <TextInput
-                  id="svc-image"
-                  type="url"
-                  placeholder="https://…"
-                  value={form.imageUrl}
-                  onChange={(e) => onFormChange("imageUrl", e.target.value)}
-                />
-              </Field>
-            </div>
-            <Field
-              label="Description"
-              htmlFor="svc-description"
-              hint={`${form.description.length}/500 characters`}
-            >
-              <TextArea
-                id="svc-description"
-                rows={4}
-                maxLength={500}
-                value={form.description}
-                placeholder="Describe what customers receive."
-                onChange={(e) => onFormChange("description", e.target.value)}
-              />
-            </Field>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          id="service-core"
-          title="Core booking details"
-          description="The essentials. Everything else lives in its own section."
-          icon={Clock}
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Duration" htmlFor="svc-duration" hint="Minutes a booking occupies.">
-              <TextInput
-                id="svc-duration"
-                type="number"
-                min={5}
-                step={5}
-                value={form.durationMinutes}
-                onChange={(e) => onFormChange("durationMinutes", Number(e.target.value) || 5)}
-              />
-            </Field>
-            <Field
-              label="Visibility"
-              htmlFor="svc-visibility"
-              hint={VISIBILITY_HINT[form.visibility]}
-            >
-              <SelectInput
-                id="svc-visibility"
-                value={form.visibility}
-                onChange={(e) =>
-                  onFormChange("visibility", e.target.value as AppointmentTypeFormState["visibility"])
-                }
-              >
-                <option value="public">Public</option>
-                <option value="unlisted">Unlisted</option>
-                <option value="secret">Secret</option>
-              </SelectInput>
-            </Field>
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[var(--type-helper)] text-[var(--text-secondary)]">
-            <span className="inline-flex items-center gap-1.5">
-              <UserRound className="h-3.5 w-3.5" aria-hidden />
-              {staff}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5" aria-hidden />
-              {location}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Tag className="h-3.5 w-3.5" aria-hidden />
-              {price}
-            </span>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          id="service-setup-summary"
-          title="Setup summary"
-          description="Where each part of this service is configured."
-          icon={Settings2}
-          flush
-        >
-          <div className="ws-summary-rows">
-            {setupRows.map((row) => (
-              <div key={row.label} className="ws-summary-row">
-                <span className="ws-summary-row-icon" aria-hidden>
-                  <row.icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="ws-summary-row-label block">{row.label}</span>
-                  <span className="ws-summary-row-value block truncate">{row.value}</span>
-                </span>
-                <button
-                  type="button"
-                  className="ws-text-btn shrink-0"
-                  onClick={() => onNavigateSection(row.section)}
-                >
-                  Edit
-                </button>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
+    <div className="ws-section-col">
+      <div className="ws-customer-preview-row">
+        <span className="ws-customer-preview-label">
+          <Eye className="h-3.5 w-3.5" aria-hidden />
+          Customer sees
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">
+          <strong className="font-semibold">{form.name || "Untitled service"}</strong>
+          {` · ${formatDurationMinutes(form.durationMinutes)} · ${price} · ${staff} · ${location}`}
+        </span>
+        {bookingLink ? (
+          <span className="flex shrink-0 items-center gap-3">
+            <button type="button" className="ws-text-btn" onClick={onPreview}>
+              <ExternalLink className="h-3 w-3" aria-hidden />
+              Open booking page
+            </button>
+            <button type="button" className="ws-text-btn" onClick={onCopyLink}>
+              {copied ? <Check className="h-3 w-3" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}
+              {copied ? "Copied" : "Copy link"}
+            </button>
+          </span>
+        ) : (
+          <span className="shrink-0 text-[var(--text-tertiary)]">Save for link</span>
+        )}
       </div>
 
-      <aside className="space-y-5">
-        <div className="ws-preview-card">
-          <div className="ws-preview-browser">
-            <span className="ws-preview-dot" />
-            <span className="ws-preview-dot" />
-            <span className="ws-preview-dot" />
-            <span className="ml-1.5 truncate text-[0.625rem] text-[var(--text-tertiary)]">
-              {bookingLink ? bookingLink.replace(/^https?:\/\//, "") : "Save to publish"}
-            </span>
-          </div>
-          <div className="ws-preview-body">
-            <p className="ws-side-card-label">
-              <Eye className="h-3 w-3" aria-hidden />
-              Customer view
-            </p>
-            <p className="mt-2 text-[var(--type-section)] font-semibold text-[var(--text-primary)]">
-              {form.name || "Untitled service"}
-            </p>
-            <p className="mt-1 text-[var(--type-helper)] text-[var(--text-secondary)]">
-              {formatDurationMinutes(form.durationMinutes)} · {price}
-            </p>
-            {form.description ? (
-              <p className="mt-2 line-clamp-3 text-[var(--type-helper)] text-[var(--text-secondary)]">
-                {form.description}
-              </p>
-            ) : null}
-            <p className="mt-3 inline-flex items-center gap-1.5 text-[var(--type-helper)]">
-              <span
-                className={`ws-chip ${form.enabled && form.visibility === "public" ? "ws-chip-success" : "ws-chip-neutral"}`}
-              >
-                {form.enabled && form.visibility === "public" ? "Live" : "Not public"}
-              </span>
-            </p>
-            {bookingLink ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" className="appt-pilot-outline-btn" onClick={onPreview}>
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                  Open booking page
-                </button>
-                <button type="button" className="appt-pilot-outline-btn" onClick={onCopyLink}>
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {copied ? "Copied" : "Copy link"}
-                </button>
-              </div>
+      <div className="ws-setup-progress" aria-label="Service setup progress">
+        <span className="font-medium text-[var(--text-primary)]">Setup</span>
+        {setupSteps.map((step) => (
+          <span key={step.label} className={step.done ? "done" : undefined}>
+            {step.done ? (
+              <Check className="mr-1 inline h-3 w-3" aria-hidden />
             ) : (
-              <p className="mt-4 flex items-start gap-2 text-[var(--type-helper)] text-[var(--text-secondary)]">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                Save this service to get its booking link.
-              </p>
+              <Circle className="mr-1 inline h-3 w-3" aria-hidden />
             )}
+            {step.label}
+            <span className="sr-only">{step.done ? " complete" : " incomplete"}</span>
+          </span>
+        ))}
+      </div>
+
+      <SectionCard
+        id="service-details"
+        title="Service details"
+        description="What customers are booking."
+        icon={LayoutGrid}
+      >
+        <div className="space-y-4">
+          <Field label="Name" htmlFor="svc-name">
+            <TextInput
+              id="svc-name"
+              value={form.name}
+              placeholder="Deep Tissue Massage"
+              onChange={(e) => onFormChange("name", e.target.value)}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Category"
+              htmlFor="svc-category"
+              hint={
+                <button type="button" className="ws-text-btn" onClick={() => setCategoryModal(true)}>
+                  <Plus className="h-3 w-3" aria-hidden />
+                  New category
+                </button>
+              }
+            >
+              <SelectInput
+                id="svc-category"
+                value={form.categoryId}
+                onChange={(e) => onFormChange("categoryId", e.target.value)}
+              >
+                <option value="">No category</option>
+                {options.categoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Image URL" htmlFor="svc-image" hint="Shown on the public booking page.">
+              <TextInput
+                id="svc-image"
+                type="url"
+                placeholder="https://…"
+                value={form.imageUrl}
+                onChange={(e) => onFormChange("imageUrl", e.target.value)}
+              />
+            </Field>
           </div>
+          <Field
+            label="Description"
+            htmlFor="svc-description"
+            hint={`${form.description.length}/500 characters`}
+          >
+            <TextArea
+              id="svc-description"
+              rows={4}
+              maxLength={500}
+              value={form.description}
+              placeholder="Describe what customers receive."
+              onChange={(e) => onFormChange("description", e.target.value)}
+            />
+          </Field>
         </div>
-      </aside>
+      </SectionCard>
+
+      <SectionCard
+        id="service-core"
+        title="Core booking details"
+        description="The essentials. Everything else lives in its own section."
+        icon={Clock}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Duration" htmlFor="svc-duration" hint="Minutes a booking occupies.">
+            <TextInput
+              id="svc-duration"
+              type="number"
+              min={5}
+              step={5}
+              value={form.durationMinutes}
+              onChange={(e) => onFormChange("durationMinutes", Number(e.target.value) || 5)}
+            />
+          </Field>
+          <Field
+            label="Visibility"
+            htmlFor="svc-visibility"
+            hint={VISIBILITY_HINT[form.visibility]}
+          >
+            <SelectInput
+              id="svc-visibility"
+              value={form.visibility}
+              onChange={(e) =>
+                onFormChange("visibility", e.target.value as AppointmentTypeFormState["visibility"])
+              }
+            >
+              <option value="public">Public</option>
+              <option value="unlisted">Unlisted</option>
+              <option value="secret">Secret</option>
+            </SelectInput>
+          </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[var(--type-helper)] text-[var(--text-secondary)]">
+          <span className="inline-flex items-center gap-1.5">
+            <UserRound className="h-3.5 w-3.5" aria-hidden />
+            {staff}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-3.5 w-3.5" aria-hidden />
+            {location}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Tag className="h-3.5 w-3.5" aria-hidden />
+            {price}
+          </span>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        id="service-setup-summary"
+        title="Setup summary"
+        description="Where each part of this service is configured."
+        icon={Settings2}
+      >
+        <div className="ws-summary-rows">
+          {setupRows.map((row) => (
+            <div key={row.label} className="ws-summary-row">
+              <span className="ws-summary-row-icon" aria-hidden>
+                <row.icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="ws-summary-row-label block">{row.label}</span>
+                <span className="ws-summary-row-value block truncate">{row.value}</span>
+              </span>
+              <button
+                type="button"
+                className="ws-text-btn shrink-0"
+                onClick={() => onNavigateSection(row.section)}
+              >
+                Edit
+              </button>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
 
       {categoryModal ? (
         <Modal
