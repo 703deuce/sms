@@ -6,7 +6,18 @@ import {
   type ClassSeriesOfferingKind,
 } from "@/lib/appointments/class-series-offering";
 
-type ClassSeries = { id: string; name: string; description: string | null; capacity: number };
+type ClassSeries = {
+  id: string;
+  name: string;
+  description: string | null;
+  capacity: number;
+  priceCents?: number;
+  isFree?: boolean;
+  showRemainingSpots?: boolean;
+  waitlistEnabled?: boolean;
+  confirmationMessage?: string | null;
+  registrationClosedReason?: string | null;
+};
 type ClassOccurrence = {
   id: string;
   seriesId: string;
@@ -114,6 +125,10 @@ export function PublicGroupEnrollmentClient({
     occurrenceId: string,
     seat?: { seatMapId: string; rowIndex: number; colIndex: number; seatLabel: string },
   ) {
+    const occurrence = occurrences.find((o) => o.id === occurrenceId);
+    const confirmation = occurrence
+      ? series.find((s) => s.id === occurrence.seriesId)?.confirmationMessage
+      : null;
     if (!firstName.trim() || !phone.trim()) {
       setError("First name and phone are required.");
       return;
@@ -141,9 +156,14 @@ export function PublicGroupEnrollmentClient({
       if (!res.ok) throw new Error(json.error || "Registration failed");
       const seatLabel = seat?.seatLabel ? ` Seat ${seat.seatLabel} reserved.` : "";
       setMessage(
-        offeringKind === "workshop"
-          ? `You are registered for this workshop.${seatLabel} We will send a confirmation if messaging is enabled.`
-          : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`,
+        json.data?.waitlisted
+          ? "That session is full, so you are on the waitlist. We will contact you if a place opens."
+          : // A class with its own confirmation wording replaces the generic
+            // line entirely, which is the point of setting one.
+            confirmation ||
+            (offeringKind === "workshop"
+              ? `You are registered for this workshop.${seatLabel} We will send a confirmation if messaging is enabled.`
+              : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`),
       );
       setSeatPickerOpen(false);
       setPendingOccurrence(null);
@@ -330,19 +350,33 @@ export function PublicGroupEnrollmentClient({
           {occurrences.map((occ) => {
             const s = seriesMap.get(occ.seriesId);
             const full = occ.remaining <= 0;
+            const closed = s?.registrationClosedReason || null;
+            const waitlistable = full && s?.waitlistEnabled === true;
+            const price = s?.isFree === false && s.priceCents ? `$${(s.priceCents / 100).toFixed(2)}` : "Free";
+            const facts = [
+              // Remaining seats are only shown when the class says to show them.
+              s?.showRemainingSpots === false
+                ? full
+                  ? "Full"
+                  : null
+                : full
+                  ? "Full"
+                  : `${occ.remaining} spot${occ.remaining === 1 ? "" : "s"} left`,
+              price,
+              occ.requiresSeatSelection ? "Seat selection required" : null,
+            ].filter(Boolean);
             return (
               <li key={occ.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
                   <p className="font-medium">{s?.name || sessionFallback}</p>
                   <p className="text-sm text-muted-foreground">{formatWhen(occ.startsAt)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {full ? "Full" : `${occ.remaining} spot${occ.remaining === 1 ? "" : "s"} left`}
-                    {occ.requiresSeatSelection ? " · Seat selection required" : ""}
+                    {closed || facts.join(" · ")}
                   </p>
                 </div>
                 <button
                   type="button"
-                  disabled={busy || full}
+                  disabled={busy || Boolean(closed) || (full && !waitlistable)}
                   className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
                   onClick={() => {
                     if (occ.requiresSeatSelection && occ.seatMapId) {
@@ -352,7 +386,11 @@ export function PublicGroupEnrollmentClient({
                     void enroll(occ.id);
                   }}
                 >
-                  {occ.requiresSeatSelection ? "Choose seat" : copy.registerVerb}
+                  {waitlistable
+                    ? "Join waitlist"
+                    : occ.requiresSeatSelection
+                      ? "Choose seat"
+                      : copy.registerVerb}
                 </button>
               </li>
             );

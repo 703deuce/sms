@@ -71,6 +71,8 @@ export async function POST(request: Request, { params }: Params) {
     const rowIndex = body.rowIndex != null ? Number(body.rowIndex) : undefined;
     const colIndex = body.colIndex != null ? Number(body.colIndex) : undefined;
 
+    let seriesForRegistration: { id: string; metadata: unknown } | null = null;
+
     if (occurrenceId) {
       const occ = await prisma.classOccurrence.findFirst({
         where: { id: occurrenceId, workspaceId: workspace.id },
@@ -85,6 +87,7 @@ export async function POST(request: Request, { params }: Params) {
       if (resolveClassSeriesOfferingKind(occ.series.metadata) !== "class") {
         return NextResponse.json({ error: "Invalid class session" }, { status: 400 });
       }
+      seriesForRegistration = { id: occ.series.id, metadata: occ.series.metadata };
 
       const seatMap = await prisma.classSeatMap.findFirst({
         where: { workspaceId: workspace.id, occurrenceId, active: true },
@@ -95,14 +98,53 @@ export async function POST(request: Request, { params }: Params) {
           { status: 400 },
         );
       }
+    } else if (body.seriesId) {
+      const series = await prisma.classSeries.findFirst({
+        where: { id: String(body.seriesId), workspaceId: workspace.id },
+      });
+      if (!series) return NextResponse.json({ error: "Class not found" }, { status: 404 });
+      seriesForRegistration = { id: series.id, metadata: series.metadata };
     }
 
-    const enrollment = await enrollInClass(workspace.id, {
-      contactId,
-      occurrenceId,
-      seriesId: body.seriesId ? String(body.seriesId) : undefined,
-      enrollFullSeries: body.enrollFullSeries === true,
-    });
+    // The registration window is a setting on the class, so it is enforced
+    // here rather than only hidden in the UI — a stale page must not be able
+    // to register somebody after registration closed.
+    if (seriesForRegistration) {
+      const { classRegistrationClosedReason } = await import(
+        "@/lib/appointments/public-group-offering"
+      );
+      const closed = classRegistrationClosedReason(seriesForRegistration.metadata);
+      if (closed) return NextResponse.json({ error: closed }, { status: 400 });
+    }
+
+    let enrollment;
+    try {
+      enrollment = await enrollInClass(workspace.id, {
+        contactId,
+        occurrenceId,
+        seriesId: body.seriesId ? String(body.seriesId) : undefined,
+        enrollFullSeries: body.enrollFullSeries === true,
+      });
+    } catch (err) {
+      // A class with a waitlist turns "full" into a place in the queue rather
+      // than a dead end. Without one the capacity error stands.
+      const message = err instanceof Error ? err.message : "Registration failed";
+      const { parseClassSeriesMetadata } = await import(
+        "@/lib/appointments/class-series-offering"
+      );
+      if (!seriesForRegistration || !message.toLowerCase().includes("full")) throw err;
+      if (parseClassSeriesMetadata(seriesForRegistration.metadata).waitlistEnabled !== true) {
+        throw err;
+      }
+
+      const { joinClassWaitlist } = await import("@/lib/appointments/service-booking/classes");
+      const entry = await joinClassWaitlist(workspace.id, {
+        seriesId: seriesForRegistration.id,
+        occurrenceId,
+        contactId,
+      });
+      return NextResponse.json({ data: { waitlisted: true, entry } }, { status: 202 });
+    }
 
     let seatReservation = null;
     if (seatMapId && rowIndex != null && colIndex != null && contactId) {
