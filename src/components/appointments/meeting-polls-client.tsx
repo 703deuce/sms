@@ -1,3 +1,1 @@
-"use client";
-
-export { MeetingPollsConnected as MeetingPollsClient } from "@/features/appointments/kimi/meeting-polls/meeting-polls-connected";
+export { MeetingPollsLibraryConnected as MeetingPollsClient } from "@/components/appointments/meeting-polls/meeting-polls-library-connected";

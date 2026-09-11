@@ -1,5 +1,5 @@
-import { MeetingPollsClient } from "@/components/appointments/meeting-polls-client";
+import { redirect } from "next/navigation";
 
-export default function MeetingPollsPage() {
-  return <MeetingPollsClient />;
+export default function LegacyMeetingPollsPage() {
+  redirect("/appointments/meeting-polls");
 }

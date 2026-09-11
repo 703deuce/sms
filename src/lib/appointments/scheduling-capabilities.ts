@@ -50,22 +50,90 @@ export type SingleUseBookingLink = {
   createdBy?: string;
 };
 
+export type MeetingPollVoteValue = "yes" | "maybe" | "no";
+
 export type MeetingPollOption = {
   id: string;
   startsAt: string;
   endsAt: string;
-  votes: number;
+  /** @deprecated Legacy aggregate; use responses + scoring */
+  votes?: number;
+  archivedAt?: string;
 };
+
+export type MeetingPollParticipant = {
+  id: string;
+  name: string;
+  email: string;
+  contactId?: string;
+  inviteToken: string;
+  status: "invited" | "viewed" | "responded" | "removed" | "delivery_failed";
+  lastActivityAt?: string;
+  comment?: string;
+};
+
+export type MeetingPollResponse = {
+  participantId: string;
+  optionId: string;
+  value: MeetingPollVoteValue;
+  updatedAt: string;
+};
+
+export type MeetingPollActivityEntry = {
+  id: string;
+  at: string;
+  actor: string;
+  action: string;
+  detail?: string;
+};
+
+export type MeetingPollSettings = {
+  allowMaybe: boolean;
+  allowComments: boolean;
+  allowResponseChanges: boolean;
+  showNamesToParticipants: boolean;
+  showAggregateBeforeResponse: boolean;
+  deadlineBehavior: "mark_passed" | "auto_close";
+  requireOrganizerFreeOnFinalize: boolean;
+  autoReminderHoursBeforeDeadline?: number;
+};
+
+export type MeetingPollStatus =
+  | "draft"
+  | "open"
+  | "closed"
+  | "finalized"
+  | "expired"
+  | "cancelled";
+
+export type MeetingPollMeetingMethod = "video" | "phone" | "in_person" | "custom";
 
 export type MeetingPoll = {
   id: string;
   workspaceId: string;
   title: string;
+  description?: string;
   appointmentTypeId?: string;
+  timezone: string;
+  durationMinutes: number;
+  meetingMethod?: MeetingPollMeetingMethod;
+  location?: string;
   options: MeetingPollOption[];
-  status: "open" | "closed" | "booked";
+  participants: MeetingPollParticipant[];
+  responses: MeetingPollResponse[];
+  settings: MeetingPollSettings;
+  activity: MeetingPollActivityEntry[];
+  status: MeetingPollStatus;
+  shareToken: string;
+  deadlineAt?: string;
+  organizerStaffId?: string;
+  organizerUserId?: string;
+  winningOptionId?: string;
+  finalizedOptionId?: string;
   bookedAppointmentId?: string;
+  finalizeIdempotencyKey?: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type BookingApprovalConfig = {

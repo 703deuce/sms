@@ -110,11 +110,13 @@ export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
     "/appointments/booking",
     "/appointments/team-pages",
     "/appointments/team-booking",
+    "/appointments/point-of-sale",
     "/appointments/availability",
     "/appointments/ai-booking",
     "/appointments/routing-forms",
     "/appointments/routing",
     "/appointments/polls",
+    "/appointments/meeting-polls",
   ],
   automations: [
     "/appointments/reminders",
