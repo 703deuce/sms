@@ -27,6 +27,13 @@ export async function POST(request: Request, { params }: Params) {
     const { slug } = await params;
     const workspace = await resolveWorkspaceBySlug(slug);
     if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // Listing classes already refuses when the booking page is switched off.
+    // Registering has to refuse as well, or a page loaded while it was still on
+    // can keep enrolling people after it is turned off.
+    const config = await loadAppointmentPlatformConfig(workspace.id);
+    if (!config.bookingEnabled) {
+      return NextResponse.json({ error: "Booking disabled" }, { status: 403 });
+    }
 
     const body = await request.json();
     const phone = String(body.phone || "").trim();

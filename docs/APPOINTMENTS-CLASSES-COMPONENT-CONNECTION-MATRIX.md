@@ -263,6 +263,24 @@ near 1000px.
 Both were exercised with a real workshop-kind row; see
 `/opt/cursor/artifacts/class-route-integrity.log`.
 
+## Public registration guards
+
+Everything a class settles about who may register is enforced on the write path, not
+only hidden on the read path, because a page loaded a minute ago is still able to POST.
+
+| Setting | Where it is set | What the write path does |
+|---------|-----------------|--------------------------|
+| Booking page on/off (`bookingEnabled`) | workspace booking settings | `POST /api/public/book/[slug]/classes` returns `403 Booking disabled` |
+| Registration window | Capacity → Registration state | returns `400` with the reason from `classRegistrationClosedReason()` |
+| Visibility | Advanced → Policies | hidden classes are dropped from `loadPublicGroupOfferings` |
+| Capacity | Capacity → Capacity | `enrollInClass` refuses with `This session is full` |
+| Waitlist | Capacity → Waitlist | a full session returns `202` with a real waitlist entry instead of an error |
+| Offering kind | — | a workshop occurrence posted to the classes route returns `400 Invalid class session` |
+
+Evidence: `/opt/cursor/artifacts/class-booking-gate.log`,
+`/opt/cursor/artifacts/class-public-runtime.log`,
+`/opt/cursor/artifacts/class-capacity-enforcement.log`.
+
 ## Honest gap list
 
 These are recorded in the UI as `.ws-gap-note` text next to the control, never as a

@@ -130,6 +130,7 @@ management open in an overlay drawer rather than taking a column.
 | The registration window was advertised and never enforced | Neither the read nor the write path used it | `classRegistrationClosedReason` applied to both |
 | A full session on a waitlist-enabled class dead-ended | The capacity error was returned as-is | The public route converts it into a real waitlist join returning `202` |
 | Price, remaining-spot display and the custom confirmation were stored and ignored | `PublicGroupSeries` carried five fields | The shape now carries what the editor writes |
+| Turning the booking page off hid classes but still let people register | The `bookingEnabled` guard was on the classes `GET` only | The same guard on `POST`, matching `/api/public/book/[slug]` |
 
 ### Known gaps, stated in the UI rather than faked
 
@@ -163,3 +164,7 @@ reads the limit at the moment they configure the thing.
 to `AppointmentTypesConnected`, which accepts none of them, and
 `AppointmentTypesPageModel` requires a `segmentLocked` the connected component never
 builds). Both come from the `f83e1cf4` merge and are untouched by this pass.
+
+`POST /api/public/book/[slug]/workshops` has the same missing `bookingEnabled` guard that
+was just closed on the classes route. It is left for the Workshops pass rather than
+touched here, and it is recorded so it is not lost.
