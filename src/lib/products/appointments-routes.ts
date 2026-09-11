@@ -67,6 +67,7 @@ export const APPOINTMENTS_STATIC_SEGMENTS = new Set([
   "classes",
   "availability",
   "staff",
+  "clients",
   "locations",
   "routing",
   "routing-forms",
@@ -117,6 +118,7 @@ export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
     "/appointments/routing",
     "/appointments/polls",
     "/appointments/meeting-polls",
+    "/appointments/clients",
   ],
   automations: [
     "/appointments/reminders",

@@ -213,11 +213,21 @@ export async function buildStaffDetail(workspaceId: string, staffId: string): Pr
   if (!member) return null;
 
   const prisma = getPrisma();
+  type ServiceRow = { id: string; name: string; durationMinutes: number | null; config: unknown };
+  type ApptDetailRow = {
+    id: string;
+    startsAt: Date;
+    endsAt: Date | null;
+    metadata: unknown;
+    status: string;
+    serviceName: string | null;
+    staffName: string | null;
+  };
   const [types, connections, apptRows] = await Promise.all([
     prisma.voiceService.findMany({
       where: { workspaceId },
       select: { id: true, name: true, durationMinutes: true, config: true },
-    }),
+    }) as Promise<ServiceRow[]>,
     listWorkspaceCalendarConnections(workspaceId),
     prisma.voiceAppointment.findMany({
       where: { workspaceId },
@@ -232,7 +242,7 @@ export async function buildStaffDetail(workspaceId: string, staffId: string): Pr
       },
       orderBy: { startsAt: "desc" },
       take: 200,
-    }),
+    }) as Promise<ApptDetailRow[]>,
   ]);
 
   const form = platformAvailabilityForm(platform);

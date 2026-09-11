@@ -17,7 +17,6 @@ import type { NavItem } from "@/lib/nav";
 import type { SchedulingModuleFlags } from "@/lib/products/scheduling-modules";
 import {
   isAnalyticsInV1Nav,
-  isContactsInV1Nav,
   isConversationsInV1Nav,
 } from "@/lib/products/v1-launch-nav";
 
@@ -30,6 +29,7 @@ function calendarChildren(): NavItem["children"] {
   return [
     { label: "Calendar", href: "/appointments/calendar" },
     { label: "Appointments", href: "/appointments" },
+    { label: "Clients", href: "/appointments/clients" },
     { label: "Waitlist", href: "/appointments/waitlist" },
     { label: "Recalls", href: "/appointments/recalls" },
   ];
@@ -164,13 +164,11 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
     },
   ];
 
-  if (isContactsInV1Nav()) {
-    items.push({
-      label: "Contacts",
-      href: "/contacts",
-      icon: Users,
-    });
-  }
+  items.push({
+    label: "Clients",
+    href: "/appointments/clients",
+    icon: Users,
+  });
 
   if (isConversationsInV1Nav()) {
     items.push({
@@ -275,9 +273,7 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
     });
   }
 
-  if (isContactsInV1Nav()) {
-    items.push({ label: "Contacts", href: "/contacts", icon: Users });
-  }
+  items.push({ label: "Clients", href: "/appointments/clients", icon: Users });
 
   return items.slice(0, 4);
 }
@@ -329,6 +325,7 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/appointments/analytics")) return "Analytics";
   if (pathname.startsWith("/appointments/enterprise")) return "Team";
   if (pathname.startsWith("/appointments/staff")) return "Team";
+  if (pathname.startsWith("/appointments/clients")) return "Clients";
   if (pathname.startsWith("/appointments/new")) return "New Appointment";
   if (pathname.match(/\/appointments\/[^/]+$/)) return "Appointment";
   if (pathname.startsWith("/appointments")) return "Appointments";
