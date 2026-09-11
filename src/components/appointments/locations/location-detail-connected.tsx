@@ -69,20 +69,6 @@ export function LocationDetailConnected({ locationId }: { locationId: string }) 
     }
   }
 
-  async function toggleService(typeId: string, assigned: boolean) {
-    if (!detail.data) return;
-    const ids = detail.data.services.filter((s) => s.assigned).map((s) => s.id);
-    const next = assigned ? ids.filter((id) => id !== typeId) : [...ids, typeId];
-    await detail.patch({ appointmentTypeIds: next });
-  }
-
-  async function toggleStaff(staffId: string, assigned: boolean) {
-    if (!detail.data) return;
-    const ids = detail.data.staff.filter((s) => s.assigned).map((s) => s.id);
-    const next = assigned ? ids.filter((id) => id !== staffId) : [...ids, staffId];
-    await detail.patch({ staffIds: next });
-  }
-
   async function deactivate(force = false) {
     try {
       await detail.patch({ deactivate: true, forceDeactivate: force });
@@ -198,7 +184,15 @@ export function LocationDetailConnected({ locationId }: { locationId: string }) 
                       <td className="px-3 py-2">{s.durationMinutes} min</td>
                       <td className="px-3 py-2">{s.staffAtLocation}</td>
                       <td className="px-3 py-2">
-                        <input type="checkbox" checked={s.assigned} onChange={(e) => void toggleService(s.id, s.assigned)} />
+                        <input
+                          type="checkbox"
+                          checked={s.assigned}
+                          onChange={(e) => {
+                            const ids = d.services.filter((x) => x.assigned).map((x) => x.id);
+                            const next = e.target.checked ? [...ids, s.id] : ids.filter((id) => id !== s.id);
+                            void detail.patch({ appointmentTypeIds: next });
+                          }}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -225,7 +219,15 @@ export function LocationDetailConnected({ locationId }: { locationId: string }) 
                       <td className="px-3 py-2">{s.title || "—"}</td>
                       <td className="px-3 py-2">{s.status}</td>
                       <td className="px-3 py-2">
-                        <input type="checkbox" checked={s.assigned} onChange={(e) => void toggleStaff(s.id, s.assigned)} />
+                        <input
+                          type="checkbox"
+                          checked={s.assigned}
+                          onChange={(e) => {
+                            const ids = d.staff.filter((x) => x.assigned).map((x) => x.id);
+                            const next = e.target.checked ? [...ids, s.id] : ids.filter((id) => id !== s.id);
+                            void detail.patch({ staffIds: next });
+                          }}
+                        />
                       </td>
                     </tr>
                   ))}

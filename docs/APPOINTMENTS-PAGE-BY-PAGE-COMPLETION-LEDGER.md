@@ -620,3 +620,20 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, auth matrix, security, parity |
 
 **Overall:** `APPOINTMENTS_CLIENT_PORTAL_COMPLETE: NO` (E2E 1–35, screenshots 01–33, pending forms, invoices, in-portal slot reschedule, rate limits, cross-tenant Playwright proof)
+
+## LOCATIONS (`/appointments/locations`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_BACKEND_REUSE | PASS | `AppointmentLocation` in platform config |
+| LAYOUT / DENSITY / VISUAL | PASS | Pilot shell; full-width table + detail nav |
+| LOCATION_DIRECTORY | PASS | `buildLocationsWorkspace` |
+| SERVICE_ASSIGNMENTS | PASS | `syncLocationServiceAssignments` |
+| STAFF_ASSIGNMENTS | PASS | `syncLocationStaffAssignments` |
+| AVAILABILITY_LINKAGE | PASS | Summary + link; `resolveLocationWeeklyHours` |
+| RESOURCES_LINKAGE | PARTIAL | Summary + `/appointments/resources` link |
+| DEACTIVATION | PASS | Future appointment 409 |
+| PUBLIC_BOOKING E2E | BLOCKED | — |
+| DOCS | PASS | Audit, eligibility, parity, matrix |
+
+**Overall:** `APPOINTMENTS_LOCATIONS_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–26, service-area, hidden address, full resources filter, routing/team E2E proof)
