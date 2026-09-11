@@ -749,7 +749,13 @@ export async function POST(request: Request, { params }: Params) {
     });
     if (assignedStaff) staffId = assignedStaff.id;
 
-    const payment = resolvedType?.config.payment;
+    const { effectivePayment: mergePaymentWithDefaults } = await import(
+      "@/lib/appointments/pricing-payments/pricing-workspace"
+    );
+    const payment = mergePaymentWithDefaults(
+      (resolvedType?.config || {}) as import("@/lib/appointments/types").AppointmentTypeConfig,
+      config.commerceDefaults,
+    );
     let effectivePayment = payment ? { ...payment } : undefined;
     if (effectivePayment?.priceCents && startsAt) {
       try {

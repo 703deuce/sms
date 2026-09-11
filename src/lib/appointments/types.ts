@@ -263,6 +263,21 @@ export type AppointmentPlatformConfig = {
   };
   /** Automated outbound voice reminder templates and settings */
   voiceReminders?: VoiceRemindersPlatformConfig;
+  /** Workspace-wide booking commerce defaults (offering config may override). */
+  commerceDefaults?: CommerceDefaults;
+};
+
+export type CommerceDefaults = {
+  /** Default collection when an offering does not set payment.mode explicitly. */
+  paymentMode?: "none" | "full" | "deposit";
+  depositType?: "fixed" | "percent";
+  depositCents?: number;
+  depositPercent?: number;
+  defaultProvider?: "stripe" | "square";
+  /** Show promo code field on public checkout when supported. */
+  allowPromoCodes?: boolean;
+  /** How remaining balance after deposit is expected to be collected. */
+  balanceDueBehavior?: "at_appointment" | "manual" | "invoice";
 };
 
 /** Booking archetype — MEETING (minimal), SERVICE (commerce/recurrence), CLASS (group/capacity). */

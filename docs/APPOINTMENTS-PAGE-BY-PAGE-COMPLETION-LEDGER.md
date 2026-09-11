@@ -384,3 +384,27 @@ sections, Services-style density).
 - Staff-specific date overrides: runtime supports; add UI or deep-link to Staff editor overrides.
 - Named schedule editor remains list-only (pre-existing); assign via type `namedScheduleId` on Service.
 - Availability engine latency (per-slot queries) remains a shared platform issue (see Meetings ledger).
+
+---
+
+## PRICING & PAYMENTS (`/appointments/pricing-payments`) — central commerce configuration
+
+Wide pilot workspace; separate from Availability, Packages, Memberships, and Transactions.
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| LAYOUT | PASS | Full-width workspace, horizontal sections, no second sidebar |
+| OVERVIEW | PASS | Provider, default collection, health, commerce summary, checkout preview |
+| PAYMENT COLLECTION | PASS | Default mode + offering table; links to canonical editors |
+| DEPOSITS | PASS | Default fixed/% + balance behavior (informational) + override table |
+| PACKAGES & MEMBERSHIPS | PASS | Read canonical counts; manage links |
+| DISCOUNTS & TAXES | PASS | Coupon count + promo toggle; taxes honestly N/A |
+| REFUNDS & POLICIES | PASS | Links to transactions + per-offering policies |
+| PROVIDERS | PASS | `GET /api/merchant-payments/status` |
+| CHECKOUT PREVIEW | PASS | `calculatePaymentAmounts` shared math |
+| DOCS | PASS | Precedence, checkout order, component matrix |
+| SERVER DEFAULT MERGE | PASS | Public book merges `commerceDefaults` when type omits explicit payment |
+| CHECKOUT E2E | BLOCKED | Tests 1–22 not run |
+| SCREENSHOTS | BLOCKED | Not captured |
+
+**Overall:** `APPOINTMENTS_PRICING_PAYMENTS_PAGE_COMPLETE: NO`
