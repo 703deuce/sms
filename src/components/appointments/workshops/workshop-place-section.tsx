@@ -214,8 +214,9 @@ export function WorkshopPlaceSection({
               <p className="ws-gap-note mt-2.5">
                 <Video className="h-3.5 w-3.5" aria-hidden />
                 <span>
-                  The link is stored and shown with the workshop. Nothing creates the meeting for
-                  you — paste a link from your own video tool.
+                  The registration page shows the workshop as “Online” and hands the link over
+                  once somebody has registered, so it is not public. Nothing creates the meeting
+                  for you — paste a link from your own video tool.
                 </span>
               </p>
             </div>

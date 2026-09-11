@@ -34,6 +34,8 @@ export type PublicGroupSeries = {
   showRemainingSpots: boolean;
   waitlistEnabled: boolean;
   confirmationMessage: string | null;
+  /** Where it happens, in the customer's words. Null when nothing is set. */
+  placeLabel: string | null;
   /** Null when registration is open; otherwise why it is not. */
   registrationClosedReason: string | null;
 };
@@ -60,6 +62,20 @@ export function classRegistrationClosedReason(
   return null;
 }
 
+/**
+ * The joining link itself is deliberately not public — it goes out with the
+ * confirmation — so an online event says only that it is online.
+ */
+function publicPlaceLabel(
+  meta: ReturnType<typeof parseClassSeriesMetadata>,
+  locationId: string | null,
+  locationNames: Map<string, string>,
+): string | null {
+  if (meta.locationMode === "virtual") return "Online";
+  if (meta.locationMode === "custom") return meta.locationNote?.trim() || null;
+  return (locationId && locationNames.get(locationId)) || null;
+}
+
 export async function loadPublicGroupOfferings(
   workspaceId: string,
   offeringKind: ClassSeriesOfferingKind,
@@ -75,6 +91,7 @@ export async function loadPublicGroupOfferings(
     requireFullSeries: boolean;
     active: boolean;
     metadata: unknown;
+    locationId: string | null;
   }> = await listClassSeries(workspaceId);
   // Hidden is a real setting on the class, so it has to keep the class off the
   // public listing — otherwise the toggle in the editor means nothing.
@@ -88,6 +105,14 @@ export async function loadPublicGroupOfferings(
   if (seriesIds.length === 0) {
     return { series: [], occurrences: [] };
   }
+
+  // A workshop states where it happens in its own right — a room, online, or a
+  // one-off venue — so the public listing has to be able to say which.
+  const { loadAppointmentPlatformConfig } = await import("@/lib/appointments/settings");
+  const config = await loadAppointmentPlatformConfig(workspaceId);
+  const locationNames = new Map<string, string>(
+    (config.locations || []).map((l) => [l.id, l.name]),
+  );
 
   const occurrences: Array<{
     id: string;
@@ -168,6 +193,7 @@ export async function loadPublicGroupOfferings(
       showRemainingSpots: meta.showRemainingSpots !== false,
       waitlistEnabled: meta.waitlistEnabled === true,
       confirmationMessage: meta.confirmationMessage ?? null,
+      placeLabel: publicPlaceLabel(meta, s.locationId, locationNames),
       registrationClosedReason: classRegistrationClosedReason(s.metadata),
     };
   });

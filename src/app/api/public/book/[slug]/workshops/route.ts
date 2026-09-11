@@ -172,7 +172,21 @@ export async function POST(request: Request, { params }: Params) {
       });
     }
 
-    return NextResponse.json({ data: { enrollment, seatReservation } }, { status: 201 });
+    // The joining link is handed over here rather than on the listing, so it
+    // reaches the person who registered and nobody else.
+    const { parseClassSeriesMetadata } = await import(
+      "@/lib/appointments/class-series-offering"
+    );
+    const registeredMeta = seriesForRegistration
+      ? parseClassSeriesMetadata(seriesForRegistration.metadata)
+      : null;
+    const joinUrl =
+      registeredMeta?.locationMode === "virtual" ? registeredMeta.virtualUrl || null : null;
+
+    return NextResponse.json(
+      { data: { enrollment, seatReservation, joinUrl } },
+      { status: 201 },
+    );
   } catch (err) {
     return jsonError(err, 400);
   }

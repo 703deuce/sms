@@ -16,6 +16,7 @@ type ClassSeries = {
   showRemainingSpots?: boolean;
   waitlistEnabled?: boolean;
   confirmationMessage?: string | null;
+  placeLabel?: string | null;
   registrationClosedReason?: string | null;
 };
 type ClassOccurrence = {
@@ -155,8 +156,11 @@ export function PublicGroupEnrollmentClient({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Registration failed");
       const seatLabel = seat?.seatLabel ? ` Seat ${seat.seatLabel} reserved.` : "";
+      // Only an online workshop returns one, and only to the person who has
+      // just taken a place.
+      const joinLine = json.data?.joinUrl ? ` Join here: ${json.data.joinUrl}` : "";
       setMessage(
-        json.data?.waitlisted
+        (json.data?.waitlisted
           ? offeringKind === "workshop"
             ? "This workshop is full, so you are on the waitlist. We will contact you if a place opens."
             : "That session is full, so you are on the waitlist. We will contact you if a place opens."
@@ -165,7 +169,7 @@ export function PublicGroupEnrollmentClient({
             confirmation ||
             (offeringKind === "workshop"
               ? `You are registered for this workshop.${seatLabel} We will send a confirmation if messaging is enabled.`
-              : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`),
+              : `You are enrolled.${seatLabel} We will send a confirmation if messaging is enabled.`)) + joinLine,
       );
       setSeatPickerOpen(false);
       setPendingOccurrence(null);
@@ -371,7 +375,10 @@ export function PublicGroupEnrollmentClient({
               <li key={occ.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
                   <p className="font-medium">{s?.name || sessionFallback}</p>
-                  <p className="text-sm text-muted-foreground">{formatWhen(occ.startsAt)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatWhen(occ.startsAt)}
+                    {s?.placeLabel ? ` · ${s.placeLabel}` : ""}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {closed || facts.join(" · ")}
                   </p>
