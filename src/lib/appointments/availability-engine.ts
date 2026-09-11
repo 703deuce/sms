@@ -148,10 +148,10 @@ export async function generateNativeSlots(
   const bufferBefore = ctx.bufferBeforeMinutes * 60_000;
   const bufferAfter = ctx.bufferAfterMinutes * 60_000;
   const noticeMs = ctx.minimumNoticeMinutes * 60_000;
-  const slotStep = (await import("@/lib/appointments/service-booking/fixed-start-times")).slotStepMinutes(
-    durationMinutes,
-    schedulingLimits.customStartIntervalMinutes,
+  const { candidateStartMinutes, resolveAllowedStartMinutes, slotStepMinutes } = await import(
+    "@/lib/appointments/service-booking/fixed-start-times"
   );
+  const slotStep = slotStepMinutes(durationMinutes, schedulingLimits.customStartIntervalMinutes);
   const fixedStartConfig = schedulingLimits.fixedStartTimes;
   const densityHidePercent = schedulingLimits.availabilityDensityHidePercent;
   const now = new Date();
@@ -230,16 +230,24 @@ export async function generateNativeSlots(
       if (!windows.length) continue;
     }
 
+    const allowedStartMinutes = resolveAllowedStartMinutes(
+      fixedStartConfig,
+      noon.toISOString(),
+      tz,
+    );
+
     for (const window of windows) {
       const openMin = parseHm(window.open);
       const closeMin = parseHm(window.close);
       if (openMin == null || closeMin == null) continue;
 
-      for (
-        let slotStart = openMin;
-        slotStart + durationMinutes <= closeMin;
-        slotStart += slotStep
-      ) {
+      for (const slotStart of candidateStartMinutes({
+        openMinutes: openMin,
+        closeMinutes: closeMin,
+        durationMinutes,
+        stepMinutes: slotStep,
+        allowedStartMinutes,
+      })) {
         const hour = Math.floor(slotStart / 60);
         const minute = slotStart % 60;
         const start = wallTimeInZoneToUtc(tz, day.year, day.month, day.day, hour, minute);

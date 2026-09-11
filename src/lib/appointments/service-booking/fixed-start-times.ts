@@ -71,6 +71,33 @@ export function filterSlotsToFixedStartTimes(
   });
 }
 
+/**
+ * Start minutes to try inside one open window.
+ *
+ * With fixed start times the listed clock times are the candidates. Stepping a
+ * grid and filtering afterwards silently drops any listed time the grid does
+ * not happen to land on — an 11:00 service with a 13:00 fixed start would never
+ * be offered.
+ */
+export function candidateStartMinutes(input: {
+  openMinutes: number;
+  closeMinutes: number;
+  durationMinutes: number;
+  stepMinutes: number;
+  allowedStartMinutes: Set<number> | null;
+}): number[] {
+  const last = input.closeMinutes - input.durationMinutes;
+  if (input.allowedStartMinutes) {
+    return [...input.allowedStartMinutes]
+      .filter((m) => m >= input.openMinutes && m <= last)
+      .sort((a, b) => a - b);
+  }
+  const out: number[] = [];
+  const step = Math.max(1, input.stepMinutes);
+  for (let m = input.openMinutes; m <= last; m += step) out.push(m);
+  return out;
+}
+
 export function slotStepMinutes(
   durationMinutes: number,
   customStartIntervalMinutes?: number,
