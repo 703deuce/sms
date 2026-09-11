@@ -16,7 +16,7 @@ type Props = {
   namedScheduleOptions: Array<{ id: string; name: string }>;
 };
 
-function KpiCell({
+function MetaItem({
   icon: Icon,
   label,
   value,
@@ -28,19 +28,19 @@ function KpiCell({
   unset?: boolean;
 }) {
   return (
-    <div className="ws-kpi-cell">
-      <p className="ws-kpi-label">
-        <Icon className="h-3 w-3" aria-hidden />
-        {label}
-      </p>
-      {/* title carries the full string because narrow columns must ellipsize */}
-      <p className={`ws-kpi-value${unset ? " is-unset" : ""}`} title={value}>
-        {value}
-      </p>
-    </div>
+    <span className="ws-meta-item" title={value}>
+      <Icon className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="sr-only">{label}: </span>
+      <strong className={unset ? "is-unset" : undefined}>{value}</strong>
+    </span>
   );
 }
 
+/**
+ * A single line of the facts an operator checks constantly. It stays one line
+ * because it sits between the header and the section tabs, and anything taller
+ * pushes the actual work below the fold.
+ */
 export function MeetingSummaryStrip({ form, staffNames, namedScheduleOptions }: Props) {
   const host = hostAssignmentLabel(
     {
@@ -57,12 +57,12 @@ export function MeetingSummaryStrip({ form, staffNames, namedScheduleOptions }: 
   });
 
   return (
-    <div className="ws-kpi-strip" aria-label="Meeting summary">
-      <KpiCell icon={Clock} label="Duration" value={formatDurationMinutes(form.durationMinutes)} />
-      <KpiCell icon={User} label="Host" value={host} />
-      <KpiCell icon={Video} label="Method" value={method} unset={method === "Not set"} />
-      <KpiCell icon={Calendar} label="Availability" value={schedule} />
-      <KpiCell icon={DollarSign} label="Price" value={price} />
+    <div className="ws-meta-strip" aria-label="Meeting summary">
+      <MetaItem icon={Clock} label="Duration" value={formatDurationMinutes(form.durationMinutes)} />
+      <MetaItem icon={User} label="Host" value={host} />
+      <MetaItem icon={Video} label="Method" value={method} unset={method === "Not set"} />
+      <MetaItem icon={Calendar} label="Availability" value={schedule} />
+      <MetaItem icon={DollarSign} label="Price" value={price} />
     </div>
   );
 }

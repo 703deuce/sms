@@ -1,42 +1,31 @@
 "use client";
 
-import {
-  Calendar,
-  ClipboardList,
-  LayoutGrid,
-  Settings2,
-  Shield,
-  Users,
-} from "lucide-react";
 import { MEETING_SECTIONS, type MeetingSectionId } from "./meeting-section-types";
-
-const ICONS: Record<MeetingSectionId, React.ComponentType<{ className?: string }>> = {
-  overview: LayoutGrid,
-  availability: Calendar,
-  "hosts-method": Users,
-  questions: ClipboardList,
-  "booking-rules": Shield,
-  advanced: Settings2,
-};
 
 type Props = {
   active: MeetingSectionId;
   onChange: (id: MeetingSectionId) => void;
-  /** Sections with an unresolved setup blocker, flagged in the rail. */
+  /** Sections with an unresolved setup blocker, flagged in the strip. */
   attention?: Set<MeetingSectionId>;
 };
 
 /**
- * Renders both responsive presentations of the same navigation: a vertical rail
- * on desktop and a dropdown below it. Keeping both inside one component is what
- * stops a caller from mounting the dropdown and the rail side by side.
+ * Section navigation sits horizontally under the object header. The product
+ * sidebar is already a vertical menu and the meetings list is a second one; a
+ * third rail beside them reads as a wall of menus and leaves the form about a
+ * third of the screen.
+ *
+ * Both responsive presentations live here so a caller cannot mount one without
+ * the other and end up showing two navigations at once. Which one shows is
+ * decided in the stylesheet rather than with a utility class, because
+ * `.ws-section-tabs` sets `display` itself and would win against one.
  */
 export function MeetingLocalNav({ active, onChange, attention }: Props) {
   const activeSection = MEETING_SECTIONS.find((s) => s.id === active);
 
   return (
     <>
-      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 lg:hidden">
+      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 sm:hidden">
         <label className="sr-only" htmlFor="meeting-section-select">
           Meeting section
         </label>
@@ -60,36 +49,25 @@ export function MeetingLocalNav({ active, onChange, attention }: Props) {
         ) : null}
       </div>
 
-      <nav className="ws-local-nav hidden lg:block" aria-label="Meeting sections">
-        <p className="ws-local-nav-heading">Configure</p>
-        <ul className="space-y-0.5">
-          {MEETING_SECTIONS.map((section) => {
-            const Icon = ICONS[section.id];
-            const isActive = active === section.id;
-            const needsAttention = attention?.has(section.id);
-            return (
-              <li key={section.id}>
-                <button
-                  type="button"
-                  onClick={() => onChange(section.id)}
-                  aria-current={isActive ? "page" : undefined}
-                  className="ws-local-nav-btn"
-                  title={section.description}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                  <span className="truncate">{section.label}</span>
-                  {needsAttention ? (
-                    <span
-                      className="ws-local-nav-flag"
-                      title={`${section.label} needs attention`}
-                      aria-label={`${section.label} needs attention`}
-                    />
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="ws-section-tabs" aria-label="Meeting sections">
+        {MEETING_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => onChange(section.id)}
+            aria-current={active === section.id ? "page" : undefined}
+            className="ws-section-tab"
+            title={section.description}
+          >
+            {section.label}
+            {attention?.has(section.id) ? (
+              <span
+                className="ws-section-tab-flag"
+                aria-label={`${section.label} needs attention`}
+              />
+            ) : null}
+          </button>
+        ))}
       </nav>
     </>
   );

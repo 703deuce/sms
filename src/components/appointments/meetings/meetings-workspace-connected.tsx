@@ -267,23 +267,21 @@ export function MeetingsWorkspaceConnected({ meetingId }: Props) {
           namedScheduleOptions={editor.options.namedScheduleOptions}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <MeetingLocalNav active={section} onChange={setSection} attention={attention} />
-          <MeetingSectionWorkspace
-            section={section}
-            form={editor.form}
-            options={editor.options}
-            staffNames={staffNames}
-            bookingLink={editor.bookingLink}
-            onFormChange={editor.updateForm}
-            onNavigateSection={setSection}
-            onPreview={editor.previewBooking}
-            onCopyLink={() => void editor.copyBookingLink()}
-            onAddStaff={editor.addStaffMember}
-            onAddLocation={editor.addLocation}
-            copied={editor.copied}
-          />
-        </div>
+        <MeetingLocalNav active={section} onChange={setSection} attention={attention} />
+        <MeetingSectionWorkspace
+          section={section}
+          form={editor.form}
+          options={editor.options}
+          staffNames={staffNames}
+          bookingLink={editor.bookingLink}
+          onFormChange={editor.updateForm}
+          onNavigateSection={setSection}
+          onPreview={editor.previewBooking}
+          onCopyLink={() => void editor.copyBookingLink()}
+          onAddStaff={editor.addStaffMember}
+          onAddLocation={editor.addLocation}
+          copied={editor.copied}
+        />
       </div>
     </div>
   );
