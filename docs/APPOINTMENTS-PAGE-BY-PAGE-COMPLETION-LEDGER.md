@@ -571,3 +571,31 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, parity, matrix |
 
 **Overall:** `APPOINTMENTS_STAFF_PAGE_COMPLETE: NO` (E2E 1–28, screenshots 01–22, avatar upload, staff ordering, full account invite wiring)
+
+## CLIENTS ADMIN (`/appointments/clients`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_BACKEND_REUSE | PASS | Canonical `Contact`; no Client table |
+| CANONICAL_CONTACT_IDENTITY | PASS | `client-identity.ts`, booking `resolveOrCreateContact` |
+| VISUAL / LAYOUT / DENSITY | PASS | Pilot shell; full-width directory + detail; horizontal sections |
+| CLIENT_DIRECTORY | PASS | `buildClientsDirectory` + table |
+| SEARCH | PASS | Query param `q` |
+| FILTERS | FAIL | Status/access/balance filters not in UI |
+| CLIENT_CREATE | PASS | Modal + POST with duplicate 409 |
+| DUPLICATE_DETECTION | PASS | `findDuplicateClientCandidates` |
+| MERGE | PASS | Modal + `/api/appointments/clients/merge` |
+| BLOCK_UNBLOCK | PASS | `clientBookingRestriction` from detail menu |
+| PROFILE / NOTES / ACTIVITY | PASS | PATCH + timeline |
+| APPOINTMENTS | PASS | Table + canonical `/appointments/[id]` |
+| BOOK_FOR_CLIENT | PARTIAL | Calendar link with `contactId` (calendar may not consume) |
+| PAYMENTS / PACKAGES / MEMBERSHIPS | PARTIAL | Read models; POS deep links |
+| FORMS | PARTIAL | Submitted intake responses only |
+| MESSAGES | PARTIAL | Inbox deep link |
+| IMPORT_EXPORT | PARTIAL | Import link; export GAP |
+| PORTAL_IDENTITY_READINESS | PASS | Single contact id; portal not built |
+| CUSTOM_FIELDS | FAIL | Not on profile UI |
+| E2E / SCREENSHOTS | BLOCKED | Not run this pass |
+| DOCS | PASS | Audit, identity, parity, matrix |
+
+**Overall:** `APPOINTMENTS_CLIENTS_ADMIN_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–26, directory filters, custom fields, pending forms, embedded messages, calendar contact preselect, export, full invoice view)
