@@ -73,8 +73,9 @@ export function EventTypeNotetakerSettings({ form, onChange }: Props) {
         Extract action items
       </label>
       <div>
-        <Label>Summary style</Label>
+        <Label htmlFor="notetaker-summary-template">Summary style</Label>
         <select
+          id="notetaker-summary-template"
           className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
           value={form.notetakerSummaryTemplate || "general"}
           onChange={(e) => onChange("notetakerSummaryTemplate", e.target.value)}
