@@ -1,38 +1,51 @@
 /**
- * Appointments Overview — color + typography pilot (scoped).
- * Charcoal + restrained teal on light neutrals. Geist via overview layout.
+ * Appointments Overview — 60-30-10 palette (scoped).
+ * Canvas neutrals (60%) · graphite structure (30%) · muted violet accent (10%).
  */
 .appt-overview-pilot {
+  --canvas: #f7f7f5;
   --surface: #ffffff;
-  --surface-muted: #f7f8fa;
-  --text-primary: #101418;
-  --text-secondary: #6b7280;
-  --border: #e5e7eb;
-  --brand-primary: #1f2329;
-  --brand-accent: #147d74;
-  --brand-accent-soft: #dcefeb;
-  --state-success: #15803d;
-  --state-success-soft: #ecfdf3;
-  --state-warning: #b45309;
-  --state-warning-soft: #fffbeb;
-  --state-error: #dc2626;
-  --state-error-soft: #fef2f2;
+  --surface-muted: #f1f2f0;
+  --graphite: #181b1f;
+  --graphite-2: #22262c;
+  --text-primary: #181b1f;
+  --text-secondary: #626872;
+  --text-tertiary: #8b929c;
+  --border: #e2e3e1;
+  --border-soft: #eceeed;
+  --brand-primary: #181b1f;
+  --brand-accent: #6b5dd3;
+  --brand-accent-hover: #5848c2;
+  --brand-accent-soft: #efecfb;
+  --brand-accent-border: #cfc8f2;
+  --state-success: #248a5a;
+  --state-success-soft: #e8f4ed;
+  --state-warning: #b7791f;
+  --state-warning-soft: #fff5df;
+  --state-error: #c74848;
+  --state-error-soft: #fceaea;
 
-  /* Type scale — calm product density (scheduling SaaS, not marketing) */
-  --type-page-title: 1.625rem; /* 26px */
-  --type-section: 1.0625rem; /* 17px */
+  /* Type scale — IBM Plex compact enterprise */
+  --type-page-title: 1.375rem; /* 22px / 28px */
+  --type-page-title-line: 1.75rem;
+  --type-section: 1.125rem; /* 18px / 24px */
+  --type-section-line: 1.5rem;
   --type-section-minor: 0.9375rem; /* 15px */
-  --type-stat: 1.625rem; /* 26px KPI */
-  --type-body: 0.875rem; /* 14px */
-  --type-list: 0.8125rem; /* 13px */
-  --type-label: 0.8125rem; /* 13px */
-  --type-helper: 0.75rem; /* 12px */
-  --type-button: 0.8125rem; /* 13px */
-  --type-nav: 0.8125rem; /* 13px */
+  --type-stat: 1.5rem; /* 24px KPI */
+  --type-body: 0.875rem; /* 14px / 20px */
+  --type-body-line: 1.25rem;
+  --type-list: 0.875rem; /* 14px */
+  --type-label: 0.75rem; /* 12px / 16px */
+  --type-label-line: 1rem;
+  --type-helper: 0.75rem; /* 12px / 16px */
+  --type-helper-line: 1rem;
+  --type-button: 0.875rem; /* 14px */
+  --type-nav: 0.875rem; /* 14px / 18px */
+  --type-nav-line: 1.125rem;
 
-  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-appt-overview-pilot), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--type-body);
-  line-height: 1.4;
+  line-height: var(--type-body-line);
   letter-spacing: -0.011em;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -43,11 +56,9 @@
   letter-spacing: -0.02em;
 }
 
-/* Page canvas — neutral 60% */
+/* Page canvas — warm neutral 60% */
 .appt-overview-pilot.ref-root {
-  background:
-    radial-gradient(ellipse 70% 45% at 100% -5%, rgba(20, 125, 116, 0.05), transparent 55%),
-    linear-gradient(180deg, var(--surface-muted) 0%, #f3f4f6 100%) !important;
+  background: var(--canvas) !important;
 }
 
 .appt-overview-pilot.ref-root::before {
@@ -61,20 +72,20 @@
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(90deg, rgba(20, 125, 116, 0.04), transparent 42%);
+  background: transparent;
 }
 
 .appt-overview-pilot .ref-deco-page-head h1 {
   font-size: var(--type-page-title) !important;
   font-weight: 600 !important;
-  line-height: 1.2 !important;
+  line-height: calc(var(--type-page-title-line) / var(--type-page-title)) !important;
   letter-spacing: -0.022em;
   color: var(--text-primary);
 }
 
 .appt-overview-pilot .ref-deco-page-head p {
   font-size: var(--type-body);
-  line-height: 1.35;
+  line-height: var(--type-body-line);
   font-weight: 400;
   color: var(--text-secondary);
   margin-top: 0.25rem;
@@ -112,10 +123,10 @@
 }
 
 .appt-pilot-muted-link:hover {
-  color: #0f665f;
+  color: var(--brand-accent-hover);
 }
 
-/* Primary / secondary actions — charcoal CTA, teal on secondary hover */
+/* Primary actions — violet accent (scarce, intentional) */
 .appt-pilot-primary-btn {
   display: inline-flex;
   align-items: center;
@@ -124,19 +135,19 @@
   min-height: 2.25rem;
   padding: 0 1rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--brand-primary);
-  background: var(--brand-primary);
+  border: 1px solid var(--brand-accent);
+  background: var(--brand-accent);
   color: #ffffff;
   font-size: var(--type-button);
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.06);
+  box-shadow: 0 1px 2px rgba(107, 93, 211, 0.18);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .appt-pilot-primary-btn:hover {
-  background: #2c3138;
-  border-color: #2c3138;
+  background: var(--brand-accent-hover);
+  border-color: var(--brand-accent-hover);
 }
 
 .appt-pilot-primary-btn:focus-visible {
@@ -162,9 +173,9 @@
 }
 
 .appt-pilot-outline-btn:hover {
-  border-color: rgba(20, 125, 116, 0.35);
-  background: var(--brand-accent-soft);
-  color: var(--brand-accent);
+  border-color: var(--brand-accent-border);
+  background: var(--surface-muted);
+  color: var(--brand-primary);
 }
 
 .appt-pilot-outline-btn:focus-visible {
@@ -215,7 +226,7 @@
 }
 
 .appt-pilot-back-link:hover {
-  color: #0f665f;
+  color: var(--brand-accent-hover);
 }
 
 .appt-pilot-back-link:focus-visible {
@@ -321,7 +332,7 @@
   border-color: #d1d5db;
 }
 
-/* KPI — compact, neutral structure; teal accent only on highlight */
+/* KPI — compact, neutral structure; violet accent only on highlight */
 .appt-overview-pilot .ref-deco-kpi {
   padding: 0.875rem 1rem;
   gap: 0.75rem;
@@ -345,8 +356,8 @@
 
 .appt-overview-pilot .ref-deco-kpi--highlight,
 .appt-overview-pilot .ref-deco-kpi:first-child {
-  border-color: rgba(20, 125, 116, 0.22);
-  box-shadow: 0 0 0 1px rgba(20, 125, 116, 0.06), 0 4px 14px rgba(20, 125, 116, 0.06);
+  border-color: var(--brand-accent-border);
+  box-shadow: 0 0 0 1px rgba(107, 93, 211, 0.06), 0 4px 14px rgba(107, 93, 211, 0.06);
 }
 
 .appt-overview-pilot .ref-deco-kpi:hover {
@@ -395,9 +406,9 @@
 .appt-overview-pilot .ref-deco-icon-ring--green,
 .appt-overview-pilot .ref-deco-icon-ring--amber,
 .appt-overview-pilot .ref-deco-icon-ring--red {
-  background: var(--brand-accent-soft);
-  color: var(--brand-accent);
-  box-shadow: none;
+  background: var(--surface-muted);
+  color: var(--brand-primary);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 /* Sections — shallower, neutral surfaces */
@@ -424,7 +435,7 @@
 .appt-overview-pilot .ref-deco-section-head h2 {
   font-size: var(--type-section) !important;
   font-weight: 600 !important;
-  line-height: 1.25 !important;
+  line-height: calc(var(--type-section-line) / var(--type-section)) !important;
   letter-spacing: -0.015em;
   color: var(--text-primary);
 }
@@ -445,7 +456,8 @@
 .appt-overview-pilot .ref-deco-section-accent--amber {
   width: 3px;
   height: 22px;
-  background: var(--brand-accent) !important;
+  background: var(--brand-primary) !important;
+  opacity: 0.35;
 }
 
 .appt-overview-pilot .ref-deco-chart {
@@ -534,10 +546,10 @@
 }
 
 .appt-overview-pilot .qa-btn:hover {
-  border-color: rgba(20, 125, 116, 0.35);
-  background: var(--brand-accent-soft);
-  color: var(--brand-accent);
-  box-shadow: 0 4px 12px rgba(20, 125, 116, 0.08);
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--brand-primary);
+  box-shadow: 0 2px 8px rgba(24, 27, 31, 0.04);
 }
 
 .appt-overview-pilot .appt-pilot-secondary-btn {
@@ -546,12 +558,12 @@
 }
 
 .appt-overview-pilot .appt-pilot-secondary-btn:hover {
-  border-color: rgba(20, 125, 116, 0.3);
-  background: var(--brand-accent-soft);
+  border-color: var(--border);
+  background: var(--surface-muted);
 }
 
 .appt-overview-pilot .appt-pilot-attention-row:hover {
-  border-color: rgba(20, 125, 116, 0.28);
+  border-color: #d1d5db;
   box-shadow: 0 2px 8px rgba(16, 20, 24, 0.04);
 }
 
@@ -626,8 +638,8 @@
 
 /* ========== Force pilot palette over shared ref-deco (import order safe) ========== */
 .appt-overview-pilot.ref-root {
-  --brand: #147d74 !important;
-  --deco-brand: #147d74 !important;
+  --brand: #6b5dd3 !important;
+  --deco-brand: #6b5dd3 !important;
 }
 
 .appt-overview-pilot .ref-deco-kpi,
@@ -662,8 +674,8 @@
 
 .appt-overview-pilot .ref-deco-kpi--highlight {
   box-shadow:
-    0 0 0 1px rgba(20, 125, 116, 0.06),
-    0 4px 14px rgba(20, 125, 116, 0.06) !important;
+    0 0 0 1px rgba(107, 93, 211, 0.06),
+    0 4px 14px rgba(107, 93, 211, 0.06) !important;
 }
 
 .appt-overview-pilot .ref-deco-icon-ring,
@@ -703,11 +715,12 @@
 .appt-overview-pilot .ref-deco-section-accent--blue,
 .appt-overview-pilot .ref-deco-section-accent--green,
 .appt-overview-pilot .ref-deco-section-accent--amber {
-  background: var(--brand-accent) !important;
+  background: var(--brand-primary) !important;
+  opacity: 0.35 !important;
 }
 
 .appt-overview-pilot .ref-deco-page-head {
-  background: linear-gradient(90deg, rgba(20, 125, 116, 0.04), transparent 42%) !important;
+  background: transparent !important;
   border-bottom-color: var(--border) !important;
 }
 
@@ -720,10 +733,10 @@
 
 .appt-overview-pilot.ref-root .qa-btn:hover,
 .appt-overview-pilot .qa-btn:hover {
-  border-color: rgba(20, 125, 116, 0.35) !important;
-  background: var(--brand-accent-soft) !important;
-  color: var(--brand-accent) !important;
-  box-shadow: 0 4px 12px rgba(20, 125, 116, 0.08) !important;
+  border-color: var(--border) !important;
+  background: var(--surface-muted) !important;
+  color: var(--brand-primary) !important;
+  box-shadow: 0 2px 8px rgba(24, 27, 31, 0.04) !important;
   transform: none !important;
 }
 
@@ -736,27 +749,40 @@
 
 /* ========== Full-page shell pilot (sidebar, header, switcher) ========== */
 html.appt-overview-pilot-active {
-  --pilot-charcoal: #1f2329;
-  --pilot-teal: #147d74;
-  --pilot-teal-soft: #dcefeb;
-  --pilot-border: #e5e7eb;
-  --pilot-surface-muted: #f7f8fa;
+  --pilot-charcoal: #181b1f;
+  --pilot-graphite-2: #22262c;
+  --pilot-accent: #6b5dd3;
+  --pilot-accent-hover: #5848c2;
+  --pilot-accent-soft: #efecfb;
+  --pilot-accent-border: #cfc8f2;
+  --pilot-border: #2c3138;
+  --pilot-border-light: #e2e3e1;
+  --pilot-surface-muted: #f7f7f5;
+  --text-on-dark: #f7f7f5;
+  --text-on-dark-secondary: #c5cbd3;
+  --text-on-dark-muted: #97a0aa;
 
   /* Shared type scale for shell + content */
-  --type-page-title: 1.625rem;
-  --type-section: 1.0625rem;
+  --type-page-title: 1.375rem;
+  --type-page-title-line: 1.75rem;
+  --type-section: 1.125rem;
+  --type-section-line: 1.5rem;
   --type-section-minor: 0.9375rem;
-  --type-stat: 1.625rem;
+  --type-stat: 1.5rem;
   --type-body: 0.875rem;
-  --type-list: 0.8125rem;
-  --type-label: 0.8125rem;
+  --type-body-line: 1.25rem;
+  --type-list: 0.875rem;
+  --type-label: 0.75rem;
+  --type-label-line: 1rem;
   --type-helper: 0.75rem;
-  --type-button: 0.8125rem;
-  --type-nav: 0.8125rem;
+  --type-helper-line: 1rem;
+  --type-button: 0.875rem;
+  --type-nav: 0.875rem;
+  --type-nav-line: 1.125rem;
 
-  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-appt-overview-pilot), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: var(--type-body);
-  line-height: 1.4;
+  line-height: var(--type-body-line);
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
 }
@@ -766,94 +792,111 @@ html.appt-overview-pilot-active .product-theme {
 }
 
 html.appt-overview-pilot-active .product-theme {
-  --primary: #147d74;
+  --primary: #6b5dd3;
   --primary-foreground: #ffffff;
-  --primary-hover: #10665f;
-  --ring: #147d74;
-  --sidebar-active: #147d74;
-  --background: #f7f8fa;
+  --primary-hover: #5848c2;
+  --ring: #6b5dd3;
+  --sidebar-active: #6b5dd3;
+  --background: #f7f7f5;
 }
 
 html.appt-overview-pilot-active .product-theme .bg-mesh {
-  background-color: #f7f8fa;
-  background-image:
-    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(20, 125, 116, 0.05), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(31, 35, 41, 0.03), transparent);
+  background-color: #f7f7f5;
+  background-image: none;
 }
 
+/* Graphite shell — 30% structural dark */
 html.appt-overview-pilot-active .transovo-sidebar {
-  background: #ffffff !important;
+  background: var(--pilot-charcoal) !important;
+  border-color: var(--pilot-border) !important;
+  color: var(--text-on-dark) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .border-border {
   border-color: var(--pilot-border) !important;
 }
 
+html.appt-overview-pilot-active .transovo-sidebar .text-foreground {
+  color: var(--text-on-dark) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .text-muted-foreground {
+  color: var(--text-on-dark-muted) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .bg-card {
+  background: var(--pilot-graphite-2) !important;
+}
+
 html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600 {
-  background-color: var(--pilot-charcoal) !important;
+  background-color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item:hover {
-  background-color: rgba(20, 125, 116, 0.06) !important;
-  color: var(--pilot-charcoal) !important;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-on-dark) !important;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
-  background-color: rgba(20, 125, 116, 0.1) !important;
-  color: var(--pilot-teal) !important;
+  background-color: rgba(107, 93, 211, 0.14) !important;
+  color: var(--text-on-dark) !important;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
-  background-color: var(--pilot-teal) !important;
+  background-color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active .transovo-badge,
 html.appt-overview-pilot-active .transovo-badge-dot {
-  background-color: var(--pilot-teal) !important;
+  background-color: var(--pilot-accent) !important;
   color: #ffffff !important;
 }
 
 html.appt-overview-pilot-active .transovo-credits-bar {
-  background-color: rgba(20, 125, 116, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 html.appt-overview-pilot-active .transovo-credits-fill {
-  background: linear-gradient(90deg, #147d74, #1f2329) !important;
+  background: linear-gradient(90deg, var(--pilot-accent), var(--pilot-graphite-2)) !important;
 }
 
 /* Product switcher */
 html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
   border-color: var(--pilot-border) !important;
-  background: var(--pilot-surface-muted) !important;
+  background: var(--pilot-graphite-2) !important;
+  color: var(--text-on-dark) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"]:hover {
-  border-color: rgba(20, 125, 116, 0.35) !important;
-  background: var(--pilot-teal-soft) !important;
+  border-color: rgba(107, 93, 211, 0.35) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"],
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"]:hover {
-  background: rgba(20, 125, 116, 0.08) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"] > span:first-child {
-  background: var(--pilot-teal) !important;
+  background: var(--pilot-accent) !important;
   color: #ffffff !important;
 }
 
 /* Product switcher onboarding tooltip */
 html.appt-overview-pilot-active .transovo-sidebar .border-primary\/20 {
-  border-color: rgba(20, 125, 116, 0.22) !important;
+  border-color: rgba(107, 93, 211, 0.22) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .bg-primary {
-  background-color: var(--pilot-teal) !important;
+  background-color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .text-primary {
-  color: var(--pilot-teal) !important;
+  color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .bg-primary\/10 {
-  background-color: rgba(20, 125, 116, 0.1) !important;
+  background-color: rgba(107, 93, 211, 0.1) !important;
 }
 
 /* Top header */
@@ -863,16 +906,16 @@ html.appt-overview-pilot-active header.sticky {
 }
 
 html.appt-overview-pilot-active header.sticky input:focus {
-  border-color: rgba(20, 125, 116, 0.45) !important;
-  --tw-ring-color: rgba(20, 125, 116, 0.2) !important;
+  border-color: rgba(107, 93, 211, 0.45) !important;
+  --tw-ring-color: rgba(107, 93, 211, 0.2) !important;
 }
 
 html.appt-overview-pilot-active header.sticky .text-primary {
-  color: var(--pilot-teal) !important;
+  color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active header.sticky .bg-primary\/5 {
-  background-color: rgba(20, 125, 116, 0.06) !important;
+  background-color: rgba(107, 93, 211, 0.06) !important;
 }
 
 /* Shell typography — product density, not marketing headings */
@@ -884,7 +927,8 @@ html.appt-overview-pilot-active .transovo-sidebar .text-\[15px\] {
 
 html.appt-overview-pilot-active .transovo-nav-item {
   font-size: var(--type-nav) !important;
-  line-height: 1.35 !important;
+  font-weight: 500 !important;
+  line-height: var(--type-nav-line) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .text-\[10px\] {
@@ -974,8 +1018,8 @@ html.appt-overview-pilot-active .appt-overview-pilot h3 {
 
 /* Transitional appointment-types editor — pilot typography + palette when under /appointments/types */
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root {
-  --brand: #1f2329;
-  --brand-dark: #2c3138;
+  --brand: #181b1f;
+  --brand-dark: #22262c;
   background: var(--surface-muted);
   font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, sans-serif;
   font-size: var(--type-body);
@@ -1023,13 +1067,13 @@ html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#1
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .btn-brand,
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .bg-\[\#5b4bff\] {
-  background-color: var(--brand-primary) !important;
+  background-color: var(--brand-accent) !important;
   color: #ffffff !important;
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .btn-brand:hover,
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .hover\:bg-\[\#4f41e6\]:hover {
-  background-color: #2c3138 !important;
+  background-color: var(--brand-accent-hover) !important;
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .text-\[\#5b4bff\] {
@@ -1043,8 +1087,8 @@ html.appt-overview-pilot-active .appt-overview-pilot .reference-root .hover\:tex
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .border-\[\#5b4bff\],
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .ring-\[\#dcd9ff\] {
-  border-color: rgba(20, 125, 116, 0.4) !important;
-  --tw-ring-color: rgba(20, 125, 116, 0.2) !important;
+  border-color: rgba(107, 93, 211, 0.4) !important;
+  --tw-ring-color: rgba(107, 93, 211, 0.2) !important;
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .bg-\[\#f7f6ff\],
@@ -1061,8 +1105,8 @@ html.appt-overview-pilot-active .appt-overview-pilot .reference-root .toggle.on 
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .input:focus {
-  border-color: rgba(20, 125, 116, 0.55) !important;
-  box-shadow: 0 0 0 3px rgba(20, 125, 116, 0.12) !important;
+  border-color: rgba(107, 93, 211, 0.55) !important;
+  box-shadow: 0 0 0 3px rgba(107, 93, 211, 0.12) !important;
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .checkbox {

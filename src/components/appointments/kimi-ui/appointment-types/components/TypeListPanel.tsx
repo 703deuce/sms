@@ -17,6 +17,8 @@ interface Props {
   onToggleInactive: () => void;
   onSearchChange: (query: string) => void;
   onMoveType?: (id: string, direction: "up" | "down") => void;
+  listPanelTitle?: string;
+  listEmptyMessage?: string;
 }
 
 export default function TypeListPanel({
@@ -29,12 +31,14 @@ export default function TypeListPanel({
   onToggleInactive,
   onSearchChange,
   onMoveType,
+  listPanelTitle = "All appointment types",
+  listEmptyMessage = "No appointment types match.",
 }: Props) {
   return (
     <div className="card flex flex-col w-[300px] shrink-0 overflow-hidden">
       <div className="p-4 pb-3">
         <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-[14.5px] font-semibold">All appointment types</h2>
+          <h2 className="text-[14.5px] font-semibold">{listPanelTitle}</h2>
           <span className="text-[11px] font-semibold bg-[#eef0ff] text-[#5b4bff] rounded-full px-2 py-0.5">
             {totalCount}
           </span>
@@ -51,7 +55,7 @@ export default function TypeListPanel({
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
         {types.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[12.5px] text-[#8a8fa3]">No appointment types match.</p>
+          <p className="px-3 py-6 text-center text-[12.5px] text-[#8a8fa3]">{listEmptyMessage}</p>
         ) : (
           types.map((t, index) => {
             const selected = t.id === selectedId;

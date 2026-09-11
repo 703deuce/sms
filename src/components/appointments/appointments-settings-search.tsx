@@ -6,7 +6,10 @@ import { Search } from "lucide-react";
 
 const SETTINGS_INDEX: Array<{ title: string; subtitle?: string; href: string; keywords: string[] }> = [
   { title: "Setup checklist", href: "/appointments/setup", keywords: ["setup", "onboarding", "checklist"] },
-  { title: "Booking types", href: "/appointments/types", keywords: ["types", "services", "duration", "payment"] },
+  { title: "Services", href: "/appointments/services", keywords: ["types", "services", "duration", "payment"] },
+  { title: "Meetings", href: "/appointments/meetings", keywords: ["meeting", "consultation", "call"] },
+  { title: "Classes", href: "/appointments/classes", keywords: ["class", "group", "yoga", "fitness"] },
+  { title: "Workshops", href: "/appointments/workshops", keywords: ["workshop", "seminar", "event"] },
   { title: "Locations", href: "/appointments/locations", keywords: ["location", "office", "branch", "timezone"] },
   { title: "Staff", href: "/appointments/staff", keywords: ["staff", "provider", "team"] },
   { title: "Availability", href: "/appointments/availability", keywords: ["hours", "schedule", "availability"] },

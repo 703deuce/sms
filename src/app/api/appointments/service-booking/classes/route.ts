@@ -2,6 +2,9 @@ import {
   listClassSeries,
   upsertClassSeries,
   generateClassOccurrences,
+  listOccurrencesForSeries,
+  cancelClassOccurrence,
+  updateClassOccurrence,
   enrollInClass,
   purchaseAndEnrollClassSeries,
 } from "@/lib/appointments/service-booking";
@@ -15,8 +18,14 @@ export async function POST(request: Request) {
   const body = await request.json();
   return withAppointmentsAuth("appointments.write", async ({ workspaceId }) => {
     switch (body.action) {
+      case "list_occurrences":
+        return listOccurrencesForSeries(workspaceId, body.seriesId);
       case "occurrences":
         return generateClassOccurrences(workspaceId, body.seriesId, body.occurrences);
+      case "cancel_occurrence":
+        return cancelClassOccurrence(workspaceId, body.occurrenceId);
+      case "update_occurrence":
+        return updateClassOccurrence(workspaceId, body.occurrenceId, body);
       case "enroll":
         return enrollInClass(workspaceId, body);
       case "purchase_enroll":

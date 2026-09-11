@@ -116,6 +116,16 @@ export type AppointmentTypeFormState = {
   }>;
 };
 
+export type AppointmentTypesPageCopy = {
+  pageTitle: string;
+  pageDescription: string;
+  createButtonLabel: string;
+  listPanelTitle: string;
+  listEmptyMessage: string;
+  editorBackLabel: string;
+  hideKindPicker: boolean;
+};
+
 export type AppointmentTypesPageModel = {
   types: AppointmentTypeItem[];
   visibleTypes: AppointmentTypeItem[];
@@ -131,6 +141,7 @@ export type AppointmentTypesPageModel = {
   saving: boolean;
   error: string;
   copiedId: string | null;
+  pageCopy: AppointmentTypesPageCopy;
   staffOptions: Array<{ id: string; name: string }>;
   locationOptions: Array<{ id: string; name: string }>;
   connectedPaymentProviders: Array<{ provider: "stripe" | "square"; label: string }>;

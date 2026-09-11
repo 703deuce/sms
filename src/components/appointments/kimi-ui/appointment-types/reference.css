@@ -1,7 +1,7 @@
 @import "../overview/ref-deco.css";
 .reference-root {
-  --brand: #5b4bff;
-  --brand-dark: #4a3ae0;
+  --brand: #6b5dd3;
+  --brand-dark: #5848c2;
   background: #f7f8fb;
   color: #1e1e2d;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;

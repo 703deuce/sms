@@ -26,12 +26,10 @@ export default function AppointmentTypesView({ model, actions }: Props) {
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="min-w-0">
             <h1 className="text-[24px] leading-[30px] font-bold tracking-tight text-[#1a1d29]">
-              {model.segmentTitle ?? "Appointment Types"}
+              {model.pageCopy.pageTitle}
             </h1>
             <p className="text-[13.5px] leading-[20px] text-[#8a8fa3] mt-1">
-              {model.segmentLocked
-                ? `Create or edit ${model.segmentTitle?.toLowerCase() ?? "booking types"} in this workspace.`
-                : "Manage the services you offer and how customers can book with you."}
+              {model.pageCopy.pageDescription}
             </p>
           </div>
           <div className="flex items-center gap-2.5 shrink-0 pt-0.5">
@@ -48,7 +46,7 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               className="btn-brand flex items-center gap-1.5 text-[13px] font-semibold h-9 px-4 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98]"
               onClick={actions.onNewType}
             >
-              <Plus size={15} strokeWidth={2.5} /> New appointment type
+              <Plus size={15} strokeWidth={2.5} /> {model.pageCopy.createButtonLabel}
             </button>
           </div>
         </div>
@@ -65,6 +63,8 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onToggleInactive={actions.onToggleShowInactive}
               onSearchChange={actions.onSearchChange}
               onMoveType={actions.onMoveType}
+              listPanelTitle={model.pageCopy.listPanelTitle}
+              listEmptyMessage={model.pageCopy.listEmptyMessage}
             />
           </div>
           <div className="flex-1 min-w-0">
@@ -83,7 +83,6 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               categoryOptions={model.categoryOptions}
               intakeFormOptions={model.intakeFormOptions}
               appointmentTypeId={model.selectedId}
-              hideKindPicker={model.segmentLocked}
               onFormChange={actions.onFormChange}
               onSave={actions.onSave}
               onCancel={actions.onCancel}
@@ -91,6 +90,8 @@ export default function AppointmentTypesView({ model, actions }: Props) {
               onManageAvailability={actions.onManageAvailability}
               onManageStaff={actions.onManageStaff}
               onManageLocations={actions.onManageLocations}
+              hideKindPicker={model.pageCopy.hideKindPicker}
+              editorBackLabel={model.pageCopy.editorBackLabel}
             />
           </div>
           {selected ? (

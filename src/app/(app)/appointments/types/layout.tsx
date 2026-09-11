@@ -1,21 +1,16 @@
-import { Geist } from "next/font/google";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
+import { appointmentsPilotFont } from "@/components/appointments/kimi-ui/appointments-pilot-font";
 import { AppointmentsOverviewPilotChrome } from "@/components/appointments/kimi-ui/overview/appointments-overview-pilot-chrome";
 
-/** Booking Types — same charcoal/teal pilot as Overview (art direction, not layout clone). */
-const geistSans = Geist({
-  variable: "--font-appt-overview-pilot",
-  subsets: ["latin"],
-});
-
+/** Booking Types — same canvas/graphite/violet pilot as Overview. */
 export default function BookingTypesLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <AppointmentsOverviewPilotChrome fontVariableClass={geistSans.variable}>
-      <div className={geistSans.className}>{children}</div>
+    <AppointmentsOverviewPilotChrome fontVariableClass={appointmentsPilotFont.variable}>
+      <div className={appointmentsPilotFont.className}>{children}</div>
     </AppointmentsOverviewPilotChrome>
   );
 }

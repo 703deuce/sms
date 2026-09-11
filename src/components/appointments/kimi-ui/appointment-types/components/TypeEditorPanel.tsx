@@ -29,7 +29,6 @@ interface Props {
   categoryOptions?: Array<{ id: string; name: string }>;
   intakeFormOptions?: Array<{ id: string; name: string; active?: boolean }>;
   appointmentTypeId?: string | null;
-  hideKindPicker?: boolean;
   onFormChange: <K extends keyof AppointmentTypeFormState>(
     key: K,
     value: AppointmentTypeFormState[K],
@@ -40,6 +39,8 @@ interface Props {
   onManageAvailability: () => void;
   onManageStaff: () => void;
   onManageLocations: () => void;
+  hideKindPicker?: boolean;
+  editorBackLabel?: string;
 }
 
 export default function TypeEditorPanel({
@@ -57,7 +58,6 @@ export default function TypeEditorPanel({
   categoryOptions = [],
   intakeFormOptions = [],
   appointmentTypeId = null,
-  hideKindPicker = false,
   onFormChange,
   onSave,
   onCancel,
@@ -65,6 +65,8 @@ export default function TypeEditorPanel({
   onManageAvailability,
   onManageStaff,
   onManageLocations,
+  hideKindPicker = false,
+  editorBackLabel = "Back to all types",
 }: Props) {
   const kindDefaults = editorDefaultsForBookingTypeKind(form.bookingTypeKind);
 
@@ -76,18 +78,18 @@ export default function TypeEditorPanel({
           className="flex items-center gap-1.5 text-[13px] text-[#6b6f82] hover:text-[#3f4254]"
           onClick={onBack}
         >
-          <ChevronLeft size={15} /> Back to all types
+          <ChevronLeft size={15} /> {editorBackLabel}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
-        {hideKindPicker ? null : (
+        {!hideKindPicker ? (
           <BookingTypeKindPicker
             form={form}
             isCreating={isCreating}
             onFormChange={onFormChange}
           />
-        )}
+        ) : null}
 
         <section>
           <h3 className="text-[14px] font-semibold mb-4">Basic details</h3>

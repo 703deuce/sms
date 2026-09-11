@@ -131,7 +131,7 @@ export function AppointmentsPoliciesClient() {
 
       <p className="text-sm text-muted-foreground">
         Per-type overrides live on{" "}
-        <Link href="/appointments/types" className="text-primary underline">appointment types</Link>.
+        <Link href="/appointments/services" className="text-primary underline">services</Link>.
       </p>
     </div>
   );

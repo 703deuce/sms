@@ -13,7 +13,7 @@ type LoadState = "loading" | "ready" | "error" | "empty";
 type Filter = "all" | PollStatus;
 
 const LOCAL_NAV = [
-  { label: "Booking Types", href: "/appointments/types" },
+  { label: "Services", href: "/appointments/services" },
   { label: "Booking Pages", href: "/appointments/booking" },
   { label: "Availability", href: "/appointments/availability" },
   { label: "AI Booking", href: "/appointments/ai-booking" },

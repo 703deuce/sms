@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api-auth";
-import { listClassSeries } from "@/lib/appointments/service-booking/classes";
+import { loadPublicGroupOfferings } from "@/lib/appointments/public-group-offering";
 import { resolveWorkspaceBySlug, loadAppointmentPlatformConfig } from "@/lib/appointments";
-import { getPrisma } from "@/lib/db";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -16,84 +15,8 @@ export async function GET(_request: Request, { params }: Params) {
       return NextResponse.json({ error: "Booking disabled" }, { status: 403 });
     }
 
-    const prisma = getPrisma();
-    const series = await listClassSeries(workspace.id);
-    const active = series.filter((s: { active: boolean }) => s.active);
-
-    const occurrences = await prisma.classOccurrence.findMany({
-      where: {
-        workspaceId: workspace.id,
-        status: "scheduled",
-        startsAt: { gte: new Date() },
-      },
-      orderBy: { startsAt: "asc" },
-      take: 100,
-    });
-
-    const enrollmentCounts = await prisma.classEnrollment.groupBy({
-      by: ["occurrenceId"],
-      where: { workspaceId: workspace.id, status: "enrolled" },
-      _count: { occurrenceId: true },
-    });
-    const countMap = new Map(
-      enrollmentCounts.map((e: { occurrenceId: string; _count: { occurrenceId: number } }) => [
-        e.occurrenceId,
-        e._count.occurrenceId,
-      ]),
-    );
-
-    const occurrenceIds = occurrences.map((occ: { id: string }) => occ.id);
-    const seatMaps = occurrenceIds.length
-      ? await prisma.classSeatMap.findMany({
-          where: { workspaceId: workspace.id, occurrenceId: { in: occurrenceIds }, active: true },
-          select: { id: true, occurrenceId: true, name: true },
-        })
-      : [];
-    const seatMapByOccurrence = new Map<string, { id: string; name: string }>(
-      seatMaps
-        .filter((m: { occurrenceId: string | null }) => Boolean(m.occurrenceId))
-        .map((m: { id: string; occurrenceId: string | null; name: string }) => [
-          String(m.occurrenceId),
-          { id: m.id, name: m.name },
-        ]),
-    );
-
-    const publicOccurrences = occurrences.map(
-      (occ: {
-        id: string;
-        seriesId: string;
-        startsAt: Date;
-        endsAt: Date;
-        capacity: number | null;
-      }) => {
-        const seatMap = seatMapByOccurrence.get(occ.id);
-        return {
-          id: occ.id,
-          seriesId: occ.seriesId,
-          startsAt: occ.startsAt.toISOString(),
-          endsAt: occ.endsAt.toISOString(),
-          capacity: occ.capacity,
-          enrolled: Number(countMap.get(occ.id) ?? 0),
-          remaining: Math.max(0, Number(occ.capacity ?? 0) - Number(countMap.get(occ.id) ?? 0)),
-          seatMapId: seatMap?.id ?? null,
-          seatMapName: seatMap?.name ?? null,
-          requiresSeatSelection: Boolean(seatMap?.id),
-        };
-      },
-    );
-
-    return NextResponse.json({
-      data: {
-        series: active.map((s: { id: string; name: string; description: string | null; capacity: number; requireFullSeries: boolean }) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          capacity: s.capacity,
-          requireFullSeries: s.requireFullSeries,
-        })),
-        occurrences: publicOccurrences,
-      },
-    });
+    const data = await loadPublicGroupOfferings(workspace.id, "class");
+    return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);
   }
@@ -120,7 +43,11 @@ export async function POST(request: Request, { params }: Params) {
     const { getPrisma } = await import("@/lib/db");
     const prisma = getPrisma();
 
-    let contactId = await resolveContactIdByPhone(workspace.id, phone, body.email ? String(body.email) : undefined);
+    let contactId = await resolveContactIdByPhone(
+      workspace.id,
+      phone,
+      body.email ? String(body.email) : undefined,
+    );
     if (!contactId) {
       const created = await prisma.contact.create({
         data: {
@@ -145,6 +72,20 @@ export async function POST(request: Request, { params }: Params) {
     const colIndex = body.colIndex != null ? Number(body.colIndex) : undefined;
 
     if (occurrenceId) {
+      const occ = await prisma.classOccurrence.findFirst({
+        where: { id: occurrenceId, workspaceId: workspace.id },
+        include: { series: true },
+      });
+      if (!occ?.series) {
+        return NextResponse.json({ error: "Class session not found" }, { status: 404 });
+      }
+      const { resolveClassSeriesOfferingKind } = await import(
+        "@/lib/appointments/class-series-offering"
+      );
+      if (resolveClassSeriesOfferingKind(occ.series.metadata) !== "class") {
+        return NextResponse.json({ error: "Invalid class session" }, { status: 400 });
+      }
+
       const seatMap = await prisma.classSeatMap.findFirst({
         where: { workspaceId: workspace.id, occurrenceId, active: true },
       });

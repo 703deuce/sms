@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 const PILOT_HTML_CLASS = "appt-overview-pilot-active";
 
-/** Overview pilot only — full-page charcoal/teal + Geist on shell and content. */
+/** Overview pilot only — full-page graphite shell + violet accent + IBM Plex. */
 export function AppointmentsOverviewPilotChrome({
   children,
   fontVariableClass,
