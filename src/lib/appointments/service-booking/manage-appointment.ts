@@ -74,6 +74,52 @@ export function manageAppointmentUrl(baseUrl: string, token: string): string {
   return `${root}/manage/${token}`;
 }
 
+/**
+ * Change policies belong to the booking type, so they are read from the server
+ * rather than taken from the request body — a customer-supplied policy could
+ * otherwise wave away the business's own cutoff.
+ */
+async function policiesForAppointment(
+  workspaceId: string,
+  serviceName: string | null,
+): Promise<{
+  cancellation?: ExtendedCancellationPolicy;
+  reschedule?: ExtendedReschedulePolicy;
+}> {
+  if (!serviceName) return {};
+  const prisma = getPrisma();
+  const type = await prisma.voiceService.findFirst({
+    where: { workspaceId, name: serviceName },
+    select: { config: true },
+  });
+  const cfg = (type?.config || {}) as {
+    extendedCancellationPolicy?: ExtendedCancellationPolicy;
+    extendedReschedulePolicy?: ExtendedReschedulePolicy;
+    cancellationPolicy?: { allowed: string; cutoffHours?: number; policyText?: string };
+    reschedulePolicy?: { allowed: string; cutoffHours?: number; policyText?: string };
+  };
+
+  function widen(
+    basic?: { allowed: string; cutoffHours?: number; policyText?: string },
+  ): ExtendedCancellationPolicy | undefined {
+    if (!basic) return undefined;
+    if (basic.allowed === "disabled") return { allowed: "disabled", policyText: basic.policyText };
+    if (basic.allowed === "until_hours_before") {
+      return {
+        allowed: "until_before",
+        cutoff: { enabled: true, unit: "hours", value: basic.cutoffHours ?? 24 },
+        policyText: basic.policyText,
+      };
+    }
+    return { allowed: "anytime", policyText: basic.policyText };
+  }
+
+  return {
+    cancellation: cfg.extendedCancellationPolicy || widen(cfg.cancellationPolicy),
+    reschedule: cfg.extendedReschedulePolicy || widen(cfg.reschedulePolicy),
+  };
+}
+
 export async function manageAppointmentReschedule(
   workspaceId: string,
   appointmentId: string,
@@ -86,8 +132,9 @@ export async function manageAppointmentReschedule(
   });
   if (!appointment) throw new Error("Appointment not found");
 
+  const policies = await policiesForAppointment(workspaceId, appointment.serviceName);
   const evalResult = evaluateExtendedReschedulePolicy(
-    reschedulePolicy,
+    policies.reschedule || reschedulePolicy,
     new Date(appointment.startsAt),
   );
   if (!evalResult.allowed) {
@@ -119,8 +166,9 @@ export async function manageAppointmentCancel(
   });
   if (!appointment) throw new Error("Appointment not found");
 
+  const policies = await policiesForAppointment(workspaceId, appointment.serviceName);
   const evalResult = evaluateExtendedCancellationPolicy(
-    cancellationPolicy,
+    policies.cancellation || cancellationPolicy,
     new Date(appointment.startsAt),
   );
   if (!evalResult.allowed) {
