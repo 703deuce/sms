@@ -2690,6 +2690,14 @@
   font-weight: 600;
 }
 
+/* `.ws-cell-sub` only stacks inside a table, so on a row it needs its own
+   rule — otherwise the count and its caption run together as "5/5registered". */
+.ws-pilot .ws-row-metric .ws-cell-sub {
+  display: block;
+  font-size: var(--type-helper);
+  color: var(--text-tertiary);
+}
+
 .ws-pilot .ws-row-actions {
   display: inline-flex;
   flex-shrink: 0;

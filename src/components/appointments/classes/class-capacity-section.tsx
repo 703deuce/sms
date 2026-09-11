@@ -455,11 +455,15 @@ export function ClassCapacitySection({
           </dl>
           <p className="ws-gap-note mt-4">
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            Answers to registration questions are not stored against a class registration yet, so
-            they are not shown here.{" "}
-            <Link href="/appointments/booking/forms" className="ws-text-btn">
-              Manage forms
-            </Link>
+            {/* The note lays its children out as flex items, so the sentence and
+                the link have to arrive as one child or they sit side by side. */}
+            <span>
+              Answers to registration questions are not stored against a class registration yet, so
+              they are not shown here.{" "}
+              <Link href="/appointments/booking/forms" className="ws-text-btn">
+                Manage forms
+              </Link>
+            </span>
           </p>
         </Drawer>
       ) : null}
