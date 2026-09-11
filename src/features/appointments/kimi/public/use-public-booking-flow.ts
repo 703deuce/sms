@@ -202,6 +202,13 @@ export function usePublicBookingFlow(options: PublicBookingFlowOptions) {
   const showStaffPicker =
     selectedType?.config?.staffAssignment === "customer_chooses" && eligibleStaff.length > 0;
   const showLocationPicker = eligibleLocations.length >= 1;
+
+  // With one eligible location there is nothing to choose, and leaving it
+  // unset failed the booking at the last step for a decision never offered.
+  const onlyLocationId = eligibleLocations.length === 1 ? eligibleLocations[0]!.id : "";
+  useEffect(() => {
+    if (onlyLocationId) setSelectedLocationId(onlyLocationId);
+  }, [onlyLocationId]);
   const groupEnabled = Boolean(selectedType?.config?.groupBooking?.enabled);
   const groupCapacity = selectedType?.config?.groupBooking?.capacity || 1;
   const recurringEnabled = Boolean(selectedType?.config?.recurring?.enabled);

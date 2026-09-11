@@ -841,6 +841,7 @@ export async function POST(request: Request, { params }: Params) {
       utm: utmAttribution,
       emailOtpVerified: body.emailOtpVerified === true,
       singleUseToken: body.singleUseToken ? String(body.singleUseToken) : undefined,
+      holdId: body.holdId ? String(body.holdId) : undefined,
       extraRecipients,
       resourceIds,
       addOnIds,

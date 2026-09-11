@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { BookingType, Slot, StaffOption, LocationOption, DurationOption } from "../mock-data";
 import { availableDays, slotsByDay } from "../mock-data";
 import { Button } from "./ui";
-import { cn, formatSlotTime, formatFullDate } from "./utils";
+import { cn, formatSlotTime, formatFullDate, formatPrice } from "./utils";
 import { ArrowLeft, CalendarCheck, ChevronRight, Globe2, ListPlus, Sparkles } from "lucide-react";
 
 export function DateTimeStep({
@@ -83,6 +83,9 @@ export function DateTimeStep({
         locationOptions.length > 0,
     );
   const showDurations = (type.durationOptions || []).length > 1;
+  // A pay-in-person service carries its amount as a display string, a charged
+  // one carries it on the payment config.
+  const headlinePrice = type.config?.priceDisplay || formatPrice(type.config?.payment);
 
   // Sandbox: simulate availability fetch per selected day
   useEffect(() => {
@@ -113,7 +116,15 @@ export function DateTimeStep({
       </h1>
       <p className="mt-1 text-[13px] text-muted-foreground">
         {duration?.minutes || type.durationMinutes} minutes · {type.config?.location || "In person"}
+        {headlinePrice ? ` · ${headlinePrice}` : ""}
       </p>
+      {/* A deep link skips the service list, so this is the only place the
+          description and price are shown before someone picks a time. */}
+      {type.config?.description ? (
+        <p className="mt-2 max-w-prose text-[13px] leading-relaxed text-muted-foreground">
+          {type.config.description}
+        </p>
+      ) : null}
 
       {showDurations ? (
         <div className="mt-5">

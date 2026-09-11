@@ -726,6 +726,10 @@ export async function bookAppointment(
     workspaceId,
     startsAt,
     endsAt,
+    // The web flow reserves the slot before the customer has typed a phone
+    // number, so without the hold id their own reservation reads as someone
+    // else's and blocks them at checkout.
+    excludeHoldId: args.holdId ? String(args.holdId) : undefined,
     excludeCallId: callId,
     excludePhone: phone || undefined,
   });

@@ -266,6 +266,8 @@ export async function createPlatformAppointment(
     utm?: import("@/lib/appointments/scheduling-capabilities").UtmAttribution;
     singleUseToken?: string;
     emailOtpVerified?: boolean;
+    /** Hold this booking is claiming, so it is not treated as someone else's. */
+    holdId?: string;
     extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
     skipApproval?: boolean;
     resourceIds?: string[];
@@ -412,6 +414,7 @@ export async function createPlatformAppointment(
         skipSms: true,
         source: input.source || "admin",
         notes: input.notes,
+        holdId: input.holdId,
       });
     },
   );
