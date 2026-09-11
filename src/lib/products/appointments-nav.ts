@@ -54,7 +54,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
   }
   children.push(
     { label: "Segments", href: "/appointments/segments" },
-    { label: "Routing", href: "/appointments/routing-forms" },
+    { label: "Routing forms", href: "/appointments/routing-forms" },
     { label: "Team Booking", href: "/appointments/team-pages" },
     { label: "Meeting Polls", href: "/appointments/polls" },
     { label: "AI Booking", href: "/appointments/ai-booking" },
@@ -65,6 +65,7 @@ function bookingChildren(modules: SchedulingModuleFlags): NavItem["children"] {
 function availabilityChildren(): NavItem["children"] {
   return [
     { label: "Schedules", href: "/appointments/availability" },
+    { label: "Routing", href: "/appointments/routing" },
     { label: "Locations", href: "/appointments/locations" },
     { label: "Resources", href: "/appointments/resources" },
   ];

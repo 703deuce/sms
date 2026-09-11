@@ -133,6 +133,71 @@ export async function assignStaffRoundRobin(
   return selected;
 }
 
+/** Priority assignment — first eligible staff in configured order, then remainder. */
+export async function assignStaffPriority(
+  workspaceId: string,
+  eligibleStaff: BookableStaffMember[],
+  priorityOrder: string[],
+  slotContext?: {
+    startsAt: Date;
+    endsAt: Date;
+    timezone: string;
+    durationMinutes: number;
+    bufferBeforeMs: number;
+    bufferAfterMs: number;
+    svcCfg: AppointmentTypeConfig;
+  },
+): Promise<BookableStaffMember | null> {
+  if (!eligibleStaff.length) return null;
+
+  let pool = eligibleStaff;
+  const platform = await loadAppointmentPlatformConfig(workspaceId);
+  if (slotContext) {
+    pool = await filterStaffAvailableForSlot(workspaceId, eligibleStaff, slotContext.startsAt, slotContext.endsAt, {
+      timezone: slotContext.timezone,
+      durationMinutes: slotContext.durationMinutes,
+      bufferBeforeMs: slotContext.bufferBeforeMs,
+      bufferAfterMs: slotContext.bufferAfterMs,
+      platform,
+      svcCfg: slotContext.svcCfg,
+      mode: "any",
+    });
+    if (!pool.length) return null;
+  }
+
+  const ordered: BookableStaffMember[] = [];
+  for (const id of priorityOrder) {
+    const match = pool.find((s) => s.id === id);
+    if (match) ordered.push(match);
+  }
+  const remainder = pool.filter((s) => !priorityOrder.includes(s.id));
+  const tryOrder = [...ordered, ...remainder];
+
+  if (slotContext) {
+    for (const staff of tryOrder) {
+      const available = await filterStaffAvailableForSlot(
+        workspaceId,
+        [staff],
+        slotContext.startsAt,
+        slotContext.endsAt,
+        {
+          timezone: slotContext.timezone,
+          durationMinutes: slotContext.durationMinutes,
+          bufferBeforeMs: slotContext.bufferBeforeMs,
+          bufferAfterMs: slotContext.bufferAfterMs,
+          platform,
+          svcCfg: slotContext.svcCfg,
+          mode: "any",
+        },
+      );
+      if (available[0]) return available[0];
+    }
+    return null;
+  }
+
+  return tryOrder[0] || null;
+}
+
 /** Maximize availability — pick staff member with most open slots in range. */
 export async function assignStaffMaximizeAvailability(
   workspaceId: string,
@@ -245,6 +310,16 @@ export async function resolveStaffForBooking(
 
   if (mode === "round_robin") {
     return assignStaffRoundRobin(ctx.workspaceId, ctx.serviceName, eligible, slotContext);
+  }
+
+  if (mode === "priority") {
+    const order =
+      ctx.svcCfg.staffPriorityOrder?.length
+        ? ctx.svcCfg.staffPriorityOrder
+        : platform.staffRouting?.workspaceStaffPriorityOrder?.length
+          ? platform.staffRouting.workspaceStaffPriorityOrder
+          : ctx.svcCfg.staffIds || [];
+    return assignStaffPriority(ctx.workspaceId, eligible, order, slotContext);
   }
 
   if (mode === "maximize_availability" && slotContext) {

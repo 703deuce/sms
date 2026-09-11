@@ -84,6 +84,13 @@ const STRATEGIES: Array<{
     icon: Repeat,
     pool: "staffIds",
   },
+  {
+    value: "priority",
+    label: "Priority",
+    helper: "Assigns the first eligible staff member in priority order.",
+    icon: UserRound,
+    pool: "staffIds",
+  },
 ];
 
 const LOCATION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {

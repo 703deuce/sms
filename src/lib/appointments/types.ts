@@ -67,8 +67,34 @@ export type StaffAssignmentMode =
   | "specific_staff"
   | "customer_chooses"
   | "round_robin"
+  | "priority"
   | "maximize_availability"
   | "collective";
+
+/** How customers pick a provider on public booking (orthogonal to auto-assignment algorithm). */
+export type CustomerStaffSelectionMode =
+  | "customer_must_choose"
+  | "customer_may_choose_or_any"
+  | "auto_assign_hidden";
+
+/** Algorithm when the system must pick among eligible staff. */
+export type AutoAssignmentMethod =
+  | "round_robin"
+  | "priority"
+  | "maximize_availability"
+  | "first_eligible";
+
+export type StaffRoutingConfig = {
+  defaultCustomerSelection?: CustomerStaffSelectionMode;
+  defaultAutoMethod?: AutoAssignmentMethod;
+  /** Workspace-wide priority order (staff ids); per-service order may override. */
+  workspaceStaffPriorityOrder?: string[];
+  rescheduleWhenStaffUnavailable?: "require_new_slot" | "auto_reroute";
+  /** When true, cancelled routed bookings still count toward round-robin balance. */
+  countCancelledTowardBalance?: boolean;
+  /** When true, manual admin assignments count toward round-robin balance. */
+  countManualTowardBalance?: boolean;
+};
 
 export type BookableStaffMember = {
   id: string;
@@ -252,6 +278,8 @@ export type AppointmentPlatformConfig = {
   holidays?: import("@/lib/appointments/scheduling-capabilities").HolidayCalendarEntry[];
   routingForms?: import("@/lib/appointments/scheduling-capabilities").RoutingForm[];
   schedulingGroups?: import("@/lib/appointments/scheduling-capabilities").SchedulingGroup[];
+  /** Workspace defaults for staff assignment routing (Services/Meetings may override). */
+  staffRouting?: StaffRoutingConfig;
   teamBookingPages?: import("@/lib/appointments/scheduling-capabilities").TeamBookingPage[];
   organizationPolicy?: import("@/lib/appointments/scheduling-capabilities").OrganizationSchedulingPolicy;
   singleUseLinks?: import("@/lib/appointments/scheduling-capabilities").SingleUseBookingLink[];
@@ -318,6 +346,12 @@ export type AppointmentTypeConfig = {
   confirmationPage?: import("@/lib/appointments/scheduling-capabilities").ConfirmationPageResources;
   bookingQuestions?: BookingQuestion[];
   staffAssignment?: StaffAssignmentMode;
+  /** Explicit priority order for `priority` assignment (staff ids). */
+  staffPriorityOrder?: string[];
+  /** When true, public booking may offer "Any available" alongside named staff. */
+  allowAnyAvailable?: boolean;
+  /** When true, inherit workspace `staffRouting` defaults instead of custom staffAssignment encoding. */
+  useWorkspaceRoutingDefault?: boolean;
   staffIds?: string[];
   groupCapacity?: number;
   collectiveStaffIds?: string[];

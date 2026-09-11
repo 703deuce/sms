@@ -447,3 +447,31 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Existing system audit, parity, matrix |
 
 **Overall:** `APPOINTMENTS_REMINDERS_PAGE_COMPLETE: NO`
+
+## ROUTING (`/appointments/routing`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING BACKEND REUSE | PASS | `resolveStaffForBooking`, RR state, `filterStaffAvailableForSlot` preserved |
+| BOUNDARY VS AVAILABILITY | PASS | Routing page staff assignment only; availability unchanged |
+| VISUAL / LAYOUT | PASS | Home/teal workspace pilot; horizontal sections; no local vertical nav |
+| DENSITY | PASS | Compact rows, full-width tables, drawer detail |
+| CUSTOMER STAFF SELECTION | PARTIAL | Two-axis UI; `allowAnyAvailable` public partial |
+| ANY AVAILABLE | PARTIAL | `any_eligible` + model flag; pooled UI gap |
+| HIDDEN STAFF SELECTION | PASS | `auto_assign_hidden` default path |
+| ROUND ROBIN | PASS | Documented least-count algorithm |
+| PRIORITY | PASS | New `priority` mode + order UI |
+| LEAST LOADED | PASS | `maximize_availability` |
+| STAFF POOLS | PARTIAL | `schedulingGroups` read-only table |
+| SERVICE ASSIGNMENT | PARTIAL | Table + drawer; PATCH service API; editor bidirectional partial |
+| ROUTING SIMULATOR | PASS | POST simulate uses real `resolveStaffForBooking` |
+| ACTIVITY | PARTIAL | Recent bookings by `metadata.staffId`; no routing reason field |
+| RESCHEDULE / CANCELLATION POLICY | GAP | Settings stored; RR flags not in runtime |
+| CONCURRENCY | PARTIAL | Slot revalidation; RR not in DB transaction |
+| CLASSES / WORKSHOPS | N/A | Marked N/A in workspace |
+| LEGACY TYPE RULES | PASS | `?section=type-rules` preserves `routingRules` |
+| DOCS | PASS | Audit, algorithms, precedence, parity, matrix |
+| E2E TESTS 1–26 | BLOCKED | Not run |
+| SCREENSHOTS 01–18 | BLOCKED | Not captured |
+
+**Overall:** `APPOINTMENTS_ROUTING_PAGE_COMPLETE: NO`
