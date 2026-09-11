@@ -2,10 +2,15 @@
  * Shared pilot tokens — imported by object workspaces (Meetings, Services, Classes).
  * Scoped under .appt-pilot-workspace; color values inherit from .appt-overview-pilot when nested.
  */
+/*
+ * The object list is the one vertical menu allowed beside the product sidebar,
+ * so it is sized to be readable and no more. At 300px it competed with the
+ * sidebar for attention and took width the form needed.
+ */
 .appt-pilot-workspace {
-  --workspace-list-width: min(100%, 300px);
-  --workspace-list-min: 260px;
-  --workspace-list-max: 320px;
+  --workspace-list-width: min(100%, 240px);
+  --workspace-list-min: 200px;
+  --workspace-list-max: 260px;
   --workspace-tab-height: 2.75rem;
 }
 

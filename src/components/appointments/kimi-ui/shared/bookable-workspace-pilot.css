@@ -12,9 +12,9 @@
   --brand-accent-hover: var(--ws-accent-hover);
   --brand-accent-soft: var(--ws-accent-soft);
   --brand-accent-border: var(--ws-accent-border);
-  --workspace-list-width: min(100%, 300px);
-  --workspace-list-min: 260px;
-  --workspace-list-max: 320px;
+  --workspace-list-width: min(100%, 240px);
+  --workspace-list-min: 200px;
+  --workspace-list-max: 260px;
 }
 
 .bookable-workspace-pilot .ws-list-panel {
