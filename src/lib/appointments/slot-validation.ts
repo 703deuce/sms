@@ -63,11 +63,24 @@ export async function assertSlotAvailableForBooking(
   });
   if (conflict) throw new Error("That time slot is no longer available");
 
-  const { slots } = await generateNativeSlots(workspaceId, {
+  let { slots } = await generateNativeSlots(workspaceId, {
     serviceName: input.serviceName,
     daysAhead: Math.min(maxDays, 21),
     timezone: ctx.timezone,
+    excludeAppointmentId: input.excludeAppointmentId,
   });
+  const { resolveResourceIdsForBookingType, filterSlotsByResourceAvailability } = await import(
+    "@/lib/appointments/service-booking/resource-availability"
+  );
+  const resourceIds = await resolveResourceIdsForBookingType(workspaceId, svcCfg);
+  if (resourceIds.length) {
+    slots = await filterSlotsByResourceAvailability(
+      workspaceId,
+      resourceIds,
+      slots,
+      input.excludeAppointmentId,
+    );
+  }
   const startMs = start.getTime();
   const allowed = slots.some((slot) => {
     const slotMs = new Date(slot.startsAt).getTime();

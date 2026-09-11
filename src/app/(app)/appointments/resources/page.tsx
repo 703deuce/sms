@@ -1,5 +1,5 @@
-import { ServiceBookingAdminClient } from "@/components/appointments/service-booking-admin-client";
+import { ResourcesConnected } from "@/features/appointments/kimi/resources/resources-connected";
 
 export default function SchedulingResourcesPage() {
-  return <ServiceBookingAdminClient initialSection="resources" />;
+  return <ResourcesConnected />;
 }

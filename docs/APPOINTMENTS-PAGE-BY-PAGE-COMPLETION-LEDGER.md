@@ -637,3 +637,44 @@ Wide pilot workspace; separate from Availability, Packages, Memberships, and Tra
 | DOCS | PASS | Audit, eligibility, parity, matrix |
 
 **Overall:** `APPOINTMENTS_LOCATIONS_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–26, service-area, hidden address, full resources filter, routing/team E2E proof)
+
+## RESOURCES (`/appointments/resources`)
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| EXISTING_BACKEND_REUSE | PASS | `SchedulingResource`, groups, `resource-availability`, booking assert |
+| VISUAL / LAYOUT / DENSITY | PASS | Pilot shell; full-width table; horizontal detail nav; no object-list sidebar |
+| RESOURCE_DIRECTORY | PASS | `buildResourcesWorkspace` + connected table |
+| RESOURCE_TYPES | PASS | metadata.category |
+| INDIVIDUAL_RESOURCE | PASS | quantity 1 |
+| RESOURCE_POOL | PARTIAL | Groups API; quantity pools on single row |
+| QUANTITY_CAPACITY | PASS | quantity + countResourceUsage |
+| LOCATION_RELATIONSHIP | PASS | metadata.locationIds + filter |
+| SERVICE_REQUIREMENT | PASS | `resource-service-sync` bidirectional |
+| SERVICE_QUANTITY_REQUIREMENT | FAIL | 1 unit per line only |
+| MULTIPLE_RESOURCE_REQUIREMENTS | PASS | multiple resourceIds on service |
+| RESOURCE_AVAILABILITY | PARTIAL | Location hours; no custom resource schedule UI |
+| OVERRIDES | N/A | Not in engine |
+| CAPACITY_ENFORCEMENT | PASS | assert + slot filter |
+| SLOT_GENERATION | PASS | `filterSlotsByResourceAvailability` |
+| BOOKING_RESERVATION | PASS | `appointmentServiceLine` |
+| CONCURRENT_CAPACITY | PARTIAL | Service-slot advisory lock; resource-level race GAP |
+| RESCHEDULE | PASS | assert + line time shift |
+| CANCELLATION | PARTIAL | Line retention policy |
+| SERVICE_PHASES | PARTIAL | Phase asserts in service-phases |
+| CLASS_RESOURCE | GAP | — |
+| WORKSHOP_RESOURCE | GAP | — |
+| MEETING_RESOURCE | N/A | — |
+| ROUTING_INTERSECTION | PARTIAL | Via shared slot APIs |
+| TEAM_BOOKING_INTERSECTION | PARTIAL | Resource assert before team on create |
+| PUBLIC_BOOKING | PASS | Slot list filters resources |
+| HISTORICAL_RECORDS | PASS | Lines + resourceLabels metadata |
+| DEACTIVATION | PASS | 409 future reservations |
+| FUTURE_BOOKING_SAFETY | PASS | Deactivate + capacity reduce guards |
+| CONTEXTUAL_CREATE | PASS | locationId query + return to detail |
+| RESPONSIVE | PASS | Compact table / stacked detail |
+| ACCESSIBILITY | PARTIAL | Labels on search; not fully audited |
+| CONSOLE_NETWORK | PARTIAL | New APIs; E2E not run |
+| DOCS | PASS | Audit, occupancy, precedence, capacity, parity, matrix |
+
+**Overall:** `APPOINTMENTS_RESOURCES_PAGE_COMPLETE: NO` (E2E 1–30, screenshots 01–24, per-booking multi-unit quantity, resource-level transaction lock, class occurrence reservation, team/routing proof, custom resource hours)

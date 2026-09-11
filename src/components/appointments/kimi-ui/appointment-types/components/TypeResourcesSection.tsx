@@ -43,7 +43,7 @@ export function TypeResourcesSection({ form, resourceOptions, onFormChange }: Pr
       {resourceOptions.length === 0 ? (
         <p className="text-[12.5px] text-[#8a8fa3] rounded-xl border border-dashed border-[#e4e6ee] px-4 py-6 text-center">
           No resources yet.{" "}
-          <Link href="/appointments/resources" className="text-[#5b4bff] hover:underline">
+          <Link href="/appointments/resources" className="text-[var(--accent)] hover:underline">
             Create a resource
           </Link>{" "}
           to assign it here.

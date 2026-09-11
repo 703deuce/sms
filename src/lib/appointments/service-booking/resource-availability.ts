@@ -78,10 +78,18 @@ export async function persistAppointmentResources(
 ) {
   const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
-  await assertResourcesAvailable(workspaceId, input.resourceIds, input.startsAt, input.endsAt);
   await prisma.appointmentServiceLine.deleteMany({
     where: { workspaceId, appointmentId: input.appointmentId },
   });
+  if (input.resourceIds.length) {
+    await assertResourcesAvailable(
+      workspaceId,
+      input.resourceIds,
+      input.startsAt,
+      input.endsAt,
+      input.appointmentId,
+    );
+  }
   if (!input.resourceIds.length) {
     await prisma.appointmentServiceLine.create({
       data: {

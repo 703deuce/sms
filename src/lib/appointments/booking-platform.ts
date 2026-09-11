@@ -364,7 +364,13 @@ export async function createPlatformAppointment(
   );
   if (resolvedResourceIds.length) {
     const { assertResourcesAvailable } = await import("@/lib/appointments/service-booking/resources");
-    await assertResourcesAvailable(workspaceId, resolvedResourceIds, startsAtDate, endsAtDate);
+    await assertResourcesAvailable(
+      workspaceId,
+      resolvedResourceIds,
+      startsAtDate,
+      endsAtDate,
+      input.excludeAppointmentId,
+    );
   }
 
   let teamAssignment: import("@/lib/appointments/team-booking/types").ResolvedTeamAssignment | null =
@@ -1004,6 +1010,16 @@ export async function reschedulePlatformAppointment(
     detail: start.toISOString(),
   });
 
+  const svcCfg = (service?.config || {}) as import("@/lib/appointments/types").AppointmentTypeConfig;
+  const { resolveResourceIdsForBookingType } = await import(
+    "@/lib/appointments/service-booking/resource-availability"
+  );
+  const { assertResourcesAvailable } = await import("@/lib/appointments/service-booking/resources");
+  const resourceIds = await resolveResourceIdsForBookingType(workspaceId, svcCfg);
+  if (resourceIds.length) {
+    await assertResourcesAvailable(workspaceId, resourceIds, start, end, appointmentId);
+  }
+
   const rescheduled = await prisma.voiceAppointment.update({
     where: { id: appointmentId },
     data: {
@@ -1013,6 +1029,33 @@ export async function reschedulePlatformAppointment(
       metadata: metadata as object,
     },
   });
+
+  const serviceLines = await prisma.appointmentServiceLine.findMany({
+    where: { workspaceId, appointmentId },
+  });
+  if (serviceLines.length) {
+    await prisma.appointmentServiceLine.updateMany({
+      where: { workspaceId, appointmentId },
+      data: { startsAt: start, endsAt: end },
+    });
+  } else if (resourceIds.length) {
+    const { persistAppointmentResources } = await import(
+      "@/lib/appointments/service-booking/resource-availability"
+    );
+    const staffId =
+      typeof (row.metadata as { staffId?: string } | null)?.staffId === "string"
+        ? (row.metadata as { staffId: string }).staffId
+        : undefined;
+    await persistAppointmentResources(workspaceId, {
+      appointmentId,
+      appointmentTypeId: service?.id,
+      serviceName: row.serviceName!,
+      staffId,
+      resourceIds,
+      startsAt: start,
+      endsAt: end,
+    });
+  }
 
   try {
     const { syncExternalCalendarOnReschedule } = await import("@/lib/calendar/external-sync");
