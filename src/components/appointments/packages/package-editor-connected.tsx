@@ -17,7 +17,8 @@ import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.c
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 
-const SHELL_CLASS = "appt-overview-pilot bookable-workspace-pilot ws-pilot ref-root";
+const SHELL_CLASS =
+  "appt-overview-pilot bookable-workspace-pilot ws-pilot appt-pilot-workspace ref-root";
 const VALID_SECTIONS = new Set<string>(PACKAGE_SECTIONS.map((s) => s.id));
 
 type Props = { packageId: string };
