@@ -167,7 +167,7 @@ export async function upsertAppointmentType(
   workspaceId: string,
   input: {
     id?: string;
-    name: string;
+    name?: string;
     durationMinutes?: number;
     bufferMinutes?: number;
     calendarId?: string | null;
@@ -183,21 +183,26 @@ export async function upsertAppointmentType(
   }
 
   const prisma = getPrisma();
-  const data = {
-    name: input.name.trim(),
-    durationMinutes: Number(input.durationMinutes) || 30,
-    bufferMinutes: Number(input.bufferMinutes) || 0,
-    calendarId: input.calendarId || null,
-    config: (input.config || {}) as object,
-  };
   if (input.id) {
-    return prisma.voiceService.update({
-      where: { id: input.id, workspaceId },
-      data,
-    });
+    // A partial update must leave out what the caller did not send, otherwise
+    // an unrelated PATCH renames the type and resets its duration.
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name.trim();
+    if (input.durationMinutes !== undefined) data.durationMinutes = Number(input.durationMinutes) || 30;
+    if (input.bufferMinutes !== undefined) data.bufferMinutes = Number(input.bufferMinutes) || 0;
+    if (input.calendarId !== undefined) data.calendarId = input.calendarId || null;
+    if (input.config !== undefined) data.config = input.config as object;
+    return prisma.voiceService.update({ where: { id: input.id, workspaceId }, data });
   }
   return prisma.voiceService.create({
-    data: { workspaceId, ...data },
+    data: {
+      workspaceId,
+      name: input.name?.trim() || "Appointment",
+      durationMinutes: Number(input.durationMinutes) || 30,
+      bufferMinutes: Number(input.bufferMinutes) || 0,
+      calendarId: input.calendarId || null,
+      config: (input.config || {}) as object,
+    },
   });
 }
 

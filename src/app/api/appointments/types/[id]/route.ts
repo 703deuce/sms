@@ -49,7 +49,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     const data = await upsertAppointmentType(auth.workspaceId, {
       id,
-      name: body.name || "Appointment",
+      name: body.name,
       durationMinutes: body.durationMinutes,
       bufferMinutes: body.bufferMinutes,
       calendarId: body.calendarId,
