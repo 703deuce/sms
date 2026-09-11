@@ -23,7 +23,7 @@ import {
 import { newBookingQuestion } from "@/features/appointments/kimi/shared/platform-settings-types";
 import { EventTypeVideoSettings } from "@/components/video/event-type-video-settings";
 import { EventTypeNotetakerSettings } from "@/components/meetings/event-type-notetaker-settings";
-import { ChoiceCard, Field, SectionCard, SelectInput, TextInput } from "./meeting-ui";
+import { ChoiceCard, Field, SectionCard, SelectInput, TextInput } from "@/components/appointments/workspace-ui";
 
 type CalendarStatus = "connected" | "needs_reauth" | "pending_oauth" | "missing";
 

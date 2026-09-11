@@ -38,16 +38,16 @@ import {
   formatDurationMinutes,
   meetingMethodLabel,
 } from "@/lib/appointments/meetings/meeting-display";
-import { ChoiceCard, Field, NumberField, SelectInput, TextArea, TextInput } from "./meeting-ui";
+import { ChoiceCard, Field, NumberField, SelectInput, TextArea, TextInput } from "@/components/appointments/workspace-ui";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
-import "@/components/appointments/kimi-ui/shared/meetings-workspace-pilot.css";
+import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 
 const SHELL_CLASS =
-  "appt-overview-pilot bookable-workspace-pilot meetings-workspace-pilot ref-root";
+  "appt-overview-pilot bookable-workspace-pilot ws-pilot ref-root";
 
 const STEPS = [
   { label: "Basics", icon: FileText },

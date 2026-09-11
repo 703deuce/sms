@@ -18,13 +18,13 @@ import { MeetingsListPanel } from "./meetings-list-panel";
 import { MEETING_SECTIONS, type MeetingSectionId } from "./meeting-section-types";
 import "@/components/appointments/kimi-ui/shared/appointments-pilot-tokens.css";
 import "@/components/appointments/kimi-ui/shared/bookable-workspace-pilot.css";
-import "@/components/appointments/kimi-ui/shared/meetings-workspace-pilot.css";
+import "@/components/appointments/kimi-ui/shared/workspace-pilot.css";
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
 import "@/components/appointments/kimi-ui/overview/reference.css";
 import "@/components/appointments/kimi-ui/appointment-types/reference.css";
 
 const SHELL_CLASS =
-  "appt-overview-pilot bookable-workspace-pilot meetings-workspace-pilot appt-pilot-workspace ref-root";
+  "appt-overview-pilot bookable-workspace-pilot ws-pilot appt-pilot-workspace ref-root";
 
 const VALID_SECTIONS = new Set<string>(MEETING_SECTIONS.map((s) => s.id));
 

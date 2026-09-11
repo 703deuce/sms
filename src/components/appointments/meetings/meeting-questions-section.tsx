@@ -17,7 +17,7 @@ import {
   newBookingQuestion,
   QUESTION_TYPE_OPTIONS,
 } from "@/features/appointments/kimi/shared/platform-settings-types";
-import { Field, Modal, SectionCard, SelectInput, TextInput } from "./meeting-ui";
+import { Field, Modal, SectionCard, SelectInput, TextInput } from "@/components/appointments/workspace-ui";
 
 const TYPE_LABELS = new Map(QUESTION_TYPE_OPTIONS.map((o) => [o.value as string, o.label]));
 

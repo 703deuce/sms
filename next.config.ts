@@ -6,6 +6,10 @@ const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Headless browsers and test harnesses reach the dev server on the loopback IP.
+  // Without this Next blocks /_next/webpack-hmr as cross-origin and the client
+  // never hydrates, which looks like a broken page rather than a config problem.
+  allowedDevOrigins: ["127.0.0.1", "localhost", "0.0.0.0"],
   typescript: {
     ignoreBuildErrors: isCoolifyBuild,
   },

@@ -245,7 +245,7 @@ export function Modal({
    * still reach the dialog.
    */
   return createPortal(
-    <div className="meetings-workspace-pilot appt-overview-pilot ref-root ws-portal">
+    <div className="ws-pilot appt-overview-pilot ref-root ws-portal">
       <div
         className="ws-overlay"
         role="presentation"

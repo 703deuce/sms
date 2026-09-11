@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CalendarX2, Gauge, Repeat, ShieldCheck } from "lucide-react";
 import type { CancellationPolicy, ReschedulePolicy } from "@/lib/appointments/types";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
-import { Field, Module, NumberField, SelectInput, Switch } from "./meeting-ui";
+import { Field, Module, NumberField, SelectInput, Switch } from "@/components/appointments/workspace-ui";
 
 type ModuleId = "approval" | "changes" | "limits" | "recurring";
 

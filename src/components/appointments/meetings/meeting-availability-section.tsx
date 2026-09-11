@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarClock, CalendarRange, Timer } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
-import { Field, NumberField, SectionCard, SelectInput } from "./meeting-ui";
+import { Field, NumberField, SectionCard, SelectInput } from "@/components/appointments/workspace-ui";
 
 type Props = {
   form: AppointmentTypeFormState;

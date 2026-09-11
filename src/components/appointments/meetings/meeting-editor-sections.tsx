@@ -3,8 +3,8 @@
 /**
  * Shared form primitives for the bookable-object editors.
  *
- * The Meetings workspace has moved to ./meeting-ui; these remain because the
- * Services and Classes editors still build on them.
+ * The Meetings and Services workspaces have moved to the shared primitives in
+ * @/components/appointments/workspace-ui; these remain for the Classes editor.
  */
 
 export function SectionCard({

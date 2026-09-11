@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Bell, CreditCard, ExternalLink, MessageSquare, Share2 } from "lucide-react";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
 import { priceLabel } from "@/lib/appointments/meetings/meeting-display";
-import { Field, Module, NumberField, SelectInput, Switch, TextArea, TextInput } from "./meeting-ui";
+import { Field, Module, NumberField, SelectInput, Switch, TextArea, TextInput } from "@/components/appointments/workspace-ui";
 
 type ModuleId = "payment" | "confirmation" | "redirect";
 

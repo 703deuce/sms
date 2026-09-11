@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { StaffAssignmentMode } from "@/lib/appointments/types";
 import type { AppointmentTypeFormState } from "@/features/appointments/kimi/appointment-types/types";
-import { ChoiceCard, Field, SectionCard, TextInput } from "./meeting-ui";
+import { ChoiceCard, Field, SectionCard, TextInput } from "@/components/appointments/workspace-ui";
 
 type StrategyDef = {
   value: StaffAssignmentMode;

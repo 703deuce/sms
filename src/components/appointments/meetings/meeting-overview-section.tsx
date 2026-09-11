@@ -10,7 +10,7 @@ import {
 } from "@/lib/appointments/meetings/meeting-display";
 import { meetingSetupSteps, setupCompletion } from "@/lib/appointments/meetings/meeting-setup";
 import type { MeetingSectionId } from "./meeting-section-types";
-import { Field, NumberField, SectionCard, TextArea, TextInput } from "./meeting-ui";
+import { Field, NumberField, SectionCard, TextArea, TextInput } from "@/components/appointments/workspace-ui";
 
 type Props = {
   form: AppointmentTypeFormState;

@@ -1,13 +1,15 @@
 /**
- * Meetings workspace — premium visual layer.
+ * Bookable-object workspace — premium visual layer.
  *
  * Structure, type scale, radii, spacing and 60/30/10 balance are inherited from
  * the Home page system (appointments-overview-pilot.css). The accent is teal:
  * Home still ships the superseded violet, so it is overridden here rather than
- * inherited. Scoped to .meetings-workspace-pilot so the Services workspace,
- * which shares bookable-workspace-pilot.css, is unaffected.
+ * inherited.
+ *
+ * Every workspace page (Meetings, Services, …) opts in with .ws-pilot so they
+ * share one visual system instead of each growing its own variant.
  */
-.meetings-workspace-pilot {
+.ws-pilot {
   --ws-accent: #0f766e;
   --ws-accent-hover: #0b5f59;
   --ws-accent-active: #094b46;
@@ -34,7 +36,7 @@
    .input/.label are only defined under .reference-root elsewhere, so every
    control in this workspace rendered borderless. Defined here for real.
    ============================================================ */
-.meetings-workspace-pilot .input {
+.ws-pilot .input {
   width: 100%;
   min-height: 2.25rem;
   padding: 0.4375rem 0.6875rem;
@@ -50,35 +52,35 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.meetings-workspace-pilot .input::placeholder {
+.ws-pilot .input::placeholder {
   color: var(--text-tertiary);
 }
 
-.meetings-workspace-pilot .input:hover:not(:disabled):not(:focus) {
+.ws-pilot .input:hover:not(:disabled):not(:focus) {
   border-color: #cfd2cf;
 }
 
-.meetings-workspace-pilot .input:focus {
+.ws-pilot .input:focus {
   border-color: var(--ws-accent);
   box-shadow: 0 0 0 3px rgba(var(--ws-accent-rgb), 0.14);
 }
 
-.meetings-workspace-pilot .input:disabled {
+.ws-pilot .input:disabled {
   background: var(--surface-muted);
   color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
-.meetings-workspace-pilot .input.has-leading-icon {
+.ws-pilot .input.has-leading-icon {
   padding-left: 2rem;
 }
 
-.meetings-workspace-pilot textarea.input {
+.ws-pilot textarea.input {
   min-height: 4.5rem;
   line-height: 1.5;
 }
 
-.meetings-workspace-pilot select.input {
+.ws-pilot select.input {
   appearance: none;
   padding-right: 2rem;
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23626872' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -87,38 +89,38 @@
   cursor: pointer;
 }
 
-.meetings-workspace-pilot input[type="checkbox"],
-.meetings-workspace-pilot input[type="radio"] {
+.ws-pilot input[type="checkbox"],
+.ws-pilot input[type="radio"] {
   width: 0.9375rem;
   height: 0.9375rem;
   accent-color: var(--ws-accent);
   cursor: pointer;
 }
 
-.meetings-workspace-pilot .ws-field-hint {
+.ws-pilot .ws-field-hint {
   margin-top: 0.375rem;
   font-size: var(--type-helper);
   line-height: 1.4;
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-inline-error {
+.ws-pilot .ws-inline-error {
   margin-top: 0.375rem;
   font-size: var(--type-helper);
   color: var(--state-error);
 }
 
 /* Suffixed numeric field — keeps unit inside the control */
-.meetings-workspace-pilot .ws-suffix-field {
+.ws-pilot .ws-suffix-field {
   position: relative;
   display: block;
 }
 
-.meetings-workspace-pilot .ws-suffix-field .input {
+.ws-pilot .ws-suffix-field .input {
   padding-right: 3.25rem;
 }
 
-.meetings-workspace-pilot .ws-suffix-field span {
+.ws-pilot .ws-suffix-field span {
   position: absolute;
   top: 50%;
   right: 0.6875rem;
@@ -132,7 +134,7 @@
 /* ============================================================
    Toggle switch
    ============================================================ */
-.meetings-workspace-pilot .ws-switch {
+.ws-pilot .ws-switch {
   position: relative;
   flex-shrink: 0;
   width: 2.25rem;
@@ -144,7 +146,7 @@
   transition: background 0.18s ease;
 }
 
-.meetings-workspace-pilot .ws-switch::after {
+.ws-pilot .ws-switch::after {
   content: "";
   position: absolute;
   top: 0.1875rem;
@@ -157,20 +159,20 @@
   transition: transform 0.18s ease;
 }
 
-.meetings-workspace-pilot .ws-switch[aria-checked="true"] {
+.ws-pilot .ws-switch[aria-checked="true"] {
   background: var(--ws-accent);
 }
 
-.meetings-workspace-pilot .ws-switch[aria-checked="true"]::after {
+.ws-pilot .ws-switch[aria-checked="true"]::after {
   transform: translateX(1rem);
 }
 
-.meetings-workspace-pilot .ws-switch:focus-visible {
+.ws-pilot .ws-switch:focus-visible {
   outline: 2px solid var(--ws-accent);
   outline-offset: 2px;
 }
 
-.meetings-workspace-pilot .ws-switch-row {
+.ws-pilot .ws-switch-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -178,14 +180,14 @@
   padding: 0.75rem 0;
 }
 
-.meetings-workspace-pilot .ws-switch-row + .ws-switch-row {
+.ws-pilot .ws-switch-row + .ws-switch-row {
   border-top: 1px solid var(--border-soft);
 }
 
 /* ============================================================
    Status chips
    ============================================================ */
-.meetings-workspace-pilot .ws-chip {
+.ws-pilot .ws-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -197,22 +199,22 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-chip-success {
+.ws-pilot .ws-chip-success {
   background: var(--state-success-soft);
   color: var(--state-success);
 }
 
-.meetings-workspace-pilot .ws-chip-accent {
+.ws-pilot .ws-chip-accent {
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
 }
 
-.meetings-workspace-pilot .ws-chip-neutral {
+.ws-pilot .ws-chip-neutral {
   background: var(--surface-muted);
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-chip-warning {
+.ws-pilot .ws-chip-warning {
   background: var(--state-warning-soft);
   color: var(--state-warning);
 }
@@ -220,18 +222,18 @@
 /* ============================================================
    Object list
    ============================================================ */
-.meetings-workspace-pilot .ws-list-item {
+.ws-pilot .ws-list-item {
   display: block;
   padding: 0.5625rem 0.6875rem;
 }
 
-.meetings-workspace-pilot .ws-list-item[aria-selected="true"] {
+.ws-pilot .ws-list-item[aria-selected="true"] {
   border-color: var(--ws-accent-border);
   background: var(--ws-accent-soft);
   box-shadow: inset 2px 0 0 var(--ws-accent);
 }
 
-.meetings-workspace-pilot .ws-list-item-name {
+.ws-pilot .ws-list-item-name {
   display: block;
   overflow: hidden;
   font-size: var(--type-list);
@@ -242,7 +244,7 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-list-item-meta {
+.ws-pilot .ws-list-item-meta {
   display: block;
   margin-top: 0.125rem;
   overflow: hidden;
@@ -253,7 +255,7 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-list-count {
+.ws-pilot .ws-list-count {
   font-size: var(--type-helper);
   font-weight: 500;
   color: var(--text-tertiary);
@@ -262,11 +264,11 @@
 /* ============================================================
    Object header
    ============================================================ */
-.meetings-workspace-pilot .ws-object-header {
+.ws-pilot .ws-object-header {
   padding: 0.875rem 1.5rem;
 }
 
-.meetings-workspace-pilot .ws-object-icon {
+.ws-pilot .ws-object-icon {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: var(--ws-radius-tile);
@@ -275,7 +277,7 @@
   box-shadow: inset 0 0 0 1px var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-object-title {
+.ws-pilot .ws-object-title {
   overflow: hidden;
   font-size: 1.125rem;
   font-weight: 600;
@@ -287,7 +289,7 @@
 }
 
 /* Save state reads as feedback when clean, as a call to action when dirty */
-.meetings-workspace-pilot .ws-save-state {
+.ws-pilot .ws-save-state {
   display: inline-flex;
   align-items: center;
   gap: 0.3125rem;
@@ -298,7 +300,7 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-menu {
+.ws-pilot .ws-menu {
   position: absolute;
   right: 0;
   z-index: 30;
@@ -311,7 +313,7 @@
   box-shadow: var(--ws-shadow-overlay);
 }
 
-.meetings-workspace-pilot .ws-menu-item {
+.ws-pilot .ws-menu-item {
   display: flex;
   width: 100%;
   align-items: center;
@@ -324,18 +326,18 @@
   cursor: pointer;
 }
 
-.meetings-workspace-pilot .ws-menu-item:hover {
+.ws-pilot .ws-menu-item:hover {
   background: var(--surface-muted);
 }
 
-.meetings-workspace-pilot .ws-menu-item.danger {
+.ws-pilot .ws-menu-item.danger {
   color: var(--state-error);
 }
 
 /* ============================================================
    Summary strip — responsive, no shrunken desktop row on mobile
    ============================================================ */
-.meetings-workspace-pilot .ws-kpi-strip {
+.ws-pilot .ws-kpi-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
@@ -349,27 +351,27 @@
  * the row it lands on. Without this the 2- and 3-column layouts leave a bare
  * gutter-coloured hole at the end of the grid.
  */
-.meetings-workspace-pilot .ws-kpi-cell:last-child {
+.ws-pilot .ws-kpi-cell:last-child {
   grid-column: span 2;
 }
 
 @media (min-width: 640px) {
-  .meetings-workspace-pilot .ws-kpi-strip {
+  .ws-pilot .ws-kpi-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
-  .meetings-workspace-pilot .ws-kpi-strip {
+  .ws-pilot .ws-kpi-strip {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  .meetings-workspace-pilot .ws-kpi-cell:last-child {
+  .ws-pilot .ws-kpi-cell:last-child {
     grid-column: auto;
   }
 }
 
-.meetings-workspace-pilot .ws-kpi-cell {
+.ws-pilot .ws-kpi-cell {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -378,11 +380,11 @@
   padding: 0.625rem 1rem;
 }
 
-.meetings-workspace-pilot .ws-kpi-cell + .ws-kpi-cell {
+.ws-pilot .ws-kpi-cell + .ws-kpi-cell {
   border-left: none;
 }
 
-.meetings-workspace-pilot .ws-kpi-label {
+.ws-pilot .ws-kpi-label {
   display: flex;
   align-items: center;
   gap: 0.3125rem;
@@ -393,7 +395,7 @@
   color: var(--text-tertiary);
 }
 
-.meetings-workspace-pilot .ws-kpi-value {
+.ws-pilot .ws-kpi-value {
   overflow: hidden;
   font-size: var(--type-list);
   font-weight: 600;
@@ -403,7 +405,7 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-kpi-value.is-unset {
+.ws-pilot .ws-kpi-value.is-unset {
   font-weight: 500;
   color: var(--text-tertiary);
 }
@@ -411,12 +413,12 @@
 /* ============================================================
    Section navigation — one rail on desktop, one dropdown below it
    ============================================================ */
-.meetings-workspace-pilot .ws-local-nav {
+.ws-pilot .ws-local-nav {
   width: 13rem;
   padding: 0.875rem 0.625rem;
 }
 
-.meetings-workspace-pilot .ws-local-nav-heading {
+.ws-pilot .ws-local-nav-heading {
   padding: 0 0.5rem 0.5rem;
   font-size: 0.625rem;
   font-weight: 600;
@@ -425,21 +427,21 @@
   color: var(--text-tertiary);
 }
 
-.meetings-workspace-pilot .ws-local-nav-btn {
+.ws-pilot .ws-local-nav-btn {
   gap: 0.5625rem;
   padding: 0.4375rem 0.5rem;
   font-size: var(--type-list);
   transition: background 0.14s ease, color 0.14s ease;
 }
 
-.meetings-workspace-pilot .ws-local-nav-btn[aria-current="page"] {
+.ws-pilot .ws-local-nav-btn[aria-current="page"] {
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
   font-weight: 600;
   box-shadow: inset 0 0 0 1px var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-local-nav-flag {
+.ws-pilot .ws-local-nav-flag {
   margin-left: auto;
   width: 0.375rem;
   height: 0.375rem;
@@ -451,14 +453,14 @@
 /* ============================================================
    Section cards
    ============================================================ */
-.meetings-workspace-pilot .ws-card {
+.ws-pilot .ws-card {
   border: 1px solid var(--border);
   border-radius: var(--ws-radius-card);
   background: var(--surface);
   box-shadow: var(--ws-shadow-card);
 }
 
-.meetings-workspace-pilot .ws-card-head {
+.ws-pilot .ws-card-head {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -466,7 +468,7 @@
   padding: 0.875rem 1.125rem;
 }
 
-.meetings-workspace-pilot .ws-card-icon {
+.ws-pilot .ws-card-icon {
   display: flex;
   width: 1.875rem;
   height: 1.875rem;
@@ -479,7 +481,7 @@
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.meetings-workspace-pilot .ws-card-title {
+.ws-pilot .ws-card-title {
   font-size: 0.9375rem;
   font-weight: 600;
   line-height: 1.3;
@@ -487,31 +489,31 @@
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-card-desc {
+.ws-pilot .ws-card-desc {
   margin-top: 0.125rem;
   font-size: var(--type-helper);
   line-height: 1.4;
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-card-body {
+.ws-pilot .ws-card-body {
   padding: 1.125rem;
 }
 
-.meetings-workspace-pilot .ws-card-body-flush {
+.ws-pilot .ws-card-body-flush {
   padding: 0.375rem 1.125rem 1.125rem;
 }
 
 /* ============================================================
    Choice cards — meeting method, host strategy, payment mode
    ============================================================ */
-.meetings-workspace-pilot .ws-choice-grid {
+.ws-pilot .ws-choice-grid {
   display: grid;
   gap: 0.625rem;
   grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
 }
 
-.meetings-workspace-pilot .ws-choice-card {
+.ws-pilot .ws-choice-card {
   position: relative;
   display: flex;
   align-items: flex-start;
@@ -525,24 +527,24 @@
   transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.meetings-workspace-pilot .ws-choice-card:hover {
+.ws-pilot .ws-choice-card:hover {
   border-color: var(--ws-accent-border);
   box-shadow: var(--ws-shadow-raised);
 }
 
-.meetings-workspace-pilot .ws-choice-card[aria-pressed="true"],
-.meetings-workspace-pilot .ws-choice-card.selected {
+.ws-pilot .ws-choice-card[aria-pressed="true"],
+.ws-pilot .ws-choice-card.selected {
   border-color: var(--ws-accent);
   background: var(--ws-accent-soft);
   box-shadow: inset 0 0 0 1px var(--ws-accent);
 }
 
-.meetings-workspace-pilot .ws-choice-card:focus-visible {
+.ws-pilot .ws-choice-card:focus-visible {
   outline: 2px solid var(--ws-accent);
   outline-offset: 2px;
 }
 
-.meetings-workspace-pilot .ws-choice-icon {
+.ws-pilot .ws-choice-icon {
   display: flex;
   width: 1.75rem;
   height: 1.75rem;
@@ -556,28 +558,28 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.meetings-workspace-pilot .ws-choice-card[aria-pressed="true"] .ws-choice-icon,
-.meetings-workspace-pilot .ws-choice-card.selected .ws-choice-icon {
+.ws-pilot .ws-choice-card[aria-pressed="true"] .ws-choice-icon,
+.ws-pilot .ws-choice-card.selected .ws-choice-icon {
   background: var(--ws-accent);
   color: #fff;
   box-shadow: none;
 }
 
-.meetings-workspace-pilot .ws-choice-name {
+.ws-pilot .ws-choice-name {
   font-size: var(--type-list);
   font-weight: 600;
   line-height: 1.3;
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-choice-help {
+.ws-pilot .ws-choice-help {
   margin-top: 0.125rem;
   font-size: var(--type-helper);
   line-height: 1.35;
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-choice-check {
+.ws-pilot .ws-choice-check {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
@@ -585,7 +587,7 @@
 }
 
 /* Config panel revealed by the selected choice */
-.meetings-workspace-pilot .ws-choice-config {
+.ws-pilot .ws-choice-config {
   margin-top: 0.875rem;
   border: 1px solid var(--ws-accent-border);
   border-radius: var(--ws-radius-tile);
@@ -593,7 +595,7 @@
   padding: 0.875rem 1rem;
 }
 
-.meetings-workspace-pilot .ws-choice-config-title {
+.ws-pilot .ws-choice-config-title {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -609,7 +611,7 @@
  * editors and bring their own shadcn markup. Rather than fork them, their
  * surface and type are normalised to the workspace scale here.
  */
-.meetings-workspace-pilot .ws-legacy-panel > * {
+.ws-pilot .ws-legacy-panel > * {
   margin-top: 0;
   border: 1px solid var(--border);
   border-radius: var(--ws-radius-tile);
@@ -618,23 +620,23 @@
   padding: 0.875rem 1rem;
 }
 
-.meetings-workspace-pilot .ws-legacy-panel h3 {
+.ws-pilot .ws-legacy-panel h3 {
   font-size: var(--type-list);
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-legacy-panel p {
+.ws-pilot .ws-legacy-panel p {
   font-size: var(--type-helper);
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-legacy-panel label {
+.ws-pilot .ws-legacy-panel label {
   font-size: var(--type-list);
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-legacy-panel select {
+.ws-pilot .ws-legacy-panel select {
   width: 100%;
   height: 2.25rem;
   border: 1px solid var(--border);
@@ -645,7 +647,7 @@
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-legacy-panel select:focus-visible {
+.ws-pilot .ws-legacy-panel select:focus-visible {
   outline: none;
   border-color: var(--ws-accent);
   box-shadow: 0 0 0 3px rgba(var(--ws-accent-rgb), 0.16);
@@ -654,7 +656,7 @@
 /* ============================================================
    Host chips
    ============================================================ */
-.meetings-workspace-pilot .ws-host-chip {
+.ws-pilot .ws-host-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.4375rem;
@@ -669,18 +671,18 @@
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.meetings-workspace-pilot .ws-host-chip:hover {
+.ws-pilot .ws-host-chip:hover {
   border-color: var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-host-chip[aria-pressed="true"] {
+.ws-pilot .ws-host-chip[aria-pressed="true"] {
   border-color: var(--ws-accent);
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
   font-weight: 600;
 }
 
-.meetings-workspace-pilot .ws-host-avatar {
+.ws-pilot .ws-host-avatar {
   display: flex;
   width: 1.375rem;
   height: 1.375rem;
@@ -693,7 +695,7 @@
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-host-chip[aria-pressed="true"] .ws-host-avatar {
+.ws-pilot .ws-host-chip[aria-pressed="true"] .ws-host-avatar {
   background: var(--ws-accent);
   color: #fff;
 }
@@ -701,7 +703,7 @@
 /* ============================================================
    Question builder
    ============================================================ */
-.meetings-workspace-pilot .ws-question-row {
+.ws-pilot .ws-question-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -712,12 +714,12 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.meetings-workspace-pilot .ws-question-row:hover {
+.ws-pilot .ws-question-row:hover {
   border-color: #cfd2cf;
   box-shadow: var(--ws-shadow-card);
 }
 
-.meetings-workspace-pilot .ws-question-index {
+.ws-pilot .ws-question-index {
   display: flex;
   width: 1.375rem;
   height: 1.375rem;
@@ -731,20 +733,20 @@
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-question-label {
+.ws-pilot .ws-question-label {
   font-size: var(--type-list);
   font-weight: 500;
   line-height: 1.35;
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-question-meta {
+.ws-pilot .ws-question-meta {
   margin-top: 0.0625rem;
   font-size: var(--type-helper);
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-icon-btn {
+.ws-pilot .ws-icon-btn {
   display: inline-flex;
   width: 1.75rem;
   height: 1.75rem;
@@ -759,24 +761,24 @@
   transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
 }
 
-.meetings-workspace-pilot .ws-icon-btn:hover:not(:disabled) {
+.ws-pilot .ws-icon-btn:hover:not(:disabled) {
   border-color: var(--border);
   background: var(--surface-muted);
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-icon-btn:disabled {
+.ws-pilot .ws-icon-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.meetings-workspace-pilot .ws-icon-btn.danger:hover:not(:disabled) {
+.ws-pilot .ws-icon-btn.danger:hover:not(:disabled) {
   border-color: rgba(199, 72, 72, 0.3);
   background: var(--state-error-soft);
   color: var(--state-error);
 }
 
-.meetings-workspace-pilot .ws-default-field {
+.ws-pilot .ws-default-field {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -789,7 +791,7 @@
 }
 
 /* Booking URLs have no break opportunities and would otherwise widen the page */
-.meetings-workspace-pilot .ws-default-field > span {
+.ws-pilot .ws-default-field > span {
   min-width: 0;
 }
 
@@ -805,7 +807,7 @@
   display: contents;
 }
 
-.meetings-workspace-pilot .ws-overlay {
+.ws-pilot .ws-overlay {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -817,7 +819,7 @@
   animation: wsFade 0.14s ease-out;
 }
 
-.meetings-workspace-pilot .ws-modal {
+.ws-pilot .ws-modal {
   width: 100%;
   max-width: 30rem;
   max-height: calc(100vh - 2rem);
@@ -828,7 +830,7 @@
   animation: wsRise 0.16s ease-out;
 }
 
-.meetings-workspace-pilot .ws-modal-head {
+.ws-pilot .ws-modal-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -837,7 +839,7 @@
   padding: 1rem 1.25rem;
 }
 
-.meetings-workspace-pilot .ws-modal-title {
+.ws-pilot .ws-modal-title {
   font-size: var(--type-section);
   font-weight: 600;
   line-height: 1.3;
@@ -845,11 +847,11 @@
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-modal-body {
+.ws-pilot .ws-modal-body {
   padding: 1.25rem;
 }
 
-.meetings-workspace-pilot .ws-modal-foot {
+.ws-pilot .ws-modal-foot {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
@@ -868,8 +870,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .meetings-workspace-pilot .ws-overlay,
-  .meetings-workspace-pilot .ws-modal {
+  .ws-pilot .ws-overlay,
+  .ws-pilot .ws-modal {
     animation: none;
   }
 }
@@ -877,7 +879,7 @@
 /* ============================================================
    Rule / advanced modules
    ============================================================ */
-.meetings-workspace-pilot .ws-module {
+.ws-pilot .ws-module {
   border: 1px solid var(--border);
   border-radius: var(--ws-radius-card);
   background: var(--surface);
@@ -885,11 +887,11 @@
   overflow: hidden;
 }
 
-.meetings-workspace-pilot .ws-module + .ws-module {
+.ws-pilot .ws-module + .ws-module {
   margin-top: 0.75rem;
 }
 
-.meetings-workspace-pilot .ws-module-trigger {
+.ws-pilot .ws-module-trigger {
   display: flex;
   width: 100%;
   align-items: center;
@@ -902,15 +904,15 @@
   transition: background 0.14s ease;
 }
 
-.meetings-workspace-pilot .ws-module-trigger:hover {
+.ws-pilot .ws-module-trigger:hover {
   background: var(--surface-muted);
 }
 
-.meetings-workspace-pilot .ws-module.is-open .ws-module-trigger {
+.ws-pilot .ws-module.is-open .ws-module-trigger {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.meetings-workspace-pilot .ws-module-icon {
+.ws-pilot .ws-module-icon {
   display: flex;
   width: 2rem;
   height: 2rem;
@@ -923,50 +925,50 @@
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.meetings-workspace-pilot .ws-module.is-open .ws-module-icon {
+.ws-pilot .ws-module.is-open .ws-module-icon {
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
   box-shadow: inset 0 0 0 1px var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-module-title {
+.ws-pilot .ws-module-title {
   font-size: var(--type-list);
   font-weight: 600;
   line-height: 1.3;
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-module-value {
+.ws-pilot .ws-module-value {
   margin-top: 0.0625rem;
   font-size: var(--type-helper);
   line-height: 1.35;
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-module-chevron {
+.ws-pilot .ws-module-chevron {
   flex-shrink: 0;
   color: var(--text-tertiary);
   transition: transform 0.18s ease;
 }
 
-.meetings-workspace-pilot .ws-module.is-open .ws-module-chevron {
+.ws-pilot .ws-module.is-open .ws-module-chevron {
   transform: rotate(180deg);
 }
 
-.meetings-workspace-pilot .ws-module-body {
+.ws-pilot .ws-module-body {
   padding: 1.125rem;
 }
 
 /* ============================================================
    Side cards / setup health
    ============================================================ */
-.meetings-workspace-pilot .ws-side-card {
+.ws-pilot .ws-side-card {
   border-radius: var(--ws-radius-card);
   box-shadow: var(--ws-shadow-card);
   padding: 1rem 1.125rem;
 }
 
-.meetings-workspace-pilot .ws-side-card-label {
+.ws-pilot .ws-side-card-label {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -977,7 +979,7 @@
   color: var(--text-tertiary);
 }
 
-.meetings-workspace-pilot .ws-preview-card {
+.ws-pilot .ws-preview-card {
   border-radius: var(--ws-radius-card);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -985,7 +987,7 @@
   overflow: hidden;
 }
 
-.meetings-workspace-pilot .ws-preview-browser {
+.ws-pilot .ws-preview-browser {
   display: flex;
   align-items: center;
   gap: 0.3125rem;
@@ -994,36 +996,36 @@
   padding: 0.5rem 0.75rem;
 }
 
-.meetings-workspace-pilot .ws-preview-dot {
+.ws-pilot .ws-preview-dot {
   width: 0.4375rem;
   height: 0.4375rem;
   border-radius: 9999px;
   background: #d3d6d3;
 }
 
-.meetings-workspace-pilot .ws-preview-body {
+.ws-pilot .ws-preview-body {
   padding: 1rem 1.125rem 1.125rem;
 }
 
-.meetings-workspace-pilot .ws-health-bar {
+.ws-pilot .ws-health-bar {
   height: 0.25rem;
   overflow: hidden;
   border-radius: 9999px;
   background: var(--border);
 }
 
-.meetings-workspace-pilot .ws-health-fill {
+.ws-pilot .ws-health-fill {
   height: 100%;
   border-radius: 9999px;
   background: var(--ws-accent);
   transition: width 0.3s ease;
 }
 
-.meetings-workspace-pilot .ws-health-fill.is-complete {
+.ws-pilot .ws-health-fill.is-complete {
   background: var(--state-success);
 }
 
-.meetings-workspace-pilot .ws-checklist-item {
+.ws-pilot .ws-checklist-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1032,11 +1034,11 @@
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-checklist-item.done {
+.ws-pilot .ws-checklist-item.done {
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-checklist-mark {
+.ws-pilot .ws-checklist-mark {
   display: flex;
   width: 1rem;
   height: 1rem;
@@ -1049,13 +1051,13 @@
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.meetings-workspace-pilot .ws-checklist-item.done .ws-checklist-mark {
+.ws-pilot .ws-checklist-item.done .ws-checklist-mark {
   background: var(--state-success-soft);
   color: var(--state-success);
   box-shadow: none;
 }
 
-.meetings-workspace-pilot .ws-checklist-jump {
+.ws-pilot .ws-checklist-jump {
   margin-left: auto;
   font-size: var(--type-helper);
   font-weight: 600;
@@ -1066,7 +1068,7 @@
 /* ============================================================
    Empty states
    ============================================================ */
-.meetings-workspace-pilot .ws-empty-icon {
+.ws-pilot .ws-empty-icon {
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 14px;
@@ -1075,7 +1077,7 @@
   box-shadow: inset 0 0 0 1px var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-empty-title {
+.ws-pilot .ws-empty-title {
   margin-top: 1rem;
   font-size: var(--type-section);
   font-weight: 600;
@@ -1083,7 +1085,7 @@
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-empty-body {
+.ws-pilot .ws-empty-body {
   margin-top: 0.375rem;
   max-width: 26rem;
   font-size: var(--type-list);
@@ -1091,7 +1093,7 @@
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-empty-hints {
+.ws-pilot .ws-empty-hints {
   display: grid;
   gap: 0.5rem;
   margin-top: 1.5rem;
@@ -1100,7 +1102,7 @@
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
 }
 
-.meetings-workspace-pilot .ws-empty-hint {
+.ws-pilot .ws-empty-hint {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1114,13 +1116,13 @@
   color: var(--text-secondary);
 }
 
-.meetings-workspace-pilot .ws-empty-hint svg {
+.ws-pilot .ws-empty-hint svg {
   flex-shrink: 0;
   color: var(--ws-accent);
 }
 
 /* Inline nudge inside a section — never a dead end */
-.meetings-workspace-pilot .ws-nudge {
+.ws-pilot .ws-nudge {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
@@ -1130,7 +1132,7 @@
   padding: 0.875rem 1rem;
 }
 
-.meetings-workspace-pilot .ws-nudge-icon {
+.ws-pilot .ws-nudge-icon {
   display: flex;
   width: 1.75rem;
   height: 1.75rem;
@@ -1146,34 +1148,34 @@
 /* ============================================================
    Wizard
    ============================================================ */
-.meetings-workspace-pilot .ws-wizard-shell {
+.ws-pilot .ws-wizard-shell {
   max-width: 62rem;
   padding: 1.75rem 1.25rem 2.5rem;
 }
 
-.meetings-workspace-pilot .ws-wizard-layout {
+.ws-pilot .ws-wizard-layout {
   gap: 1.5rem;
 }
 
 @media (min-width: 1024px) {
-  .meetings-workspace-pilot .ws-wizard-layout {
+  .ws-pilot .ws-wizard-layout {
     grid-template-columns: minmax(0, 1fr) 16rem;
   }
 }
 
-.meetings-workspace-pilot .ws-wizard-card {
+.ws-pilot .ws-wizard-card {
   border-radius: var(--ws-radius-card);
   padding: 1.5rem;
   box-shadow: var(--ws-shadow-card);
 }
 
-.meetings-workspace-pilot .ws-wizard-steps {
+.ws-pilot .ws-wizard-steps {
   display: flex;
   align-items: center;
   gap: 0.375rem;
 }
 
-.meetings-workspace-pilot .ws-wizard-step {
+.ws-pilot .ws-wizard-step {
   display: flex;
   min-width: 0;
   flex: 1 1 0;
@@ -1185,7 +1187,7 @@
   text-align: left;
 }
 
-.meetings-workspace-pilot .ws-wizard-step-dot {
+.ws-pilot .ws-wizard-step-dot {
   display: flex;
   width: 1.625rem;
   height: 1.625rem;
@@ -1199,19 +1201,19 @@
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.meetings-workspace-pilot .ws-wizard-step.is-active .ws-wizard-step-dot {
+.ws-pilot .ws-wizard-step.is-active .ws-wizard-step-dot {
   background: var(--ws-accent);
   color: #fff;
   box-shadow: 0 0 0 3px rgba(var(--ws-accent-rgb), 0.16);
 }
 
-.meetings-workspace-pilot .ws-wizard-step.is-done .ws-wizard-step-dot {
+.ws-pilot .ws-wizard-step.is-done .ws-wizard-step-dot {
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
   box-shadow: inset 0 0 0 1px var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-wizard-step-label {
+.ws-pilot .ws-wizard-step-label {
   overflow: hidden;
   font-size: var(--type-helper);
   font-weight: 500;
@@ -1220,24 +1222,24 @@
   white-space: nowrap;
 }
 
-.meetings-workspace-pilot .ws-wizard-step.is-active .ws-wizard-step-label,
-.meetings-workspace-pilot .ws-wizard-step.is-done .ws-wizard-step-label {
+.ws-pilot .ws-wizard-step.is-active .ws-wizard-step-label,
+.ws-pilot .ws-wizard-step.is-done .ws-wizard-step-label {
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-wizard-connector {
+.ws-pilot .ws-wizard-connector {
   height: 1px;
   min-width: 0.75rem;
   flex: 1 1 auto;
   background: var(--border);
 }
 
-.meetings-workspace-pilot .ws-wizard-connector.is-done {
+.ws-pilot .ws-wizard-connector.is-done {
   background: var(--ws-accent-border);
 }
 
-.meetings-workspace-pilot .ws-wizard-summary {
+.ws-pilot .ws-wizard-summary {
   border-radius: var(--ws-radius-card);
   border-color: var(--border);
   background: var(--surface);
@@ -1245,7 +1247,7 @@
   box-shadow: var(--ws-shadow-card);
 }
 
-.meetings-workspace-pilot .ws-wizard-summary h4 {
+.ws-pilot .ws-wizard-summary h4 {
   font-size: 0.625rem;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
@@ -1254,32 +1256,32 @@
 /* ============================================================
    Buttons
    ============================================================ */
-.meetings-workspace-pilot .appt-pilot-primary-btn {
+.ws-pilot .appt-pilot-primary-btn {
   background: var(--ws-accent);
   border-color: var(--ws-accent);
   box-shadow: 0 1px 2px rgba(var(--ws-accent-rgb), 0.2);
 }
 
-.meetings-workspace-pilot .appt-pilot-primary-btn:hover:not(:disabled) {
+.ws-pilot .appt-pilot-primary-btn:hover:not(:disabled) {
   background: var(--ws-accent-hover);
   border-color: var(--ws-accent-hover);
 }
 
-.meetings-workspace-pilot .appt-pilot-primary-btn:disabled,
-.meetings-workspace-pilot .appt-pilot-outline-btn:disabled {
+.ws-pilot .appt-pilot-primary-btn:disabled,
+.ws-pilot .appt-pilot-outline-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.meetings-workspace-pilot .ws-list-new-btn {
+.ws-pilot .ws-list-new-btn {
   background: var(--ws-accent);
 }
 
-.meetings-workspace-pilot .ws-list-new-btn:hover {
+.ws-pilot .ws-list-new-btn:hover {
   background: var(--ws-accent-hover);
 }
 
-.meetings-workspace-pilot .ws-text-btn {
+.ws-pilot .ws-text-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.3125rem;
@@ -1291,11 +1293,11 @@
   cursor: pointer;
 }
 
-.meetings-workspace-pilot .ws-text-btn:hover {
+.ws-pilot .ws-text-btn:hover {
   color: var(--ws-accent-hover);
 }
 
-.meetings-workspace-pilot .ws-add-row {
+.ws-pilot .ws-add-row {
   display: flex;
   width: 100%;
   align-items: center;
@@ -1312,7 +1314,7 @@
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.meetings-workspace-pilot .ws-add-row:hover {
+.ws-pilot .ws-add-row:hover {
   border-color: var(--ws-accent-border);
   background: var(--ws-accent-soft);
   color: var(--ws-accent);
@@ -1321,45 +1323,45 @@
 /* ============================================================
    Layout rhythm
    ============================================================ */
-.meetings-workspace-pilot .ws-section-scroll {
+.ws-pilot .ws-section-scroll {
   padding: 1.25rem 1.25rem 2.5rem;
 }
 
 @media (min-width: 640px) {
-  .meetings-workspace-pilot .ws-section-scroll {
+  .ws-pilot .ws-section-scroll {
     padding: 1.5rem 1.75rem 3rem;
   }
 }
 
-.meetings-workspace-pilot .ws-section-col {
+.ws-pilot .ws-section-col {
   max-width: 46rem;
 }
 
-.meetings-workspace-pilot .ws-overview-grid {
+.ws-pilot .ws-overview-grid {
   gap: 1.25rem;
 }
 
-.meetings-workspace-pilot .ws-overview-grid > * {
+.ws-pilot .ws-overview-grid > * {
   min-width: 0;
 }
 
-.meetings-workspace-pilot .ws-section-scroll > * {
+.ws-pilot .ws-section-scroll > * {
   min-width: 0;
 }
 
 @media (min-width: 1280px) {
-  .meetings-workspace-pilot .ws-overview-grid.has-side {
+  .ws-pilot .ws-overview-grid.has-side {
     grid-template-columns: minmax(0, 1fr) 18.5rem;
   }
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
-  .meetings-workspace-pilot .ws-overview-grid.has-side {
+  .ws-pilot .ws-overview-grid.has-side {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.meetings-workspace-pilot .ws-section-heading {
+.ws-pilot .ws-section-heading {
   font-size: var(--type-section);
   font-weight: 600;
   line-height: 1.3;
@@ -1367,7 +1369,7 @@
   color: var(--text-primary);
 }
 
-.meetings-workspace-pilot .ws-section-sub {
+.ws-pilot .ws-section-sub {
   margin-top: 0.1875rem;
   font-size: var(--type-helper);
   line-height: 1.45;
