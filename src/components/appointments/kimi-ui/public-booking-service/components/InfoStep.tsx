@@ -28,6 +28,31 @@ function formatMoney(cents: number) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+/**
+ * What the business decided about cancelling, said before the customer commits.
+ * The operator's own wording wins where they wrote some; otherwise the cutoff
+ * they configured is spelled out, because a policy nobody is shown is not one.
+ */
+function cancellationNotice(type: BookingType): string {
+  const extended = type.config?.extendedCancellationPolicy;
+  if (extended?.policyText?.trim()) return extended.policyText.trim();
+
+  const basic = type.config?.cancellationPolicy;
+  const allowed = extended?.allowed || basic?.allowed;
+  if (!allowed) return "";
+  if (allowed === "disabled") return "This appointment cannot be cancelled online.";
+  if (allowed === "anytime") return "You can cancel or reschedule at any time.";
+
+  const hours =
+    extended?.cutoff?.enabled && extended.cutoff.value
+      ? extended.cutoff.unit === "days"
+        ? extended.cutoff.value * 24
+        : extended.cutoff.value
+      : basic?.cutoffHours;
+  if (!hours) return "";
+  return `Free cancellation up to ${hours} hour${hours === 1 ? "" : "s"} before your appointment.`;
+}
+
 export function InfoStep({
   type,
   startsAt,
@@ -219,6 +244,8 @@ export function InfoStep({
     setFieldErrors(next);
     return Object.keys(next).length === 0;
   }
+
+  const policyNotice = cancellationNotice(type);
 
   function submit() {
     if (!validate()) return;
@@ -767,6 +794,12 @@ export function InfoStep({
           >
             Checkout {sessionLineCount + 1} appointments
           </Button>
+        ) : null}
+        {policyNotice ? (
+          <p className="flex items-start justify-center gap-1.5 pb-1 text-center text-[12px] text-muted-foreground">
+            <CalendarCheck className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{policyNotice}</span>
+          </p>
         ) : null}
         <Button size="lg" className="w-full" onClick={submit} disabled={submitting}>
           {submitting ? "Booking…" : "Book appointment"}

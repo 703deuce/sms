@@ -36,6 +36,12 @@ export type BookingType = {
     payment?: PaymentRequirement;
     groupBooking?: { enabled: boolean; capacity: number };
     recurring?: { enabled: boolean; allowedFrequencies: string[]; maxOccurrences: number };
+    cancellationPolicy?: { allowed?: string; cutoffHours?: number };
+    extendedCancellationPolicy?: {
+      allowed?: string;
+      policyText?: string;
+      cutoff?: { enabled?: boolean; value?: number; unit?: string };
+    };
   };
 };
 
