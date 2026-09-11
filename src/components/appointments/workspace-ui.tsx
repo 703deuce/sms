@@ -44,6 +44,109 @@ export function SectionCard({
   );
 }
 
+/**
+ * A bordered cell for the wide grid. `SectionCard` is a full-width band
+ * separated by rules and cannot sit beside another one; this can, which is
+ * what lets Capacity put three summaries across the top of the section.
+ */
+export function Panel({
+  title,
+  icon: Icon,
+  actions,
+  flush,
+  className,
+  children,
+}: {
+  title: string;
+  icon?: IconType;
+  actions?: React.ReactNode;
+  flush?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const titleId = useId();
+  return (
+    <section className={`ws-panel${className ? ` ${className}` : ""}`} aria-labelledby={titleId}>
+      <div className="ws-panel-head">
+        <h3 className="ws-panel-title" id={titleId}>
+          {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
+          {title}
+        </h3>
+        {actions ? <div className="ws-panel-actions">{actions}</div> : null}
+      </div>
+      <div className={`ws-panel-body${flush ? " is-flush" : ""}`}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Right-hand overlay for record detail. Portalled for the same reason the
+ * modal is: the workspace sits in a z-index:1 stacking context and anything
+ * rendered in place is painted under the product sidebar.
+ */
+export function Drawer({
+  title,
+  description,
+  onClose,
+  footer,
+  children,
+}: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    ref.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="ws-pilot appt-overview-pilot ref-root ws-portal">
+      <div
+        className="ws-drawer-scrim"
+        role="presentation"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div
+          className="ws-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          ref={ref}
+        >
+          <div className="ws-drawer-head">
+            <div className="min-w-0 flex-1">
+              <h2 className="ws-drawer-title" id={titleId}>
+                {title}
+              </h2>
+              {description ? <p className="ws-card-desc">{description}</p> : null}
+            </div>
+            <button type="button" className="ws-icon-btn" aria-label="Close" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="ws-drawer-body">{children}</div>
+          {footer ? <div className="ws-drawer-foot">{footer}</div> : null}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function Field({
   label,
   htmlFor,

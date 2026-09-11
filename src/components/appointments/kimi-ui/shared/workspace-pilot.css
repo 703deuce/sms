@@ -1177,8 +1177,12 @@
 /* ============================================================
    Wizard
    ============================================================ */
+/*
+ * Sized so the step surface lands near 700px — wide enough for a two-column
+ * field row, narrow enough to still read as a form rather than a page.
+ */
 .ws-pilot .ws-wizard-shell {
-  max-width: 62rem;
+  max-width: 64rem;
   padding: 1.75rem 1.25rem 2.5rem;
 }
 
@@ -2423,4 +2427,604 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-primary);
+}
+
+/* ============================================================
+   Wide workspace grid
+
+   Sections that lay panels out across the width opt out of the reading-column
+   cap. A form field is unreadable at 1600px, but a row of three summary panels
+   and a registrant table below them is exactly what the width is for.
+   ============================================================ */
+.ws-pilot .ws-section-wide {
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.ws-pilot .ws-grid12 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1.125rem;
+  align-items: start;
+}
+
+.ws-pilot .ws-grid12 > * {
+  min-width: 0;
+  grid-column: span 12;
+}
+
+/*
+ * Spans only apply once there is width worth splitting. Below that every panel
+ * takes the full row rather than becoming a 200px column of wrapped labels.
+ */
+@media (min-width: 1100px) {
+  .ws-pilot .ws-span-4 { grid-column: span 4; }
+  .ws-pilot .ws-span-5 { grid-column: span 5; }
+  .ws-pilot .ws-span-6 { grid-column: span 6; }
+  .ws-pilot .ws-span-7 { grid-column: span 7; }
+  .ws-pilot .ws-span-8 { grid-column: span 8; }
+  .ws-pilot .ws-span-12 { grid-column: span 12; }
+}
+
+@media (min-width: 700px) and (max-width: 1099px) {
+  .ws-pilot .ws-span-4,
+  .ws-pilot .ws-span-5,
+  .ws-pilot .ws-span-6,
+  .ws-pilot .ws-span-7,
+  .ws-pilot .ws-span-8 {
+    grid-column: span 6;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Panel — a bordered cell inside the wide grid.
+
+   ws-flat-section is a full-width rule-separated band and cannot sit beside
+   another one; a panel can.
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--ws-radius-card);
+  background: var(--surface);
+  box-shadow: var(--ws-shadow-card);
+  overflow: hidden;
+}
+
+.ws-pilot .ws-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.ws-pilot .ws-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--type-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-panel-title svg {
+  color: var(--ws-accent);
+}
+
+.ws-pilot .ws-panel-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+}
+
+.ws-pilot .ws-panel-body {
+  padding: 0.875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.ws-pilot .ws-panel-body.is-flush {
+  padding: 0;
+}
+
+/* A number worth reading from across the room, with its unit beside it. */
+.ws-pilot .ws-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.ws-pilot .ws-stat-value {
+  font-size: 1.75rem;
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-stat-unit {
+  font-size: var(--type-list);
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-stat-note {
+  margin-top: 0.375rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-meter {
+  margin-top: 0.625rem;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.ws-pilot .ws-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ws-accent);
+  transition: width 0.2s ease;
+}
+
+.ws-pilot .ws-meter.is-full > span {
+  background: var(--state-warning, #b46b12);
+}
+
+/* ------------------------------------------------------------------
+   Long thin rows — sessions, entitlements, attached forms.
+
+   Deliberately a row and not a tile: a session is one fact per column, and a
+   class with twelve of them should be one screen, not twelve.
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-row-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-pilot .ws-row-item {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: 4rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.ws-pilot .ws-row-list > .ws-row-item:last-child {
+  border-bottom: 0;
+}
+
+/*
+ * A workspace with thirty packages should not turn one panel into thirty
+ * screens. Past roughly seven rows the list scrolls inside its panel instead.
+ */
+.ws-pilot .ws-row-list.is-scroll {
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.ws-pilot .ws-row-item:hover {
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-row-item.is-cancelled .ws-row-primary {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-row-lead {
+  display: flex;
+  width: 3rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ws-radius-tile);
+  background: var(--ws-accent-soft);
+  padding: 0.3125rem 0;
+  color: var(--ws-accent);
+}
+
+.ws-pilot .ws-row-lead-top {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ws-pilot .ws-row-lead-main {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.ws-pilot .ws-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-pilot .ws-row-primary {
+  display: block;
+  font-size: var(--type-list);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-pilot .ws-row-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.625rem;
+  margin-top: 0.1875rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-row-metric {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: var(--type-list);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-row-metric strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ws-pilot .ws-row-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+/* ------------------------------------------------------------------
+   Compact data table — registrants, waitlist
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-table-wrap {
+  overflow-x: auto;
+}
+
+.ws-pilot .ws-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-list);
+}
+
+.ws-pilot .ws-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  text-align: left;
+  font-size: var(--type-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.ws-pilot .ws-table tbody td {
+  padding: 0.5625rem 0.875rem;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.ws-pilot .ws-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ws-pilot .ws-table tbody tr:hover td {
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-table .ws-cell-sub {
+  display: block;
+  font-size: var(--type-helper);
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-table .ws-cell-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ws-pilot .ws-table .ws-cell-num {
+  width: 3rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------
+   Drawer — registrant and waitlist detail.
+
+   A drawer rather than a third column: detail is occasional, and a permanent
+   column for it would take width from the table it describes.
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(16, 20, 24, 0.28);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ws-pilot .ws-drawer {
+  display: flex;
+  width: min(100%, 30rem);
+  flex-direction: column;
+  background: var(--surface);
+  box-shadow: var(--ws-shadow-overlay);
+  animation: ws-drawer-in 0.16s ease-out;
+}
+
+@keyframes ws-drawer-in {
+  from { transform: translateX(1.5rem); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-pilot .ws-drawer { animation: none; }
+}
+
+.ws-pilot .ws-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-pilot .ws-drawer-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.125rem 1.25rem;
+}
+
+.ws-pilot .ws-drawer-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  padding: 0.875rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.ws-pilot .ws-detail-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: var(--type-list);
+}
+
+.ws-pilot .ws-detail-list > div {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.ws-pilot .ws-detail-list dt {
+  width: 7.5rem;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.ws-pilot .ws-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------
+   Wide thin choice cards — one-time vs repeating
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-pattern-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 700px) {
+  .ws-pilot .ws-pattern-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ws-pilot .ws-pattern-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--ws-radius-tile);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ws-pilot .ws-pattern-card:hover {
+  border-color: var(--ws-accent-border);
+}
+
+.ws-pilot .ws-pattern-card[aria-pressed="true"] {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+}
+
+.ws-pilot .ws-pattern-icon {
+  display: inline-flex;
+  height: 1.875rem;
+  width: 1.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ws-radius-tile);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+
+.ws-pilot .ws-pattern-card[aria-pressed="true"] .ws-pattern-icon {
+  background: var(--surface);
+}
+
+.ws-pilot .ws-pattern-name {
+  display: block;
+  font-size: var(--type-list);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ws-pilot .ws-pattern-help {
+  display: block;
+  margin-top: 0.0625rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+/* Weekday chips — a week fits on one line, so it should be one line. */
+.ws-pilot .ws-day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3125rem;
+}
+
+.ws-pilot .ws-day-chip {
+  min-width: 2.375rem;
+  padding: 0.3125rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--ws-radius-control);
+  background: var(--surface);
+  font-size: var(--type-helper);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.ws-pilot .ws-day-chip[aria-pressed="true"] {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------
+   Compact people cards — instructor picking, with a face on it
+   ------------------------------------------------------------------ */
+.ws-pilot .ws-people-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+}
+
+.ws-pilot .ws-people-card {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--ws-radius-tile);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ws-pilot .ws-people-card:hover {
+  border-color: var(--ws-accent-border);
+}
+
+.ws-pilot .ws-people-card[aria-pressed="true"] {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+}
+
+.ws-pilot .ws-people-avatar {
+  display: inline-flex;
+  height: 1.875rem;
+  width: 1.875rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--ws-accent-soft);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ws-accent);
+}
+
+.ws-pilot .ws-people-card[aria-pressed="true"] .ws-people-avatar {
+  background: var(--surface);
+}
+
+.ws-pilot .ws-people-name {
+  display: block;
+  font-size: var(--type-list);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-pilot .ws-people-meta {
+  display: block;
+  font-size: var(--type-helper);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A statement of what the product does not do yet, not a disabled control. */
+.ws-pilot .ws-gap-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: var(--ws-radius-control);
+  border: 1px dashed var(--border);
+  background: var(--surface-muted);
+  padding: 0.5rem 0.6875rem;
+  font-size: var(--type-helper);
+  color: var(--text-secondary);
+}
+
+.ws-pilot .ws-gap-note svg {
+  margin-top: 0.0625rem;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
 }
