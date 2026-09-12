@@ -21,6 +21,6 @@
 
 | MCTB_HOME_MICRO_POLISH | PASS | KPI, Active chip, nav/logo neutral, bottom row stretch |
 
-**MCTB_HOME_COMPLETE: YES**
+**MCTB_HOME_COMPLETE: YES** — **LOCKED** (`docs/MCTB-HOME-VISUAL-REFERENCE.md`)
 
-Other MCTB pages: **not started** (content may retain legacy purple until their pass).
+Other MCTB pages: **not started** — use Home as visual reference; do not modify Home except shared-shell fixes.

@@ -175,13 +175,9 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
             </div>
           ) : null}
 
-          <div className="order-4 flex flex-col gap-3 lg:contents lg:col-span-12 lg:row-start-2">
-            <div className="lg:col-span-7">
-              <MctbHomeRecentConversations data={data} />
-            </div>
-            <div className="lg:col-span-5">
-              <MctbHomeSetupStatus data={data} />
-            </div>
+          <div className="mctb-home-bottom-pair order-4 lg:col-span-12 lg:row-start-2">
+            <MctbHomeRecentConversations data={data} />
+            <MctbHomeSetupStatus data={data} />
           </div>
         </div>
       </div>

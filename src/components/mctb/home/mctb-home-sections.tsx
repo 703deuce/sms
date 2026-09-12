@@ -13,7 +13,30 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { MctbAttentionItem } from "@/components/mctb/kimi-ui/mctb-needs-attention";
+import type { ReactNode } from "react";
 import "./mctb-home.css";
+
+/** Shared module header — same geometry for every Home section. */
+export function MctbHomeSectionHead({
+  id,
+  title,
+  action,
+}: {
+  id: string;
+  title: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mctb-home-section-head">
+      <h2 id={id} className="mctb-home-section-title">{title}</h2>
+      {action ?? (
+        <span className="mctb-home-section-head-action-placeholder" aria-hidden>
+          Open inbox →
+        </span>
+      )}
+    </div>
+  );
+}
 
 function fmtTime(iso: string) {
   try {
@@ -215,14 +238,15 @@ export function MctbHomeNeedsAttention({ items }: { items: MctbAttentionItem[] }
 export function MctbHomeRecentConversations({ data }: { data: MctbOverviewPayload }) {
   return (
     <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-conversations">
-      <div className="mctb-home-section-head">
-        <h2 id="mctb-home-conversations" className="mctb-home-section-title">
-          Recent conversations
-        </h2>
-        <Link href={MCTB_ROUTES.conversations} className="mctb-home-link">
-          Open inbox →
-        </Link>
-      </div>
+      <MctbHomeSectionHead
+        id="mctb-home-conversations"
+        title="Recent conversations"
+        action={
+          <Link href={MCTB_ROUTES.conversations} className="mctb-home-link">
+            Open inbox →
+          </Link>
+        }
+      />
       {data.recentConversations.length === 0 ? (
         <div className="px-4 py-5 text-center">
           <p className="text-[13px] font-medium text-[#1b1e23]">No recent conversations.</p>
@@ -278,9 +302,7 @@ const SETUP_ROWS: Array<{
 export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
   return (
     <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-setup">
-      <div className="mctb-home-section-head">
-        <h2 id="mctb-home-setup" className="mctb-home-section-title">Setup status</h2>
-      </div>
+      <MctbHomeSectionHead id="mctb-home-setup" title="Setup status" />
       <div className="mctb-home-module-body">
         {SETUP_ROWS.map((row) => (
           <Link key={row.key} href={row.href} className="mctb-home-setup-row mctb-home-interactive-row">
