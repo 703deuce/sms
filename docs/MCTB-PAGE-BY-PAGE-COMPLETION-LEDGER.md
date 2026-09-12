@@ -125,7 +125,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_OVERVIEW_PAUSE_RESUME | PASS | `POST /api/mctb/setup` |
 | MCTB_SETUP_OVERVIEW_ACTIVITY | PASS | Funnel events read-only |
 | MCTB_SETUP_OVERVIEW_QUICK_ACTIONS | PASS | Deep links |
-| MCTB_SETUP_PHONE_FORWARDING | NOT_STARTED | Next pass |
+| MCTB_SETUP_PHONE_FORWARDING | PASS | Premium 8/4 grid, status strip, instructions drawer, verify panel |
 | MCTB_SETUP_RECOVERY | NOT_STARTED | Next pass |
 | MCTB_SETUP_CONSENT | NOT_STARTED | Next pass |
 | MCTB_SETUP_VOICEMAIL | NOT_STARTED | Next pass |
@@ -135,3 +135,20 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 
 **MCTB_SETUP_SHELL_COMPLETE: YES**  
 **MCTB_SETUP_OVERVIEW_COMPLETE: YES** — visual premium polish (flow strip, grouped rows, status rail)
+
+## Phone & Forwarding (`/mctb/setup/phone`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_PHONE_ROUTE | PASS | Canonical `/mctb/setup/phone` |
+| MCTB_SETUP_PHONE_STATUS_STRIP | PASS | Business → forward → carrier → connection |
+| MCTB_SETUP_PHONE_SECTIONS | PASS | Business, destination, carrier, setup, ring, verify |
+| MCTB_SETUP_PHONE_INSTRUCTIONS_DRAWER | PASS | Carrier steps + copy; not inline wall |
+| MCTB_SETUP_PHONE_VERIFY | PASS | `start_forwarding_test` + poll |
+| MCTB_SETUP_PHONE_SAVE | PASS | Setup + onboarding POST; dirty state |
+| MCTB_SETUP_PHONE_RAIL | PASS | Summary, flow preview, help |
+| MCTB_SETUP_PHONE_RESPONSIVE | PASS | Screenshots `mctb-setup/phone_*` |
+| MCTB_SETUP_PHONE_DOCS | PASS | Audit + connection matrix |
+| MCTB_SETUP_PHONE_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**MCTB_SETUP_PHONE_FORWARDING_COMPLETE: YES**
