@@ -12,8 +12,7 @@ import { buildNumbersNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
-import { buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
-import { buildMctbV1Nav } from "@/lib/products/mctb-nav";
+import { resolveProductSidebarNav, isMctbShellActive, isAppointmentsShellActive } from "@/lib/products/resolve-product-nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { productLogoHome } from "@/lib/products/context";
@@ -363,60 +362,16 @@ export function Sidebar({
       });
     }
 
-    if (multiProduct && productShell === "appointments") {
-      return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
-    }
-
-    if (multiProduct && productShell === "mctb") {
-      return buildMctbV1Nav({ inboxBadge });
-    }
-
-    if (isAppointmentsV1Primary()) {
-      return buildAppointmentsV1Nav({ conversationsBadge: inboxBadge });
-    }
-
-    if (isSmsOnlyAppNav()) {
-      return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
-    }
-
-    if (multiProduct) {
-      if (productShell === "mass_sms") {
-        return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
-      }
-      if (productShell === "ai_after_hours") {
-        return buildAiAfterHoursNav({
-          primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-        });
-      }
-      return buildMctbShellNav({
-        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-        showTryIt,
-        smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-        productFeatures,
-        showBillingNav: true,
-        inboxBadge,
-        hasSms,
-      });
-    }
-
-    if (hasMassSms) {
-      return buildSmsPlatformNav({ conversationsBadge: inboxBadge });
-    }
-
-    if (hasAiAfterHours) {
-      return buildAiAfterHoursNav({
-        primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-      });
-    }
-
-    return buildMctbShellNav({
-      primaryVoiceAgentId: primaryVoiceAgentId ?? null,
-      showTryIt,
-      smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
-      productFeatures,
-      showBillingNav: true,
+    return resolveProductSidebarNav({
+      pathname,
       inboxBadge,
+      multiProduct,
+      productShell,
+      primaryVoiceAgentId,
+      showTryIt,
+      productFeatures,
       hasSms,
+      smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
     });
   }, [
     primaryVoiceAgentId,
@@ -451,11 +406,15 @@ export function Sidebar({
   }
 
   const homeHref =
-    multiProduct && productShell === "appointments"
-      ? appointmentsShellHome()
-      : multiProduct && productShell === "mctb"
-        ? mctbShellHome()
-        : isAppointmentsV1Primary()
+    isMctbShellActive(pathname, multiProduct, productShell)
+      ? mctbShellHome()
+      : isAppointmentsShellActive(pathname, multiProduct, productShell)
+        ? appointmentsShellHome()
+        : multiProduct && productShell === "appointments"
+          ? appointmentsShellHome()
+          : multiProduct && productShell === "mctb"
+            ? mctbShellHome()
+            : isAppointmentsV1Primary()
     ? appointmentsShellHome()
     : realtorMode
     ? "/realtor/dashboard"

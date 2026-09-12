@@ -4,7 +4,6 @@ import {
   MessageSquare,
   PhoneMissed,
   SlidersHorizontal,
-  Users,
   Voicemail,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
@@ -50,12 +49,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Setup",
       href: MCTB_ROUTES.setup,
       icon: SlidersHorizontal,
-      sectionLabel: "Configure",
-    },
-    {
-      label: "Numbers",
-      href: MCTB_ROUTES.numbers,
-      icon: Users,
+      children: [{ label: "Numbers", href: MCTB_ROUTES.numbers }],
     },
   ];
 }

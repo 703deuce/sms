@@ -17,6 +17,7 @@ import {
 import { buildAiAfterHoursNav } from "../src/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "../src/lib/products/sms-platform-nav";
 import { buildMctbV1Nav } from "../src/lib/products/mctb-nav";
+import { resolveProductSidebarNav } from "../src/lib/products/resolve-product-nav";
 import { isAiAfterHoursEntitled, AI_AFTER_HOURS_DISPLAY_NAME } from "../src/lib/products/ai-after-hours";
 
 assert.equal(productShellLabel("appointments"), "Appointments");
@@ -56,14 +57,24 @@ assert.ok(
 );
 
 const mctbNav = buildMctbV1Nav();
+assert.equal(mctbNav.length, 6);
 const mctbLabels = mctbNav.map((i) => i.label);
+
+const mctbNavFromPath = resolveProductSidebarNav({
+  pathname: "/mctb/missed-calls",
+  multiProduct: false,
+  productShell: "appointments",
+});
+assert.equal(mctbNavFromPath.map((i) => i.label).join(","), mctbLabels.join(","));
 assert.ok(mctbLabels.includes("Home"));
 assert.ok(mctbLabels.includes("Missed Calls"));
 assert.ok(mctbLabels.includes("Conversations"));
 assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));
-assert.ok(mctbLabels.includes("Numbers"));
+const setup = mctbNav.find((i) => i.label === "Setup");
+assert.ok(setup?.children?.some((c) => c.label === "Numbers"));
+assert.ok(!mctbLabels.includes("Numbers"));
 assert.ok(!mctbLabels.includes("Settings"));
 assert.ok(!mctbLabels.includes("Campaigns"));
 assert.ok(!mctbLabels.includes("Calendar"));
