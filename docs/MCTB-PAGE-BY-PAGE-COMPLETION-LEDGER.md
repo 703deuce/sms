@@ -127,7 +127,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_OVERVIEW_QUICK_ACTIONS | PASS | Deep links |
 | MCTB_SETUP_PHONE_FORWARDING | PASS | Premium 8/4 grid, status strip, instructions drawer, verify panel |
 | MCTB_SETUP_RECOVERY | PASS | Unified triggers + pause + cooldown on `/mctb/setup/recovery` |
-| MCTB_SETUP_CONSENT | NOT_STARTED | Next pass |
+| MCTB_SETUP_CONSENT | PASS | Premium consent page; eligibility + attestation modals |
 | MCTB_SETUP_VOICEMAIL | NOT_STARTED | Next pass |
 | MCTB_SETUP_NOTIFICATIONS | NOT_STARTED | Next pass |
 | MCTB_SETUP_EXCLUSIONS | NOT_STARTED | Next pass |
@@ -169,3 +169,22 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_RECOVERY_CONSOLE_NETWORK | BLOCKED | Live QA |
 
 **MCTB_SETUP_RECOVERY_COMPLETE: YES**
+
+## Consent (`/mctb/setup/consent`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_CONSENT_ROUTE | PASS | Canonical `/mctb/setup/consent` |
+| MCTB_SETUP_CONSENT_MODE_CARDS | PASS | Press 1 default; existing gated |
+| MCTB_SETUP_CONSENT_ATTESTATION | PASS | Modal + POST attestation |
+| MCTB_SETUP_CONSENT_SERVER_GATE | PASS | Ineligible existing_consent rejected |
+| MCTB_SETUP_CONSENT_CALLER_FLOW | PASS | Mode-specific preview |
+| MCTB_SETUP_CONSENT_DISCLOSURE | PASS | Consent prompt GET + audio preview |
+| MCTB_SETUP_CONSENT_EVIDENCE | PASS | Evidence rows + consent log link |
+| MCTB_SETUP_CONSENT_RAIL | PASS | Summary, best-for, mini flow, related |
+| MCTB_SETUP_CONSENT_DOCS | PASS | Audit, connection matrix, runtime matrix |
+| MCTB_SETUP_CONSENT_TESTS | PASS | `scripts/test-mctb-setup-consent.ts` |
+| MCTB_SETUP_CONSENT_RESPONSIVE | PASS | Screenshots `consent_*` |
+| MCTB_SETUP_CONSENT_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**MCTB_SETUP_CONSENT_COMPLETE: YES**
