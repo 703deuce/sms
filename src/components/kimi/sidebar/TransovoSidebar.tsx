@@ -199,7 +199,10 @@ export function TransovoSidebar({
 
   return (
     <aside
-      className="transovo-sidebar flex h-screen flex-col border-r border-border bg-card"
+      className={cn(
+        "transovo-sidebar flex h-screen flex-col border-r border-border bg-card",
+        appointmentsOverviewShell && "transovo-sidebar-soft-slate",
+      )}
       style={{
         width: collapsed ? 56 : expandedWidthPx,
         ...(appointmentsOverviewShell && !collapsed

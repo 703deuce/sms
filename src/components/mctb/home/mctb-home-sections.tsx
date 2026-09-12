@@ -110,16 +110,23 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
   );
 }
 
-export function MctbHomeAttentionOkStrip() {
+export function MctbHomeAttentionOkStrip({ variant = "card" }: { variant?: "card" | "inline" }) {
+  const className = variant === "inline" ? "mctb-home-attention-inline" : "mctb-home-attention-ok";
   return (
-    <div className="mctb-home-attention-ok" role="status">
+    <div className={className} role="status">
       <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden />
       <span>Nothing needs attention</span>
     </div>
   );
 }
 
-export function MctbHomeRecentMissedCallsTable({ data }: { data: MctbOverviewPayload }) {
+export function MctbHomeRecentMissedCallsTable({
+  data,
+  attentionOkInline = false,
+}: {
+  data: MctbOverviewPayload;
+  attentionOkInline?: boolean;
+}) {
   const router = useRouter();
   const goDetail = (id: string) => router.push(MCTB_ROUTES.missedCallDetail(id));
 
@@ -133,6 +140,7 @@ export function MctbHomeRecentMissedCallsTable({ data }: { data: MctbOverviewPay
           View all →
         </Link>
       </div>
+      {attentionOkInline ? <MctbHomeAttentionOkStrip variant="inline" /> : null}
       {data.recentMissedCalls.length === 0 ? (
         <div className="px-4 py-6 text-center">
           <p className="text-[13px] font-medium text-[#1b1e23]">No missed calls yet today.</p>
