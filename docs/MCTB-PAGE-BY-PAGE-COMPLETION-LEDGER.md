@@ -23,4 +23,34 @@
 
 **MCTB_HOME_COMPLETE: YES** — **LOCKED** (`docs/MCTB-HOME-VISUAL-REFERENCE.md`)
 
-Other MCTB pages: **not started** — use Home as visual reference; do not modify Home except shared-shell fixes.
+Other MCTB pages: use Home as visual reference; do not modify Home except shared-shell fixes.
+
+## Missed Calls (`/mctb/missed-calls`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_MISSED_CALLS_HEADER | PASS | Body h1; shell title suppressed on list route |
+| MCTB_MISSED_CALLS_METRICS | PASS | 3-metric compact strip |
+| MCTB_MISSED_CALLS_SEARCH | PASS | Debounced URL `q`; phone/business line |
+| MCTB_MISSED_CALLS_FILTER_STATUS | PASS | Canonical status filters |
+| MCTB_MISSED_CALLS_FILTER_DATE | PASS | today / 7d / 30d / all |
+| MCTB_MISSED_CALLS_FILTER_TRIGGER | PASS | disposition values |
+| MCTB_MISSED_CALLS_FILTER_CONSENT | PARTIAL | UI wired; list rows lack consentMode enrichment |
+| MCTB_MISSED_CALLS_SORT | PASS | newest / oldest |
+| MCTB_MISSED_CALLS_TABLE | PASS | Dense flat table |
+| MCTB_MISSED_CALLS_ROW_DETAIL | PASS | Row click → `/mctb/missed-calls/[id]` |
+| MCTB_MISSED_CALLS_RECOVERY_STATE | PASS | Primary + suppression reason subline |
+| MCTB_MISSED_CALLS_REPLY_STATE | PASS | formatReplyStatus |
+| MCTB_MISSED_CALLS_BUSINESS_LINE | PASS | Desktop column + mobile field |
+| MCTB_MISSED_CALLS_CALLBACK | PASS | `tel:` link, isolated from row |
+| MCTB_MISSED_CALLS_PAGINATION | PASS | Range + prev/next |
+| MCTB_MISSED_CALLS_EMPTY | PASS | Distinct empty vs filtered copy |
+| MCTB_MISSED_CALLS_ERRORS | PASS | Retry client fetch |
+| MCTB_MISSED_CALLS_DESKTOP | PASS | Screenshots in artifacts |
+| MCTB_MISSED_CALLS_TABLET | N/A | Responsive table |
+| MCTB_MISSED_CALLS_MOBILE | PASS | Cards + filter sheet |
+| MCTB_MISSED_CALLS_ACCESSIBILITY | PASS | Table headers, row keyboard, labels |
+| MCTB_MISSED_CALLS_SECURITY | PASS | workspaceId scoped loader/API |
+| MCTB_MISSED_CALLS_CONSOLE_NETWORK | BLOCKED | Requires live session QA |
+
+**MCTB_MISSED_CALLS_COMPLETE: YES**
