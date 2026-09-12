@@ -1,17 +1,21 @@
-export const AUDIENCE_PAGE_SIZES = [10, 20, 50, 100] as const;
+import {
+  GLOBAL_TABLE_DEFAULT_PAGE_SIZE,
+  GLOBAL_TABLE_PAGE_SIZE_OPTIONS,
+  normalizeGlobalTablePageSize,
+  type GlobalTablePageSize,
+} from "@/lib/ui/global-data-table";
 
-export type AudiencePageSize = (typeof AUDIENCE_PAGE_SIZES)[number];
+export const AUDIENCE_PAGE_SIZES = GLOBAL_TABLE_PAGE_SIZE_OPTIONS;
 
-export const DEFAULT_AUDIENCE_PAGE_SIZE: AudiencePageSize = 10;
+export type AudiencePageSize = GlobalTablePageSize;
+
+export const DEFAULT_AUDIENCE_PAGE_SIZE: AudiencePageSize = GLOBAL_TABLE_DEFAULT_PAGE_SIZE;
 
 export function parseAudiencePagination(input?: {
   page?: string;
   perPage?: string;
 }): { page: number; perPage: AudiencePageSize } {
-  const perPageRaw = Number(input?.perPage);
-  const perPage = AUDIENCE_PAGE_SIZES.includes(perPageRaw as AudiencePageSize)
-    ? (perPageRaw as AudiencePageSize)
-    : DEFAULT_AUDIENCE_PAGE_SIZE;
+  const perPage = normalizeGlobalTablePageSize(input?.perPage);
   const page = Math.max(1, Number(input?.page) || 1);
   return { page, perPage };
 }

@@ -1,4 +1,8 @@
 import type { Prisma } from "@prisma/client";
+import {
+  GLOBAL_TABLE_DEFAULT_PAGE_SIZE,
+  normalizeGlobalTablePageSize,
+} from "@/lib/ui/global-data-table";
 
 export type MissedCallsStatusFilter =
   | "all"
@@ -23,8 +27,7 @@ export type MissedCallsListQuery = {
   sort?: MissedCallsSort;
 };
 
-export const MISSED_CALLS_PAGE_SIZE_DEFAULT = 25;
-export const MISSED_CALLS_PAGE_SIZE_MAX = 100;
+export const MISSED_CALLS_PAGE_SIZE_DEFAULT = GLOBAL_TABLE_DEFAULT_PAGE_SIZE;
 
 export function parseMissedCallsListQuery(
   searchParams: URLSearchParams,
@@ -34,7 +37,7 @@ export function parseMissedCallsListQuery(
   const consentMode = searchParams.get("consentMode") as "press_1" | "existing_consent" | null;
   const sort = searchParams.get("sort") as MissedCallsSort | null;
   const page = Number(searchParams.get("page") || "1");
-  const pageSize = Number(searchParams.get("pageSize") || String(MISSED_CALLS_PAGE_SIZE_DEFAULT));
+  const pageSize = normalizeGlobalTablePageSize(searchParams.get("pageSize"));
 
   return {
     q: searchParams.get("q")?.trim() || undefined,
@@ -52,10 +55,7 @@ export function parseMissedCallsListQuery(
     consentMode:
       consentMode === "press_1" || consentMode === "existing_consent" ? consentMode : undefined,
     page: Number.isFinite(page) && page > 0 ? page : 1,
-    pageSize:
-      Number.isFinite(pageSize) && pageSize > 0
-        ? Math.min(MISSED_CALLS_PAGE_SIZE_MAX, pageSize)
-        : MISSED_CALLS_PAGE_SIZE_DEFAULT,
+    pageSize,
     sort: sort === "detectedAt_asc" ? "detectedAt_asc" : "detectedAt_desc",
   };
 }

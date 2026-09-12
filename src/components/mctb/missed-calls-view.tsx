@@ -10,9 +10,11 @@ import {
   type MissedCallsSort,
   type MissedCallsStatusFilter,
 } from "@/lib/mctb/missed-calls-list-filters";
+import { DataTablePaginationFooter } from "@/components/ui/data-table-pagination-footer";
 import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { ChevronLeft, ChevronRight, MoreHorizontal, SlidersHorizontal } from "lucide-react";
+import type { GlobalTablePageSize } from "@/lib/ui/global-data-table";
+import { MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -112,11 +114,25 @@ function fmtSuppressionReason(reason: string | null): string | null {
   return reason.replace(/_/g, " ").toLowerCase();
 }
 
-function recoveryTone(status: string, suppressionReason: string | null): "" | "failed" | "warning" {
+function recoveryStatusClass(status: string, suppressionReason: string | null): string {
   const s = status.toUpperCase();
-  if (s === "FAILED") return "failed";
-  if (s === "SUPPRESSED" && suppressionReason === "NOT_EXISTING_CONSENT") return "warning";
-  return "";
+  if (s === "FAILED") return "mctb-mc-status mctb-mc-status--failed";
+  if (s === "SUPPRESSED") {
+    if (suppressionReason === "NOT_EXISTING_CONSENT") {
+      return "mctb-mc-status mctb-mc-status--warning";
+    }
+    return "mctb-mc-status mctb-mc-status--suppressed";
+  }
+  if (s === "SENT" || s === "SMS_SENT" || s === "CUSTOMER_REPLIED") {
+    return "mctb-mc-status mctb-mc-status--sent";
+  }
+  return "mctb-mc-status";
+}
+
+function replyStatusClass(status: string): string {
+  const s = status.toUpperCase();
+  if (s === "CUSTOMER_REPLIED") return "mctb-mc-status mctb-mc-status--replied";
+  return "mctb-mc-status mctb-mc-status--muted";
 }
 
 function toMissedCallEvents(data: MctbMissedCallsListData["events"]): MissedCallEvent[] {
@@ -279,14 +295,9 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
     router.push(detailHref(id));
   };
 
-  const rangeLabel = useMemo(() => {
-    if (!pagination || pagination.total === 0) return "";
-    const start = (pagination.page - 1) * pagination.pageSize + 1;
-    const end = Math.min(pagination.page * pagination.pageSize, pagination.total);
-    return `${start}–${end} of ${pagination.total}`;
-  }, [pagination]);
-
   const clearFilters = () => router.push(MCTB_ROUTES.missedCalls);
+
+  const tablePageSize = (pagination?.pageSize ?? query.pageSize ?? 10) as GlobalTablePageSize;
 
   return (
     <div className="mctb-missed-calls">
@@ -573,7 +584,8 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                     {events.map((row) => {
                       const recoveryPrimary = formatRecoveryStatus(row.status, row.suppressionReason);
                       const reason = fmtSuppressionReason(row.suppressionReason);
-                      const tone = recoveryTone(row.status, row.suppressionReason);
+                      const recoveryClass = recoveryStatusClass(row.status, row.suppressionReason);
+                      const replyClass = replyStatusClass(row.status);
                       const callerPrimary = row.contactName || fmtPhone(row.callerE164);
                       const showPhoneSecondary = Boolean(row.contactName);
                       return (
@@ -604,23 +616,15 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                           <td className="mctb-mc-muted">
                             {classificationToTriggerLabel(row.classification)}
                           </td>
-                          <td>
-                            <span
-                              className={`mctb-mc-recovery-primary${
-                                tone === "failed"
-                                  ? " mctb-mc-recovery--failed"
-                                  : tone === "warning"
-                                    ? " mctb-mc-recovery--warning"
-                                    : ""
-                              }`}
-                            >
-                              {recoveryPrimary}
-                            </span>
+                          <td className="mctb-mc-cell-recovery">
+                            <span className={recoveryClass}>{recoveryPrimary}</span>
                             {reason ? (
                               <span className="mctb-mc-recovery-reason">{reason}</span>
                             ) : null}
                           </td>
-                          <td className="mctb-mc-muted">{formatReplyStatus(row.status)}</td>
+                          <td>
+                            <span className={replyClass}>{formatReplyStatus(row.status)}</span>
+                          </td>
                           <td className="mctb-mc-muted hidden md:table-cell">{fmtPhone(row.businessE164)}</td>
                           <td className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="mctb-mc-actions relative">
@@ -629,7 +633,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                                 className="mctb-mc-callback"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                Call back
+                                Callback
                               </a>
                               <button
                                 type="button"
@@ -723,38 +727,18 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                 })}
               </div>
 
-              {pagination ? (
-                <div className="mctb-mc-footer">
-                  <span>{rangeLabel}</span>
-                  {pagination.totalPages > 1 ? (
-                    <div className="mctb-mc-pager">
-                      <button
-                        type="button"
-                        className="mctb-mc-pager-btn"
-                        disabled={pagination.page <= 1}
-                        onClick={() => pushQuery({ page: pagination.page - 1 })}
-                        aria-label="Previous page"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden />
-                      </button>
-                      <span>
-                        Page {pagination.page} of {pagination.totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        className="mctb-mc-pager-btn"
-                        disabled={pagination.page >= pagination.totalPages}
-                        onClick={() => pushQuery({ page: pagination.page + 1 })}
-                        aria-label="Next page"
-                      >
-                        <ChevronRight className="h-4 w-4" aria-hidden />
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           )}
+          {!loading && !error && pagination ? (
+            <DataTablePaginationFooter
+              className="mctb-mc-pagination"
+              page={pagination.page}
+              pageSize={tablePageSize}
+              total={pagination.total}
+              onPageChange={(page) => pushQuery({ page })}
+              onPageSizeChange={(pageSize) => pushQuery({ pageSize, page: 1 })}
+            />
+          ) : null}
         </div>
       </div>
     </div>

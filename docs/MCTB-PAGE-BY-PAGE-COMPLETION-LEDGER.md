@@ -43,7 +43,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_MISSED_CALLS_REPLY_STATE | PASS | formatReplyStatus |
 | MCTB_MISSED_CALLS_BUSINESS_LINE | PASS | Desktop column + mobile field |
 | MCTB_MISSED_CALLS_CALLBACK | PASS | `tel:` link, isolated from row |
-| MCTB_MISSED_CALLS_PAGINATION | PASS | Range + prev/next |
+| MCTB_MISSED_CALLS_PAGINATION | PASS | Default 10 rows; shared footer + page size 5/10/25/50 |
 | MCTB_MISSED_CALLS_EMPTY | PASS | Distinct empty vs filtered copy |
 | MCTB_MISSED_CALLS_ERRORS | PASS | Retry client fetch |
 | MCTB_MISSED_CALLS_DESKTOP | PASS | Screenshots in artifacts |

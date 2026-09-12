@@ -3,6 +3,7 @@ import {
   buildMissedCallsListWhere,
   filterEventsByConsentMode,
   missedCallsOrderBy,
+  MISSED_CALLS_PAGE_SIZE_DEFAULT,
   type MissedCallsListQuery,
 } from "@/lib/mctb/missed-calls-list-filters";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
@@ -37,8 +38,8 @@ export async function loadMctbMissedCallsListData(
   const prisma = getPrisma();
   const where = buildMissedCallsListWhere(workspaceId, query);
   const orderBy = missedCallsOrderBy(query.sort);
-  const skip = ((query.page ?? 1) - 1) * (query.pageSize ?? 25);
-  const take = query.pageSize ?? 25;
+  const take = query.pageSize ?? MISSED_CALLS_PAGE_SIZE_DEFAULT;
+  const skip = ((query.page ?? 1) - 1) * take;
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
