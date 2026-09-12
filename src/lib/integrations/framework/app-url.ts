@@ -82,6 +82,17 @@ export function resolvePublicAppUrl(request?: Request): string {
 
 /** Build an absolute redirect URL using the public site origin (never 0.0.0.0). */
 export function publicRedirectUrl(path: string, request?: Request): URL {
+  if (process.env.NODE_ENV === "development" && request) {
+    try {
+      const origin = new URL(request.url).origin;
+      const hostOnly = new URL(request.url).hostname.toLowerCase();
+      if (hostOnly === "127.0.0.1" || hostOnly === "localhost") {
+        return new URL(path, `${origin}/`);
+      }
+    } catch {
+      /* fall through */
+    }
+  }
   return new URL(path, `${resolvePublicAppUrl(request)}/`);
 }
 

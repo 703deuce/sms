@@ -43,6 +43,15 @@ assert.equal(
   "https://live.coolify.example/login",
 );
 
+process.env.NODE_ENV = "development";
+const localDevRequest = new Request("http://127.0.0.1:3000/api/auth/dev-bypass?next=%2Fappointments%2Foverview", {
+  headers: { host: "127.0.0.1:3000" },
+});
+assert.equal(
+  publicRedirectUrl("/appointments/overview", localDevRequest).href,
+  "http://127.0.0.1:3000/appointments/overview",
+);
+
 delete process.env.NEXT_PUBLIC_APP_URL;
 assert.equal(resolvePublicAppUrl(internalRequest), "https://app.example.com");
 process.env.APP_URL = "https://app.example.com"; // pragma: allowlist secret

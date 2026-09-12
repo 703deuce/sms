@@ -9,7 +9,7 @@ import { chromium, type Page } from "playwright";
 const BASE = process.env.UI_AGENT_BASE_URL?.trim() || "http://127.0.0.1:3000";
 const OUT =
   process.env.SCREENSHOT_DIR || "/opt/cursor/artifacts/transovo-soft-cool-slate-204-test";
-const ROUTE = `${BASE}/appointments/overview`;
+const ROUTE = `${BASE}/api/auth/dev-bypass?next=${encodeURIComponent("/appointments/overview")}`;
 const SIDEBAR_W = 204;
 
 async function dismissOverlays(page: Page) {
@@ -22,13 +22,18 @@ async function dismissOverlays(page: Page) {
 
 async function ready(page: Page) {
   await page.goto(ROUTE, { waitUntil: "networkidle", timeout: 180000 });
-  await page.waitForSelector("html.appt-overview-pilot-active", { timeout: 90000 }).catch(() => undefined);
+  await page.waitForURL(/\/appointments\/overview/, { timeout: 120000 });
+  await page.waitForSelector("html.appt-overview-slate-204, html:has(.appt-overview-pilot)", {
+    timeout: 90000,
+  }).catch(() => undefined);
   await page.waitForSelector('[data-overview-revision="soft-cool-slate-204"]', { timeout: 120000 }).catch(
     () => undefined,
   );
-  await page.waitForSelector(".appt-overview-pilot .ref-deco-kpi, h1:has-text('Overview')", {
+  await page.waitForSelector('[data-overview-revision="soft-cool-slate-204"]', {
+    state: "attached",
     timeout: 120000,
   });
+  await page.waitForSelector(".appt-overview-pilot", { state: "attached", timeout: 120000 });
   await dismissOverlays(page);
   await page.waitForTimeout(1200);
 }
