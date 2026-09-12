@@ -136,8 +136,8 @@
 .mctb-vm-panel--inbox {
   display: flex;
   flex-direction: column;
-  min-height: 32rem;
-  max-height: calc(100vh - 15rem);
+  height: min(28rem, calc(100vh - 12.5rem));
+  min-height: 22rem;
 }
 
 .mctb-vm-inbox-scroll {
@@ -149,9 +149,32 @@
 .mctb-vm-inbox-pagination {
   flex-shrink: 0;
   margin-top: auto;
-  border-top: 1px solid #f0f2f4;
+  border-top: 1px solid #eaedf0;
   border-radius: 0 0 8px 8px;
   background: #fafbfc;
+  min-height: 2.75rem;
+  z-index: 1;
+}
+
+.mctb-vm-btn:disabled,
+.mctb-vm-greeting-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.mctb-vm-greeting-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #626872;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mctb-vm-greeting-link:not(:disabled):hover {
+  color: #1b1e23;
 }
 
 .mctb-vm-panel--detail {

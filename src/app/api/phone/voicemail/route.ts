@@ -94,6 +94,7 @@ export async function GET(request: Request) {
         isRead: m.isRead,
         boxId: m.boxId,
         callerDisplayName: m.fromE164 ? displayByPhone.get(m.fromE164) ?? null : null,
+        hasRecording: Boolean(m.recordingUrl),
       }),
     );
 

@@ -13,6 +13,7 @@ export type PersonalVoicemailMessage = {
   isRead: boolean;
   readAt?: string | null;
   boxId?: string;
+  hasRecording?: boolean;
 };
 
 export type VoicemailInboxSummary = {
@@ -44,17 +45,31 @@ export function mapVoicemailMessage(row: {
   isRead?: boolean;
   boxId?: string;
   callerDisplayName?: string | null;
+  hasRecording?: boolean;
+  durationSec?: number | null;
+  callerNumber?: string;
+  transcript?: string | null;
 }): PersonalVoicemailMessage {
   const isRead = Boolean(row.isRead);
-  const durationRaw = row.durationSeconds;
+  const durationRaw =
+    row.durationSeconds ??
+    row.durationSec ??
+    null;
+  const durationSec =
+    durationRaw == null || durationRaw <= 0 ? null : durationRaw;
+  const callerNumber =
+    row.callerNumber ||
+    row.fromE164 ||
+    "Unknown";
   return {
     id: row.id,
-    callerNumber: row.fromE164 || "Unknown",
+    callerNumber,
     callerDisplayName: row.callerDisplayName ?? null,
-    durationSec: durationRaw == null ? null : durationRaw,
+    durationSec,
+    hasRecording: row.hasRecording,
     createdAt:
       row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-    transcript: row.transcriptText,
+    transcript: row.transcript ?? row.transcriptText,
     transcriptEnglish: row.transcriptEnglish,
     summary: row.aiSummary,
     internalNotes: row.internalNotes,
@@ -98,13 +113,34 @@ export function parseVoicemailApiPayload(data: unknown): {
 
   const boxes = Array.isArray(payload.boxes) ? payload.boxes : [];
   const messages = Array.isArray(payload.messages)
-    ? payload.messages.map((m) => mapVoicemailMessage(m))
+    ? payload.messages.map((m) => {
+        const row = m as Record<string, unknown>;
+        if (row.callerNumber != null && typeof row.isRead === "boolean") {
+          return mapVoicemailMessage({
+            id: String(row.id),
+            callerNumber: String(row.callerNumber),
+            callerDisplayName: row.callerDisplayName as string | null,
+            durationSec: row.durationSec as number | null,
+            durationSeconds: row.durationSeconds as number | null,
+            createdAt: String(row.createdAt),
+            transcript: row.transcript as string | null,
+            transcriptEnglish: row.transcriptEnglish as string | null,
+            aiSummary: (row.summary ?? row.aiSummary) as string | null,
+            internalNotes: row.internalNotes as string | null,
+            isRead: row.isRead as boolean,
+            boxId: row.boxId as string | undefined,
+            hasRecording: row.hasRecording as boolean | undefined,
+          });
+        }
+        return mapVoicemailMessage(m);
+      })
     : [];
-  const summary = payload.summary ?? {
-    totalCount: messages.length,
-    unreadCount: messages.filter((m) => !m.isRead).length,
-    minutesThisMonth: 0,
-  };
+  const summary =
+    payload.summary &&
+    typeof payload.summary.totalCount === "number" &&
+    typeof payload.summary.unreadCount === "number"
+      ? payload.summary
+      : emptySummary;
 
   return { boxes, messages, summary };
 }

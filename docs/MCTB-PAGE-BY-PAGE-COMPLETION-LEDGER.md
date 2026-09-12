@@ -85,4 +85,4 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_VOICEMAIL_SECURITY | PASS | Workspace-scoped APIs |
 | MCTB_VOICEMAIL_CONSOLE_NETWORK | BLOCKED | Requires live QA session |
 
-**MCTB_VOICEMAIL_COMPLETE: YES** — polish pass (38/40/22, canonical KPIs, inbox rows, switches)
+**MCTB_VOICEMAIL_COMPLETE: BLOCKED** — enforcement pass (verify screenshot checklist before lock)
