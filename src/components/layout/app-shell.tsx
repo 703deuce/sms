@@ -213,9 +213,10 @@ export function AppShell({
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
+  const isAppointmentsNeutralShell =
+    isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
   const isAppointmentsOverviewPilot =
-    isAppointmentsV1Primary() &&
-    isAppointmentsProductPath(pathname) &&
+    isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
   const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
   const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : 224;
@@ -229,7 +230,7 @@ export function AppShell({
         {
           "--sidebar-offset": sidebarOffset,
           "--app-header-height": isAppointmentsOverviewPilot ? "54px" : APP_HEADER_HEIGHT,
-          ...(isAppointmentsOverviewPilot
+          ...(isAppointmentsNeutralShell
             ? {
                 "--primary": "#1b1e23",
                 "--primary-foreground": "#ffffff",
