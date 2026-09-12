@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MctbHomeKpiStrip,
+  MctbHomeAttentionOkStrip,
   MctbHomeNeedsAttention,
   MctbHomeRecentConversations,
   MctbHomeRecentMissedCallsTable,
@@ -150,29 +151,45 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
           </p>
         ) : null}
 
-        <div className="order-2">
-          <MctbHomeKpiStrip data={data} />
-        </div>
+        <MctbHomeKpiStrip data={data} />
 
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-12">
-          {hasAttention ? (
-            <div className="order-3 lg:order-2 lg:col-span-4 lg:row-start-1">
-              <MctbHomeNeedsAttention items={attentionItems} />
-            </div>
-          ) : (
-            <div className="hidden lg:order-2 lg:col-span-4 lg:row-start-1 lg:block">
-              <MctbHomeNeedsAttention items={attentionItems} />
-            </div>
-          )}
+        {!hasAttention ? (
+          <div className="lg:hidden">
+            <MctbHomeAttentionOkStrip />
+          </div>
+        ) : (
+          <div className="lg:hidden">
+            <MctbHomeNeedsAttention items={attentionItems} />
+          </div>
+        )}
 
-          <div className="order-4 lg:order-1 lg:col-span-8 lg:row-start-1">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
+          {!hasAttention ? (
+            <div className="hidden lg:col-span-12 lg:block">
+              <MctbHomeAttentionOkStrip />
+            </div>
+          ) : null}
+
+          <div
+            className={
+              hasAttention
+                ? "order-2 lg:order-2 lg:col-span-8 lg:row-start-2"
+                : "order-2 lg:order-2 lg:col-span-12 lg:row-start-2"
+            }
+          >
             <MctbHomeRecentMissedCallsTable data={data} />
           </div>
 
-          <div className="order-5 lg:col-span-7">
+          {hasAttention ? (
+            <div className="hidden lg:order-3 lg:col-span-4 lg:row-start-2 lg:block">
+              <MctbHomeNeedsAttention items={attentionItems} />
+            </div>
+          ) : null}
+
+          <div className="order-3 lg:col-span-7 lg:row-start-3">
             <MctbHomeRecentConversations data={data} />
           </div>
-          <div className="order-6 lg:col-span-5">
+          <div className="order-4 lg:col-span-5 lg:row-start-3">
             <MctbHomeSetupStatus data={data} />
           </div>
         </div>

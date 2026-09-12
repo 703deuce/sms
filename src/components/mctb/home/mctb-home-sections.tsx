@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
@@ -109,7 +110,19 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
   );
 }
 
+export function MctbHomeAttentionOkStrip() {
+  return (
+    <div className="mctb-home-attention-ok" role="status">
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden />
+      <span>Nothing needs attention</span>
+    </div>
+  );
+}
+
 export function MctbHomeRecentMissedCallsTable({ data }: { data: MctbOverviewPayload }) {
+  const router = useRouter();
+  const goDetail = (id: string) => router.push(MCTB_ROUTES.missedCallDetail(id));
+
   return (
     <section className="mctb-home-surface" aria-labelledby="mctb-home-recent-missed">
       <div className="mctb-home-section-head">
@@ -137,11 +150,22 @@ export function MctbHomeRecentMissedCallsTable({ data }: { data: MctbOverviewPay
           </thead>
           <tbody>
             {data.recentMissedCalls.map((row) => (
-              <tr key={row.id} className="group">
+              <tr
+                key={row.id}
+                className="mctb-home-missed-row"
+                tabIndex={0}
+                role="link"
+                aria-label={`Missed call from ${row.callerLabel}`}
+                onClick={() => goDetail(row.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    goDetail(row.id);
+                  }
+                }}
+              >
                 <td>
-                  <Link href={MCTB_ROUTES.missedCallDetail(row.id)} className="mctb-home-caller-primary hover:underline">
-                    {row.callerLabel}
-                  </Link>
+                  <span className="mctb-home-caller-primary">{row.callerLabel}</span>
                 </td>
                 <td className="text-[#8a919b]">{fmtTime(row.missedAt)}</td>
                 <td className="text-[#626872]">{row.recoveryLabel}</td>
@@ -155,33 +179,27 @@ export function MctbHomeRecentMissedCallsTable({ data }: { data: MctbOverviewPay
   );
 }
 
+/** Populated attention only — empty state uses `MctbHomeAttentionOkStrip`. */
 export function MctbHomeNeedsAttention({ items }: { items: MctbAttentionItem[] }) {
-  const hasIssues = items.length > 0;
+  if (items.length === 0) return null;
   return (
-    <section className="mctb-home-surface h-full" aria-labelledby="mctb-home-attention">
+    <section className="mctb-home-surface" aria-labelledby="mctb-home-attention">
       <div className="mctb-home-section-head">
         <h2 id="mctb-home-attention" className="mctb-home-section-title">Needs attention</h2>
       </div>
-      {!hasIssues ? (
-        <div className="mctb-home-attention-empty">
-          <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden />
-          <span>Nothing needs attention</span>
-        </div>
-      ) : (
-        <div>
-          {items.map((item) => (
-            <Link key={item.id} href={item.href} className="mctb-home-attention-row">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium leading-[18px] text-[#1b1e23]">{item.title}</p>
-                {item.subtitle ? (
-                  <p className="truncate text-[12px] leading-[17px] text-[#8a919b]">{item.subtitle}</p>
-                ) : null}
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 text-[#8a919b]" aria-hidden />
-            </Link>
-          ))}
-        </div>
-      )}
+      <div>
+        {items.map((item) => (
+          <Link key={item.id} href={item.href} className="mctb-home-attention-row">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium leading-[18px] text-[#1b1e23]">{item.title}</p>
+              {item.subtitle ? (
+                <p className="truncate text-[12px] leading-[17px] text-[#8a919b]">{item.subtitle}</p>
+              ) : null}
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-[#8a919b]" aria-hidden />
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }
@@ -243,7 +261,7 @@ const SETUP_ROWS: Array<{
   {
     key: "sender",
     label: "Text-back sender",
-    href: MCTB_ROUTES.setupPhone,
+    href: MCTB_ROUTES.numbers,
     value: (d) => d.setupHealth.senderLabel,
   },
   { key: "recovery", label: "Recovery", href: MCTB_ROUTES.setupRecovery, value: (d) => d.setupHealth.recoveryLabel },

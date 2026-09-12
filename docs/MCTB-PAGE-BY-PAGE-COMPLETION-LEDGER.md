@@ -11,7 +11,8 @@
 | MCTB_HOME_RECENT_CONVERSATIONS | PASS | Inbox deep links |
 | MCTB_HOME_SETUP_STATUS | PASS | Deep links + 7d footer |
 | MCTB_HOME_MESSAGE_CREDITS | PASS | Neutral sidebar block (shared shell) |
-| MCTB_HOME_DESKTOP | PASS | Pending screenshot capture in CI/dev |
+| MCTB_HOME_NEEDS_ATTENTION_EMPTY | PASS | Dynamic grid: 12-col missed calls + compact ok strip |
+| MCTB_HOME_DESKTOP | PASS | Screenshot capture in artifacts |
 | MCTB_HOME_TABLET | N/A | Uses responsive grid |
 | MCTB_HOME_MOBILE | PASS | Order + bottom nav graphite |
 | MCTB_HOME_ACCESSIBILITY | PASS | Semantic headings, status, table headers |

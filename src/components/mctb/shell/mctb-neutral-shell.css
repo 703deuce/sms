@@ -1,12 +1,43 @@
-/* Shared MCTB shell — aligns with Appointments soft cool slate (no structural purple). */
+/* Shared MCTB shell — soft cool slate; overrides default purple Kimi sidebar. */
 
-.product-theme[data-mctb-neutral-shell] .transovo-credits-fill {
-  background: #3a3f47 !important;
+.product-theme[data-mctb-neutral-shell] .transovo-nav-item:hover {
+  background-color: #e8ebee !important;
+  color: #1b1e23 !important;
 }
 
 .product-theme[data-mctb-neutral-shell] .transovo-nav-item[data-active="true"] {
   background-color: #e2e6ea !important;
   color: #1b1e23 !important;
+  font-weight: 500 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-sidebar .transovo-nav-item[data-active="true"]::before {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  content: none !important;
+  background: transparent !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-sidebar .transovo-nav-item[data-active="true"] {
+  box-shadow: none !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-nav-item[data-active="true"] svg {
+  color: #2a2e34 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-credits-bar {
+  background-color: #e5e8eb !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-credits-fill {
+  background: #3a3f47 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-badge,
+.product-theme[data-mctb-neutral-shell] .transovo-badge-dot {
+  background-color: #1b1e23 !important;
 }
 
 .product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active {

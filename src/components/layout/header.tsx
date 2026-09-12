@@ -262,7 +262,7 @@ export function Header({
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               className="h-10 w-full rounded-full border border-border bg-[#f7f8fb] pl-10 pr-4 text-[13px] outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-ring/20"
-              placeholder="Search contacts, campaigns, messages..."
+              placeholder={mctbChrome || appointmentsChrome ? "Search" : "Search contacts, campaigns, messages..."}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => results.length && setSearchOpen(true)}
