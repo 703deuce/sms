@@ -41,7 +41,7 @@ export function statusChip(status: MctbOverviewStatus, label: string) {
   return (
     <span className={`mctb-home-status-chip ${tone}`} role="status">
       {status === "active" ? (
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" aria-hidden />
+        <span className="mctb-home-status-dot" aria-hidden />
       ) : null}
       {label}
     </span>
@@ -214,7 +214,7 @@ export function MctbHomeNeedsAttention({ items }: { items: MctbAttentionItem[] }
 
 export function MctbHomeRecentConversations({ data }: { data: MctbOverviewPayload }) {
   return (
-    <section className="mctb-home-surface" aria-labelledby="mctb-home-conversations">
+    <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-conversations">
       <div className="mctb-home-section-head">
         <h2 id="mctb-home-conversations" className="mctb-home-section-title">
           Recent conversations
@@ -231,12 +231,12 @@ export function MctbHomeRecentConversations({ data }: { data: MctbOverviewPayloa
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[#f0f2f4]">
+        <ul className="mctb-home-module-body divide-y divide-[#f0f2f4]">
           {data.recentConversations.map((c) => (
             <li key={c.id}>
               <Link
                 href={`${MCTB_ROUTES.conversations}?conversation=${encodeURIComponent(c.id)}`}
-                className="flex items-start justify-between gap-3 px-4 py-2.5 hover:bg-[#fafbfc]"
+                className="mctb-home-interactive-row flex items-start justify-between gap-3 px-4 py-2.5"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium leading-[18px] text-[#1b1e23]">{c.label}</p>
@@ -277,18 +277,16 @@ const SETUP_ROWS: Array<{
 
 export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
   return (
-    <section className="mctb-home-surface flex flex-col" aria-labelledby="mctb-home-setup">
+    <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-setup">
       <div className="mctb-home-section-head">
         <h2 id="mctb-home-setup" className="mctb-home-section-title">Setup status</h2>
       </div>
-      <div>
+      <div className="mctb-home-module-body">
         {SETUP_ROWS.map((row) => (
-          <div key={row.key} className="mctb-home-setup-row">
+          <Link key={row.key} href={row.href} className="mctb-home-setup-row mctb-home-interactive-row">
             <span className="mctb-home-setup-label">{row.label}</span>
-            <span className="mctb-home-setup-value">
-              <Link href={row.href}>{row.value(data)}</Link>
-            </span>
-          </div>
+            <span className="mctb-home-setup-value">{row.value(data)}</span>
+          </Link>
         ))}
       </div>
       <div className="mctb-home-footer-line">

@@ -19,4 +19,8 @@
 | MCTB_HOME_BACKEND_REGRESSION | PASS | No API/model changes |
 | MCTB_HOME_CONSOLE_NETWORK | BLOCKED | Requires running app + auth |
 
+| MCTB_HOME_MICRO_POLISH | PASS | KPI, Active chip, nav/logo neutral, bottom row stretch |
+
+**MCTB_HOME_COMPLETE: YES**
+
 Other MCTB pages: **not started** (content may retain legacy purple until their pass).
