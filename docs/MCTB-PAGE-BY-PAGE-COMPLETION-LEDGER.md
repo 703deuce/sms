@@ -126,7 +126,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_OVERVIEW_ACTIVITY | PASS | Funnel events read-only |
 | MCTB_SETUP_OVERVIEW_QUICK_ACTIONS | PASS | Deep links |
 | MCTB_SETUP_PHONE_FORWARDING | PASS | Premium 8/4 grid, status strip, instructions drawer, verify panel |
-| MCTB_SETUP_RECOVERY | NOT_STARTED | Next pass |
+| MCTB_SETUP_RECOVERY | PASS | Unified triggers + pause + cooldown on `/mctb/setup/recovery` |
 | MCTB_SETUP_CONSENT | NOT_STARTED | Next pass |
 | MCTB_SETUP_VOICEMAIL | NOT_STARTED | Next pass |
 | MCTB_SETUP_NOTIFICATIONS | NOT_STARTED | Next pass |
@@ -152,3 +152,19 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_PHONE_CONSOLE_NETWORK | BLOCKED | Live QA |
 
 **MCTB_SETUP_PHONE_FORWARDING_COMPLETE: YES**
+
+## Recovery (`/mctb/setup/recovery`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_RECOVERY_ROUTE | PASS | Canonical; legacy missed-call-rules redirects |
+| MCTB_SETUP_RECOVERY_CONSOLIDATION | PASS | Merged rules + recovery controls |
+| MCTB_SETUP_RECOVERY_PAUSE | PASS | Modal presets + resume (setup API) |
+| MCTB_SETUP_RECOVERY_TRIGGERS | PASS | Outcome grid → triggerRules save |
+| MCTB_SETUP_RECOVERY_COOLDOWN | PASS | Presets + custom minutes |
+| MCTB_SETUP_RECOVERY_RAIL | PASS | Summary, flow, suppressions |
+| MCTB_SETUP_RECOVERY_DOCS | PASS | Audit, precedence, connection matrix |
+| MCTB_SETUP_RECOVERY_RESPONSIVE | PASS | Screenshots `recovery_*` |
+| MCTB_SETUP_RECOVERY_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**MCTB_SETUP_RECOVERY_COMPLETE: YES**

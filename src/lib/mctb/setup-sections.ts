@@ -35,7 +35,7 @@ export const MCTB_SETUP_SECTIONS: MctbSetupSection[] = [
     id: "recovery",
     label: "Recovery",
     href: MCTB_ROUTES.setupRecovery,
-    description: "Triggers, text-back message, links, and pause controls",
+    description: "Missed-call triggers, cooldown, pause, and recovery eligibility",
   },
   {
     id: "consent",
