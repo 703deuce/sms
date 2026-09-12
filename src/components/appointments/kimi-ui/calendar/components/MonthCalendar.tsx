@@ -10,6 +10,7 @@ type Props = {
   onOpenAppointment: (id: string) => void;
   onSelectDay: (dateKey: string) => void;
   onShowCalendarSettings: () => void;
+  onMonthEventDrop?: (input: { id: string; targetDateKey: string }) => void;
 };
 
 export default function MonthCalendar({
@@ -18,6 +19,7 @@ export default function MonthCalendar({
   onOpenAppointment,
   onSelectDay,
   onShowCalendarSettings,
+  onMonthEventDrop,
 }: Props) {
   return (
     <div className="week-card month-card">
@@ -31,6 +33,14 @@ export default function MonthCalendar({
             type="button"
             className={`month-cell ${cell.muted ? "muted" : ""} ${cell.today ? "today" : ""}`}
             onClick={() => onSelectDay(cell.dateKey)}
+            onDragOver={(e) => {
+              if (onMonthEventDrop) e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = e.dataTransfer.getData("text/calendar-event-id");
+              if (id && onMonthEventDrop) onMonthEventDrop({ id, targetDateKey: cell.dateKey });
+            }}
           >
             <span className="month-day-num">{cell.day}</span>
             <div className="month-events">
@@ -38,7 +48,11 @@ export default function MonthCalendar({
                 <button
                   key={ev.id}
                   type="button"
+                  draggable={Boolean(onMonthEventDrop)}
                   className={`month-event ev-${ev.type}`}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/calendar-event-id", ev.id);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     onOpenAppointment(ev.id);

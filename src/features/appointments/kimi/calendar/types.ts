@@ -157,4 +157,5 @@ export type CalendarPageActions = {
   onWaitlistSlotClick?: (input: { dateKey: string; hour: number; count: number }) => void;
   sideCollapsed?: boolean;
   onToggleSide?: () => void;
+  onMonthEventDrop?: (input: { id: string; targetDateKey: string }) => void;
 };

@@ -73,6 +73,7 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onOpenAppointment={actions.onOpenAppointment}
             onSelectDay={actions.onSelectDay}
             onShowCalendarSettings={actions.onShowCalendarSettings}
+            onMonthEventDrop={actions.onMonthEventDrop}
           />
         ) : (
           <WeekCalendar

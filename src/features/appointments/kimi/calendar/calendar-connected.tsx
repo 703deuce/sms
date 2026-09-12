@@ -27,6 +27,7 @@ import {
 } from "@/components/appointments/calendar/calendar-quick-create-sheet";
 import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
 import { appendReturnTo } from "@/lib/navigation/return-context";
+import { wallTimeInZoneToUtc, zonedDateParts } from "@/lib/voice/calendar/timezone-slots";
 import { CalendarRecurringScopeDialog } from "@/components/appointments/calendar/calendar-recurring-scope-dialog";
 import {
   CalendarWaitlistMatchDrawer,
@@ -411,6 +412,17 @@ export function CalendarConnected() {
       slotWaitlistCounts,
       sideCollapsed,
       onToggleSide: () => setSideCollapsed((v) => !v),
+      onMonthEventDrop: ({ id, targetDateKey }) => {
+        const row = rowById.get(id);
+        if (!row?.startsAt || !row.serviceName) return;
+        const parts = zonedDateParts(new Date(row.startsAt), timeZone);
+        const target = new Date(targetDateKey);
+        const isoDate = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;
+        const [y, mo, d] = isoDate.split("-").map(Number);
+        const nextIso = wallTimeInZoneToUtc(timeZone, y, mo, d, parts.hour, parts.minute).toISOString();
+        const meta = (row.metadata || {}) as { recurringSeriesId?: string };
+        void beginReschedule(id, nextIso, meta.recurringSeriesId);
+      },
       onWaitlistSlotClick: ({ dateKey: dk, hour }) => {
         const d = new Date(dk);
         d.setHours(hour, 0, 0, 0);
@@ -440,6 +452,7 @@ export function CalendarConnected() {
       slotWaitlistCounts,
       view,
       timeZone,
+      rowById,
       workspace,
     ],
   );
