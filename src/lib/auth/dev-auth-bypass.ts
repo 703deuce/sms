@@ -3,6 +3,7 @@
  * Remove DEV_AUTH_BYPASS from env when Google login is re-enabled.
  */
 import { certBrowserRequestHost, isCertBrowserPublicProductionHost } from "@/lib/auth/cert-browser-host";
+import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
 
 export const DEV_AUTH_BYPASS_ENV = "DEV_AUTH_BYPASS";
 
@@ -32,5 +33,5 @@ export function safeDevBypassNextPath(raw: string | null): string {
   if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) {
     return "/dashboard";
   }
-  return next;
+  return normalizeAppointmentsPostLoginPath(next);
 }

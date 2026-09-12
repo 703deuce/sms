@@ -4,7 +4,7 @@
  */
 
 /* —— Tokens —— */
-html.appt-overview-pilot-active {
+html.appt-overview-slate-204, html.appt-overview-pilot-active {
   --neutral-success-text: #247a42;
   --neutral-link: #3f3f3b;
   --neutral-link-hover: #1d1d1b;
@@ -19,7 +19,7 @@ html.appt-overview-pilot-active {
 }
 
 /* —— 1. Kill workspace teal / product primary on this route —— */
-html.appt-overview-pilot-active .product-theme {
+html.appt-overview-slate-204 .product-theme , html.appt-overview-pilot-active .product-theme {
   --primary: #1d1d1b !important;
   --primary-foreground: #ffffff !important;
   --primary-hover: #2a2a27 !important;
@@ -28,87 +28,87 @@ html.appt-overview-pilot-active .product-theme {
   --background: #f7f7f5 !important;
 }
 
-html.appt-overview-pilot-active .text-primary,
-html.appt-overview-pilot-active nav .text-primary,
-html.appt-overview-pilot-active a.text-primary {
+html.appt-overview-slate-204 .text-primary, html.appt-overview-pilot-active .text-primary,
+html.appt-overview-slate-204 nav .text-primary, html.appt-overview-pilot-active nav .text-primary,
+html.appt-overview-slate-204 a.text-primary , html.appt-overview-pilot-active a.text-primary {
   color: #1d1d1b !important;
 }
 
-html.appt-overview-pilot-active .text-muted-foreground {
+html.appt-overview-slate-204 .text-muted-foreground , html.appt-overview-pilot-active .text-muted-foreground {
   color: #77756f !important;
 }
 
-html.appt-overview-pilot-active .bg-primary {
+html.appt-overview-slate-204 .bg-primary , html.appt-overview-pilot-active .bg-primary {
   background-color: #1d1d1b !important;
 }
 
-html.appt-overview-pilot-active .border-primary,
-html.appt-overview-pilot-active .border-primary\/20 {
+html.appt-overview-slate-204 .border-primary, html.appt-overview-pilot-active .border-primary,
+html.appt-overview-slate-204 .border-primary\/20 , html.appt-overview-pilot-active .border-primary\/20 {
   border-color: #e2e2dd !important;
 }
 
 /* —— 2. Sidebar: recede; quiet selection —— */
-html.appt-overview-pilot-active .transovo-sidebar {
+html.appt-overview-slate-204 .transovo-sidebar , html.appt-overview-pilot-active .transovo-sidebar {
   background: #f2f2f0 !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item {
+html.appt-overview-slate-204 .transovo-nav-item , html.appt-overview-pilot-active .transovo-nav-item {
   color: #6f6e69 !important;
   font-weight: 500 !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item:hover {
+html.appt-overview-slate-204 .transovo-nav-item:hover , html.appt-overview-pilot-active .transovo-nav-item:hover {
   background-color: #ecece9 !important;
   color: #353532 !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+html.appt-overview-slate-204 .transovo-nav-item[data-active="true"] , html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
   background-color: #e6e6e2 !important;
   color: #1d1d1b !important;
   font-weight: 600 !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
+html.appt-overview-slate-204 .transovo-nav-item[data-active="true"]::before , html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
   display: none !important;
   width: 0 !important;
   content: none !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
+html.appt-overview-slate-204 .transovo-nav-item[data-active="true"] svg , html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
   color: #2a2a27 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .text-\[15px\],
-html.appt-overview-pilot-active .transovo-sidebar .font-semibold {
+html.appt-overview-slate-204 .transovo-sidebar .text-\[15px\], html.appt-overview-pilot-active .transovo-sidebar .text-\[15px\],
+html.appt-overview-slate-204 .transovo-sidebar .font-semibold , html.appt-overview-pilot-active .transovo-sidebar .font-semibold {
   font-weight: 600 !important;
   color: #1d1d1b !important;
 }
 
-html.appt-overview-pilot-active .transovo-credits-fill {
+html.appt-overview-slate-204 .transovo-credits-fill , html.appt-overview-pilot-active .transovo-credits-fill {
   background: #3a3a36 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .bg-primary\/10,
-html.appt-overview-pilot-active .transovo-sidebar [class*="bg-primary/10"] {
+html.appt-overview-slate-204 .transovo-sidebar .bg-primary\/10, html.appt-overview-pilot-active .transovo-sidebar .bg-primary\/10,
+html.appt-overview-slate-204 .transovo-sidebar [class*="bg-primary/10"] , html.appt-overview-pilot-active .transovo-sidebar [class*="bg-primary/10"] {
   background-color: #e6e6e2 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .text-primary {
+html.appt-overview-slate-204 .transovo-sidebar .text-primary , html.appt-overview-pilot-active .transovo-sidebar .text-primary {
   color: #1d1d1b !important;
 }
 
-html.appt-overview-pilot-active header.sticky .bg-primary\/5,
-html.appt-overview-pilot-active header.sticky .ring-primary {
+html.appt-overview-slate-204 header.sticky .bg-primary\/5, html.appt-overview-pilot-active header.sticky .bg-primary\/5,
+html.appt-overview-slate-204 header.sticky .ring-primary , html.appt-overview-pilot-active header.sticky .ring-primary {
   background-color: #f3f3f1 !important;
   --tw-ring-color: rgba(28, 28, 26, 0.12) !important;
 }
 
 /* —— 3. Section accent bars: none —— */
-html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent,
-html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--purple,
-html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--blue,
-html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--green,
-html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--amber {
+html.appt-overview-slate-204 .appt-overview-pilot .ref-deco-section-accent, html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent,
+html.appt-overview-slate-204 .appt-overview-pilot .ref-deco-section-accent--purple, html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--purple,
+html.appt-overview-slate-204 .appt-overview-pilot .ref-deco-section-accent--blue, html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--blue,
+html.appt-overview-slate-204 .appt-overview-pilot .ref-deco-section-accent--green, html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--green,
+html.appt-overview-slate-204 .appt-overview-pilot .ref-deco-section-accent--amber , html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--amber {
   display: none !important;
 }
 
@@ -176,7 +176,7 @@ html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--a
 
 /* —— 6. Semantic green only —— */
 .appt-overview-pilot .appt-pilot-semantic-positive,
-html.appt-overview-pilot-active .appt-overview-pilot .appt-pilot-semantic-positive {
+html.appt-overview-slate-204 .appt-overview-pilot .appt-pilot-semantic-positive , html.appt-overview-pilot-active .appt-overview-pilot .appt-pilot-semantic-positive {
   color: var(--neutral-success-text) !important;
 }
 
@@ -305,15 +305,15 @@ html.appt-overview-pilot-active .appt-overview-pilot .appt-pilot-semantic-positi
   }
 }
 
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary,
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary svg {
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-primary, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary,
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-primary svg , html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary svg {
   color: #1d1d1b !important;
 }
 
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground,
-html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground,
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground svg,
-html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground svg {
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-muted-foreground, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground,
+html.appt-overview-slate-204 nav.fixed.bottom-0 button.text-muted-foreground, html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground,
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-muted-foreground svg, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground svg,
+html.appt-overview-slate-204 nav.fixed.bottom-0 button.text-muted-foreground svg , html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground svg {
   color: #77756f !important;
 }
 

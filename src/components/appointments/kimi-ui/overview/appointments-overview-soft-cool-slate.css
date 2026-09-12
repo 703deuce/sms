@@ -3,7 +3,7 @@
  * Sidebar width: 204px. Build: soft-cool-slate-204
  */
 
-html.appt-overview-pilot-active {
+html.appt-overview-slate-204, html.appt-overview-pilot-active {
   --overview-sidebar-width: 204px;
   --sidebar-bg: #eef0f2;
   --sidebar-hover: #e8ebee;
@@ -63,7 +63,7 @@ html.appt-overview-pilot-active {
   --type-nav-line: 1.125rem;
 }
 
-html.appt-overview-pilot-active .product-theme {
+html.appt-overview-slate-204 .product-theme , html.appt-overview-pilot-active .product-theme {
   --primary: #1b1e23 !important;
   --primary-foreground: #ffffff !important;
   --primary-hover: #262a31 !important;
@@ -72,15 +72,15 @@ html.appt-overview-pilot-active .product-theme {
   --background: #f6f7f8 !important;
 }
 
-html.appt-overview-pilot-active .product-theme .bg-mesh,
-html.appt-overview-pilot-active .bg-background {
+html.appt-overview-slate-204 .product-theme .bg-mesh, html.appt-overview-pilot-active .product-theme .bg-mesh,
+html.appt-overview-slate-204 .bg-background , html.appt-overview-pilot-active .bg-background {
   background-color: var(--app-bg) !important;
   background-image: none !important;
 }
 
 /* —— Sidebar width 204px —— */
-html.appt-overview-pilot-active .transovo-sidebar,
-html.appt-overview-pilot-active aside.transovo-sidebar[style] {
+html.appt-overview-slate-204 .transovo-sidebar, html.appt-overview-pilot-active .transovo-sidebar,
+html.appt-overview-slate-204 aside.transovo-sidebar[style] , html.appt-overview-pilot-active aside.transovo-sidebar[style] {
   width: 204px !important;
   max-width: 204px !important;
   min-width: 204px !important;
@@ -88,18 +88,18 @@ html.appt-overview-pilot-active aside.transovo-sidebar[style] {
   border-color: var(--sidebar-border) !important;
 }
 
-html.appt-overview-pilot-active .hidden.lg\:fixed.lg\:w-\[224px\],
-html.appt-overview-pilot-active .transovo-sidebar.w-\[224px\],
-html.appt-overview-pilot-active .transovo-sidebar.lg\:w-\[224px\] {
+html.appt-overview-slate-204 .hidden.lg\:fixed.lg\:w-\[224px\], html.appt-overview-pilot-active .hidden.lg\:fixed.lg\:w-\[224px\],
+html.appt-overview-slate-204 .transovo-sidebar.w-\[224px\], html.appt-overview-pilot-active .transovo-sidebar.w-\[224px\],
+html.appt-overview-slate-204 .transovo-sidebar.lg\:w-\[224px\] , html.appt-overview-pilot-active .transovo-sidebar.lg\:w-\[224px\] {
   width: 204px !important;
 }
 
-html.appt-overview-pilot-active .lg\:pl-\[224px\] {
+html.appt-overview-slate-204 .lg\:pl-\[224px\] , html.appt-overview-pilot-active .lg\:pl-\[224px\] {
   padding-left: 204px !important;
 }
 
 /* —— Nav density —— */
-html.appt-overview-pilot-active .transovo-nav-item {
+html.appt-overview-slate-204 .transovo-nav-item , html.appt-overview-pilot-active .transovo-nav-item {
   min-height: 34px !important;
   height: 34px !important;
   margin: 2px 6px !important;
@@ -112,39 +112,39 @@ html.appt-overview-pilot-active .transovo-nav-item {
   gap: 8px !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item svg,
-html.appt-overview-pilot-active .transovo-nav-item .h-4.w-4 {
+html.appt-overview-slate-204 .transovo-nav-item svg, html.appt-overview-pilot-active .transovo-nav-item svg,
+html.appt-overview-slate-204 .transovo-nav-item .h-4.w-4 , html.appt-overview-pilot-active .transovo-nav-item .h-4.w-4 {
   width: 16px !important;
   height: 16px !important;
   color: var(--pilot-nav-icon) !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item:hover {
+html.appt-overview-slate-204 .transovo-nav-item:hover , html.appt-overview-pilot-active .transovo-nav-item:hover {
   background-color: var(--sidebar-hover) !important;
   color: #30343a !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item:hover svg {
+html.appt-overview-slate-204 .transovo-nav-item:hover svg , html.appt-overview-pilot-active .transovo-nav-item:hover svg {
   color: var(--pilot-nav-icon-hover) !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+html.appt-overview-slate-204 .transovo-nav-item[data-active="true"] , html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
   background-color: var(--sidebar-selected) !important;
   color: var(--pilot-nav-text-active) !important;
   font-weight: 500 !important;
 }
 
-html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
+html.appt-overview-slate-204 .transovo-nav-item[data-active="true"] svg , html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
   color: var(--pilot-nav-icon-active) !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar nav {
+html.appt-overview-slate-204 .transovo-sidebar nav , html.appt-overview-pilot-active .transovo-sidebar nav {
   padding-left: 6px !important;
   padding-right: 6px !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar nav > div > p,
-html.appt-overview-pilot-active .transovo-sidebar .text-\[10px\].uppercase {
+html.appt-overview-slate-204 .transovo-sidebar nav > div > p, html.appt-overview-pilot-active .transovo-sidebar nav > div > p,
+html.appt-overview-slate-204 .transovo-sidebar .text-\[10px\].uppercase , html.appt-overview-pilot-active .transovo-sidebar .text-\[10px\].uppercase {
   font-size: 10.5px !important;
   line-height: 15px !important;
   font-weight: 600 !important;
@@ -154,25 +154,25 @@ html.appt-overview-pilot-active .transovo-sidebar .text-\[10px\].uppercase {
   margin-top: 0 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar nav > div + div {
+html.appt-overview-slate-204 .transovo-sidebar nav > div + div , html.appt-overview-pilot-active .transovo-sidebar nav > div + div {
   margin-top: 2px;
 }
 
 /* Logo row — slimmer */
-html.appt-overview-pilot-active .transovo-sidebar .h-14 {
+html.appt-overview-slate-204 .transovo-sidebar .h-14 , html.appt-overview-pilot-active .transovo-sidebar .h-14 {
   height: 46px !important;
   min-height: 46px !important;
   padding-left: 10px !important;
   padding-right: 10px !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .h-14 .text-\[15px\] {
+html.appt-overview-slate-204 .transovo-sidebar .h-14 .text-\[15px\] , html.appt-overview-pilot-active .transovo-sidebar .h-14 .text-\[15px\] {
   font-size: 13px !important;
   font-weight: 600 !important;
 }
 
 /* Product switcher */
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
   min-height: 46px !important;
   max-height: 48px !important;
   padding: 8px 10px !important;
@@ -182,34 +182,34 @@ html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"
   background: var(--surface-secondary) !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-7.w-7 {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .h-7.w-7 , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-7.w-7 {
   width: 18px !important;
   height: 18px !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-4.w-4 {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .h-4.w-4 , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-4.w-4 {
   width: 16px !important;
   height: 16px !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[10px\] {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .text-\[10px\] , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[10px\] {
   font-size: 11px !important;
   font-weight: 500 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[12px\] {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .text-\[12px\] , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[12px\] {
   font-size: 12px !important;
   font-weight: 500 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .bg-primary\/10,
-html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-primary {
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .bg-primary\/10, html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .bg-primary\/10,
+html.appt-overview-slate-204 .transovo-sidebar button[aria-haspopup="listbox"] .text-primary , html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-primary {
   background: var(--surface-tertiary) !important;
   color: var(--text-primary) !important;
 }
 
 /* Message credits — quieter */
-html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 {
+html.appt-overview-slate-204 .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 , html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 {
   padding: 8px 10px !important;
   margin: 0 6px 4px !important;
   border-color: var(--border-subtle) !important;
@@ -218,39 +218,39 @@ html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-bord
   max-height: 64px;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 .text-\[12px\] {
+html.appt-overview-slate-204 .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 .text-\[12px\] , html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 .text-\[12px\] {
   font-size: 11px !important;
   font-weight: 500 !important;
   color: var(--text-secondary) !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 a.text-indigo-600 {
+html.appt-overview-slate-204 .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 a.text-indigo-600 , html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 a.text-indigo-600 {
   font-size: 10.5px !important;
   font-weight: 500 !important;
   color: var(--text-tertiary) !important;
 }
 
-html.appt-overview-pilot-active .transovo-credits-bar {
+html.appt-overview-slate-204 .transovo-credits-bar , html.appt-overview-pilot-active .transovo-credits-bar {
   height: 4px !important;
   margin-top: 6px !important;
   background-color: var(--surface-tertiary) !important;
 }
 
-html.appt-overview-pilot-active .transovo-credits-fill {
+html.appt-overview-slate-204 .transovo-credits-fill , html.appt-overview-pilot-active .transovo-credits-fill {
   background: #454b53 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 p.text-\[11px\] {
+html.appt-overview-slate-204 .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 p.text-\[11px\] , html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 p.text-\[11px\] {
   margin-top: 4px !important;
   font-size: 10.5px !important;
 }
 
 /* Account footer */
-html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t {
+html.appt-overview-slate-204 .transovo-sidebar .shrink-0.border-t , html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t {
   padding: 6px 6px 8px !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .h-7.w-7 {
+html.appt-overview-slate-204 .transovo-sidebar .shrink-0.border-t .h-7.w-7 , html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .h-7.w-7 {
   width: 28px !important;
   height: 28px !important;
   font-size: 11px !important;
@@ -258,32 +258,32 @@ html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .h-7.w-7 {
   color: var(--text-secondary) !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[13px\] {
+html.appt-overview-slate-204 .transovo-sidebar .shrink-0.border-t .text-\[13px\] , html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[13px\] {
   font-size: 12.5px !important;
   font-weight: 500 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[11px\] {
+html.appt-overview-slate-204 .transovo-sidebar .shrink-0.border-t .text-\[11px\] , html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[11px\] {
   font-size: 11px !important;
   font-weight: 400 !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-100,
-html.appt-overview-pilot-active .transovo-sidebar .text-indigo-700,
-html.appt-overview-pilot-active .transovo-sidebar .text-indigo-600 {
+html.appt-overview-slate-204 .transovo-sidebar .bg-indigo-100, html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-100,
+html.appt-overview-slate-204 .transovo-sidebar .text-indigo-700, html.appt-overview-pilot-active .transovo-sidebar .text-indigo-700,
+html.appt-overview-slate-204 .transovo-sidebar .text-indigo-600 , html.appt-overview-pilot-active .transovo-sidebar .text-indigo-600 {
   background: var(--surface-tertiary) !important;
   color: var(--text-secondary) !important;
 }
 
 /* Header 54px */
-html.appt-overview-pilot-active header.sticky {
+html.appt-overview-slate-204 header.sticky , html.appt-overview-pilot-active header.sticky {
   background: var(--header-bg) !important;
   border-bottom: 1px solid #e4e7ea !important;
   box-shadow: none !important;
   min-height: 54px !important;
 }
 
-html.appt-overview-pilot-active header.sticky .h-16 {
+html.appt-overview-slate-204 header.sticky .h-16 , html.appt-overview-pilot-active header.sticky .h-16 {
   height: 54px !important;
   min-height: 54px !important;
 }
@@ -340,19 +340,19 @@ html.appt-overview-pilot-active header.sticky .h-16 {
   border: 1px solid var(--semantic-success-border);
 }
 
-html.appt-overview-pilot-active nav.fixed.bottom-0 {
+html.appt-overview-slate-204 nav.fixed.bottom-0 , html.appt-overview-pilot-active nav.fixed.bottom-0 {
   background: var(--surface-primary) !important;
   border-color: var(--border-default) !important;
 }
 
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary,
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary svg {
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-primary, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary,
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-primary svg , html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary svg {
   color: #1b1e23 !important;
 }
 
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground,
-html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground,
-html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground svg,
-html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground svg {
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-muted-foreground, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground,
+html.appt-overview-slate-204 nav.fixed.bottom-0 button.text-muted-foreground, html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground,
+html.appt-overview-slate-204 nav.fixed.bottom-0 a.text-muted-foreground svg, html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground svg,
+html.appt-overview-slate-204 nav.fixed.bottom-0 button.text-muted-foreground svg , html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground svg {
   color: #777e87 !important;
 }

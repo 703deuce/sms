@@ -327,8 +327,8 @@ export function AppointmentsLandingPage() {
               ))}
             </nav>
             <div className="lp-nav-actions">
-              <Link href="/login?next=/appointments" className="lp-login">Log in</Link>
-              <Link href="/signup?next=/appointments" className="lp-btn lp-btn-primary lp-btn-sm">
+              <Link href="/login?next=/appointments/overview" className="lp-login">Log in</Link>
+              <Link href="/signup?next=/appointments/overview" className="lp-btn lp-btn-primary lp-btn-sm">
                 Start Free
               </Link>
               <button
@@ -347,9 +347,9 @@ export function AppointmentsLandingPage() {
                 {item.label}
               </Link>
             ))}
-            <Link href="/login?next=/appointments" onClick={() => setMenuOpen(false)}>Log in</Link>
+            <Link href="/login?next=/appointments/overview" onClick={() => setMenuOpen(false)}>Log in</Link>
             <Link href="/contact" onClick={() => setMenuOpen(false)}>Book a Demo</Link>
-            <Link href="/signup?next=/appointments" onClick={() => setMenuOpen(false)}>Start Free</Link>
+            <Link href="/signup?next=/appointments/overview" onClick={() => setMenuOpen(false)}>Start Free</Link>
           </div>
         </div>
       </header>
@@ -372,7 +372,7 @@ export function AppointmentsLandingPage() {
               one platform.
             </p>
             <div className="lp-hero-actions appt-hero-actions">
-              <Link href="/signup?next=/appointments" className="lp-btn lp-btn-primary">
+              <Link href="/signup?next=/appointments/overview" className="lp-btn lp-btn-primary">
                 Start Free
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -521,7 +521,7 @@ export function AppointmentsLandingPage() {
               team routing, and payments when you&apos;re ready.
             </p>
             <div className="appt-hero-actions">
-              <Link href="/signup?next=/appointments" className="lp-btn lp-btn-primary">
+              <Link href="/signup?next=/appointments/overview" className="lp-btn lp-btn-primary">
                 Start Free
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -579,8 +579,8 @@ export function AppointmentsLandingPage() {
                 <h4>Product</h4>
                 <Link href="#features">Features</Link>
                 <Link href="#how-it-works">How it works</Link>
-                <Link href="/signup?next=/appointments">Start Free</Link>
-                <Link href="/login?next=/appointments">Login</Link>
+                <Link href="/signup?next=/appointments/overview">Start Free</Link>
+                <Link href="/login?next=/appointments/overview">Login</Link>
               </div>
               <div>
                 <h4>Features</h4>

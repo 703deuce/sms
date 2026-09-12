@@ -1,3 +1,5 @@
+import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
+
 /** Client-side navigation after login/signup — API routes need full page loads. */
 export function navigateAfterAuth(
   path: string,
@@ -18,7 +20,7 @@ export function clientSafeNextPath(path: string | null | undefined, fallback = "
   if (!path.startsWith("/") || path.startsWith("//")) return fallback;
   if (path.startsWith("/login") || path.startsWith("/signup")) return fallback;
   if (path.startsWith("/api/")) return fallback;
-  return path;
+  return normalizeAppointmentsPostLoginPath(path);
 }
 
 /** Voice product signup should open workspace via server redirect route. */

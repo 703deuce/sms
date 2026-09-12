@@ -1,6 +1,8 @@
 # TRANSOVO Soft Cool Slate — Overview visual test (204px sidebar)
 
-**Scope:** `/appointments/overview` only (`html.appt-overview-pilot-active`). Not global.
+**Scope:** `/appointments/overview` only (`html.appt-overview-slate-204`). Sidebar **204px**. Not global.
+
+**Home routing:** `/appointments` and `/appointments?tab=upcoming` redirect to `/appointments/overview` when Appointments V1 is primary.
 
 ## Sidebar width
 
@@ -38,7 +40,9 @@ npx tsx scripts/capture-overview-soft-cool-slate-screenshot.ts
 - `appointments-overview-neutral-runtime.ts`
 - `appointments-overview-pilot-chrome.tsx`
 - `appointments-overview-pilot.css`
-- `appointments-overview-neutral-r2.css` (unchanged; still imported)
+- `appointments-overview-neutral-r2.css` (dual `html.appt-overview-slate-204` selectors)
+- `src/lib/products/appointments-home-redirect.ts` (home → overview redirect)
+- `src/app/(app)/appointments/page.tsx`, `post-login-navigation.ts`, `dev-auth-bypass.ts`, landing login `next=`
 - `page.tsx`, `overview-connected.tsx`, `layout.tsx`
 - `BookingsChart.tsx`
 - `scripts/capture-overview-soft-cool-slate-screenshot.ts` (new)
