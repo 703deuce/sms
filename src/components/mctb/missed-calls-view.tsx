@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import {
   classificationToTriggerLabel,
+  MISSED_CALLS_OUTCOME_FILTER_LABEL,
   missedCallsListSearchParams,
   parseMissedCallsListQuery,
   type MissedCallsDateFilter,
@@ -10,11 +11,12 @@ import {
   type MissedCallsSort,
   type MissedCallsStatusFilter,
 } from "@/lib/mctb/missed-calls-list-filters";
+import { missedCallActionableIssue } from "@/lib/mctb/missed-calls-display";
 import { DataTablePaginationFooter } from "@/components/ui/data-table-pagination-footer";
 import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { GlobalTablePageSize } from "@/lib/ui/global-data-table";
-import { MoreHorizontal, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -33,12 +35,15 @@ type MissedCallEvent = {
   smsSentAt: string | null;
   classification: string | null;
   callsToday?: number;
+  conversationId?: string | null;
 };
 
 type Summary = {
-  missedToday: number;
-  sentToday: number;
-  repliedToday: number;
+  missedCount: number;
+  recoveryTextsCount: number;
+  repliesCount: number;
+  needsReplyCount: number;
+  rangeLabel: string;
 };
 
 type Pagination = {
@@ -48,14 +53,20 @@ type Pagination = {
   totalPages: number;
 };
 
-const STATUS_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
-  { id: "all", label: "All statuses" },
+const OUTCOME_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
+  { id: "all", label: "All outcomes" },
   { id: "needs_attention", label: "Needs attention" },
   { id: "replied", label: "Replied" },
   { id: "waiting_consent", label: "Waiting for consent" },
   { id: "suppressed", label: "Suppressed" },
   { id: "failed", label: "Failed" },
 ];
+
+const NEEDS_REPLY_HREF = `${MCTB_ROUTES.conversations}?filter=needs_reply`;
+
+function conversationHref(conversationId: string) {
+  return `${MCTB_ROUTES.conversations}?conversation=${encodeURIComponent(conversationId)}`;
+}
 
 const DATE_OPTIONS: Array<{ id: MissedCallsDateFilter; label: string }> = [
   { id: "today", label: "Today" },
@@ -182,7 +193,22 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
   const filtersPanelRef = useRef<HTMLDivElement>(null);
+
+  const showCopyToast = (message: string) => {
+    setCopyToast(message);
+    window.setTimeout(() => setCopyToast(null), 2400);
+  };
+
+  const copyCallerNumber = async (e164: string) => {
+    try {
+      await navigator.clipboard.writeText(fmtPhone(e164));
+      showCopyToast("Phone number copied.");
+    } catch {
+      showCopyToast("Could not copy number.");
+    }
+  };
 
   const pushQuery = useCallback(
     (patch: Partial<MissedCallsListQuery>) => {
@@ -312,22 +338,59 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
           </Link>
         </header>
 
-        <div className="mctb-mc-metrics" aria-label="Today summary">
+        <div className="mctb-mc-metrics mctb-mc-metrics--four" aria-label="Summary for selected date range">
           {[
-            { label: "Missed today", value: summary?.missedToday },
-            { label: "Recovery texts today", value: summary?.sentToday },
-            { label: "Replies today", value: summary?.repliedToday },
-          ].map((stat) => (
-            <div key={stat.label} className="mctb-mc-metric">
-              <span className="mctb-mc-metric-label">{stat.label}</span>
-              {loading && summary == null ? (
-                <div className="mctb-mc-metric-skeleton" aria-hidden />
-              ) : (
-                <span className="mctb-mc-metric-value">{stat.value ?? "—"}</span>
-              )}
-            </div>
-          ))}
+            {
+              label: "Missed calls",
+              value: summary?.missedCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Recovery texts",
+              value: summary?.recoveryTextsCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Replies",
+              value: summary?.repliesCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Needs reply",
+              value: summary?.needsReplyCount,
+              context: "Conversations",
+              href: NEEDS_REPLY_HREF,
+            },
+          ].map((stat) => {
+            const inner = (
+              <>
+                <span className="mctb-mc-metric-label">{stat.label}</span>
+                {loading && summary == null ? (
+                  <div className="mctb-mc-metric-skeleton" aria-hidden />
+                ) : (
+                  <span className="mctb-mc-metric-value">{stat.value ?? "—"}</span>
+                )}
+                {stat.context ? (
+                  <span className="mctb-mc-metric-context">{stat.context}</span>
+                ) : null}
+              </>
+            );
+            return stat.href ? (
+              <Link key={stat.label} href={stat.href} className="mctb-mc-metric mctb-mc-metric--link">
+                {inner}
+              </Link>
+            ) : (
+              <div key={stat.label} className="mctb-mc-metric">{inner}</div>
+            );
+          })}
         </div>
+
+        {copyToast ? (
+          <p className="mctb-mc-toast" role="status">{copyToast}</p>
+        ) : null}
 
         <div className="mctb-mc-toolbar mctb-mc-mobile-toolbar" role="search">
           <div className="mctb-mc-toolbar-row mctb-mc-mobile-only">
@@ -377,11 +440,11 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
             </div>
             <select
               className="mctb-mc-select"
-              aria-label="Status"
+              aria-label={MISSED_CALLS_OUTCOME_FILTER_LABEL}
               value={query.status ?? "all"}
               onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
             >
-              {STATUS_OPTIONS.map((opt) => (
+              {OUTCOME_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
@@ -463,14 +526,14 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
             <div className="mctb-mc-sheet mctb-mc-mobile-only" role="dialog" aria-label="Filters">
               <h3>Filters</h3>
               <div className="mctb-mc-sheet-field">
-                <label htmlFor="mctb-missed-status-m">Status</label>
+                <label htmlFor="mctb-missed-status-m">{MISSED_CALLS_OUTCOME_FILTER_LABEL}</label>
                 <select
                   id="mctb-missed-status-m"
                   className="mctb-mc-select w-full"
                   value={query.status ?? "all"}
                   onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
                 >
-                  {STATUS_OPTIONS.map((opt) => (
+                  {OUTCOME_OPTIONS.map((opt) => (
                     <option key={opt.id} value={opt.id}>{opt.label}</option>
                   ))}
                 </select>
@@ -586,6 +649,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                       const reason = fmtSuppressionReason(row.suppressionReason);
                       const recoveryClass = recoveryStatusClass(row.status, row.suppressionReason);
                       const replyClass = replyStatusClass(row.status);
+                      const issue = missedCallActionableIssue(row.status, row.suppressionReason);
                       const callerPrimary = row.contactName || fmtPhone(row.callerE164);
                       const showPhoneSecondary = Boolean(row.contactName);
                       return (
@@ -617,7 +681,16 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                             {classificationToTriggerLabel(row.classification)}
                           </td>
                           <td className="mctb-mc-cell-recovery">
-                            <span className={recoveryClass}>{recoveryPrimary}</span>
+                            <span className="mctb-mc-recovery-line">
+                              {issue.show ? (
+                                <AlertTriangle
+                                  className="mctb-mc-issue-icon"
+                                  aria-hidden
+                                  title={issue.message}
+                                />
+                              ) : null}
+                              <span className={recoveryClass}>{recoveryPrimary}</span>
+                            </span>
                             {reason ? (
                               <span className="mctb-mc-recovery-reason">{reason}</span>
                             ) : null}
@@ -660,13 +733,22 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                                   >
                                     Open details
                                   </button>
+                                  {row.conversationId ? (
+                                    <Link
+                                      href={conversationHref(row.conversationId)}
+                                      role="menuitem"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Open conversation
+                                    </Link>
+                                  ) : null}
                                   <button
                                     type="button"
                                     role="menuitem"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      void navigator.clipboard.writeText(row.callerE164);
                                       setOpenMenuId(null);
+                                      void copyCallerNumber(row.callerE164);
                                     }}
                                   >
                                     Copy number

@@ -73,6 +73,16 @@
   margin-bottom: 1rem;
 }
 
+.mctb-mc-metrics--four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+  .mctb-mc-metrics--four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .mctb-mc-metric {
   display: flex;
   flex-direction: column;
@@ -98,6 +108,51 @@
   font-weight: 600;
   line-height: 1.75rem;
   font-variant-numeric: tabular-nums;
+}
+
+.mctb-mc-metric-context {
+  margin-top: 0.125rem;
+  font-size: 11px;
+  line-height: 1rem;
+  color: #8b939e;
+}
+
+.mctb-mc-metric--link {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mctb-mc-metric--link:hover {
+  border-color: #dee2e6;
+  background: #fafbfc;
+}
+
+.mctb-mc-toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 60;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #eaedf0;
+  background: #ffffff;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(27, 30, 35, 0.1);
+}
+
+.mctb-mc-recovery-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mctb-mc-issue-icon {
+  height: 0.875rem;
+  width: 0.875rem;
+  flex-shrink: 0;
+  color: #b45309;
 }
 
 .mctb-mc-metric-skeleton {

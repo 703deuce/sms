@@ -47,7 +47,7 @@ export function DataTablePaginationFooter({
 
       <div className="data-table-pagination-footer__controls">
         <label className="data-table-pagination-footer__page-size">
-          <span className="sr-only">Rows per page</span>
+          <span className="data-table-pagination-footer__page-size-prefix">Rows per page</span>
           <select
             className="data-table-pagination-footer__select"
             value={pageSize}
@@ -63,7 +63,6 @@ export function DataTablePaginationFooter({
               </option>
             ))}
           </select>
-          <span className="data-table-pagination-footer__page-size-label">/ page</span>
         </label>
 
         <div className="data-table-pagination-footer__pager">

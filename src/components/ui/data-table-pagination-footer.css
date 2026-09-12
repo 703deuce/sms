@@ -41,8 +41,9 @@
   color: #1b1e23;
 }
 
-.data-table-pagination-footer__page-size-label {
+.data-table-pagination-footer__page-size-prefix {
   color: #626872;
+  white-space: nowrap;
 }
 
 .data-table-pagination-footer__pager {

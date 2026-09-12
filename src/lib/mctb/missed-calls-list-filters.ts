@@ -66,7 +66,7 @@ function startOfToday(): Date {
   return d;
 }
 
-function dateRangeFromFilter(date: MissedCallsDateFilter): { gte?: Date } | undefined {
+export function dateRangeFromFilter(date: MissedCallsDateFilter): { gte?: Date } | undefined {
   if (date === "all") return undefined;
   const now = new Date();
   if (date === "today") return { gte: startOfToday() };
@@ -75,6 +75,22 @@ function dateRangeFromFilter(date: MissedCallsDateFilter): { gte?: Date } | unde
   gte.setDate(gte.getDate() - days);
   return { gte };
 }
+
+export function missedCallsSummaryRangeLabel(date: MissedCallsDateFilter = "all"): string {
+  switch (date) {
+    case "today":
+      return "Today";
+    case "7d":
+      return "Last 7 days";
+    case "30d":
+      return "Last 30 days";
+    default:
+      return "All time";
+  }
+}
+
+/** User-facing name for the `status` query filter (composite recovery/reply/consent outcomes). */
+export const MISSED_CALLS_OUTCOME_FILTER_LABEL = "Outcome";
 
 function statusWhere(status: MissedCallsStatusFilter): Prisma.MissedCallEventWhereInput | undefined {
   switch (status) {
