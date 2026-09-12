@@ -19,8 +19,13 @@ async function main() {
     `${BASE}/api/auth/dev-bypass?next=${encodeURIComponent("/mctb/setup")}`,
     { waitUntil: "domcontentloaded", timeout: 120000 },
   );
-  await page.waitForTimeout(2500);
   await page.locator("main .mctb-setup-page-title").waitFor({ state: "visible", timeout: 60000 });
+  await page
+    .locator(".mctb-setup-summary-row, .mctb-setup-panel")
+    .first()
+    .waitFor({ state: "visible", timeout: 60000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(800);
 
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
