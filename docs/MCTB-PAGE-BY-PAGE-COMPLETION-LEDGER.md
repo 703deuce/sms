@@ -155,7 +155,7 @@ MESSAGE_ACTIONS: CONNECTED_AND_WORKING
 | MCTB_SETUP_RECOVERY | PASS | Unified triggers + pause + cooldown on `/mctb/setup/recovery` |
 | MCTB_SETUP_CONSENT | PASS | Premium consent page; eligibility + attestation modals |
 | MCTB_SETUP_VOICEMAIL | NOT_STARTED | Setup sub-page (separate from inbox) |
-| MCTB_SETUP_NOTIFICATIONS | NOT_STARTED | Next pass |
+| MCTB_SETUP_NOTIFICATIONS | PASS | Premium handoff + routing matrix |
 | MCTB_SETUP_EXCLUSIONS | NOT_STARTED | Next pass |
 | MCTB_SETUP_TEST | NOT_STARTED | Next pass |
 
@@ -214,3 +214,25 @@ MESSAGE_ACTIONS: CONNECTED_AND_WORKING
 | MCTB_SETUP_CONSENT_CONSOLE_NETWORK | BLOCKED | Live QA |
 
 **MCTB_SETUP_CONSENT_COMPLETE: YES**
+
+## Notifications (`/mctb/setup/notifications`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_NOTIFICATIONS_ROUTE | PASS | Canonical; `/api/mctb/handoff` |
+| MCTB_SETUP_NOTIFICATIONS_HANDOFF_MODES | PASS | Four response modes |
+| MCTB_SETUP_NOTIFICATIONS_GUIDED_FIELDS | PASS | Conditional on guided_collection |
+| MCTB_SETUP_NOTIFICATIONS_EMERGENCY | PASS | Criteria, action, uncertain behavior |
+| MCTB_SETUP_NOTIFICATIONS_RECIPIENTS | PASS | Add/edit/enable recipients |
+| MCTB_SETUP_NOTIFICATIONS_ROUTING_MATRIX | PASS | Per-event email/SMS/in-app |
+| MCTB_SETUP_NOTIFICATIONS_QUIET_HOURS | PASS | Bypass + SMS delay |
+| MCTB_SETUP_NOTIFICATIONS_TEST | PASS | test_notification action |
+| MCTB_SETUP_NOTIFICATIONS_DOCS | PASS | Audit + matrices |
+| MCTB_SETUP_NOTIFICATIONS_RESPONSIVE | PASS | Screenshots `notifications_*` |
+| MCTB_SETUP_NOTIFICATIONS_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**NOTIFICATIONS_PAGE_COMPLETE: YES**  
+EXISTING_CAPABILITIES_DISCOVERED: 18  
+EXISTING_CAPABILITIES_PRESERVED: 18  
+HANDOFF_MODES_DISCOVERED: 4  
+ALERT_CHANNELS_DISCOVERED: 3 (email, SMS, in-app)
