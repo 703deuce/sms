@@ -1,14 +1,14 @@
 "use client";
 
 import { buildRealtorMobileNav } from "@/lib/realtor/nav";
-import { buildAppointmentsMobileNav } from "@/lib/products/appointments-nav";
-import { buildMctbV1MobileNav } from "@/lib/products/mctb-nav";
+import { resolveProductMobileNav } from "@/lib/products/resolve-product-nav";
 import { isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { buildNumbersMobileNav } from "@/lib/products/numbers-nav";
 import { buildAiAfterHoursMobileNav } from "@/lib/products/ai-after-hours-nav";
 import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice-nav";
 import { useProductShell } from "@/components/products/product-shell-tabs";
-import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
+import { resolveProductShellFromPath, shouldShowProductSwitcher } from "@/lib/products/product-shell";
+import { isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import { isSmsOnlyAppNav, isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
@@ -82,39 +82,33 @@ export function MobileNav({
     icon: voiceMobileIcons[i] ?? LayoutDashboard,
   }));
 
-  const appointmentsItems = buildAppointmentsMobileNav().map((item, i) => ({
-    ...item,
-    icon: [Home, Calendar, Globe, MessageSquare, Users][i] ?? Home,
-  }));
+  const resolvedMobile = resolveProductMobileNav({
+    pathname,
+    inboxBadge: 0,
+    multiProduct,
+    productShell,
+    primaryVoiceAgentId,
+    showTryIt,
+    productFeatures,
+    hasSms: hasMassSms,
+  });
 
-  const mctbItems = buildMctbV1MobileNav().map((item, i) => ({
-    ...item,
-    icon: [Home, PhoneMissed, MessageSquare, SlidersHorizontal][i] ?? Home,
-  }));
+  const mobileIconSets: Record<string, typeof Home[]> = {
+    Home: [Home, Calendar, Globe, MessageSquare, Users],
+    mctb: [Home, PhoneMissed, MessageSquare, SlidersHorizontal],
+  };
 
   const items = realtorMode
     ? buildRealtorMobileNav()
-    : multiProduct && productShell === "appointments"
-      ? appointmentsItems
-      : multiProduct && productShell === "mctb"
-        ? mctbItems
-        : isAppointmentsV1Primary()
-      ? appointmentsItems
-      : currentProduct === "numbers"
+    : currentProduct === "numbers"
       ? numbersItems
-      : isSmsOnlyAppNav()
-        ? massSmsItems
-        : multiProduct
-        ? productShell === "mass_sms"
-          ? massSmsItems
-          : productShell === "ai_after_hours"
-            ? aiAfterHoursItems
-            : voiceItems
-        : hasMassSms
-          ? massSmsItems
-          : hasAiAfterHours
-            ? aiAfterHoursItems
-            : voiceItems;
+      : resolvedMobile.map((item, i) => {
+          const icons =
+            item.href.startsWith("/mctb")
+              ? mobileIconSets.mctb
+              : mobileIconSets.Home;
+          return { ...item, icon: icons[i] ?? Home };
+        });
 
   return (
     <>
@@ -127,10 +121,9 @@ export function MobileNav({
         >
           {items.map((item) => {
             const Icon = item.icon;
-            const active =
-              productShell === "mctb" || (!multiProduct && !isAppointmentsV1Primary())
-                ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                : isAppointmentsNavItemActive(item.href, pathname);
+            const active = isMctbShellActive(pathname, multiProduct, productShell)
+              ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+              : isAppointmentsNavItemActive(item.href, pathname);
             return (
               <Link
                 key={`${item.label}-${item.href}`}

@@ -20,6 +20,7 @@ import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
+import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
@@ -182,9 +183,8 @@ export function AppShell({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
-  const appointmentsContextActive =
-    multiProduct ? productShell === "appointments" : isAppointmentsV1Primary();
-  const mctbContextActive = multiProduct && productShell === "mctb";
+  const mctbContextActive = isMctbShellActive(pathname, multiProduct, productShell);
+  const appointmentsContextActive = isAppointmentsShellActive(pathname, multiProduct, productShell);
   const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
   const appointmentsTitle =
     appointmentsContextActive && isAppointmentsProductPath(pathname)
