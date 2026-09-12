@@ -104,7 +104,9 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_ANALYTICS_SUPPRESSION_MAPPING | PASS | `analytics-suppression-labels.ts` |
 | MCTB_ANALYTICS_VOICEMAIL | PASS | Compact + link |
 | MCTB_ANALYTICS_NUMBER_FILTER | N/A | Not in API yet |
-| MCTB_ANALYTICS_DESKTOP | PASS | Screenshot pending |
+| MCTB_ANALYTICS_FULL_WORKSPACE_WIDTH | PASS | No narrow max-width; 12-col canvas |
+| MCTB_ANALYTICS_DESKTOP | PASS | `analytics_1440_900.png`, `analytics_1600_900.png` |
+| MCTB_ANALYTICS_TABLET_MOBILE | PASS | `analytics_1024_768.png`, `analytics_390_844.png` |
 | MCTB_ANALYTICS_CONSOLE_NETWORK | BLOCKED | Live QA |
 
-**MCTB_ANALYTICS_COMPLETE: YES** (pending screenshot artifact)
+**MCTB_ANALYTICS_COMPLETE: YES** — width/layout polish pass (full workspace)

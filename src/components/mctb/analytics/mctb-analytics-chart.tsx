@@ -18,6 +18,7 @@ export function MctbAnalyticsChart({
   metricName,
   emptyMessage = "No activity in this period.",
   hrefForDate,
+  compact = false,
 }: {
   title: string;
   total: number;
@@ -26,6 +27,7 @@ export function MctbAnalyticsChart({
   metricName: string;
   emptyMessage?: string;
   hrefForDate?: (iso: string) => string;
+  compact?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = useMemo(() => Math.max(1, ...series.map((p) => p.count)), [series]);
@@ -36,7 +38,10 @@ export function MctbAnalyticsChart({
   );
 
   return (
-    <section className="mctb-analytics-chart" aria-label={title}>
+    <section
+      className={`mctb-analytics-chart${compact ? " mctb-analytics-chart--compact" : ""}`}
+      aria-label={title}
+    >
       <div className="mctb-analytics-chart__head">
         <h2 className="mctb-analytics-chart__title">{title}</h2>
         <p className="mctb-analytics-chart__total">
