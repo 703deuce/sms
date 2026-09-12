@@ -36,15 +36,28 @@ export interface TransovoSidebarProps {
   appointmentsOverviewShell?: boolean;
 }
 
-function Logo({ collapsed, homeHref }: { collapsed: boolean; homeHref: string }) {
+function Logo({
+  collapsed,
+  homeHref,
+  neutralMark,
+}: {
+  collapsed: boolean;
+  homeHref: string;
+  neutralMark?: boolean;
+}) {
   return (
     <div
       className={`flex items-center gap-2 h-14 border-b border-border shrink-0 ${
         collapsed ? "justify-center px-0" : "px-4"
       }`}
+      style={neutralMark ? { borderColor: "#dde1e5" } : undefined}
     >
       <Link href={homeHref} className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-white shrink-0">
+        <span
+          className={`flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${
+            neutralMark ? "border border-[#dee2e6] bg-[#f2f4f6] text-[#1b1e23]" : "bg-indigo-600 text-white"
+          }`}
+        >
           <Sparkles className="h-4 w-4" />
         </span>
         {!collapsed && (
@@ -75,8 +88,9 @@ function ExpandedNavRow({
 }) {
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
-  const className =
-    "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
+  const className = appointmentsOverviewShell
+    ? "transovo-nav-item flex w-full items-center gap-2 rounded-md px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:text-[#1b1e23] min-h-[34px]"
+    : "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
   const rowStyle =
     appointmentsOverviewShell && active ? OVERVIEW_NAV_ACTIVE : undefined;
   const iconStyle =
@@ -184,7 +198,7 @@ export function TransovoSidebar({
           : {}),
       }}
     >
-      <Logo collapsed={collapsed} homeHref={homeHref} />
+      <Logo collapsed={collapsed} homeHref={homeHref} neutralMark={appointmentsOverviewShell} />
 
       {productSwitcher ? (
         <div className={collapsed ? "px-1" : "px-0"}>{productSwitcher}</div>
@@ -272,26 +286,42 @@ export function TransovoSidebar({
           </>
         ) : (
           <>
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+            <div
+              className={
+                appointmentsOverviewShell
+                  ? "rounded-lg border border-[#dee2e6] bg-white px-2.5 py-2.5"
+                  : "rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+              }
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[12px] font-medium text-foreground">{credits.label}</span>
                 <Link
                   href={upgradeHref}
-                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                  className={
+                    appointmentsOverviewShell
+                      ? "text-[11px] font-medium text-[#1b1e23] hover:underline"
+                      : "text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                  }
                 >
                   Upgrade
                 </Link>
               </div>
-              <div className="transovo-credits-bar mt-2">
+              <div className="transovo-credits-bar mt-1.5 h-1">
                 <div className="transovo-credits-fill" style={{ width: `${creditsPct}%` }} />
               </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground whitespace-nowrap">
-                {credits.remaining.toLocaleString()} Credits Remaining
+              <p className="mt-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                {credits.remaining.toLocaleString()} credits remaining
               </p>
             </div>
 
             <div className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-muted/60 cursor-pointer">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                  appointmentsOverviewShell
+                    ? "bg-[#e2e6ea] text-[#1b1e23]"
+                    : "bg-indigo-100 text-indigo-700"
+                }`}
+              >
                 {user.initials}
               </span>
               <div className="min-w-0 flex-1">

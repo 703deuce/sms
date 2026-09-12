@@ -4,7 +4,7 @@ import type { DashboardMetrics, PhoneNumber, Workspace } from "@/lib/types";
 import type { WorkspaceTypeCookie } from "@/lib/auth";
 import type { CurrentProduct } from "@/lib/products/types";
 import { SmsCreateMenu } from "@/components/products/sms-create-menu";
-import { formatPhone } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import {
   Bell,
@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
+import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 
 type SearchResult = {
   id: string;
@@ -75,6 +76,8 @@ export function Header({
   const router = useRouter();
   const pathname = usePathname();
   const appointmentsChrome = isAppointmentsProductPath(pathname);
+  const mctbChrome = isMctbNeutralShellPath(pathname);
+  const neutralChrome = appointmentsChrome || mctbChrome;
   const showMassSmsChrome = hasSms && !appointmentsChrome;
   const [numberId, setNumberId] = useState(
     activeFromNumberId || phoneNumbers[0]?.id || "",
@@ -205,8 +208,18 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-header/95 backdrop-blur">
-      <div className="flex h-16 items-center gap-2 px-4 lg:gap-3 lg:px-6">
+    <header
+      className={cn(
+        "sticky top-0 z-30 border-b backdrop-blur",
+        neutralChrome ? "border-[#e5e8eb] bg-white/95" : "border-border bg-header/95",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-2 px-4 lg:gap-3 lg:px-6",
+          neutralChrome ? "h-[54px]" : "h-16",
+        )}
+      >
         <button
           type="button"
           className="rounded-lg p-2 text-foreground hover:bg-muted lg:hidden"
@@ -227,7 +240,11 @@ export function Header({
         <div className="flex-1" />
 
         {showMassSmsChrome ? (
-          <SmsCreateMenu variant="header" className="hidden sm:block" />
+          <SmsCreateMenu
+            variant="header"
+            className="hidden sm:block"
+            neutralPrimary={neutralChrome}
+          />
         ) : null}
 
         {currentProduct === "numbers" ? (

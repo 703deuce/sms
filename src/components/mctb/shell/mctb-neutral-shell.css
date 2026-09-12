@@ -1,0 +1,14 @@
+/* Shared MCTB shell — aligns with Appointments soft cool slate (no structural purple). */
+
+.product-theme[data-mctb-neutral-shell] .transovo-credits-fill {
+  background: #3a3f47 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-nav-item[data-active="true"] {
+  background-color: #e2e6ea !important;
+  color: #1b1e23 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active {
+  color: #1b1e23 !important;
+}
