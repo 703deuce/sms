@@ -92,6 +92,12 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
       mode: session.mode,
     });
   }
+  const { isPaymentRequestCheckoutMetadata } = await import("@/lib/payment-requests/stripe-checkout");
+  if (isPaymentRequestCheckoutMetadata(metadata)) {
+    const { handlePaymentRequestCheckoutCompleted } = await import("@/lib/payment-requests/service");
+    return handlePaymentRequestCheckoutCompleted(session);
+  }
+
   const { isAppointmentCheckoutMetadata, handleAppointmentCheckoutCompleted } = await import(
     "@/lib/appointments/payment-checkout"
   );
@@ -252,6 +258,14 @@ async function processStripeEvent(event: Stripe.Event) {
         const { handleAppointmentCheckoutExpired } = await import("@/lib/appointments/payment-checkout");
         await handleAppointmentCheckoutExpired(metadata.workspaceId, metadata.appointmentId);
         return { subsystem: "merchant_payments" as const, action: "checkout_expired" };
+      }
+      if (metadata.transaction_type === "transovo_payment_request" && metadata.transovo_payment_request_id) {
+        const { getPrisma } = await import("@/lib/db");
+        await getPrisma().paymentRequest.updateMany({
+          where: { id: metadata.transovo_payment_request_id },
+          data: { status: "expired" },
+        });
+        return { subsystem: "payment_request" as const, action: "checkout_expired" };
       }
       return { subsystem: "none" as const, skipped: true };
     }

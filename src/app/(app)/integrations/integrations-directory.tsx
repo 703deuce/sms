@@ -58,7 +58,7 @@ const PROVIDERS: ProviderDef[] = [
     tone: "bg-violet-100 text-violet-700",
     kind: "stripe",
     links: [
-      { label: "Text-to-pay", href: "/messaging/payments" },
+      { label: "Text-to-pay", href: "/payments" },
       { label: "Billing", href: "/settings/billing" },
     ],
   },

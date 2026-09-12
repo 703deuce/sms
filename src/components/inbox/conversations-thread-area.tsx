@@ -13,6 +13,7 @@ import {
   useInboxAiAssist,
 } from "@/components/ai-replies/inbox-ai-assist-panel";
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
+import { ConversationPaymentActions } from "@/components/payments/conversation-payments";
 
 type Props = {
   convo: Conversation;
@@ -106,6 +107,13 @@ export function ConversationsThreadArea({
       disabled?: boolean;
     }) => (
       <>
+        <ConversationPaymentActions
+          conversationId={convo.id}
+          phone={convo.phone}
+          customerName={convo.name}
+          contactId={convo.contactId}
+          missedCallId={convo.missedCallEventId}
+        />
         {composerDisabledReason ? (
           <div
             style={{
@@ -138,7 +146,7 @@ export function ConversationsThreadArea({
         />
       </>
     ),
-    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId],
+    [prefill, composerDisabled, composerDisabledReason, teammates, phoneNumbers, composeFromRef, defaultFromNumberId, convo],
   );
 
   return (

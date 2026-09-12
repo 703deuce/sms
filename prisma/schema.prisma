@@ -95,6 +95,36 @@ enum PaymentLinkStatus {
   canceled
 }
 
+enum PaymentRequestStatus {
+  draft
+  ready
+  sent
+  delivered
+  opened
+  paid
+  failed
+  expired
+  cancelled
+  refunded
+  partially_refunded
+}
+
+enum PaymentRequestSourceType {
+  standalone
+  conversation
+  mctb_conversation
+  appointment
+  other
+}
+
+enum PaymentRequestDeliveryStatus {
+  not_sent
+  queued
+  sent
+  delivered
+  failed
+}
+
 enum WorkspaceType {
   PERSONAL
   BUSINESS
@@ -349,6 +379,7 @@ model Workspace {
   messagingSettings WorkspaceMessagingSettings?
   emailToSmsAddresses EmailToSmsAddress[]
   paymentLinks PaymentLink[]
+  paymentRequests PaymentRequest[]
   portRequests PortRequest[]
   portOutRequests PortOutRequest[]
   humanCalls HumanCall[]
@@ -3656,6 +3687,77 @@ model PaymentLink {
   @@index([workspaceId, status])
   @@index([stripeSessionId])
   @@map("payment_links")
+}
+
+/// Canonical Text-to-Pay / payment request (business asks customer to pay via SMS + hosted checkout).
+model PaymentRequest {
+  id                         String                       @id @default(cuid())
+  workspaceId                String
+  processor                  String                       @default("STRIPE")
+  processorConnectedAccountId String?
+  customerId                 String?
+  contactId                  String?
+  customerName               String?
+  customerPhoneE164          String
+  amountMinor                Int
+  currency                   String                       @default("usd")
+  description                String
+  customerNote               String?
+  status                     PaymentRequestStatus         @default(draft)
+  deliveryStatus             PaymentRequestDeliveryStatus @default(not_sent)
+  processorCheckoutId        String?
+  processorPaymentLinkId     String?
+  processorPaymentIntentId   String?
+  processorChargeId          String?
+  publicToken                String                       @unique
+  expiresAt                  DateTime?
+  cancelledAt                DateTime?
+  paidAt                     DateTime?
+  failedAt                   DateTime?
+  refundedAt                 DateTime?
+  amountPaidMinor            Int?
+  amountRefundedMinor        Int?                         @default(0)
+  sourceType                 PaymentRequestSourceType     @default(standalone)
+  sourceId                   String?
+  conversationId             String?
+  missedCallId               String?
+  appointmentId              String?
+  messageId                  String?
+  createdByUserId            String?
+  lastReminderAt             DateTime?
+  reminderCount              Int                          @default(0)
+  firstOpenedAt              DateTime?
+  lastOpenedAt               DateTime?
+  openCount                  Int                          @default(0)
+  idempotencyKey             String?                      @unique
+  smsError                   String?
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+  workspace                  Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events                     PaymentRequestEvent[]
+
+  @@index([workspaceId, status, createdAt])
+  @@index([workspaceId, customerPhoneE164])
+  @@index([conversationId])
+  @@index([processorCheckoutId])
+  @@index([publicToken])
+  @@map("payment_requests")
+}
+
+model PaymentRequestEvent {
+  id               String         @id @default(cuid())
+  paymentRequestId String
+  workspaceId      String
+  eventType        String
+  actorType        String         @default("system")
+  actorUserId      String?
+  payload          Json?
+  createdAt        DateTime       @default(now())
+  paymentRequest   PaymentRequest @relation(fields: [paymentRequestId], references: [id], onDelete: Cascade)
+
+  @@index([paymentRequestId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("payment_request_events")
 }
 
 model HumanCall {

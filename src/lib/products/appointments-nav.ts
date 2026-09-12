@@ -217,9 +217,10 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   if (modules.payments) {
     items.push({
       label: "Payments",
-      href: "/payments/transactions",
+      href: "/payments",
       icon: CreditCard,
       children: [
+        { label: "Payment requests", href: "/payments" },
         { label: "Transactions", href: "/payments/transactions" },
         { label: "Invoices", href: "/payments/invoices" },
       ],
