@@ -135,7 +135,15 @@ function ExpandedNavRow({
   );
 }
 
-function CollapsedNavButton({ item, active }: { item: KimiNavItem; active: boolean }) {
+function CollapsedNavButton({
+  item,
+  active,
+  appointmentsOverviewShell,
+}: {
+  item: KimiNavItem;
+  active: boolean;
+  appointmentsOverviewShell?: boolean;
+}) {
   const Icon = item.icon;
   return (
     <Link
@@ -143,6 +151,7 @@ function CollapsedNavButton({ item, active }: { item: KimiNavItem; active: boole
       data-active={active ? "true" : undefined}
       title={item.label}
       className="transovo-nav-item relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+      style={active && appointmentsOverviewShell ? OVERVIEW_NAV_ACTIVE : undefined}
     >
       <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
       {hasPositiveBadge(item.badge) && (
@@ -212,7 +221,14 @@ export function TransovoSidebar({
         {navItems.map((item) => {
           const active = isActive(item);
           if (collapsed) {
-            return <CollapsedNavButton key={item.label} item={item} active={active} />;
+            return (
+              <CollapsedNavButton
+                key={item.label}
+                item={item}
+                active={active}
+                appointmentsOverviewShell={appointmentsOverviewShell}
+              />
+            );
           }
           const childActive = item.children?.some((c) => isChildNavActive(c.href, bestMatch));
           const expanded = expandedGroups[item.label] ?? (active || childActive);
@@ -249,6 +265,11 @@ export function TransovoSidebar({
                       href={child.href}
                       data-active={isChildNavActive(child.href, bestMatch) ? "true" : undefined}
                       className="transovo-nav-item flex w-full items-center rounded-md px-2 py-[6px] text-[13px] text-muted-foreground hover:text-foreground"
+                      style={
+                        appointmentsOverviewShell && isChildNavActive(child.href, bestMatch)
+                          ? OVERVIEW_NAV_ACTIVE
+                          : undefined
+                      }
                     >
                       <span className="whitespace-nowrap">{child.label}</span>
                     </Link>
