@@ -306,7 +306,11 @@ export function TransovoSidebar({
           <>
             <span
               title={user.name}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-semibold text-indigo-700"
+              className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold ${
+                appointmentsOverviewShell
+                  ? "bg-[#e2e6ea] text-[#1b1e23]"
+                  : "bg-indigo-100 text-indigo-700"
+              }`}
             >
               {user.initials}
             </span>

@@ -7,6 +7,10 @@ import {
   type MctbOnboardingStep,
   MCTB_ONBOARDING_STEP_ORDER,
 } from "./types";
+import {
+  normalizeCompletedSteps,
+  normalizeOnboardingStep,
+} from "@/lib/mctb/onboarding/wizard-flow";
 import { normalizeWorkspaceTollFreeFields } from "@/lib/mctb/workspace-toll-free";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -30,14 +34,10 @@ function jsonSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-const LEGACY_STEP_MAP: Record<string, MctbOnboardingStep> = {
-  compliance: "tfv",
-};
-
 export function defaultMctbOnboardingState(): MctbOnboardingState {
   return {
     version: 2,
-    currentStep: "business",
+    currentStep: "business_line",
     completedSteps: [],
     startedAt: new Date().toISOString(),
     messageTemplate: DEFAULT_ONBOARDING_MESSAGE,
@@ -51,8 +51,9 @@ export function defaultMctbOnboardingState(): MctbOnboardingState {
 }
 
 function normalizeStep(step: unknown): MctbOnboardingStep {
-  const raw = String(step || "business");
-  return LEGACY_STEP_MAP[raw] || (raw as MctbOnboardingStep);
+  const raw = String(step || "business_line");
+  if (raw === "compliance") return "recovery";
+  return normalizeOnboardingStep(raw);
 }
 
 export function parseMctbOnboardingState(raw: unknown): MctbOnboardingState {
@@ -65,9 +66,7 @@ export function parseMctbOnboardingState(raw: unknown): MctbOnboardingState {
     ...tollFreeFields,
     version: 2,
     currentStep: normalizeStep(stored.currentStep),
-    completedSteps: Array.isArray(stored.completedSteps)
-      ? (stored.completedSteps as string[]).map(normalizeStep)
-      : [],
+    completedSteps: normalizeCompletedSteps(stored.completedSteps),
     funnelEvents:
       stored.funnelEvents && typeof stored.funnelEvents === "object"
         ? (stored.funnelEvents as Record<string, string>)
@@ -175,7 +174,8 @@ export async function recordFunnelEvent(
 }
 
 export function isOnboardingComplete(state: MctbOnboardingState): boolean {
-  return Boolean(state.trialActivatedAt) || state.currentStep === "complete";
+  const step = normalizeStep(state.currentStep);
+  return Boolean(state.trialActivatedAt) || step === "ready" || step === "complete";
 }
 
 export function deriveOnboardingProgress(state: MctbOnboardingState) {

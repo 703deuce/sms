@@ -92,6 +92,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/book/")) return true;
   if (pathname.startsWith("/messaging/payments/mock/")) return true;
   if (pathname.startsWith("/r/")) return true;
+  if (pathname.startsWith("/p/")) return true;
   // Hosted + embeddable opt-in forms (consent capture)
   if (pathname.startsWith("/f/")) return true;
   if (pathname.startsWith("/j/")) return true;

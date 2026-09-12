@@ -1,6 +1,15 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { MctbOnboardingProgress } from "@/components/mctb/onboarding/mctb-onboarding-progress";
+import "./onboarding/mctb-onboarding-wizard.css";
+import { MctbPhoneForwardingPanel } from "@/components/mctb/wizard/mctb-phone-forwarding-panel";
+import { MctbHeroNumber } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
+import {
+  MctbConsentModeCards,
+  MctbMessagingActivationPanel,
+  MctbTextBackComposer,
+  MctbVerificationTimeline,
+} from "@/components/mctb/wizard/mctb-wizard-ui";
 import type { CarrierForwardingGuide } from "@/lib/mctb/onboarding/carriers";
 import type {
   MctbConsentMode,
@@ -10,112 +19,69 @@ import type {
   MctbTfvStatus,
 } from "@/lib/mctb/onboarding/types";
 import {
-  Building2,
-  CheckCircle2,
-  Loader2,
-  MessageSquare,
-  Phone,
-  PhoneMissed,
-  ShieldCheck,
-  Sparkles,
-  Zap,
-  FileCheck,
-} from "lucide-react";
-import Link from "next/link";
-import {
-  MctbCallout,
-  MctbHeroNumber,
-} from "@/components/mctb/kimi-ui/mctb-premium-patterns";
-import { MctbPhoneForwardingPanel } from "@/components/mctb/wizard/mctb-phone-forwarding-panel";
-import {
-  MctbBusinessIdentityStep,
-  MctbConsentModeCards,
-  MctbConnectionStatusCard,
-  MctbFlowStepper,
-  MctbMessagingActivationPanel,
-  MctbTextBackComposer,
-  MctbVerificationTimeline,
-} from "@/components/mctb/wizard/mctb-wizard-ui";
-import { MctbWizardStepShell } from "@/components/mctb/setup/wizard-step-shell";
+  normalizeOnboardingStep,
+  wizardStageIndex,
+} from "@/lib/mctb/onboarding/wizard-flow";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
+import { existingConsentIneligibleReason } from "@/lib/mctb/setup-consent-eligibility";
+import { CheckCircle2, FileCheck, Loader2, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import "./kimi-ui/reference.css";
+import {
+  MctbNumberDrawerHost,
+  useMctbNumberDrawerEvents,
+  type MctbNumberDrawerMode,
+} from "@/components/mctb/numbers/mctb-number-drawer-host";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
-  steps: MctbOnboardingStep[];
-  stepLabels: Record<MctbOnboardingStep, string>;
-  demo: {
-    demoNumberE164: string;
-    demoNumberDisplay: string | null;
-    label?: string;
-    description?: string;
-    consentMode?: string;
-    requiresForwarding?: boolean;
-    checks: {
-      callDetected: boolean;
-      missedCall: boolean;
-      textDelivered: boolean;
-      replyReceived: boolean;
-    };
-    completed: boolean;
-  };
   trialNumber: {
     provisioned: boolean;
     display: string | null;
-    voiceStatus: string | null;
     messagingVerificationStatus: MctbTfvStatus;
     tfvStatusLabel: string;
     messagingApproved?: boolean;
     numberClass?: string | null;
-    complianceType?: string | null;
   };
   liveTest: {
     started: boolean;
     passed: boolean;
-    checks: {
-      callDetected: boolean;
-      missedCall: boolean;
-      consentCompleted: boolean;
-      textSent: boolean;
-      textDelivered: boolean;
-      replyReceived: boolean;
-    };
+    checks: Record<string, boolean>;
     forwardTargetE164: string | null;
-    /** @deprecated use forwardTargetE164 */
-    trialNumberE164?: string | null;
     businessNumberE164: string | null;
   };
   tfv: {
     status: string;
     approved: boolean;
-    trialE164: string | null;
     failureReason?: string | null;
     messagingApproved?: boolean;
     numberClass?: string | null;
-    complianceType?: string | null;
+  };
+  demo: {
+    demoNumberDisplay: string | null;
+    demoNumberE164: string;
+    description?: string;
+    label?: string;
+    checks: Record<string, boolean>;
+    completed: boolean;
   };
   carriers: CarrierForwardingGuide[];
-  demoIngressE164?: string | null;
-  productionForwardE164?: string | null;
-  forwardTargetE164?: string | null;
-  defaultBusinessLineE164?: string | null;
   forwardingVerification: {
     testStarted: boolean;
-    callDetected: boolean;
     verified: boolean;
     path: string | null;
-    aniLikelyPreserved: boolean | null;
   } | null;
+  forwardTargetE164?: string | null;
+  productionForwardE164?: string | null;
+  trial?: { daysRemaining?: number; active?: boolean };
 };
 
 const DEFAULT_MESSAGE =
   "Sorry we missed your call! Reply here and we'll get back to you shortly.";
 
-type Props = {
-  initialBusinessName?: string;
-};
+type Props = { initialBusinessName?: string };
 
 export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const router = useRouter();
@@ -123,30 +89,30 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [existingConsentEligible, setExistingConsentEligible] = useState(false);
 
   const [businessName, setBusinessName] = useState(initialBusinessName);
   const [websiteUrl, setWebsiteUrl] = useState("");
+  const [businessNumber, setBusinessNumber] = useState("");
+  const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE);
   const [consentMode, setConsentMode] = useState<MctbConsentMode>("press_1");
   const [existingConsentAttested, setExistingConsentAttested] = useState(false);
-  const [carrier, setCarrier] = useState<MctbForwardingCarrier>("verizon");
   const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
   const [forwardingTestActive, setForwardingTestActive] = useState(false);
-  const [businessNumber, setBusinessNumber] = useState("");
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
+  useMctbNumberDrawerEvents(setDrawerMode);
 
-  const step = data?.state.currentStep || "business";
-  const stepIndex = useMemo(
-    () => (data ? data.steps.indexOf(step) : 0),
-    [data, step],
-  );
-  const previousStep = useMemo((): MctbOnboardingStep | null => {
-    if (!data || stepIndex <= 0) return null;
-    return data.steps[stepIndex - 1] ?? null;
-  }, [data, stepIndex]);
+  const step = normalizeOnboardingStep(data?.state.currentStep || "business_line");
+  const stageIndex = wizardStageIndex(step);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/mctb/onboarding", { cache: "no-store" });
-    const json = (await res.json()) as OnboardingPayload;
+    const [onbRes, setupRes] = await Promise.all([
+      fetch("/api/mctb/onboarding", { cache: "no-store" }),
+      fetch("/api/mctb/setup", { cache: "no-store" }).catch(() => null),
+    ]);
+    const json = (await onbRes.json()) as OnboardingPayload;
     if (json.state) {
       setData(json);
       if (json.state.businessName) setBusinessName(json.state.businessName);
@@ -155,12 +121,13 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
       if (json.state.consentMode) setConsentMode(json.state.consentMode);
       if (json.state.forwardingCarrier) setCarrier(json.state.forwardingCarrier);
       if (json.state.businessNumberE164) setBusinessNumber(json.state.businessNumberE164);
-      else if (json.defaultBusinessLineE164) setBusinessNumber(json.defaultBusinessLineE164);
       if (json.state.forwardingRingSeconds) setForwardRingSeconds(json.state.forwardingRingSeconds);
-      if (json.state.forwardingTestStartedAt && !json.state.forwardingConnectedAt) {
-        setForwardingTestActive(true);
-      }
       if (json.forwardingVerification?.verified) setForwardingTestActive(false);
+    }
+    if (setupRes?.ok) {
+      const setupJson = await setupRes.json();
+      const ready = Boolean(setupJson?.consentMeta?.existingConsentEligible ?? setupJson?.messagingReady);
+      setExistingConsentEligible(ready);
     }
     setLoading(false);
   }, []);
@@ -170,48 +137,22 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   }, [load]);
 
   useEffect(() => {
-    if (step !== "demo") return;
-    const timer = setInterval(() => {
-      void load();
-    }, 2500);
-    return () => clearInterval(timer);
-  }, [step, load]);
-
-  const provisionTrialNumber = useCallback(async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/mctb/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "provision_trial_number" }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not assign production number");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not assign production number");
-    } finally {
-      setSaving(false);
-    }
-  }, [load]);
+    if (step !== "connect_calls") return;
+    if (data?.trialNumber.provisioned) return;
+    void provisionTrialNumber();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per connect visit
+  }, [step]);
 
   useEffect(() => {
-    if (step !== "connect" && step !== "live_test") return;
+    if (step !== "connect_calls" && step !== "review_test") return;
     if (!forwardingTestActive && !data?.state.forwardingTestStartedAt) return;
     if (data?.forwardingVerification?.verified) return;
     const timer = setInterval(() => void load(), 4000);
     return () => clearInterval(timer);
-  }, [
-    step,
-    forwardingTestActive,
-    data?.state.forwardingTestStartedAt,
-    data?.forwardingVerification?.verified,
-    load,
-  ]);
+  }, [step, forwardingTestActive, data, load]);
 
   useEffect(() => {
-    if (step !== "live_test") return;
+    if (step !== "review_test") return;
     void fetch("/api/mctb/live-test", { method: "POST" }).catch(() => undefined);
     const timer = setInterval(() => {
       void fetch("/api/mctb/live-test", { cache: "no-store" })
@@ -220,17 +161,22 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           if (!j.data) return;
           setData((prev) => (prev ? { ...prev, liveTest: j.data } : prev));
           if (j.data.passed) void load();
-        })
-        .catch(() => undefined);
+        });
     }, 3000);
     return () => clearInterval(timer);
   }, [step, load]);
 
   useEffect(() => {
-    if (step !== "pending" && step !== "tfv") return;
+    if (step !== "recovery") return;
     const timer = setInterval(() => void load(), 15000);
     return () => clearInterval(timer);
   }, [step, load]);
+
+  useEffect(() => {
+    if (!demoOpen) return;
+    const timer = setInterval(() => void load(), 2500);
+    return () => clearInterval(timer);
+  }, [demoOpen, load]);
 
   async function post(body: Record<string, unknown>) {
     setSaving(true);
@@ -253,9 +199,43 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     }
   }
 
-  const goBack = () => {
-    if (previousStep) void post({ step: previousStep });
-  };
+  const provisionTrialNumber = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "provision_trial_number" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not assign number");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not assign number");
+    } finally {
+      setSaving(false);
+    }
+  }, [load]);
+
+  const forwardE164 =
+    data?.productionForwardE164 || data?.forwardTargetE164 || data?.liveTest.forwardTargetE164;
+  const forwardDisplay = forwardE164 ? formatMctbPhoneLabel(forwardE164) : "your MCTB number";
+  const tfvApproved = data?.tfv.approved || data?.trialNumber.messagingApproved === true;
+  const usesA2pPath = data?.tfv.numberClass === "TELNYX_LOCAL_A2P";
+
+  const previousStep = useMemo((): MctbOnboardingStep | null => {
+    const order: MctbOnboardingStep[] = [
+      "business_line",
+      "connect_calls",
+      "consent",
+      "recovery",
+      "voicemail",
+      "review_test",
+    ];
+    const idx = order.indexOf(step);
+    return idx > 0 ? order[idx - 1]! : null;
+  }, [step]);
 
   async function startDemo() {
     setSaving(true);
@@ -281,442 +261,245 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
     }
   }
 
-  const trialDisplay = data?.trialNumber.display;
-  const trialE164 = data?.tfv.trialE164 ?? null;
-  const forwardE164 =
-    data?.productionForwardE164 ||
-    data?.forwardTargetE164 ||
-    data?.liveTest.forwardTargetE164 ||
-    null;
-  const forwardDisplay = forwardE164
-    ? forwardE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
-    : "your assigned MCTB number";
-  const demoNumberE164 = data?.demoIngressE164 || data?.demo.demoNumberE164 || null;
-  const demoNumberDisplay =
-    data?.demo.demoNumberDisplay ||
-    (demoNumberE164
-      ? demoNumberE164.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "1-$1-$2-$3")
-      : "demo line");
-  const tfvApproved =
-    data?.tfv.approved || data?.trialNumber.messagingApproved === true || false;
-  const usesA2pPath =
-    data?.tfv.numberClass === "TELNYX_LOCAL_A2P" ||
-    data?.trialNumber.numberClass === "TELNYX_LOCAL_A2P";
-  const tfvActionRequired = data?.trialNumber.messagingVerificationStatus === "action_required";
-  const tfvFailureReason = data?.tfv.failureReason;
+  function panelFooter(back?: boolean, primary?: { label: string; onClick: () => void; disabled?: boolean }) {
+    return (
+      <footer className="mctb-onb-footer">
+        <div>
+          {back && previousStep ? (
+            <button
+              type="button"
+              className="mctb-setup-btn mctb-setup-btn--outline"
+              disabled={saving}
+              onClick={() => void post({ step: previousStep })}
+            >
+              Back
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
+        <span className="mctb-onb-footer__status">{saving ? "Saving…" : null}</span>
+        {primary ? (
+          <button
+            type="button"
+            className="mctb-setup-btn mctb-setup-btn--primary"
+            disabled={saving || primary.disabled}
+            onClick={primary.onClick}
+          >
+            {primary.label}
+          </button>
+        ) : (
+          <span />
+        )}
+      </footer>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="mctb-page flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="mctb-onb-root flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3a3f47]" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  if (step === "ready") {
+    const messagingPending = !tfvApproved;
+    return (
+      <div className="mctb-onb-root">
+        <header className="mctb-onb-top">
+          <div className="mctb-onb-top__brand">
+            <span className="mctb-onb-top__logo">Transovo</span>
+            <span className="mctb-onb-top__product">Missed Call Text Back</span>
+          </div>
+        </header>
+        <main className="mctb-onb-main">
+          <div className="mctb-onb-panel text-center">
+            <div className="px-6 py-10">
+              <CheckCircle2 className="mx-auto h-12 w-12 text-[#1f6b42]" aria-hidden />
+              <h1 className="mt-4 text-2xl font-semibold tracking-tight">You&apos;re ready</h1>
+              <p className="mx-auto mt-2 max-w-md text-[13px] text-[#626872]">
+                {messagingPending
+                  ? "Call handling is ready. Messaging verification is still pending — automatic recovery texts will send when approved."
+                  : "Your missed-call recovery setup is complete."}
+              </p>
+              {data?.trial?.daysRemaining != null ? (
+                <p className="mt-2 text-[13px] font-medium">Trial active · {data.trial.daysRemaining} days remaining</p>
+              ) : null}
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  className="mctb-setup-btn mctb-setup-btn--primary"
+                  onClick={() => router.push(MCTB_ROUTES.home)}
+                >
+                  Go to MCTB
+                </button>
+                <Link href={MCTB_ROUTES.setup} className="mctb-setup-btn mctb-setup-btn--outline">
+                  Review setup
+                </Link>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="mctb-page voice-theme">
-      <div className="mctb-page-inner max-w-4xl space-y-5">
-        <div className="voice-card border-indigo-100/80 bg-gradient-to-br from-indigo-50/90 via-white to-violet-50/40 p-6 shadow-sm">
-          <span className="ref-pill pill-purple">Missed Call Text Back</span>
-          <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-gray-900 sm:text-[28px]">
-            Set up missed-call recovery
-          </h1>
-          <p className="mt-2 text-[13px] leading-relaxed text-gray-600">
-            Step {stepIndex + 1} of {data?.steps.length || 10}:{" "}
-            <span className="font-semibold text-gray-900">{data?.stepLabels[step]}</span>
-          </p>
+    <div className="mctb-onb-root">
+      <header className="mctb-onb-top">
+        <div className="mctb-onb-top__brand">
+          <span className="mctb-onb-top__logo">Transovo</span>
+          <span className="mctb-onb-top__product">Missed Call Text Back</span>
         </div>
+        <div className="mctb-onb-top__actions">
+          <a className="mctb-onb-top__link" href="https://help.transovo.com" target="_blank" rel="noreferrer">
+            Need help?
+          </a>
+          <button
+            type="button"
+            className="mctb-setup-btn mctb-setup-btn--outline"
+            onClick={() => router.push(MCTB_ROUTES.setup)}
+          >
+            Save & exit
+          </button>
+        </div>
+      </header>
 
-        {data ? (
-          <MctbFlowStepper
-            steps={data.steps}
-            labels={data.stepLabels}
-            currentIndex={stepIndex}
-          />
-        ) : null}
+      <main className="mctb-onb-main">
+        <MctbOnboardingProgress currentIndex={Math.min(stageIndex, 5)} />
 
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
+        {error ? <div className="mctb-onb-error" role="alert">{error}</div> : null}
+
+        {step === "business_line" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">Set up your business line</h1>
+              <p className="mctb-onb-panel__sub">Start with the number your customers already call.</p>
+            </header>
+            <div className="mctb-onb-panel__body mctb-onb-split">
+              <div>
+                <div className="mctb-onb-field">
+                  <label htmlFor="mctb-onb-biz-name">Business name</label>
+                  <input
+                    id="mctb-onb-biz-name"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                  />
+                </div>
+                <div className="mctb-onb-field">
+                  <label htmlFor="mctb-onb-biz-phone">Business phone</label>
+                  <input
+                    id="mctb-onb-biz-phone"
+                    type="tel"
+                    value={businessNumber}
+                    onChange={(e) => setBusinessNumber(e.target.value)}
+                    placeholder="(571) 555-0188"
+                  />
+                </div>
+                <div className="mctb-onb-field">
+                  <label htmlFor="mctb-onb-carrier">Carrier / provider</label>
+                  <select
+                    id="mctb-onb-carrier"
+                    value={carrier}
+                    onChange={(e) => setCarrier(e.target.value as MctbForwardingCarrier)}
+                  >
+                    {(data?.carriers ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mctb-onb-field">
+                  <label htmlFor="mctb-onb-site">Website (optional)</label>
+                  <input
+                    id="mctb-onb-site"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+              <aside className="mctb-onb-aside">
+                <h2 className="mctb-onb-aside__title">Keep your existing number</h2>
+                <div className="mctb-onb-flow">
+                  <span className="mctb-onb-flow__node">Customers</span>
+                  <span aria-hidden>↓</span>
+                  <span className="mctb-onb-flow__node">
+                    Your business number
+                    <br />
+                    {businessNumber ? formatMctbPhoneLabel(businessNumber) : "(your line)"}
+                  </span>
+                  <span aria-hidden>↓</span>
+                  <span className="mctb-onb-flow__node text-[12px] text-[#626872]">
+                    Transovo only receives unanswered calls
+                  </span>
+                </div>
+                <p className="mt-3 text-[12px] text-[#626872]">No porting required.</p>
+                <button
+                  type="button"
+                  className="mt-3 text-[12px] font-semibold text-[#3a3f47] underline"
+                  onClick={() => setDemoOpen(true)}
+                >
+                  See how it works
+                </button>
+              </aside>
+            </div>
+            {panelFooter(false, {
+              label: "Continue",
+              disabled: !businessName.trim() || !businessNumber.trim(),
+              onClick: () =>
+                void post({
+                  businessName: businessName.trim(),
+                  websiteUrl: websiteUrl.trim(),
+                  businessNumberE164: businessNumber.trim(),
+                  forwardingCarrier: carrier,
+                }),
+            })}
           </div>
         ) : null}
 
-      {step === "business" ? (
-        <MctbWizardStepShell
-          icon={Building2}
-          title="Business information"
-          description="Tell us how your business should appear on missed-call recovery messages."
-          onPrimary={() =>
-            void post({ businessName: businessName.trim(), websiteUrl: websiteUrl.trim() })
-          }
-          primaryDisabled={!businessName.trim()}
-          primaryLoading={saving}
-        >
-          <MctbBusinessIdentityStep
-            businessName={businessName}
-            onBusinessNameChange={setBusinessName}
-            websiteUrl={websiteUrl}
-            onWebsiteUrlChange={setWebsiteUrl}
-          />
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "trial_number" ? (
-        <MctbWizardStepShell
-          icon={Phone}
-          title="Your production MCTB number"
-          description="Assign your own Telnyx number for real missed-call recovery. You'll forward your business line to this number next."
-          onBack={previousStep ? goBack : undefined}
-          onPrimary={
-            data?.trialNumber.provisioned
-              ? () => void post({ step: "configure" })
-              : undefined
-          }
-          primaryLabel="Continue"
-          primaryDisabled={!data?.trialNumber.provisioned}
-          primaryLoading={saving}
-          footer={
-            !data?.trialNumber.provisioned ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {previousStep ? (
-                  <Button type="button" variant="outline" size="sm" onClick={goBack} disabled={saving}>
-                    Back
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                {!saving ? (
-                  <Button onClick={() => void provisionTrialNumber()} className="shadow-sm" size="sm">
-                    Assign my production number
-                  </Button>
-                ) : null}
-              </div>
-            ) : undefined
-          }
-        >
-          {saving ? (
-            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-4 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              Assigning your production number…
-            </div>
-          ) : !data?.trialNumber.provisioned ? (
-            <MctbCallout icon={Phone} title="Ready when you are">
-              Assign a Telnyx number only when you are ready to use your own production line. If
-              you already have a number in MCTB setup, that saved number is used instead.
-            </MctbCallout>
-          ) : (
-            <MctbConnectionStatusCard
-              title="Your production MCTB number"
-              rows={[
-                {
-                  label: "Text-back sender",
-                  value: trialDisplay || "—",
-                  mono: true,
-                  status: "ready",
-                },
-                {
-                  label: "Voice ingress",
-                  value: data?.trialNumber.voiceStatus || "Ready",
-                  status: "ready",
-                },
-                {
-                  label: "Text messaging",
-                  value: data?.trialNumber.tfvStatusLabel || "Verification required",
-                  status: data?.trialNumber.messagingApproved ? "ready" : "pending",
-                },
-              ]}
-              footer={
-                <p className="text-[12px] leading-relaxed text-[#6b7280]">
-                  Next: activate texting, then forward your business line to this number.
-                </p>
-              }
-            />
-          )}
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "configure" ? (
-        <MctbWizardStepShell
-          icon={MessageSquare}
-          title="Configure text back"
-          description={`Recovery message sent when you miss a call on ${trialDisplay || "your Transovo number"}.`}
-          onBack={previousStep ? goBack : undefined}
-          onSaveExit={() => router.push(MCTB_ROUTES.setup)}
-          onPrimary={() => void post({ messageTemplate: messageTemplate.trim() })}
-          primaryDisabled={!messageTemplate.trim()}
-          primaryLoading={saving}
-          banner={false}
-        >
-          <MctbTextBackComposer
-            message={messageTemplate}
-            onMessageChange={setMessageTemplate}
-            press1Mode={consentMode === "press_1"}
-            compliancePreview="Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out."
-            variablesHint="{{customer.firstName}} · {{business.name}}"
-          />
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "consent" ? (
-        <MctbWizardStepShell
-          icon={ShieldCheck}
-          title="Consent for missed-call texting"
-          description="Choose how Transovo establishes or relies on permission to text missed callers."
-          onBack={previousStep ? goBack : undefined}
-          onSaveExit={() => router.push(MCTB_ROUTES.setup)}
-          onPrimary={() =>
-            void post({
-              consentMode,
-              existingConsentAttested:
-                consentMode === "existing_consent" ? true : undefined,
-            })
-          }
-          primaryDisabled={
-            saving || (consentMode === "existing_consent" && !existingConsentAttested)
-          }
-          primaryLoading={saving}
-          banner={false}
-        >
-          <MctbConsentModeCards
-            value={consentMode}
-            onChange={setConsentMode}
-            attested={existingConsentAttested}
-            onAttestedChange={setExistingConsentAttested}
-            options={[
-              {
-                id: "press_1",
-                title: "Ask callers to press 1",
-                subtitle: "Transovo plays a disclosure and captures DTMF 1 before texting.",
-                audience: "Businesses that need platform-captured consent on each call.",
-                badge: "Recommended",
-                icon: ShieldCheck,
-                nextSteps: [
-                  "Caller hears your Press-1 disclosure on the missed call.",
-                  "Pressing 1 creates a consent event tied to that call.",
-                  "System compliance SMS sends, then your recovery opener.",
-                ],
-              },
-              {
-                id: "existing_consent",
-                title: "Use permission my business already has",
-                subtitle: "No Press 1 — you attest that compliant permission already exists.",
-                audience: "Businesses with documented prior opt-in for this use case.",
-                icon: FileCheck,
-                nextSteps: [
-                  "Missed call is classified without a voice consent prompt.",
-                  "Eligibility checks run before any recovery text.",
-                  "You remain responsible for proving existing permission.",
-                ],
-              },
-            ]}
-          />
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "demo" ? (
-        <MctbWizardStepShell
-          icon={Sparkles}
-          title="Try it now — call the demo line"
-          description={
-            data?.demo.description ||
-            "No forwarding required. Call from your verified mobile and experience recovery in under two minutes."
-          }
-          onBack={previousStep ? goBack : undefined}
-          footer={
-            !data?.demo.completed ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  disabled={
-                    saving || (consentMode === "existing_consent" && !existingConsentAttested)
+        {step === "connect_calls" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">Connect calls</h1>
+              <p className="mctb-onb-panel__sub">
+                Forward unanswered calls from your business line to {forwardDisplay}.
+              </p>
+            </header>
+            <div className="mctb-onb-panel__body">
+              {!data?.trialNumber.provisioned ? (
+                <p className="text-[13px] text-[#626872]">Assigning your MCTB number…</p>
+              ) : (
+                <MctbPhoneForwardingPanel
+                  businessNumber={businessNumber}
+                  onBusinessNumberChange={setBusinessNumber}
+                  carrier={carrier}
+                  onCarrierChange={setCarrier}
+                  carriers={data?.carriers ?? []}
+                  forwardDisplay={forwardDisplay}
+                  forwardE164={forwardE164}
+                  forwardRingSeconds={forwardRingSeconds}
+                  onForwardRingSecondsChange={setForwardRingSeconds}
+                  verification={data?.forwardingVerification ?? null}
+                  connectionStatus={
+                    data?.forwardingVerification?.verified
+                      ? "ready"
+                      : data?.forwardingVerification?.testStarted
+                        ? "pending"
+                        : "unknown"
                   }
-                  onClick={() => void startDemo()}
-                  className="shadow-sm"
-                >
-                  <Phone className="mr-2 h-4 w-4" aria-hidden />
-                  I&apos;m ready — start demo
-                </Button>
-                {data?.demo.checks.textDelivered ? (
-                  <p className="text-[13px] text-muted-foreground">
-                    Reply to the text to complete the demo.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-[13px] font-medium text-emerald-800">
-                  That&apos;s what your customers will experience.
-                </p>
-                <Button onClick={() => void post({ step: "trial_number" })} className="shadow-sm">
-                  Continue — get your production number
-                </Button>
-              </div>
-            )
-          }
-        >
-          <MctbHeroNumber
-            label={data?.demo.label || "Approved demo number"}
-            number={demoNumberDisplay}
-            hint="Call directly from your verified mobile. Let it ring without answering — do not forward."
-            tint="blue"
-          />
-
-          <MctbVerificationTimeline
-            title="Live demo progress"
-            passed={data?.demo.completed}
-            passedTitle="Demo complete — you're ready for a production number"
-            waitingHint="Checkpoints update automatically when your demo call completes."
-            steps={[
-              {
-                id: "mode",
-                label:
-                  consentMode === "existing_consent"
-                    ? "Consent mode: existing permission"
-                    : "Consent mode: Press 1 on the call",
-                done: true,
-              },
-              {
-                id: "call",
-                label: "Call detected on demo line",
-                done: data?.demo.checks.callDetected || false,
-              },
-              {
-                id: "missed",
-                label: "Classified as missed call",
-                done: data?.demo.checks.missedCall || false,
-              },
-              {
-                id: "text",
-                label: "Recovery text received",
-                done: data?.demo.checks.textDelivered || false,
-              },
-              {
-                id: "reply",
-                label: "Reply received (optional)",
-                detail: "Reply to the text to experience the full conversation loop.",
-                done: data?.demo.checks.replyReceived || false,
-              },
-            ]}
-          />
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "tfv" || step === "pending" ? (
-        <MctbWizardStepShell
-          icon={ShieldCheck}
-          title={
-            tfvApproved
-              ? usesA2pPath
-                ? "A2P messaging is ready"
-                : "Your number is ready"
-              : usesA2pPath
-                ? "Activate A2P texting on your number"
-                : "Activate texting on your number"
-          }
-          description={
-            usesA2pPath
-              ? `Telnyx 10DLC / A2P for ${trialDisplay || "your assigned number"}. Pre-approved numbers skip this wait.`
-              : `Toll-free verification for ${trialDisplay || "your assigned number"}. Your trial clock has not started yet.`
-          }
-          onBack={previousStep ? goBack : undefined}
-          onPrimary={tfvApproved ? () => void post({ step: "connect" }) : undefined}
-          primaryLabel="Connect your business calls"
-          primaryLoading={saving}
-          footer={
-            !tfvApproved ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {previousStep ? (
-                  <Button type="button" variant="outline" size="sm" onClick={goBack} disabled={saving}>
-                    Back
-                  </Button>
-                ) : (
-                  <span />
-                )}
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    disabled={saving}
-                    className="shadow-sm"
-                    size="sm"
-                    onClick={() =>
-                      void (async () => {
-                        setSaving(true);
-                        setError(null);
-                        try {
-                          const res = await fetch("/api/mctb/tfv", { method: "POST" });
-                          const json = await res.json();
-                          if (!res.ok) throw new Error(json.error || "Submit failed");
-                          await load();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Submit failed");
-                        } finally {
-                          setSaving(false);
-                        }
-                      })()
-                    }
-                  >
-                    {tfvActionRequired ? "Resubmit verification" : "Submit toll-free verification"}
-                  </Button>
-                  <Link
-                    href="/compliance"
-                    className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
-                  >
-                    Complete business details
-                  </Link>
-                </div>
-              </div>
-            ) : undefined
-          }
-        >
-          <MctbMessagingActivationPanel
-            statusLabel={data?.trialNumber.tfvStatusLabel || data?.tfv.status || "Not started"}
-            usesA2pPath={usesA2pPath}
-            approved={tfvApproved}
-            actionRequired={tfvActionRequired}
-            failureReason={tfvFailureReason}
-            numberDisplay={trialDisplay || "—"}
-          />
-          {step === "pending" && !tfvApproved ? (
-            <p className="mt-3 text-[13px] text-muted-foreground">
-              Your number is being verified for texting. You can configure forwarding early — your
-              trial clock has not started.
-            </p>
-          ) : null}
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "connect" ? (
-        <MctbWizardStepShell
-          icon={PhoneMissed}
-          title="Phone & forwarding"
-          description={`Connect your business line and forward unanswered calls to ${forwardDisplay}.`}
-          onBack={previousStep ? goBack : undefined}
-          onSaveExit={() => router.push(MCTB_ROUTES.setupPhone)}
-          banner={false}
-          footer={
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={saving || !businessNumber.trim()}
-                onClick={() =>
-                  void post({
-                    forwardingCarrier: carrier,
-                    businessNumberE164: businessNumber,
-                    forwardingRingSeconds: forwardRingSeconds,
-                  })
-                }
-              >
-                Save progress
-              </Button>
-              <Button
-                size="sm"
-                className="shadow-sm"
-                disabled={saving || !businessNumber.trim()}
-                onClick={async () => {
-                  await post({
-                    forwardingCarrier: carrier,
-                    businessNumberE164: businessNumber,
-                    forwardingRingSeconds: forwardRingSeconds,
-                  });
+                />
+              )}
+            </div>
+            {panelFooter(true, {
+              label: data?.forwardingVerification?.verified ? "Continue" : "Save & verify later",
+              disabled: !businessNumber.trim(),
+              onClick: async () => {
+                await post({
+                  forwardingCarrier: carrier,
+                  businessNumberE164: businessNumber,
+                  forwardingRingSeconds: forwardRingSeconds,
+                });
+                if (!data?.forwardingVerification?.verified) {
                   setForwardingTestActive(true);
                   await fetch("/api/mctb/onboarding", {
                     method: "POST",
@@ -724,114 +507,306 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                     body: JSON.stringify({ action: "start_forwarding_test" }),
                   });
                   await load();
+                  return;
+                }
+                await post({ step: "consent" });
+              },
+            })}
+          </div>
+        ) : null}
+
+        {step === "consent" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">How should callers give permission to text?</h1>
+              <p className="mctb-onb-panel__sub">
+                Choose how consent is established before automatic recovery texting.
+              </p>
+            </header>
+            <div className="mctb-onb-panel__body">
+              {!existingConsentEligible ? (
+                <p className="mb-3 text-[12.5px] text-[#626872]">
+                  {existingConsentIneligibleReason(false)}
+                </p>
+              ) : null}
+              <MctbConsentModeCards
+                value={consentMode}
+                onChange={(mode) => {
+                  if (mode === "existing_consent" && !existingConsentEligible) return;
+                  setConsentMode(mode);
                 }}
-              >
-                I&apos;ve turned it on — verify forwarding
-              </Button>
+                attested={existingConsentAttested}
+                onAttestedChange={setExistingConsentAttested}
+                options={[
+                  {
+                    id: "press_1",
+                    title: "Ask callers to press 1",
+                    subtitle: "Transovo plays a short disclosure and records permission for the call.",
+                    audience: "Per-call consent · Recommended",
+                    badge: "Recommended",
+                    icon: ShieldCheck,
+                    nextSteps: ["Disclosure", "Press 1", "Consent recorded", "Recovery eligible"],
+                  },
+                  {
+                    id: "existing_consent",
+                    title: "Use permission my business already has",
+                    subtitle: "For businesses that already have valid permission to text customers.",
+                    audience: "Existing-consent mode",
+                    icon: FileCheck,
+                    nextSteps: ["Missed call", "Existing permission", "Recovery eligibility"],
+                  },
+                ]}
+              />
             </div>
-          }
-        >
-          {!forwardE164 ? (
-            <MctbCallout icon={Phone} title="Assign your MCTB number first" variant="warning">
-              Assign your production number in the previous step or in{" "}
-              <Link href={MCTB_ROUTES.setup} className="font-semibold text-primary hover:underline">
-                Setup
-              </Link>{" "}
-              before configuring forwarding.
-            </MctbCallout>
-          ) : null}
-          <MctbPhoneForwardingPanel
-            businessNumber={businessNumber}
-            onBusinessNumberChange={setBusinessNumber}
-            carrier={carrier}
-            onCarrierChange={setCarrier}
-            carriers={data?.carriers ?? []}
-            forwardDisplay={forwardDisplay}
-            forwardE164={forwardE164}
-            forwardRingSeconds={forwardRingSeconds}
-            onForwardRingSecondsChange={setForwardRingSeconds}
-            verification={data?.forwardingVerification ?? null}
-            connectionStatus={
-              data?.forwardingVerification?.verified
-                ? "ready"
-                : data?.forwardingVerification?.testStarted
-                  ? "pending"
-                  : "unknown"
-            }
-          />
-        </MctbWizardStepShell>
-      ) : null}
+            {panelFooter(true, {
+              label: "Continue",
+              disabled: consentMode === "existing_consent" && !existingConsentAttested,
+              onClick: () =>
+                void post({
+                  consentMode,
+                  existingConsentAttested:
+                    consentMode === "existing_consent" ? true : undefined,
+                }),
+            })}
+          </div>
+        ) : null}
 
-      {step === "live_test" ? (
-        <MctbWizardStepShell
-          icon={Zap}
-          title="Live verification"
-          description={`Call ${businessNumber || "your business line"} from another phone. Don't answer — we'll recover the miss on ${forwardDisplay}.`}
-          onBack={previousStep ? goBack : undefined}
-          banner={false}
-        >
-          <MctbVerificationTimeline
-            title="End-to-end recovery test"
-            passed={data?.liveTest.passed}
-            passedTitle="Live test passed — starting your trial"
-            waitingHint="Checkpoints update automatically when your test call completes."
-            steps={[
-              {
-                id: "call",
-                label: `Call arrived on MCTB number (${forwardDisplay})`,
-                done: data?.liveTest.checks.callDetected || false,
-              },
-              {
-                id: "missed",
-                label: "Classified as missed call",
-                done: data?.liveTest.checks.missedCall || false,
-              },
-              {
-                id: "consent",
-                label: "Consent completed (if required)",
-                done: data?.liveTest.checks.consentCompleted || false,
-              },
-              {
-                id: "sent",
-                label: "Recovery SMS sent",
-                done: data?.liveTest.checks.textSent || false,
-              },
-              {
-                id: "delivered",
-                label: "SMS delivered",
-                done: data?.liveTest.checks.textDelivered || false,
-              },
-              {
-                id: "reply",
-                label: "Reply received in Transovo",
-                detail: "Optional — reply to the text to complete the full loop.",
-                done: data?.liveTest.checks.replyReceived || false,
-              },
-            ]}
-          />
-        </MctbWizardStepShell>
-      ) : null}
-
-      {step === "complete" ? (
-        <div className="ref-card overflow-hidden text-center">
-          <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50/50 px-6 py-10">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100">
-              <CheckCircle2 className="h-9 w-9 text-emerald-600" aria-hidden />
+        {step === "recovery" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">Recovery message & texting</h1>
+              <p className="mctb-onb-panel__sub">
+                Configure the first recovery text and messaging readiness for {forwardDisplay}.
+              </p>
+            </header>
+            <div className="mctb-onb-panel__body mctb-onb-split">
+              <div>
+                <MctbTextBackComposer
+                  message={messageTemplate}
+                  onMessageChange={setMessageTemplate}
+                  press1Mode={consentMode === "press_1"}
+                  compliancePreview="Reply YES to confirm you want text messages from this business. Msg & data rates may apply. Reply STOP to opt out."
+                  variablesHint="{{customer.firstName}} · {{business.name}}"
+                />
+                <div className="mt-4 rounded-lg border border-[#e8eaed] p-3 text-[13px]">
+                  <p className="font-semibold">Text-back number</p>
+                  <p className="mt-1 font-mono">{data?.trialNumber.display || forwardDisplay}</p>
+                  <p className="mt-1 text-[#626872]">
+                    Status:{" "}
+                    {tfvApproved ? "Ready" : data?.trialNumber.tfvStatusLabel || "Verification pending"}
+                  </p>
+                  {!tfvApproved ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="mctb-setup-btn mctb-setup-btn--outline"
+                        onClick={() => setDrawerMode("verify")}
+                      >
+                        Complete messaging verification
+                      </button>
+                      {!data?.trialNumber.provisioned ? (
+                        <button
+                          type="button"
+                          className="mctb-setup-btn mctb-setup-btn--outline"
+                          onClick={() => setDrawerMode("add")}
+                        >
+                          Choose a number
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <aside className="mctb-onb-aside">
+                <MctbMessagingActivationPanel
+                  statusLabel={data?.trialNumber.tfvStatusLabel || data?.tfv.status || "Not started"}
+                  usesA2pPath={usesA2pPath}
+                  approved={tfvApproved}
+                  actionRequired={data?.trialNumber.messagingVerificationStatus === "action_required"}
+                  failureReason={data?.tfv.failureReason}
+                  numberDisplay={data?.trialNumber.display || forwardDisplay}
+                />
+              </aside>
             </div>
-            <h2 className="mt-5 font-display text-2xl font-bold tracking-tight text-gray-900">
-              Your 14-day free trial starts now
-            </h2>
-            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-gray-600">
-              Missed Call Text Back is live. Day 1 of 14 begins today — not while you were waiting on
-              verification.
-            </p>
-            <Button className="mt-6 shadow-sm" onClick={() => router.push(MCTB_ROUTES.home)}>
-              Go to Overview
-            </Button>
+            {panelFooter(true, {
+              label: "Continue",
+              disabled: !messageTemplate.trim(),
+              onClick: () => void post({ messageTemplate: messageTemplate.trim() }),
+            })}
+          </div>
+        ) : null}
+
+        {step === "voicemail" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">Set up voicemail</h1>
+              <p className="mctb-onb-panel__sub">Choose what callers hear when you cannot answer.</p>
+            </header>
+            <div className="mctb-onb-panel__body mctb-onb-split">
+              <div className="space-y-3 text-[13px]">
+                <p>
+                  Use the Transovo default greeting for the fastest setup, or customize later in{" "}
+                  <Link href={MCTB_ROUTES.voicemail} className="font-semibold underline">
+                    Voicemail
+                  </Link>
+                  .
+                </p>
+                <button
+                  type="button"
+                  className="mctb-setup-btn mctb-setup-btn--primary"
+                  onClick={() => void post({ action: "mark_voicemail_configured" })}
+                >
+                  Use default greeting
+                </button>
+              </div>
+              <aside className="mctb-onb-aside">
+                <h2 className="mctb-onb-aside__title">Call ending</h2>
+                <p className="text-[12.5px] leading-relaxed text-[#626872]">
+                  {consentMode === "press_1"
+                    ? "If the caller does not press 1, they hear your voicemail greeting and can leave a message."
+                    : "Callers reach voicemail according to your configured call flow after the missed call."}
+                </p>
+              </aside>
+            </div>
+            {panelFooter(true, {
+              label: "Continue",
+              onClick: () => void post({ action: "mark_voicemail_configured" }),
+            })}
+          </div>
+        ) : null}
+
+        {step === "review_test" ? (
+          <div className="mctb-onb-panel">
+            <header className="mctb-onb-panel__head">
+              <h1 className="mctb-onb-panel__title">Review & test</h1>
+              <p className="mctb-onb-panel__sub">
+                Confirm your setup, then run a live test from {businessNumber || "your business line"}.
+              </p>
+            </header>
+            <div className="mctb-onb-panel__body mctb-onb-split">
+              <div>
+                <ul className="space-y-2 text-[13px]">
+                  {[
+                    ["Business line", businessNumber ? formatMctbPhoneLabel(businessNumber) : "—", "business_line"],
+                    ["Forwarding", data?.forwardingVerification?.verified ? "Verified" : "Not verified", "connect_calls"],
+                    ["Consent", consentMode === "press_1" ? "Press 1" : "Existing consent", "consent"],
+                    ["Recovery message", messageTemplate ? "Configured" : "—", "recovery"],
+                    ["Messaging", tfvApproved ? "Ready" : "Pending", "recovery"],
+                  ].map(([label, value, jump]) => (
+                    <li key={label} className="flex items-center justify-between gap-2 border-b border-[#f0f2f4] py-2">
+                      <span className="text-[#626872]">{label}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium">{value}</span>
+                        <button
+                          type="button"
+                          className="text-[12px] font-semibold text-[#3a3f47] underline"
+                          onClick={() => void post({ step: jump })}
+                        >
+                          Edit
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="mctb-setup-btn mctb-setup-btn--primary mt-4"
+                  disabled={saving}
+                  onClick={async () => {
+                    await fetch("/api/mctb/live-test", { method: "POST" });
+                    await load();
+                  }}
+                >
+                  Run live test
+                </button>
+                {!data?.forwardingVerification?.verified ? (
+                  <p className="mt-2 text-[12px] text-amber-800">
+                    Forwarding wasn&apos;t verified yet.{" "}
+                    <button
+                      type="button"
+                      className="font-semibold underline"
+                      onClick={() => void post({ step: "connect_calls" })}
+                    >
+                      Review forwarding
+                    </button>
+                  </p>
+                ) : null}
+                <MctbVerificationTimeline
+                  title="Live test progress"
+                  passed={data?.liveTest.passed}
+                  passedTitle="Your missed-call recovery is working"
+                  waitingHint="Checkpoints update automatically."
+                  steps={[
+                    { id: "call", label: "Forwarded call received", done: data?.liveTest.checks.callDetected || false },
+                    { id: "missed", label: "Missed call classified", done: data?.liveTest.checks.missedCall || false },
+                    { id: "consent", label: "Consent handled", done: data?.liveTest.checks.consentCompleted || false },
+                    { id: "sms", label: "Recovery SMS", done: data?.liveTest.checks.textSent || false },
+                  ]}
+                />
+              </div>
+              <aside className="mctb-onb-aside">
+                <h2 className="mctb-onb-aside__title">Recovery flow</h2>
+                <div className="mctb-onb-flow text-left items-start">
+                  <span>Customer calls → Business rings {forwardRingSeconds}s → Forwards to Transovo</span>
+                  <span>→ {consentMode === "press_1" ? "Press 1 consent" : "Existing consent"} → Recovery text / Voicemail</span>
+                </div>
+              </aside>
+            </div>
+            {panelFooter(true, {
+              label: data?.liveTest.passed ? "Finish setup" : "Continue",
+              onClick: async () => {
+                if (data?.liveTest.passed) {
+                  await post({ action: "activate_trial", step: "ready" });
+                } else {
+                  await post({ step: "ready" });
+                }
+              },
+            })}
+          </div>
+        ) : null}
+      </main>
+
+      <MctbNumberDrawerHost
+        open={drawerMode}
+        onClose={() => setDrawerMode(null)}
+        onOpenMode={setDrawerMode}
+        onNumbersChanged={() => void load()}
+      />
+
+      {demoOpen ? (
+        <div className="mctb-onb-modal-backdrop" role="presentation" onClick={() => setDemoOpen(false)}>
+          <div className="mctb-onb-modal" role="dialog" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold">How missed-call recovery works</h2>
+            <p className="mt-1 text-[13px] text-[#626872]">{data?.demo.description}</p>
+            <MctbHeroNumber
+              label={data?.demo.label || "Demo number"}
+              number={data?.demo.demoNumberDisplay || "—"}
+              hint="Call from your verified mobile without forwarding."
+              tint="blue"
+            />
+            <button
+              type="button"
+              className="mctb-setup-btn mctb-setup-btn--primary mt-3"
+              disabled={saving}
+              onClick={() => void startDemo()}
+            >
+              Start demo call
+            </button>
+            <MctbVerificationTimeline
+              title="Demo progress"
+              passed={data?.demo.completed}
+              passedTitle="Demo complete"
+              steps={[
+                { id: "c", label: "Call detected", done: data?.demo.checks.callDetected || false },
+                { id: "t", label: "Text delivered", done: data?.demo.checks.textDelivered || false },
+              ]}
+            />
+            <button type="button" className="mctb-setup-btn mctb-setup-btn--outline mt-3" onClick={() => setDemoOpen(false)}>
+              Close
+            </button>
           </div>
         </div>
       ) : null}
-      </div>
     </div>
   );
 }

@@ -56,7 +56,7 @@ async function notifyVoicemailTranscriptReady(input: {
     type: "voicemail_transcript",
     title: "Voicemail transcript ready",
     body: `Transcript ready for ${input.fromE164 || "unknown caller"}`,
-    href: "/personal/voicemail",
+    href: "/mctb/voicemail",
   }).catch(() => undefined);
 }
 
@@ -361,7 +361,7 @@ export async function leaveVoicemailOnCall(input: {
     type: "voicemail",
     title: "New voicemail",
     body: `Voicemail from ${call?.from || "unknown"}`,
-    href: "/personal/voicemail",
+    href: "/mctb/voicemail",
   }).catch(() => undefined);
 
   if (box.smsNotifyE164?.trim()) {
@@ -450,7 +450,7 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
 <p>Duration: ${updated.durationSeconds ?? "—"}s</p>
 ${transcriptBlock}
 ${recordingLink}
-${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></p>` : ""}`;
+${appUrl ? `<p><a href="${appUrl}/mctb/voicemail">Open voicemail inbox</a></p>` : ""}`;
       for (const to of notifyTargets) {
         await sendTransactionalEmail({
           to: String(to),

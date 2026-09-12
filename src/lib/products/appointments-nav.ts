@@ -108,8 +108,8 @@ function analyticsChildren(): NavItem["children"] {
 
 function integrationsChildren(): NavItem["children"] {
   return [
-    { label: "Calendars", href: "/integrations/calendars" },
-    { label: "Payments", href: "/integrations/payments" },
+    { label: "Calendars", href: "/integrations?provider=calendar" },
+    { label: "Payments", href: "/integrations?provider=stripe" },
   ];
 }
 
@@ -217,9 +217,10 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   if (modules.payments) {
     items.push({
       label: "Payments",
-      href: "/payments/transactions",
+      href: "/payments",
       icon: CreditCard,
       children: [
+        { label: "Payment requests", href: "/payments" },
         { label: "Transactions", href: "/payments/transactions" },
         { label: "Invoices", href: "/payments/invoices" },
       ],
@@ -238,7 +239,7 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   if (modules.integrations) {
     items.push({
       label: "Integrations",
-      href: "/integrations/calendars",
+      href: "/integrations?provider=calendar",
       icon: Puzzle,
       sectionLabel: "Platform",
       children: integrationsChildren(),

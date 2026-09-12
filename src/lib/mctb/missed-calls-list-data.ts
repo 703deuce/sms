@@ -1,19 +1,30 @@
 import { getPrisma } from "@/lib/db";
+import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
 import {
   buildMissedCallsListWhere,
   filterEventsByConsentMode,
   missedCallsOrderBy,
+  MISSED_CALLS_PAGE_SIZE_DEFAULT,
   type MissedCallsListQuery,
 } from "@/lib/mctb/missed-calls-list-filters";
+import { loadMissedCallsListSummary } from "@/lib/mctb/missed-calls-list-summary";
 import { countCallerMissedEventsToday } from "@/lib/mctb/repeat-caller";
 import type { MissedCallEvent } from "@prisma/client";
 
 export type MctbMissedCallsListData = {
-  summary: { missedToday: number; sentToday: number; repliedToday: number };
+  summary: {
+    missedCount: number;
+    recoveryTextsCount: number;
+    repliesCount: number;
+    needsReplyCount: number;
+    rangeLabel: string;
+  };
   events: Array<{
     id: string;
     callerE164: string;
     contactName: string | null;
+    contactId: string | null;
+    conversationId: string | null;
     businessE164: string;
     status: string;
     suppressionReason: string | null;
@@ -37,13 +48,12 @@ export async function loadMctbMissedCallsListData(
   const prisma = getPrisma();
   const where = buildMissedCallsListWhere(workspaceId, query);
   const orderBy = missedCallsOrderBy(query.sort);
-  const skip = ((query.page ?? 1) - 1) * (query.pageSize ?? 25);
-  const take = query.pageSize ?? 25;
+  const take = query.pageSize ?? MISSED_CALLS_PAGE_SIZE_DEFAULT;
+  const skip = ((query.page ?? 1) - 1) * take;
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+  const dateScope = query.date ?? "all";
 
-  const [total, events, missedToday, sentToday, repliedToday] = await Promise.all([
+  const [total, events, summary] = await Promise.all([
     prisma.missedCallEvent.count({ where }),
     prisma.missedCallEvent.findMany({
       where,
@@ -51,20 +61,32 @@ export async function loadMctbMissedCallsListData(
       skip,
       take,
     }),
-    prisma.missedCallEvent.count({
-      where: { workspaceId, detectedAt: { gte: start } },
-    }),
-    prisma.missedCallEvent.count({
-      where: { workspaceId, smsSentAt: { gte: start } },
-    }),
-    prisma.missedCallEvent.count({
-      where: {
-        workspaceId,
-        status: "CUSTOMER_REPLIED",
-        updatedAt: { gte: start },
-      },
-    }),
+    loadMissedCallsListSummary(workspaceId, dateScope),
   ]);
+
+  const contactIds = [
+    ...new Set(events.map((e: MissedCallEvent) => e.contactId).filter(Boolean)),
+  ] as string[];
+
+  const conversations =
+    contactIds.length > 0
+      ? await prisma.conversation.findMany({
+          where: {
+            workspaceId,
+            contactId: { in: contactIds },
+            productSource: appProductSourceToPrisma("mctb"),
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, contactId: true },
+        })
+      : [];
+
+  const conversationByContact = new Map<string, string>();
+  for (const c of conversations) {
+    if (c.contactId && !conversationByContact.has(c.contactId)) {
+      conversationByContact.set(c.contactId, c.id);
+    }
+  }
 
   const mapped = await Promise.all(
     events.map(async (e: MissedCallEvent) => {
@@ -83,6 +105,8 @@ export async function loadMctbMissedCallsListData(
         id: e.id,
         callerE164: e.callerE164,
         contactName,
+        contactId: e.contactId,
+        conversationId: e.contactId ? conversationByContact.get(e.contactId) ?? null : null,
         businessE164: e.businessE164,
         status: e.status,
         suppressionReason: e.suppressionReason,
@@ -98,7 +122,7 @@ export async function loadMctbMissedCallsListData(
   const listTotal = query.consentMode ? filtered.length : total;
 
   return {
-    summary: { missedToday, sentToday, repliedToday },
+    summary,
     events: filtered.map((e) => ({
       ...e,
       detectedAt: e.detectedAt,

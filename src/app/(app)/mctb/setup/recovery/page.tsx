@@ -1,5 +1,5 @@
-import { MctbRecoveryControlsView } from "@/components/mctb/recovery-controls-view";
+import { MctbSetupRecoveryView } from "@/components/mctb/setup/setup-recovery-view";
 
 export default function MctbSetupRecoveryPage() {
-  return <MctbRecoveryControlsView />;
+  return <MctbSetupRecoveryView />;
 }

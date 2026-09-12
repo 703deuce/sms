@@ -2,6 +2,7 @@
 
 import {
   AUDIENCE_PAGE_SIZES,
+  DEFAULT_AUDIENCE_PAGE_SIZE,
   type AudiencePageSize,
 } from "@/lib/contacts/audience-pagination";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,7 @@ function buildHref(
     else params.set("page", String(patch.page));
   }
   if (patch.perPage != null) {
-    if (patch.perPage === 10) params.delete("perPage");
+    if (patch.perPage === DEFAULT_AUDIENCE_PAGE_SIZE) params.delete("perPage");
     else params.set("perPage", String(patch.perPage));
     params.delete("page");
   }

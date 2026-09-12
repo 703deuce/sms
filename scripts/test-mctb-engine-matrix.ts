@@ -102,8 +102,8 @@ function testMctbDemoDirectExistingConsent() {
 function testMctbProductionForwardedPress1() {
   const state = {
     ...defaultMctbOnboardingState(),
-    currentStep: "connect" as const,
-    completedSteps: ["business", "consent", "demo", "trial_number", "configure"] as const,
+    currentStep: "connect_calls" as const,
+    completedSteps: ["business_line", "consent", "recovery", "connect_calls"] as const,
     businessNumberE164: process.env.MCTB_TEST_BUSINESS_E164?.trim() || PROD_BUSINESS_LINE,
     forwardingTestStartedAt: new Date().toISOString(),
   };

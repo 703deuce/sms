@@ -141,9 +141,12 @@ function formatDurationLabel(sec: number): string {
 export function PersonalVoicemailUI({
   numberId,
   numbers = [],
+  initialMessageId,
 }: {
   numberId?: string;
   numbers?: PersonalNumberRow[];
+  /** Pre-select a voicemail message (e.g. deep link from missed-call detail). */
+  initialMessageId?: string;
 }) {
   const [messages, setMessages] = useState<PersonalVoicemailMessage[]>([]);
   const [box, setBox] = useState<PersonalVoicemailBox | null>(null);
@@ -216,6 +219,13 @@ export function PersonalVoicemailUI({
     loadVoicemail().finally(() => setLoading(false));
   }, [loadVoicemail, numberId]);
 
+  useEffect(() => {
+    if (!initialMessageId) return;
+    if (messages.some((m) => m.id === initialMessageId)) {
+      setSelectedId(initialMessageId);
+    }
+  }, [initialMessageId, messages]);
+
   const useWireframe = usePersonalWireframe(messages.length);
   const managingNumberId = useWireframe
     ? numberId || numbers[0]?.id
@@ -275,7 +285,10 @@ export function PersonalVoicemailUI({
   const unread = sourceMessages.filter((m) => !m.readAt).length;
   const voicemailMinutes = useWireframe
     ? WIREFRAME_VOICEMAIL_KPIS.minutes
-    : Math.round(messages.reduce((sum, m) => sum + (m.durationSec || 0), 0) / 60);
+    : Math.round(
+        messages.reduce((sum, m) => sum + (m.durationSec != null && m.durationSec > 0 ? m.durationSec : 0), 0) /
+          60,
+      );
   const selected =
     sourceMessages.find((m) => m.id === selectedId) ?? sourceMessages[0] ?? null;
 

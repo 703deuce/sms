@@ -40,7 +40,7 @@ assert.ok(hrefs.includes("/appointments/booking"));
 assert.ok(hrefs.includes("/appointments/ai-booking"));
 assert.ok(hrefs.includes("/appointments/automations/activity"));
 assert.ok(hrefs.includes("/payments/transactions"));
-assert.ok(hrefs.includes("/integrations/calendars"));
+assert.ok(hrefs.includes("/integrations/calendars") || hrefs.includes("/integrations?provider=calendar"));
 assert.ok(hrefs.includes("/settings/messaging"));
 
 const appointments = nav.find((i) => i.label === "Appointments");

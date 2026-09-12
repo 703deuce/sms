@@ -24,6 +24,10 @@ const MCTB_PATH_PREFIXES = [
   "/onboarding/mctb",
   "/analytics/mctb",
   "/mctb",
+  "/mctb/calendar",
+  "/mctb/appointments",
+  "/mctb/booking",
+  "/mctb/reminders",
 ] as const;
 
 const AI_AFTER_HOURS_PATH_PREFIXES = [
@@ -53,9 +57,6 @@ const APPOINTMENTS_PATH_PREFIXES = [
   "/appointments",
   "/meetings",
   "/video",
-  "/payments",
-  "/integrations/calendars",
-  "/integrations/payments",
 ] as const;
 
 export function massSmsShellHome(): string {

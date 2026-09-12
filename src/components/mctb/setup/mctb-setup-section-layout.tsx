@@ -1,11 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { MctbSetupLocalNav } from "@/components/mctb/setup/mctb-setup-local-nav";
+import { MctbSetupShell } from "@/components/mctb/setup/mctb-setup-shell";
 import { Check } from "lucide-react";
-import Link from "next/link";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import "../kimi-ui/reference.css";
+import Link from "next/link";
 
 type Props = {
   title: string;
@@ -19,6 +18,10 @@ type Props = {
   showSave?: boolean;
 };
 
+/**
+ * Legacy section pages (Phone, Recovery, etc.) — uses the new horizontal Setup shell.
+ * Section content redesign happens in later passes.
+ */
 export function MctbSetupSectionLayout({
   title,
   description,
@@ -30,61 +33,46 @@ export function MctbSetupSectionLayout({
   saveLabel = "Save changes",
   showSave = true,
 }: Props) {
-  return (
-    <div className="mctb-page">
-      <div className="mctb-page-inner mx-auto max-w-[1100px]">
-        <div className="mb-2">
-          <Link
-            href={MCTB_ROUTES.setup}
-            className="inline-flex items-center gap-1 text-[13px] font-semibold text-indigo-600 transition hover:text-indigo-800 hover:underline"
-          >
-            ← Setup
-          </Link>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="hidden lg:block">
-            <MctbSetupLocalNav />
-          </aside>
-
-          <div className="min-w-0">
-            <div className="mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-white to-indigo-50/50 p-5 shadow-[0_8px_24px_rgba(79,70,229,0.06)] sm:p-6">
-              <div className="mb-3 h-1 w-16 rounded-full bg-gradient-to-r from-indigo-500 to-violet-400" aria-hidden />
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h1 className="font-display text-[22px] font-bold tracking-tight text-gray-900">{title}</h1>
-                  <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-gray-600">{description}</p>
-                </div>
-              {showSave && onSave ? (
-                <div className="flex shrink-0 items-center gap-3 pt-1">
-                  {saved && !saving ? (
-                    <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-600">
-                      <Check className="h-4 w-4" aria-hidden />
-                      Saved
-                    </span>
-                  ) : null}
-                  <Button onClick={onSave} disabled={saving} size="md" className="text-[13px]">
-                    {saving ? "Saving…" : saveLabel}
-                  </Button>
-                </div>
-              ) : null}
-              </div>
-            </div>
-
-            <div className="mb-4 mt-4 lg:hidden">
-              <MctbSetupLocalNav />
-            </div>
-
-            {error ? (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800">
-                {error}
-              </div>
-            ) : null}
-
-            <div className="mt-6 space-y-4">{children}</div>
-          </div>
-        </div>
+  const headerAction =
+    showSave && onSave ? (
+      <div className="flex shrink-0 items-center gap-3">
+        {saved && !saving ? (
+          <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#1f6b42]">
+            <Check className="h-4 w-4" aria-hidden />
+            Saved
+          </span>
+        ) : null}
+        <Button onClick={onSave} disabled={saving} size="md" className="text-[13px]">
+          {saving ? "Saving…" : saveLabel}
+        </Button>
       </div>
-    </div>
+    ) : (
+      <Link href={MCTB_ROUTES.setupTest} className="mctb-setup-btn mctb-setup-btn--primary">
+        Run live test
+      </Link>
+    );
+
+  return (
+    <MctbSetupShell
+      title="Setup"
+      description="Configure missed-call recovery, forwarding, consent, voicemail, and operational controls."
+      headerAction={headerAction}
+    >
+      {error ? (
+        <div
+          className="mb-4 rounded-lg border border-[#f0d0d0] bg-[#fff5f5] px-4 py-3 text-[13px] text-[#9b2c2c]"
+          role="alert"
+        >
+          {error}
+        </div>
+      ) : null}
+      <div className="min-w-0 w-full max-w-none">
+        <div className="mb-4">
+          <h2 className="text-[1.125rem] font-semibold tracking-tight text-[#1b1e23]">{title}</h2>
+          <p className="mt-1 text-[13px] text-[#626872]">{description}</p>
+        </div>
+        <div className="space-y-4">{children}</div>
+      </div>
+    </MctbSetupShell>
   );
 }

@@ -55,6 +55,7 @@ export const NOT_CONNECTED_CONNECTIONS: MerchantConnectionView[] = [
 ];
 
 export const integrationsTabs = [
-  { label: "Calendars", href: "/integrations/calendars" },
-  { label: "Payments", href: "/integrations/payments" },
+  { label: "Directory", href: "/integrations" },
+  { label: "Calendars", href: "/integrations?provider=calendar" },
+  { label: "Payments", href: "/integrations?provider=stripe" },
 ];

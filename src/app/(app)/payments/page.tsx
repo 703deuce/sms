@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { PaymentsWorkspace } from "@/components/payments/payments-workspace";
 
-export default function PaymentsIndexPage() {
-  redirect("/payments/transactions");
+export default function PaymentsPage() {
+  return <PaymentsWorkspace />;
 }

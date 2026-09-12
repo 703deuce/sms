@@ -52,13 +52,14 @@ const PROVIDERS: ProviderDef[] = [
   { id: "zapier", name: "Zapier", description: "Connect Transovo SMS to 5,000+ apps.", icon: Zap, tone: "bg-orange-100 text-orange-600", kind: "link", href: "/integrations/api" },
   {
     id: "stripe",
-    name: "Stripe",
-    description: "Payments for text-to-pay and workspace billing.",
+    name: "Stripe (billing)",
+    description: "Transovo platform subscription billing (separate from merchant Connect).",
     icon: CreditCard,
     tone: "bg-violet-100 text-violet-700",
     kind: "stripe",
     links: [
-      { label: "Text-to-pay", href: "/messaging/payments" },
+      { label: "Merchant Connect", href: "/integrations?provider=stripe" },
+      { label: "Text-to-pay", href: "/payments" },
       { label: "Billing", href: "/settings/billing" },
     ],
   },

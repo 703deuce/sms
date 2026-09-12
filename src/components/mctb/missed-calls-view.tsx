@@ -1,10 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import {
   classificationToTriggerLabel,
+  MISSED_CALLS_OUTCOME_FILTER_LABEL,
   missedCallsListSearchParams,
   parseMissedCallsListQuery,
   type MissedCallsDateFilter,
@@ -12,16 +11,18 @@ import {
   type MissedCallsSort,
   type MissedCallsStatusFilter,
 } from "@/lib/mctb/missed-calls-list-filters";
+import { missedCallActionableIssue } from "@/lib/mctb/missed-calls-display";
+import { DataTablePaginationFooter } from "@/components/ui/data-table-pagination-footer";
 import { formatRecoveryStatus, formatReplyStatus } from "@/lib/mctb/recovery-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import { MctbPageHeader } from "@/components/mctb/kimi-ui/mctb-premium-patterns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { GlobalTablePageSize } from "@/lib/ui/global-data-table";
+import { AlertTriangle, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { traceMctbClient } from "@/lib/mctb/debug-client";
 import type { MctbMissedCallsListData } from "@/lib/mctb/missed-calls-list-data";
-import "./kimi-ui/reference.css";
+import "./missed-calls/mctb-missed-calls.css";
 
 type MissedCallEvent = {
   id: string;
@@ -34,12 +35,15 @@ type MissedCallEvent = {
   smsSentAt: string | null;
   classification: string | null;
   callsToday?: number;
+  conversationId?: string | null;
 };
 
 type Summary = {
-  missedToday: number;
-  sentToday: number;
-  repliedToday: number;
+  missedCount: number;
+  recoveryTextsCount: number;
+  repliesCount: number;
+  needsReplyCount: number;
+  rangeLabel: string;
 };
 
 type Pagination = {
@@ -49,14 +53,20 @@ type Pagination = {
   totalPages: number;
 };
 
-const STATUS_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
-  { id: "all", label: "All" },
+const RECOVERY_FILTER_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
+  { id: "all", label: "All recovery outcomes" },
   { id: "needs_attention", label: "Needs attention" },
   { id: "replied", label: "Replied" },
   { id: "waiting_consent", label: "Waiting for consent" },
   { id: "suppressed", label: "Suppressed" },
   { id: "failed", label: "Failed" },
 ];
+
+const NEEDS_REPLY_HREF = `${MCTB_ROUTES.conversations}?filter=needs_reply`;
+
+function conversationHref(conversationId: string) {
+  return `${MCTB_ROUTES.conversations}?conversation=${encodeURIComponent(conversationId)}`;
+}
 
 const DATE_OPTIONS: Array<{ id: MissedCallsDateFilter; label: string }> = [
   { id: "today", label: "Today" },
@@ -105,24 +115,35 @@ function fmtMissedTime(iso: string) {
   if (sameDay) {
     return d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
   }
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const datePart = d.toLocaleString("en-US", { month: "short", day: "numeric" });
+  const timePart = d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${datePart} · ${timePart}`;
 }
 
-function TableSkeleton() {
-  return (
-    <div className="px-6 py-12" aria-busy="true" aria-label="Loading missed calls">
-      <div className="space-y-3 animate-pulse">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-10 rounded bg-muted" />
-        ))}
-      </div>
-    </div>
-  );
+function fmtSuppressionReason(reason: string | null): string | null {
+  if (!reason) return null;
+  return reason.replace(/_/g, " ").toLowerCase();
+}
+
+function recoveryStatusClass(status: string, suppressionReason: string | null): string {
+  const s = status.toUpperCase();
+  if (s === "FAILED") return "mctb-mc-status mctb-mc-status--failed";
+  if (s === "SUPPRESSED") {
+    if (suppressionReason === "NOT_EXISTING_CONSENT") {
+      return "mctb-mc-status mctb-mc-status--warning";
+    }
+    return "mctb-mc-status mctb-mc-status--suppressed";
+  }
+  if (s === "SENT" || s === "SMS_SENT" || s === "CUSTOMER_REPLIED") {
+    return "mctb-mc-status mctb-mc-status--sent";
+  }
+  return "mctb-mc-status";
+}
+
+function replyStatusClass(status: string): string {
+  const s = status.toUpperCase();
+  if (s === "CUSTOMER_REPLIED") return "mctb-mc-status mctb-mc-status--replied";
+  return "mctb-mc-status mctb-mc-status--muted";
 }
 
 function toMissedCallEvents(data: MctbMissedCallsListData["events"]): MissedCallEvent[] {
@@ -137,6 +158,16 @@ function toMissedCallEvents(data: MctbMissedCallsListData["events"]): MissedCall
           ? row.smsSentAt
           : row.smsSentAt.toISOString(),
   }));
+}
+
+function countActiveFilters(query: MissedCallsListQuery): number {
+  let n = 0;
+  if (query.q) n += 1;
+  if (query.status && query.status !== "all") n += 1;
+  if (query.date && query.date !== "all") n += 1;
+  if (query.trigger) n += 1;
+  if (query.consentMode) n += 1;
+  return n;
 }
 
 type MctbMissedCallsViewProps = {
@@ -159,6 +190,25 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(false);
   const [searchInput, setSearchInput] = useState(query.q ?? "");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
+
+  const showCopyToast = (message: string) => {
+    setCopyToast(message);
+    window.setTimeout(() => setCopyToast(null), 2400);
+  };
+
+  const copyCallerNumber = async (e164: string) => {
+    try {
+      await navigator.clipboard.writeText(fmtPhone(e164));
+      showCopyToast("Phone number copied.");
+    } catch {
+      showCopyToast("Could not copy number.");
+    }
+  };
 
   const pushQuery = useCallback(
     (patch: Partial<MissedCallsListQuery>) => {
@@ -232,6 +282,24 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
     return () => clearTimeout(t);
   }, [searchInput, query.q, pushQuery]);
 
+  useEffect(() => {
+    if (!desktopFiltersOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (filtersPanelRef.current && !filtersPanelRef.current.contains(e.target as Node)) {
+        setDesktopFiltersOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [desktopFiltersOpen]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const onDoc = () => setOpenMenuId(null);
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [openMenuId]);
+
   const hasActiveFilters =
     Boolean(query.q) ||
     (query.status && query.status !== "all") ||
@@ -240,291 +308,520 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
     Boolean(query.consentMode) ||
     (query.sort && query.sort !== "detectedAt_desc");
 
+  const activeFilterCount = countActiveFilters(query);
+
   const detailHref = (id: string) => {
     const returnQs = searchParams.toString();
     const base = MCTB_ROUTES.missedCallDetail(id);
     return returnQs ? `${base}?return=${encodeURIComponent(returnQs)}` : base;
   };
 
-  const saveScrollAndNavigate = () => {
+  const saveScrollAndNavigate = (id: string) => {
     sessionStorage.setItem(SCROLL_STORAGE_KEY, String(window.scrollY));
+    router.push(detailHref(id));
   };
 
-  const rangeLabel = useMemo(() => {
-    if (!pagination) return "";
-    const start = (pagination.page - 1) * pagination.pageSize + 1;
-    const end = Math.min(pagination.page * pagination.pageSize, pagination.total);
-    return `${start}–${end} of ${pagination.total}`;
-  }, [pagination]);
+  const clearFilters = () => router.push(MCTB_ROUTES.missedCalls);
+
+  const tablePageSize = (pagination?.pageSize ?? query.pageSize ?? 10) as GlobalTablePageSize;
 
   return (
-    <div className="mctb-page">
-      <div className="mctb-page-inner">
-        <MctbPageHeader
-          title="Missed Calls"
-          description="Review missed calls and see what happened after each one."
-          action={
-            <Link
-              href={MCTB_ROUTES.setup}
-              className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:border-indigo-200 hover:shadow"
-            >
-              Manage setup
-            </Link>
-          }
-        />
-
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        {[
-          { label: "Missed today", value: summary?.missedToday ?? "—", tint: "purple" as const },
-          { label: "Recovery texts today", value: summary?.sentToday ?? "—", tint: "blue" as const },
-          { label: "Replies today", value: summary?.repliedToday ?? "—", tint: "green" as const },
-        ].map((stat) => (
-          <div key={stat.label} className={`ref-deco-kpi ref-deco-kpi--${stat.tint} px-5 py-4`}>
-            <p className="text-[12px] font-medium text-gray-500">{stat.label}</p>
-            <p className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">{stat.value}</p>
+    <div className="mctb-missed-calls">
+      <div className="mctb-missed-calls-inner">
+        <header className="mctb-mc-header">
+          <div>
+            <h1 className="mctb-mc-title">Missed Calls</h1>
+            <p className="mctb-mc-desc">Review missed calls and recovery outcomes.</p>
           </div>
-        ))}
-      </div>
+          <Link href={MCTB_ROUTES.setup} className="mctb-mc-btn-secondary">
+            Manage setup
+          </Link>
+        </header>
 
-      <div className="ref-deco-control-bar mb-4 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="sm:col-span-2">
-              <label htmlFor="mctb-missed-search" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Search missed calls
-              </label>
-              <Input
+        <div className="mctb-mc-metrics mctb-mc-metrics--four" aria-label="Summary for selected date range">
+          {[
+            {
+              label: "Missed calls",
+              value: summary?.missedCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Recovery texts",
+              value: summary?.recoveryTextsCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Replies",
+              value: summary?.repliesCount,
+              context: summary?.rangeLabel,
+              href: undefined,
+            },
+            {
+              label: "Needs reply",
+              value: summary?.needsReplyCount,
+              context: "Conversations",
+              href: NEEDS_REPLY_HREF,
+            },
+          ].map((stat) => {
+            const inner = (
+              <>
+                <span className="mctb-mc-metric-label">{stat.label}</span>
+                {loading && summary == null ? (
+                  <div className="mctb-mc-metric-skeleton" aria-hidden />
+                ) : (
+                  <span className="mctb-mc-metric-value">{stat.value ?? "—"}</span>
+                )}
+                {stat.context ? (
+                  <span className="mctb-mc-metric-context">{stat.context}</span>
+                ) : null}
+              </>
+            );
+            return stat.href ? (
+              <Link key={stat.label} href={stat.href} className="mctb-mc-metric mctb-mc-metric--link">
+                {inner}
+              </Link>
+            ) : (
+              <div key={stat.label} className="mctb-mc-metric">{inner}</div>
+            );
+          })}
+        </div>
+
+        {copyToast ? (
+          <p className="mctb-mc-toast" role="status">{copyToast}</p>
+        ) : null}
+
+        <div className="mctb-mc-toolbar mctb-mc-mobile-toolbar" role="search">
+          <div className="mctb-mc-toolbar-row mctb-mc-mobile-only">
+            <div className="mctb-mc-search">
+              <label htmlFor="mctb-missed-search" className="sr-only">Search caller or number</label>
+              <input
                 id="mctb-missed-search"
-                placeholder="Phone number"
+                type="search"
+                placeholder="Search caller or number"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
+                autoComplete="off"
               />
             </div>
-            <div>
-              <label htmlFor="mctb-missed-status" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Status
-              </label>
-              <select
-                id="mctb-missed-status"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                value={query.status ?? "all"}
-                onChange={(e) =>
-                  pushQuery({ status: e.target.value as MissedCallsStatusFilter })
-                }
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="mctb-missed-date" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Date
-              </label>
-              <select
-                id="mctb-missed-date"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                value={query.date ?? "all"}
-                onChange={(e) =>
-                  pushQuery({ date: e.target.value as MissedCallsDateFilter })
-                }
-              >
-                {DATE_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+            <button
+              type="button"
+              className="mctb-mc-btn-secondary"
+              onClick={() => setFiltersOpen(true)}
+              aria-label={`Filters${activeFilterCount ? `, ${activeFilterCount} active` : ""}`}
+            >
+              <SlidersHorizontal className="mr-1.5 inline h-4 w-4" aria-hidden />
+              Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </button>
+            <select
+              className="mctb-mc-select"
+              aria-label="Sort missed calls"
+              value={query.sort ?? "detectedAt_desc"}
+              onChange={(e) => pushQuery({ sort: e.target.value as MissedCallsSort })}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
           </div>
-          <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label htmlFor="mctb-missed-trigger" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Trigger
-              </label>
-              <select
-                id="mctb-missed-trigger"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                value={query.trigger ?? ""}
-                onChange={(e) => pushQuery({ trigger: e.target.value || undefined })}
-              >
-                {TRIGGER_OPTIONS.map((opt) => (
-                  <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="mctb-missed-consent" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Consent mode
-              </label>
-              <select
-                id="mctb-missed-consent"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                value={query.consentMode ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value as "" | "press_1" | "existing_consent";
-                  pushQuery({ consentMode: v || undefined });
-                }}
-              >
-                {CONSENT_MODE_OPTIONS.map((opt) => (
-                  <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="mctb-missed-sort" className="mb-1 block text-[12px] font-medium text-muted-foreground">
-                Sort
-              </label>
-              <select
-                id="mctb-missed-sort"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                value={query.sort ?? "detectedAt_desc"}
-                onChange={(e) => pushQuery({ sort: e.target.value as MissedCallsSort })}
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {hasActiveFilters ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => router.push(MCTB_ROUTES.missedCalls)}>
-              Clear filters
-            </Button>
-          ) : null}
-        </div>
-      </div>
 
-      <div className="ref-deco-table-wrap">
-        {loading ? (
-          <TableSkeleton />
-        ) : error ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-foreground">Missed calls couldn&apos;t be loaded.</p>
-            <Button type="button" size="sm" className="mt-4" onClick={() => void load()}>
-              Retry
-            </Button>
-          </div>
-        ) : events.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-foreground">
-              {hasActiveFilters ? "No missed calls match these filters" : "No missed calls in this period"}
-            </p>
+          <div className="mctb-mc-toolbar-row mctb-mc-desktop-table">
+            <div className="mctb-mc-search">
+              <label htmlFor="mctb-missed-search-desktop" className="sr-only">Search caller or number</label>
+              <input
+                id="mctb-missed-search-desktop"
+                type="search"
+                placeholder="Search caller or number"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <select
+              className="mctb-mc-select"
+              aria-label={MISSED_CALLS_OUTCOME_FILTER_LABEL}
+              value={query.status ?? "all"}
+              onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
+            >
+              {RECOVERY_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              className="mctb-mc-select"
+              aria-label="Date"
+              value={query.date ?? "all"}
+              onChange={(e) => pushQuery({ date: e.target.value as MissedCallsDateFilter })}
+            >
+              {DATE_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              className="mctb-mc-select"
+              aria-label="Trigger"
+              value={query.trigger ?? ""}
+              onChange={(e) => pushQuery({ trigger: e.target.value || undefined })}
+            >
+              {TRIGGER_OPTIONS.map((opt) => (
+                <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <div className="mctb-mc-filters-pop" ref={filtersPanelRef}>
+              <button
+                type="button"
+                className="mctb-mc-btn-secondary"
+                aria-expanded={desktopFiltersOpen}
+                aria-haspopup="true"
+                onClick={() => setDesktopFiltersOpen((v) => !v)}
+              >
+                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              </button>
+              {desktopFiltersOpen ? (
+                <div className="mctb-mc-filters-panel" role="dialog" aria-label="More filters">
+                  <label htmlFor="mctb-missed-consent">Consent mode</label>
+                  <select
+                    id="mctb-missed-consent"
+                    className="mctb-mc-select w-full"
+                    value={query.consentMode ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value as "" | "press_1" | "existing_consent";
+                      pushQuery({ consentMode: v || undefined });
+                    }}
+                  >
+                    {CONSENT_MODE_OPTIONS.map((opt) => (
+                      <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+            </div>
+            <select
+              className="mctb-mc-select"
+              aria-label="Sort"
+              value={query.sort ?? "detectedAt_desc"}
+              onChange={(e) => pushQuery({ sort: e.target.value as MissedCallsSort })}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
             {hasActiveFilters ? (
+              <button type="button" className="mctb-mc-clear" onClick={clearFilters}>
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {filtersOpen ? (
+          <>
+            <button
+              type="button"
+              className="mctb-mc-sheet-backdrop mctb-mc-mobile-only"
+              aria-label="Close filters"
+              onClick={() => setFiltersOpen(false)}
+            />
+            <div className="mctb-mc-sheet mctb-mc-mobile-only" role="dialog" aria-label="Filters">
+              <h3>Filters</h3>
+              <div className="mctb-mc-sheet-field">
+                <label htmlFor="mctb-missed-status-m">{MISSED_CALLS_OUTCOME_FILTER_LABEL}</label>
+                <select
+                  id="mctb-missed-status-m"
+                  className="mctb-mc-select w-full"
+                  value={query.status ?? "all"}
+                  onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
+                >
+                  {RECOVERY_FILTER_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mctb-mc-sheet-field">
+                <label htmlFor="mctb-missed-date-m">Date</label>
+                <select
+                  id="mctb-missed-date-m"
+                  className="mctb-mc-select w-full"
+                  value={query.date ?? "all"}
+                  onChange={(e) => pushQuery({ date: e.target.value as MissedCallsDateFilter })}
+                >
+                  {DATE_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mctb-mc-sheet-field">
+                <label htmlFor="mctb-missed-trigger-m">Trigger</label>
+                <select
+                  id="mctb-missed-trigger-m"
+                  className="mctb-mc-select w-full"
+                  value={query.trigger ?? ""}
+                  onChange={(e) => pushQuery({ trigger: e.target.value || undefined })}
+                >
+                  {TRIGGER_OPTIONS.map((opt) => (
+                    <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mctb-mc-sheet-field">
+                <label htmlFor="mctb-missed-consent-m">Consent mode</label>
+                <select
+                  id="mctb-missed-consent-m"
+                  className="mctb-mc-select w-full"
+                  value={query.consentMode ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value as "" | "press_1" | "existing_consent";
+                    pushQuery({ consentMode: v || undefined });
+                  }}
+                >
+                  {CONSENT_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.id || "all"} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                {hasActiveFilters ? (
+                  <button type="button" className="mctb-mc-clear" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                ) : null}
+                <button type="button" className="mctb-mc-btn-secondary" onClick={() => setFiltersOpen(false)}>
+                  Done
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
+
+        <div className="mctb-mc-table-wrap">
+          {loading ? (
+            <div aria-busy="true" aria-label="Loading missed calls">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="mctb-mc-skeleton-row" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="mctb-mc-error">
+              <p>Unable to load missed calls.</p>
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                className="mt-4"
-                onClick={() => router.push(MCTB_ROUTES.missedCalls)}
+                className="mt-4 bg-[#1b1e23] text-white hover:bg-[#262a31]"
+                onClick={() => void load()}
               >
-                Clear filters
+                Retry
               </Button>
-            ) : (
-              <Link href={MCTB_ROUTES.setup} className="mt-4 inline-block text-sm font-semibold text-primary">
-                Finish setup →
-              </Link>
-            )}
-          </div>
-        ) : (
-          <>
-            <Table>
-              <THead>
-                <TR>
-                  <TH scope="col">Caller</TH>
-                  <TH scope="col">Missed</TH>
-                  <TH scope="col">Trigger</TH>
-                  <TH scope="col">Recovery</TH>
-                  <TH scope="col">Reply</TH>
-                  <TH scope="col" className="hidden md:table-cell">Business line</TH>
-                  <TH scope="col" className="text-right">Actions</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {events.map((row) => (
-                  <TR key={row.id}>
-                    <TH scope="row" className="font-medium">
-                      <Link
-                        href={detailHref(row.id)}
-                        className="hover:underline"
-                        onClick={saveScrollAndNavigate}
-                      >
-                        {row.contactName || fmtPhone(row.callerE164)}
-                      </Link>
-                      {row.contactName ? (
-                        <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
-                          {fmtPhone(row.callerE164)}
-                        </span>
-                      ) : null}
-                      {row.callsToday != null && row.callsToday > 1 ? (
-                        <span className="ml-0 mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                          Called {row.callsToday}× today
-                        </span>
-                      ) : null}
-                    </TH>
-                    <TD className="text-muted-foreground">{fmtMissedTime(row.detectedAt)}</TD>
-                    <TD className="text-muted-foreground">
-                      {classificationToTriggerLabel(row.classification)}
-                    </TD>
-                    <TD>
-                      <span className="text-sm font-medium">
-                        {formatRecoveryStatus(row.status, row.suppressionReason)}
-                      </span>
-                      {row.suppressionReason ? (
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                          {row.suppressionReason.replace(/_/g, " ").toLowerCase()}
-                        </span>
-                      ) : null}
-                    </TD>
-                    <TD className="text-muted-foreground">{formatReplyStatus(row.status)}</TD>
-                    <TD className="hidden text-muted-foreground md:table-cell">
-                      {fmtPhone(row.businessE164)}
-                    </TD>
-                    <TD className="text-right">
-                      <a
-                        href={`tel:${row.callerE164}`}
-                        className="text-[13px] font-semibold text-primary hover:underline"
-                      >
-                        Call back
-                      </a>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
-            {pagination && pagination.totalPages > 1 ? (
-              <div className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">{rangeLabel}</p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page <= 1}
-                    onClick={() => pushQuery({ page: pagination.page - 1 })}
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft className="h-4 w-4" aria-hidden />
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {pagination.page} of {pagination.totalPages}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() => pushQuery({ page: pagination.page + 1 })}
-                    aria-label="Next page"
-                  >
-                    <ChevronRight className="h-4 w-4" aria-hidden />
-                  </Button>
-                </div>
+            </div>
+          ) : events.length === 0 ? (
+            <div className="mctb-mc-empty">
+              <p>
+                {hasActiveFilters
+                  ? "No missed calls match these filters."
+                  : "No missed calls yet."}
+              </p>
+              {!hasActiveFilters ? (
+                <p className="mctb-mc-empty-sub">Missed calls will appear here when they occur.</p>
+              ) : (
+                <button type="button" className="mctb-mc-clear mt-4" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="mctb-mc-desktop-table mctb-mc-table-scroll">
+                <table className="mctb-mc-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Caller</th>
+                      <th scope="col">Missed</th>
+                      <th scope="col">Trigger</th>
+                      <th scope="col">Recovery</th>
+                      <th scope="col">Reply</th>
+                      <th scope="col" className="hidden md:table-cell">Business line</th>
+                      <th scope="col" className="text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((row) => {
+                      const recoveryPrimary = formatRecoveryStatus(row.status, row.suppressionReason);
+                      const reason = fmtSuppressionReason(row.suppressionReason);
+                      const recoveryClass = recoveryStatusClass(row.status, row.suppressionReason);
+                      const replyClass = replyStatusClass(row.status);
+                      const issue = missedCallActionableIssue(row.status, row.suppressionReason);
+                      const callerPrimary = row.contactName || fmtPhone(row.callerE164);
+                      const showPhoneSecondary = Boolean(row.contactName);
+                      return (
+                        <tr
+                          key={row.id}
+                          className="mctb-mc-row"
+                          tabIndex={0}
+                          onClick={() => saveScrollAndNavigate(row.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              saveScrollAndNavigate(row.id);
+                            }
+                          }}
+                        >
+                          <th scope="row">
+                            <span className="mctb-mc-caller-primary">{callerPrimary}</span>
+                            {showPhoneSecondary ? (
+                              <span className="mctb-mc-caller-secondary">{fmtPhone(row.callerE164)}</span>
+                            ) : null}
+                            {row.callsToday != null && row.callsToday > 1 ? (
+                              <span className="mctb-mc-repeat">Called {row.callsToday}× today</span>
+                            ) : null}
+                          </th>
+                          <td className="mctb-mc-muted" title={new Date(row.detectedAt).toLocaleString()}>
+                            {fmtMissedTime(row.detectedAt)}
+                          </td>
+                          <td className="mctb-mc-muted">
+                            {classificationToTriggerLabel(row.classification)}
+                          </td>
+                          <td className="mctb-mc-cell-recovery">
+                            <span className="mctb-mc-recovery-line">
+                              {issue.show ? (
+                                <AlertTriangle
+                                  className="mctb-mc-issue-icon"
+                                  aria-hidden
+                                  title={issue.message}
+                                />
+                              ) : null}
+                              <span className={recoveryClass}>{recoveryPrimary}</span>
+                            </span>
+                            {reason ? (
+                              <span className="mctb-mc-recovery-reason">{reason}</span>
+                            ) : null}
+                          </td>
+                          <td>
+                            <span className={replyClass}>{formatReplyStatus(row.status)}</span>
+                          </td>
+                          <td className="mctb-mc-muted hidden md:table-cell">{fmtPhone(row.businessE164)}</td>
+                          <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="mctb-mc-actions relative">
+                              <a
+                                href={`tel:${row.callerE164}`}
+                                className="mctb-mc-callback"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Callback
+                              </a>
+                              <button
+                                type="button"
+                                className="mctb-mc-menu-btn"
+                                aria-label="Row actions"
+                                aria-expanded={openMenuId === row.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(openMenuId === row.id ? null : row.id);
+                                }}
+                              >
+                                <MoreHorizontal className="h-4 w-4" aria-hidden />
+                              </button>
+                              {openMenuId === row.id ? (
+                                <div className="mctb-mc-menu" role="menu">
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuId(null);
+                                      saveScrollAndNavigate(row.id);
+                                    }}
+                                  >
+                                    Open details
+                                  </button>
+                                  {row.conversationId ? (
+                                    <Link
+                                      href={conversationHref(row.conversationId)}
+                                      role="menuitem"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Open conversation
+                                    </Link>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuId(null);
+                                      void copyCallerNumber(row.callerE164);
+                                    }}
+                                  >
+                                    Copy number
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ) : pagination ? (
-              <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">{rangeLabel}</p>
-            ) : null}
-          </>
-        )}
-      </div>
+
+              <div className="mctb-mc-mobile-list">
+                {events.map((row) => {
+                  const recoveryPrimary = formatRecoveryStatus(row.status, row.suppressionReason);
+                  const reason = fmtSuppressionReason(row.suppressionReason);
+                  const recoveryLine = reason ? `${recoveryPrimary} · ${reason}` : recoveryPrimary;
+                  return (
+                    <div
+                      key={row.id}
+                      className="mctb-mc-record"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => saveScrollAndNavigate(row.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          saveScrollAndNavigate(row.id);
+                        }
+                      }}
+                    >
+                      <div className="mctb-mc-caller-primary">
+                        {row.contactName || fmtPhone(row.callerE164)}
+                      </div>
+                      {row.contactName ? (
+                        <div className="mctb-mc-caller-secondary">{fmtPhone(row.callerE164)}</div>
+                      ) : null}
+                      <div className="mctb-mc-record-grid">
+                        <span className="mctb-mc-record-label">Missed</span>
+                        <span>{fmtMissedTime(row.detectedAt)}</span>
+                        <span className="mctb-mc-record-label">Recovery</span>
+                        <span>{recoveryLine}</span>
+                        <span className="mctb-mc-record-label">Reply</span>
+                        <span>{formatReplyStatus(row.status)}</span>
+                        <span className="mctb-mc-record-label">Business line</span>
+                        <span>{fmtPhone(row.businessE164)}</span>
+                      </div>
+                      <div className="mctb-mc-record-actions" onClick={(e) => e.stopPropagation()}>
+                        <a href={`tel:${row.callerE164}`} className="mctb-mc-callback">
+                          Callback
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </>
+          )}
+          {!loading && !error && pagination ? (
+            <DataTablePaginationFooter
+              className="mctb-mc-pagination"
+              page={pagination.page}
+              pageSize={tablePageSize}
+              total={pagination.total}
+              onPageChange={(page) => pushQuery({ page })}
+              onPageSizeChange={(pageSize) => pushQuery({ pageSize, page: 1 })}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );

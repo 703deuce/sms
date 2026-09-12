@@ -1,14 +1,25 @@
 export type PersonalVoicemailMessage = {
   id: string;
   callerNumber: string;
-  durationSec: number;
+  /** Resolved contact name when available */
+  callerDisplayName?: string | null;
+  durationSec: number | null;
   createdAt: string;
   transcript?: string | null;
   transcriptEnglish?: string | null;
   summary?: string | null;
   internalNotes?: string | null;
+  /** Canonical read flag from `voicemail_messages.is_read` */
+  isRead: boolean;
   readAt?: string | null;
   boxId?: string;
+  hasRecording?: boolean;
+};
+
+export type VoicemailInboxSummary = {
+  totalCount: number;
+  unreadCount: number;
+  minutesThisMonth: number;
 };
 
 export type PersonalVoicemailBox = {
@@ -33,18 +44,37 @@ export function mapVoicemailMessage(row: {
   internalNotes?: string | null;
   isRead?: boolean;
   boxId?: string;
+  callerDisplayName?: string | null;
+  hasRecording?: boolean;
+  durationSec?: number | null;
+  callerNumber?: string;
+  transcript?: string | null;
 }): PersonalVoicemailMessage {
+  const isRead = Boolean(row.isRead);
+  const durationRaw =
+    row.durationSeconds ??
+    row.durationSec ??
+    null;
+  const durationSec =
+    durationRaw == null || durationRaw <= 0 ? null : durationRaw;
+  const callerNumber =
+    row.callerNumber ||
+    row.fromE164 ||
+    "Unknown";
   return {
     id: row.id,
-    callerNumber: row.fromE164 || "Unknown",
-    durationSec: row.durationSeconds ?? 0,
+    callerNumber,
+    callerDisplayName: row.callerDisplayName ?? null,
+    durationSec,
+    hasRecording: row.hasRecording,
     createdAt:
       row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-    transcript: row.transcriptText,
+    transcript: row.transcript ?? row.transcriptText,
     transcriptEnglish: row.transcriptEnglish,
     summary: row.aiSummary,
     internalNotes: row.internalNotes,
-    readAt: row.isRead ? new Date().toISOString() : null,
+    isRead,
+    readAt: isRead ? new Date().toISOString() : null,
     boxId: row.boxId,
   };
 }
@@ -52,12 +82,19 @@ export function mapVoicemailMessage(row: {
 export function parseVoicemailApiPayload(data: unknown): {
   boxes: PersonalVoicemailBox[];
   messages: PersonalVoicemailMessage[];
+  summary: VoicemailInboxSummary;
 } {
+  const emptySummary: VoicemailInboxSummary = {
+    totalCount: 0,
+    unreadCount: 0,
+    minutesThisMonth: 0,
+  };
   if (!data || typeof data !== "object") {
-    return { boxes: [], messages: [] };
+    return { boxes: [], messages: [], summary: emptySummary };
   }
 
   const payload = data as {
+    summary?: VoicemailInboxSummary;
     boxes?: PersonalVoicemailBox[];
     messages?: Array<{
       id: string;
@@ -70,13 +107,40 @@ export function parseVoicemailApiPayload(data: unknown): {
       internalNotes?: string | null;
       isRead?: boolean;
       boxId?: string;
+      callerDisplayName?: string | null;
     }>;
   };
 
   const boxes = Array.isArray(payload.boxes) ? payload.boxes : [];
   const messages = Array.isArray(payload.messages)
-    ? payload.messages.map((m) => mapVoicemailMessage(m))
+    ? payload.messages.map((m) => {
+        const row = m as Record<string, unknown>;
+        if (row.callerNumber != null && typeof row.isRead === "boolean") {
+          return mapVoicemailMessage({
+            id: String(row.id),
+            callerNumber: String(row.callerNumber),
+            callerDisplayName: row.callerDisplayName as string | null,
+            durationSec: row.durationSec as number | null,
+            durationSeconds: row.durationSeconds as number | null,
+            createdAt: String(row.createdAt),
+            transcript: row.transcript as string | null,
+            transcriptEnglish: row.transcriptEnglish as string | null,
+            aiSummary: (row.summary ?? row.aiSummary) as string | null,
+            internalNotes: row.internalNotes as string | null,
+            isRead: row.isRead as boolean,
+            boxId: row.boxId as string | undefined,
+            hasRecording: row.hasRecording as boolean | undefined,
+          });
+        }
+        return mapVoicemailMessage(m);
+      })
     : [];
+  const summary =
+    payload.summary &&
+    typeof payload.summary.totalCount === "number" &&
+    typeof payload.summary.unreadCount === "number"
+      ? payload.summary
+      : emptySummary;
 
-  return { boxes, messages };
+  return { boxes, messages, summary };
 }

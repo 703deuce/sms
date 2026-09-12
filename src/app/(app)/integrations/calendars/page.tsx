@@ -1,5 +1,6 @@
-import { CalendarIntegrationsConnected } from "@/features/integrations/kimi/calendars/calendars-connected";
+import { redirect } from "next/navigation";
 
-export default function CalendarIntegrationsPage() {
-  return <CalendarIntegrationsConnected />;
+/** Legacy route — canonical integrations page owns calendar connections. */
+export default function CalendarIntegrationsRedirectPage() {
+  redirect("/integrations?provider=calendar");
 }

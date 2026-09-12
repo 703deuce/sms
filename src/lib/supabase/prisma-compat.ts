@@ -240,6 +240,8 @@ const MODEL_TO_TABLE: Record<string, string> = {
   workspaceMessagingSettings: "workspace_messaging_settings",
   emailToSmsAddress: "email_to_sms_addresses",
   paymentLink: "payment_links",
+  paymentRequest: "payment_requests",
+  paymentRequestEvent: "payment_request_events",
   portRequest: "PortRequest",
   portOutRequest: "port_out_requests",
   humanCall: "human_calls",

@@ -21,6 +21,8 @@ import { loadMctbSetupPhoneOptionsWithTelnyxSync } from "@/lib/mctb/setup-telnyx
 import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { isMctbSetupMessagingReady } from "@/lib/mctb/setup-messaging-ready";
+import { isExistingConsentModeEligible } from "@/lib/mctb/setup-consent-eligibility";
+import { EXISTING_CONSENT_ATTESTATION_VERSION } from "@/lib/mctb/capture/attestation";
 import {
   resolveCanonicalMctbSetupPhoneId,
   sanitizeMctbSetupPhoneNumberId,
@@ -245,6 +247,20 @@ export async function GET() {
         (mctbSettings.consentMode as MctbConsentMode | undefined) ||
         (setupMeta.consentMode as MctbConsentMode | undefined) ||
         "press_1",
+      consentMeta: {
+        existingConsentEligible: isExistingConsentModeEligible({ messagingReady }),
+        existingConsentAttestation: (() => {
+          const raw = mctbSettings.existingConsentAttestation;
+          if (!raw || typeof raw !== "object") return null;
+          const row = raw as Record<string, unknown>;
+          if (row.accepted !== true) return null;
+          return {
+            attestedAt: String(row.attestedAt || ""),
+            attestedByUserId: String(row.attestedByUserId || ""),
+            version: String(row.version || EXISTING_CONSENT_ATTESTATION_VERSION),
+          };
+        })(),
+      },
       productionForwardTargetE164: productionForwardE164,
       businessLineE164,
     },
@@ -341,6 +357,37 @@ export async function POST(req: Request) {
       { error: "Existing consent attestation is required" },
       { status: 400 },
     );
+  }
+
+  if (body.consentMode === "existing_consent") {
+    const [phoneNumbersForConsent, complianceForConsent, regForConsent, adminFlagsForConsent] =
+      await Promise.all([
+        loadMctbSetupPhoneOptionsWithTelnyxSync(workspaceId),
+        loadComplianceOverview(workspaceId),
+        loadPhoneNumbers(workspaceId, { includeLinked: true }),
+        loadAdminMctbTestFlags(workspaceId),
+      ]);
+    const requiredForConsent = deriveRequiredActions(
+      complianceForConsent.registration,
+      regForConsent,
+    );
+    if (
+      !isExistingConsentModeEligible({
+        messagingReady: isMctbSetupMessagingReady({
+          phoneNumbers: phoneNumbersForConsent,
+          requiredActions: requiredForConsent,
+          adminFlags: adminFlagsForConsent,
+        }),
+      })
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Existing consent requires an eligible business messaging setup. Complete messaging compliance and use an approved sender.",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   if (body.activate === true && body.phoneNumberId) {

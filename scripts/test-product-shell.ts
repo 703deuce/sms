@@ -30,6 +30,7 @@ assert.equal(resolveProductShellFromPath("/appointments/calendar"), "appointment
 assert.equal(resolveProductShellFromPath("/voice/missed-calls"), "mctb");
 assert.equal(resolveProductShellFromPath("/mctb"), "mctb");
 assert.equal(resolveProductShellFromPath("/mctb/missed-calls"), "mctb");
+assert.equal(resolveProductShellFromPath("/personal/voicemail"), null);
 assert.equal(resolveProductShellFromPath("/voice/agents"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/voice/overview"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/settings"), null);
@@ -57,7 +58,7 @@ assert.ok(
 );
 
 const mctbNav = buildMctbV1Nav();
-assert.equal(mctbNav.length, 6);
+assert.equal(mctbNav.length, 12);
 const mctbLabels = mctbNav.map((i) => i.label);
 
 const mctbNavFromPath = resolveProductSidebarNav({
@@ -66,18 +67,19 @@ const mctbNavFromPath = resolveProductSidebarNav({
   productShell: "appointments",
 });
 assert.equal(mctbNavFromPath.map((i) => i.label).join(","), mctbLabels.join(","));
-assert.ok(mctbLabels.includes("Home"));
+assert.ok(mctbLabels.includes("Overview"));
 assert.ok(mctbLabels.includes("Missed Calls"));
 assert.ok(mctbLabels.includes("Conversations"));
 assert.ok(mctbLabels.includes("Voicemail"));
 assert.ok(mctbLabels.includes("Analytics"));
 assert.ok(mctbLabels.includes("Setup"));
-const setup = mctbNav.find((i) => i.label === "Setup");
-assert.ok(setup?.children?.some((c) => c.label === "Numbers"));
+assert.ok(mctbLabels.includes("Calendar"));
+assert.ok(mctbLabels.includes("Payments"));
+assert.ok(mctbLabels.includes("Integrations"));
+assert.ok(!mctbLabels.includes("Home"));
 assert.ok(!mctbLabels.includes("Numbers"));
 assert.ok(!mctbLabels.includes("Settings"));
 assert.ok(!mctbLabels.includes("Campaigns"));
-assert.ok(!mctbLabels.includes("Calendar"));
 
 const aiNav = buildAiAfterHoursNav({ primaryVoiceAgentId: "agent_1" });
 const aiLabels = aiNav.map((i) => i.label);
