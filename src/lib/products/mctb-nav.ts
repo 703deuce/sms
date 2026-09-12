@@ -5,10 +5,12 @@ import {
   Home,
   MessageSquare,
   PhoneMissed,
+  Puzzle,
   Settings2,
   SlidersHorizontal,
   Voicemail,
   Bell,
+  CreditCard,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -60,6 +62,11 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: Bell,
     },
     {
+      label: "Payments",
+      href: MCTB_ROUTES.payments,
+      icon: CreditCard,
+    },
+    {
       label: "Voicemail",
       href: MCTB_ROUTES.voicemail,
       icon: Voicemail,
@@ -68,6 +75,11 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Analytics",
       href: MCTB_ROUTES.analytics,
       icon: BarChart3,
+    },
+    {
+      label: "Integrations",
+      href: MCTB_ROUTES.integrations,
+      icon: Puzzle,
     },
     {
       label: "Setup",
@@ -114,6 +126,8 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.appointments)) return "Appointments";
   if (pathname.startsWith(MCTB_ROUTES.booking)) return "Booking Setup";
   if (pathname.startsWith(MCTB_ROUTES.reminders)) return "Reminders";
+  if (pathname.startsWith(MCTB_ROUTES.payments)) return "Payments";
+  if (pathname === MCTB_ROUTES.integrations || pathname.startsWith("/integrations")) return "Integrations";
 
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/voicemail")) return "Voicemail";

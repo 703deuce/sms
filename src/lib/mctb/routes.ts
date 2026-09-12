@@ -27,4 +27,6 @@ export const MCTB_ROUTES = {
   booking: "/mctb/booking",
   bookingType: (id: string) => `/mctb/booking/${id}`,
   reminders: "/mctb/reminders",
+  payments: "/payments",
+  integrations: "/integrations",
 } as const;

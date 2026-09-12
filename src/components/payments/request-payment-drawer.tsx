@@ -183,7 +183,7 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
               {!stripeConnected ? (
                 <div className="payments-setup-banner">
                   <span>Connect Stripe to send payment requests.</span>
-                  <Link href="/integrations/payments">Connect Stripe</Link>
+                  <Link href="/integrations?provider=stripe">Connect Stripe</Link>
                 </div>
               ) : null}
 
@@ -253,7 +253,7 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
 
               <div className="payments-field">
                 <div className="payments-field-label">Processor</div>
-                <div style={{ fontSize: 14 }}>Stripe {stripeConnected ? "· Connected ✓" : "· Not connected"} <Link href="/integrations/payments">Manage</Link></div>
+                <div style={{ fontSize: 14 }}>Stripe {stripeConnected ? "· Connected ✓" : "· Not connected"} <Link href="/integrations?provider=stripe">Manage</Link></div>
               </div>
 
               {preview ? (

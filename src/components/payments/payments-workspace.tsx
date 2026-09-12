@@ -144,7 +144,7 @@ export function PaymentsWorkspace() {
             {stripeConnected !== null ? (
               <p className="payments-stripe-chip">
                 Stripe · {stripeConnected ? "Connected ✓" : "Not connected"}
-                <Link href="/integrations/payments">Manage connection</Link>
+                <Link href="/integrations?provider=stripe">Manage connection</Link>
               </p>
             ) : null}
           </div>
@@ -158,7 +158,7 @@ export function PaymentsWorkspace() {
       {stripeConnected === false ? (
         <div className="payments-setup-banner" role="status">
           <span>Connect Stripe to request payments. Stripe securely handles checkout and card information.</span>
-          <Link href="/integrations/payments" className="payments-primary-btn" style={{ minWidth: 0, height: 36 }}>
+          <Link href="/integrations?provider=stripe" className="payments-primary-btn" style={{ minWidth: 0, height: 36 }}>
             Connect Stripe
           </Link>
         </div>

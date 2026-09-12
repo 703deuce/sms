@@ -12,12 +12,12 @@ import { listConnections, isStripeEnvConfigured } from "@/lib/integrations/conne
 import { getPrisma } from "@/lib/db";
 import { Plus, Puzzle } from "lucide-react";
 import Link from "next/link";
-import { ConnectableProvidersGrid } from "@/components/integrations/connectable-providers-grid";
-import { IntegrationsDirectory } from "./integrations-directory";
+import { IntegrationsHomeClient } from "./integrations-home-client";
 
 const integrationTabs = [
   { label: "Directory", href: "/integrations" },
-  { label: "Calendars", href: "/integrations/calendars" },
+  { label: "Calendars", href: "/integrations?provider=calendar" },
+  { label: "Payments", href: "/integrations?provider=stripe" },
   { label: "Connect apps", href: "/integrations/native" },
   { label: "CRM", href: "/integrations/crm" },
   { label: "API", href: "/integrations/api" },
@@ -25,8 +25,19 @@ const integrationTabs = [
   { label: "Developer logs", href: "/integrations/logs" },
 ];
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { workspaceId } = await requireWorkspaceContext();
+  const params = await searchParams;
+  const focusProvider =
+    typeof params.provider === "string"
+      ? params.provider
+      : typeof params.focus === "string"
+        ? params.focus
+        : null;
   const [apiKeys, endpoints, webhooks, connections, workspace] = await Promise.all([
     loadApiKeys(workspaceId),
     loadIntegrationEndpoints(workspaceId),
@@ -50,7 +61,7 @@ export default async function IntegrationsPage() {
     <div className="space-y-5">
       <SectionHeader
         title="Integrations"
-        description="Connect Transovo SMS to your CRM, payments, calendar, and custom applications."
+        description="Connect Transovo with the tools you already use."
         icon={Puzzle}
         iconTone="bg-violet-50 text-violet-600"
         actions={
@@ -83,12 +94,11 @@ export default async function IntegrationsPage() {
         </Card>
       </div>
 
-      <ConnectableProvidersGrid />
-
-      <IntegrationsDirectory
+      <IntegrationsHomeClient
         connectedApi={connectedApi}
         connectedWebhooks={connectedWebhooks}
         endpointsCount={endpoints.length}
+        focusProvider={focusProvider}
       />
     </div>
   );

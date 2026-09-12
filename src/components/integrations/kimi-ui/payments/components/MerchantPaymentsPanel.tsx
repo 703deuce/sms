@@ -14,6 +14,7 @@ export function MerchantPaymentsPanel({
   acting,
   error,
   pendingDisconnect,
+  embedded = false,
   onRetry,
   onConnectStripe,
   onConnectSquare,
@@ -30,6 +31,8 @@ export function MerchantPaymentsPanel({
   acting: string | null;
   error: string | null;
   pendingDisconnect: MerchantPaymentProvider | null;
+  /** When true, hide full-page chrome (used inside canonical /integrations). */
+  embedded?: boolean;
   onRetry: () => void;
   onConnectStripe: () => void;
   onConnectSquare: () => void;
@@ -46,19 +49,21 @@ export function MerchantPaymentsPanel({
   const anyConnected = connections.some((c) => c.status === "connected" && c.canAcceptPayments);
 
   return (
-    <div className="tv-container">
-      {/* Page header */}
-      <header className="tv-page-header">
-        <div>
-          <h1 className="tv-page-title">Integrations</h1>
-          <p className="tv-page-subtitle">Connect external systems Transovo works with.</p>
-        </div>
-      </header>
-
-      <Tabs items={integrationsTabs} active="/integrations/payments" />
+    <div className={embedded ? "" : "tv-container"}>
+      {!embedded ? (
+        <>
+          <header className="tv-page-header">
+            <div>
+              <h1 className="tv-page-title">Integrations</h1>
+              <p className="tv-page-subtitle">Connect external systems Transovo works with.</p>
+            </div>
+          </header>
+          <Tabs items={integrationsTabs} active="/integrations?provider=stripe" />
+        </>
+      ) : null}
 
       <div className="tv-section-heading">
-        <h2 className="tv-section-title">Appointment payments</h2>
+        <h2 className="tv-section-title">{embedded ? "Payment processor" : "Appointment payments"}</h2>
         <p className="tv-section-desc">
           Connect a payment provider to collect deposits or full payments when customers book.
           Providers settle directly to your account.
@@ -129,12 +134,14 @@ export function MerchantPaymentsPanel({
 
       {!loading && anyConnected ? <PaymentExperiencePreview connections={connections} /> : null}
 
-      <p className="tv-footnote">
-        Payment processing is handled by your provider. Fees, payouts, and disputes are managed in
-        your Stripe or Square account. Sandbox states:{" "}
-        <button className="tv-link" onClick={onSimulateEmpty}>first use</button> ·{" "}
-        <button className="tv-link" onClick={onSimulateError}>error</button>
-      </p>
+      {!embedded ? (
+        <p className="tv-footnote">
+          Payment processing is handled by your provider. Fees, payouts, and disputes are managed in
+          your Stripe or Square account. Sandbox states:{" "}
+          <button className="tv-link" onClick={onSimulateEmpty}>first use</button> ·{" "}
+          <button className="tv-link" onClick={onSimulateError}>error</button>
+        </p>
+      ) : null}
 
       {pendingDisconnect ? (
         <DisconnectModal
