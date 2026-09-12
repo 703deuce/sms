@@ -20,4 +20,11 @@ export const MCTB_ROUTES = {
   setupTest: "/mctb/setup/test",
   numbers: "/mctb/numbers",
   complianceConsent: "/mctb/compliance/consent",
+  calendar: "/mctb/calendar",
+  appointments: "/mctb/appointments",
+  appointmentsNew: "/mctb/appointments/new",
+  appointmentDetail: (id: string) => `/mctb/appointments/${id}`,
+  booking: "/mctb/booking",
+  bookingType: (id: string) => `/mctb/booking/${id}`,
+  reminders: "/mctb/reminders",
 } as const;

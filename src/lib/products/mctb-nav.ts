@@ -1,10 +1,14 @@
 import {
   BarChart3,
+  Calendar,
+  ClipboardList,
   Home,
   MessageSquare,
   PhoneMissed,
+  Settings2,
   SlidersHorizontal,
   Voicemail,
+  Bell,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -34,6 +38,26 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
+    },
+    {
+      label: "Calendar",
+      href: MCTB_ROUTES.calendar,
+      icon: Calendar,
+    },
+    {
+      label: "Appointments",
+      href: MCTB_ROUTES.appointments,
+      icon: ClipboardList,
+    },
+    {
+      label: "Booking Setup",
+      href: MCTB_ROUTES.booking,
+      icon: Settings2,
+    },
+    {
+      label: "Reminders",
+      href: MCTB_ROUTES.reminders,
+      icon: Bell,
     },
     {
       label: "Voicemail",
@@ -83,7 +107,13 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";
   if (pathname.startsWith(MCTB_ROUTES.complianceConsent)) return "Consent Log";
   if (pathname.startsWith("/onboarding/mctb")) return "Setup";
-  if (pathname.startsWith("/conversations")) return "Conversations";
+  if (pathname.startsWith("/conversations") || pathname.startsWith("/mctb/conversations")) {
+    return "Conversations";
+  }
+  if (pathname.startsWith(MCTB_ROUTES.calendar)) return "Calendar";
+  if (pathname.startsWith(MCTB_ROUTES.appointments)) return "Appointments";
+  if (pathname.startsWith(MCTB_ROUTES.booking)) return "Booking Setup";
+  if (pathname.startsWith(MCTB_ROUTES.reminders)) return "Reminders";
 
   if (pathname.startsWith("/voice/missed-calls")) return "Missed Calls";
   if (pathname.startsWith("/voice/voicemail")) return "Voicemail";

@@ -1,0 +1,59 @@
+.mctb-booking-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 76px;
+  padding: 20px 24px 12px;
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.mctb-booking-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111;
+}
+
+.mctb-booking-page-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.mctb-booking-primary-btn {
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mctb-booking-shell {
+  min-height: 100%;
+  background: var(--surface-muted, #f6f6f4);
+}
+
+.mctb-booking-shell .cal-page-shell {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.mctb-booking-shell .cal-filter-bar {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .mctb-booking-page-header {
+    flex-direction: column;
+    padding: 16px;
+  }
+}
