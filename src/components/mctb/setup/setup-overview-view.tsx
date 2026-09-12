@@ -1,17 +1,24 @@
 "use client";
 
 import { MctbSetupPauseControl } from "@/components/mctb/setup/mctb-setup-pause-control";
+import {
+  SetupOverviewFlowStrip,
+  SetupOverviewQuickActions,
+  SetupOverviewSummaryRowLink,
+} from "@/components/mctb/setup/setup-overview-premium";
 import { MctbSetupShell } from "@/components/mctb/setup/mctb-setup-shell";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
+import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
   buildSetupActivityFromFunnel,
   buildSetupAttentionItems,
+  buildSetupFlowStages,
   buildSetupGlobalStatus,
   buildSetupSummaryRows,
-  type SetupOverviewSummaryRow,
+  formatShortWhenCompact,
 } from "@/lib/mctb/setup-overview-model";
-import { ChevronRight } from "lucide-react";
+import { AlertTriangle, Check, Play, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -41,13 +48,6 @@ type SetupApi = {
   compliance: { messagingReady: boolean; requiredActions: string[] };
 };
 
-function chipClass(status: SetupOverviewSummaryRow["status"]) {
-  if (status === "ok") return "mctb-setup-chip mctb-setup-chip--ok";
-  if (status === "warning") return "mctb-setup-chip mctb-setup-chip--warning";
-  if (status === "error") return "mctb-setup-chip mctb-setup-chip--error";
-  return "mctb-setup-chip";
-}
-
 export function MctbSetupOverviewView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -55,10 +55,14 @@ export function MctbSetupOverviewView() {
   const [exclusionCount, setExclusionCount] = useState(0);
   const [notificationSummary, setNotificationSummary] = useState("Not loaded");
   const [voicemailSummary, setVoicemailSummary] = useState("Configure in Voicemail");
+  const [voicemailTranscriptionOn, setVoicemailTranscriptionOn] = useState<boolean | undefined>();
   const [forwardingVerified, setForwardingVerified] = useState(false);
+  const [forwardingCarrier, setForwardingCarrier] = useState<MctbForwardingCarrier | null>(null);
+  const [forwardingRingSeconds, setForwardingRingSeconds] = useState<number | null>(null);
   const [lastTestAt, setLastTestAt] = useState<string | null>(null);
   const [liveTestPassed, setLiveTestPassed] = useState(false);
   const [funnelEvents, setFunnelEvents] = useState<Record<string, string>>({});
+  const [showAllIssues, setShowAllIssues] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,7 +111,7 @@ export function MctbSetupOverviewView() {
         if (active.length === 0) setNotificationSummary("No recipients configured");
         else
           setNotificationSummary(
-            `${emailOn ? "Email enabled" : "Email disabled"} · ${smsOn ? "SMS enabled" : "SMS disabled"}`,
+            `${emailOn ? "Email on" : "Email off"} · ${smsOn ? "SMS on" : "SMS off"}`,
           );
       } else {
         setNotificationSummary("Unable to load notifications");
@@ -117,6 +121,8 @@ export function MctbSetupOverviewView() {
         const ob = await onboardRes.json();
         setForwardingVerified(Boolean(ob.state?.forwardingConnectedAt || ob.forwardingVerification?.verified));
         setFunnelEvents(ob.state?.funnelEvents || {});
+        if (ob.state?.forwardingCarrier) setForwardingCarrier(ob.state.forwardingCarrier);
+        if (ob.state?.forwardingRingSeconds != null) setForwardingRingSeconds(ob.state.forwardingRingSeconds);
         if (ob.state?.liveTestPassedAt) {
           setLastTestAt(ob.state.liveTestPassedAt as string);
           setLiveTestPassed(true);
@@ -140,6 +146,9 @@ export function MctbSetupOverviewView() {
           const greetingUrl = box?.greetingUrl?.trim();
           if (greetingText || greetingUrl) setVoicemailSummary("Custom greeting · Active");
           else setVoicemailSummary("Default greeting");
+          if (typeof box?.transcriptionEnabled === "boolean") {
+            setVoicemailTranscriptionOn(box.transcriptionEnabled);
+          }
         }
       }
 
@@ -203,24 +212,45 @@ export function MctbSetupOverviewView() {
       businessLineE164: setup.businessLineE164,
       forwardTargetE164: setup.productionForwardTargetE164,
       forwardingVerified,
+      forwardingCarrier,
+      forwardingRingSeconds,
       messagingReady: setup.compliance.messagingReady,
       exclusionCount,
       lastTestAt,
       liveTestPassed,
       notificationSummary,
       voicemailSummary,
+      voicemailTranscriptionOn,
       existingConsentBlocked:
         setup.consentMode === "existing_consent" && !setup.compliance.messagingReady,
     });
   }, [
     setup,
     forwardingVerified,
+    forwardingCarrier,
+    forwardingRingSeconds,
     exclusionCount,
     lastTestAt,
     liveTestPassed,
     notificationSummary,
     voicemailSummary,
+    voicemailTranscriptionOn,
   ]);
+
+  const callFlowRows = rows.filter((r) => r.group === "call-flow");
+  const operationsRows = rows.filter((r) => r.group === "operations");
+
+  const flowStages = useMemo(() => {
+    if (!setup) return [];
+    const paused = setup.schedule.paused || !setup.runtime.enabled;
+    return buildSetupFlowStages({
+      consentMode: setup.consentMode,
+      forwardingVerified,
+      recoveryPaused: paused,
+      recoveryActive: triggersOn && !paused,
+      voicemailReady: !voicemailSummary.includes("Not") && voicemailSummary !== "Configure in Voicemail",
+    });
+  }, [setup, forwardingVerified, triggersOn, voicemailSummary]);
 
   const activity = useMemo(() => buildSetupActivityFromFunnel(funnelEvents), [funnelEvents]);
 
@@ -233,18 +263,33 @@ export function MctbSetupOverviewView() {
     return s;
   }, [attention]);
 
+  const headerMeta = lastTestAt ? (
+    <span>Last tested {formatShortWhenCompact(lastTestAt)}</span>
+  ) : null;
+
   const headerAction = (
     <Link href={MCTB_ROUTES.setupTest} className="mctb-setup-btn mctb-setup-btn--primary">
       Run live test
     </Link>
   );
 
+  const shellProps = {
+    title: "Setup",
+    description:
+      "Configure missed-call recovery, forwarding, consent, voicemail, and operational controls.",
+    headerIcon: <Settings2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />,
+    headerMeta,
+    headerAction,
+    navAttention,
+  };
+
   if (loading) {
     return (
-      <MctbSetupShell title="Setup" description="Configure missed-call recovery and call handling." headerAction={headerAction}>
+      <MctbSetupShell {...shellProps}>
         <div className="mctb-setup-canvas">
-          <div className="mctb-setup-span-12 mctb-setup-skel h-14" />
+          <div className="mctb-setup-span-12 mctb-setup-skel h-16" />
           <div className="mctb-setup-span-12 mctb-setup-skel h-12" />
+          <div className="mctb-setup-span-12 mctb-setup-skel h-20" />
           <div className="mctb-setup-span-12 mctb-setup-skel h-80" />
         </div>
       </MctbSetupShell>
@@ -253,7 +298,7 @@ export function MctbSetupOverviewView() {
 
   if (error || !setup || !globalStatus) {
     return (
-      <MctbSetupShell title="Setup" description="Configure missed-call recovery and call handling." headerAction={headerAction}>
+      <MctbSetupShell {...shellProps}>
         <div className="mctb-setup-panel mctb-setup-span-12">
           <p className="text-[13px]">Unable to load setup status.</p>
           <button type="button" className="mctb-setup-btn mctb-setup-btn--outline mt-3" onClick={() => void load()}>
@@ -264,35 +309,49 @@ export function MctbSetupOverviewView() {
     );
   }
 
+  const senderParts = globalStatus.senderLabel?.split(" · ") ?? [];
+  const senderNumber = senderParts[0] || "—";
+  const senderState = senderParts[1] || "—";
+  const recoveryActive = !globalStatus.paused && setup.runtime.enabled;
+  const visibleAttention = showAllIssues ? attention : attention.slice(0, 2);
+
   return (
-    <MctbSetupShell
-      title="Setup"
-      description="Configure missed-call recovery, forwarding, consent, voicemail, and operational controls."
-      headerAction={headerAction}
-      navAttention={navAttention}
-    >
+    <MctbSetupShell {...shellProps}>
       <div className="mctb-setup-canvas">
-        <div className="mctb-setup-span-12 mctb-setup-status-strip">
-          <span>
-            <strong>{globalStatus.recoveryLabel}</strong>
-          </span>
-          {globalStatus.businessLineLabel ? (
-            <>
-              <span className="mctb-setup-status-strip__sep">·</span>
-              <span>{globalStatus.businessLineLabel}</span>
-            </>
-          ) : null}
-          {globalStatus.senderLabel ? (
-            <>
-              <span className="mctb-setup-status-strip__sep">·</span>
-              <span>{globalStatus.senderLabel}</span>
-            </>
-          ) : null}
-          <span className="mctb-setup-status-strip__sep">·</span>
-          <span>{globalStatus.forwardingLabel}</span>
-          <span className="mctb-setup-status-strip__sep">·</span>
-          <span>{globalStatus.lastTestLabel}</span>
-          <div className="mctb-setup-status-strip__actions">
+        <div className="mctb-setup-span-12 mctb-setup-status-rail">
+          <div className="mctb-setup-status-rail__lead">
+            <span
+              className={`mctb-setup-status-rail__dot${recoveryActive ? "" : " mctb-setup-status-rail__dot--warn"}`}
+              aria-hidden
+            />
+            {recoveryActive ? "Recovery active" : globalStatus.recoveryLabel}
+          </div>
+          <div className="mctb-setup-status-rail__meta">
+            <div className="mctb-setup-status-rail__item">
+              <span className="mctb-setup-status-rail__item-label">Business line</span>
+              <span className="mctb-setup-status-rail__item-value">
+                {globalStatus.businessLineLabel || "Not set"}
+              </span>
+            </div>
+            <div className="mctb-setup-status-rail__item">
+              <span className="mctb-setup-status-rail__item-label">Sender</span>
+              <span className="mctb-setup-status-rail__item-value">{senderNumber}</span>
+              <span className="text-[11px] text-[#626872]">{senderState}</span>
+            </div>
+            <div className="mctb-setup-status-rail__item">
+              <span className="mctb-setup-status-rail__item-label">Forwarding</span>
+              <span className="mctb-setup-status-rail__item-value">
+                {forwardingVerified ? "Verified" : "Pending"}
+              </span>
+            </div>
+            <div className="mctb-setup-status-rail__item">
+              <span className="mctb-setup-status-rail__item-label">Last test</span>
+              <span className="mctb-setup-status-rail__item-value">
+                {lastTestAt ? formatShortWhenCompact(lastTestAt) : "Never"}
+              </span>
+            </div>
+          </div>
+          <div className="mctb-setup-status-rail__actions">
             <MctbSetupPauseControl
               paused={globalStatus.paused}
               pauseUntil={globalStatus.pauseUntil}
@@ -304,34 +363,61 @@ export function MctbSetupOverviewView() {
         </div>
 
         {attention.length > 0 ? (
-          <div className="mctb-setup-span-12 mctb-setup-attention" role="status">
-            {attention.map((item) => (
+          <div className="mctb-setup-span-12 mctb-setup-attention mctb-setup-attention--warn" role="status">
+            {visibleAttention.map((item) => (
               <div key={item.id} className="mctb-setup-attention-row">
-                <span>{item.message}</span>
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-[#8a6116]" aria-hidden />
+                  {item.message}
+                </span>
                 <Link href={item.href}>{item.actionLabel}</Link>
               </div>
             ))}
+            {attention.length > 2 && !showAllIssues ? (
+              <button
+                type="button"
+                className="text-left text-[12px] font-semibold text-[#1b1e23] underline"
+                onClick={() => setShowAllIssues(true)}
+              >
+                View {attention.length} issues
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="mctb-setup-span-12 mctb-setup-attention mctb-setup-attention--ok" role="status">
-            <span>✓ Setup is healthy.</span>
+            <span className="mctb-setup-attention--ok__icon" aria-hidden>
+              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+            <div>
+              <div className="mctb-setup-attention--ok__title">Setup is healthy</div>
+              <div className="mctb-setup-attention--ok__sub">All required recovery services are ready.</div>
+            </div>
           </div>
         )}
 
-        <div className="mctb-setup-span-12 mctb-setup-summary">
-          {rows.map((row) => (
-            <Link key={row.id} href={row.href} className="mctb-setup-summary-row">
-              <div className="mctb-setup-summary-row__main">
-                <div className="mctb-setup-summary-row__title">{row.title}</div>
-                <div className="mctb-setup-summary-row__summary">{row.summary}</div>
-              </div>
-              <span className={chipClass(row.status)}>{row.statusLabel}</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-[#8b939e]" aria-hidden />
-            </Link>
-          ))}
+        <div className="mctb-setup-span-12">
+          <SetupOverviewFlowStrip stages={flowStages} />
         </div>
 
-        <div className="mctb-setup-span-7 mctb-setup-panel">
+        <div className="mctb-setup-span-12">
+          <p className="mctb-setup-group-label">Call flow</p>
+          <div className="mctb-setup-summary">
+            {callFlowRows.map((row) => (
+              <SetupOverviewSummaryRowLink key={row.id} row={row} />
+            ))}
+          </div>
+        </div>
+
+        <div className="mctb-setup-span-12">
+          <p className="mctb-setup-group-label mctb-setup-group-label--spaced">Operations</p>
+          <div className="mctb-setup-summary">
+            {operationsRows.map((row) => (
+              <SetupOverviewSummaryRowLink key={row.id} row={row} />
+            ))}
+          </div>
+        </div>
+
+        <div className="mctb-setup-span-7 mctb-setup-panel mctb-setup-panel--elevated">
           <h2>Recent system activity</h2>
           {activity.length === 0 ? (
             <p className="text-[12px] text-[#626872]">No recorded setup events in this workspace yet.</p>
@@ -339,36 +425,29 @@ export function MctbSetupOverviewView() {
             <ul className="list-none p-0 m-0">
               {activity.map((ev) => (
                 <li key={`${ev.label}-${ev.at}`} className="mctb-setup-activity-row">
-                  <span>{ev.label}</span>
-                  <span className="text-[#8b939e]">
-                    {new Date(ev.at).toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
+                  <span className="mctb-setup-activity-row__left">
+                    <span
+                      className={`mctb-setup-activity-row__icon${
+                        ev.kind === "success" ? " mctb-setup-activity-row__icon--success" : ""
+                      }`}
+                    >
+                      {ev.kind === "start" ? (
+                        <Play className="h-3 w-3" aria-hidden />
+                      ) : (
+                        <Check className="h-3 w-3" aria-hidden />
+                      )}
+                    </span>
+                    {ev.label}
                   </span>
+                  <span className="shrink-0 text-[#8b939e]">{formatShortWhenCompact(ev.at)}</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        <div className="mctb-setup-span-5 mctb-setup-panel">
-          <h2>Quick actions</h2>
-          <Link href={MCTB_ROUTES.setupTest} className="mctb-setup-quick-action">
-            Run live test <ChevronRight className="h-4 w-4" aria-hidden />
-          </Link>
-          <Link href={MCTB_ROUTES.setupPhone} className="mctb-setup-quick-action">
-            View forwarding instructions <ChevronRight className="h-4 w-4" aria-hidden />
-          </Link>
-          <Link href={MCTB_ROUTES.setupTextBack} className="mctb-setup-quick-action">
-            Edit recovery message <ChevronRight className="h-4 w-4" aria-hidden />
-          </Link>
-          <Link href={MCTB_ROUTES.setupConsent} className="mctb-setup-quick-action">
-            Change consent method <ChevronRight className="h-4 w-4" aria-hidden />
-          </Link>
-          <Link href={MCTB_ROUTES.setupVoicemail} className="mctb-setup-quick-action">
-            Change voicemail greeting <ChevronRight className="h-4 w-4" aria-hidden />
-          </Link>
+        <div className="mctb-setup-span-5">
+          <SetupOverviewQuickActions />
         </div>
       </div>
     </MctbSetupShell>

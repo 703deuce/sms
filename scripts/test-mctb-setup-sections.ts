@@ -38,7 +38,9 @@ const rows = buildSetupSummaryRows({
 });
 
 assert.equal(rows.length, 8);
-assert.ok(rows[0].summary.includes("→"));
+assert.ok(rows[0].secondary.includes("→"));
+assert.equal(rows[0].group, "call-flow");
+assert.equal(rows.filter((r) => r.group === "operations").length, 3);
 
 const attention = buildSetupAttentionItems({
   forwardingVerified: false,

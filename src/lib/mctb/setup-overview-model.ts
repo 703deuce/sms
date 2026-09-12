@@ -1,17 +1,32 @@
 import { MCTB_CONSENT_MODE_LABELS, type MctbConsentMode } from "@/lib/mctb/consent-mode";
+import { getCarrierGuide } from "@/lib/mctb/onboarding/carriers";
+import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
 import { formatMctbPhoneLabel } from "@/lib/mctb/phone-display";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import type { MctbPauseKind } from "@/lib/mctb/schedule-shared";
 
 export type SetupOverviewRowStatus = "ok" | "warning" | "neutral" | "error";
 
+export type SetupOverviewRowGroup = "call-flow" | "operations";
+
 export type SetupOverviewSummaryRow = {
   id: string;
   title: string;
+  /** @deprecated use secondary — kept for tests */
   summary: string;
+  secondary: string;
+  operationalDetail: string;
   statusLabel: string;
   status: SetupOverviewRowStatus;
   href: string;
+  group: SetupOverviewRowGroup;
+};
+
+export type SetupFlowStage = {
+  id: string;
+  label: string;
+  stateLabel: string;
+  tone: "ok" | "warning" | "neutral" | "muted";
 };
 
 export type SetupAttentionItem = {
@@ -145,6 +160,40 @@ export function buildSetupAttentionItems(input: {
   return items;
 }
 
+export function buildSetupFlowStages(input: {
+  consentMode: MctbConsentMode;
+  forwardingVerified: boolean;
+  recoveryPaused: boolean;
+  recoveryActive: boolean;
+  voicemailReady: boolean;
+}): SetupFlowStage[] {
+  const consentLabel = input.consentMode === "press_1" ? "Press 1 consent" : "Existing consent";
+  const recoveryState = input.recoveryPaused
+    ? "Paused"
+    : input.recoveryActive
+      ? "Active"
+      : "Off";
+  const recoveryTone = input.recoveryPaused ? "warning" : input.recoveryActive ? "ok" : "neutral";
+
+  return [
+    { id: "missed", label: "Missed call", stateLabel: "Listening", tone: "neutral" },
+    {
+      id: "forward",
+      label: "Forwarded",
+      stateLabel: input.forwardingVerified ? "Verified" : "Pending",
+      tone: input.forwardingVerified ? "ok" : "warning",
+    },
+    { id: "consent", label: consentLabel, stateLabel: "Configured", tone: "ok" },
+    { id: "text", label: "Recovery text", stateLabel: recoveryState, tone: recoveryTone },
+    {
+      id: "vm",
+      label: "Voicemail fallback",
+      stateLabel: input.voicemailReady ? "Ready" : "Setup",
+      tone: input.voicemailReady ? "ok" : "warning",
+    },
+  ];
+}
+
 export function buildSetupSummaryRows(input: {
   runtime: RuntimeSlice;
   schedule: ScheduleSlice;
@@ -152,12 +201,15 @@ export function buildSetupSummaryRows(input: {
   businessLineE164?: string | null;
   forwardTargetE164?: string | null;
   forwardingVerified: boolean;
+  forwardingCarrier?: MctbForwardingCarrier | null;
+  forwardingRingSeconds?: number | null;
   messagingReady: boolean;
   exclusionCount: number;
   lastTestAt: string | null;
   liveTestPassed: boolean;
   notificationSummary: string;
   voicemailSummary: string;
+  voicemailTranscriptionOn?: boolean;
   existingConsentBlocked: boolean;
 }): SetupOverviewSummaryRow[] {
   const r = input.runtime;
@@ -168,8 +220,15 @@ export function buildSetupSummaryRows(input: {
 
   const line = input.businessLineE164 ? formatMctbPhoneLabel(input.businessLineE164) : null;
   const fwd = input.forwardTargetE164 ? formatMctbPhoneLabel(input.forwardTargetE164) : null;
-  const phoneSummary =
+  const phoneSecondary =
     line && fwd ? `${line} → ${fwd}` : line ? line : "Business line not configured";
+  const phoneSummary = phoneSecondary;
+  const carrierLabel = input.forwardingCarrier
+    ? getCarrierGuide(input.forwardingCarrier).label
+    : null;
+  const ring =
+    input.forwardingRingSeconds != null ? `${input.forwardingRingSeconds} sec ring` : null;
+  const phoneOperational = [carrierLabel, ring].filter(Boolean).join(" · ") || "Carrier & ring timing";
   const phoneStatus: SetupOverviewRowStatus =
     line && input.forwardingVerified && r.phoneNumberId ? "ok" : line ? "warning" : "neutral";
   const phoneStatusLabel = !line
@@ -183,86 +242,136 @@ export function buildSetupSummaryRows(input: {
   if (r.sendAfterBusy) triggerBits.push("Busy");
   if (r.sendAfterRejected) triggerBits.push("Unreachable");
   if (r.sendAfterTimeout) triggerBits.push("Timeout");
-  const recoverySummary = paused
-    ? "Paused"
+  const recoverySecondary = paused
+    ? "Recovery paused"
     : triggersOn
-      ? `Active · ${triggerBits.join(" + ")} · ${formatCooldown(r.cooldownMinutes)} repeat cooldown`
+      ? triggerBits.join(" + ")
       : "No triggers enabled";
+  const recoverySummary = recoverySecondary;
+  const recoveryOperational = `Cooldown: ${formatCooldown(r.cooldownMinutes)}`;
 
   const consent = MCTB_CONSENT_MODE_LABELS[input.consentMode];
-  const consentSummary =
-    input.consentMode === "press_1"
-      ? "Press 1 · Per-call consent capture"
-      : "Existing consent · Business attestation";
+  const consentSecondary =
+    input.consentMode === "press_1" ? "Press 1" : "Existing consent";
+  const consentOperational =
+    input.consentMode === "press_1" ? "Per-call consent capture" : "Business attestation";
+  const consentSummary = `${consentSecondary} · ${consentOperational}`;
+
+  const msgPreview = r.messageTemplate.trim().replace(/\s+/g, " ").slice(0, 48);
+  const textSecondary =
+    msgLen > 0 ? `Configured · ${msgLen} characters` : "Not configured";
+  const textOperational =
+    msgLen > 0 ? `"${msgPreview}${r.messageTemplate.trim().length > 48 ? "…" : ""}"` : "Add your recovery opener";
+
+  const vmSecondary = input.voicemailSummary.replace(" · Active", "");
+  const vmOperational =
+    input.voicemailTranscriptionOn === true
+      ? "Transcription on"
+      : input.voicemailTranscriptionOn === false
+        ? "Transcription off"
+        : "Greeting & fallback";
+
+  const notifParts = input.notificationSummary.split(" · ");
+  const notifSecondary = notifParts[0] || input.notificationSummary;
+
+  const exclSecondary =
+    input.exclusionCount > 0 ? `${input.exclusionCount} blocked callers` : "No blocked callers";
+
+  const testSecondary = input.lastTestAt
+    ? `Last successful test ${formatShortWhenCompact(input.lastTestAt)}`
+    : input.liveTestPassed
+      ? "Live test passed"
+      : "Never tested";
+  const testOperational = "Production path";
 
   return [
     {
       id: "phone",
       title: "Phone & Forwarding",
       summary: phoneSummary,
+      secondary: phoneSecondary,
+      operationalDetail: phoneOperational,
       statusLabel: phoneStatusLabel,
       status: phoneStatus,
       href: MCTB_ROUTES.setupPhone,
+      group: "call-flow",
     },
     {
       id: "recovery",
       title: "Recovery",
       summary: recoverySummary,
+      secondary: recoverySecondary,
+      operationalDetail: recoveryOperational,
       statusLabel: paused ? "Paused" : triggersOn ? "Active" : "Needs attention",
       status: paused ? "warning" : triggersOn ? "ok" : "warning",
       href: MCTB_ROUTES.setupRecovery,
+      group: "call-flow",
     },
     {
       id: "consent",
       title: "Consent",
       summary: consentSummary,
+      secondary: consentSecondary,
+      operationalDetail: consentOperational,
       statusLabel: input.existingConsentBlocked ? "Unavailable" : consent?.title ? "Configured" : "Not set",
       status: input.existingConsentBlocked ? "error" : "ok",
       href: MCTB_ROUTES.setupConsent,
+      group: "call-flow",
     },
     {
       id: "text-back",
       title: "Text-back message",
-      summary: msgLen > 0 ? `Configured · ${msgLen} characters` : "Not configured",
+      summary: textSecondary,
+      secondary: textSecondary,
+      operationalDetail: textOperational,
       statusLabel: msgLen > 0 ? "Configured" : "Missing",
       status: msgLen > 0 ? "ok" : "warning",
       href: `${MCTB_ROUTES.setupTextBack}`,
+      group: "call-flow",
     },
     {
       id: "voicemail",
       title: "Voicemail",
-      summary: input.voicemailSummary,
+      summary: vmSecondary,
+      secondary: vmSecondary,
+      operationalDetail: vmOperational,
       statusLabel: input.voicemailSummary.includes("Not") ? "Not configured" : "Ready",
       status: input.voicemailSummary.includes("Not") ? "warning" : "ok",
       href: MCTB_ROUTES.setupVoicemail,
+      group: "call-flow",
     },
     {
       id: "notifications",
       title: "Notifications",
       summary: input.notificationSummary,
-      statusLabel: "Current",
+      secondary: notifSecondary,
+      operationalDetail: notifParts[1] || "Team alerts",
+      statusLabel: input.notificationSummary.includes("No recipients") ? "Off" : "Configured",
       status: "neutral",
       href: MCTB_ROUTES.setupNotifications,
+      group: "operations",
     },
     {
       id: "exclusions",
       title: "Exclusions",
-      summary: input.exclusionCount > 0 ? `${input.exclusionCount} blocked numbers` : "None",
+      summary: exclSecondary,
+      secondary: exclSecondary,
+      operationalDetail: "Do-not-text list",
       statusLabel: input.exclusionCount > 0 ? "Active" : "None",
       status: "neutral",
       href: MCTB_ROUTES.setupExclusions,
+      group: "operations",
     },
     {
       id: "test",
       title: "Test & diagnostics",
-      summary: input.lastTestAt
-        ? `Last successful test: ${formatShortWhen(input.lastTestAt)}`
-        : input.liveTestPassed
-          ? "Live test passed"
-          : "Never tested",
-      statusLabel: input.liveTestPassed ? "Passed" : "Not run",
+      summary: testSecondary,
+      secondary: testSecondary,
+      operationalDetail: testOperational,
+      statusLabel: input.liveTestPassed ? "Passed" : "Needs test",
       status: input.liveTestPassed ? "ok" : "neutral",
       href: MCTB_ROUTES.setupTest,
+      group: "operations",
     },
   ];
 }
@@ -275,16 +384,36 @@ const FUNNEL_LABELS: Record<string, string> = {
   MCTB_TFV_APPROVED: "Messaging sender ready",
 };
 
+export type SetupActivityKind = "success" | "start" | "provision" | "neutral";
+
+const FUNNEL_KIND: Record<string, SetupActivityKind> = {
+  MCTB_FORWARDING_VERIFIED: "success",
+  MCTB_LIVE_TEST_PASSED: "success",
+  MCTB_LIVE_TEST_STARTED: "start",
+  MCTB_TRIAL_NUMBER_PROVISIONED: "provision",
+  MCTB_TFV_APPROVED: "success",
+};
+
 export function buildSetupActivityFromFunnel(
   funnelEvents: Record<string, string> | undefined,
   limit = 5,
-): Array<{ label: string; at: string }> {
+): Array<{ label: string; at: string; kind: SetupActivityKind }> {
   if (!funnelEvents) return [];
   return Object.entries(funnelEvents)
     .filter(([key]) => FUNNEL_LABELS[key])
     .sort((a, b) => new Date(b[1]).getTime() - new Date(a[1]).getTime())
     .slice(0, limit)
-    .map(([key, at]) => ({ label: FUNNEL_LABELS[key] || key, at }));
+    .map(([key, at]) => ({
+      label: FUNNEL_LABELS[key] || key,
+      at,
+      kind: FUNNEL_KIND[key] || "neutral",
+    }));
+}
+
+export function formatShortWhenCompact(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function formatShortWhen(iso: string): string {
