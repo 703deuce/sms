@@ -16,6 +16,10 @@ import {
 import type { NavItem } from "@/lib/nav";
 import type { SchedulingModuleFlags } from "@/lib/products/scheduling-modules";
 import {
+  APPOINTMENTS_CAMPAIGNS_PATH,
+  APPOINTMENTS_INBOX_PATH,
+} from "@/lib/products/appointments-messages-routes";
+import {
   isAnalyticsInV1Nav,
   isConversationsInV1Nav,
 } from "@/lib/products/v1-launch-nav";
@@ -173,10 +177,13 @@ export function buildAppointmentsV1Nav(options: AppointmentsNavOptions = {}): Na
   if (isConversationsInV1Nav()) {
     items.push({
       label: "Messages",
-      href: "/conversations",
+      href: APPOINTMENTS_INBOX_PATH,
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
-      children: [{ label: "Inbox", href: "/conversations" }],
+      children: [
+        { label: "Inbox", href: APPOINTMENTS_INBOX_PATH },
+        { label: "Campaigns", href: APPOINTMENTS_CAMPAIGNS_PATH },
+      ],
     });
   }
 
@@ -267,7 +274,7 @@ export function buildAppointmentsMobileNav(options: AppointmentsNavOptions = {})
   if (isConversationsInV1Nav()) {
     items.push({
       label: "Messages",
-      href: "/conversations",
+      href: APPOINTMENTS_INBOX_PATH,
       icon: MessageSquare,
       badge: badge > 0 ? badge : undefined,
     });
@@ -332,7 +339,8 @@ export function getAppointmentsPageTitle(pathname: string): string {
   if (pathname.startsWith("/video")) return "Upcoming meetings";
   if (pathname.startsWith("/meetings")) return "Recaps";
   if (pathname.startsWith("/payments")) return "Payments";
-  if (pathname.startsWith("/conversations")) return "Messages";
+  if (pathname.startsWith("/conversations")) return "Inbox";
+  if (pathname.startsWith("/campaigns")) return "Campaigns";
   if (pathname.startsWith("/contacts/lists")) return "Lists";
   if (pathname.startsWith("/contacts/segments")) return "Segments";
   if (pathname.startsWith("/contacts")) return "Contacts";

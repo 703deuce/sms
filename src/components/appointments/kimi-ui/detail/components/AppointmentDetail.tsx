@@ -305,7 +305,7 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
         acting={acting}
         onBack={() => router.push("/appointments")}
         onMessage={() => {
-          if (appt.contactId) router.push(`/conversations?contact=${appt.contactId}`);
+          if (appt.contactId) router.push(`/conversations?contactId=${appt.contactId}`);
           else showToast("Opening conversation…");
         }}
         onReschedule={openReschedule}

@@ -92,6 +92,7 @@ export function AppShell({
   metrics,
   activeFromNumberId,
   unreadNotifications,
+  inboxUnreadCount = 0,
   outcomeInstances = {},
   primaryVoiceAgentId = null,
   realtorMode = false,
@@ -114,6 +115,8 @@ export function AppShell({
   metrics: DashboardMetrics;
   activeFromNumberId?: string | null;
   unreadNotifications?: number;
+  /** Open unread conversations — Messages nav badge when Appointments V1 is primary. */
+  inboxUnreadCount?: number;
   outcomeInstances?: Record<string, SolutionNavInstance[]>;
   primaryVoiceAgentId?: string | null;
   realtorMode?: boolean;
@@ -243,7 +246,9 @@ export function AppShell({
           realtorMode={realtorMode}
           currentProduct={currentProduct}
           isLauncher={isLauncher}
-          inboxBadge={unreadNotifications}
+          inboxBadge={
+            isAppointmentsV1Primary() ? inboxUnreadCount : unreadNotifications
+          }
           collapsed={sidebarCollapsedEffective}
           onToggleCollapse={() => {
             if (autoCollapseSidebar) return;

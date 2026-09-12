@@ -4,7 +4,9 @@ import React, { useCallback, useEffect, useMemo, useState, type MutableRefObject
 import ThreadView from "@/components/kimi/conversations/components/ThreadView";
 import type { Conversation, Tag, Teammate } from "@/lib/inbox/conversation-types";
 import { ConversationsComposer } from "@/components/inbox/conversations-composer";
+import { AppointmentsInboxContextBanner } from "@/components/inbox/appointments-inbox-context-banner";
 import { MctbConversationContextBanner } from "@/components/inbox/mctb-conversation-context";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import {
   InboxAiAssistPanel,
   InboxAiBanner,
@@ -161,6 +163,12 @@ export function ConversationsThreadArea({
             missedCallEventId={convo.missedCallEventId}
             detectedAt={convo.missedCallDetectedAt}
             repeatCaller={convo.repeatCaller}
+          />
+        ) : null}
+        {isAppointmentsV1Primary() && convo.appointmentContext ? (
+          <AppointmentsInboxContextBanner
+            contactId={convo.contactId}
+            appointmentContext={convo.appointmentContext}
           />
         ) : null}
         <ThreadView

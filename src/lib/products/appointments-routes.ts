@@ -1,3 +1,6 @@
+import { isAppointmentsMessagesPath } from "@/lib/products/appointments-messages-routes";
+import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
+
 /** Appointments V1 route prefixes — shared shell routes included. */
 export const APPOINTMENTS_APP_ROUTE_PREFIXES = [
   "/appointments",
@@ -5,6 +8,7 @@ export const APPOINTMENTS_APP_ROUTE_PREFIXES = [
   "/video",
   "/payments",
   "/conversations",
+  "/campaigns",
   "/contacts",
   "/analytics",
   "/integrations",
@@ -24,6 +28,8 @@ export const APPOINTMENTS_API_ROUTE_PREFIXES = [
   "/api/calendar",
   "/api/contacts",
   "/api/conversations",
+  "/api/mass-texting",
+  "/api/campaigns",
   "/api/templates",
   "/api/team",
   "/api/workspace",
@@ -36,6 +42,7 @@ export const APPOINTMENTS_API_ROUTE_PREFIXES = [
 
 export function isAppointmentsProductPath(pathname: string): boolean {
   if (pathname === "/appointments" || pathname.startsWith("/appointments/")) return true;
+  if (isAppointmentsV1Primary() && isAppointmentsMessagesPath(pathname)) return true;
   return APPOINTMENTS_APP_ROUTE_PREFIXES.some(
     (p) => p !== "/appointments" && (pathname === p || pathname.startsWith(`${p}/`)),
   );
@@ -131,6 +138,7 @@ export const APPOINTMENTS_DOMAIN_PREFIXES: Record<string, string[]> = {
   analytics: ["/appointments/analytics"],
   integrations: ["/integrations/calendars", "/integrations/payments"],
   settings: ["/settings"],
+  messages: ["/conversations", "/campaigns"],
 };
 
 /** Nav active check: /appointments list + detail IDs only — not /appointments/calendar etc. */

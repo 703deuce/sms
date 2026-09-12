@@ -79,6 +79,7 @@ export default async function AppLayout({
       metrics={shell.metrics}
       activeFromNumberId={shell.activeFromNumberId}
       unreadNotifications={shell.unreadNotifications}
+      inboxUnreadCount={shell.inboxUnreadCount}
       outcomeInstances={outcomeInstances}
       primaryVoiceAgentId={primaryVoiceAgentId}
       realtorMode={false}

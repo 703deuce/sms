@@ -16,6 +16,24 @@
 
 ---
 
+## Messages module (SMS reuse — Appointments shell)
+
+| Track | Status | Notes |
+|-------|--------|-------|
+| MESSAGES_NAV | FUNCTIONAL_PASS | Messages → Inbox (`/conversations`) + Campaigns (`/campaigns`) |
+| INBOX | FUNCTIONAL_PASS | Renamed nav label; canonical inbox runtime |
+| CAMPAIGNS | FUNCTIONAL_PASS | Canonical `/campaigns` + mass-texting APIs |
+| CANONICAL_SMS_RUNTIME_REUSE | FUNCTIONAL_PASS | No forked models |
+| UNREAD_BADGE | FUNCTIONAL_PASS | OPEN + unread conversation count |
+| CONTACT_INTEGRATION | FUNCTIONAL_PASS | Contact Message → inbox |
+| APPOINTMENT_INTEGRATION | FUNCTIONAL_PASS | Detail Message client → inbox |
+| TENANT_SECURITY | FUNCTIONAL_PASS | Existing workspace scoping (code audit) |
+| UAT (send/reply/campaign launch) | UAT_PENDING | Browser proof on harbor-home |
+
+See `docs/APPOINTMENTS-MESSAGES-SMS-REUSE-AUDIT.md` and `docs/APPOINTMENTS-MESSAGES-COMPONENT-CONNECTION-MATRIX.md`.
+
+---
+
 ## This pass (runtime + UI wiring)
 
 | Feature | Change |

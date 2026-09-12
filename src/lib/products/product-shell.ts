@@ -3,6 +3,7 @@
  * V1 launch: Appointments + Missed Call Text Back (SMS marketing is infrastructure, not a nav product).
  */
 import { appointmentsShellHome } from "@/lib/products/appointments-routes";
+import { isAppointmentsMessagesPath } from "@/lib/products/appointments-messages-routes";
 import { isSmsOnlyAppNav, isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
 export type ProductShell = "appointments" | "mass_sms" | "mctb" | "ai_after_hours";
@@ -110,6 +111,12 @@ export function isExplicitMctbShellPath(pathname: string): boolean {
 }
 
 export function isExplicitAppointmentsShellPath(pathname: string): boolean {
+  if (
+    isAppointmentsV1Primary() &&
+    isAppointmentsMessagesPath(pathname)
+  ) {
+    return true;
+  }
   return APPOINTMENTS_PATH_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

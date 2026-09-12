@@ -534,7 +534,7 @@ export function ConnectedRecordsPanel({
   function sendCalendlyLink() {
     if (!schedulingUrl) return;
     const text = `Book a time with me: ${schedulingUrl}`;
-    const href = `/inbox?contactId=${encodeURIComponent(contactId)}&draft=${encodeURIComponent(text)}`;
+    const href = `/conversations?contactId=${encodeURIComponent(contactId)}&draft=${encodeURIComponent(text)}`;
     window.open(href, "_blank", "noopener,noreferrer");
   }
 

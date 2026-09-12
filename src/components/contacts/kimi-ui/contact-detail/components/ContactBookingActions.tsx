@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui";
 import { bookingUrl as mockBookingUrl } from "../types";
@@ -108,6 +109,23 @@ export function ContactBookingActions({ contactId, phone, email }: Props) {
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-end" }}>
+      {phone ? (
+        <Button variant="outline">
+          <Link
+            href={`/conversations?contactId=${encodeURIComponent(contactId)}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              textDecoration: "none",
+              color: "inherit",
+            }}
+          >
+            <MessageSquare style={{ width: 14, height: 14 }} />
+            Message
+          </Link>
+        </Button>
+      ) : null}
       {bookingUrl ? (
         <Button variant="outline">
           <a

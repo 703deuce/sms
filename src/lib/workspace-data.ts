@@ -725,8 +725,18 @@ export async function loadComplianceOverview(workspaceId: string) {
   };
 }
 
+/** Unread open inbox threads — canonical Messages sidebar badge (workspace-wide). */
+export async function loadInboxUnreadConversationCount(workspaceId: string): Promise<number> {
+  return getPrisma()
+    .conversation.count({
+      where: { workspaceId, unread: true, status: "OPEN" },
+    })
+    .catch(() => 0);
+}
+
 export async function loadShellData(userId: string, workspaceId: string) {
-  const [workspaces, phoneNumbersRaw, metrics, workspace, unreadNotifications] = await Promise.all([
+  const [workspaces, phoneNumbersRaw, metrics, workspace, unreadNotifications, inboxUnreadCount] =
+    await Promise.all([
     loadWorkspacesForUser(userId),
     loadPhoneNumbers(workspaceId, { includeLinked: true }),
     loadDashboardMetrics(workspaceId),
@@ -734,6 +744,7 @@ export async function loadShellData(userId: string, workspaceId: string) {
     getPrisma()
       .inAppNotification.count({ where: { workspaceId, userId, readAt: null } })
       .catch(() => 0),
+    loadInboxUnreadConversationCount(workspaceId),
   ]);
   const { sortPhoneNumbersForSms, pickPreferredSmsSendingNumber, scoreSmsSendingNumber } = await import(
     "@/lib/messaging/preferred-sending-number"
@@ -753,5 +764,6 @@ export async function loadShellData(userId: string, workspaceId: string) {
     metrics,
     activeFromNumberId: storedIsCompetitive ? storedFromId : preferred?.id ?? storedFromId,
     unreadNotifications,
+    inboxUnreadCount,
   };
 }
