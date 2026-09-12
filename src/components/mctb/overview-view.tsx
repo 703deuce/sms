@@ -152,7 +152,7 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
 
         <MctbHomeKpiStrip data={data} />
 
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:gap-4">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-stretch lg:gap-3">
           {hasAttention ? (
             <div className="order-1 lg:hidden">
               <MctbHomeNeedsAttention items={attentionItems} />
@@ -175,11 +175,13 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
             </div>
           ) : null}
 
-          <div className="order-4 lg:col-span-7 lg:row-start-2">
-            <MctbHomeRecentConversations data={data} />
-          </div>
-          <div className="order-5 lg:col-span-5 lg:row-start-2">
-            <MctbHomeSetupStatus data={data} />
+          <div className="order-4 flex flex-col gap-3 lg:contents lg:col-span-12 lg:row-start-2">
+            <div className="lg:col-span-7">
+              <MctbHomeRecentConversations data={data} />
+            </div>
+            <div className="lg:col-span-5">
+              <MctbHomeSetupStatus data={data} />
+            </div>
           </div>
         </div>
       </div>

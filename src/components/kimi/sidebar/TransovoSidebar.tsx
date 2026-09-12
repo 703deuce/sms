@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { KimiCredits, KimiNavItem, KimiSidebarUser } from "./types";
 import { findBestNavMatch } from "@/lib/nav-active";
+import { cn } from "@/lib/utils";
 
 function hasPositiveBadge(badge: string | number | undefined): boolean {
   if (badge == null) return false;
@@ -54,14 +55,20 @@ function Logo({
     >
       <Link href={homeHref} className="flex items-center gap-2">
         <span
-          className={`flex h-7 w-7 items-center justify-center rounded-md shrink-0 ${
-            neutralMark ? "border border-[#dee2e6] bg-[#f2f4f6] text-[#1b1e23]" : "bg-indigo-600 text-white"
+          className={`flex h-7 w-7 items-center justify-center rounded-[6px] shrink-0 ${
+            neutralMark
+              ? "border border-[#d8dce0] bg-[#eceff2] text-[#2a2e34]"
+              : "bg-indigo-600 text-white"
           }`}
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="h-4 w-4" strokeWidth={1.75} />
         </span>
         {!collapsed && (
-          <span className="text-[15px] font-semibold tracking-tight text-foreground whitespace-nowrap">
+          <span
+            className={`text-[15px] font-semibold tracking-tight whitespace-nowrap ${
+              neutralMark ? "text-[#1b1e23]" : "text-foreground"
+            }`}
+          >
             Transovo
           </span>
         )}
@@ -89,7 +96,7 @@ function ExpandedNavRow({
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
   const className = appointmentsOverviewShell
-    ? "transovo-nav-item flex w-full items-center gap-2 rounded-md px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:text-[#1b1e23] min-h-[34px]"
+    ? "transovo-nav-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:bg-[#e8ebee] hover:text-[#1b1e23] min-h-[34px]"
     : "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
   const rowStyle =
     appointmentsOverviewShell && active ? OVERVIEW_NAV_ACTIVE : undefined;

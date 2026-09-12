@@ -22,16 +22,19 @@ async function main() {
     .catch(() => undefined);
   await page.waitForTimeout(1500);
 
-  const shots = [
-    ["01_mctb_home_full_desktop.png", { fullPage: false }],
-    ["02_mctb_home_viewport_tall.png", { fullPage: true }],
-  ] as const;
+  await page.screenshot({
+    path: join(OUT, "01_mctb_home_full_desktop.png"),
+    fullPage: false,
+  });
+  console.log("wrote desktop");
 
-  for (const [name, opts] of shots) {
-    const path = join(OUT, name);
-    await page.screenshot({ path, ...opts });
-    console.log("wrote", path);
-  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(800);
+  await page.screenshot({
+    path: join(OUT, "06_mctb_home_mobile.png"),
+    fullPage: false,
+  });
+  console.log("wrote mobile");
 
   await browser.close();
 }
