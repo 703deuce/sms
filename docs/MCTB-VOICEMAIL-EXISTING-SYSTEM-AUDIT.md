@@ -1,64 +1,50 @@
 # MCTB Voicemail — existing system audit
 
-Date: 2026-09-12 (implementation pass)
+Date: 2026-09-12. Canonical route: `/mctb/voicemail`.
 
-## Routes
+## Architecture
 
-| Route | Role | Shell |
-|-------|------|-------|
-| `/mctb/voicemail` | **Canonical MCTB visual voicemail workspace** (`MctbVoicemailWorkspace`) | MCTB (`/mctb/*`) |
-| `/personal/voicemail` | Numbers/Personal product voicemail (`PersonalVoicemailUI`) | Personal/Numbers nav |
-| `/voice/voicemail` | Redirect → `MCTB_ROUTES.voicemail` | MCTB after redirect |
-| `/mctb/setup/voicemail` | MCTB setup editor | MCTB |
+- **Page:** `src/app/(app)/mctb/voicemail/page.tsx` — entitlement `hasMctbBundledVoicemailAccess`, loads `loadPersonalNumbers`, renders `MctbVoicemailWorkspace`.
+- **Presentation:** `src/components/mctb/voicemail/mctb-voicemail-workspace.tsx` wraps shared personal voicemail APIs (no parallel engine).
+- **Shared personal UI:** `src/components/personal/personal-voicemail-ui.tsx` (legacy full mockup layout); MCTB uses workspace, not duplicate runtime.
+- **Greeting / ElevenLabs:** `PersonalGreetingControls` + `GreetingVoicePicker` → `/api/smart-routing/audio/generate`, `/api/smart-routing/audio/upload`.
+- **Setup drill-down:** `MCTB_ROUTES.setupVoicemail` (`/mctb/setup/voicemail`).
 
-## Entitlements
+## Query params
 
-- `hasMctbBundledVoicemailAccess` on both MCTB and personal pages → `AddOnUpgradeCard` when false.
+- `numberId` — filter inbox + per-number settings/greeting.
+- `id` — pre-select message.
 
-## APIs (preserved)
+## APIs (`/api/phone/voicemail`)
 
-- `GET /api/phone/voicemail?phoneNumberId=` — boxes + messages (all workspace messages when no `phoneNumberId`; per-number when set).
-- `POST /api/phone/voicemail` — `ensure_number_box`, `ensure_personal`, `update_box`, `mark_read`, `mark_unread`, `mark_resolved`, `needs_callback`, `delete_message`, `update_message_notes`, `retranscribe`.
-- `GET /api/phone/voicemail/[id]/recording` — signed/protected playback.
-- `POST /api/mctb/exclusions` — block caller from voicemail overflow.
+| Action | Purpose |
+|--------|---------|
+| GET | boxes, messages, summary (total, unread, minutes this month) |
+| ensure_number_box / ensure_personal | create box |
+| mark_read / mark_unread | read state |
+| mark_resolved | resolution |
+| needs_callback | callback request (entitlement) |
+| delete_message | delete |
+| update_message_notes | internal notes |
+| retranscribe | Whisper re-run (Telnyx) |
+| update_box | greeting, emails, SMS notify, transcription |
 
-## Models (unchanged)
+Recording playback: `/api/phone/voicemail/[id]/recording`.
 
-- `voicemailBox`, `voicemailMessage` via Prisma / `voicemail-mappers.ts`.
-- Greeting: `greetingUrl`, `greetingText`, active greeting provisioning via `voicemail-active-greeting`.
-- Alerts: `emailNotify`, `secondaryEmailNotify`, `smsNotifyE164`, `transcriptionEnabled`.
+## Message capabilities
 
-## Personal UI (`PersonalVoicemailUI`) — legacy layout
+Playback, speed, download, transcript, English translation field, AI summary, notes, callback (`BusinessCallBackButton`), block (`/api/mctb/exclusions`), overflow actions.
 
-| Control | Classification | Notes |
-|---------|----------------|-------|
-| 3-column equal layout + left Greeting Library | REPLACED on MCTB | MCTB uses 36/42/22 workspace |
-| Sort dropdown | NO_OP (personal) | No state wiring |
-| View All (Recent Activity) | NO_OP | Removed on MCTB (duplicate inbox) |
-| Wireframe/demo data | READ_ONLY | `usePersonalWireframe` always false in prod |
-| Voicemail minutes KPI | PARTIAL | Label "This month" but summed all messages — fixed on MCTB |
-| Pagination default 5 | PARTIAL | MCTB uses global default 10 |
-| Settings toggles | PARTIAL | Batch save via Save Settings |
-| Greeting library Play/Edit | NO_OP | MCTB: library inside Change greeting drawer |
+## Greeting
 
-## MCTB workspace (`MctbVoicemailWorkspace`)
+Record (MediaRecorder), upload, ElevenLabs generate, default script, active URL via `provisionActiveVoicemailGreeting` on box update.
 
-| Area | Status |
-|------|--------|
-| MCTB shell | CONNECTED |
-| Inbox search/filter/sort/pagination | CONNECTED |
-| Message detail playback/actions/notes | CONNECTED |
-| Greeting preview/change/record/upload/generate | CONNECTED via `PersonalGreetingControls` |
-| Settings + alerts + forwarding context | CONNECTED (per-number save) |
-| Test voicemail modal | CONNECTED (instructions) |
-| Mobile inbox → full-screen detail | CONNECTED |
-| Tablet utility drawer | CONNECTED |
+## Entitlement
 
-## Backend changes this pass
+`AddOnUpgradeCard feature="visual_voicemail"` when not entitled.
 
-- **YES (minimal):** `GET` all-numbers inbox uses all boxes’ messages; `mark_unread` action added; notification deep links → `/mctb/voicemail`.
+## Premium pass (this branch)
 
-## Security
-
-- All mutations scoped by `workspaceId` in API (unchanged).
-- Recording URLs via authenticated recording route (unchanged).
+- `MctbVoicemailGreetingStudio` drawer (640–704px) with explicit activation for generated audio.
+- Inbox default page size **5**; options 5/10/20.
+- 32 / 42 / 26 desktop grid; no duplicate message list (personal wireframe activity list not copied).

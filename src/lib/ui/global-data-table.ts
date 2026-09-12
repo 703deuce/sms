@@ -6,7 +6,7 @@
 
 export const GLOBAL_TABLE_DEFAULT_PAGE_SIZE = 10;
 
-export const GLOBAL_TABLE_PAGE_SIZE_OPTIONS = [5, 10, 25, 50] as const;
+export const GLOBAL_TABLE_PAGE_SIZE_OPTIONS = [5, 10, 20, 25, 50] as const;
 
 export type GlobalTablePageSize = (typeof GLOBAL_TABLE_PAGE_SIZE_OPTIONS)[number];
 

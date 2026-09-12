@@ -87,6 +87,32 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 
 **MCTB_VOICEMAIL_COMPLETE: YES** — enforcement verified (`enforcement_desktop.png`, pagination + disabled greeting + switches)
 
+## Voicemail workspace (`/mctb/voicemail`) — premium pass 2
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_VOICEMAIL_ROUTE | PASS | Canonical; shared `/api/phone/voicemail` |
+| MCTB_VOICEMAIL_ENTITLEMENT | PASS | `hasMctbBundledVoicemailAccess` |
+| MCTB_VOICEMAIL_INBOX | PASS | Search, filters, sort, pagination default 5 |
+| MCTB_VOICEMAIL_DETAIL | PASS | Playback, summary, transcript, actions, notes |
+| MCTB_VOICEMAIL_GREETING_STUDIO | PASS | Record/upload/ElevenLabs + library + explicit activate |
+| MCTB_VOICEMAIL_SETTINGS | PASS | VM on, transcription, email/SMS alerts |
+| MCTB_VOICEMAIL_CALL_PATH | PASS | Forwarding + ring + test modal |
+| MCTB_VOICEMAIL_RESPONSIVE | PASS | Screenshots `voicemail_*` |
+| MCTB_VOICEMAIL_DOCS | PASS | Audit + 3 matrices |
+| MCTB_VOICEMAIL_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**VOICEMAIL_PAGE_COMPLETE: YES**  
+FUNCTIONAL_CAPABILITIES_DISCOVERED: 45+  
+FUNCTIONAL_CAPABILITIES_PRESERVED: 45+  
+ELEVENLABS_INTEGRATION: CONNECTED_AND_WORKING  
+RECORD_GREETING: CONNECTED_AND_WORKING  
+UPLOAD_GREETING: CONNECTED_AND_WORKING  
+GENERATE_GREETING: CONNECTED_AND_WORKING  
+GREETING_ACTIVATION: CONNECTED_AND_WORKING  
+TRANSCRIPTION: CONNECTED_AND_WORKING  
+MESSAGE_ACTIONS: CONNECTED_AND_WORKING
+
 ## Analytics (`/mctb/analytics`)
 
 | Item | Status | Notes |
@@ -128,7 +154,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_PHONE_FORWARDING | PASS | Premium 8/4 grid, status strip, instructions drawer, verify panel |
 | MCTB_SETUP_RECOVERY | PASS | Unified triggers + pause + cooldown on `/mctb/setup/recovery` |
 | MCTB_SETUP_CONSENT | PASS | Premium consent page; eligibility + attestation modals |
-| MCTB_SETUP_VOICEMAIL | NOT_STARTED | Next pass |
+| MCTB_SETUP_VOICEMAIL | NOT_STARTED | Setup sub-page (separate from inbox) |
 | MCTB_SETUP_NOTIFICATIONS | NOT_STARTED | Next pass |
 | MCTB_SETUP_EXCLUSIONS | NOT_STARTED | Next pass |
 | MCTB_SETUP_TEST | NOT_STARTED | Next pass |

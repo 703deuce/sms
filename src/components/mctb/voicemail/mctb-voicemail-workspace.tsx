@@ -1,6 +1,6 @@
 "use client";
 
-import { PersonalGreetingControls } from "@/components/personal/personal-greeting-controls";
+import { MctbVoicemailGreetingStudio } from "@/components/mctb/voicemail/mctb-voicemail-greeting-studio";
 import { PersonalNumberSelector } from "@/components/personal/personal-number-selector";
 import { BusinessCallBackButton } from "@/components/smart-routing/business-call-back-button";
 import { DataTablePaginationFooter } from "@/components/ui/data-table-pagination-footer";
@@ -21,19 +21,24 @@ import {
   type PersonalVoicemailBox,
   type PersonalVoicemailMessage,
 } from "@/lib/personal/voicemail-mappers";
-import {
-  GLOBAL_TABLE_DEFAULT_PAGE_SIZE,
-  type GlobalTablePageSize,
-} from "@/lib/ui/global-data-table";
+import type { GlobalTablePageSize } from "@/lib/ui/global-data-table";
 import type { PersonalNumberRow } from "@/lib/workspace/personal-data";
 import { formatPhone } from "@/lib/utils";
-import { ChevronLeft, MoreHorizontal, Search, Voicemail } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Search, Sparkles, Voicemail } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./mctb-voicemail.css";
 
 type InboxFilter = "All" | "Unread" | "Read";
+
+const MCTB_VM_PAGE_SIZES = [5, 10, 20] as const;
+type MctbVmPageSize = (typeof MCTB_VM_PAGE_SIZES)[number];
+
+function coerceMctbVmPageSize(n: number): MctbVmPageSize {
+  if (n === 5 || n === 10 || n === 20) return n;
+  return 5;
+}
 
 export function MctbVoicemailWorkspace({
   numbers,
@@ -63,7 +68,7 @@ export function MctbVoicemailWorkspace({
   const [searchQuery, setSearchQuery] = useState("");
   const [inboxSort, setInboxSort] = useState<VoicemailInboxSort>("newest");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<GlobalTablePageSize>(GLOBAL_TABLE_DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<MctbVmPageSize>(5);
 
   const [voicemailEnabled, setVoicemailEnabled] = useState(true);
   const [autoTranscription, setAutoTranscription] = useState(true);
@@ -78,6 +83,8 @@ export function MctbVoicemailWorkspace({
   const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const [greetingDrawerOpen, setGreetingDrawerOpen] = useState(false);
+  const [greetingStudioMode, setGreetingStudioMode] = useState<"create" | "change">("change");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [utilityDrawerOpen, setUtilityDrawerOpen] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -249,7 +256,6 @@ export function MctbVoicemailWorkspace({
   }
 
   async function deleteMessage(messageId: string) {
-    if (!window.confirm("Delete this voicemail permanently?")) return;
     const res = await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -261,6 +267,7 @@ export function MctbVoicemailWorkspace({
       setSelectedId(null);
       syncMessageIdInUrl(null);
     }
+    setDeleteConfirmId(null);
   }
 
   async function saveSettings() {
@@ -382,40 +389,26 @@ export function MctbVoicemailWorkspace({
             <button
               type="button"
               className="mctb-vm-btn"
-              onClick={() => setGreetingDrawerOpen(true)}
+              onClick={() => {
+                setGreetingStudioMode("change");
+                setGreetingDrawerOpen(true);
+              }}
               disabled={managingAllNumbers}
             >
               Change
             </button>
           </div>
-          <p className="mt-2 text-[12px] text-[#626872]">
-            <button
-              type="button"
-              className="mctb-vm-greeting-link"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={managingAllNumbers}
-            >
-              Record
-            </button>
-            {" · "}
-            <button
-              type="button"
-              className="mctb-vm-greeting-link"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={managingAllNumbers}
-            >
-              Upload
-            </button>
-            {" · "}
-            <button
-              type="button"
-              className="mctb-vm-greeting-link"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={managingAllNumbers}
-            >
-              Generate
-            </button>
-          </p>
+          <button
+            type="button"
+            className="mctb-vm-create-greeting"
+            disabled={managingAllNumbers}
+            onClick={() => {
+              setGreetingStudioMode("create");
+              setGreetingDrawerOpen(true);
+            }}
+          >
+            Create greeting →
+          </button>
         </div>
       </div>
 
@@ -533,7 +526,7 @@ export function MctbVoicemailWorkspace({
       onOverflowToggle={() => setOverflowOpen((o) => !o)}
       onMarkRead={() => void markRead(selected.id)}
       onMarkUnread={() => void markUnread(selected.id)}
-      onDelete={() => void deleteMessage(selected.id)}
+      onDelete={() => setDeleteConfirmId(selected.id)}
       onRetranscribe={async () => {
         await fetch("/api/phone/voicemail", {
           method: "POST",
@@ -607,7 +600,10 @@ export function MctbVoicemailWorkspace({
   ) : (
     <div className="mctb-vm-detail-empty">
       <Voicemail className="mb-2 h-8 w-8 text-[#8b939e]" aria-hidden />
-      <p>Select a voicemail to listen and view its transcript.</p>
+      <p className="font-medium text-[#1b1e23]">Select a voicemail</p>
+      <p className="mt-1 text-[13px] text-[#626872]">
+        Listen to the recording, review the transcript, and take action.
+      </p>
     </div>
   );
 
@@ -615,11 +611,16 @@ export function MctbVoicemailWorkspace({
     <div className="mctb-vm">
       <div className="mctb-vm-inner">
         <header className="mctb-vm-header">
-          <div>
-            <h1 className="mctb-vm-title">Voicemail</h1>
-            <p className="mctb-vm-desc">
-              Manage messages, greetings, transcription, and voicemail delivery.
-            </p>
+          <div className="mctb-vm-header__left">
+            <div className="mctb-vm-header__icon" aria-hidden>
+              <Voicemail className="h-[18px] w-[18px]" strokeWidth={1.85} />
+            </div>
+            <div>
+              <h1 className="mctb-vm-title">Voicemail</h1>
+              <p className="mctb-vm-desc">
+                Manage messages, greetings, transcription, and voicemail delivery.
+              </p>
+            </div>
           </div>
           <Link href={MCTB_ROUTES.setupVoicemail} className="mctb-vm-btn mctb-vm-btn--primary h-9">
             Configure voicemail
@@ -635,6 +636,10 @@ export function MctbVoicemailWorkspace({
               allowAll
               selectClassName="h-9 min-w-[12rem] rounded-md border border-[#dee2e6] bg-white px-2 text-[13px] font-medium"
             />
+            <span className="mctb-vm-number-bar__counts">
+              {loading ? "—" : `${inboxSummary.totalCount} voicemails`} ·{" "}
+              {loading ? "—" : `${unreadCount} unread`}
+            </span>
             <span className="mctb-vm-number-bar__status">{statusLine}</span>
           </div>
         ) : null}
@@ -671,7 +676,10 @@ export function MctbVoicemailWorkspace({
         {/* Desktop / tablet workspace */}
         <div className="mctb-vm-workspace">
           <div className="mctb-vm-panel mctb-vm-panel--inbox">
-            <div className="mctb-vm-panel-head">Voicemail Inbox</div>
+            <div className="mctb-vm-panel-head">
+              Voicemail inbox
+              <span className="mctb-vm-inbox-count">{total}</span>
+            </div>
             <div className="mctb-vm-inbox-tools">
               <div className="mctb-vm-search-wrap">
                 <Search aria-hidden />
@@ -751,10 +759,11 @@ export function MctbVoicemailWorkspace({
                 total={total}
                 onPageChange={setPage}
                 onPageSizeChange={(size) => {
-                  setPageSize(size);
+                  setPageSize(coerceMctbVmPageSize(size));
                   setPage(1);
                 }}
                 className="mctb-vm-inbox-pagination"
+                pageSizeOptions={MCTB_VM_PAGE_SIZES as unknown as readonly GlobalTablePageSize[]}
               />
             ) : null}
           </div>
@@ -849,36 +858,50 @@ export function MctbVoicemailWorkspace({
         </div>
       </div>
 
-      {greetingDrawerOpen ? (
+      <MctbVoicemailGreetingStudio
+        open={greetingDrawerOpen}
+        mode={greetingStudioMode}
+        box={box}
+        onClose={() => setGreetingDrawerOpen(false)}
+        onSaveText={(t) => persistGreeting({ greetingText: t })}
+        onSaveUrl={(u) => persistGreeting({ greetingUrl: u })}
+        onUseDefault={() =>
+          persistGreeting({ greetingText: "Please leave a message after the tone.", greetingUrl: null }).then(
+            () => setSettingsMessage("Default greeting is now active."),
+          )
+        }
+      />
+
+      {deleteConfirmId ? (
         <>
-          <div className="mctb-vm-drawer-backdrop" onClick={() => setGreetingDrawerOpen(false)} />
-          <div className="mctb-vm-drawer" role="dialog" aria-label="Change greeting">
-            <h2 className="text-lg font-semibold">Change greeting</h2>
-            <p className="mt-1 text-[13px] text-[#626872]">Record, upload, generate, or pick from library.</p>
-            <div className="mt-4">
-              <PersonalGreetingControls
-                greetingText={box?.greetingText || "Please leave a message after the tone."}
-                greetingUrl={box?.greetingUrl}
-                onSaveText={(t) => persistGreeting({ greetingText: t })}
-                onSaveUrl={(u) => persistGreeting({ greetingUrl: u })}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
+          <div className="mctb-vm-drawer-backdrop" onClick={() => setDeleteConfirmId(null)} />
+          <div
+            className="mctb-vm-drawer max-w-md"
+            style={{
+              width: "min(400px, 100vw)",
+              height: "auto",
+              top: "20%",
+              right: "50%",
+              transform: "translateX(50%)",
+            }}
+            role="alertdialog"
+            aria-labelledby="vm-delete-title"
+          >
+            <h2 id="vm-delete-title" className="text-lg font-semibold">Delete voicemail?</h2>
+            <p className="mt-2 text-[13px] text-[#626872]">
+              This removes this voicemail message and its recording and transcript from your inbox.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className="mctb-vm-btn" onClick={() => setDeleteConfirmId(null)}>
+                Cancel
+              </button>
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  void persistGreeting({ greetingText: "Please leave a message after the tone." }).then(
-                    () => setSettingsMessage("Default greeting is now active."),
-                  )
-                }
+                className="mctb-vm-btn mctb-vm-btn--danger"
+                onClick={() => void deleteMessage(deleteConfirmId)}
               >
-                Use default greeting
-              </Button>
-              <Button type="button" size="sm" onClick={() => setGreetingDrawerOpen(false)}>
-                Close
-              </Button>
+                Delete voicemail
+              </button>
             </div>
           </div>
         </>
@@ -1043,7 +1066,12 @@ function MessageDetail({
     <>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[15px] font-semibold">{formatPhone(message.callerNumber || "Unknown")}</p>
+          <p className="text-[15px] font-semibold">
+            {message.callerDisplayName?.trim() &&
+            message.callerDisplayName.toLowerCase() !== "unknown"
+              ? message.callerDisplayName
+              : formatPhone(message.callerNumber || "Unknown")}
+          </p>
           <p className="text-[12px] text-[#626872]">{formatPhone(message.callerNumber || "")}</p>
           <p className="mt-2 text-[12px] text-[#626872]">
             Called: {calledLabel || "Main line"}
@@ -1071,6 +1099,7 @@ function MessageDetail({
           onChange={(e) => onPlaySpeedChange(Number(e.target.value))}
         >
           <option value={1}>1×</option>
+          <option value={1.25}>1.25×</option>
           <option value={1.5}>1.5×</option>
           <option value={2}>2×</option>
         </select>
@@ -1128,7 +1157,10 @@ function MessageDetail({
       </div>
       {vmActionMessage ? <p className="text-[12px] text-[#626872]">{vmActionMessage}</p> : null}
 
-      <h3 className="mctb-vm-section-title">Summary</h3>
+      <h3 className="mctb-vm-section-title flex items-center gap-1.5">
+        <Sparkles className="h-3.5 w-3.5 text-[#8b939e]" aria-hidden />
+        Summary
+      </h3>
       <p className="mctb-vm-section-body">
         {message.summary || "No summary available."}
       </p>

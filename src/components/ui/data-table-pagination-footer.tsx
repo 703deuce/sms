@@ -17,6 +17,8 @@ export type DataTablePaginationFooterProps = {
   className?: string;
   /** When true, show footer even if total is 0 (default true). */
   showWhenEmpty?: boolean;
+  /** Override row-size choices (must still use GlobalTablePageSize values). */
+  pageSizeOptions?: readonly GlobalTablePageSize[];
 };
 
 export function DataTablePaginationFooter({
@@ -27,6 +29,7 @@ export function DataTablePaginationFooter({
   onPageSizeChange,
   className = "",
   showWhenEmpty = true,
+  pageSizeOptions = GLOBAL_TABLE_PAGE_SIZE_OPTIONS,
 }: DataTablePaginationFooterProps) {
   if (total === 0 && !showWhenEmpty) return null;
 
@@ -57,7 +60,7 @@ export function DataTablePaginationFooter({
               onPageSizeChange(next);
             }}
           >
-            {GLOBAL_TABLE_PAGE_SIZE_OPTIONS.map((size) => (
+            {pageSizeOptions.map((size) => (
               <option key={size} value={size}>
                 {size}
               </option>

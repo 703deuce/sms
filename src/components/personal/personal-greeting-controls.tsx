@@ -17,6 +17,10 @@ type GreetingControlsProps = {
   emptyHint?: string;
   scriptPlaceholder?: string;
   createButtonLabel?: string;
+  /** When explicit, generated/uploaded audio is preview-only until user confirms activation. */
+  activationMode?: "immediate" | "explicit";
+  /** Premium neutral tab styling (MCTB voicemail studio). */
+  premiumTabs?: boolean;
 };
 
 export function PersonalGreetingControls({
@@ -28,6 +32,8 @@ export function PersonalGreetingControls({
   emptyHint = "No custom audio yet — choose how to create your greeting below.",
   scriptPlaceholder = "Please leave a message after the tone.",
   createButtonLabel = "Create greeting",
+  activationMode = "immediate",
+  premiumTabs = false,
 }: GreetingControlsProps) {
   const [voiceSource, setVoiceSource] = useState<VoiceSource>("create");
   const [text, setText] = useState(greetingText || "Please leave a message after the tone.");
@@ -43,8 +49,6 @@ export function PersonalGreetingControls({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const activeAudioUrl = greetingUrl || generatedUrl;
 
   async function startRecording() {
     setMessage(null);
@@ -76,7 +80,7 @@ export function PersonalGreetingControls({
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
-  async function uploadBlob(blob: Blob, filename: string) {
+  async function uploadBlob(blob: Blob, filename: string, forceActivate = false) {
     setUploading(true);
     setMessage(null);
     try {
@@ -90,11 +94,18 @@ export function PersonalGreetingControls({
       }
       const url = json.data?.processedUrl as string | undefined;
       if (!url) throw new Error("Upload did not return a playable URL.");
-      await onSaveUrl(url);
-      setGeneratedUrl(url);
-      setPreviewUrl(null);
-      chunksRef.current = [];
-      setMessage("Greeting audio saved.");
+      if (activationMode === "immediate" || forceActivate) {
+        await onSaveUrl(url);
+        setGeneratedUrl(url);
+        setPreviewUrl(null);
+        chunksRef.current = [];
+        setMessage("Greeting audio saved.");
+      } else {
+        setGeneratedUrl(url);
+        setPreviewUrl(null);
+        chunksRef.current = [];
+        setMessage("Preview ready — use “Use this greeting” to activate.");
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Upload failed.");
     } finally {
@@ -139,9 +150,13 @@ export function PersonalGreetingControls({
       }
       const url = json.data.processedUrl as string;
       setGeneratedUrl(url);
-      await onSaveUrl(url);
-      await onSaveText(script);
-      setMessage("Greeting saved — callers will hear this recording.");
+      if (activationMode === "immediate") {
+        await onSaveUrl(url);
+        await onSaveText(script);
+        setMessage("Greeting saved — callers will hear this recording.");
+      } else {
+        setMessage("Generated preview ready — activate when you are ready.");
+      }
       const audio = new Audio(url);
       audio.play().catch(() => undefined);
     } catch (e) {
@@ -151,34 +166,93 @@ export function PersonalGreetingControls({
     }
   }
 
+  async function activateDraftGreeting() {
+    const url = generatedUrl || previewUrl;
+    if (!url) {
+      setMessage("Generate or record a greeting first.");
+      return;
+    }
+    setMessage(null);
+    try {
+      if (url.startsWith("blob:")) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        await uploadBlob(blob, "voicemail-greeting.webm", true);
+        if (text.trim()) await onSaveText(text.trim());
+        return;
+      }
+      await onSaveUrl(url);
+      if (text.trim()) await onSaveText(text.trim());
+      setMessage("Greeting is now active for callers.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not activate greeting.");
+    }
+  }
+
+  const tabClass = (active: boolean) =>
+    premiumTabs
+      ? cn(
+          "rounded-md border px-3 py-2 text-[12px] font-semibold transition-colors",
+          active
+            ? "border-[#1b1e23] bg-[#1b1e23] text-white"
+            : "border-[#dfe3e8] bg-white text-[#626872] hover:border-[#c8cdd4]",
+        )
+      : cn(
+          "rounded-lg border px-3 py-2 text-[12px] font-semibold",
+          active
+            ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca]"
+            : "border-[#e5e7eb] bg-white text-[#6b7280]",
+        );
+
+  const previewUrlForDraft = generatedUrl || previewUrl;
+
   return (
     <div className="space-y-4">
-      {activeAudioUrl ? (
-        <audio className="w-full max-w-md" controls src={activeAudioUrl} />
+      {greetingUrl ? (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b939e]">
+            Active greeting
+          </p>
+          <audio className="w-full max-w-md" controls src={greetingUrl} />
+        </div>
       ) : (
         <p className="text-[12px] text-[#6b7280]">{emptyHint}</p>
       )}
+
+      {previewUrlForDraft && previewUrlForDraft !== greetingUrl ? (
+        <div className="space-y-1 rounded-lg border border-[#dfe3e8] bg-[#fafbfc] p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b939e]">
+            {activationMode === "explicit" ? "Generated preview" : "Draft preview"}
+          </p>
+          <audio className="w-full" controls src={previewUrlForDraft} />
+          {activationMode === "explicit" ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <PersonalOutlineButton onClick={() => void generateVoiceGreeting()} disabled={generating}>
+                Regenerate
+              </PersonalOutlineButton>
+              <PersonalPrimaryButton onClick={() => void activateDraftGreeting()} disabled={uploading}>
+                Use this greeting
+              </PersonalPrimaryButton>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div>
         <p className="text-[12px] font-semibold text-[#374151]">Greeting source</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {(
             [
-              ["create", "Create a voice"],
-              ["record", "Record your own"],
-              ["upload", "Upload your own"],
+              ["create", premiumTabs ? "Write & generate" : "Create a voice"],
+              ["record", "Record"],
+              ["upload", "Upload"],
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
               onClick={() => setVoiceSource(id)}
-              className={cn(
-                "rounded-lg border px-3 py-2 text-[12px] font-semibold",
-                voiceSource === id
-                  ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca]"
-                  : "border-[#e5e7eb] bg-white text-[#6b7280]",
-              )}
+              className={tabClass(voiceSource === id)}
             >
               {label}
             </button>
@@ -211,7 +285,11 @@ export function PersonalGreetingControls({
             onClick={generateVoiceGreeting}
             disabled={generating || !text.trim()}
           >
-            {generating ? "Creating…" : createButtonLabel}
+            {generating
+              ? "Generating…"
+              : activationMode === "explicit"
+                ? "Generate preview"
+                : createButtonLabel}
           </PersonalPrimaryButton>
         </div>
       ) : null}
@@ -231,7 +309,11 @@ export function PersonalGreetingControls({
               <>
                 <audio controls src={previewUrl} className="h-8 max-w-[200px]" />
                 <PersonalPrimaryButton onClick={saveRecording} disabled={uploading}>
-                  {uploading ? "Saving…" : "Save recording"}
+                  {uploading
+                    ? "Saving…"
+                    : activationMode === "explicit"
+                      ? "Use this greeting"
+                      : "Save recording"}
                 </PersonalPrimaryButton>
               </>
             ) : null}
