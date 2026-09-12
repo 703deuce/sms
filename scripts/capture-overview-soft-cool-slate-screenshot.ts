@@ -34,8 +34,15 @@ async function ready(page: Page) {
     timeout: 120000,
   });
   await page.waitForSelector(".appt-overview-pilot", { state: "attached", timeout: 120000 });
+  await page.waitForFunction(
+    () => {
+      const shell = document.querySelector(".product-theme");
+      return shell ? shell.getBoundingClientRect().width > 200 : false;
+    },
+    { timeout: 120000 },
+  );
   await dismissOverlays(page);
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(2500);
 }
 
 async function shot(
@@ -51,7 +58,7 @@ async function shot(
 async function scrollTo(page: Page, selector: string) {
   const loc = page.locator(selector).first();
   if (await loc.count()) {
-    await loc.scrollIntoViewIfNeeded();
+    await loc.scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => undefined);
     await page.waitForTimeout(400);
   }
 }
