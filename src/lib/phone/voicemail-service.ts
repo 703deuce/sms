@@ -450,7 +450,7 @@ export async function attachVoicemailRecordingAndTranscribe(input: {
 <p>Duration: ${updated.durationSeconds ?? "—"}s</p>
 ${transcriptBlock}
 ${recordingLink}
-${appUrl ? `<p><a href="${appUrl}/personal/voicemail">Open voicemail inbox</a></p>` : ""}`;
+${appUrl ? `<p><a href="${appUrl}/mctb/voicemail">Open voicemail inbox</a></p>` : ""}`;
       for (const to of notifyTargets) {
         await sendTransactionalEmail({
           to: String(to),
