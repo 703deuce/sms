@@ -20,7 +20,7 @@ type Props = {
   onOpenAppointment: (id: string) => void;
   onShowCalendarSettings: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
-  weekStart?: Date;
+  timeZone?: string;
   dragOverrides?: Record<string, { day: number; start: number }>;
   onDragPreview?: (input: { id: string; day: number; start: number }) => void;
   onDragClear?: (id: string) => void;
@@ -39,7 +39,7 @@ export default function DayCalendar({
   onOpenAppointment,
   onShowCalendarSettings,
   onSlotClick,
-  weekStart,
+  timeZone = "America/Chicago",
   dragOverrides,
   onDragPreview,
   onDragClear,
@@ -48,8 +48,6 @@ export default function DayCalendar({
   onWaitlistSlotClick,
 }: Props) {
   const day = weekDays[0];
-  const effectiveWeekStart = weekStart || (day ? new Date(day.dateKey) : new Date());
-
   return (
     <div className="week-card">
       <div className="week-grid day-grid">
@@ -75,20 +73,7 @@ export default function DayCalendar({
               className={`wg-cell ${day?.today ? "today-col" : ""}`}
               aria-label={`Create appointment ${h}`}
               onClick={() => day && onSlotClick?.({ dateKey: day.dateKey, hour: START + hi })}
-            >
-              {day && (slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`] || 0) > 0 ? (
-                <span
-                  className="cal-waitlist-slot-badge"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const count = slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`] || 0;
-                    onWaitlistSlotClick?.({ dateKey: day.dateKey, hour: START + hi, count });
-                  }}
-                >
-                  {slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`]} waitlist matches
-                </span>
-              ) : null}
-            </button>
+            />
           </React.Fragment>
         ))}
 
@@ -105,7 +90,8 @@ export default function DayCalendar({
             <CalendarDraggableEvent
               key={ev.id}
               ev={ev}
-              weekStart={effectiveWeekStart}
+              weekDays={weekDays}
+              timeZone={timeZone}
               dragOverride={dragOverrides?.[ev.id]}
               onOpen={onOpenAppointment}
               onDragPreview={onDragPreview}

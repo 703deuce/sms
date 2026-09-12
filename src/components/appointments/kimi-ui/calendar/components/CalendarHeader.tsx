@@ -1,7 +1,7 @@
 import React from "react";
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
-import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
+import { PanelLeft } from "lucide-react";
 
 type Props = {
   rangeLabel: string;
@@ -13,6 +13,9 @@ type Props = {
   onNewAppointment: () => void;
   onBlockTime: () => void;
   onWaitlist?: () => void;
+  sideCollapsed?: boolean;
+  onToggleSide?: () => void;
+  hideTitleBlock?: boolean;
 };
 
 const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
@@ -31,17 +34,25 @@ export default function CalendarHeader({
   onViewChange,
   onNewAppointment,
   onBlockTime,
-  onWaitlist,
+  sideCollapsed,
+  onToggleSide,
+  hideTitleBlock,
 }: Props) {
   return (
     <div className="cal-header">
-      <div className="cal-title-wrap">
-        <Calendar size={22} className="cal-title-icon" aria-hidden />
-        <div>
-          <h1 className="cal-title">Calendar</h1>
-          <p className="cal-subtitle">Manage appointments, availability, classes, and schedule changes.</p>
+      {!hideTitleBlock ? (
+        <div className="cal-title-wrap">
+          <Calendar size={22} className="cal-title-icon" aria-hidden />
+          <div>
+            <h1 className="cal-title">Calendar</h1>
+            <p className="cal-subtitle">Manage appointments, availability, classes, and schedule changes.</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="cal-title-wrap cal-title-wrap--compact">
+          <p className="cal-subtitle cal-subtitle--standalone">Manage appointments, availability, classes, and schedule changes.</p>
+        </div>
+      )}
       <div className="cal-controls">
         <button type="button" className="btn-today" onClick={onToday}>
           Today
@@ -71,11 +82,17 @@ export default function CalendarHeader({
             </button>
           ))}
         </div>
-        <CalendarAddMenu
-          onNewAppointment={onNewAppointment}
-          onBlockTime={onBlockTime}
-          onWaitlist={onWaitlist}
-        />
+        {onToggleSide ? (
+          <button
+            type="button"
+            className="appt-pilot-secondary-btn inline-flex items-center gap-1"
+            onClick={onToggleSide}
+            title={sideCollapsed ? "Show side panel" : "Hide side panel"}
+          >
+            <PanelLeft size={14} aria-hidden />
+            {sideCollapsed ? "Show panel" : "Hide panel"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

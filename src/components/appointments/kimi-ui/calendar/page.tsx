@@ -35,6 +35,9 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
         onNewAppointment={actions.onNewAppointment}
         onBlockTime={actions.onBlockTime}
         onWaitlist={actions.onWaitlist}
+        sideCollapsed={sideCollapsed}
+        onToggleSide={onToggleSide}
+        hideTitleBlock
       />
       {!hideStatCards ? <StatCards stats={model.stats} /> : (
         <div className="cal-summary-strip">
@@ -55,7 +58,7 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
-            weekStart={actions.weekStart}
+            timeZone={actions.timeZone}
             dragOverrides={actions.dragOverrides}
             onDragPreview={actions.onDragPreview}
             onDragClear={actions.onDragClear}
@@ -82,7 +85,7 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
-            weekStart={actions.weekStart}
+            timeZone={actions.timeZone}
             dragOverrides={actions.dragOverrides}
             onDragPreview={actions.onDragPreview}
             onDragClear={actions.onDragClear}
@@ -92,11 +95,6 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
           />
         )}
         <aside className={`cal-side ${sideCollapsed ? "cal-side--collapsed" : ""}`}>
-          {onToggleSide ? (
-            <button type="button" className="cal-side-toggle" onClick={onToggleSide}>
-              {sideCollapsed ? "Show panel" : "Hide panel"}
-            </button>
-          ) : null}
           {!sideCollapsed ? (
             <>
           <MiniCalendar

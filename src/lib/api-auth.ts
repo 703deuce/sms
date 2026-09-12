@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSchedulingConflictError } from "@/lib/appointments/scheduling-conflict-error";
 import { getActiveWorkspaceId, getSession } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { canUseFeature } from "@/lib/workspace/capabilities";
@@ -89,6 +90,9 @@ export async function requireAdmin() {
 }
 
 export function jsonError(err: unknown, status = 400) {
+  if (isSchedulingConflictError(err)) {
+    return NextResponse.json({ error: err.message, code: err.code }, { status });
+  }
   // Lazy import avoided — keep this tiny and sync for route handlers.
   const message =
     err instanceof Error
@@ -112,8 +116,15 @@ export function jsonError(err: unknown, status = 400) {
             }
             return "Request failed";
           })();
-  const code = /forbidden|unauthorized/i.test(message) ? 403 : status;
-  return NextResponse.json({ error: message }, { status: code });
+  const httpStatus = /forbidden|unauthorized/i.test(message) ? 403 : status;
+  const conflictCode =
+    err && typeof err === "object" && "code" in err && typeof (err as { code?: string }).code === "string"
+      ? (err as { code: string }).code
+      : undefined;
+  return NextResponse.json(
+    { error: message, ...(conflictCode ? { code: conflictCode } : {}) },
+    { status: httpStatus },
+  );
 }
 
 export { jsonEntitlementError } from "@/lib/products/entitlement-errors";

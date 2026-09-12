@@ -6,6 +6,7 @@ import "server-only";
 import { getPrisma, type DbRow } from "@/lib/db";
 import { assertSlotAvailableForBooking } from "@/lib/appointments/slot-validation";
 import { SlotTakenError } from "@/lib/appointments/slot-errors";
+import { isSchedulingConflictError } from "@/lib/appointments/scheduling-conflict-error";
 import { createHash } from "crypto";
 
 export { SlotTakenError } from "@/lib/appointments/slot-errors";
@@ -37,9 +38,7 @@ export async function withAtomicSlotBooking<T>(
     });
   } catch (err) {
     if (err instanceof SlotTakenError) throw err;
-    if (err instanceof Error && /no longer available|just taken|slot/i.test(err.message)) {
-      throw new SlotTakenError();
-    }
+    if (isSchedulingConflictError(err)) throw err;
     throw err;
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { CalendarWeekEvent } from "@/features/appointments/kimi/calendar/types";
+import type { CalendarWeekDay, CalendarWeekEvent } from "@/features/appointments/kimi/calendar/types";
 import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
 import {
@@ -21,7 +21,8 @@ function StatusIcon({ status }: { status: string }) {
 
 type Props = {
   ev: CalendarWeekEvent;
-  weekStart: Date;
+  weekDays: CalendarWeekDay[];
+  timeZone: string;
   dragOverride?: { day: number; start: number };
   onOpen: (id: string) => void;
   onDragPreview: (input: { id: string; day: number; start: number }) => void;
@@ -32,7 +33,8 @@ type Props = {
 
 export function CalendarDraggableEvent({
   ev,
-  weekStart,
+  weekDays,
+  timeZone,
   dragOverride,
   onOpen,
   onDragPreview,
@@ -90,14 +92,12 @@ export function CalendarDraggableEvent({
       const rect = gridRef.current.getBoundingClientRect();
       const dayIdx = singleDay ? 0 : dayIndexFromPointer(rect.left, rect.width, e.clientX);
       const hour = decimalHourFromPointer(rect.top, e.clientY, gridRef.current.scrollTop);
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + dayIdx);
-      const h = Math.floor(hour);
-      const m = Math.round((hour - h) * 60);
-      d.setHours(h, m, 0, 0);
-      onDragCommit({ id: ev.id, startsAt: d.toISOString() });
+      const dayInfo = weekDays[dayIdx] || weekDays[0];
+      if (!dayInfo) return;
+      const startsAt = isoFromDayAndHour(dayInfo.isoDate, hour, timeZone);
+      onDragCommit({ id: ev.id, startsAt });
     },
-    [dragging, ev.id, onDragClear, onDragCommit, onOpen, singleDay, weekStart],
+    [dragging, ev.id, onDragClear, onDragCommit, onOpen, singleDay, timeZone, weekDays],
   );
 
   return (

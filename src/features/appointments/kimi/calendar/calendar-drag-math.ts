@@ -1,3 +1,5 @@
+import { wallTimeInZoneToUtc } from "@/lib/voice/calendar/timezone-slots";
+
 const GRID_START = 8;
 const HOUR_H = 56;
 const SNAP_MINUTES = 15;
@@ -18,13 +20,15 @@ export function decimalHourFromPointer(
   return snapDecimalHour(Math.max(GRID_START, Math.min(GRID_START + 11, raw)));
 }
 
-export function isoFromDayAndHour(weekStart: Date, dayIndex: number, decimalHour: number) {
-  const d = new Date(weekStart);
-  d.setDate(d.getDate() + dayIndex);
+export function isoFromDayAndHour(
+  isoDate: string,
+  decimalHour: number,
+  timeZone: string,
+) {
+  const [y, mo, d] = isoDate.split("-").map(Number);
   const h = Math.floor(decimalHour);
   const m = Math.round((decimalHour - h) * 60);
-  d.setHours(h, m, 0, 0);
-  return d.toISOString();
+  return wallTimeInZoneToUtc(timeZone, y, mo, d, h, m).toISOString();
 }
 
 export function dayIndexFromPointer(

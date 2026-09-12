@@ -37,8 +37,10 @@ export function useCalendarReschedule(onRefresh: () => void) {
             ...(recurringScope ? { recurringScope } : {}),
           }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Could not reschedule");
+        const json = (await res.json()) as { error?: string; code?: string };
+        if (!res.ok) {
+          throw new Error(json.error || "Could not reschedule");
+        }
         clearDrag(appointmentId);
         onRefresh();
         setToast(null);

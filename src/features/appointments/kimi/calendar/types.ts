@@ -13,6 +13,7 @@ export type CalendarWeekDay = {
   label: string;
   date: string;
   dateKey: string;
+  isoDate: string;
   today: boolean;
   dayOfWeek: number;
 };
@@ -147,11 +148,13 @@ export type CalendarPageActions = {
   onShowCalendarSettings: () => void;
   onRetry: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
-  weekStart?: Date;
+  timeZone?: string;
   dragOverrides?: Record<string, { day: number; start: number }>;
   onDragPreview?: (input: { id: string; day: number; start: number }) => void;
   onDragClear?: (id: string) => void;
   onDragCommit?: (input: { id: string; startsAt: string }) => void;
   slotWaitlistCounts?: Record<string, number>;
   onWaitlistSlotClick?: (input: { dateKey: string; hour: number; count: number }) => void;
+  sideCollapsed?: boolean;
+  onToggleSide?: () => void;
 };

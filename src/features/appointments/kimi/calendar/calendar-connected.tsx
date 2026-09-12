@@ -26,6 +26,7 @@ import {
   type QuickCreatePrefill,
 } from "@/components/appointments/calendar/calendar-quick-create-sheet";
 import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
+import { appendReturnTo } from "@/lib/navigation/return-context";
 import { CalendarRecurringScopeDialog } from "@/components/appointments/calendar/calendar-recurring-scope-dialog";
 import {
   CalendarWaitlistMatchDrawer,
@@ -123,6 +124,7 @@ export function CalendarConnected() {
     locations: Array<{ id: string; name: string }>;
     resources: Array<{ id: string; name: string }>;
     services: Array<{ id: string; name: string }>;
+    timezone?: string;
   } | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [quickCreate, setQuickCreate] = useState<QuickCreatePrefill | null>(null);
@@ -293,10 +295,12 @@ export function CalendarConnected() {
     }
   }, [router, searchParams]);
 
-  const weekStart = useMemo(
-    () => (view === "week" ? cursor : startOfWeek(cursor)),
-    [cursor, view],
+  const calendarReturnTo = useMemo(
+    () => `/appointments/calendar?${buildCalendarSearchParams({ view, cursor, selectedDayKey, filters }).toString()}`,
+    [cursor, filters, selectedDayKey, view],
   );
+
+  const timeZone = workspace?.timezone || "America/Chicago";
 
   const model: CalendarPageModel | null = useMemo(() => {
     const base = buildCalendarPageModel({
@@ -354,6 +358,7 @@ export function CalendarConnected() {
       onNext: () => shift(1),
       onViewChange: (nextView) => {
         setView(nextView);
+        if (nextView === "month") setSideCollapsed(true);
         if (nextView === "week") {
           setCursor(startOfWeek(new Date(selectedDayKey)));
         } else if (nextView === "month") {
@@ -398,12 +403,14 @@ export function CalendarConnected() {
           serviceId: workspace?.services[0]?.id,
         });
       },
-      weekStart,
+      timeZone,
       dragOverrides,
       onDragPreview,
       onDragClear,
       onDragCommit,
       slotWaitlistCounts,
+      sideCollapsed,
+      onToggleSide: () => setSideCollapsed((v) => !v),
       onWaitlistSlotClick: ({ dateKey: dk, hour }) => {
         const d = new Date(dk);
         d.setHours(hour, 0, 0, 0);
@@ -432,7 +439,7 @@ export function CalendarConnected() {
       shift,
       slotWaitlistCounts,
       view,
-      weekStart,
+      timeZone,
       workspace,
     ],
   );
@@ -450,27 +457,16 @@ export function CalendarConnected() {
 
   return (
     <div className="appt-overview-pilot bookable-workspace-pilot cal-page-shell">
-      <div className="cal-toolbar-row border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs lg:px-6">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" className="appt-pilot-secondary-btn" onClick={() => router.push("/appointments/waitlist")}>
-            Waitlist
-          </button>
-          <button type="button" className="appt-pilot-secondary-btn" onClick={() => setFiltersOpen((v) => !v)}>
-            {filtersOpen ? "Hide filters" : "Filters"}
-          </button>
-          <CalendarAddMenu
-            onNewAppointment={() => router.push("/appointments/new")}
-            onBlockTime={() => router.push("/appointments/availability?section=overrides")}
-            onWaitlist={() => router.push("/appointments/waitlist")}
-          />
-        </div>
-      </div>
       <CalendarFilterBar
         workspace={workspace}
         filters={filters}
         onChange={setFilters}
         collapsed={!filtersOpen}
-        showSecondary={secondaryFilters}
+        showSecondary={false}
+        onWaitlist={() => router.push("/appointments/waitlist")}
+        onAdd={() => router.push(appendReturnTo("/appointments/new", calendarReturnTo))}
+        secondaryFiltersOpen={secondaryFilters}
+        onToggleSecondaryFilters={() => setSecondaryFilters((v) => !v)}
         onSearchSubmit={() => {
           const q = filters.q.trim().toLowerCase();
           if (!q) return;
@@ -487,13 +483,6 @@ export function CalendarConnected() {
           setDrawerId(match.id);
         }}
       />
-      {filtersOpen && !secondaryFilters ? (
-        <div className="px-4 pb-1 text-[11px] lg:px-6">
-          <button type="button" className="text-[var(--text-muted)] underline" onClick={() => setSecondaryFilters(true)}>
-            More filters (location, resource, status)
-          </button>
-        </div>
-      ) : null}
       {toast ? (
         <div className="cal-toast-error" role="alert">
           {toast}
@@ -532,6 +521,9 @@ export function CalendarConnected() {
             onNewAppointment={actions.onNewAppointment}
             onBlockTime={actions.onBlockTime}
             onWaitlist={actions.onWaitlist}
+            hideTitleBlock
+            sideCollapsed={sideCollapsed}
+            onToggleSide={() => setSideCollapsed((v) => !v)}
           />
           <div className="px-4 pb-6 lg:px-6">
             <AgendaListView rows={rows} onSelect={openEvent} />
@@ -570,6 +562,7 @@ export function CalendarConnected() {
         event={drawerId ? rowById.get(drawerId) || rows.find((r) => r.id === drawerId) || null : null}
         onClose={() => setDrawerId(null)}
         onRefresh={load}
+        returnTo={calendarReturnTo}
         onReschedule={(appointmentId, startsAt) => {
           const row = rowById.get(appointmentId);
           const meta = (row?.metadata || {}) as { recurringSeriesId?: string };

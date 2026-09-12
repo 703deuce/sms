@@ -1,6 +1,7 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { useRef, useState } from "react";
+import { Search, SlidersHorizontal } from "lucide-react";
 
 export type CalendarFilters = {
   q: string;
@@ -16,6 +17,7 @@ type Workspace = {
   locations: Array<{ id: string; name: string }>;
   resources: Array<{ id: string; name: string }>;
   services: Array<{ id: string; name: string }>;
+  timezone?: string;
 };
 
 type Props = {
@@ -23,10 +25,21 @@ type Props = {
   filters: CalendarFilters;
   onChange: (next: CalendarFilters) => void;
   collapsed?: boolean;
-  onToggleCollapsed?: () => void;
   onSearchSubmit?: () => void;
+  onWaitlist?: () => void;
+  onAdd?: () => void;
+  secondaryFiltersOpen?: boolean;
+  onToggleSecondaryFilters?: () => void;
   showSecondary?: boolean;
 };
+
+function activeSecondaryCount(filters: CalendarFilters) {
+  let n = 0;
+  if (filters.locationId) n += 1;
+  if (filters.resourceId) n += 1;
+  if (filters.status !== "all") n += 1;
+  return n;
+}
 
 export function CalendarFilterBar({
   workspace,
@@ -34,8 +47,15 @@ export function CalendarFilterBar({
   onChange,
   collapsed,
   onSearchSubmit,
-  showSecondary = true,
+  onWaitlist,
+  onAdd,
+  secondaryFiltersOpen,
+  onToggleSecondaryFilters,
 }: Props) {
+  const popRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const secondaryCount = activeSecondaryCount(filters);
+
   if (collapsed) return null;
 
   return (
@@ -68,9 +88,7 @@ export function CalendarFilterBar({
       <select
         className="rounded border border-[var(--border)] px-2 py-1.5 max-w-[140px]"
         value={filters.staffIds[0] || ""}
-        onChange={(e) =>
-          onChange({ ...filters, staffIds: e.target.value ? [e.target.value] : [] })
-        }
+        onChange={(e) => onChange({ ...filters, staffIds: e.target.value ? [e.target.value] : [] })}
         aria-label="Staff filter"
       >
         <option value="">All staff</option>
@@ -78,44 +96,77 @@ export function CalendarFilterBar({
           <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
-      {showSecondary ? (
-      <>
-      <select
-        className="rounded border border-[var(--border)] px-2 py-1.5 max-w-[140px]"
-        value={filters.locationId}
-        onChange={(e) => onChange({ ...filters, locationId: e.target.value })}
-        aria-label="Location filter"
-      >
-        <option value="">All locations</option>
-        {(workspace?.locations || []).map((l) => (
-          <option key={l.id} value={l.id}>{l.name}</option>
-        ))}
-      </select>
-      <select
-        className="rounded border border-[var(--border)] px-2 py-1.5 max-w-[140px]"
-        value={filters.resourceId}
-        onChange={(e) => onChange({ ...filters, resourceId: e.target.value })}
-        aria-label="Resource filter"
-      >
-        <option value="">All resources</option>
-        {(workspace?.resources || []).map((r) => (
-          <option key={r.id} value={r.id}>{r.name}</option>
-        ))}
-      </select>
-      <select
-        className="rounded border border-[var(--border)] px-2 py-1.5"
-        value={filters.status}
-        onChange={(e) => onChange({ ...filters, status: e.target.value })}
-        aria-label="Status filter"
-      >
-        <option value="all">All statuses</option>
-        <option value="confirmed">Confirmed</option>
-        <option value="awaiting_confirmation">Pending</option>
-        <option value="completed">Completed</option>
-        <option value="canceled">Cancelled</option>
-      </select>
-      </>
-      ) : null}
+      <div className="relative" ref={popRef}>
+        <button
+          type="button"
+          className="appt-pilot-secondary-btn inline-flex items-center gap-1"
+          onClick={() => {
+            setOpen((v) => !v);
+            onToggleSecondaryFilters?.();
+          }}
+          aria-expanded={open || secondaryFiltersOpen}
+        >
+          <SlidersHorizontal size={14} aria-hidden />
+          Filters
+          {secondaryCount > 0 ? <span className="cal-filter-count">{secondaryCount}</span> : null}
+        </button>
+        {open || secondaryFiltersOpen ? (
+          <div className="cal-filter-popover">
+            <label className="flex flex-col gap-1">
+              <span className="text-[var(--muted)]">Location</span>
+              <select
+                className="rounded border border-[var(--border)] px-2 py-1.5"
+                value={filters.locationId}
+                onChange={(e) => onChange({ ...filters, locationId: e.target.value })}
+              >
+                <option value="">All locations</option>
+                {(workspace?.locations || []).map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[var(--muted)]">Resource</span>
+              <select
+                className="rounded border border-[var(--border)] px-2 py-1.5"
+                value={filters.resourceId}
+                onChange={(e) => onChange({ ...filters, resourceId: e.target.value })}
+              >
+                <option value="">All resources</option>
+                {(workspace?.resources || []).map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[var(--muted)]">Status</span>
+              <select
+                className="rounded border border-[var(--border)] px-2 py-1.5"
+                value={filters.status}
+                onChange={(e) => onChange({ ...filters, status: e.target.value })}
+              >
+                <option value="all">All statuses</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="awaiting_confirmation">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="canceled">Cancelled</option>
+              </select>
+            </label>
+          </div>
+        ) : null}
+      </div>
+      <div className="ml-auto flex items-center gap-2">
+        {onWaitlist ? (
+          <button type="button" className="appt-pilot-secondary-btn" onClick={onWaitlist}>
+            Waitlist
+          </button>
+        ) : null}
+        {onAdd ? (
+          <button type="button" className="appt-pilot-primary-btn" onClick={onAdd}>
+            + Add
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -20,7 +20,7 @@ type Props = {
   onOpenAppointment: (id: string) => void;
   onShowCalendarSettings: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
-  weekStart?: Date;
+  timeZone?: string;
   dragOverrides?: Record<string, { day: number; start: number }>;
   onDragPreview?: (input: { id: string; day: number; start: number }) => void;
   onDragClear?: (id: string) => void;
@@ -39,7 +39,7 @@ export default function WeekCalendar({
   onOpenAppointment,
   onShowCalendarSettings,
   onSlotClick,
-  weekStart,
+  timeZone = "America/Chicago",
   dragOverrides,
   onDragPreview,
   onDragClear,
@@ -47,7 +47,6 @@ export default function WeekCalendar({
   slotWaitlistCounts,
   onWaitlistSlotClick,
 }: Props) {
-  const effectiveWeekStart = weekStart || new Date();
   return (
     <div className="week-card">
       <div className="week-grid">
@@ -68,40 +67,15 @@ export default function WeekCalendar({
         {hours.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="wg-time">{h}</div>
-            {weekDays.map((d) => {
-              const slotKey = `${d.dateKey}:${START + hi}`;
-              const matchCount = slotWaitlistCounts?.[slotKey] || 0;
-              return (
-                <button
-                  key={d.dateKey + h}
-                  type="button"
-                  className={`wg-cell ${d.today ? "today-col" : ""}`}
-                  aria-label={`Create appointment ${d.label} ${h}`}
-                  onClick={() => onSlotClick?.({ dateKey: d.dateKey, hour: START + hi })}
-                >
-                  {matchCount > 0 ? (
-                    <span
-                      className="cal-waitlist-slot-badge"
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onWaitlistSlotClick?.({ dateKey: d.dateKey, hour: START + hi, count: matchCount });
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onWaitlistSlotClick?.({ dateKey: d.dateKey, hour: START + hi, count: matchCount });
-                        }
-                      }}
-                    >
-                      {matchCount} waitlist {matchCount === 1 ? "match" : "matches"}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
+            {weekDays.map((d) => (
+              <button
+                key={d.dateKey + h}
+                type="button"
+                className={`wg-cell ${d.today ? "today-col" : ""}`}
+                aria-label={`Create appointment ${d.label} ${h}`}
+                onClick={() => onSlotClick?.({ dateKey: d.dateKey, hour: START + hi })}
+              />
+            ))}
           </React.Fragment>
         ))}
 
@@ -118,7 +92,8 @@ export default function WeekCalendar({
             <CalendarDraggableEvent
               key={ev.id}
               ev={ev}
-              weekStart={effectiveWeekStart}
+              weekDays={weekDays}
+              timeZone={timeZone}
               dragOverride={dragOverrides?.[ev.id]}
               onOpen={onOpenAppointment}
               onDragPreview={onDragPreview}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ContextBackLink } from "@/components/navigation/context-back-link";
 import {
   Calendar, Clock, CreditCard, MapPin, MessageSquare, Phone, Mail,
   ShieldCheck, StickyNote, User, Users, X, AlertTriangle, Plus, Info,
@@ -36,6 +37,8 @@ const TERMINAL_COPY: Record<string, { title: string; text: string }> = {
 
 export function AppointmentDetail({ appointmentId }: { appointmentId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -300,10 +303,16 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
 
   return (
     <div>
+      <div className="mb-3">
+        <ContextBackLink returnTo={returnTo} fallbackHref="/appointments/scheduled" fallbackLabel="Back to Appointments" />
+      </div>
       <AppointmentHeader
         appt={appt}
         acting={acting}
-        onBack={() => router.push("/appointments")}
+        onBack={() => {
+          if (returnTo) router.push(returnTo);
+          else router.push("/appointments/scheduled");
+        }}
         onMessage={() => {
           if (appt.contactId) router.push(`/conversations?contactId=${appt.contactId}`);
           else showToast("Opening conversation…");

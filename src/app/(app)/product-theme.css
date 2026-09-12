@@ -1,18 +1,16 @@
-/* TransOvo product shell — purple primary, light surfaces (mockup) */
+/* TransOvo product shell — Soft Cool Slate (Appointments V1) */
 .product-theme {
-  --primary: #6366f1;
+  --primary: #1b1e23;
   --primary-foreground: #ffffff;
-  --primary-hover: #4f46e5;
-  --ring: #6366f1;
-  --sidebar-active: #6366f1;
-  --background: #f5f6fa;
+  --primary-hover: #262a31;
+  --ring: #747c86;
+  --sidebar-active: #1b1e23;
+  --background: #f6f7f8;
 }
 
 .product-theme .bg-mesh {
-  background-color: #f5f6fa;
-  background-image:
-    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99, 102, 241, 0.08), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 0%, rgba(139, 92, 246, 0.06), transparent);
+  background-color: #f6f7f8;
+  background-image: none;
 }
 
 .voice-card {

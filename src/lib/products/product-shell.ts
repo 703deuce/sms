@@ -230,5 +230,7 @@ export function shouldShowProductSwitcher(input: {
   hasAiAfterHours: boolean;
 }): boolean {
   if (isSmsOnlyAppNav()) return false;
+  /** Appointments V1 launch: hide switcher UI; infrastructure remains for later restore. */
+  if (isAppointmentsV1Primary()) return false;
   return visibleProductShells(input).length >= 2;
 }

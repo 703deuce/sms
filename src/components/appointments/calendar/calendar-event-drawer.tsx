@@ -35,6 +35,7 @@ type AppointmentDetail = {
 };
 
 import type { OpenSlotSummary } from "@/components/appointments/calendar/calendar-waitlist-match-drawer";
+import { appendReturnTo } from "@/lib/navigation/return-context";
 
 type Props = {
   event: CalendarApiAppointment | null;
@@ -42,6 +43,7 @@ type Props = {
   onRefresh: () => void;
   onReschedule?: (appointmentId: string, startsAt: string) => void;
   onCanceled?: (slot: OpenSlotSummary) => void;
+  returnTo?: string;
 };
 
 function fmtRange(startsAt: string, endsAt: string | null, tz: string | null) {
@@ -66,7 +68,7 @@ function DrawerSection({ title, children, defaultOpen = true }: { title: string;
   );
 }
 
-export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, onCanceled }: Props) {
+export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, onCanceled, returnTo }: Props) {
   const [detail, setDetail] = useState<AppointmentDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -186,7 +188,7 @@ export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, o
             <div className="cal-drawer-primary-actions">
               {contactId ? (
                 <Link
-                  href={`/conversations?contactId=${encodeURIComponent(contactId)}`}
+                  href={appendReturnTo(`/conversations?contactId=${encodeURIComponent(contactId)}`, returnTo)}
                   className="cal-drawer-action-btn"
                 >
                   <MessageSquare size={14} aria-hidden />
@@ -276,7 +278,7 @@ export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, o
                 {email ? <p className="text-[var(--muted)]">{email}</p> : null}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {contactId ? (
-                    <Link href={`/contacts/${contactId}`} className="appt-pilot-secondary-btn text-[11px] px-2 py-1">
+                    <Link href={appendReturnTo(`/contacts/${contactId}`, returnTo)} className="appt-pilot-secondary-btn text-[11px] px-2 py-1">
                       Open client
                     </Link>
                   ) : null}
@@ -399,7 +401,10 @@ export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, o
                 Open video
               </Link>
             ) : (
-              <Link href={`/appointments/${event.id}`} className="appt-pilot-primary-btn w-full text-center">
+              <Link
+                href={appendReturnTo(`/appointments/${event.id}`, returnTo)}
+                className="appt-pilot-primary-btn w-full text-center"
+              >
                 Open full appointment
               </Link>
             )}

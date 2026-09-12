@@ -50,7 +50,11 @@ function isLegacyAutomationRoute(pathname: string): boolean {
 }
 
 function shouldAutoCollapseSidebar(path: string) {
-  return path.startsWith("/conversations") || /^\/automations\/[^/]+\/edit/.test(path);
+  return (
+    path.startsWith("/conversations") ||
+    path.startsWith("/appointments/calendar") ||
+    /^\/automations\/[^/]+\/edit/.test(path)
+  );
 }
 
 function isAppointmentsKimiFullBleedRoute(pathname: string): boolean {
@@ -187,7 +191,7 @@ export function AppShell({
       ? getAppointmentsPageTitle(pathname)
       : "";
   const mctbTitle = mctbContextActive ? getMctbPageTitle(pathname) || getVoicePageTitle(pathname) : "";
-  const title = hideChromeTitle
+  const title = hideChromeTitle || hideAppointmentsHeaderTitle
     ? ""
     : isLauncher
       ? "Your Transovo Products"
@@ -209,7 +213,11 @@ export function AppShell({
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
-  const isAppointmentsOverviewPilot = pathname === "/appointments/overview";
+  const isAppointmentsOverviewPilot =
+    isAppointmentsV1Primary() &&
+    isAppointmentsProductPath(pathname) &&
+    (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
+  const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
   const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 

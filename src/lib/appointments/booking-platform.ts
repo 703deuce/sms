@@ -981,13 +981,25 @@ export async function reschedulePlatformAppointment(
   if (!row) throw new Error("Appointment not found");
   if (!row.serviceName) throw new Error("Appointment has no service type");
 
+  const meta = (row.metadata || {}) as AppointmentMetadata;
+  const { snapProposedStartToCanonicalSlot } = await import(
+    "@/lib/appointments/reschedule-slot-resolve"
+  );
+  const canonicalStartsAt = await snapProposedStartToCanonicalSlot(workspaceId, {
+    serviceName: row.serviceName,
+    startsAt,
+    excludeAppointmentId: appointmentId,
+    staffId: meta.staffId || meta.primaryStaffId,
+    locationId: meta.locationId,
+  });
+
   await withAtomicSlotBooking(
     workspaceId,
-    { serviceName: row.serviceName, startsAt, excludeAppointmentId: appointmentId },
+    { serviceName: row.serviceName, startsAt: canonicalStartsAt, excludeAppointmentId: appointmentId },
     async () => {
       await assertSlotAvailableForBooking(workspaceId, {
         serviceName: row.serviceName!,
-        startsAt,
+        startsAt: canonicalStartsAt,
         excludeAppointmentId: appointmentId,
       });
     },
@@ -997,7 +1009,7 @@ export async function reschedulePlatformAppointment(
     where: { workspaceId, name: row.serviceName },
   });
   const durationMinutes = service?.durationMinutes || 30;
-  const start = new Date(startsAt);
+  const start = new Date(canonicalStartsAt);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
 
   const baseMeta = resetAppointmentReminders({

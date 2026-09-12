@@ -247,6 +247,7 @@ function mapWeekDays(cursor: Date): CalendarWeekDay[] {
       label: day.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(),
       date: day.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
       dateKey: dateKey(day),
+      isoDate: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`,
       today: dateKey(day) === todayKey,
       dayOfWeek: i,
     };
