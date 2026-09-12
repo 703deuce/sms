@@ -20,14 +20,38 @@ export function voicemailMinutesThisMonth(messages: PersonalVoicemailMessage[]):
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const sec = messages
     .filter((m) => new Date(m.createdAt) >= start)
-    .reduce((sum, m) => sum + (m.durationSec || 0), 0);
+    .reduce((sum, m) => sum + (m.durationSec != null && m.durationSec > 0 ? m.durationSec : 0), 0);
   return Math.round(sec / 60);
 }
 
-export function formatVoicemailDuration(sec: number): string {
+export function formatVoicemailDuration(sec: number | null | undefined): string {
+  if (sec == null || sec <= 0) return "—";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export function voicemailPrimaryLine(
+  callerDisplayName?: string | null,
+  callerNumber?: string | null,
+  formatPhoneFn: (p: string) => string = (p) => p,
+): string {
+  const name = (callerDisplayName || "").trim();
+  if (name && name.toLowerCase() !== "unknown") return name;
+  if (callerNumber && callerNumber !== "Unknown") return formatPhoneFn(callerNumber);
+  return "Unknown caller";
+}
+
+export function voicemailSecondaryPhoneLine(
+  callerDisplayName?: string | null,
+  callerNumber?: string | null,
+  formatPhoneFn: (p: string) => string = (p) => p,
+): string | null {
+  const name = (callerDisplayName || "").trim();
+  const hasName = name && name.toLowerCase() !== "unknown";
+  if (!callerNumber || callerNumber === "Unknown") return hasName ? null : null;
+  if (hasName) return formatPhoneFn(callerNumber);
+  return null;
 }
 
 export function formatVoicemailListTime(createdAt: string): string {

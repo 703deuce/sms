@@ -11,9 +11,11 @@ import {
   formatVoicemailDuration,
   formatVoicemailListTime,
   sortVoicemailMessages,
-  voicemailMinutesThisMonth,
+  voicemailPrimaryLine,
+  voicemailSecondaryPhoneLine,
   type VoicemailInboxSort,
 } from "@/lib/mctb/voicemail-display";
+import type { VoicemailInboxSummary } from "@/lib/personal/voicemail-mappers";
 import { runPersonalNumberAction } from "@/lib/personal/client-actions";
 import {
   parseVoicemailApiPayload,
@@ -48,6 +50,11 @@ export function MctbVoicemailWorkspace({
   const searchParams = useSearchParams();
 
   const [messages, setMessages] = useState<PersonalVoicemailMessage[]>([]);
+  const [inboxSummary, setInboxSummary] = useState<VoicemailInboxSummary>({
+    totalCount: 0,
+    unreadCount: 0,
+    minutesThisMonth: 0,
+  });
   const [box, setBox] = useState<PersonalVoicemailBox | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -101,8 +108,9 @@ export function MctbVoicemailWorkspace({
       const res = await fetch(`/api/phone/voicemail?${params}`, { cache: "no-store" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error("load failed");
-      const { boxes, messages: rows } = parseVoicemailApiPayload(j.data);
+      const { boxes, messages: rows, summary } = parseVoicemailApiPayload(j.data);
       setMessages(rows);
+      setInboxSummary(summary);
       const primary = boxes[0] ?? null;
       setBox(primary);
       if (primary) {
@@ -116,6 +124,7 @@ export function MctbVoicemailWorkspace({
     } catch {
       setLoadError(true);
       setMessages([]);
+      setInboxSummary({ totalCount: 0, unreadCount: 0, minutesThisMonth: 0 });
       setBox(null);
     }
   }, [numberId]);
@@ -149,8 +158,8 @@ export function MctbVoicemailWorkspace({
 
   const filteredMessages = useMemo(() => {
     return sortedMessages.filter((m) => {
-      if (inboxFilter === "Unread" && m.readAt) return false;
-      if (inboxFilter === "Read" && !m.readAt) return false;
+      if (inboxFilter === "Unread" && m.isRead) return false;
+      if (inboxFilter === "Read" && !m.isRead) return false;
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -164,8 +173,8 @@ export function MctbVoicemailWorkspace({
   const total = filteredMessages.length;
   const pagedMessages = filteredMessages.slice((page - 1) * pageSize, page * pageSize);
 
-  const unreadCount = messages.filter((m) => !m.readAt).length;
-  const minutesMonth = voicemailMinutesThisMonth(messages);
+  const unreadCount = inboxSummary.unreadCount;
+  const minutesMonth = inboxSummary.minutesThisMonth;
 
   const selected = filteredMessages.find((m) => m.id === selectedId) ?? null;
 
@@ -207,30 +216,45 @@ export function MctbVoicemailWorkspace({
   }
 
   async function markRead(messageId: string) {
+    const wasUnread = messages.find((m) => m.id === messageId && !m.isRead);
     await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark_read", messageId }),
     });
     setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, readAt: new Date().toISOString() } : m)),
+      prev.map((m) =>
+        m.id === messageId ? { ...m, isRead: true, readAt: new Date().toISOString() } : m,
+      ),
     );
+    if (wasUnread) {
+      setInboxSummary((s) => ({
+        ...s,
+        unreadCount: Math.max(0, s.unreadCount - 1),
+      }));
+    }
   }
 
   async function markUnread(messageId: string) {
+    const wasRead = messages.find((m) => m.id === messageId && m.isRead);
     await fetch("/api/phone/voicemail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark_unread", messageId }),
     });
-    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, readAt: null } : m)));
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, isRead: false, readAt: null } : m)),
+    );
+    if (wasRead) {
+      setInboxSummary((s) => ({ ...s, unreadCount: s.unreadCount + 1 }));
+    }
   }
 
   function selectMessage(id: string) {
     setSelectedId(id);
     syncMessageIdInUrl(id);
     const msg = messages.find((m) => m.id === id);
-    if (msg && !msg.readAt) void markRead(id);
+    if (msg && !msg.isRead) void markRead(id);
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
       setMobileDetailOpen(true);
     }
@@ -330,54 +354,55 @@ export function MctbVoicemailWorkspace({
   const utilityRail = (
     <>
       <audio ref={greetingPreviewRef} className="hidden" />
-      <div className="mctb-vm-rail-module">
+      <div className={`mctb-vm-rail-module${numberId ? "" : " mctb-vm-rail-module--disabled"}`}>
         <div className="mctb-vm-rail-head">
           <span>Voicemail greeting</span>
-          <span className="text-[12px] font-medium text-[#626872]">Active</span>
+          {numberId ? (
+            <span className="text-[12px] font-medium text-[#626872]">Active</span>
+          ) : null}
         </div>
         <div className="mctb-vm-rail-body">
-          <p className="font-medium">{numberId ? greetingLabel : "Select a number"}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="mctb-vm-btn" onClick={previewGreeting} disabled={!numberId}>
-              Preview
-            </button>
-            <button
-              type="button"
-              className="mctb-vm-btn"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={!numberId}
-            >
-              Change
-            </button>
-          </div>
-          <p className="mt-3 text-[12px] text-[#626872]">
-            <button
-              type="button"
-              className="underline"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={!numberId}
-            >
-              Record
-            </button>
-            {" · "}
-            <button
-              type="button"
-              className="underline"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={!numberId}
-            >
-              Upload
-            </button>
-            {" · "}
-            <button
-              type="button"
-              className="underline"
-              onClick={() => setGreetingDrawerOpen(true)}
-              disabled={!numberId}
-            >
-              Generate
-            </button>
-          </p>
+          {numberId ? (
+            <>
+              <p className="font-medium">{greetingLabel}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="mctb-vm-btn" onClick={previewGreeting}>
+                  Preview
+                </button>
+                <button type="button" className="mctb-vm-btn" onClick={() => setGreetingDrawerOpen(true)}>
+                  Change
+                </button>
+              </div>
+              <p className="mt-2 text-[12px] text-[#626872]">
+                <button type="button" className="underline" onClick={() => setGreetingDrawerOpen(true)}>
+                  Record
+                </button>
+                {" · "}
+                <button type="button" className="underline" onClick={() => setGreetingDrawerOpen(true)}>
+                  Upload
+                </button>
+                {" · "}
+                <button type="button" className="underline" onClick={() => setGreetingDrawerOpen(true)}>
+                  Generate
+                </button>
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13px] text-[#626872]">
+                Select a specific number to manage its greeting.
+              </p>
+              <div className="mt-2">
+                <PersonalNumberSelector
+                  numbers={numbers}
+                  selectedId={numberId}
+                  label=""
+                  allowAll={false}
+                  selectClassName="h-9 w-full rounded-md border border-[#dee2e6] bg-white px-2 text-[13px]"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -436,9 +461,9 @@ export function MctbVoicemailWorkspace({
               </p>
             </div>
           ) : null}
-          <div className="px-3 py-2 border-t border-[#f0f2f4]">
-            <p className="text-[12px] font-semibold">How calls reach voicemail</p>
-            <div className="mt-2 space-y-1 text-[12px] text-[#626872]">
+          <div className="mctb-vm-rail-forwarding">
+            <p className="mctb-vm-rail-forwarding-title">How calls reach voicemail</p>
+            <div className="mctb-vm-rail-forwarding-rows">
               <div className="flex justify-between">
                 <span>Forwarding</span>
                 <span className="text-[#1b1e23]">{forwardingEnabledLive ? "On" : "Off"}</span>
@@ -604,7 +629,7 @@ export function MctbVoicemailWorkspace({
         <div className="mctb-vm-metrics">
           <div className="mctb-vm-metric">
             <div className="mctb-vm-metric-label">Total voicemails</div>
-            <div className="mctb-vm-metric-value">{loading ? "—" : messages.length}</div>
+            <div className="mctb-vm-metric-value">{loading ? "—" : inboxSummary.totalCount}</div>
             <div className="mctb-vm-metric-sub">All time</div>
           </div>
           <div className="mctb-vm-metric">
@@ -632,7 +657,7 @@ export function MctbVoicemailWorkspace({
 
         {/* Desktop / tablet workspace */}
         <div className="mctb-vm-workspace">
-          <div className="mctb-vm-panel">
+          <div className="mctb-vm-panel mctb-vm-panel--inbox">
             <div className="mctb-vm-panel-head">Voicemail Inbox</div>
             <div className="mctb-vm-inbox-tools">
               <div className="mctb-vm-search-wrap">
@@ -692,31 +717,19 @@ export function MctbVoicemailWorkspace({
                 </button>
               </div>
             ) : (
-              <ul className="mctb-vm-list">
-                {pagedMessages.map((m) => (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      className={`mctb-vm-row${selectedId === m.id ? " mctb-vm-row--selected" : ""}${!m.readAt ? " mctb-vm-row--unread" : ""}`}
-                      onClick={() => selectMessage(m.id)}
-                    >
-                      <div className="mctb-vm-row-top">
-                        <span className="mctb-vm-row-name">
-                          {!m.readAt ? <span className="mctb-vm-unread-dot" aria-label="Unread" /> : null}
-                          {formatPhone(m.callerNumber || "Unknown")}
-                        </span>
-                        <span className="mctb-vm-row-meta">
-                          {formatVoicemailListTime(m.createdAt)}
-                          <br />
-                          {formatVoicemailDuration(m.durationSec)}
-                        </span>
-                      </div>
-                      <div className="mctb-vm-row-phone">{formatPhone(m.callerNumber || "")}</div>
-                      {m.transcript ? <p className="mctb-vm-row-preview">{m.transcript}</p> : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mctb-vm-inbox-scroll">
+                <ul className="mctb-vm-list">
+                  {pagedMessages.map((m) => (
+                    <li key={m.id}>
+                      <VoicemailInboxRow
+                        message={m}
+                        selected={selectedId === m.id}
+                        onSelect={() => selectMessage(m.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {!loading && !loadError ? (
               <DataTablePaginationFooter
@@ -728,12 +741,12 @@ export function MctbVoicemailWorkspace({
                   setPageSize(size);
                   setPage(1);
                 }}
-                className="border-t border-[#f0f2f4] rounded-none"
+                className="mctb-vm-inbox-pagination"
               />
             ) : null}
           </div>
 
-          <div className="mctb-vm-panel">
+          <div className="mctb-vm-panel mctb-vm-panel--detail">
             <div className="mctb-vm-panel-head">Selected voicemail</div>
             <div className="mctb-vm-detail">{detailPanel}</div>
           </div>
@@ -782,19 +795,11 @@ export function MctbVoicemailWorkspace({
                 <ul className="mctb-vm-list">
                   {pagedMessages.map((m) => (
                     <li key={m.id}>
-                      <button type="button" className="mctb-vm-row" onClick={() => selectMessage(m.id)}>
-                        <div className="mctb-vm-row-top">
-                          <span className="mctb-vm-row-name">
-                            {!m.readAt ? <span className="mctb-vm-unread-dot" /> : null}
-                            {formatPhone(m.callerNumber || "Unknown")}
-                          </span>
-                          <span className="mctb-vm-row-meta">{formatVmTimeShort(m.createdAt)}</span>
-                        </div>
-                        <div className="flex justify-between text-[12px] text-[#626872]">
-                          <span>{formatPhone(m.callerNumber || "")}</span>
-                          <span>{formatVoicemailDuration(m.durationSec)}</span>
-                        </div>
-                      </button>
+                      <VoicemailInboxRow
+                        message={m}
+                        selected={selectedId === m.id}
+                        onSelect={() => selectMessage(m.id)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -932,13 +937,54 @@ function SettingToggle({
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         disabled={disabled}
-        className="h-7 min-w-[3rem] rounded-full border border-[#dee2e6] px-2 text-[11px] font-semibold"
+        className={`mctb-vm-switch${checked ? " mctb-vm-switch--on" : ""}`}
         onClick={() => onChange(!checked)}
       >
-        {checked ? "ON" : "OFF"}
+        <span className="mctb-vm-switch-thumb" />
       </button>
     </div>
+  );
+}
+
+function VoicemailInboxRow({
+  message: m,
+  selected,
+  onSelect,
+}: {
+  message: PersonalVoicemailMessage;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const primary = voicemailPrimaryLine(m.callerDisplayName, m.callerNumber, formatPhone);
+  const secondaryPhone = voicemailSecondaryPhoneLine(m.callerDisplayName, m.callerNumber, formatPhone);
+  const showUnknownSub =
+    !m.callerDisplayName?.trim() && m.callerNumber && m.callerNumber !== "Unknown";
+
+  return (
+    <button
+      type="button"
+      className={`mctb-vm-row${selected ? " mctb-vm-row--selected" : ""}${!m.isRead ? " mctb-vm-row--unread" : ""}`}
+      onClick={onSelect}
+    >
+      <div className="mctb-vm-row-top">
+        <span className="mctb-vm-row-name">
+          {!m.isRead ? <span className="mctb-vm-unread-dot" aria-label="Unread" /> : null}
+          <span className="truncate">{primary}</span>
+        </span>
+        <span className="mctb-vm-row-meta">
+          <span>{formatVoicemailListTime(m.createdAt)}</span>
+          <span className="mctb-vm-row-duration">{formatVoicemailDuration(m.durationSec)}</span>
+        </span>
+      </div>
+      {secondaryPhone ? (
+        <div className="mctb-vm-row-phone">{secondaryPhone}</div>
+      ) : showUnknownSub ? (
+        <div className="mctb-vm-row-phone text-[#8b939e]">Unknown caller</div>
+      ) : null}
+      {m.transcript ? <p className="mctb-vm-row-preview">{m.transcript}</p> : null}
+    </button>
   );
 }
 
@@ -999,7 +1045,7 @@ function MessageDetail({
             {formatVoicemailDetailWhen(message.createdAt)} · {message.durationSec} sec
           </p>
         </div>
-        <span className="text-[12px] font-medium text-[#626872]">{message.readAt ? "Read" : "Unread"}</span>
+        <span className="text-[12px] font-medium text-[#626872]">{message.isRead ? "Read" : "Unread"}</span>
       </div>
 
       <div className="mctb-vm-playback">
@@ -1048,8 +1094,8 @@ function MessageDetail({
           </button>
           {overflowOpen ? (
             <div className="mctb-vm-menu" role="menu">
-              <button type="button" role="menuitem" onClick={message.readAt ? onMarkUnread : onMarkRead}>
-                {message.readAt ? "Mark unread" : "Mark read"}
+              <button type="button" role="menuitem" onClick={message.isRead ? onMarkUnread : onMarkRead}>
+                {message.isRead ? "Mark unread" : "Mark read"}
               </button>
               <a
                 role="menuitem"

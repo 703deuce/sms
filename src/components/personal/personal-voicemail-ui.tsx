@@ -285,7 +285,10 @@ export function PersonalVoicemailUI({
   const unread = sourceMessages.filter((m) => !m.readAt).length;
   const voicemailMinutes = useWireframe
     ? WIREFRAME_VOICEMAIL_KPIS.minutes
-    : Math.round(messages.reduce((sum, m) => sum + (m.durationSec || 0), 0) / 60);
+    : Math.round(
+        messages.reduce((sum, m) => sum + (m.durationSec != null && m.durationSec > 0 ? m.durationSec : 0), 0) /
+          60,
+      );
   const selected =
     sourceMessages.find((m) => m.id === selectedId) ?? sourceMessages[0] ?? null;
 

@@ -54,11 +54,11 @@ export function MctbVoicemailView({ initialId }: { initialId?: string }) {
       const mapped: VmMessage[] = rows.map((m) => ({
         id: m.id,
         callerNumber: m.callerNumber,
-        durationSec: m.durationSec,
+        durationSec: m.durationSec ?? 0,
         createdAt: m.createdAt,
         transcript: m.transcript,
         summary: m.summary,
-        readAt: m.readAt ?? null,
+        readAt: m.isRead ? m.readAt ?? new Date().toISOString() : null,
       }));
       setMessages(mapped);
       if (!selectedId && mapped[0]) setSelectedId(mapped[0].id);

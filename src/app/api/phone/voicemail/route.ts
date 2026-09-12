@@ -5,6 +5,7 @@ import { normalizeVoicemailGreetingUrl } from "@/lib/phone/voicemail-greeting-pl
 import { getPrisma } from "@/lib/db";
 import { hasWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { resolveVoicemailRecordingFetchUrl } from "@/lib/voice/python-runtime-bridge/mctb-sip-voicemail-service";
+import { mapVoicemailMessage } from "@/lib/personal/voicemail-mappers";
 
 export async function GET(request: Request) {
   try {
@@ -43,8 +44,70 @@ export async function GET(request: Request) {
     }
     const resolvedBoxId =
       boxId ?? (phoneNumberId ? boxes[0]?.id : undefined);
+    const prisma = getPrisma();
     const messages = await listVoicemailMessages(auth.workspaceId, resolvedBoxId);
-    return NextResponse.json({ data: { boxes, messages } });
+    const messageWhere = {
+      workspaceId: auth.workspaceId,
+      ...(resolvedBoxId ? { boxId: resolvedBoxId } : {}),
+    };
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [unreadCount, totalCount, monthAgg] = await Promise.all([
+      prisma.voicemailMessage.count({
+        where: { ...messageWhere, isRead: false },
+      }),
+      prisma.voicemailMessage.count({ where: messageWhere }),
+      prisma.voicemailMessage.aggregate({
+        where: { ...messageWhere, createdAt: { gte: startOfMonth } },
+        _sum: { durationSeconds: true },
+      }),
+    ]);
+
+    const phones = [
+      ...new Set(messages.map((m) => m.fromE164).filter((p): p is string => Boolean(p))),
+    ];
+    const contacts =
+      phones.length > 0
+        ? await prisma.contact.findMany({
+            where: { workspaceId: auth.workspaceId, phone: { in: phones } },
+            select: { phone: true, firstName: true, lastName: true },
+          })
+        : [];
+    const displayByPhone = new Map<string, string>();
+    for (const c of contacts) {
+      const label = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+      if (label) displayByPhone.set(c.phone, label);
+    }
+
+    const mappedMessages = messages.map((m) =>
+      mapVoicemailMessage({
+        id: m.id,
+        fromE164: m.fromE164,
+        durationSeconds: m.durationSeconds,
+        createdAt: m.createdAt,
+        transcriptText: m.transcriptText,
+        transcriptEnglish: m.transcriptEnglish,
+        aiSummary: m.aiSummary,
+        internalNotes: m.internalNotes,
+        isRead: m.isRead,
+        boxId: m.boxId,
+        callerDisplayName: m.fromE164 ? displayByPhone.get(m.fromE164) ?? null : null,
+      }),
+    );
+
+    return NextResponse.json({
+      data: {
+        boxes,
+        messages: mappedMessages,
+        summary: {
+          totalCount,
+          unreadCount,
+          minutesThisMonth: Math.round((monthAgg._sum.durationSeconds ?? 0) / 60),
+        },
+      },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

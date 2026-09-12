@@ -111,7 +111,7 @@
 @media (min-width: 769px) {
   .mctb-vm-workspace {
     display: grid;
-    grid-template-columns: 36fr 42fr 22fr;
+    grid-template-columns: 38fr 40fr 22fr;
     gap: 0.875rem;
     align-items: start;
   }
@@ -131,6 +131,31 @@
   border-radius: 8px;
   background: #fff;
   min-height: 12rem;
+}
+
+.mctb-vm-panel--inbox {
+  display: flex;
+  flex-direction: column;
+  min-height: 32rem;
+  max-height: calc(100vh - 15rem);
+}
+
+.mctb-vm-inbox-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mctb-vm-inbox-pagination {
+  flex-shrink: 0;
+  margin-top: auto;
+  border-top: 1px solid #f0f2f4;
+  border-radius: 0 0 8px 8px;
+  background: #fafbfc;
+}
+
+.mctb-vm-panel--detail {
+  min-height: 32rem;
 }
 
 .mctb-vm-panel-head {
@@ -263,13 +288,28 @@
 }
 
 .mctb-vm-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
   font-size: 12px;
   color: #626872;
   text-align: right;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.mctb-vm-row-duration {
+  font-size: 11px;
+  color: #8b939e;
+}
+
+.mctb-vm-row-name {
+  min-width: 0;
 }
 
 .mctb-vm-row-phone {
+  margin-top: 0.125rem;
   font-size: 12px;
   color: #626872;
 }
@@ -406,6 +446,76 @@
 
 .mctb-vm-setting-row:last-child {
   border-bottom: none;
+}
+
+.mctb-vm-switch {
+  position: relative;
+  width: 2.375rem;
+  height: 1.375rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: #c8cdd3;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.mctb-vm-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mctb-vm-switch--on {
+  background: #1b1e23;
+}
+
+.mctb-vm-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease;
+}
+
+.mctb-vm-switch--on .mctb-vm-switch-thumb {
+  transform: translateX(1rem);
+}
+
+.mctb-vm-rail-module--disabled {
+  opacity: 0.92;
+  background: #fafbfc;
+}
+
+.mctb-vm-rail-forwarding {
+  padding: 0.5rem 0.75rem 0.625rem;
+  border-top: 1px solid #f0f2f4;
+}
+
+.mctb-vm-rail-forwarding-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #626872;
+}
+
+.mctb-vm-rail-forwarding-rows {
+  margin-top: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 11px;
+  color: #626872;
+}
+
+.mctb-vm-rail-forwarding-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .mctb-vm-tablet-util {

@@ -6,8 +6,15 @@ import {
 } from "../src/lib/mctb/voicemail-display";
 import type { PersonalVoicemailMessage } from "../src/lib/personal/voicemail-mappers";
 
-function msg(id: string, createdAt: string, durationSec = 30): PersonalVoicemailMessage {
-  return { id, callerNumber: "+15551234567", durationSec, createdAt, readAt: null };
+function msg(id: string, createdAt: string, durationSec: number | null = 30): PersonalVoicemailMessage {
+  return {
+    id,
+    callerNumber: "+15551234567",
+    durationSec,
+    createdAt,
+    isRead: false,
+    readAt: null,
+  };
 }
 
 const sorted = sortVoicemailMessages(
@@ -33,5 +40,7 @@ assert.equal(minutes, 2);
 
 assert.equal(formatVoicemailDuration(42), "0:42");
 assert.equal(formatVoicemailDuration(125), "2:05");
+assert.equal(formatVoicemailDuration(0), "—");
+assert.equal(formatVoicemailDuration(null), "—");
 
 console.log("test-mctb-voicemail-display: ok");
