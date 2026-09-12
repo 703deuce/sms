@@ -1,14 +1,7 @@
-import { MctbNumbersView } from "@/components/mctb/mctb-numbers-view";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
-import {
-  enrichWorkspacePhoneWithMessagingStatus,
-  loadWorkspaceAccessiblePhoneNumbers,
-} from "@/lib/numbers/workspace-accessible-numbers";
+import { redirect } from "next/navigation";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 
-export default async function MctbNumbersPage() {
-  const { workspaceId } = await requireWorkspaceContext();
-  const numbers = await loadWorkspaceAccessiblePhoneNumbers(workspaceId);
-  const numbersWithStatus = enrichWorkspacePhoneWithMessagingStatus(numbers);
-
-  return <MctbNumbersView numbers={numbersWithStatus} />;
+/** Legacy route — number management lives in Setup → Phone & Forwarding drawers. */
+export default function MctbNumbersLegacyPage() {
+  redirect(`${MCTB_ROUTES.setupPhone}?open=manage`);
 }

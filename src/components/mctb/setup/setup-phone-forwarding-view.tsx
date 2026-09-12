@@ -36,7 +36,13 @@ import {
   Radio,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  MctbNumberDrawerHost,
+  useMctbNumberDrawerEvents,
+  type MctbNumberDrawerMode,
+} from "@/components/mctb/numbers/mctb-number-drawer-host";
 
 type PhoneOption = {
   id: string;
@@ -60,6 +66,8 @@ function useCopyFeedback() {
 }
 
 export function MctbSetupPhoneForwardingView() {
+  const searchParams = useSearchParams();
+  const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -151,6 +159,15 @@ export function MctbSetupPhoneForwardingView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useMctbNumberDrawerEvents(setDrawerMode);
+
+  useEffect(() => {
+    const open = searchParams.get("open");
+    if (open === "manage" || open === "add" || open === "verify") {
+      setDrawerMode(open);
+    }
+  }, [searchParams]);
 
   const selected = useMemo(
     () => phoneNumbers.find((n) => n.id === phoneNumberId) || null,
@@ -515,28 +532,54 @@ export function MctbSetupPhoneForwardingView() {
               <label className="mctb-phone-field-label" htmlFor="mctb-forward-dest">
                 Transovo number
               </label>
-              <select
-                id="mctb-forward-dest"
-                className="mctb-phone-select"
-                value={phoneNumberId || ""}
-                disabled={phoneNumbers.length <= 1 && Boolean(phoneNumberId)}
-                onChange={(e) => {
-                  setPhoneNumberId(e.target.value || null);
-                  setSaved(false);
-                }}
-              >
-                {!phoneNumberId ? <option value="">Select a number…</option> : null}
-                {phoneNumbers.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.friendlyName ? `${n.friendlyName} · ` : ""}
-                    {displayPhone(n.e164)}
-                  </option>
-                ))}
-              </select>
-              <p className="mctb-phone-helper">{senderSecondary}</p>
-              <Link href={MCTB_ROUTES.numbers} className="mctb-phone-link mt-2 inline-block">
-                Manage numbers →
-              </Link>
+              {forwardTarget ? (
+                <div className="mctb-phone-dest-summary">
+                  <p className="mctb-phone-dest-summary__number">{displayPhone(forwardTarget)}</p>
+                  <p className="mctb-phone-helper mt-1">{senderSecondary}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className="mctb-phone-chip mctb-phone-chip--muted">Voice · Ready</span>
+                    <button
+                      type="button"
+                      className={`mctb-phone-chip ${selected?.messagingStatus?.approved || messagingReady ? "mctb-phone-chip--ok" : "mctb-phone-chip--warn"}`}
+                      onClick={() => setDrawerMode("verify")}
+                    >
+                      Messaging ·{" "}
+                      {selected?.messagingStatus?.approved || messagingReady
+                        ? "Ready"
+                        : selected?.messagingStatus?.label || "Pending"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[13px] text-[#626872]">No MCTB number yet.</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="mctb-setup-btn mctb-setup-btn--primary mctb-phone-btn"
+                  onClick={() => setDrawerMode(forwardTarget ? "manage" : "add")}
+                >
+                  {forwardTarget ? "Manage number" : "Choose number"}
+                </button>
+                {phoneNumbers.length > 1 ? (
+                  <select
+                    id="mctb-forward-dest"
+                    className="mctb-phone-select max-w-[14rem]"
+                    value={phoneNumberId || ""}
+                    onChange={(e) => {
+                      setPhoneNumberId(e.target.value || null);
+                      setSaved(false);
+                    }}
+                    aria-label="Switch active MCTB number"
+                  >
+                    {phoneNumbers.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {displayPhone(n.e164)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
             </section>
 
             <section className="mctb-phone-module" aria-labelledby="mctb-phone-carrier">
@@ -954,6 +997,13 @@ export function MctbSetupPhoneForwardingView() {
           </div>
         </>
       ) : null}
+
+      <MctbNumberDrawerHost
+        open={drawerMode}
+        onClose={() => setDrawerMode(null)}
+        onOpenMode={setDrawerMode}
+        onNumbersChanged={() => void load()}
+      />
     </MctbSetupShell>
   );
 }

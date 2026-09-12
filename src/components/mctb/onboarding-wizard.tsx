@@ -29,6 +29,11 @@ import { CheckCircle2, FileCheck, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  MctbNumberDrawerHost,
+  useMctbNumberDrawerEvents,
+  type MctbNumberDrawerMode,
+} from "@/components/mctb/numbers/mctb-number-drawer-host";
 
 type OnboardingPayload = {
   state: MctbOnboardingState;
@@ -96,6 +101,8 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
   const [forwardRingSeconds, setForwardRingSeconds] = useState(15);
   const [forwardingTestActive, setForwardingTestActive] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<MctbNumberDrawerMode>(null);
+  useMctbNumberDrawerEvents(setDrawerMode);
 
   const step = normalizeOnboardingStep(data?.state.currentStep || "business_line");
   const stageIndex = wizardStageIndex(step);
@@ -593,26 +600,19 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
                       <button
                         type="button"
                         className="mctb-setup-btn mctb-setup-btn--outline"
-                        disabled={saving}
-                        onClick={async () => {
-                          setSaving(true);
-                          try {
-                            const res = await fetch("/api/mctb/tfv", { method: "POST" });
-                            const json = await res.json();
-                            if (!res.ok) throw new Error(json.error || "Submit failed");
-                            await load();
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : "Submit failed");
-                          } finally {
-                            setSaving(false);
-                          }
-                        }}
+                        onClick={() => setDrawerMode("verify")}
                       >
                         Complete messaging verification
                       </button>
-                      <Link href="/compliance" className="mctb-setup-btn mctb-setup-btn--outline">
-                        Business details
-                      </Link>
+                      {!data?.trialNumber.provisioned ? (
+                        <button
+                          type="button"
+                          className="mctb-setup-btn mctb-setup-btn--outline"
+                          onClick={() => setDrawerMode("add")}
+                        >
+                          Choose a number
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -765,6 +765,13 @@ export function MctbOnboardingWizard({ initialBusinessName = "" }: Props) {
           </div>
         ) : null}
       </main>
+
+      <MctbNumberDrawerHost
+        open={drawerMode}
+        onClose={() => setDrawerMode(null)}
+        onOpenMode={setDrawerMode}
+        onNumbersChanged={() => void load()}
+      />
 
       {demoOpen ? (
         <div className="mctb-onb-modal-backdrop" role="presentation" onClick={() => setDemoOpen(false)}>

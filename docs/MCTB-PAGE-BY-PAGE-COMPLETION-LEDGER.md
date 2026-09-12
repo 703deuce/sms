@@ -294,3 +294,23 @@ BROKEN: 0
 NO_OP: 0  
 PLACEHOLDER: 0  
 REMOVED_EXISTING_FEATURES: 0
+
+## Numbers / A2P consolidation (MCTB)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_NUMBERS_NAV_REMOVED | PASS | Setup nav no longer lists Numbers |
+| MCTB_NUMBERS_LEGACY_ROUTE | PASS | `/mctb/numbers` → phone drawer |
+| MCTB_NUMBER_MANAGE_DRAWER | PASS | Phone & Forwarding |
+| MCTB_NUMBER_ADD_FLOW | PASS | Shared drawer + premium search |
+| MCTB_MESSAGING_VERIFY_DRAWER | PASS | TFV POST + compliance links |
+| MCTB_ONBOARDING_SHARED_FLOWS | PASS | Same drawer host |
+| MCTB_NUMBERS_DOCS | PASS | Audit + 2 matrices |
+| MCTB_NUMBERS_TESTS | PASS | `test-mctb-number-management.ts` |
+
+**MCTB_NUMBERS_UI_CONSOLIDATION_COMPLETE: YES**  
+UNACCOUNTED_CAPABILITIES: 0  
+UNMAPPED_FIELDS: 0  
+BROKEN: 0  
+NO_OP: 0  
+PLACEHOLDER: 0

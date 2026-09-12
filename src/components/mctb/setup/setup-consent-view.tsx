@@ -432,7 +432,7 @@ export function MctbSetupConsentView() {
               {!existingConsentEligible && ineligibleCopy ? (
                 <div className="mctb-consent-inline-warn" role="status">
                   {ineligibleCopy}{" "}
-                  <Link href={MCTB_ROUTES.numbers}>Manage messaging number →</Link>
+                  <Link href={`${MCTB_ROUTES.setupPhone}?open=manage`}>Manage messaging number →</Link>
                 </div>
               ) : null}
             </section>

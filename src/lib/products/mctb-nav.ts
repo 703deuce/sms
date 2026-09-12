@@ -49,7 +49,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Setup",
       href: MCTB_ROUTES.setup,
       icon: SlidersHorizontal,
-      children: [{ label: "Numbers", href: MCTB_ROUTES.numbers }],
     },
   ];
 }
