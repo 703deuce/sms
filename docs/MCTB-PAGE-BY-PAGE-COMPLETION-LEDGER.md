@@ -110,3 +110,28 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_ANALYTICS_CONSOLE_NETWORK | BLOCKED | Live QA |
 
 **MCTB_ANALYTICS_COMPLETE: YES** — width/layout polish pass (full workspace)
+
+## Setup shell + Overview (`/mctb/setup`) — Pass 1 only
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_SHELL_HORIZONTAL_NAV | PASS | Vertical setup sidebar removed |
+| MCTB_SETUP_SHELL_FULL_WIDTH | PASS | Main bleed + `mctb-setup-workspace` |
+| MCTB_SETUP_SECTION_IA | PASS | 8 sections in `setup-sections.ts` |
+| MCTB_SETUP_LEGACY_ROUTES | PASS | Old recovery sub-routes map to Recovery nav |
+| MCTB_SETUP_OVERVIEW_STATUS_STRIP | PASS | Real setup/onboarding data |
+| MCTB_SETUP_OVERVIEW_ATTENTION | PASS | Conditional rows |
+| MCTB_SETUP_OVERVIEW_SUMMARY | PASS | 8 compact rows |
+| MCTB_SETUP_OVERVIEW_PAUSE_RESUME | PASS | `POST /api/mctb/setup` |
+| MCTB_SETUP_OVERVIEW_ACTIVITY | PASS | Funnel events read-only |
+| MCTB_SETUP_OVERVIEW_QUICK_ACTIONS | PASS | Deep links |
+| MCTB_SETUP_PHONE_FORWARDING | NOT_STARTED | Next pass |
+| MCTB_SETUP_RECOVERY | NOT_STARTED | Next pass |
+| MCTB_SETUP_CONSENT | NOT_STARTED | Next pass |
+| MCTB_SETUP_VOICEMAIL | NOT_STARTED | Next pass |
+| MCTB_SETUP_NOTIFICATIONS | NOT_STARTED | Next pass |
+| MCTB_SETUP_EXCLUSIONS | NOT_STARTED | Next pass |
+| MCTB_SETUP_TEST | NOT_STARTED | Next pass |
+
+**MCTB_SETUP_SHELL_COMPLETE: YES**  
+**MCTB_SETUP_OVERVIEW_COMPLETE: YES**

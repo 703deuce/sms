@@ -72,6 +72,10 @@ function isMctbAnalyticsFullWidthRoute(pathname: string): boolean {
   );
 }
 
+function isMctbSetupFullWidthRoute(pathname: string): boolean {
+  return pathname === "/mctb/setup" || pathname.startsWith("/mctb/setup/");
+}
+
 function isSmsFullBleedRoute(pathname: string): boolean {
   if (isLegacyAutomationRoute(pathname)) return false;
   return (
@@ -177,10 +181,12 @@ export function AppShell({
   const legacyAutomation = isLegacyAutomationRoute(pathname);
   const fixedViewport = isFixedViewportSmsRoute(pathname);
   const mctbAnalyticsFullWidth = isMctbAnalyticsFullWidthRoute(pathname);
+  const mctbSetupFullWidth = isMctbSetupFullWidthRoute(pathname);
+  const mctbWorkspaceFullWidth = mctbAnalyticsFullWidth || mctbSetupFullWidth;
   const isFullBleed =
     isSmsFullBleedRoute(pathname) ||
     isAppointmentsKimiFullBleedRoute(pathname) ||
-    mctbAnalyticsFullWidth;
+    mctbWorkspaceFullWidth;
   const isKimiFullBleed =
     isFullBleed &&
     isKimiIntegratedRoute(pathname) &&
@@ -338,7 +344,7 @@ export function AppShell({
               ? "h-dvh overflow-hidden px-0 pb-0 pt-0 lg:px-0"
               : fixedViewport
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : mctbAnalyticsFullWidth
+                : mctbWorkspaceFullWidth
                   ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-0 pb-28 pt-0 lg:pb-8"
                   : isFullBleed
                     ? isKimiFullBleed
