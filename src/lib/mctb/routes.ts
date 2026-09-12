@@ -4,7 +4,8 @@ export const MCTB_ROUTES = {
   missedCalls: "/mctb/missed-calls",
   missedCallDetail: (id: string) => `/mctb/missed-calls/${id}`,
   conversations: "/mctb/conversations",
-  voicemail: "/mctb/voicemail",
+  /** Full visual voicemail inbox (PersonalVoicemailUI). Legacy `/mctb/voicemail` redirects here. */
+  voicemail: "/personal/voicemail",
   analytics: "/mctb/analytics",
   setup: "/mctb/setup",
   setupStart: "/mctb/setup/start",

@@ -30,6 +30,7 @@ assert.equal(resolveProductShellFromPath("/appointments/calendar"), "appointment
 assert.equal(resolveProductShellFromPath("/voice/missed-calls"), "mctb");
 assert.equal(resolveProductShellFromPath("/mctb"), "mctb");
 assert.equal(resolveProductShellFromPath("/mctb/missed-calls"), "mctb");
+assert.equal(resolveProductShellFromPath("/personal/voicemail"), "mctb");
 assert.equal(resolveProductShellFromPath("/voice/agents"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/voice/overview"), "ai_after_hours");
 assert.equal(resolveProductShellFromPath("/settings"), null);

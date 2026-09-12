@@ -1,22 +1,17 @@
-import { MctbVoicemailView } from "@/components/mctb/mctb-voicemail-view";
-import { AddOnUpgradeCard } from "@/components/products/add-on-upgrade-card";
-import { hasMctbBundledVoicemailAccess } from "@/lib/products/feature-entitlements";
-import { requireWorkspaceContext } from "@/lib/workspace-data";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { redirect } from "next/navigation";
 
-export default async function MctbVoicemailPage({
+/** Legacy URL — canonical visual voicemail inbox is PersonalVoicemailUI. */
+export default async function MctbVoicemailLegacyRedirect({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; numberId?: string; from?: string }>;
 }) {
-  const { workspaceId, session } = await requireWorkspaceContext();
-  const entitled = await hasMctbBundledVoicemailAccess(workspaceId, {
-    isPlatformAdmin: session.isAdmin,
-  });
-
-  if (!entitled) {
-    return <AddOnUpgradeCard feature="visual_voicemail" />;
-  }
-
-  const { id } = await searchParams;
-  return <MctbVoicemailView initialId={id} />;
+  const params = await searchParams;
+  const q = new URLSearchParams();
+  if (params.id) q.set("id", params.id);
+  if (params.numberId) q.set("numberId", params.numberId);
+  if (params.from) q.set("from", params.from);
+  const qs = q.toString();
+  redirect(qs ? `${MCTB_ROUTES.voicemail}?${qs}` : MCTB_ROUTES.voicemail);
 }

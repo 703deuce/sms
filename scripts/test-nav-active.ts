@@ -5,7 +5,7 @@ const mctbNav = [
   { href: "/mctb", matchExact: true },
   { href: "/mctb/missed-calls" },
   { href: "/mctb/conversations" },
-  { href: "/mctb/voicemail" },
+  { href: "/personal/voicemail" },
   { href: "/mctb/analytics" },
   { href: "/mctb/setup" },
   { href: "/mctb/numbers" },
