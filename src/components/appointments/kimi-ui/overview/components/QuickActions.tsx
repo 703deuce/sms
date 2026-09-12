@@ -26,7 +26,12 @@ export default function QuickActions({
   ];
 
   return (
-    <RefDecoSection title="Quick actions" bodyClassName="flex flex-col">
+    <RefDecoSection
+      accent="none"
+      className="appt-overview-module appt-overview-module--flat"
+      title="Quick actions"
+      bodyClassName="flex flex-col"
+    >
       <div className="grid grid-cols-2 gap-3">
         {actions.map((a) => (
           <button key={a.label} type="button" onClick={a.onClick} className="qa-btn">

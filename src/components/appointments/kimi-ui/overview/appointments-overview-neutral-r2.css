@@ -1,0 +1,171 @@
+/**
+ * Appointments Overview — Neutral visual test Revision 2 (overview route only).
+ * Imported from overview/layout.tsx so corrections apply without a full page redesign.
+ */
+
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--purple,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--blue,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--green,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--amber {
+  display: none !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi--highlight::before,
+.appt-overview-pilot .ref-deco-kpi:first-child::before,
+.appt-overview-pilot.ref-root .ref-deco-kpi--highlight::before,
+.appt-overview-pilot.ref-root .ref-deco-kpi:first-child::before {
+  background: #1c1c1a !important;
+  opacity: 0.28 !important;
+}
+
+.appt-overview-pilot .ref-deco-kpi--highlight,
+.appt-overview-pilot .ref-deco-kpi:first-child,
+.appt-overview-pilot.ref-root .ref-deco-kpi--highlight {
+  border-color: #e1e1dc !important;
+  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.03) !important;
+}
+
+.appt-overview-pilot .ref-deco-icon-ring,
+.appt-overview-pilot .ref-deco-icon-ring--purple,
+.appt-overview-pilot .ref-deco-icon-ring--blue,
+.appt-overview-pilot .ref-deco-icon-ring--green,
+.appt-overview-pilot .ref-deco-icon-ring--amber,
+.appt-overview-pilot .ref-deco-icon-ring--red,
+.appt-overview-pilot .ref-deco-kpi:first-child .ref-deco-icon-ring,
+.appt-overview-pilot .ref-deco-kpi--highlight .ref-deco-icon-ring {
+  background: #f1f1ee !important;
+  color: #444440 !important;
+  box-shadow: none !important;
+}
+
+.appt-overview-pilot .appt-pilot-muted-link {
+  color: #444440 !important;
+}
+
+.appt-overview-pilot .appt-pilot-muted-link:hover {
+  color: #292927 !important;
+}
+
+.appt-overview-pilot .appt-pilot-schedule-dot,
+.appt-overview-pilot .chart-dot {
+  background: #363633 !important;
+  fill: #363633 !important;
+}
+
+.appt-overview-pilot .ref-deco-section {
+  border-color: #e8e8e4 !important;
+  box-shadow: none !important;
+}
+
+.appt-overview-pilot .mt-4.grid.grid-cols-2 {
+  grid-template-columns: 1fr !important;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot .mt-4.grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+.appt-overview-pilot .mt-4.grid.grid-cols-3 {
+  grid-template-columns: 1fr !important;
+  gap: 1.25rem !important;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    border: 1px solid #e8e8e4;
+    border-radius: 12px;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 > .ref-deco-section {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 > .ref-deco-section:not(:last-child) {
+    border-right: 1px solid #e8e8e4 !important;
+  }
+}
+
+.appt-overview-pilot .ref-deco-section-head {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.appt-overview-pilot .ref-deco-section-head h2 {
+  font-size: 0.9375rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25rem !important;
+}
+
+.appt-overview-pilot .ref-deco-chart,
+.appt-overview-pilot .appt-overview-chart-wrap {
+  min-height: 150px;
+}
+
+.appt-overview-pilot .appt-overview-chart-svg,
+.appt-overview-pilot .ref-deco-chart svg {
+  min-height: 150px;
+  display: block;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+  background-color: #e5e5e1 !important;
+  color: #181816 !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
+  display: none !important;
+  width: 0 !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
+  color: #222220 !important;
+}
+
+@media (max-width: 1023px) {
+  .appt-overview-pilot .ref-deco-page-head h1,
+  .appt-overview-pilot .font-display.text-\[26px\] {
+    font-size: 1.375rem !important;
+    line-height: 1.75rem !important;
+    font-weight: 600 !important;
+  }
+
+  .appt-overview-pilot .ref-deco-section-head {
+    min-height: 48px;
+    padding: 12px 14px 10px !important;
+  }
+
+  .appt-overview-pilot .ref-deco-section-head > .shrink-0 {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .appt-overview-pilot .ref-deco-kpi .text-gray-900,
+  .appt-overview-pilot .ref-deco-kpi .min-w-0 > div:nth-child(2) {
+    font-size: 1.5rem !important;
+    line-height: 1.75rem !important;
+    font-weight: 600 !important;
+  }
+
+  .appt-overview-pilot .ref-deco-kpi .text-gray-500,
+  .appt-overview-pilot .ref-deco-kpi .min-w-0 > div:first-child {
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    line-height: 1rem !important;
+  }
+
+  .appt-overview-pilot .ref-deco-chart,
+  .appt-overview-pilot .appt-overview-chart-wrap,
+  .appt-overview-pilot .ref-deco-chart svg {
+    min-height: 160px;
+  }
+}

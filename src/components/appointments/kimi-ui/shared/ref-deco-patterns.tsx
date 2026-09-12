@@ -61,20 +61,22 @@ export function RefDecoSectionHeading({
   title: string;
   description?: string;
   action?: React.ReactNode;
-  accent?: "purple" | "blue" | "green" | "amber";
+  accent?: "purple" | "blue" | "green" | "amber" | "none";
 }) {
   return (
-    <div className="ref-deco-section-head">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className={cn("ref-deco-section-accent", `ref-deco-section-accent--${accent}`)} aria-hidden />
+    <div className="ref-deco-section-head appt-overview-section-head">
+      <div className="appt-overview-section-title flex min-w-0 flex-1 items-start gap-3">
+        {accent !== "none" ? (
+          <span className={cn("ref-deco-section-accent", `ref-deco-section-accent--${accent}`)} aria-hidden />
+        ) : null}
         <div className="min-w-0">
-          <h2 className="text-[15px] font-bold tracking-tight text-gray-900">{title}</h2>
+          <h2 className="appt-overview-module-title text-[15px] font-bold tracking-tight text-gray-900">{title}</h2>
           {description ? (
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-gray-500">{description}</p>
           ) : null}
         </div>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="appt-overview-section-action shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -91,7 +93,7 @@ export function RefDecoSection({
 }: {
   title?: string;
   description?: string;
-  accent?: "purple" | "blue" | "green" | "amber";
+  accent?: "purple" | "blue" | "green" | "amber" | "none";
   tint?: "purple" | "blue" | "amber";
   action?: React.ReactNode;
   children: React.ReactNode;

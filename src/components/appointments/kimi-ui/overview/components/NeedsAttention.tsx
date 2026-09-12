@@ -12,7 +12,12 @@ type Props = {
 
 export default function NeedsAttention({ items, onOpenItem, onReviewAll }: Props) {
   return (
-    <RefDecoSection title="Needs attention" bodyClassName="flex flex-col">
+    <RefDecoSection
+      accent="none"
+      className="appt-overview-module appt-overview-module--flat"
+      title="Needs attention"
+      bodyClassName="flex flex-col"
+    >
       {items.length === 0 ? (
         <p className="appt-pilot-text-body py-8 text-center text-[var(--text-secondary)]">Nothing needs attention right now.</p>
       ) : (

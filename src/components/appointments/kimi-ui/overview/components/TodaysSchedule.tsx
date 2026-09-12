@@ -12,9 +12,11 @@ type Props = {
 export default function TodaysSchedule({ schedule, total, onViewCalendar, onOpenAppointment }: Props) {
   return (
     <RefDecoSection
+      accent="none"
       title="Today's schedule"
+      className="appt-overview-module"
       action={
-        <div className="flex items-center gap-2">
+        <div className="appt-overview-module-actions flex flex-wrap items-center justify-end gap-2">
           <span className="ref-pill pill-purple">{total}</span>
           <button
             type="button"

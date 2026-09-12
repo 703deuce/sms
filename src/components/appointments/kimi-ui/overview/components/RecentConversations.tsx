@@ -11,8 +11,11 @@ type Props = {
 export default function RecentConversations({ conversations, onOpenConversation, onViewAll }: Props) {
   return (
     <RefDecoSection
+      accent="none"
+      className="appt-overview-module appt-overview-module--flat"
       title="Recent conversations"
       action={
+        <div className="appt-overview-module-actions flex flex-wrap items-center justify-end gap-2">
         <button
           type="button"
           onClick={onViewAll}
@@ -20,6 +23,7 @@ export default function RecentConversations({ conversations, onOpenConversation,
         >
           View all
         </button>
+        </div>
       }
       bodyClassName="flex flex-col"
     >

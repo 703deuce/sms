@@ -19,6 +19,8 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
 
   return (
     <RefDecoSection
+      accent="none"
+      className="appt-overview-module appt-overview-chart-module"
       title="Bookings this week"
       action={
         <button
@@ -33,12 +35,12 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
       <div className="appt-pilot-chart-total">{chart.total}</div>
       <div className="appt-pilot-chart-label mt-1">Total appointments</div>
       <div className="appt-pilot-chart-delta text-green-600">{chart.deltaLabel}</div>
-      <div className="mt-3 -mx-1">
-        <svg viewBox={`0 0 ${W} ${H + 22}`} className="w-full" role="img" aria-label="Bookings trend chart">
+      <div className="appt-overview-chart-wrap mt-3 -mx-1">
+        <svg viewBox={`0 0 ${W} ${H + 22}`} className="appt-overview-chart-svg w-full" role="img" aria-label="Bookings trend chart">
           <defs>
             <linearGradient id="apptPilotAreaG" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--brand-accent)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--brand-accent)" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="#363633" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#363633" stopOpacity="0.01" />
             </linearGradient>
           </defs>
           {[max, Math.round(max * 0.66), Math.round(max * 0.33), 0].map((v) => {
@@ -55,7 +57,7 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
             <polyline
               points={solidPts}
               fill="none"
-              stroke="var(--brand-accent)"
+              stroke="#363633"
               strokeWidth="2.2"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -65,8 +67,8 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
             <polyline
               points={dashedPts}
               fill="none"
-              stroke="var(--brand-accent)"
-              strokeOpacity="0.45"
+              stroke="#363633"
+              strokeOpacity="0.35"
               strokeWidth="2"
               strokeDasharray="4 4"
             />
@@ -78,7 +80,7 @@ export default function BookingsChart({ chart }: { chart: OverviewChartModel }) 
               x={xs[i]}
               y={H + 12}
               fontSize="10"
-              fill={i === chart.days.length - 2 ? "var(--brand-accent)" : "var(--text-secondary)"}
+              fill={i === chart.days.length - 2 ? "#363633" : "var(--text-secondary)"}
               textAnchor="middle"
               fontWeight={i === chart.days.length - 2 ? 700 : 400}
             >

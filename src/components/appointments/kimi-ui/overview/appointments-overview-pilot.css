@@ -1,23 +1,28 @@
 /**
  * Appointments Overview — 60-30-10 palette (scoped).
- * Canvas neutrals (60%) · graphite structure (30%) · muted violet accent (10%).
+ * Near-monochrome canvas — charcoal primary actions, semantic color only.
  */
 .appt-overview-pilot {
   --canvas: #f7f7f5;
   --surface: #ffffff;
-  --surface-muted: #f1f2f0;
-  --graphite: #181b1f;
-  --graphite-2: #22262c;
-  --text-primary: #181b1f;
-  --text-secondary: #626872;
-  --text-tertiary: #8b929c;
-  --border: #e2e3e1;
-  --border-soft: #eceeed;
-  --brand-primary: #181b1f;
-  --brand-accent: #6b5dd3;
-  --brand-accent-hover: #5848c2;
-  --brand-accent-soft: #efecfb;
-  --brand-accent-border: #cfc8f2;
+  --surface-muted: #fafaf8;
+  --graphite: #1c1c1a;
+  --graphite-2: #292927;
+  --text-primary: #1c1c1a;
+  --text-secondary: #66645f;
+  --text-tertiary: #8a8882;
+  --border: #e1e1dc;
+  --border-large: #e8e8e4;
+  --border-soft: #ecece8;
+  --kpi-icon-surface: #f1f1ee;
+  --kpi-icon-color: #444440;
+  --chart-line: #363633;
+  --graphite-ui: #2a2a27;
+  --brand-primary: #1c1c1a;
+  --brand-accent: #1d1d1b;
+  --brand-accent-hover: #2a2a27;
+  --brand-accent-soft: #e8e8e5;
+  --brand-accent-border: #e1e1dc;
   --state-success: #248a5a;
   --state-success-soft: #e8f4ed;
   --state-warning: #b7791f;
@@ -25,9 +30,8 @@
   --state-error: #c74848;
   --state-error-soft: #fceaea;
 
-  /* Type scale — IBM Plex compact enterprise */
-  --type-page-title: 1.375rem; /* 22px / 28px */
-  --type-page-title-line: 1.75rem;
+  --type-page-title: 1.5rem; /* 24px / 30px */
+  --type-page-title-line: 1.875rem;
   --type-section: 1.125rem; /* 18px / 24px */
   --type-section-line: 1.5rem;
   --type-section-minor: 0.9375rem; /* 15px */
@@ -43,7 +47,7 @@
   --type-nav: 0.875rem; /* 14px / 18px */
   --type-nav-line: 1.125rem;
 
-  font-family: var(--font-appt-overview-pilot), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: var(--type-body);
   line-height: var(--type-body-line);
   letter-spacing: -0.011em;
@@ -62,9 +66,8 @@
 }
 
 .appt-overview-pilot.ref-root::before {
-  opacity: 0.22 !important;
-  background-image: radial-gradient(circle at 1px 1px, rgba(31, 35, 41, 0.05) 1px, transparent 0) !important;
-  background-size: 28px 28px !important;
+  opacity: 0 !important;
+  background-image: none !important;
 }
 
 /* Typography */
@@ -116,14 +119,14 @@
 }
 
 .appt-pilot-muted-link {
-  color: var(--brand-accent);
+  color: #444440;
   font-size: var(--type-list);
   font-weight: 600;
   line-height: 1.3;
 }
 
 .appt-pilot-muted-link:hover {
-  color: var(--brand-accent-hover);
+  color: var(--graphite-2);
 }
 
 /* Primary actions — violet accent (scarce, intentional) */
@@ -141,7 +144,7 @@
   font-size: var(--type-button);
   font-weight: 600;
   line-height: 1.3;
-  box-shadow: 0 1px 2px rgba(107, 93, 211, 0.18);
+  box-shadow: 0 1px 2px rgba(28, 28, 26, 0.08);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -350,14 +353,14 @@
 
 .appt-overview-pilot .ref-deco-kpi--highlight::before,
 .appt-overview-pilot .ref-deco-kpi:first-child::before {
-  background: var(--brand-accent) !important;
-  opacity: 1 !important;
+  background: var(--brand-primary) !important;
+  opacity: 0.28 !important;
 }
 
 .appt-overview-pilot .ref-deco-kpi--highlight,
 .appt-overview-pilot .ref-deco-kpi:first-child {
-  border-color: var(--brand-accent-border);
-  box-shadow: 0 0 0 1px rgba(107, 93, 211, 0.06), 0 4px 14px rgba(107, 93, 211, 0.06);
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.03);
 }
 
 .appt-overview-pilot .ref-deco-kpi:hover {
@@ -392,9 +395,9 @@
   width: 40px !important;
   height: 40px !important;
   border-radius: 10px;
-  background: var(--surface-muted);
-  color: var(--brand-primary);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--kpi-icon-surface);
+  color: var(--kpi-icon-color);
+  box-shadow: none;
 }
 
 .appt-overview-pilot .ref-deco-icon-ring::after {
@@ -406,17 +409,17 @@
 .appt-overview-pilot .ref-deco-icon-ring--green,
 .appt-overview-pilot .ref-deco-icon-ring--amber,
 .appt-overview-pilot .ref-deco-icon-ring--red {
-  background: var(--surface-muted);
-  color: var(--brand-primary);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--kpi-icon-surface);
+  color: var(--kpi-icon-color);
+  box-shadow: none;
 }
 
 /* Sections — shallower, neutral surfaces */
 .appt-overview-pilot .ref-deco-section {
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-large);
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.02);
+  box-shadow: none;
 }
 
 .appt-overview-pilot .ref-deco-section--tint-purple,
@@ -568,11 +571,11 @@
 }
 
 .appt-overview-pilot .appt-pilot-schedule-dot {
-  background: var(--brand-accent);
+  background: var(--chart-line);
 }
 
 .appt-overview-pilot .chart-dot {
-  fill: var(--brand-accent);
+  fill: var(--chart-line);
 }
 
 .appt-overview-pilot .text-green-600 {
@@ -638,8 +641,8 @@
 
 /* ========== Force pilot palette over shared ref-deco (import order safe) ========== */
 .appt-overview-pilot.ref-root {
-  --brand: #6b5dd3 !important;
-  --deco-brand: #6b5dd3 !important;
+  --brand: #1d1d1b !important;
+  --deco-brand: #1d1d1b !important;
 }
 
 .appt-overview-pilot .ref-deco-kpi,
@@ -668,14 +671,13 @@
 
 .appt-overview-pilot .ref-deco-kpi--highlight::before,
 .appt-overview-pilot .ref-deco-kpi:first-child::before {
-  background: var(--brand-accent) !important;
-  opacity: 1 !important;
+  background: var(--brand-primary) !important;
+  opacity: 0.28 !important;
 }
 
 .appt-overview-pilot .ref-deco-kpi--highlight {
-  box-shadow:
-    0 0 0 1px rgba(107, 93, 211, 0.06),
-    0 4px 14px rgba(107, 93, 211, 0.06) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.03) !important;
 }
 
 .appt-overview-pilot .ref-deco-icon-ring,
@@ -684,15 +686,15 @@
 .appt-overview-pilot .ref-deco-icon-ring--green,
 .appt-overview-pilot .ref-deco-icon-ring--amber,
 .appt-overview-pilot .ref-deco-icon-ring--red {
-  background: var(--surface-muted) !important;
-  color: var(--brand-primary) !important;
-  box-shadow: inset 0 0 0 1px var(--border) !important;
+  background: var(--kpi-icon-surface) !important;
+  color: var(--kpi-icon-color) !important;
+  box-shadow: none !important;
 }
 
 .appt-overview-pilot .ref-deco-kpi:first-child .ref-deco-icon-ring,
 .appt-overview-pilot .ref-deco-kpi--highlight .ref-deco-icon-ring {
-  background: var(--brand-accent-soft) !important;
-  color: var(--brand-accent) !important;
+  background: var(--kpi-icon-surface) !important;
+  color: var(--kpi-icon-color) !important;
   box-shadow: none !important;
 }
 
@@ -701,8 +703,8 @@
 .appt-overview-pilot .ref-deco-section--tint-blue,
 .appt-overview-pilot .ref-deco-section--tint-amber {
   background: var(--surface) !important;
-  border-color: var(--border) !important;
-  box-shadow: 0 1px 2px rgba(16, 20, 24, 0.02) !important;
+  border-color: var(--border-large) !important;
+  box-shadow: none !important;
 }
 
 .appt-overview-pilot .ref-deco-section-head {
@@ -747,20 +749,20 @@
   color: var(--text-secondary) !important;
 }
 
-/* ========== Full-page shell pilot (sidebar, header, switcher) ========== */
+/* ========== Full-page shell — light unified neutral (overview route only) ========== */
 html.appt-overview-pilot-active {
-  --pilot-charcoal: #181b1f;
-  --pilot-graphite-2: #22262c;
-  --pilot-accent: #6b5dd3;
-  --pilot-accent-hover: #5848c2;
-  --pilot-accent-soft: #efecfb;
-  --pilot-accent-border: #cfc8f2;
-  --pilot-border: #2c3138;
-  --pilot-border-light: #e2e3e1;
+  --pilot-charcoal: #1c1c1a;
+  --pilot-graphite-2: #292927;
+  --pilot-accent: #1d1d1b;
+  --pilot-accent-hover: #2a2a27;
+  --pilot-accent-soft: #e8e8e5;
+  --pilot-accent-border: #e1e1dc;
+  --pilot-border: #e4e4df;
+  --pilot-border-light: #e8e8e4;
   --pilot-surface-muted: #f7f7f5;
-  --text-on-dark: #f7f7f5;
-  --text-on-dark-secondary: #c5cbd3;
-  --text-on-dark-muted: #97a0aa;
+  --pilot-nav-bg: #f2f2f0;
+  --pilot-nav-text: #5f5e59;
+  --pilot-nav-text-active: #181816;
 
   /* Shared type scale for shell + content */
   --type-page-title: 1.375rem;
@@ -780,7 +782,7 @@ html.appt-overview-pilot-active {
   --type-nav: 0.875rem;
   --type-nav-line: 1.125rem;
 
-  font-family: var(--font-appt-overview-pilot), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-geist-sans), "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
   font-size: var(--type-body);
   line-height: var(--type-body-line);
   letter-spacing: -0.011em;
@@ -792,11 +794,11 @@ html.appt-overview-pilot-active .product-theme {
 }
 
 html.appt-overview-pilot-active .product-theme {
-  --primary: #6b5dd3;
+  --primary: #1d1d1b;
   --primary-foreground: #ffffff;
-  --primary-hover: #5848c2;
-  --ring: #6b5dd3;
-  --sidebar-active: #6b5dd3;
+  --primary-hover: #2a2a27;
+  --ring: #777771;
+  --sidebar-active: #1d1d1b;
   --background: #f7f7f5;
 }
 
@@ -805,11 +807,20 @@ html.appt-overview-pilot-active .product-theme .bg-mesh {
   background-image: none;
 }
 
-/* Graphite shell — 30% structural dark */
 html.appt-overview-pilot-active .transovo-sidebar {
-  background: var(--pilot-charcoal) !important;
+  background: var(--pilot-nav-bg) !important;
   border-color: var(--pilot-border) !important;
-  color: var(--text-on-dark) !important;
+  color: var(--pilot-nav-text) !important;
+  box-shadow: none !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar.w-\[224px\],
+html.appt-overview-pilot-active .transovo-sidebar.lg\:w-\[224px\] {
+  width: 232px !important;
+}
+
+html.appt-overview-pilot-active .lg\:pl-\[224px\] {
+  padding-left: 232px !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .border-border {
@@ -817,64 +828,79 @@ html.appt-overview-pilot-active .transovo-sidebar .border-border {
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .text-foreground {
-  color: var(--text-on-dark) !important;
+  color: var(--pilot-charcoal) !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .text-muted-foreground {
-  color: var(--text-on-dark-muted) !important;
+html.appt-overview-pilot-active .transovo-sidebar .text-muted-foreground,
+html.appt-overview-pilot-active .transovo-sidebar .text-sidebar-muted {
+  color: var(--pilot-nav-text) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .bg-card {
-  background: var(--pilot-graphite-2) !important;
+  background: #ffffff !important;
 }
 
-html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600 {
+html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-600,
+html.appt-overview-pilot-active .transovo-sidebar .bg-\[\#6366f1\] {
   background-color: var(--pilot-accent) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item {
+  height: 36px;
+  margin: 2px 8px;
+  border-radius: 7px;
+  color: var(--pilot-nav-text) !important;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  color: var(--text-on-dark) !important;
+  background-color: #ecece9 !important;
+  color: var(--pilot-graphite-2) !important;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
-  background-color: rgba(107, 93, 211, 0.14) !important;
-  color: var(--text-on-dark) !important;
+  background-color: #e5e5e1 !important;
+  color: var(--pilot-nav-text-active) !important;
+  font-weight: 600;
 }
 
 html.appt-overview-pilot-active .transovo-nav-item[data-active="true"]::before {
-  background-color: var(--pilot-accent) !important;
+  display: none !important;
+  content: none !important;
+  width: 0 !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item.text-\[\#4f46e5\] {
+  color: var(--pilot-nav-text-active) !important;
 }
 
 html.appt-overview-pilot-active .transovo-badge,
 html.appt-overview-pilot-active .transovo-badge-dot {
-  background-color: var(--pilot-accent) !important;
-  color: #ffffff !important;
+  background-color: #f1f1ee !important;
+  color: #65635e !important;
 }
 
 html.appt-overview-pilot-active .transovo-credits-bar {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #ecece9 !important;
 }
 
 html.appt-overview-pilot-active .transovo-credits-fill {
-  background: linear-gradient(90deg, var(--pilot-accent), var(--pilot-graphite-2)) !important;
+  background: var(--pilot-accent) !important;
 }
 
-/* Product switcher */
 html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
-  border-color: var(--pilot-border) !important;
-  background: var(--pilot-graphite-2) !important;
-  color: var(--text-on-dark) !important;
+  border-color: #e1e1dc !important;
+  background: #fafaf8 !important;
+  color: var(--pilot-charcoal) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"]:hover {
-  border-color: rgba(107, 93, 211, 0.35) !important;
-  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: #d3d3cd !important;
+  background: #f3f3f1 !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"],
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"]:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: #f2f2f0 !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="option"][aria-selected="true"] > span:first-child {
@@ -882,9 +908,8 @@ html.appt-overview-pilot-active .transovo-sidebar [role="listbox"] button[role="
   color: #ffffff !important;
 }
 
-/* Product switcher onboarding tooltip */
 html.appt-overview-pilot-active .transovo-sidebar .border-primary\/20 {
-  border-color: rgba(107, 93, 211, 0.22) !important;
+  border-color: #e1e1dc !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .bg-primary {
@@ -892,30 +917,41 @@ html.appt-overview-pilot-active .transovo-sidebar .bg-primary {
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .text-primary {
-  color: var(--pilot-accent) !important;
+  color: var(--pilot-charcoal) !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .bg-primary\/10 {
-  background-color: rgba(107, 93, 211, 0.1) !important;
+  background-color: #f3f3f1 !important;
 }
 
-/* Top header */
 html.appt-overview-pilot-active header.sticky {
-  background: rgba(255, 255, 255, 0.96) !important;
-  border-bottom-color: var(--pilot-border) !important;
+  background: #f7f7f5 !important;
+  border-bottom-color: var(--pilot-border-light) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  min-height: 56px;
+}
+
+html.appt-overview-pilot-active header.sticky .h-16 {
+  height: 56px !important;
+  min-height: 56px;
 }
 
 html.appt-overview-pilot-active header.sticky input:focus {
-  border-color: rgba(107, 93, 211, 0.45) !important;
-  --tw-ring-color: rgba(107, 93, 211, 0.2) !important;
+  border-color: #777771 !important;
+  --tw-ring-color: rgba(28, 28, 26, 0.12) !important;
+}
+
+html.appt-overview-pilot-active header.sticky .bg-\[\#6366f1\] {
+  background-color: var(--pilot-accent) !important;
 }
 
 html.appt-overview-pilot-active header.sticky .text-primary {
-  color: var(--pilot-accent) !important;
+  color: var(--pilot-charcoal) !important;
 }
 
 html.appt-overview-pilot-active header.sticky .bg-primary\/5 {
-  background-color: rgba(107, 93, 211, 0.06) !important;
+  background-color: #f3f3f1 !important;
 }
 
 /* Shell typography — product density, not marketing headings */
@@ -1021,7 +1057,7 @@ html.appt-overview-pilot-active .appt-overview-pilot .reference-root {
   --brand: #181b1f;
   --brand-dark: #22262c;
   background: var(--surface-muted);
-  font-family: var(--font-appt-overview-pilot), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-geist-sans), "Geist", ui-sans-serif, system-ui, sans-serif;
   font-size: var(--type-body);
   line-height: 1.4;
   letter-spacing: -0.011em;
@@ -1105,11 +1141,177 @@ html.appt-overview-pilot-active .appt-overview-pilot .reference-root .toggle.on 
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .input:focus {
-  border-color: rgba(107, 93, 211, 0.55) !important;
-  box-shadow: 0 0 0 3px rgba(107, 93, 211, 0.12) !important;
+  border-color: #777771 !important;
+  box-shadow: 0 0 0 3px rgba(28, 28, 26, 0.08) !important;
 }
 
 html.appt-overview-pilot-active .appt-overview-pilot .reference-root .checkbox {
-  accent-color: var(--brand-accent) !important;
+  accent-color: var(--graphite) !important;
+}
+
+/* ========== Revision 2 — neutral test corrections (overview only) ========== */
+
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--purple,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--blue,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--green,
+html.appt-overview-pilot-active .appt-overview-pilot .ref-deco-section-accent--amber {
+  display: none !important;
+}
+
+.appt-overview-pilot .mt-4.grid.grid-cols-2 {
+  grid-template-columns: 1fr !important;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot .mt-4.grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+.appt-overview-pilot .mt-4.grid.grid-cols-3 {
+  grid-template-columns: 1fr !important;
+  gap: 1.25rem !important;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    border: 1px solid var(--border-large);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 > .ref-deco-section {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .appt-overview-pilot .mt-4.grid.grid-cols-3 > .ref-deco-section:not(:last-child) {
+    border-right: 1px solid var(--border-large) !important;
+  }
+}
+
+.appt-overview-pilot .ref-deco-kpi .text-gray-500,
+.appt-overview-pilot .ref-deco-kpi .min-w-0 > div:first-child {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+}
+
+.appt-overview-pilot .appt-overview-module--flat.ref-deco-section {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot .appt-overview-row-lower {
+    border: 1px solid var(--border-large);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+    gap: 0 !important;
+  }
+
+  .appt-overview-pilot .appt-overview-row-lower > .appt-overview-module--flat {
+    border-radius: 0;
+    min-height: 100%;
+  }
+
+  .appt-overview-pilot .appt-overview-row-lower > .appt-overview-module--flat:not(:last-child) {
+    border-right: 1px solid var(--border-large);
+  }
+
+  .appt-overview-pilot .appt-overview-row-lower > .appt-overview-module--flat .ref-deco-section-head {
+    border-bottom: 1px solid var(--border-soft);
+  }
+}
+
+.appt-overview-pilot .appt-overview-section-head {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.appt-overview-pilot .appt-overview-module-title {
+  font-size: var(--type-section-minor);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.appt-overview-pilot .appt-overview-chart-wrap {
+  min-height: 150px;
+}
+
+.appt-overview-pilot .appt-overview-chart-svg {
+  min-height: 150px;
+  display: block;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
+  color: #222220 !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+  color: #181816 !important;
+}
+
+@media (max-width: 1023px) {
+  html.appt-overview-pilot-active {
+    --type-page-title: 1.375rem;
+    --type-page-title-line: 1.75rem;
+    --type-section-minor: 0.9375rem;
+    --type-stat: 1.5rem;
+  }
+
+  .appt-overview-pilot .ref-deco-page-head h1 {
+    font-size: 1.375rem !important;
+    line-height: 1.75rem !important;
+    font-weight: 600 !important;
+  }
+
+  .appt-overview-pilot .appt-overview-module-title {
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+  }
+
+  .appt-overview-pilot .ref-deco-kpi .text-gray-900,
+  .appt-overview-pilot .ref-deco-kpi .min-w-0 > div:nth-child(2) {
+    font-size: 1.5rem !important;
+    line-height: 1.75rem !important;
+    font-weight: 600 !important;
+  }
+
+  .appt-overview-pilot .ref-deco-section-head {
+    min-height: 48px;
+    padding: 12px 14px 10px !important;
+  }
+
+  .appt-overview-pilot .appt-overview-section-action,
+  .appt-overview-pilot .appt-overview-module-actions {
+    flex: 1 1 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+
+  .appt-overview-pilot .appt-overview-row-primary,
+  .appt-overview-pilot .appt-overview-row-lower {
+    grid-template-columns: 1fr !important;
+  }
+
+  .appt-overview-pilot .appt-overview-chart-wrap {
+    min-height: 160px;
+  }
+
+  .appt-overview-pilot .appt-overview-chart-svg {
+    min-height: 160px;
+  }
 }
 

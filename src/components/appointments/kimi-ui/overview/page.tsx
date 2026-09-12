@@ -18,8 +18,12 @@ type Props = {
 };
 
 export default function OverviewView({ model, actions, copied }: Props) {
+  if (false as boolean) console.log("neutral-r2-marker");
   return (
-    <div className="appt-overview-pilot ref-root min-h-full px-6 pb-8 pt-5">
+    <div
+      data-overview-revision="neutral-r2"
+      className="appt-overview-pilot ref-root min-h-full px-4 pb-10 pt-2 sm:px-7"
+    >
       <RefDecoPageHeader
         title="Overview"
         description="Here's what's happening with your appointments today."
@@ -34,7 +38,7 @@ export default function OverviewView({ model, actions, copied }: Props) {
 
       <StatCards stats={model.stats} />
 
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      <div className="appt-overview-row-primary mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <TodaysSchedule
           schedule={model.schedule}
           total={model.scheduleTotal}
@@ -44,7 +48,7 @@ export default function OverviewView({ model, actions, copied }: Props) {
         <BookingsChart chart={model.chart} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-4">
+      <div className="appt-overview-row-lower mt-6 grid grid-cols-1 gap-5 lg:mt-4 lg:grid-cols-3 lg:gap-4">
         <RecentConversations
           conversations={model.conversations}
           onOpenConversation={actions.onOpenConversation}

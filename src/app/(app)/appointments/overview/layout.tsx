@@ -1,16 +1,17 @@
 import "@/components/appointments/kimi-ui/overview/appointments-overview-pilot.css";
-import { appointmentsPilotFont } from "@/components/appointments/kimi-ui/appointments-pilot-font";
+import "@/components/appointments/kimi-ui/overview/appointments-overview-neutral-r2.css";
+import { GeistSans } from "geist/font/sans";
 import { AppointmentsOverviewPilotChrome } from "@/components/appointments/kimi-ui/overview/appointments-overview-pilot-chrome";
 
-/** Overview pilot — IBM Plex + canvas/graphite/violet (not global). */
+/** Appointments Home — neutral 2027 pilot (Geist + light unified shell). */
 export default function AppointmentsOverviewLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <AppointmentsOverviewPilotChrome fontVariableClass={appointmentsPilotFont.variable}>
-      <div className={appointmentsPilotFont.className}>{children}</div>
+    <AppointmentsOverviewPilotChrome fontVariableClass={GeistSans.variable}>
+      <div className={GeistSans.className}>{children}</div>
     </AppointmentsOverviewPilotChrome>
   );
 }
