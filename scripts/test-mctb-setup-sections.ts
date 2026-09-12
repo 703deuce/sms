@@ -3,6 +3,8 @@ import { resolveMctbSetupSectionId, MCTB_SETUP_SECTIONS } from "../src/lib/mctb/
 import {
   buildSetupSummaryRows,
   buildSetupAttentionItems,
+  buildCoreSystemsReadiness,
+  resolveSetupChipTone,
 } from "../src/lib/mctb/setup-overview-model";
 
 assert.equal(MCTB_SETUP_SECTIONS.length, 8);
@@ -52,5 +54,18 @@ const attention = buildSetupAttentionItems({
   voicemailConfigured: false,
 });
 assert.ok(attention.length >= 3);
+
+const readiness = buildCoreSystemsReadiness({
+  forwardingVerified: true,
+  messagingReady: true,
+  recoveryPaused: false,
+  triggersOn: true,
+  messageConfigured: true,
+  voicemailReady: true,
+});
+assert.equal(readiness.ready, 5);
+
+assert.equal(resolveSetupChipTone("Configured", "neutral"), "neutral");
+assert.equal(resolveSetupChipTone("Verified", "ok"), "positive");
 
 console.log("test-mctb-setup-sections: ok");

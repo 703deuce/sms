@@ -7,6 +7,7 @@ const OUT = process.env.OUT_DIR || "/opt/cursor/artifacts/screenshots/mctb-setup
 
 const VIEWPORTS: Array<{ name: string; width: number; height: number }> = [
   { name: "desktop_1440", width: 1440, height: 900 },
+  { name: "desktop_1280", width: 1280, height: 800 },
   { name: "tablet_1024", width: 1024, height: 768 },
   { name: "mobile_390", width: 390, height: 844 },
 ];

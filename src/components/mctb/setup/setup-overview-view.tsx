@@ -3,9 +3,11 @@
 import { MctbSetupPauseControl } from "@/components/mctb/setup/mctb-setup-pause-control";
 import {
   SetupOverviewFlowStrip,
+  SetupOverviewGroupHead,
   SetupOverviewQuickActions,
   SetupOverviewSummaryRowLink,
 } from "@/components/mctb/setup/setup-overview-premium";
+import "./setup-overview-visual.css";
 import { MctbSetupShell } from "@/components/mctb/setup/mctb-setup-shell";
 import type { MctbConsentMode } from "@/lib/mctb/consent-mode";
 import type { MctbForwardingCarrier } from "@/lib/mctb/onboarding/types";
@@ -13,12 +15,13 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
   buildSetupActivityFromFunnel,
   buildSetupAttentionItems,
+  buildCoreSystemsReadiness,
   buildSetupFlowStages,
   buildSetupGlobalStatus,
   buildSetupSummaryRows,
   formatShortWhenCompact,
 } from "@/lib/mctb/setup-overview-model";
-import { AlertTriangle, Check, Play, Settings2 } from "lucide-react";
+import { AlertTriangle, Check, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -264,7 +267,11 @@ export function MctbSetupOverviewView() {
   }, [attention]);
 
   const headerMeta = lastTestAt ? (
-    <span>Last tested {formatShortWhenCompact(lastTestAt)}</span>
+    <span>
+      Last successful test
+      <br />
+      {formatShortWhenCompact(lastTestAt)}
+    </span>
   ) : null;
 
   const headerAction = (
@@ -314,17 +321,35 @@ export function MctbSetupOverviewView() {
   const senderState = senderParts[1] || "—";
   const recoveryActive = !globalStatus.paused && setup.runtime.enabled;
   const visibleAttention = showAllIssues ? attention : attention.slice(0, 2);
+  const messageConfigured = setup.runtime.messageTemplate.trim().length > 0;
+  const voicemailReady =
+    !voicemailSummary.includes("Not") && voicemailSummary !== "Configure in Voicemail";
+  const coreReadiness = buildCoreSystemsReadiness({
+    forwardingVerified,
+    messagingReady: setup.compliance.messagingReady,
+    recoveryPaused: globalStatus.paused,
+    triggersOn,
+    messageConfigured,
+    voicemailReady,
+  });
+
+  const lastTestParts = lastTestAt ? formatShortWhenCompact(lastTestAt).split(", ") : null;
 
   return (
     <MctbSetupShell {...shellProps}>
       <div className="mctb-setup-canvas">
         <div className="mctb-setup-span-12 mctb-setup-status-rail">
-          <div className="mctb-setup-status-rail__lead">
+          <div className="mctb-setup-status-rail__lead-col">
+            <span className="mctb-setup-status-rail__kicker">Recovery</span>
             <span
-              className={`mctb-setup-status-rail__dot${recoveryActive ? "" : " mctb-setup-status-rail__dot--warn"}`}
-              aria-hidden
-            />
-            {recoveryActive ? "Recovery active" : globalStatus.recoveryLabel}
+              className={`mctb-setup-status-rail__state${
+                recoveryActive
+                  ? " mctb-setup-status-rail__state--active"
+                  : " mctb-setup-status-rail__state--paused"
+              }`}
+            >
+              {recoveryActive ? "Active" : globalStatus.paused ? "Paused" : "Inactive"}
+            </span>
           </div>
           <div className="mctb-setup-status-rail__meta">
             <div className="mctb-setup-status-rail__item">
@@ -334,9 +359,9 @@ export function MctbSetupOverviewView() {
               </span>
             </div>
             <div className="mctb-setup-status-rail__item">
-              <span className="mctb-setup-status-rail__item-label">Sender</span>
+              <span className="mctb-setup-status-rail__item-label">Text-back sender</span>
               <span className="mctb-setup-status-rail__item-value">{senderNumber}</span>
-              <span className="text-[11px] text-[#626872]">{senderState}</span>
+              <span className="mctb-setup-status-rail__item-sublabel">{senderState}</span>
             </div>
             <div className="mctb-setup-status-rail__item">
               <span className="mctb-setup-status-rail__item-label">Forwarding</span>
@@ -347,8 +372,11 @@ export function MctbSetupOverviewView() {
             <div className="mctb-setup-status-rail__item">
               <span className="mctb-setup-status-rail__item-label">Last test</span>
               <span className="mctb-setup-status-rail__item-value">
-                {lastTestAt ? formatShortWhenCompact(lastTestAt) : "Never"}
+                {lastTestParts?.[0] || "Never"}
               </span>
+              {lastTestParts?.[1] ? (
+                <span className="mctb-setup-status-rail__item-sublabel">{lastTestParts[1]}</span>
+              ) : null}
             </div>
           </div>
           <div className="mctb-setup-status-rail__actions">
@@ -362,11 +390,41 @@ export function MctbSetupOverviewView() {
           </div>
         </div>
 
+        <div
+          className={`mctb-setup-span-12 mctb-setup-health-strip${
+            attention.length > 0 ? " mctb-setup-health-strip--warn" : " mctb-setup-health-strip--ok"
+          }`}
+          role="status"
+        >
+          <div className="mctb-setup-health-strip__left">
+            <span className="mctb-setup-health-strip__icon" aria-hidden>
+              {attention.length > 0 ? (
+                <AlertTriangle className="h-3 w-3" strokeWidth={2.25} />
+              ) : (
+                <Check className="h-3 w-3" strokeWidth={2.5} />
+              )}
+            </span>
+            <div>
+              <div className="mctb-setup-health-strip__title">
+                {attention.length > 0 ? "Needs attention" : "Setup healthy"}
+              </div>
+              <div className="mctb-setup-health-strip__sub">
+                {attention.length > 0
+                  ? attention[0]?.message
+                  : "All required recovery services are ready."}
+              </div>
+            </div>
+          </div>
+          <span className="mctb-setup-health-strip__count">
+            {coreReadiness.ready} of {coreReadiness.total} core systems ready
+          </span>
+        </div>
+
         {attention.length > 0 ? (
           <div className="mctb-setup-span-12 mctb-setup-attention mctb-setup-attention--warn" role="status">
             {visibleAttention.map((item) => (
               <div key={item.id} className="mctb-setup-attention-row">
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 text-[12px]">
                   <AlertTriangle className="h-3.5 w-3.5 text-[#8a6116]" aria-hidden />
                   {item.message}
                 </span>
@@ -383,24 +441,14 @@ export function MctbSetupOverviewView() {
               </button>
             ) : null}
           </div>
-        ) : (
-          <div className="mctb-setup-span-12 mctb-setup-attention mctb-setup-attention--ok" role="status">
-            <span className="mctb-setup-attention--ok__icon" aria-hidden>
-              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </span>
-            <div>
-              <div className="mctb-setup-attention--ok__title">Setup is healthy</div>
-              <div className="mctb-setup-attention--ok__sub">All required recovery services are ready.</div>
-            </div>
-          </div>
-        )}
+        ) : null}
 
         <div className="mctb-setup-span-12">
           <SetupOverviewFlowStrip stages={flowStages} />
         </div>
 
         <div className="mctb-setup-span-12">
-          <p className="mctb-setup-group-label">Call flow</p>
+          <SetupOverviewGroupHead label="Call flow" />
           <div className="mctb-setup-summary">
             {callFlowRows.map((row) => (
               <SetupOverviewSummaryRowLink key={row.id} row={row} />
@@ -409,7 +457,7 @@ export function MctbSetupOverviewView() {
         </div>
 
         <div className="mctb-setup-span-12">
-          <p className="mctb-setup-group-label mctb-setup-group-label--spaced">Operations</p>
+          <SetupOverviewGroupHead label="Operations" spaced />
           <div className="mctb-setup-summary">
             {operationsRows.map((row) => (
               <SetupOverviewSummaryRowLink key={row.id} row={row} />
@@ -417,34 +465,29 @@ export function MctbSetupOverviewView() {
           </div>
         </div>
 
-        <div className="mctb-setup-span-7 mctb-setup-panel mctb-setup-panel--elevated">
-          <h2>Recent system activity</h2>
-          {activity.length === 0 ? (
-            <p className="text-[12px] text-[#626872]">No recorded setup events in this workspace yet.</p>
-          ) : (
-            <ul className="list-none p-0 m-0">
+        {activity.length > 0 ? (
+          <div className="mctb-setup-span-7 mctb-setup-panel mctb-setup-panel--level3">
+            <h2>Recent system activity</h2>
+            <ul className="mctb-setup-activity-timeline">
               {activity.map((ev) => (
-                <li key={`${ev.label}-${ev.at}`} className="mctb-setup-activity-row">
-                  <span className="mctb-setup-activity-row__left">
-                    <span
-                      className={`mctb-setup-activity-row__icon${
-                        ev.kind === "success" ? " mctb-setup-activity-row__icon--success" : ""
-                      }`}
-                    >
-                      {ev.kind === "start" ? (
-                        <Play className="h-3 w-3" aria-hidden />
-                      ) : (
-                        <Check className="h-3 w-3" aria-hidden />
-                      )}
-                    </span>
-                    {ev.label}
+                <li key={`${ev.label}-${ev.at}`} className="mctb-setup-activity-timeline__item">
+                  <span
+                    className={`mctb-setup-activity-timeline__dot${
+                      ev.kind === "success" ? " mctb-setup-activity-timeline__dot--success" : ""
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="mctb-setup-activity-timeline__label">{ev.label}</span>
+                  <span className="mctb-setup-activity-timeline__time">
+                    {formatShortWhenCompact(ev.at)}
                   </span>
-                  <span className="shrink-0 text-[#8b939e]">{formatShortWhenCompact(ev.at)}</span>
                 </li>
               ))}
             </ul>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="mctb-setup-span-7" />
+        )}
 
         <div className="mctb-setup-span-5">
           <SetupOverviewQuickActions />

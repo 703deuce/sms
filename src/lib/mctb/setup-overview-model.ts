@@ -167,7 +167,8 @@ export function buildSetupFlowStages(input: {
   recoveryActive: boolean;
   voicemailReady: boolean;
 }): SetupFlowStage[] {
-  const consentLabel = input.consentMode === "press_1" ? "Press 1 consent" : "Existing consent";
+  const consentState =
+    input.consentMode === "press_1" ? "Press 1" : "Existing permission";
   const recoveryState = input.recoveryPaused
     ? "Paused"
     : input.recoveryActive
@@ -183,15 +184,51 @@ export function buildSetupFlowStages(input: {
       stateLabel: input.forwardingVerified ? "Verified" : "Pending",
       tone: input.forwardingVerified ? "ok" : "warning",
     },
-    { id: "consent", label: consentLabel, stateLabel: "Configured", tone: "ok" },
-    { id: "text", label: "Recovery text", stateLabel: recoveryState, tone: recoveryTone },
+    { id: "consent", label: "Consent", stateLabel: consentState, tone: "neutral" },
+    { id: "text", label: "Text sent", stateLabel: recoveryState, tone: recoveryTone },
     {
       id: "vm",
-      label: "Voicemail fallback",
+      label: "Voicemail",
       stateLabel: input.voicemailReady ? "Ready" : "Setup",
       tone: input.voicemailReady ? "ok" : "warning",
     },
   ];
+}
+
+/** Five canonical readiness checks derived from live setup state (no fabricated counts). */
+export function buildCoreSystemsReadiness(input: {
+  forwardingVerified: boolean;
+  messagingReady: boolean;
+  recoveryPaused: boolean;
+  triggersOn: boolean;
+  messageConfigured: boolean;
+  voicemailReady: boolean;
+}): { ready: number; total: number } {
+  const checks = [
+    input.forwardingVerified,
+    input.messagingReady,
+    !input.recoveryPaused && input.triggersOn,
+    input.messageConfigured,
+    input.voicemailReady,
+  ];
+  return { ready: checks.filter(Boolean).length, total: checks.length };
+}
+
+export function resolveSetupChipTone(
+  statusLabel: string,
+  status: SetupOverviewRowStatus,
+): "positive" | "neutral" | "attention" | "danger" {
+  const label = statusLabel.toLowerCase();
+  if (status === "error") return "danger";
+  if (["verified", "active", "ready", "passed"].some((k) => label.includes(k))) return "positive";
+  if (
+    ["pending", "needs", "missing", "not run", "unavailable", "not configured"].some((k) =>
+      label.includes(k),
+    )
+  ) {
+    return "attention";
+  }
+  return "neutral";
 }
 
 export function buildSetupSummaryRows(input: {
@@ -314,7 +351,7 @@ export function buildSetupSummaryRows(input: {
       secondary: consentSecondary,
       operationalDetail: consentOperational,
       statusLabel: input.existingConsentBlocked ? "Unavailable" : consent?.title ? "Configured" : "Not set",
-      status: input.existingConsentBlocked ? "error" : "ok",
+      status: input.existingConsentBlocked ? "error" : "neutral",
       href: MCTB_ROUTES.setupConsent,
       group: "call-flow",
     },
