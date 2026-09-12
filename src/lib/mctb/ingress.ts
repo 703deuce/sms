@@ -8,8 +8,11 @@ export type MctbIngressKind = "demo_direct" | "production_forwarded";
 
 const PRODUCTION_ONBOARDING_STEPS = new Set([
   "connect",
+  "connect_calls",
   "live_test",
+  "review_test",
   "complete",
+  "ready",
 ]);
 
 /** Demo never requires carrier forwarding — direct call to platform demo DID only. */
@@ -25,10 +28,18 @@ export function productionRequiresForwardingSetup(): boolean {
 /** True when onboarding is in the production activation phase (post-demo). */
 export function isProductionActivationPhase(state: MctbOnboardingState): boolean {
   if (PRODUCTION_ONBOARDING_STEPS.has(state.currentStep)) return true;
+  const steps = state.completedSteps;
+  const pastDemo =
+    steps.includes("demo") ||
+    steps.includes("recovery") ||
+    steps.includes("consent") ||
+    Boolean(state.workspaceTollFreeNumber || state.trialNumber);
   return (
-    state.completedSteps.includes("demo") &&
-    (state.completedSteps.includes("connect") ||
-      state.completedSteps.includes("live_test") ||
+    pastDemo &&
+    (steps.includes("connect") ||
+      steps.includes("connect_calls") ||
+      steps.includes("live_test") ||
+      steps.includes("review_test") ||
       Boolean(state.forwardingTestStartedAt) ||
       Boolean(state.liveTestSession?.startedAt))
   );

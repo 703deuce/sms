@@ -1,8 +1,15 @@
 export type MctbOnboardingStep =
+  | "business_line"
+  | "connect_calls"
+  | "consent"
+  | "recovery"
+  | "voicemail"
+  | "review_test"
+  | "ready"
+  /** @deprecated legacy persisted values — normalized on read */
   | "business"
   | "trial_number"
   | "configure"
-  | "consent"
   | "demo"
   | "tfv"
   | "pending"
@@ -124,27 +131,31 @@ export type MctbOnboardingState = {
   liveTestSession?: MctbLiveTestSession | null;
   liveTestPassedAt?: string | null;
   trialActivatedAt?: string | null;
+  voicemailConfiguredAt?: string | null;
   funnelEvents?: Record<string, string>;
 };
 
 export const MCTB_ONBOARDING_STEP_ORDER: MctbOnboardingStep[] = [
-  "business",
+  "business_line",
+  "connect_calls",
   "consent",
-  "demo",
-  "trial_number",
-  "configure",
-  "tfv",
-  "pending",
-  "connect",
-  "live_test",
-  "complete",
+  "recovery",
+  "voicemail",
+  "review_test",
+  "ready",
 ];
 
-export const MCTB_ONBOARDING_STEP_LABELS: Record<MctbOnboardingStep, string> = {
+export const MCTB_ONBOARDING_STEP_LABELS: Record<string, string> = {
+  business_line: "Business line",
+  connect_calls: "Connect calls",
+  consent: "Consent",
+  recovery: "Recovery",
+  voicemail: "Voicemail",
+  review_test: "Review & test",
+  ready: "Ready",
   business: "Business info",
   trial_number: "Your Transovo number",
   configure: "Text-back message",
-  consent: "Consent method",
   demo: "See how it works",
   tfv: "Toll-free verification",
   pending: "Verification pending",

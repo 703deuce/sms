@@ -41,6 +41,11 @@ import {
   type MctbForwardingCarrier,
   type MctbOnboardingStep,
 } from "@/lib/mctb/onboarding/types";
+import {
+  MCTB_WIZARD_PRIMARY_STEPS,
+  MCTB_WIZARD_PRIMARY_LABELS,
+  normalizeOnboardingStep,
+} from "@/lib/mctb/onboarding/wizard-flow";
 import { traceMctbDebug, traceMctbDebugError } from "@/lib/mctb/debug";
 import { startMctbTryItSession } from "@/lib/mctb/try-it/start-session";
 
@@ -76,6 +81,8 @@ export async function GET() {
       state,
       steps: MCTB_ONBOARDING_STEP_ORDER,
       stepLabels: MCTB_ONBOARDING_STEP_LABELS,
+      wizardPrimarySteps: MCTB_WIZARD_PRIMARY_STEPS,
+      wizardPrimaryLabels: MCTB_WIZARD_PRIMARY_LABELS,
       demo: {
         ...demo,
         description:
@@ -206,7 +213,12 @@ export async function POST(req: Request) {
       if (!result.ok) {
         return NextResponse.json({ error: result.reason || "Trial not ready" }, { status: 400 });
       }
-      state = await loadMctbOnboardingState(auth.workspaceId);
+      state = await saveMctbOnboardingState(auth.workspaceId, {
+        currentStep: "ready",
+        trialActivatedAt: new Date().toISOString(),
+      });
+      state = markStepComplete(state, "review_test");
+      await saveMctbOnboardingState(auth.workspaceId, state);
       return NextResponse.json({ ok: true, state, trialEndsAt: result.trialEndsAt });
     }
 
@@ -220,8 +232,17 @@ export async function POST(req: Request) {
         websiteUrl: body.websiteUrl || state.websiteUrl,
         industry: body.industry || state.industry,
       });
-      state = markStepComplete(state, "business");
-      await saveMctbOnboardingState(auth.workspaceId, state);
+      if (body.businessNumberE164) {
+        state = await saveMctbOnboardingState(auth.workspaceId, {
+          businessNumberE164: body.businessNumberE164,
+          forwardingCarrier: body.forwardingCarrier || state.forwardingCarrier,
+        });
+      }
+      state = markStepComplete(state, "business_line");
+      await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        currentStep: "connect_calls",
+      });
       await recordFunnelEvent(auth.workspaceId, "MCTB_BUSINESS_INFO_COMPLETED");
     }
 
@@ -235,13 +256,11 @@ export async function POST(req: Request) {
       state = await saveMctbOnboardingState(auth.workspaceId, {
         messageTemplate: body.messageTemplate,
       });
-      state = markStepComplete(state, "configure");
-      const trialStatus = await getTrialNumberStatus(auth.workspaceId);
-      if (trialStatus.messagingApproved && trialStatus.numberClass === "TELNYX_LOCAL_A2P") {
-        state = markStepComplete(state, "tfv");
-        state = markStepComplete(state, "pending");
-      }
-      await saveMctbOnboardingState(auth.workspaceId, state);
+      state = markStepComplete(state, "recovery");
+      await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        currentStep: state.voicemailConfiguredAt ? "review_test" : "voicemail",
+      });
       await recordFunnelEvent(auth.workspaceId, "MCTB_MESSAGE_CONFIGURED");
     }
 
@@ -281,7 +300,10 @@ export async function POST(req: Request) {
         consentMode: body.consentMode,
       });
       state = markStepComplete(state, "consent");
-      await saveMctbOnboardingState(auth.workspaceId, state);
+      await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        currentStep: "recovery",
+      });
       await recordFunnelEvent(auth.workspaceId, "MCTB_CONSENT_SELECTED", {
         consentMode: body.consentMode,
       });
@@ -298,15 +320,25 @@ export async function POST(req: Request) {
       }
     }
 
+    if (body.action === "mark_voicemail_configured") {
+      state = markStepComplete(state, "voicemail");
+      state = await saveMctbOnboardingState(auth.workspaceId, {
+        ...state,
+        voicemailConfiguredAt: new Date().toISOString(),
+        currentStep: "review_test",
+      });
+    }
+
     if (body.action === "start_forwarding_test") {
       const { isProductionActivationPhase } = await import("@/lib/mctb/ingress");
-      if (!state.completedSteps.includes("demo")) {
+      if (!state.completedSteps.includes("consent")) {
         return NextResponse.json(
-          { error: "Complete the direct-call demo before configuring forwarding." },
+          { error: "Choose a consent method before verifying forwarding." },
           { status: 400 },
         );
       }
-      if (!isProductionActivationPhase(state) && state.currentStep !== "connect") {
+      const stepCanon = normalizeOnboardingStep(state.currentStep);
+      if (!isProductionActivationPhase(state) && stepCanon !== "connect_calls") {
         return NextResponse.json(
           { error: "Forwarding setup is only available during production activation." },
           { status: 400 },
@@ -318,7 +350,7 @@ export async function POST(req: Request) {
 
     if (
       (body.forwardingCarrier || body.businessNumberE164 || body.forwardingRingSeconds != null) &&
-      state.completedSteps.includes("demo")
+      (state.completedSteps.includes("consent") || state.completedSteps.includes("business_line"))
     ) {
       const isStarting = Boolean(body.businessNumberE164 && !state.forwardingTestStartedAt);
       state = await saveMctbOnboardingState(auth.workspaceId, {
@@ -339,11 +371,12 @@ export async function POST(req: Request) {
     );
     if (forwardingCheck?.verified) {
       state = await loadMctbOnboardingState(auth.workspaceId);
-      if (state.forwardingConnectedAt && !state.completedSteps.includes("connect")) {
-        state = markStepComplete(state, "connect");
-        await saveMctbOnboardingState(auth.workspaceId, { currentStep: "live_test" });
-        const { startLiveTestSession } = await import("@/lib/mctb/onboarding/live-test");
-        await startLiveTestSession(auth.workspaceId);
+      if (state.forwardingConnectedAt && !state.completedSteps.includes("connect_calls")) {
+        state = markStepComplete(state, "connect_calls");
+        const nextAfterConnect = state.completedSteps.includes("consent")
+          ? "recovery"
+          : "consent";
+        await saveMctbOnboardingState(auth.workspaceId, { currentStep: nextAfterConnect });
         state = await loadMctbOnboardingState(auth.workspaceId);
       }
     }
@@ -360,17 +393,12 @@ export async function POST(req: Request) {
       );
     }
 
-    if (body.step === "tfv") {
-      await recordFunnelEvent(auth.workspaceId, "MCTB_TFV_STARTED");
-      state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: "tfv" });
-    } else if (body.step) {
-      if (body.step === "trial_number" && !state.completedSteps.includes("demo")) {
-        return NextResponse.json(
-          { error: "Complete the direct-call demo before assigning your production number." },
-          { status: 400 },
-        );
+    if (body.step) {
+      const nextStep = normalizeOnboardingStep(body.step);
+      if (nextStep === "recovery" && body.action === "provision_trial_number") {
+        state = markStepComplete(state, "recovery");
       }
-      state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: body.step });
+      state = await saveMctbOnboardingState(auth.workspaceId, { currentStep: nextStep });
     }
 
     await syncTrialTollFreeVerification(auth.workspaceId).catch(() => undefined);

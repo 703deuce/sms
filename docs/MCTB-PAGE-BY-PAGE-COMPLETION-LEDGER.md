@@ -265,3 +265,32 @@ BROKEN: 0
 NO_OP: 0  
 PLACEHOLDER: 0  
 REMOVED_EXISTING_FEATURES: 0
+
+## Onboarding wizard (`/onboarding/mctb`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_ONBOARDING_ROUTE | PASS | Canonical `/onboarding/mctb` |
+| MCTB_ONBOARDING_SIX_STEPS | PASS | Business → Connect → Consent → Recovery → Voicemail → Review |
+| MCTB_ONBOARDING_STATE | PASS | `workspace.customFieldsConfig.mctbOnboarding` |
+| MCTB_ONBOARDING_SETUP_PARITY | PASS | Same APIs as permanent Setup |
+| MCTB_ONBOARDING_FORWARDING | PASS | Carrier instructions + verification |
+| MCTB_ONBOARDING_CONSENT_GATE | PASS | Existing consent eligibility |
+| MCTB_ONBOARDING_TFV | PASS | Embedded in Recovery |
+| MCTB_ONBOARDING_DEMO | PASS | Modal; `start_demo` preserved |
+| MCTB_ONBOARDING_LIVE_TEST | PASS | `/api/mctb/live-test` |
+| MCTB_ONBOARDING_VOICEMAIL | PASS | Default greeting + Setup link |
+| MCTB_ONBOARDING_DOCS | PASS | Audit + 2 matrices |
+| MCTB_ONBOARDING_TESTS | PASS | `test-mctb-onboarding-wizard-flow.ts` |
+| MCTB_ONBOARDING_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**ONBOARDING_WIZARD_COMPLETE: YES**  
+OLD_STEPS_DISCOVERED: 10  
+OLD_CAPABILITIES_DISCOVERED: 24  
+CAPABILITIES_PRESERVED: 24  
+NEW_PRIMARY_STEPS: 6  
+UNACCOUNTED_OLD_CAPABILITIES: 0  
+BROKEN: 0  
+NO_OP: 0  
+PLACEHOLDER: 0  
+REMOVED_EXISTING_FEATURES: 0
