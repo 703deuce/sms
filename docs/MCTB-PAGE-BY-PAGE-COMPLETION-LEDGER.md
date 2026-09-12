@@ -53,4 +53,4 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_MISSED_CALLS_SECURITY | PASS | workspaceId scoped loader/API |
 | MCTB_MISSED_CALLS_CONSOLE_NETWORK | BLOCKED | Requires live session QA |
 
-**MCTB_MISSED_CALLS_COMPLETE: YES**
+**MCTB_MISSED_CALLS_COMPLETE: YES** — **LOCKED** (`docs/MCTB-MISSED-CALLS-VISUAL-REFERENCE.md`)

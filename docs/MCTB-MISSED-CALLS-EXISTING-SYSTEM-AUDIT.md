@@ -15,17 +15,18 @@ Audit date: 2026-09-12. Scope: list page only (not detail). Backend/runtime unch
 
 | Metric | Read source | API field | Query | Status |
 |--------|-------------|-----------|-------|--------|
-| Missed today | `summary.missedToday` | `data.summary.missedToday` | `prisma.missedCallEvent.count` workspace + `detectedAt >= startOfToday` | WORKING |
-| Recovery texts today | `summary.sentToday` | `data.summary.sentToday` | count `smsSentAt >= startOfToday` | WORKING |
-| Replies today | `summary.repliedToday` | `data.summary.repliedToday` | `status=CUSTOMER_REPLIED` + `updatedAt >= startOfToday` | WORKING |
-| Needs reply (4th) | N/A | N/A | Not on list endpoint | N/A (not added) |
+| Missed calls | `summary.missedCount` | `data.summary.missedCount` | count scoped to active **date** filter (`detectedAt`) | WORKING |
+| Recovery texts | `summary.recoveryTextsCount` | same | `smsSentAt` in date scope | WORKING |
+| Replies | `summary.repliesCount` | same | `CUSTOMER_REPLIED` + `updatedAt` in date scope | WORKING |
+| Needs reply | `summary.needsReplyCount` | same | `conversation` OPEN + unread + MCTB product (current inbox state) | WORKING |
+| Summary range label | `summary.rangeLabel` | same | mirrors date filter (Today / 7d / 30d / All time) | WORKING |
 
 ## Filters & URL state
 
 | Control | Param | Read | Write | Server filter | Status |
 |---------|-------|------|-------|---------------|--------|
 | Search | `q` | URL + debounced input 350ms | `pushQuery` | `callerE164` contains digits (≥3); `businessE164` contains digits/text | PARTIAL (no contact name search) |
-| Status | `status` | URL | `pushQuery` | `statusWhere()` in `missed-calls-list-filters.ts` | WORKING |
+| Outcome (URL `status`) | `status` | URL | `pushQuery` | `statusWhere()` — composite recovery/reply/consent outcomes | WORKING |
 | Date | `date` | URL | `pushQuery` | `today` / `7d` / `30d` / `all` on `detectedAt` | WORKING |
 | Trigger | `trigger` | URL | `pushQuery` | `disposition` equals value | WORKING |
 | Consent mode | `consentMode` | URL | `pushQuery` | `filterEventsByConsentMode` post-query | PARTIAL (rows lack `consentMode` enrichment) |

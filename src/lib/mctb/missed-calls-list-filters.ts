@@ -89,8 +89,8 @@ export function missedCallsSummaryRangeLabel(date: MissedCallsDateFilter = "all"
   }
 }
 
-/** User-facing name for the `status` query filter (composite recovery/reply/consent outcomes). */
-export const MISSED_CALLS_OUTCOME_FILTER_LABEL = "Outcome";
+/** User-facing name for the `status` query filter (recovery / reply / consent outcomes). */
+export const MISSED_CALLS_OUTCOME_FILTER_LABEL = "Recovery";
 
 function statusWhere(status: MissedCallsStatusFilter): Prisma.MissedCallEventWhereInput | undefined {
   switch (status) {

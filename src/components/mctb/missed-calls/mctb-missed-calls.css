@@ -252,16 +252,19 @@
 }
 
 .mctb-mc-table-wrap {
+  display: flex;
+  flex-direction: column;
   border: 1px solid #eaedf0;
   border-radius: 8px;
   background: #ffffff;
   overflow: hidden;
 }
 
+/* Table body only — pagination footer is a separate block below (no overlay). */
 .mctb-mc-table-scroll {
+  flex: 0 0 auto;
   overflow-x: auto;
-  max-height: min(70vh, 520px);
-  overflow-y: auto;
+  overflow-y: visible;
 }
 
 .mctb-mc-table {
@@ -288,19 +291,19 @@
 }
 
 .mctb-mc-table thead th:nth-child(1) {
-  width: 18%;
+  width: 19%;
 }
 
 .mctb-mc-table thead th:nth-child(2) {
-  width: 11%;
+  width: 13%;
 }
 
 .mctb-mc-table thead th:nth-child(3) {
-  width: 10%;
+  width: 11%;
 }
 
 .mctb-mc-table thead th:nth-child(4) {
-  width: 18%;
+  width: 22%;
 }
 
 .mctb-mc-table thead th:nth-child(5) {
@@ -308,11 +311,11 @@
 }
 
 .mctb-mc-table thead th:nth-child(6) {
-  width: 14%;
+  width: 15%;
 }
 
 .mctb-mc-table thead th:nth-child(7) {
-  width: 12%;
+  width: 10%;
 }
 
 .mctb-mc-table tbody td,
@@ -492,7 +495,11 @@
 }
 
 .mctb-mc-pagination.data-table-pagination-footer {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 0;
   border-top: 1px solid #eaedf0;
+  background: #fafbfc;
 }
 
 .mctb-mc-empty,

@@ -53,8 +53,8 @@ type Pagination = {
   totalPages: number;
 };
 
-const OUTCOME_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
-  { id: "all", label: "All outcomes" },
+const RECOVERY_FILTER_OPTIONS: Array<{ id: MissedCallsStatusFilter; label: string }> = [
+  { id: "all", label: "All recovery outcomes" },
   { id: "needs_attention", label: "Needs attention" },
   { id: "replied", label: "Replied" },
   { id: "waiting_consent", label: "Waiting for consent" },
@@ -444,7 +444,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
               value={query.status ?? "all"}
               onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
             >
-              {OUTCOME_OPTIONS.map((opt) => (
+              {RECOVERY_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id}>{opt.label}</option>
               ))}
             </select>
@@ -533,7 +533,7 @@ export function MctbMissedCallsView({ initialData = null }: MctbMissedCallsViewP
                   value={query.status ?? "all"}
                   onChange={(e) => pushQuery({ status: e.target.value as MissedCallsStatusFilter })}
                 >
-                  {OUTCOME_OPTIONS.map((opt) => (
+                  {RECOVERY_FILTER_OPTIONS.map((opt) => (
                     <option key={opt.id} value={opt.id}>{opt.label}</option>
                   ))}
                 </select>
