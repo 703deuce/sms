@@ -1,16 +1,18 @@
 import {
   BarChart3,
+  Bell,
   Calendar,
+  CalendarCheck,
+  CalendarCog,
   ClipboardList,
+  CreditCard,
   Home,
+  LayoutDashboard,
   MessageSquare,
   PhoneMissed,
   Puzzle,
-  Settings2,
   SlidersHorizontal,
   Voicemail,
-  Bell,
-  CreditCard,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -19,15 +21,19 @@ export type MctbNavOptions = {
   inboxBadge?: number;
 };
 
-/** Canonical MCTB product-local navigation for the V1 Appointments + MCTB shell. */
+const MCTB_SECTION = "Missed Call Text Back";
+const BOOKING_SECTION = "Booking";
+
+/** Canonical MCTB product-local navigation — grouped by product ownership. */
 export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
 
   return [
     {
-      label: "Home",
+      label: "Overview",
       href: MCTB_ROUTES.home,
-      icon: Home,
+      icon: LayoutDashboard,
+      sectionLabel: MCTB_SECTION,
       matchExact: true,
     },
     {
@@ -42,19 +48,35 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       badge: badge > 0 ? badge : undefined,
     },
     {
+      label: "Voicemail",
+      href: MCTB_ROUTES.voicemail,
+      icon: Voicemail,
+    },
+    {
+      label: "Analytics",
+      href: MCTB_ROUTES.analytics,
+      icon: BarChart3,
+    },
+    {
+      label: "Setup",
+      href: MCTB_ROUTES.setup,
+      icon: SlidersHorizontal,
+    },
+    {
       label: "Calendar",
       href: MCTB_ROUTES.calendar,
       icon: Calendar,
+      sectionLabel: BOOKING_SECTION,
     },
     {
       label: "Appointments",
       href: MCTB_ROUTES.appointments,
-      icon: ClipboardList,
+      icon: CalendarCheck,
     },
     {
       label: "Booking Setup",
       href: MCTB_ROUTES.booking,
-      icon: Settings2,
+      icon: CalendarCog,
     },
     {
       label: "Reminders",
@@ -67,29 +89,14 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       icon: CreditCard,
     },
     {
-      label: "Voicemail",
-      href: MCTB_ROUTES.voicemail,
-      icon: Voicemail,
-    },
-    {
-      label: "Analytics",
-      href: MCTB_ROUTES.analytics,
-      icon: BarChart3,
-    },
-    {
       label: "Integrations",
       href: MCTB_ROUTES.integrations,
       icon: Puzzle,
     },
-    {
-      label: "Setup",
-      href: MCTB_ROUTES.setup,
-      icon: SlidersHorizontal,
-    },
   ];
 }
 
-/** Bottom nav for mobile — primary MCTB destinations. */
+/** Bottom nav for mobile — primary MCTB destinations (compact; full IA via sidebar “More”). */
 export function buildMctbV1MobileNav(options: MctbNavOptions = {}): NavItem[] {
   const badge = options.inboxBadge ?? 0;
   return [
@@ -139,4 +146,11 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith("/voice/schedule")) return "Recovery Controls";
 
   return "";
+}
+
+/** Shared workspace routes that should keep the stored MCTB shell (not Appointments). */
+export function isMctbSharedWorkspacePath(pathname: string): boolean {
+  if (pathname === "/payments" || pathname.startsWith("/payments/")) return true;
+  if (pathname === "/integrations" || pathname.startsWith("/integrations/")) return true;
+  return false;
 }

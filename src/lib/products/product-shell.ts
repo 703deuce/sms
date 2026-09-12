@@ -57,9 +57,6 @@ const APPOINTMENTS_PATH_PREFIXES = [
   "/appointments",
   "/meetings",
   "/video",
-  "/payments",
-  "/integrations/calendars",
-  "/integrations/payments",
 ] as const;
 
 export function massSmsShellHome(): string {

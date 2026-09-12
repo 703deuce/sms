@@ -1,6 +1,6 @@
 import type { NavItem } from "@/lib/nav";
 import { buildAppointmentsMobileNav, buildAppointmentsV1Nav } from "@/lib/products/appointments-nav";
-import { buildMctbV1Nav, buildMctbV1MobileNav } from "@/lib/products/mctb-nav";
+import { buildMctbV1Nav, buildMctbV1MobileNav, isMctbSharedWorkspacePath } from "@/lib/products/mctb-nav";
 import { buildAiAfterHoursNav } from "@/lib/products/ai-after-hours-nav";
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { buildMctbShellNav } from "@/lib/products/voice-nav";
@@ -23,11 +23,25 @@ export type ResolveProductNavInput = {
   smartRoutingFlowId?: string | null;
 };
 
+function resolveEffectiveProductShell(
+  pathname: string,
+  productShell: ProductShell,
+  multiProduct: boolean,
+): ProductShell | null {
+  const pathShell = resolveProductShellFromPath(pathname);
+  if (pathShell) return pathShell;
+  if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return "mctb";
+  if (multiProduct) return productShell;
+  return null;
+}
+
 /** Sidebar nav for the active product shell — URL wins over stored shell tab. */
 export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem[] {
-  const pathShell = resolveProductShellFromPath(input.pathname);
-  const effectiveShell: ProductShell | null =
-    pathShell ?? (input.multiProduct ? input.productShell : null);
+  const effectiveShell = resolveEffectiveProductShell(
+    input.pathname,
+    input.productShell,
+    input.multiProduct,
+  );
 
   if (effectiveShell === "mctb") {
     return buildMctbV1Nav({ inboxBadge: input.inboxBadge });
@@ -70,9 +84,11 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
 }
 
 export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[] {
-  const pathShell = resolveProductShellFromPath(input.pathname);
-  const effectiveShell: ProductShell | null =
-    pathShell ?? (input.multiProduct ? input.productShell : null);
+  const effectiveShell = resolveEffectiveProductShell(
+    input.pathname,
+    input.productShell,
+    input.multiProduct,
+  );
 
   if (effectiveShell === "mctb") {
     return buildMctbV1MobileNav({ inboxBadge: input.inboxBadge });
@@ -97,6 +113,10 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
 export function isMctbShellActive(pathname: string, multiProduct: boolean, productShell: ProductShell): boolean {
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell === "mctb") return true;
+  if (pathShell === "appointments" || pathShell === "mass_sms" || pathShell === "ai_after_hours") {
+    return false;
+  }
+  if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return true;
   return multiProduct && productShell === "mctb";
 }
 
