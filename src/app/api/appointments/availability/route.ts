@@ -15,6 +15,8 @@ export async function GET(request: Request) {
       serviceId,
       serviceName: searchParams.get("serviceName") || undefined,
       daysAhead: Number(searchParams.get("daysAhead") || 14),
+      staffId: searchParams.get("staffId") || undefined,
+      locationId: searchParams.get("locationId") || undefined,
     });
     return NextResponse.json({ data });
   } catch (err) {

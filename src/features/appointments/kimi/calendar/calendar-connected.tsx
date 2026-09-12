@@ -26,18 +26,24 @@ import {
   type QuickCreatePrefill,
 } from "@/components/appointments/calendar/calendar-quick-create-sheet";
 import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
+import { CalendarRecurringScopeDialog } from "@/components/appointments/calendar/calendar-recurring-scope-dialog";
+import {
+  CalendarWaitlistMatchDrawer,
+  type OpenSlotSummary,
+  type WaitlistMatchRow,
+} from "@/components/appointments/calendar/calendar-waitlist-match-drawer";
+import {
+  buildCalendarSearchParams,
+  calendarUrlEquals,
+  parseCalendarCursorFromSearch,
+  parseCalendarFiltersFromSearch,
+  parseCalendarView,
+} from "@/features/appointments/kimi/calendar/calendar-url-state";
+import { useCalendarReschedule } from "@/features/appointments/kimi/calendar/use-calendar-reschedule";
 
-const VIEW_KEY = "tv-calendar-view";
 const FILTER_KEY = "tv-calendar-filters";
 
-function loadView(): CalendarViewMode {
-  if (typeof window === "undefined") return "week";
-  const v = localStorage.getItem(VIEW_KEY);
-  if (v === "day" || v === "week" || v === "month" || v === "agenda") return v;
-  return "week";
-}
-
-function loadFilters(): CalendarFilters {
+function loadFiltersFallback(): CalendarFilters {
   try {
     const raw = localStorage.getItem(FILTER_KEY);
     if (raw) return JSON.parse(raw) as CalendarFilters;
@@ -45,6 +51,10 @@ function loadFilters(): CalendarFilters {
     /* ignore */
   }
   return { q: "", staffIds: [], locationId: "", resourceId: "", status: "all", domainType: "all" };
+}
+
+function isCanceledStatus(status: string) {
+  return status === "canceled" || status === "cancelled";
 }
 
 function CalendarLoadingShell() {
@@ -71,9 +81,18 @@ function CalendarError({ onRetry }: { onRetry: () => void }) {
 export function CalendarConnected() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
-  const [view, setView] = useState<CalendarViewMode>(() => loadView());
-  const [selectedDayKey, setSelectedDayKey] = useState(() => dateKey(new Date()));
+  const initialView = parseCalendarView(searchParams.get("view"));
+  const [cursor, setCursor] = useState(() =>
+    parseCalendarCursorFromSearch(new URLSearchParams(searchParams.toString()), initialView),
+  );
+  const [view, setView] = useState<CalendarViewMode>(initialView);
+  const [selectedDayKey, setSelectedDayKey] = useState(() => {
+    const d = parseCalendarCursorFromSearch(
+      new URLSearchParams(searchParams.toString()),
+      initialView,
+    );
+    return dateKey(initialView === "week" ? d : d);
+  });
   const [miniCalendarMonth, setMiniCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -83,7 +102,20 @@ export function CalendarConnected() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [filters, setFilters] = useState<CalendarFilters>(() => loadFilters());
+  const [filters, setFilters] = useState<CalendarFilters>(() => {
+    const fromUrl = parseCalendarFiltersFromSearch(new URLSearchParams(searchParams.toString()));
+    if (
+      fromUrl.q ||
+      fromUrl.staffIds.length ||
+      fromUrl.locationId ||
+      fromUrl.resourceId ||
+      fromUrl.status !== "all" ||
+      fromUrl.domainType !== "all"
+    ) {
+      return fromUrl;
+    }
+    return loadFiltersFallback();
+  });
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [secondaryFilters, setSecondaryFilters] = useState(false);
   const [workspace, setWorkspace] = useState<{
@@ -95,6 +127,12 @@ export function CalendarConnected() {
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [quickCreate, setQuickCreate] = useState<QuickCreatePrefill | null>(null);
   const [sideCollapsed, setSideCollapsed] = useState(false);
+  const [slotWaitlistCounts, setSlotWaitlistCounts] = useState<Record<string, number>>({});
+  const [waitlistDrawer, setWaitlistDrawer] = useState<OpenSlotSummary | null>(null);
+  const [waitlistMatches, setWaitlistMatches] = useState<WaitlistMatchRow[]>([]);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistBusyEntry, setWaitlistBusyEntry] = useState<string | null>(null);
+  const [cancelWaitlistBanner, setCancelWaitlistBanner] = useState<OpenSlotSummary | null>(null);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
@@ -104,10 +142,6 @@ export function CalendarConnected() {
       .then((json) => setWorkspace(json.data || null))
       .catch(() => setWorkspace(null));
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(VIEW_KEY, view);
-  }, [view]);
 
   useEffect(() => {
     localStorage.setItem(FILTER_KEY, JSON.stringify(filters));
@@ -169,6 +203,87 @@ export function CalendarConnected() {
     load();
   }, [load]);
 
+  const {
+    dragOverrides,
+    onDragPreview,
+    onDragClear,
+    onDragCommit: baseDragCommit,
+    beginReschedule,
+    recurringOpen,
+    setRecurringOpen,
+    confirmRecurring,
+    toast,
+    setToast,
+  } = useCalendarReschedule(load);
+
+  const fetchWaitlistMatches = useCallback(async (slot: OpenSlotSummary) => {
+    setWaitlistLoading(true);
+    try {
+      const params = new URLSearchParams({ startsAt: slot.startsAt });
+      if (slot.endsAt) params.set("endsAt", slot.endsAt);
+      if (slot.serviceName) params.set("serviceName", slot.serviceName);
+      if (slot.staffLabel) {
+        const staff = workspace?.staff.find((s) => s.name === slot.staffLabel);
+        if (staff) params.set("staffId", staff.id);
+      }
+      const res = await fetch(`/api/appointments/calendar/waitlist-match?${params}`);
+      const json = await res.json();
+      setWaitlistMatches((json.data?.matches || []) as WaitlistMatchRow[]);
+    } catch {
+      setWaitlistMatches([]);
+    } finally {
+      setWaitlistLoading(false);
+    }
+  }, [workspace?.staff]);
+
+  const openWaitlistDrawer = useCallback(
+    (slot: OpenSlotSummary) => {
+      setWaitlistDrawer(slot);
+      void fetchWaitlistMatches(slot);
+    },
+    [fetchWaitlistMatches],
+  );
+
+  useEffect(() => {
+    const canceled = rows.filter((r) => isCanceledStatus(r.status));
+    if (!canceled.length) return;
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, number> = {};
+      for (const row of canceled.slice(0, 12)) {
+        const start = new Date(row.startsAt);
+        const hour = start.getHours();
+        const key = `${dateKey(start)}:${hour}`;
+        const params = new URLSearchParams({
+          startsAt: row.startsAt,
+          serviceName: row.serviceName || "Appointment",
+        });
+        if (row.staffIds?.[0]) params.set("staffId", row.staffIds[0]);
+        if (row.locationId) params.set("locationId", row.locationId);
+        const res = await fetch(`/api/appointments/calendar/waitlist-match?${params}`);
+        if (!res.ok) continue;
+        const json = await res.json();
+        const count = Number(json.data?.count || 0);
+        if (count > 0) next[key] = count;
+        if (cancelled) return;
+      }
+      if (!cancelled) setSlotWaitlistCounts(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
+  useEffect(() => {
+    const next = buildCalendarSearchParams({ view, cursor, selectedDayKey, filters });
+    const apptId = searchParams.get("appointmentId");
+    if (apptId) next.set("appointmentId", apptId);
+    const current = new URLSearchParams(searchParams.toString());
+    if (!calendarUrlEquals(next, current)) {
+      router.replace(`/appointments/calendar?${next.toString()}`, { scroll: false });
+    }
+  }, [cursor, filters, router, searchParams, selectedDayKey, view]);
+
   useEffect(() => {
     const apptId = searchParams.get("appointmentId");
     if (apptId) setDrawerId(apptId);
@@ -178,16 +293,37 @@ export function CalendarConnected() {
     }
   }, [router, searchParams]);
 
-  const model: CalendarPageModel | null = useMemo(
-    () =>
-      buildCalendarPageModel({
-        appointments: rows,
-        cursor,
-        view: view === "agenda" ? "week" : view,
-        selectedDayKey,
-        miniCalendarMonth,
+  const weekStart = useMemo(
+    () => (view === "week" ? cursor : startOfWeek(cursor)),
+    [cursor, view],
+  );
+
+  const model: CalendarPageModel | null = useMemo(() => {
+    const base = buildCalendarPageModel({
+      appointments: rows,
+      cursor,
+      view: view === "agenda" ? "week" : view,
+      selectedDayKey,
+      miniCalendarMonth,
+    });
+    if (!Object.keys(dragOverrides).length) return base;
+    return {
+      ...base,
+      weekEvents: base.weekEvents.map((ev) => {
+        const o = dragOverrides[ev.id];
+        if (!o) return ev;
+        return { ...ev, day: o.day, start: o.start };
       }),
-    [cursor, miniCalendarMonth, rows, selectedDayKey, view],
+    };
+  }, [cursor, dragOverrides, miniCalendarMonth, rows, selectedDayKey, view]);
+
+  const onDragCommit = useCallback(
+    (input: { id: string; startsAt: string }) => {
+      const row = rowById.get(input.id);
+      const meta = (row?.metadata || {}) as { recurringSeriesId?: string };
+      baseDragCommit(input, meta.recurringSeriesId);
+    },
+    [baseDragCommit, rowById],
   );
 
   const shift = useCallback(
@@ -218,7 +354,6 @@ export function CalendarConnected() {
       onNext: () => shift(1),
       onViewChange: (nextView) => {
         setView(nextView);
-        localStorage.setItem(VIEW_KEY, nextView);
         if (nextView === "week") {
           setCursor(startOfWeek(new Date(selectedDayKey)));
         } else if (nextView === "month") {
@@ -260,10 +395,46 @@ export function CalendarConnected() {
           startsAt: d.toISOString(),
           staffId: filters.staffIds[0],
           locationId: filters.locationId || undefined,
+          serviceId: workspace?.services[0]?.id,
+        });
+      },
+      weekStart,
+      dragOverrides,
+      onDragPreview,
+      onDragClear,
+      onDragCommit,
+      slotWaitlistCounts,
+      onWaitlistSlotClick: ({ dateKey: dk, hour }) => {
+        const d = new Date(dk);
+        d.setHours(hour, 0, 0, 0);
+        const end = new Date(d.getTime() + 60 * 60_000);
+        openWaitlistDrawer({
+          startsAt: d.toISOString(),
+          endsAt: end.toISOString(),
+          serviceName: workspace?.services[0]?.name,
+          staffLabel: workspace?.staff.find((s) => s.id === filters.staffIds[0])?.name,
+          locationLabel: workspace?.locations.find((l) => l.id === filters.locationId)?.name,
         });
       },
     }),
-    [filters.locationId, filters.staffIds, load, openEvent, router, selectedDayKey, shift, view],
+    [
+      dragOverrides,
+      filters.locationId,
+      filters.staffIds,
+      load,
+      onDragClear,
+      onDragCommit,
+      onDragPreview,
+      openEvent,
+      openWaitlistDrawer,
+      router,
+      selectedDayKey,
+      shift,
+      slotWaitlistCounts,
+      view,
+      weekStart,
+      workspace,
+    ],
   );
 
   const agendaRangeLabel = useMemo(() => {
@@ -323,6 +494,31 @@ export function CalendarConnected() {
           </button>
         </div>
       ) : null}
+      {toast ? (
+        <div className="cal-toast-error" role="alert">
+          {toast}
+          <button type="button" className="ml-2 underline" onClick={() => setToast(null)}>Dismiss</button>
+        </div>
+      ) : null}
+      {cancelWaitlistBanner ? (
+        <div className="cal-waitlist-cancel-banner mx-4 my-2 rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs lg:mx-6">
+          <span>
+            {waitlistMatches.length
+              ? `${waitlistMatches.length} waitlist client${waitlistMatches.length === 1 ? "" : "s"} match this opening.`
+              : "Checking waitlist matches for this opening…"}
+          </span>
+          <button
+            type="button"
+            className="ml-2 underline"
+            onClick={() => openWaitlistDrawer(cancelWaitlistBanner)}
+          >
+            View matches
+          </button>
+          <button type="button" className="ml-2 text-[var(--muted)]" onClick={() => setCancelWaitlistBanner(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {refreshing && <div className="cal-refresh-bar" aria-live="polite">Updating…</div>}
       {view === "agenda" ? (
         <div className="cal-page cal-page-agenda">
@@ -361,11 +557,59 @@ export function CalendarConnected() {
           setQuickCreate(null);
           router.push(`/appointments/new?${q.toString()}`);
         }}
+        onViewWaitlistMatches={(slot) => {
+          openWaitlistDrawer({
+            startsAt: slot.startsAt,
+            serviceName: slot.serviceName,
+            staffLabel: workspace?.staff.find((s) => s.id === filters.staffIds[0])?.name,
+            locationLabel: workspace?.locations.find((l) => l.id === filters.locationId)?.name,
+          });
+        }}
       />
       <CalendarEventDrawer
         event={drawerId ? rowById.get(drawerId) || rows.find((r) => r.id === drawerId) || null : null}
         onClose={() => setDrawerId(null)}
         onRefresh={load}
+        onReschedule={(appointmentId, startsAt) => {
+          const row = rowById.get(appointmentId);
+          const meta = (row?.metadata || {}) as { recurringSeriesId?: string };
+          void beginReschedule(appointmentId, startsAt, meta.recurringSeriesId);
+        }}
+        onCanceled={(slot) => {
+          setCancelWaitlistBanner(slot);
+          void fetchWaitlistMatches(slot).then(() => undefined);
+        }}
+      />
+      <CalendarRecurringScopeDialog
+        open={recurringOpen}
+        onClose={() => setRecurringOpen(false)}
+        onConfirm={confirmRecurring}
+      />
+      <CalendarWaitlistMatchDrawer
+        open={Boolean(waitlistDrawer)}
+        slot={waitlistDrawer}
+        matches={waitlistMatches}
+        loading={waitlistLoading}
+        busyEntryId={waitlistBusyEntry}
+        onClose={() => setWaitlistDrawer(null)}
+        onOffer={async (entryId) => {
+          if (!waitlistDrawer) return;
+          setWaitlistBusyEntry(entryId);
+          try {
+            await fetch("/api/appointments/waitlist", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                entryId,
+                action: "notify",
+                serviceName: waitlistDrawer.serviceName,
+                startsAt: waitlistDrawer.startsAt,
+              }),
+            });
+          } finally {
+            setWaitlistBusyEntry(null);
+          }
+        }}
       />
     </div>
   );

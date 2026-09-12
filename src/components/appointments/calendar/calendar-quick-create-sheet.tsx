@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 type Workspace = {
   staff: Array<{ id: string; name: string }>;
   services: Array<{ id: string; name: string }>;
+  locations?: Array<{ id: string; name: string }>;
 };
 
 export type QuickCreatePrefill = {
   startsAt: string;
   staffId?: string;
   locationId?: string;
+  serviceId?: string;
 };
 
 type Props = {
@@ -21,6 +23,7 @@ type Props = {
   onClose: () => void;
   onCreated: () => void;
   onOpenFullForm: (query: URLSearchParams) => void;
+  onViewWaitlistMatches?: (slot: { startsAt: string; serviceName?: string }) => void;
 };
 
 export function CalendarQuickCreateSheet({
@@ -30,9 +33,11 @@ export function CalendarQuickCreateSheet({
   onClose,
   onCreated,
   onOpenFullForm,
+  onViewWaitlistMatches,
 }: Props) {
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
+  const [locationId, setLocationId] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -40,21 +45,85 @@ export function CalendarQuickCreateSheet({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [slots, setSlots] = useState<Array<{ startsAt: string; endsAt: string }>>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [waitlistCount, setWaitlistCount] = useState(0);
+  const [slotWarning, setSlotWarning] = useState("");
+
+  const service = workspace?.services.find((s) => s.id === serviceId);
 
   useEffect(() => {
     if (!open || !prefill) return;
     setStartsAt(prefill.startsAt.slice(0, 16));
     setStaffId(prefill.staffId || "");
+    setLocationId(prefill.locationId || "");
+    setServiceId(prefill.serviceId || "");
     setError("");
+    setSlotWarning("");
   }, [open, prefill]);
 
-  if (!open || !prefill) return null;
+  useEffect(() => {
+    if (!open || !serviceId) {
+      setSlots([]);
+      return;
+    }
+    setSlotsLoading(true);
+    const params = new URLSearchParams({
+      serviceId,
+      daysAhead: "14",
+    });
+    if (service?.name) params.set("serviceName", service.name);
+    if (staffId) params.set("staffId", staffId);
+    if (locationId) params.set("locationId", locationId);
+    fetch(`/api/appointments/availability?${params}`)
+      .then((r) => r.json())
+      .then((json) => setSlots(json.data?.slots || []))
+      .catch(() => setSlots([]))
+      .finally(() => setSlotsLoading(false));
+  }, [open, service?.name, serviceId, staffId, locationId]);
 
-  const service = workspace?.services.find((s) => s.id === serviceId);
+  const nearestSlots = useMemo(() => {
+    if (!startsAt || !slots.length) return [];
+    const target = new Date(startsAt).getTime();
+    return [...slots]
+      .sort((a, b) => Math.abs(new Date(a.startsAt).getTime() - target) - Math.abs(new Date(b.startsAt).getTime() - target))
+      .slice(0, 5);
+  }, [slots, startsAt]);
+
+  useEffect(() => {
+    if (!open || !startsAt) return;
+    const iso = new Date(startsAt).toISOString();
+    const exact = slots.some((s) => s.startsAt === iso);
+    if (slots.length && !exact) {
+      setSlotWarning("That time is not available in the canonical schedule. Pick a valid slot below.");
+    } else {
+      setSlotWarning("");
+    }
+  }, [open, slots, startsAt]);
+
+  useEffect(() => {
+    if (!open || !startsAt) return;
+    const params = new URLSearchParams({ startsAt: new Date(startsAt).toISOString() });
+    if (service?.name) params.set("serviceName", service.name);
+    if (serviceId) params.set("serviceId", serviceId);
+    if (staffId) params.set("staffId", staffId);
+    if (locationId) params.set("locationId", locationId);
+    fetch(`/api/appointments/calendar/waitlist-match?${params}`)
+      .then((r) => r.json())
+      .then((json) => setWaitlistCount(Number(json.data?.count || 0)))
+      .catch(() => setWaitlistCount(0));
+  }, [open, startsAt, service?.name, serviceId, staffId, locationId]);
+
+  if (!open || !prefill) return null;
 
   async function create() {
     if (!phone.trim() || !startsAt) {
       setError("Client phone and time are required.");
+      return;
+    }
+    const iso = new Date(startsAt).toISOString();
+    if (slots.length && !slots.some((s) => s.startsAt === iso)) {
+      setError("Choose a canonically available time.");
       return;
     }
     setBusy(true);
@@ -66,7 +135,7 @@ export function CalendarQuickCreateSheet({
         body: JSON.stringify({
           serviceId: serviceId || undefined,
           serviceName: service?.name || "Appointment",
-          startsAt: new Date(startsAt).toISOString(),
+          startsAt: iso,
           firstName: firstName.trim() || "Guest",
           lastName: lastName.trim(),
           phone: phone.trim(),
@@ -90,7 +159,7 @@ export function CalendarQuickCreateSheet({
     const baseStart = startsAt || prefill?.startsAt || new Date().toISOString();
     const q = new URLSearchParams({ startsAt: new Date(baseStart).toISOString() });
     if (staffId) q.set("staffId", staffId);
-    if (prefill?.locationId) q.set("locationId", prefill.locationId);
+    if (locationId) q.set("locationId", locationId);
     if (serviceId) q.set("serviceId", serviceId);
     if (phone) q.set("phone", phone);
     onOpenFullForm(q);
@@ -108,6 +177,20 @@ export function CalendarQuickCreateSheet({
           <div>
             <p className="cal-drawer-kicker">Quick create</p>
             <h2 className="cal-drawer-title">New appointment</h2>
+            {waitlistCount > 0 ? (
+              <button
+                type="button"
+                className="cal-waitlist-inline-link"
+                onClick={() =>
+                  onViewWaitlistMatches?.({
+                    startsAt: new Date(startsAt || prefill.startsAt).toISOString(),
+                    serviceName: service?.name,
+                  })
+                }
+              >
+                {waitlistCount} waitlist {waitlistCount === 1 ? "match" : "matches"}
+              </button>
+            ) : null}
           </div>
           <button type="button" aria-label="Close" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -115,6 +198,7 @@ export function CalendarQuickCreateSheet({
         </div>
         <div className="cal-drawer-body flex flex-col gap-3 text-xs">
           {error ? <p className="text-red-600">{error}</p> : null}
+          {slotWarning ? <p className="text-amber-700">{slotWarning}</p> : null}
           <label className="flex flex-col gap-1">
             <span className="text-[var(--muted)]">Service</span>
             <select className="rounded border border-[var(--border)] px-2 py-2" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
@@ -132,6 +216,38 @@ export function CalendarQuickCreateSheet({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+          </label>
+          {workspace?.locations?.length ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-[var(--muted)]">Location</span>
+              <select className="rounded border border-[var(--border)] px-2 py-2" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                <option value="">Default</option>
+                {workspace.locations.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="flex flex-col gap-1">
+            <span className="text-[var(--muted)]">Canonical slots</span>
+            {slotsLoading ? <span className="text-[var(--muted)]">Loading slots…</span> : null}
+            <div className="flex flex-wrap gap-1">
+              {nearestSlots.map((s) => (
+                <button
+                  key={s.startsAt}
+                  type="button"
+                  className="rounded border border-[var(--border)] px-2 py-1"
+                  onClick={() => setStartsAt(s.startsAt.slice(0, 16))}
+                >
+                  {new Date(s.startsAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </button>
+              ))}
+            </div>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[var(--muted)]">Start</span>

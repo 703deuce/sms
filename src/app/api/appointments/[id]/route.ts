@@ -48,6 +48,7 @@ export async function PATCH(request: Request, { params }: Params) {
       action?: string;
       internalNote?: string;
       startsAt?: string;
+      recurringScope?: "this_only" | "this_and_future" | "entire_series";
       suppressReminders?: boolean;
       extraRecipients?: Array<{ email?: string; phone?: string; name?: string }>;
     };
@@ -93,12 +94,30 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     if (body.startsAt?.trim()) {
-      const updated = await reschedulePlatformAppointment(
-        auth.workspaceId,
-        id,
-        body.startsAt.trim(),
-        "staff",
-      );
+      const prisma = getPrisma();
+      const row = await prisma.voiceAppointment.findFirst({
+        where: { id, workspaceId: auth.workspaceId },
+      });
+      if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      const meta = (row.metadata || {}) as AppointmentMetadata;
+      if (body.recurringScope && meta.recurringSeriesId) {
+        const { editRecurringSeries } = await import(
+          "@/lib/appointments/service-booking/recurring-series"
+        );
+        await editRecurringSeries(
+          auth.workspaceId,
+          meta.recurringSeriesId,
+          body.recurringScope,
+          id,
+          { startsAt: body.startsAt.trim() },
+        );
+      } else {
+        await reschedulePlatformAppointment(auth.workspaceId, id, body.startsAt.trim(), "staff");
+      }
+      const updated = await prisma.voiceAppointment.findFirst({
+        where: { id, workspaceId: auth.workspaceId },
+      });
+      if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const data = await getAppointment(auth.workspaceId, id);
       const config = await loadAppointmentPlatformConfig(auth.workspaceId);
       const reminderSchedule = buildReminderSchedule({
@@ -107,7 +126,13 @@ export async function PATCH(request: Request, { params }: Params) {
         config: config.reminders,
       });
       return NextResponse.json({
-        data: data ? { ...data, reminderSchedule } : { id: updated.id, reminderSchedule },
+        data: data
+          ? { ...data, reminderSchedule }
+          : {
+              id: updated.id,
+              startsAt: updated.startsAt.toISOString(),
+              reminderSchedule,
+            },
       });
     }
 

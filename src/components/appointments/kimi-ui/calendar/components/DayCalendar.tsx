@@ -1,6 +1,6 @@
 import React from "react";
-import { CheckCircle2, Clock, Settings, XCircle } from "lucide-react";
-import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
+import { Settings } from "lucide-react";
+import { CalendarDraggableEvent } from "@/components/appointments/calendar/calendar-draggable-event";
 import type {
   CalendarNowLine,
   CalendarTypeColor,
@@ -8,14 +8,7 @@ import type {
   CalendarWeekEvent,
 } from "@/features/appointments/kimi/calendar/types";
 
-const HOUR_H = 56;
 const START = 8;
-
-function StatusIcon({ status }: { status: string }) {
-  if (status === "confirmed") return <CheckCircle2 size={13} className="ev-status confirmed" />;
-  if (status === "pending") return <Clock size={13} className="ev-status pending" />;
-  return <XCircle size={13} className="ev-status canceled" />;
-}
 
 type Props = {
   weekDays: CalendarWeekDay[];
@@ -27,6 +20,13 @@ type Props = {
   onOpenAppointment: (id: string) => void;
   onShowCalendarSettings: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
+  weekStart?: Date;
+  dragOverrides?: Record<string, { day: number; start: number }>;
+  onDragPreview?: (input: { id: string; day: number; start: number }) => void;
+  onDragClear?: (id: string) => void;
+  onDragCommit?: (input: { id: string; startsAt: string }) => void;
+  slotWaitlistCounts?: Record<string, number>;
+  onWaitlistSlotClick?: (input: { dateKey: string; hour: number; count: number }) => void;
 };
 
 export default function DayCalendar({
@@ -39,8 +39,16 @@ export default function DayCalendar({
   onOpenAppointment,
   onShowCalendarSettings,
   onSlotClick,
+  weekStart,
+  dragOverrides,
+  onDragPreview,
+  onDragClear,
+  onDragCommit,
+  slotWaitlistCounts,
+  onWaitlistSlotClick,
 }: Props) {
   const day = weekDays[0];
+  const effectiveWeekStart = weekStart || (day ? new Date(day.dateKey) : new Date());
 
   return (
     <div className="week-card">
@@ -67,7 +75,20 @@ export default function DayCalendar({
               className={`wg-cell ${day?.today ? "today-col" : ""}`}
               aria-label={`Create appointment ${h}`}
               onClick={() => day && onSlotClick?.({ dateKey: day.dateKey, hour: START + hi })}
-            />
+            >
+              {day && (slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`] || 0) > 0 ? (
+                <span
+                  className="cal-waitlist-slot-badge"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const count = slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`] || 0;
+                    onWaitlistSlotClick?.({ dateKey: day.dateKey, hour: START + hi, count });
+                  }}
+                >
+                  {slotWaitlistCounts?.[`${day.dateKey}:${START + hi}`]} waitlist matches
+                </span>
+              ) : null}
+            </button>
           </React.Fragment>
         ))}
 
@@ -79,34 +100,36 @@ export default function DayCalendar({
           </div>
         ) : null}
 
-        {weekEvents.map((ev) => {
-          const top = 57 + (ev.start - START) * HOUR_H + 3;
-          const height = ev.duration * HOUR_H - 8;
-          return (
+        {weekEvents.map((ev) =>
+          onDragCommit && onDragPreview && onDragClear ? (
+            <CalendarDraggableEvent
+              key={ev.id}
+              ev={ev}
+              weekStart={effectiveWeekStart}
+              dragOverride={dragOverrides?.[ev.id]}
+              onOpen={onOpenAppointment}
+              onDragPreview={onDragPreview}
+              onDragClear={onDragClear}
+              onDragCommit={onDragCommit}
+              singleDay
+            />
+          ) : (
             <button
               key={ev.id}
               type="button"
               className={`week-event day-event ev-${ev.type}`}
-              style={{ top, height }}
+              style={{ top: 57 + (ev.start - START) * 56 + 3, height: ev.duration * 56 - 8 }}
               onClick={() => onOpenAppointment(ev.id)}
               title={`${ev.timeLabel} — ${ev.title} with ${ev.name}`}
             >
               <div className="ev-time">{ev.timeLabel}</div>
               <div className="ev-title-row">
                 <span className="ev-title">{ev.title}</span>
-                <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
-              {ev.subtitle ? <div className="ev-meta">{ev.subtitle}</div> : null}
-              <CalendarMeetingBadges
-                meeting={ev.meeting}
-                appointmentId={ev.id}
-                eventKind={ev.eventKind}
-                compact
-              />
             </button>
-          );
-        })}
+          ),
+        )}
       </div>
 
       <div className="week-footer">

@@ -1,6 +1,6 @@
 import React from "react";
-import { CheckCircle2, Clock, XCircle, Settings } from "lucide-react";
-import { CalendarMeetingBadges } from "@/components/appointments/kimi-ui/calendar/meeting-badges";
+import { Settings } from "lucide-react";
+import { CalendarDraggableEvent } from "@/components/appointments/calendar/calendar-draggable-event";
 import type {
   CalendarNowLine,
   CalendarTypeColor,
@@ -8,14 +8,7 @@ import type {
   CalendarWeekEvent,
 } from "@/features/appointments/kimi/calendar/types";
 
-const HOUR_H = 56;
 const START = 8;
-
-function StatusIcon({ status }: { status: string }) {
-  if (status === "confirmed") return <CheckCircle2 size={13} className="ev-status confirmed" />;
-  if (status === "pending") return <Clock size={13} className="ev-status pending" />;
-  return <XCircle size={13} className="ev-status canceled" />;
-}
 
 type Props = {
   weekDays: CalendarWeekDay[];
@@ -27,6 +20,13 @@ type Props = {
   onOpenAppointment: (id: string) => void;
   onShowCalendarSettings: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
+  weekStart?: Date;
+  dragOverrides?: Record<string, { day: number; start: number }>;
+  onDragPreview?: (input: { id: string; day: number; start: number }) => void;
+  onDragClear?: (id: string) => void;
+  onDragCommit?: (input: { id: string; startsAt: string }) => void;
+  slotWaitlistCounts?: Record<string, number>;
+  onWaitlistSlotClick?: (input: { dateKey: string; hour: number; count: number }) => void;
 };
 
 export default function WeekCalendar({
@@ -39,7 +39,15 @@ export default function WeekCalendar({
   onOpenAppointment,
   onShowCalendarSettings,
   onSlotClick,
+  weekStart,
+  dragOverrides,
+  onDragPreview,
+  onDragClear,
+  onDragCommit,
+  slotWaitlistCounts,
+  onWaitlistSlotClick,
 }: Props) {
+  const effectiveWeekStart = weekStart || new Date();
   return (
     <div className="week-card">
       <div className="week-grid">
@@ -60,15 +68,40 @@ export default function WeekCalendar({
         {hours.map((h, hi) => (
           <React.Fragment key={h}>
             <div className="wg-time">{h}</div>
-            {weekDays.map((d) => (
-              <button
-                key={d.dateKey + h}
-                type="button"
-                className={`wg-cell ${d.today ? "today-col" : ""}`}
-                aria-label={`Create appointment ${d.label} ${h}`}
-                onClick={() => onSlotClick?.({ dateKey: d.dateKey, hour: START + hi })}
-              />
-            ))}
+            {weekDays.map((d) => {
+              const slotKey = `${d.dateKey}:${START + hi}`;
+              const matchCount = slotWaitlistCounts?.[slotKey] || 0;
+              return (
+                <button
+                  key={d.dateKey + h}
+                  type="button"
+                  className={`wg-cell ${d.today ? "today-col" : ""}`}
+                  aria-label={`Create appointment ${d.label} ${h}`}
+                  onClick={() => onSlotClick?.({ dateKey: d.dateKey, hour: START + hi })}
+                >
+                  {matchCount > 0 ? (
+                    <span
+                      className="cal-waitlist-slot-badge"
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onWaitlistSlotClick?.({ dateKey: d.dateKey, hour: START + hi, count: matchCount });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onWaitlistSlotClick?.({ dateKey: d.dateKey, hour: START + hi, count: matchCount });
+                        }
+                      }}
+                    >
+                      {matchCount} waitlist {matchCount === 1 ? "match" : "matches"}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </React.Fragment>
         ))}
 
@@ -80,15 +113,27 @@ export default function WeekCalendar({
           </div>
         ) : null}
 
-        {weekEvents.map((ev) => {
-          const top = 57 + (ev.start - START) * HOUR_H + 3;
-          const height = ev.duration * HOUR_H - 8;
-          return (
+        {weekEvents.map((ev) =>
+          onDragCommit && onDragPreview && onDragClear ? (
+            <CalendarDraggableEvent
+              key={ev.id}
+              ev={ev}
+              weekStart={effectiveWeekStart}
+              dragOverride={dragOverrides?.[ev.id]}
+              onOpen={onOpenAppointment}
+              onDragPreview={onDragPreview}
+              onDragClear={onDragClear}
+              onDragCommit={onDragCommit}
+            />
+          ) : (
             <button
               key={ev.id}
               type="button"
               className={`week-event ev-${ev.type}`}
-              style={{ top, height }}
+              style={{
+                top: 57 + (ev.start - START) * 56 + 3,
+                height: ev.duration * 56 - 8,
+              }}
               data-day={ev.day}
               onClick={() => onOpenAppointment(ev.id)}
               title={`${ev.timeLabel} — ${ev.title} with ${ev.name}`}
@@ -96,20 +141,11 @@ export default function WeekCalendar({
               <div className="ev-time">{ev.timeLabel}</div>
               <div className="ev-title-row">
                 <span className="ev-title">{ev.title}</span>
-                <StatusIcon status={ev.status} />
               </div>
               <div className="ev-name">{ev.name}</div>
-              {ev.subtitle ? <div className="ev-meta">{ev.subtitle}</div> : null}
-              {ev.paymentLabel ? <div className="ev-meta ev-pay">{ev.paymentLabel}</div> : null}
-              <CalendarMeetingBadges
-                meeting={ev.meeting}
-                appointmentId={ev.id}
-                eventKind={ev.eventKind}
-                compact
-              />
             </button>
-          );
-        })}
+          ),
+        )}
       </div>
 
       <div className="week-footer">

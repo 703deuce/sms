@@ -6,11 +6,20 @@ import { X } from "lucide-react";
 type Props = {
   appointmentId: string;
   currentStartsAt: string;
+  recurringSeriesId?: string;
   onClose: () => void;
   onDone: () => void;
+  onReschedule?: (appointmentId: string, startsAt: string) => void;
 };
 
-export function CalendarRescheduleSheet({ appointmentId, currentStartsAt, onClose, onDone }: Props) {
+export function CalendarRescheduleSheet({
+  appointmentId,
+  currentStartsAt,
+  recurringSeriesId,
+  onClose,
+  onDone,
+  onReschedule,
+}: Props) {
   const [startsAt, setStartsAt] = useState(currentStartsAt.slice(0, 16));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -18,11 +27,24 @@ export function CalendarRescheduleSheet({ appointmentId, currentStartsAt, onClos
   async function save() {
     setBusy(true);
     setError("");
+    const iso = new Date(startsAt).toISOString();
     try {
+      if (onReschedule && recurringSeriesId) {
+        onReschedule(appointmentId, iso);
+        onDone();
+        onClose();
+        return;
+      }
+      if (onReschedule) {
+        onReschedule(appointmentId, iso);
+        onDone();
+        onClose();
+        return;
+      }
       const res = await fetch(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt: new Date(startsAt).toISOString() }),
+        body: JSON.stringify({ startsAt: iso }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Reschedule failed");
@@ -55,6 +77,7 @@ export function CalendarRescheduleSheet({ appointmentId, currentStartsAt, onClos
           </label>
           <p className="mt-3 text-[11px] text-[var(--muted)]">
             Uses the same availability and conflict rules as the full appointment editor.
+            {recurringSeriesId ? " You will choose series scope before saving." : null}
           </p>
         </div>
         <div className="cal-drawer-actions">

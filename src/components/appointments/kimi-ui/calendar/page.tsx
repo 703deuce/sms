@@ -55,6 +55,13 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
+            weekStart={actions.weekStart}
+            dragOverrides={actions.dragOverrides}
+            onDragPreview={actions.onDragPreview}
+            onDragClear={actions.onDragClear}
+            onDragCommit={actions.onDragCommit}
+            slotWaitlistCounts={actions.slotWaitlistCounts}
+            onWaitlistSlotClick={actions.onWaitlistSlotClick}
           />
         ) : model.view === "month" ? (
           <MonthCalendar
@@ -75,6 +82,13 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onOpenAppointment={actions.onOpenAppointment}
             onShowCalendarSettings={actions.onShowCalendarSettings}
             onSlotClick={actions.onSlotClick}
+            weekStart={actions.weekStart}
+            dragOverrides={actions.dragOverrides}
+            onDragPreview={actions.onDragPreview}
+            onDragClear={actions.onDragClear}
+            onDragCommit={actions.onDragCommit}
+            slotWaitlistCounts={actions.slotWaitlistCounts}
+            onWaitlistSlotClick={actions.onWaitlistSlotClick}
           />
         )}
         <aside className={`cal-side ${sideCollapsed ? "cal-side--collapsed" : ""}`}>

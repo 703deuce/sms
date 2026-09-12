@@ -652,3 +652,32 @@
 .month-event.ev-followup { background: #fdf6e3; color: #8a5b00; }
 .month-event.ev-onboarding { background: #e9f9f1; color: #0f6b42; }
 .month-event.ev-canceled { background: #fdeef2; color: #9f1239; }
+
+.week-event--draggable { cursor: grab; touch-action: none; }
+.week-event--dragging { cursor: grabbing; z-index: 5; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18); opacity: 0.95; }
+.cal-waitlist-slot-badge {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  pointer-events: auto;
+}
+.cal-toast-error {
+  margin: 8px 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+}
+.cal-waitlist-inline-link {
+  font-size: 11px;
+  color: #92400e;
+  text-decoration: underline;
+  margin-top: 4px;
+}
+.wg-cell { position: relative; }

@@ -34,10 +34,14 @@ type AppointmentDetail = {
   source?: string | null;
 };
 
+import type { OpenSlotSummary } from "@/components/appointments/calendar/calendar-waitlist-match-drawer";
+
 type Props = {
   event: CalendarApiAppointment | null;
   onClose: () => void;
   onRefresh: () => void;
+  onReschedule?: (appointmentId: string, startsAt: string) => void;
+  onCanceled?: (slot: OpenSlotSummary) => void;
 };
 
 function fmtRange(startsAt: string, endsAt: string | null, tz: string | null) {
@@ -62,7 +66,7 @@ function DrawerSection({ title, children, defaultOpen = true }: { title: string;
   );
 }
 
-export function CalendarEventDrawer({ event, onClose, onRefresh }: Props) {
+export function CalendarEventDrawer({ event, onClose, onRefresh, onReschedule, onCanceled }: Props) {
   const [detail, setDetail] = useState<AppointmentDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -128,6 +132,13 @@ export function CalendarEventDrawer({ event, onClose, onRefresh }: Props) {
         const json = await res.json();
         throw new Error(json.error || "Cancel failed");
       }
+      onCanceled?.({
+        startsAt: event.startsAt,
+        endsAt: event.endsAt || undefined,
+        serviceName: event.serviceName || undefined,
+        staffLabel: event.staffLabel,
+        locationLabel: event.locationLabel || undefined,
+      });
       onRefresh();
       onClose();
     } catch (e) {
@@ -399,8 +410,12 @@ export function CalendarEventDrawer({ event, onClose, onRefresh }: Props) {
         <CalendarRescheduleSheet
           appointmentId={event.id}
           currentStartsAt={event.startsAt}
+          recurringSeriesId={
+            ((detail?.metadata || event.metadata || {}) as { recurringSeriesId?: string }).recurringSeriesId
+          }
           onClose={() => setRescheduleOpen(false)}
           onDone={onRefresh}
+          onReschedule={onReschedule}
         />
       ) : null}
     </>

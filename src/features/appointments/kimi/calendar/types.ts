@@ -147,4 +147,11 @@ export type CalendarPageActions = {
   onShowCalendarSettings: () => void;
   onRetry: () => void;
   onSlotClick?: (input: { dateKey: string; hour: number }) => void;
+  weekStart?: Date;
+  dragOverrides?: Record<string, { day: number; start: number }>;
+  onDragPreview?: (input: { id: string; day: number; start: number }) => void;
+  onDragClear?: (id: string) => void;
+  onDragCommit?: (input: { id: string; startsAt: string }) => void;
+  slotWaitlistCounts?: Record<string, number>;
+  onWaitlistSlotClick?: (input: { dateKey: string; hour: number; count: number }) => void;
 };
