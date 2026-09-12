@@ -74,9 +74,8 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname === MCTB_ROUTES.home) return "Missed Call Text Back";
   if (pathname === MCTB_ROUTES.missedCalls) return "";
   if (pathname.startsWith(MCTB_ROUTES.missedCalls)) return "Missed Calls";
-  if (pathname === MCTB_ROUTES.voicemail || pathname.startsWith("/mctb/voicemail")) {
-    return "Voicemail";
-  }
+  if (pathname === MCTB_ROUTES.voicemail) return "";
+  if (pathname.startsWith("/mctb/voicemail")) return "Voicemail";
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
   }

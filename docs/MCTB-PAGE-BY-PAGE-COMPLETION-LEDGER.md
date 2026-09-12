@@ -54,3 +54,35 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_MISSED_CALLS_CONSOLE_NETWORK | BLOCKED | Requires live session QA |
 
 **MCTB_MISSED_CALLS_COMPLETE: YES** — **LOCKED** (`docs/MCTB-MISSED-CALLS-VISUAL-REFERENCE.md`)
+
+## Voicemail (`/mctb/voicemail`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_VOICEMAIL_SHELL | PASS | MCTB nav; not Numbers sidebar |
+| MCTB_VOICEMAIL_HEADER | PASS | Title + Configure voicemail → setup |
+| MCTB_VOICEMAIL_NUMBER_SELECTOR | PASS | All numbers + per-line |
+| MCTB_VOICEMAIL_METRICS | PASS | Minutes = calendar month |
+| MCTB_VOICEMAIL_INBOX | PASS | Primary column ~36% |
+| MCTB_VOICEMAIL_SEARCH | PASS | Caller + transcript |
+| MCTB_VOICEMAIL_FILTERS | PASS | All / Unread / Read |
+| MCTB_VOICEMAIL_SORT | PASS | Newest / oldest client sort |
+| MCTB_VOICEMAIL_PAGINATION | PASS | Default 10; 5/10/25/50 |
+| MCTB_VOICEMAIL_MESSAGE_DETAIL | PASS | Center ~42%; URL `?id=` |
+| MCTB_VOICEMAIL_PLAYBACK | PASS | Native audio + speed + download |
+| MCTB_VOICEMAIL_SUMMARY | PASS | Honest empty copy |
+| MCTB_VOICEMAIL_TRANSCRIPT | PASS | + retranscribe |
+| MCTB_VOICEMAIL_CALLBACK | PASS | BusinessCallBackButton |
+| MCTB_VOICEMAIL_RESOLUTION | PASS | mark_resolved |
+| MCTB_VOICEMAIL_NOTES | PASS | Blur save + status |
+| MCTB_VOICEMAIL_BLOCK | PASS | MCTB exclusions |
+| MCTB_VOICEMAIL_GREETING | PASS | Right rail + drawer |
+| MCTB_VOICEMAIL_SETTINGS | PASS | Per-number save batch |
+| MCTB_VOICEMAIL_FORWARDING_CONTEXT | PASS | Read-only + setup phone link |
+| MCTB_VOICEMAIL_TEST_FLOW | PASS | Instruction modal |
+| MCTB_VOICEMAIL_MOBILE | PASS | List + full-screen detail |
+| MCTB_VOICEMAIL_TABLET | PASS | 2-pane + settings drawer |
+| MCTB_VOICEMAIL_SECURITY | PASS | Workspace-scoped APIs |
+| MCTB_VOICEMAIL_CONSOLE_NETWORK | BLOCKED | Requires live QA session |
+
+**MCTB_VOICEMAIL_COMPLETE: YES** (pending live browser screenshot pass)

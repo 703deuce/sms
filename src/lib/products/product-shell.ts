@@ -12,7 +12,6 @@ export const PRODUCT_SHELL_STORAGE_KEY = "transovo.activeProductShell";
 export const PRODUCT_SWITCHER_ONBOARDING_KEY = "transovo.productSwitcherOnboarding.v3";
 
 const MCTB_PATH_PREFIXES = [
-  "/personal/voicemail",
   "/voice/missed-calls",
   "/voice/setup",
   "/voice/consent-log",

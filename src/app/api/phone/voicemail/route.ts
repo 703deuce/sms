@@ -41,7 +41,8 @@ export async function GET(request: Request) {
         }
       }
     }
-    const resolvedBoxId = boxId ?? boxes[0]?.id;
+    const resolvedBoxId =
+      boxId ?? (phoneNumberId ? boxes[0]?.id : undefined);
     const messages = await listVoicemailMessages(auth.workspaceId, resolvedBoxId);
     return NextResponse.json({ data: { boxes, messages } });
   } catch (err) {
@@ -147,6 +148,14 @@ export async function POST(request: Request) {
       await getPrisma().voicemailMessage.updateMany({
         where: { id: body.messageId, workspaceId: auth.workspaceId },
         data: { isRead: true },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "mark_unread" && body.messageId) {
+      await getPrisma().voicemailMessage.updateMany({
+        where: { id: body.messageId, workspaceId: auth.workspaceId },
+        data: { isRead: false },
       });
       return NextResponse.json({ ok: true });
     }
