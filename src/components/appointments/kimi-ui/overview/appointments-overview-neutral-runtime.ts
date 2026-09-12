@@ -6,9 +6,14 @@ export const OVERVIEW_NEUTRAL_RUNTIME_STYLE_ID = "appt-overview-neutral-runtime"
 
 export const OVERVIEW_SIDEBAR_WIDTH_PX = 204;
 
-/** Matches overview content root in SSR + client. */
+/**
+ * Matches overview content root in SSR + client.
+ * MUST stay parenthesized — `${scope} .foo` expands to two scoped selectors;
+ * without parens, `html:has(.appt-overview-pilot), html.appt-overview-slate-204 .foo`
+ * would also match bare `html:has(.appt-overview-pilot)` and hide the whole page.
+ */
 export const OVERVIEW_PILOT_SCOPE =
-  "html:has(.appt-overview-pilot), html.appt-overview-slate-204";
+  "(html:has(.appt-overview-pilot), html.appt-overview-slate-204)";
 
 const scope = OVERVIEW_PILOT_SCOPE;
 const w = OVERVIEW_SIDEBAR_WIDTH_PX;

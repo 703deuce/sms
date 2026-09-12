@@ -20,6 +20,8 @@
 
 **DOM marker:** `data-overview-revision="soft-cool-slate-204"`
 
+**Critical fix (blank page):** `OVERVIEW_PILOT_SCOPE` in `appointments-overview-neutral-runtime.ts` must be parenthesized. Unscoped expansion made `html:has(.appt-overview-pilot)` match `display: none` rules and hid the entire document. Guard: `scripts/test-overview-pilot-scope-css.ts`.
+
 ## Screenshots
 
 Capture:
