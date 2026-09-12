@@ -165,6 +165,7 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_RECOVERY_RAIL | PASS | Summary, flow, suppressions |
 | MCTB_SETUP_RECOVERY_DOCS | PASS | Audit, precedence, connection matrix |
 | MCTB_SETUP_RECOVERY_RESPONSIVE | PASS | Screenshots `recovery_*` |
+| MCTB_SETUP_RECOVERY_VISUAL_POLISH | PASS | Command bar, outcome tiles, rail panels, cooldown Off |
 | MCTB_SETUP_RECOVERY_CONSOLE_NETWORK | BLOCKED | Live QA |
 
 **MCTB_SETUP_RECOVERY_COMPLETE: YES**

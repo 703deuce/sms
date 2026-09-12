@@ -25,6 +25,79 @@ export const TRIGGER_OPTIONS: Array<{
 
 export const COOLDOWN_PRESETS_MINUTES = [15, 30, 60, 240] as const;
 
+export function isCooldownOff(minutes: number): boolean {
+  return minutes <= 0;
+}
+
+/** User-facing cooldown label — never show "0 min". */
+export function formatCooldownDisplay(minutes: number): string {
+  if (isCooldownOff(minutes)) return "Off";
+  return cooldownPresetLabel(minutes);
+}
+
+export function formatRepeatCallerSummary(minutes: number): string {
+  return isCooldownOff(minutes) ? "Eligible immediately" : "Suppressed during cooldown";
+}
+
+export function formatTriggerRailSummary(triggers: TriggerState): string {
+  const labels = TRIGGER_OPTIONS.filter((t) => triggers[t.key]).map((t) => t.label);
+  if (labels.length === 0) return "None";
+  if (labels.length === 2) return `${labels[0]} + ${labels[1]}`;
+  return labels.join(", ");
+}
+
+export function formatConsentRailValue(mode: MctbConsentMode): { primary: string; secondary: string } {
+  if (mode === "press_1") {
+    return { primary: "Press 1", secondary: "Per-call consent" };
+  }
+  return { primary: "Existing", secondary: "Prior permission" };
+}
+
+export function cooldownFlowOutcomeLabel(minutes: number): string {
+  if (isCooldownOff(minutes)) return "Eligible immediately";
+  const end = new Date();
+  end.setMinutes(end.getMinutes() + minutes);
+  const t = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `Suppressed until ${t}`;
+}
+
+export const DIAGNOSTIC_REASONS_LEFT: Array<{ code: string; label: string }> = [
+  { code: "TRIGGER_DISABLED", label: "Trigger disabled" },
+  { code: "MCTB_DISABLED", label: "Recovery paused" },
+  { code: "COOLDOWN_ACTIVE", label: "Cooldown active" },
+  { code: "BLOCKED_NUMBER", label: "Caller excluded" },
+];
+
+export const DIAGNOSTIC_REASONS_RIGHT: Array<{ code: string; label: string }> = [
+  { code: "NOT_EXISTING_CONSENT", label: "Consent unavailable" },
+  { code: "MESSAGING_NOT_APPROVED", label: "Sender not approved" },
+  { code: "ALREADY_SENT", label: "Duplicate event" },
+  { code: "NOT_FORWARD_EVENT", label: "Not a qualifying forwarded call" },
+];
+
+export function aggregateSuppressionCounts(
+  events: Array<{ suppressionReason: string | null }>,
+): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const e of events) {
+    const raw = e.suppressionReason?.trim();
+    if (!raw) continue;
+    const key = raw.toUpperCase();
+    acc[key] = (acc[key] || 0) + 1;
+    if (key.includes("COOLDOWN")) {
+      acc.COOLDOWN_ACTIVE = (acc.COOLDOWN_ACTIVE || 0) + 1;
+    }
+    if (key.includes("MESSAGING") && key.includes("APPROV")) {
+      acc.MESSAGING_NOT_APPROVED = (acc.MESSAGING_NOT_APPROVED || 0) + 1;
+    }
+  }
+  return acc;
+}
+
+export function isCooldownPresetOrOff(minutes: number): boolean {
+  return isCooldownOff(minutes) || isCooldownPreset(minutes);
+}
+
 export function countActiveTriggers(triggers: TriggerState): number {
   return Object.values(triggers).filter(Boolean).length;
 }
@@ -55,9 +128,9 @@ export function formatDelayLabel(delaySeconds: number): string {
   return `${m} min`;
 }
 
+/** @deprecated use formatConsentRailValue */
 export function consentSummary(mode: MctbConsentMode): string {
-  const meta = MCTB_CONSENT_MODE_LABELS[mode];
-  return mode === "press_1" ? `Press 1 · ${meta.subtitle.split(".")[0]}` : `Existing permission`;
+  return formatConsentRailValue(mode).primary;
 }
 
 export const SUPPRESSION_EXPLAINERS: Array<{ code: string; label: string; detail: string }> = [

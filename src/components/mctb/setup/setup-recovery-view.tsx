@@ -7,28 +7,46 @@ import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { addPauseUntil } from "@/lib/mctb/schedule-shared";
 import { formatCompactWhen } from "@/lib/mctb/setup-phone-forwarding-model";
 import {
+  aggregateSuppressionCounts,
   COOLDOWN_PRESETS_MINUTES,
-  consentSummary,
   countActiveTriggers,
+  cooldownFlowOutcomeLabel,
   cooldownPresetLabel,
+  DIAGNOSTIC_REASONS_LEFT,
+  DIAGNOSTIC_REASONS_RIGHT,
+  formatCooldownDisplay,
+  formatConsentRailValue,
   formatDelayLabel,
+  formatRepeatCallerSummary,
   formatSuppressionRow,
-  formatTriggerSummary,
-  isCooldownPreset,
+  formatTriggerRailSummary,
+  isCooldownOff,
+  isCooldownPresetOrOff,
   recoverySnapshotsEqual,
-  SUPPRESSION_EXPLAINERS,
   TRIGGER_OPTIONS,
   type RecoverySnapshot,
+  type TriggerKey,
   type TriggerState,
 } from "@/lib/mctb/setup-recovery-model";
 import {
+  Activity,
   Check,
   ChevronRight,
+  Clock,
+  History,
+  Info,
+  MessageSquare,
+  Phone,
   PhoneMissed,
+  PhoneOff,
   Power,
   RefreshCw,
   Repeat,
   Shield,
+  ShieldCheck,
+  Signal,
+  Voicemail,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -64,6 +82,14 @@ type SolutionSlice = {
   };
 };
 
+const TRIGGER_ICONS: Record<TriggerKey, LucideIcon> = {
+  noAnswer: PhoneMissed,
+  busy: Phone,
+  rejected: PhoneOff,
+  timeout: Signal,
+  voicemail: Voicemail,
+};
+
 export function MctbSetupRecoveryView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,12 +117,12 @@ export function MctbSetupRecoveryView() {
   const [messagePreview, setMessagePreview] = useState("");
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
   const [maxMessages, setMaxMessages] = useState(1);
-  const [scheduleMode, setScheduleMode] = useState("always_on");
   const [forwardingVerified, setForwardingVerified] = useState(true);
   const [baseline, setBaseline] = useState<RecoverySnapshot | null>(null);
   const [recentSuppressions, setRecentSuppressions] = useState<
     Array<{ phone: string; reason: string; time: string }>
   >([]);
+  const [suppressionCounts, setSuppressionCounts] = useState<Record<string, number>>({});
   const [lastRecoveryAt, setLastRecoveryAt] = useState<string | null>(null);
   const [voicemailReady, setVoicemailReady] = useState(false);
 
@@ -114,7 +140,7 @@ export function MctbSetupRecoveryView() {
       const [setupRes, onboardRes, suppressedRes, recentRes] = await Promise.all([
         fetch("/api/mctb/setup", { cache: "no-store" }),
         fetch("/api/mctb/onboarding", { cache: "no-store" }),
-        fetch("/api/mctb/missed-calls?status=suppressed&date=7d&pageSize=5&sort=detectedAt_desc", {
+        fetch("/api/mctb/missed-calls?status=suppressed&date=7d&pageSize=50&sort=detectedAt_desc", {
           cache: "no-store",
         }),
         fetch("/api/mctb/missed-calls?date=7d&pageSize=15&sort=detectedAt_desc", {
@@ -138,7 +164,8 @@ export function MctbSetupRecoveryView() {
         voicemail: r.sendAfterVoicemail,
       });
       setCooldownMinutes(r.cooldownMinutes ?? 60);
-      setCooldownCustom(!isCooldownPreset(r.cooldownMinutes ?? 60));
+      const cd = r.cooldownMinutes ?? 0;
+      setCooldownCustom(!isCooldownPresetOrOff(cd));
       setDelaySeconds(r.delaySeconds ?? 0);
       setTimezone(r.timezone || "America/New_York");
       setSchedule({
@@ -146,7 +173,6 @@ export function MctbSetupRecoveryView() {
         pauseUntil: sch?.pauseUntil ?? null,
         pauseKind: sch?.pauseKind ?? null,
       });
-      setScheduleMode(sch?.scheduleMode || r.scheduleMode || "always_on");
       setConsentMode(data.consentMode || "press_1");
       setMessagingReady(Boolean(data.compliance?.messagingReady));
       setMessagePreview(r.messageTemplate?.trim() || sol?.config?.firstMessage?.trim() || "");
@@ -167,13 +193,15 @@ export function MctbSetupRecoveryView() {
           suppressionReason: string | null;
           detectedAt: string;
         }>;
+        setSuppressionCounts(aggregateSuppressionCounts(rows));
         setRecentSuppressions(
-          rows.map((e) =>
+          rows.slice(0, 5).map((e) =>
             formatSuppressionRow(e.callerE164, e.suppressionReason, e.detectedAt),
           ),
         );
       } else {
         setRecentSuppressions([]);
+        setSuppressionCounts({});
       }
 
       if (recentRes.ok) {
@@ -245,19 +273,6 @@ export function MctbSetupRecoveryView() {
     }
     return "Until manually resumed";
   }, [paused, schedule.pauseKind, schedule.pauseUntil]);
-
-  const scheduleModeLabel = useMemo(() => {
-    switch (scheduleMode) {
-      case "business_hours":
-        return "Business hours only";
-      case "after_hours":
-        return "After hours only";
-      case "custom":
-        return "Custom schedule";
-      default:
-        return "Same rules (always on)";
-    }
-  }, [scheduleMode]);
 
   async function save() {
     if (activeTriggers === 0) {
@@ -335,6 +350,28 @@ export function MctbSetupRecoveryView() {
     setSaved(false);
   }
 
+  const consentRail = formatConsentRailValue(consentMode);
+  const cooldownLabel = formatCooldownDisplay(cooldownMinutes);
+  const repeatCallerLabel = formatRepeatCallerSummary(cooldownMinutes);
+  const flowOutcomeLabel = cooldownFlowOutcomeLabel(cooldownMinutes);
+
+  const recoveryFlowSteps = useMemo(
+    () => [
+      { label: "Missed call", owned: false },
+      { label: "Outcome qualifies", owned: true },
+      { label: paused ? "Recovery paused" : "Recovery active", owned: true },
+      { label: isCooldownOff(cooldownMinutes) ? "Cooldown off" : "Cooldown passes", owned: true },
+      { label: "Consent confirmed", owned: false },
+      { label: "Recovery text", owned: false },
+    ],
+    [paused, cooldownMinutes],
+  );
+
+  function diagCount(code: string): number | null {
+    const n = suppressionCounts[code];
+    return n && n > 0 ? n : null;
+  }
+
   const headerPauseControl = paused ? (
     <button
       type="button"
@@ -356,7 +393,7 @@ export function MctbSetupRecoveryView() {
   );
 
   const headerAction = (
-    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+    <div className="mctb-recovery-header-actions">
       {headerPauseControl}
       {saved && !saving && !dirty ? (
         <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#1f6b42]">
@@ -398,8 +435,8 @@ export function MctbSetupRecoveryView() {
       <div className="mctb-recovery-page">
         <header className="mctb-recovery-section-header">
           <div className="mctb-recovery-section-header__left">
-            <div className="mctb-recovery-section-header__icon">
-              <RefreshCw className="h-4 w-4" strokeWidth={1.85} aria-hidden />
+            <div className="mctb-recovery-section-header__icon" aria-hidden>
+              <RefreshCw className="h-[18px] w-[18px]" strokeWidth={1.85} />
             </div>
             <div>
               <h2 className="mctb-recovery-section-header__title">Recovery</h2>
@@ -431,100 +468,117 @@ export function MctbSetupRecoveryView() {
         ) : null}
 
         <div
-          className={`mctb-recovery-status-strip ${paused ? "mctb-recovery-status-strip--paused" : "mctb-recovery-status-strip--active"}`}
+          className={`mctb-recovery-cmd-bar ${paused ? "mctb-recovery-cmd-bar--paused" : "mctb-recovery-cmd-bar--active"}`}
           role="status"
         >
-          <span
-            className={`mctb-recovery-dot ${paused ? "mctb-recovery-dot--paused" : "mctb-recovery-dot--active"}`}
-            aria-hidden
-          />
-          <span className="mctb-recovery-strip-strong">
-            {paused ? "Recovery paused" : "Recovery active"}
-          </span>
-          {paused && pauseLabel ? (
-            <span className="mctb-recovery-strip-muted">{pauseLabel}</span>
-          ) : null}
-          {!paused ? (
+          <div className="mctb-recovery-cmd-bar__state">
+            <span
+              className={`mctb-recovery-dot ${paused ? "mctb-recovery-dot--paused" : "mctb-recovery-dot--active"}`}
+              aria-hidden
+            />
+            <span className="mctb-recovery-cmd-bar__value">
+              {paused ? "Recovery paused" : "Recovery active"}
+            </span>
+          </div>
+          {paused ? (
             <>
-              <span className="mctb-recovery-strip-muted">Triggers: {activeTriggers}</span>
-              <span className="mctb-recovery-strip-muted">
-                Cooldown: {cooldownPresetLabel(cooldownMinutes)}
-              </span>
-              {lastRecoveryAt ? (
-                <span className="mctb-recovery-strip-muted">
-                  Last recovery: {formatCompactWhen(lastRecoveryAt)}
-                </span>
+              {pauseLabel ? (
+                <span className="mctb-recovery-cmd-bar__pause-note">{pauseLabel}. Forwarding and voicemail remain active.</span>
               ) : null}
+              <button
+                type="button"
+                className="mctb-setup-btn mctb-setup-btn--primary mctb-recovery-cmd-bar__resume"
+                disabled={pauseBusy}
+                onClick={() => void resumeNow()}
+              >
+                Resume now
+              </button>
             </>
           ) : (
-            <button
-              type="button"
-              className="mctb-setup-btn mctb-setup-btn--primary"
-              style={{ height: "2rem", marginLeft: "auto" }}
-              disabled={pauseBusy}
-              onClick={() => void resumeNow()}
-            >
-              Resume now
-            </button>
+            <>
+              <div className="mctb-recovery-cmd-bar__seg">
+                <span className="mctb-recovery-cmd-bar__label">Qualifying</span>
+                <span className="mctb-recovery-cmd-bar__value">
+                  {activeTriggers} {activeTriggers === 1 ? "outcome" : "outcomes"}
+                </span>
+              </div>
+              <div className="mctb-recovery-cmd-bar__seg">
+                <span className="mctb-recovery-cmd-bar__label">Cooldown</span>
+                <span className="mctb-recovery-cmd-bar__value">{cooldownLabel}</span>
+              </div>
+              <div className="mctb-recovery-cmd-bar__seg">
+                <span className="mctb-recovery-cmd-bar__label">Last recovery</span>
+                <span className="mctb-recovery-cmd-bar__value">
+                  {lastRecoveryAt ? formatCompactWhen(lastRecoveryAt) : "—"}
+                </span>
+              </div>
+            </>
           )}
         </div>
 
         <div className="mctb-recovery-grid">
           <div className="mctb-recovery-main">
-            <section className="mctb-recovery-module" aria-labelledby="mctb-rec-status">
-              <div className="mctb-recovery-module__head">
-                <div className="mctb-recovery-module__icon">
-                  <Power className="h-4 w-4" aria-hidden />
+            <section
+              className="mctb-recovery-module mctb-recovery-module--elevated"
+              aria-labelledby="mctb-rec-status"
+            >
+              <div className="mctb-recovery-status-compact">
+                <div className="mctb-recovery-status-compact__left">
+                  <div className="mctb-recovery-module__icon">
+                    <Power className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <h3 id="mctb-rec-status" className="mctb-recovery-module__title">
+                      Recovery status
+                    </h3>
+                    <p className="mctb-recovery-status-compact__state">
+                      <span
+                        className={`mctb-recovery-dot ${paused ? "mctb-recovery-dot--paused" : "mctb-recovery-dot--active"}`}
+                        aria-hidden
+                      />
+                      {paused ? "Paused" : "Active"}
+                    </p>
+                    <p className="mctb-recovery-status-compact__helper">
+                      {paused
+                        ? "Automatic recovery texts are paused."
+                        : "Missed-call recovery is running."}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 id="mctb-rec-status" className="mctb-recovery-module__title">
-                    Recovery status
-                  </h3>
-                  <p className="mctb-recovery-module__desc">
-                    Temporarily stop or resume missed-call recovery without changing forwarding.
-                  </p>
-                </div>
-              </div>
-              <p className="text-[13px] font-semibold text-[#1b1e23] mb-2">
-                Current state: {paused ? "Recovery paused" : "Recovery active"}
-              </p>
-              {paused && pauseLabel ? (
-                <p className="text-[12.5px] text-[#626872] mb-3">{pauseLabel}</p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                {paused ? (
-                  <>
-                    <button
-                      type="button"
-                      className="mctb-setup-btn mctb-setup-btn--primary"
-                      disabled={pauseBusy}
-                      onClick={() => void resumeNow()}
-                    >
-                      Resume now
-                    </button>
+                <div className="mctb-recovery-status-compact__actions">
+                  {paused ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mctb-setup-btn mctb-setup-btn--primary"
+                        disabled={pauseBusy}
+                        onClick={() => void resumeNow()}
+                      >
+                        Resume now
+                      </button>
+                      <button
+                        type="button"
+                        className="mctb-setup-btn mctb-setup-btn--outline"
+                        disabled={pauseBusy}
+                        onClick={() => setPauseOpen(true)}
+                      >
+                        Change pause
+                      </button>
+                    </>
+                  ) : (
                     <button
                       type="button"
                       className="mctb-setup-btn mctb-setup-btn--outline"
                       disabled={pauseBusy}
                       onClick={() => setPauseOpen(true)}
                     >
-                      Change pause
+                      Pause recovery ▾
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="mctb-setup-btn mctb-setup-btn--outline"
-                    disabled={pauseBusy}
-                    onClick={() => setPauseOpen(true)}
-                  >
-                    Pause recovery ▾
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
-              <p className="mt-3 text-[12px] text-[#8b939e] leading-relaxed">
-                Pausing stops new automatic recovery texts. Forwarding and voicemail continue on
-                the call path.
+              <p className="mctb-recovery-status-foot">
+                Forwarding and voicemail stay active while recovery texting is paused.
               </p>
             </section>
 
@@ -543,23 +597,30 @@ export function MctbSetupRecoveryView() {
                 </div>
               </div>
               <div className="mctb-recovery-outcome-grid" role="group" aria-label="Missed call outcomes">
-                {TRIGGER_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    className="mctb-recovery-outcome"
-                    aria-pressed={triggers[opt.key]}
-                    onClick={() => toggleTrigger(opt.key)}
-                  >
-                    <div className="mctb-recovery-outcome__main">
-                      <div className="mctb-recovery-outcome__label">{opt.label}</div>
-                      <div className="mctb-recovery-outcome__helper">{opt.helper}</div>
-                    </div>
-                    <span className="mctb-recovery-check" aria-hidden>
-                      {triggers[opt.key] ? "✓" : ""}
-                    </span>
-                  </button>
-                ))}
+                {TRIGGER_OPTIONS.map((opt) => {
+                  const Icon = TRIGGER_ICONS[opt.key];
+                  const on = triggers[opt.key];
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className="mctb-recovery-outcome"
+                      aria-pressed={on}
+                      onClick={() => toggleTrigger(opt.key)}
+                    >
+                      <span className="mctb-recovery-outcome__icon" aria-hidden>
+                        <Icon className="h-3.5 w-3.5" strokeWidth={1.85} />
+                      </span>
+                      <div className="mctb-recovery-outcome__main">
+                        <div className="mctb-recovery-outcome__label">{opt.label}</div>
+                        <div className="mctb-recovery-outcome__helper">{opt.helper}</div>
+                      </div>
+                      <span className="mctb-recovery-toggle" aria-hidden>
+                        {on ? <Check strokeWidth={3} /> : null}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <p className="mt-3 text-[12px] text-[#626872] leading-relaxed">
                 These settings determine which call outcomes create a recovery event. Consent and
@@ -590,6 +651,18 @@ export function MctbSetupRecoveryView() {
                     After a recovery attempt, wait:
                   </p>
                   <div className="mctb-recovery-seg" role="group" aria-label="Cooldown duration">
+                    <button
+                      type="button"
+                      className="mctb-recovery-seg-btn"
+                      aria-pressed={!cooldownCustom && isCooldownOff(cooldownMinutes)}
+                      onClick={() => {
+                        setCooldownCustom(false);
+                        setCooldownMinutes(0);
+                        setSaved(false);
+                      }}
+                    >
+                      Off
+                    </button>
                     {COOLDOWN_PRESETS_MINUTES.map((m) => (
                       <button
                         key={m}
@@ -630,37 +703,33 @@ export function MctbSetupRecoveryView() {
                       <span className="text-[12px] text-[#626872]">minutes</span>
                     </div>
                   ) : null}
-                  <div className="mt-4 space-y-2 text-[12.5px] text-[#3a3f47]">
-                    <div className="mctb-recovery-row" style={{ border: "none", padding: 0 }}>
-                      <span>Repeat caller during cooldown</span>
-                      <span className="font-semibold">Suppress duplicate recovery</span>
-                    </div>
-                    <div className="mctb-recovery-row" style={{ border: "none", padding: 0 }}>
-                      <span>After cooldown expires</span>
-                      <span className="font-semibold">Allow new recovery</span>
-                    </div>
-                    <div className="mctb-recovery-row" style={{ border: "none", padding: 0 }}>
-                      <span>Max texts per caller (window)</span>
-                      <span className="font-semibold">{maxMessages}</span>
-                    </div>
-                  </div>
                 </div>
                 <div className="mctb-recovery-mini-flow" aria-hidden>
-                  <div className="mctb-recovery-mini-flow__step">Caller misses call · 10:00 AM</div>
+                  <div className="mctb-recovery-mini-flow__row">
+                    <span>Missed call</span>
+                    <span>10:00 AM</span>
+                  </div>
                   <div className="mctb-recovery-mini-flow__arrow">↓</div>
-                  <div className="mctb-recovery-mini-flow__step">Recovery sent</div>
+                  <div className="mctb-recovery-mini-flow__row">
+                    <span>Recovery text sent</span>
+                  </div>
                   <div className="mctb-recovery-mini-flow__arrow">↓</div>
-                  <div className="mctb-recovery-mini-flow__step">Caller calls again · 10:12 AM</div>
+                  <div className="mctb-recovery-mini-flow__row">
+                    <span>Calls again</span>
+                    <span>10:12 AM</span>
+                  </div>
                   <div className="mctb-recovery-mini-flow__arrow">↓</div>
-                  <div className="mctb-recovery-mini-flow__step font-semibold text-[#8a5a12]">
-                    Suppressed — cooldown active
+                  <div
+                    className={`mctb-recovery-mini-flow__outcome ${isCooldownOff(cooldownMinutes) ? "mctb-recovery-mini-flow__outcome--ok" : "mctb-recovery-mini-flow__outcome--warn"}`}
+                  >
+                    {flowOutcomeLabel}
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="mctb-recovery-module" aria-labelledby="mctb-rec-guard">
-              <h3 id="mctb-rec-guard" className="mctb-recovery-module__title mb-3">
+            <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-guard">
+              <h3 id="mctb-rec-guard" className="mctb-recovery-module__title mb-1">
                 Recovery guardrails
               </h3>
               <button
@@ -676,142 +745,217 @@ export function MctbSetupRecoveryView() {
                   {formatDelayLabel(delaySeconds)} ›
                 </span>
               </button>
-              <div className="mctb-recovery-guard-row" style={{ cursor: "default" }}>
-                <span className="text-[#626872]">Follow-up recovery</span>
-                <Link href={MCTB_ROUTES.setupTextBack} className="font-semibold text-[#1b1e23]">
-                  {followUpEnabled ? "On" : "Off"} ›
-                </Link>
+              <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
+                <span className="text-[#626872]">Repeat caller behavior</span>
+                <span className="font-semibold text-[#1b1e23]">
+                  {isCooldownOff(cooldownMinutes) ? "Allow immediately" : "Allow after cooldown"}
+                </span>
               </div>
-              <div className="mctb-recovery-guard-row" style={{ cursor: "default" }}>
-                <span className="text-[#626872]">Maximum recovery attempts</span>
+              <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-guard-row">
+                <span className="text-[#626872]">Follow-up behavior</span>
+                <span className="font-semibold text-[#1b1e23]">{followUpEnabled ? "On" : "Off"} ›</span>
+              </Link>
+              <div className="mctb-recovery-guard-row mctb-recovery-guard-row--static">
+                <span className="text-[#626872]">Maximum attempts</span>
                 <span className="font-semibold text-[#1b1e23]">{maxMessages}</span>
-              </div>
-              <div className="mctb-recovery-guard-row" style={{ cursor: "default" }}>
-                <span className="text-[#626872]">After-hours behavior</span>
-                <span className="font-semibold text-[#1b1e23]">{scheduleModeLabel}</span>
               </div>
             </section>
 
-            <section className="mctb-recovery-module" aria-labelledby="mctb-rec-why">
+            <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-why">
               <div className="mctb-recovery-module__head">
                 <div className="mctb-recovery-module__icon">
-                  <Shield className="h-4 w-4" aria-hidden />
+                  <Info className="h-4 w-4" aria-hidden />
                 </div>
                 <div>
                   <h3 id="mctb-rec-why" className="mctb-recovery-module__title">
-                    Why a caller may not receive a text
+                    Why a recovery may not send
                   </h3>
                   <p className="mctb-recovery-module__desc">
-                    Explanatory reference — matches runtime suppression codes.
+                    A missed call can qualify without ultimately sending a recovery text.
                   </p>
                 </div>
               </div>
-              {SUPPRESSION_EXPLAINERS.map((row) => (
-                <div key={row.code} className="mctb-recovery-reason">
-                  <span className="mctb-recovery-reason__label">{row.label}</span>
-                  <span className="mctb-recovery-reason__detail">{row.detail}</span>
+              <div className="mctb-recovery-diag-grid">
+                <div>
+                  {DIAGNOSTIC_REASONS_LEFT.map((row) => {
+                    const c = diagCount(row.code);
+                    return (
+                      <div key={row.code} className="mctb-recovery-diag-item">
+                        <span className="mctb-recovery-diag-item__left">
+                          <Shield className="h-3.5 w-3.5 opacity-60" aria-hidden />
+                          {row.label}
+                        </span>
+                        {c != null ? <span className="mctb-recovery-diag-item__count">{c}</span> : null}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+                <div>
+                  {DIAGNOSTIC_REASONS_RIGHT.map((row) => {
+                    const c = diagCount(row.code);
+                    return (
+                      <div key={row.code} className="mctb-recovery-diag-item">
+                        <span className="mctb-recovery-diag-item__left">
+                          <Shield className="h-3.5 w-3.5 opacity-60" aria-hidden />
+                          {row.label}
+                        </span>
+                        {c != null ? <span className="mctb-recovery-diag-item__count">{c}</span> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <Link
+                href={`${MCTB_ROUTES.missedCalls}?status=suppressed&date=7d`}
+                className="mctb-recovery-link mt-3 inline-block"
+              >
+                View missed calls →
+              </Link>
             </section>
           </div>
 
           <aside className="mctb-recovery-rail" aria-label="Recovery summary">
-            <div className="mctb-recovery-module">
-              <h4 className="mctb-recovery-module__title mb-2">Recovery summary</h4>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Status</span>
-                <span className="mctb-recovery-row__value">{paused ? "Paused" : "Active"}</span>
+            <div className="mctb-recovery-rail-panel mctb-recovery-module--elevated">
+              <h4 className="mctb-recovery-rail-panel__title">Recovery summary</h4>
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <Activity className="h-3.5 w-3.5" aria-hidden />
+                  Status
+                </span>
+                <span className="mctb-recovery-summary-row__value">
+                  <span className="mctb-recovery-status-pill">
+                    {!paused ? <span className="mctb-recovery-status-pill__dot" aria-hidden /> : null}
+                    {paused ? "Paused" : "Active"}
+                  </span>
+                </span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Qualifying outcomes</span>
-                <span className="mctb-recovery-row__value">{formatTriggerSummary(triggers)}</span>
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <PhoneMissed className="h-3.5 w-3.5" aria-hidden />
+                  Qualifying outcomes
+                </span>
+                <span className="mctb-recovery-summary-row__value">{formatTriggerRailSummary(triggers)}</span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Cooldown</span>
-                <span className="mctb-recovery-row__value">{cooldownPresetLabel(cooldownMinutes)}</span>
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <Clock className="h-3.5 w-3.5" aria-hidden />
+                  Cooldown
+                </span>
+                <span className="mctb-recovery-summary-row__value">{cooldownLabel}</span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Repeat callers</span>
-                <span className="mctb-recovery-row__value">Suppressed during cooldown</span>
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <Repeat className="h-3.5 w-3.5" aria-hidden />
+                  Repeat callers
+                </span>
+                <span className="mctb-recovery-summary-row__value">{repeatCallerLabel}</span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Consent</span>
-                <span className="mctb-recovery-row__value">{consentSummary(consentMode)}</span>
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                  Consent
+                </span>
+                <span className="mctb-recovery-summary-row__value">
+                  {consentRail.primary}
+                  <span className="mctb-recovery-summary-row__sub">{consentRail.secondary}</span>
+                </span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Text-back</span>
-                <span className="mctb-recovery-row__value">
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                  Text-back
+                </span>
+                <span className="mctb-recovery-summary-row__value">
                   {messagePreview ? "Configured" : "Not set"}
                 </span>
               </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Voicemail fallback</span>
-                <span className="mctb-recovery-row__value">{voicemailReady ? "Ready" : "Configure"}</span>
-              </div>
-              <div className="mctb-recovery-row">
-                <span className="mctb-recovery-row__label">Last recovery</span>
-                <span className="mctb-recovery-row__value">
+              <div className="mctb-recovery-summary-row">
+                <span className="mctb-recovery-summary-row__left">
+                  <History className="h-3.5 w-3.5" aria-hidden />
+                  Last recovery
+                </span>
+                <span className="mctb-recovery-summary-row__value">
                   {lastRecoveryAt ? formatCompactWhen(lastRecoveryAt) : "—"}
                 </span>
               </div>
-              <div className="mt-3 flex flex-col gap-1">
-                <Link href={MCTB_ROUTES.setupConsent} className="mctb-recovery-link">
-                  Edit Consent →
-                </Link>
-                <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-link">
-                  Edit Text Back →
-                </Link>
-                <Link href={MCTB_ROUTES.setupVoicemail} className="mctb-recovery-link">
-                  Edit Voicemail →
-                </Link>
-              </div>
+
               {messagePreview ? (
-                <p className="mt-3 text-[12px] text-[#626872] truncate" title={messagePreview}>
-                  Preview: “{messagePreview.slice(0, 72)}
-                  {messagePreview.length > 72 ? "…" : ""}”
-                </p>
+                <div className="mctb-recovery-msg-preview">
+                  <div className="mctb-recovery-msg-preview__label">Recovery message</div>
+                  <p className="mctb-recovery-msg-preview__quote">“{messagePreview}”</p>
+                  <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-msg-preview__link">
+                    Edit message →
+                  </Link>
+                </div>
               ) : null}
-            </div>
 
-            <div className="mctb-recovery-module">
-              <h4 className="mctb-recovery-module__title mb-2">How recovery works</h4>
-              <div className="mctb-recovery-flow">
-                {[
-                  "Missed call",
-                  "Outcome qualifies",
-                  "Recovery enabled",
-                  "Cooldown checked",
-                  "Consent checked",
-                  "Message eligibility checked",
-                  "Recovery text sent",
-                ].map((step, i) => {
-                  const highlight = i >= 1 && i <= 3;
-                  return (
-                    <div key={step}>
-                      {i > 0 ? <div className="mctb-recovery-flow__arrow">↓</div> : null}
-                      <div
-                        className={`mctb-recovery-flow__step${highlight ? " mctb-recovery-flow__step--highlight" : ""}`}
-                      >
-                        {step}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="mctb-recovery-related">
+                <div className="mctb-recovery-related__label">Related settings</div>
+                <Link href={MCTB_ROUTES.setupConsent} className="mctb-recovery-related-row">
+                  <span className="mctb-recovery-related-row__left">
+                    <ShieldCheck className="h-3.5 w-3.5 text-[#8b939e]" aria-hidden />
+                    Consent
+                  </span>
+                  <span className="mctb-recovery-related-row__right">
+                    {consentRail.primary}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                </Link>
+                <Link href={MCTB_ROUTES.setupTextBack} className="mctb-recovery-related-row">
+                  <span className="mctb-recovery-related-row__left">
+                    <MessageSquare className="h-3.5 w-3.5 text-[#8b939e]" aria-hidden />
+                    Text Back
+                  </span>
+                  <span className="mctb-recovery-related-row__right">
+                    {messagePreview ? "Configured" : "Set up"}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                </Link>
+                <Link href={MCTB_ROUTES.setupVoicemail} className="mctb-recovery-related-row">
+                  <span className="mctb-recovery-related-row__left">
+                    <Voicemail className="h-3.5 w-3.5 text-[#8b939e]" aria-hidden />
+                    Voicemail
+                  </span>
+                  <span className="mctb-recovery-related-row__right">
+                    {voicemailReady ? "Ready" : "Configure"}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                </Link>
               </div>
             </div>
 
-            <div className="mctb-recovery-module">
-              <h4 className="mctb-recovery-module__title mb-2">Recent suppressed recoveries</h4>
+            <div className="mctb-recovery-rail-panel">
+              <h4 className="mctb-recovery-rail-panel__title">How recovery works</h4>
+              <div className="mctb-recovery-flow">
+                {recoveryFlowSteps.map((step, i) => (
+                  <div key={step.label}>
+                    {i > 0 ? <div className="mctb-recovery-flow__arrow">↓</div> : null}
+                    <div
+                      className={`mctb-recovery-flow__step${step.owned ? " mctb-recovery-flow__step--owned" : ""}`}
+                    >
+                      {step.owned ? <span className="mctb-recovery-flow__marker" aria-hidden /> : null}
+                      {step.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mctb-recovery-rail-panel">
+              <h4 className="mctb-recovery-rail-panel__title">Recent suppressions</h4>
               {recentSuppressions.length === 0 ? (
-                <p className="text-[12.5px] text-[#626872]">No suppressed events in the last 7 days.</p>
+                <p className="mctb-recovery-empty-ok">
+                  <Check className="h-3.5 w-3.5 text-[#1a7f5a]" aria-hidden />
+                  No recent suppressed recoveries
+                </p>
               ) : (
-                recentSuppressions.map((row, i) => (
+                recentSuppressions.slice(0, 5).map((row, i) => (
                   <div key={`${row.phone}-${i}`} className="mctb-recovery-suppression-item">
                     <div>
                       <div className="font-semibold text-[#1b1e23]">{row.phone}</div>
                       <div className="text-[#8b939e]">{row.reason}</div>
                     </div>
-                    <div className="text-[#626872] shrink-0">{row.time}</div>
+                    <div className="text-[#626872] shrink-0 text-[11px]">{row.time}</div>
                   </div>
                 ))
               )}
@@ -822,14 +966,6 @@ export function MctbSetupRecoveryView() {
                 View missed calls →
               </Link>
             </div>
-
-            <Link
-              href={MCTB_ROUTES.setupTest}
-              className="mctb-recovery-module flex items-center justify-between text-[13px] font-semibold text-[#1b1e23]"
-            >
-              Run connection test
-              <ChevronRight className="h-4 w-4 text-[#8b939e]" aria-hidden />
-            </Link>
           </aside>
         </div>
       </div>

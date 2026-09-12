@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import {
   countActiveTriggers,
   cooldownPresetLabel,
+  formatCooldownDisplay,
   formatDelayLabel,
+  formatRepeatCallerSummary,
   formatTriggerSummary,
+  isCooldownOff,
   isCooldownPreset,
   recoverySnapshotsEqual,
 } from "../src/lib/mctb/setup-recovery-model";
@@ -27,6 +30,11 @@ assert.equal(isCooldownPreset(30), true);
 assert.equal(isCooldownPreset(45), false);
 assert.equal(cooldownPresetLabel(60), "1 hr");
 assert.equal(formatDelayLabel(0), "Immediately");
+assert.equal(formatCooldownDisplay(0), "Off");
+assert.equal(formatCooldownDisplay(30), "30 min");
+assert.equal(formatRepeatCallerSummary(0), "Eligible immediately");
+assert.equal(formatRepeatCallerSummary(30), "Suppressed during cooldown");
+assert.equal(isCooldownOff(0), true);
 
 const a = {
   phoneNumberId: "p1",

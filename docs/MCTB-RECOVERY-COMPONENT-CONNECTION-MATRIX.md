@@ -7,7 +7,8 @@
 | Resume recovery | same | `enabled: true`, `pauseUntil: null` | same | Resumes SMS | Banner | CONNECTED_AND_WORKING |
 | Save changes | dirty snapshot | `triggerRules`, `cooldownMinutes`, `delaySeconds` | `missedCallTextConfig` | Trigger + cooldown + delay | Banner, validation | CONNECTED_AND_WORKING |
 | Outcome toggles | runtime `sendAfter*` | via Save → `triggerRules` | DB config | `classificationTriggersMctb` | ≥1 trigger required | CONNECTED_AND_WORKING |
-| Cooldown presets | `cooldownMinutes` | via Save | DB config | `COOLDOWN_ACTIVE` window | Save error | CONNECTED_AND_WORKING |
+| Cooldown presets (incl. Off) | `cooldownMinutes` | via Save | DB config | `COOLDOWN_ACTIVE` when &gt;0 | Save error | CONNECTED_AND_WORKING |
+| Cooldown display | computed | — | — | UI shows Off not 0 min | — | READ_ONLY_BY_DESIGN |
 | Custom cooldown | same | via Save | same | same | Save error | CONNECTED_AND_WORKING |
 | Repeat caller copy rows | eligibility logic | — | — | Explanatory | — | READ_ONLY_BY_DESIGN |
 | Max attempts display | `maxMessagesPerCaller` | — | DB (not in setup POST) | Cooldown count | — | READ_ONLY_BY_DESIGN |
