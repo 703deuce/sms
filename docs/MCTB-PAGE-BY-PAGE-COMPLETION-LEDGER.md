@@ -134,4 +134,4 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_SETUP_TEST | NOT_STARTED | Next pass |
 
 **MCTB_SETUP_SHELL_COMPLETE: YES**  
-**MCTB_SETUP_OVERVIEW_COMPLETE: YES**
+**MCTB_SETUP_OVERVIEW_COMPLETE: YES** — visual premium polish (flow strip, grouped rows, status rail)

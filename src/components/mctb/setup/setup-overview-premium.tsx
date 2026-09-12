@@ -1,6 +1,7 @@
 "use client";
 
 import type { SetupOverviewSummaryRow, SetupFlowStage } from "@/lib/mctb/setup-overview-model";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
   Activity,
   Ban,
@@ -79,11 +80,11 @@ export function SetupOverviewFlowStrip({ stages }: { stages: SetupFlowStage[] })
 }
 
 const QUICK_ACTIONS = [
-  { href: "/mctb/setup/test", label: "Run live test", icon: Play },
-  { href: "/mctb/setup/phone", label: "Forwarding instructions", icon: PhoneForwarded },
-  { href: "/mctb/setup/text-back", label: "Edit recovery message", icon: MessageSquare },
-  { href: "/mctb/setup/consent", label: "Change consent method", icon: ShieldCheck },
-  { href: "/mctb/setup/voicemail", label: "Change greeting", icon: Voicemail },
+  { href: MCTB_ROUTES.setupTest, label: "Run live test", icon: Play },
+  { href: MCTB_ROUTES.setupPhone, label: "Forwarding instructions", icon: PhoneForwarded },
+  { href: MCTB_ROUTES.setupTextBack, label: "Edit recovery message", icon: MessageSquare },
+  { href: MCTB_ROUTES.setupConsent, label: "Change consent method", icon: ShieldCheck },
+  { href: MCTB_ROUTES.setupVoicemail, label: "Change greeting", icon: Voicemail },
 ] as const;
 
 export function SetupOverviewQuickActions() {
