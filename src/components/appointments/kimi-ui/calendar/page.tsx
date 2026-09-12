@@ -17,9 +17,11 @@ type Props = {
   actions: CalendarPageActions;
   headerView?: CalendarPageModel["view"] | "agenda";
   hideStatCards?: boolean;
+  sideCollapsed?: boolean;
+  onToggleSide?: () => void;
 };
 
-export default function CalendarPage({ model, actions, headerView, hideStatCards }: Props) {
+export default function CalendarPage({ model, actions, headerView, hideStatCards, sideCollapsed, onToggleSide }: Props) {
   const activeView = (headerView || model.view) as CalendarPageModel["view"] | "agenda";
   return (
     <div className="cal-page">
@@ -31,6 +33,8 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
         onNext={actions.onNext}
         onViewChange={actions.onViewChange}
         onNewAppointment={actions.onNewAppointment}
+        onBlockTime={actions.onBlockTime}
+        onWaitlist={actions.onWaitlist}
       />
       {!hideStatCards ? <StatCards stats={model.stats} /> : (
         <div className="cal-summary-strip">
@@ -39,7 +43,7 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
           <span><strong>{model.stats[2]?.value || 0}</strong> pending</span>
         </div>
       )}
-      <div className="cal-main">
+      <div className={`cal-main ${sideCollapsed ? "cal-main--side-collapsed" : ""}`}>
         {model.view === "day" ? (
           <DayCalendar
             weekDays={model.weekDays}
@@ -73,7 +77,14 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
             onSlotClick={actions.onSlotClick}
           />
         )}
-        <aside className="cal-side">
+        <aside className={`cal-side ${sideCollapsed ? "cal-side--collapsed" : ""}`}>
+          {onToggleSide ? (
+            <button type="button" className="cal-side-toggle" onClick={onToggleSide}>
+              {sideCollapsed ? "Show panel" : "Hide panel"}
+            </button>
+          ) : null}
+          {!sideCollapsed ? (
+            <>
           <MiniCalendar
             monthLabel={model.miniCalendar.monthLabel}
             days={model.miniCalendar.days}
@@ -93,6 +104,8 @@ export default function CalendarPage({ model, actions, headerView, hideStatCards
               appointment={model.nextAppointment}
               onOpenAppointment={actions.onOpenAppointment}
             />
+          ) : null}
+            </>
           ) : null}
         </aside>
       </div>

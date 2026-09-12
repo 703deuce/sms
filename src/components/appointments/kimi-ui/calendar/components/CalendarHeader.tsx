@@ -1,6 +1,7 @@
 import React from "react";
-import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Plus } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import type { CalendarViewMode } from "@/features/appointments/kimi/calendar/types";
+import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
 
 type Props = {
   rangeLabel: string;
@@ -10,6 +11,8 @@ type Props = {
   onNext: () => void;
   onViewChange: (view: CalendarViewMode) => void;
   onNewAppointment: () => void;
+  onBlockTime: () => void;
+  onWaitlist?: () => void;
 };
 
 const VIEW_OPTIONS: Array<{ value: CalendarViewMode; label: string }> = [
@@ -27,6 +30,8 @@ export default function CalendarHeader({
   onNext,
   onViewChange,
   onNewAppointment,
+  onBlockTime,
+  onWaitlist,
 }: Props) {
   return (
     <div className="cal-header">
@@ -34,7 +39,7 @@ export default function CalendarHeader({
         <Calendar size={22} className="cal-title-icon" aria-hidden />
         <div>
           <h1 className="cal-title">Calendar</h1>
-          <p className="cal-subtitle">Manage your appointments and schedule.</p>
+          <p className="cal-subtitle">Manage appointments, availability, classes, and schedule changes.</p>
         </div>
       </div>
       <div className="cal-controls">
@@ -66,9 +71,11 @@ export default function CalendarHeader({
             </button>
           ))}
         </div>
-        <button type="button" className="btn-primary" onClick={onNewAppointment}>
-          <Plus size={16} /> New appointment
-        </button>
+        <CalendarAddMenu
+          onNewAppointment={onNewAppointment}
+          onBlockTime={onBlockTime}
+          onWaitlist={onWaitlist}
+        />
       </div>
     </div>
   );

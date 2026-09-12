@@ -21,6 +21,11 @@ import type { CalendarPageActions, CalendarPageModel, CalendarViewMode } from "@
 import { CalendarFilterBar, type CalendarFilters } from "@/components/appointments/calendar/calendar-filter-bar";
 import { CalendarEventDrawer } from "@/components/appointments/calendar/calendar-event-drawer";
 import { AgendaListView } from "@/components/appointments/calendar/agenda-list-view";
+import {
+  CalendarQuickCreateSheet,
+  type QuickCreatePrefill,
+} from "@/components/appointments/calendar/calendar-quick-create-sheet";
+import { CalendarAddMenu } from "@/components/appointments/calendar/calendar-add-menu";
 
 const VIEW_KEY = "tv-calendar-view";
 const FILTER_KEY = "tv-calendar-filters";
@@ -80,6 +85,7 @@ export function CalendarConnected() {
   const [failed, setFailed] = useState(false);
   const [filters, setFilters] = useState<CalendarFilters>(() => loadFilters());
   const [filtersOpen, setFiltersOpen] = useState(true);
+  const [secondaryFilters, setSecondaryFilters] = useState(false);
   const [workspace, setWorkspace] = useState<{
     staff: Array<{ id: string; name: string }>;
     locations: Array<{ id: string; name: string }>;
@@ -87,6 +93,8 @@ export function CalendarConnected() {
     services: Array<{ id: string; name: string }>;
   } | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
+  const [quickCreate, setQuickCreate] = useState<QuickCreatePrefill | null>(null);
+  const [sideCollapsed, setSideCollapsed] = useState(false);
 
   const range = useMemo(() => getCalendarRange(cursor, view), [cursor, view]);
 
@@ -223,6 +231,8 @@ export function CalendarConnected() {
         }
       },
       onNewAppointment: () => router.push("/appointments/new"),
+      onBlockTime: () => router.push("/appointments/availability?section=overrides"),
+      onWaitlist: () => router.push("/appointments/waitlist"),
       onOpenAppointment: openEvent,
       onSelectEvent: openEvent,
       onSelectDay: (key) => {
@@ -246,10 +256,11 @@ export function CalendarConnected() {
       onSlotClick: ({ dateKey: dk, hour }) => {
         const d = new Date(dk);
         d.setHours(hour, 0, 0, 0);
-        const q = new URLSearchParams({ startsAt: d.toISOString() });
-        if (filters.staffIds[0]) q.set("staffId", filters.staffIds[0]);
-        if (filters.locationId) q.set("locationId", filters.locationId);
-        router.push(`/appointments/new?${q.toString()}`);
+        setQuickCreate({
+          startsAt: d.toISOString(),
+          staffId: filters.staffIds[0],
+          locationId: filters.locationId || undefined,
+        });
       },
     }),
     [filters.locationId, filters.staffIds, load, openEvent, router, selectedDayKey, shift, view],
@@ -268,19 +279,19 @@ export function CalendarConnected() {
 
   return (
     <div className="appt-overview-pilot bookable-workspace-pilot cal-page-shell">
-      <div className="border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs lg:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[var(--text-muted)]">
-            Operational schedule — services, classes, team bookings, and resources in one view.
-          </p>
-          <div className="flex gap-2">
-            <button type="button" className="appt-pilot-secondary-btn" onClick={() => setFiltersOpen((v) => !v)}>
-              {filtersOpen ? "Hide filters" : "Filters"}
-            </button>
-            <button type="button" className="appt-pilot-secondary-btn" onClick={() => router.push("/appointments/availability?section=overrides")}>
-              Block time
-            </button>
-          </div>
+      <div className="cal-toolbar-row border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs lg:px-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" className="appt-pilot-secondary-btn" onClick={() => router.push("/appointments/waitlist")}>
+            Waitlist
+          </button>
+          <button type="button" className="appt-pilot-secondary-btn" onClick={() => setFiltersOpen((v) => !v)}>
+            {filtersOpen ? "Hide filters" : "Filters"}
+          </button>
+          <CalendarAddMenu
+            onNewAppointment={() => router.push("/appointments/new")}
+            onBlockTime={() => router.push("/appointments/availability?section=overrides")}
+            onWaitlist={() => router.push("/appointments/waitlist")}
+          />
         </div>
       </div>
       <CalendarFilterBar
@@ -288,7 +299,30 @@ export function CalendarConnected() {
         filters={filters}
         onChange={setFilters}
         collapsed={!filtersOpen}
+        showSecondary={secondaryFilters}
+        onSearchSubmit={() => {
+          const q = filters.q.trim().toLowerCase();
+          if (!q) return;
+          const match = rows.find(
+            (r) =>
+              (r.inviteeName || "").toLowerCase().includes(q) ||
+              (r.serviceName || "").toLowerCase().includes(q) ||
+              r.id.toLowerCase().includes(q),
+          );
+          if (!match) return;
+          const d = new Date(match.startsAt);
+          setCursor(view === "week" ? startOfWeek(d) : d);
+          setSelectedDayKey(dateKey(d));
+          setDrawerId(match.id);
+        }}
       />
+      {filtersOpen && !secondaryFilters ? (
+        <div className="px-4 pb-1 text-[11px] lg:px-6">
+          <button type="button" className="text-[var(--text-muted)] underline" onClick={() => setSecondaryFilters(true)}>
+            More filters (location, resource, status)
+          </button>
+        </div>
+      ) : null}
       {refreshing && <div className="cal-refresh-bar" aria-live="polite">Updating…</div>}
       {view === "agenda" ? (
         <div className="cal-page cal-page-agenda">
@@ -300,14 +334,34 @@ export function CalendarConnected() {
             onNext={actions.onNext}
             onViewChange={actions.onViewChange}
             onNewAppointment={actions.onNewAppointment}
+            onBlockTime={actions.onBlockTime}
+            onWaitlist={actions.onWaitlist}
           />
           <div className="px-4 pb-6 lg:px-6">
             <AgendaListView rows={rows} onSelect={openEvent} />
           </div>
         </div>
       ) : (
-        <CalendarView model={model} actions={actions} headerView={view} hideStatCards />
+        <CalendarView
+          model={model}
+          actions={actions}
+          headerView={view}
+          hideStatCards
+          sideCollapsed={sideCollapsed}
+          onToggleSide={() => setSideCollapsed((v) => !v)}
+        />
       )}
+      <CalendarQuickCreateSheet
+        open={Boolean(quickCreate)}
+        prefill={quickCreate}
+        workspace={workspace}
+        onClose={() => setQuickCreate(null)}
+        onCreated={load}
+        onOpenFullForm={(q) => {
+          setQuickCreate(null);
+          router.push(`/appointments/new?${q.toString()}`);
+        }}
+      />
       <CalendarEventDrawer
         event={drawerId ? rowById.get(drawerId) || rows.find((r) => r.id === drawerId) || null : null}
         onClose={() => setDrawerId(null)}

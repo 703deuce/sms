@@ -24,9 +24,18 @@ type Props = {
   onChange: (next: CalendarFilters) => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  onSearchSubmit?: () => void;
+  showSecondary?: boolean;
 };
 
-export function CalendarFilterBar({ workspace, filters, onChange, collapsed }: Props) {
+export function CalendarFilterBar({
+  workspace,
+  filters,
+  onChange,
+  collapsed,
+  onSearchSubmit,
+  showSecondary = true,
+}: Props) {
   if (collapsed) return null;
 
   return (
@@ -38,6 +47,9 @@ export function CalendarFilterBar({ workspace, filters, onChange, collapsed }: P
           placeholder="Search client, service…"
           value={filters.q}
           onChange={(e) => onChange({ ...filters, q: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSearchSubmit?.();
+          }}
           aria-label="Search calendar"
         />
       </div>
@@ -66,6 +78,8 @@ export function CalendarFilterBar({ workspace, filters, onChange, collapsed }: P
           <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
+      {showSecondary ? (
+      <>
       <select
         className="rounded border border-[var(--border)] px-2 py-1.5 max-w-[140px]"
         value={filters.locationId}
@@ -100,6 +114,8 @@ export function CalendarFilterBar({ workspace, filters, onChange, collapsed }: P
         <option value="completed">Completed</option>
         <option value="canceled">Cancelled</option>
       </select>
+      </>
+      ) : null}
     </div>
   );
 }
