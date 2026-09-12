@@ -206,15 +206,28 @@ export function AppShell({
 
   const autoCollapseSidebar = shouldAutoCollapseSidebar(pathname);
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
-  const sidebarOffset = sidebarCollapsedEffective ? "56px" : "224px";
+  const isAppointmentsOverviewPilot = pathname === "/appointments/overview";
+  const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : 224;
+  const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
   return (
     <div
       className="product-theme flex h-dvh overflow-hidden bg-background"
+      data-appt-overview-shell={isAppointmentsOverviewPilot ? "soft-cool-slate-204" : undefined}
       style={
         {
           "--sidebar-offset": sidebarOffset,
-          "--app-header-height": APP_HEADER_HEIGHT,
+          "--app-header-height": isAppointmentsOverviewPilot ? "54px" : APP_HEADER_HEIGHT,
+          ...(isAppointmentsOverviewPilot
+            ? {
+                "--primary": "#1b1e23",
+                "--primary-foreground": "#ffffff",
+                "--primary-hover": "#262a31",
+                "--ring": "#747c86",
+                "--sidebar-active": "#1b1e23",
+                "--background": "#f6f7f8",
+              }
+            : {}),
         } as CSSProperties
       }
     >
@@ -247,7 +260,14 @@ export function AppShell({
         />
       </Suspense>
       <div
-        className={`flex h-full min-w-0 flex-1 flex-col overflow-hidden ${sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"}`}
+        className={`flex h-full min-w-0 flex-1 flex-col overflow-hidden ${
+          sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"
+        }`}
+        style={
+          !sidebarCollapsedEffective && isAppointmentsOverviewPilot
+            ? ({ paddingLeft: sidebarExpandedPx } as CSSProperties)
+            : undefined
+        }
       >
         {realtorMode ? (
           <RealtorHeader

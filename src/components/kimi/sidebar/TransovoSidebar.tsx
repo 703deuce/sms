@@ -30,6 +30,10 @@ export interface TransovoSidebarProps {
   homeHref?: string;
   /** Rendered between Transovo identity and product-local navigation. */
   productSwitcher?: ReactNode;
+  /** Overview visual test — default 224. */
+  expandedWidthPx?: number;
+  /** Appointments overview — slate nav (inline; avoids teal `text-primary`). */
+  appointmentsOverviewShell?: boolean;
 }
 
 function Logo({ collapsed, homeHref }: { collapsed: boolean; homeHref: string }) {
@@ -53,21 +57,30 @@ function Logo({ collapsed, homeHref }: { collapsed: boolean; homeHref: string })
   );
 }
 
+const OVERVIEW_NAV_ACTIVE = { backgroundColor: "#e2e6ea", color: "#1b1e23" } as const;
+const OVERVIEW_NAV_ICON_ACTIVE = { color: "#2a2e34" } as const;
+
 function ExpandedNavRow({
   item,
   active,
   expanded,
   onToggleExpand,
+  appointmentsOverviewShell,
 }: {
   item: KimiNavItem;
   active: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
+  appointmentsOverviewShell?: boolean;
 }) {
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
   const className =
     "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
+  const rowStyle =
+    appointmentsOverviewShell && active ? OVERVIEW_NAV_ACTIVE : undefined;
+  const iconStyle =
+    appointmentsOverviewShell && active ? OVERVIEW_NAV_ICON_ACTIVE : undefined;
 
   if (hasChildren) {
     return (
@@ -76,8 +89,9 @@ function ExpandedNavRow({
         data-active={active ? "true" : undefined}
         onClick={onToggleExpand}
         className={className}
+        style={rowStyle}
       >
-        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} style={iconStyle} />
         <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
         {item.badge != null && Number(item.badge) > 0 && (
           <span className="transovo-badge">{item.badge}</span>
@@ -96,8 +110,9 @@ function ExpandedNavRow({
       href={item.href}
       data-active={active ? "true" : undefined}
       className={className}
+      style={rowStyle}
     >
-      <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+      <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} style={iconStyle} />
       <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
       {hasPositiveBadge(item.badge) && (
         <span className="transovo-badge">{item.badge}</span>
@@ -138,6 +153,8 @@ export function TransovoSidebar({
   upgradeHref = "/settings/billing",
   homeHref = "/dashboard",
   productSwitcher,
+  expandedWidthPx = 224,
+  appointmentsOverviewShell = false,
 }: TransovoSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
@@ -160,7 +177,12 @@ export function TransovoSidebar({
   return (
     <aside
       className="transovo-sidebar flex h-screen flex-col border-r border-border bg-card"
-      style={{ width: collapsed ? 56 : 224 }}
+      style={{
+        width: collapsed ? 56 : expandedWidthPx,
+        ...(appointmentsOverviewShell && !collapsed
+          ? { backgroundColor: "#eef0f2", borderColor: "#dde1e5" }
+          : {}),
+      }}
     >
       <Logo collapsed={collapsed} homeHref={homeHref} />
 
@@ -203,6 +225,7 @@ export function TransovoSidebar({
                 active={rowActive}
                 expanded={expanded}
                 onToggleExpand={() => toggleGroup(item.label)}
+                appointmentsOverviewShell={appointmentsOverviewShell}
               />
               {item.children && expanded && (
                 <div className="ml-[26px] mt-0.5 space-y-0.5 border-l border-border pl-2">

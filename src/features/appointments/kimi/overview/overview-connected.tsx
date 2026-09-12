@@ -13,7 +13,7 @@ import {
 } from "@/features/appointments/kimi/overview/map-overview";
 import type { OverviewPageActions, OverviewPageModel } from "@/features/appointments/kimi/overview/types";
 
-const SHELL = "appt-overview-pilot ref-root min-h-full bg-[#f7f7f5]";
+const SHELL = "appt-overview-pilot ref-root min-h-full bg-[#f6f7f8]";
 
 function OverviewLoading() {
   return (

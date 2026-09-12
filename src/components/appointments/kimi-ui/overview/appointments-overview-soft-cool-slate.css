@@ -1,0 +1,358 @@
+/**
+ * TRANSOVO visual test — Soft Cool Slate (overview /appointments/overview only).
+ * Sidebar width: 204px. Build: soft-cool-slate-204
+ */
+
+html.appt-overview-pilot-active {
+  --overview-sidebar-width: 204px;
+  --sidebar-bg: #eef0f2;
+  --sidebar-hover: #e8ebee;
+  --sidebar-selected: #e2e6ea;
+  --sidebar-border: #dde1e5;
+  --app-bg: #f6f7f8;
+  --header-bg: #f6f7f8;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f2f4f6;
+  --surface-tertiary: #eceff2;
+  --surface-hover: #f0f2f4;
+  --surface-selected: #e5e8ec;
+  --text-primary: #1b1e23;
+  --text-secondary: #626872;
+  --text-tertiary: #8a919b;
+  --text-disabled: #a8aeb6;
+  --border-subtle: #eaedf0;
+  --border-default: #e0e4e8;
+  --border-strong: #d1d6dc;
+  --button-primary-bg: #1b1e23;
+  --button-primary-hover: #262a31;
+  --semantic-success-text: #267a45;
+  --semantic-success-bg: #eef7f1;
+  --semantic-success-border: #d2e7d8;
+
+  --pilot-charcoal: #1b1e23;
+  --pilot-graphite-2: #2a2e34;
+  --pilot-accent: #1b1e23;
+  --pilot-accent-hover: #262a31;
+  --pilot-accent-soft: #e5e8ec;
+  --pilot-accent-border: #d6dbe0;
+  --pilot-border: #dde1e5;
+  --pilot-border-light: #e4e7ea;
+  --pilot-surface-muted: #f6f7f8;
+  --pilot-nav-bg: #eef0f2;
+  --pilot-nav-text: #666d76;
+  --pilot-nav-text-active: #1b1e23;
+  --pilot-nav-icon: #7a818b;
+  --pilot-nav-icon-active: #2a2e34;
+  --pilot-nav-icon-hover: #4c525a;
+
+  --neutral-success-text: #267a45;
+  --neutral-link: #4b515a;
+  --neutral-link-hover: #1b1e23;
+  --neutral-chart-line: #394049;
+  --neutral-chart-grid: #e4e7ea;
+  --neutral-chart-axis: #7b828c;
+  --neutral-chart-projected: #9ba2ab;
+  --neutral-module-border: #e5e8eb;
+  --neutral-kpi-icon-bg: #f0f2f4;
+  --neutral-kpi-icon-border: #e1e5e8;
+  --neutral-kpi-icon-color: #454b53;
+
+  --type-page-title: 1.5rem;
+  --type-page-title-line: 1.875rem;
+  --type-nav: 0.8125rem;
+  --type-nav-line: 1.125rem;
+}
+
+html.appt-overview-pilot-active .product-theme {
+  --primary: #1b1e23 !important;
+  --primary-foreground: #ffffff !important;
+  --primary-hover: #262a31 !important;
+  --ring: #747c86 !important;
+  --sidebar-active: #1b1e23 !important;
+  --background: #f6f7f8 !important;
+}
+
+html.appt-overview-pilot-active .product-theme .bg-mesh,
+html.appt-overview-pilot-active .bg-background {
+  background-color: var(--app-bg) !important;
+  background-image: none !important;
+}
+
+/* —— Sidebar width 204px —— */
+html.appt-overview-pilot-active .transovo-sidebar,
+html.appt-overview-pilot-active aside.transovo-sidebar[style] {
+  width: 204px !important;
+  max-width: 204px !important;
+  min-width: 204px !important;
+  background: var(--sidebar-bg) !important;
+  border-color: var(--sidebar-border) !important;
+}
+
+html.appt-overview-pilot-active .hidden.lg\:fixed.lg\:w-\[224px\],
+html.appt-overview-pilot-active .transovo-sidebar.w-\[224px\],
+html.appt-overview-pilot-active .transovo-sidebar.lg\:w-\[224px\] {
+  width: 204px !important;
+}
+
+html.appt-overview-pilot-active .lg\:pl-\[224px\] {
+  padding-left: 204px !important;
+}
+
+/* —— Nav density —— */
+html.appt-overview-pilot-active .transovo-nav-item {
+  min-height: 34px !important;
+  height: 34px !important;
+  margin: 2px 6px !important;
+  padding: 0 8px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 500 !important;
+  color: var(--pilot-nav-text) !important;
+  gap: 8px !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item svg,
+html.appt-overview-pilot-active .transovo-nav-item .h-4.w-4 {
+  width: 16px !important;
+  height: 16px !important;
+  color: var(--pilot-nav-icon) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item:hover {
+  background-color: var(--sidebar-hover) !important;
+  color: #30343a !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item:hover svg {
+  color: var(--pilot-nav-icon-hover) !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] {
+  background-color: var(--sidebar-selected) !important;
+  color: var(--pilot-nav-text-active) !important;
+  font-weight: 500 !important;
+}
+
+html.appt-overview-pilot-active .transovo-nav-item[data-active="true"] svg {
+  color: var(--pilot-nav-icon-active) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar nav {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar nav > div > p,
+html.appt-overview-pilot-active .transovo-sidebar .text-\[10px\].uppercase {
+  font-size: 10.5px !important;
+  line-height: 15px !important;
+  font-weight: 600 !important;
+  color: var(--text-tertiary) !important;
+  padding-top: 14px !important;
+  padding-bottom: 4px !important;
+  margin-top: 0 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar nav > div + div {
+  margin-top: 2px;
+}
+
+/* Logo row — slimmer */
+html.appt-overview-pilot-active .transovo-sidebar .h-14 {
+  height: 46px !important;
+  min-height: 46px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .h-14 .text-\[15px\] {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+/* Product switcher */
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] {
+  min-height: 46px !important;
+  max-height: 48px !important;
+  padding: 8px 10px !important;
+  margin: 4px 6px 6px !important;
+  border-radius: 8px !important;
+  border-color: var(--border-default) !important;
+  background: var(--surface-secondary) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-7.w-7 {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .h-4.w-4 {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[10px\] {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-\[12px\] {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .bg-primary\/10,
+html.appt-overview-pilot-active .transovo-sidebar button[aria-haspopup="listbox"] .text-primary {
+  background: var(--surface-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Message credits — quieter */
+html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 {
+  padding: 8px 10px !important;
+  margin: 0 6px 4px !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--surface-secondary) !important;
+  min-height: 58px;
+  max-height: 64px;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 .text-\[12px\] {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 a.text-indigo-600 {
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  color: var(--text-tertiary) !important;
+}
+
+html.appt-overview-pilot-active .transovo-credits-bar {
+  height: 4px !important;
+  margin-top: 6px !important;
+  background-color: var(--surface-tertiary) !important;
+}
+
+html.appt-overview-pilot-active .transovo-credits-fill {
+  background: #454b53 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .rounded-lg.border.border-border.bg-muted\/40 p.text-\[11px\] {
+  margin-top: 4px !important;
+  font-size: 10.5px !important;
+}
+
+/* Account footer */
+html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t {
+  padding: 6px 6px 8px !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .h-7.w-7 {
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 11px !important;
+  background: var(--surface-tertiary) !important;
+  color: var(--text-secondary) !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[13px\] {
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .shrink-0.border-t .text-\[11px\] {
+  font-size: 11px !important;
+  font-weight: 400 !important;
+}
+
+html.appt-overview-pilot-active .transovo-sidebar .bg-indigo-100,
+html.appt-overview-pilot-active .transovo-sidebar .text-indigo-700,
+html.appt-overview-pilot-active .transovo-sidebar .text-indigo-600 {
+  background: var(--surface-tertiary) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Header 54px */
+html.appt-overview-pilot-active header.sticky {
+  background: var(--header-bg) !important;
+  border-bottom: 1px solid #e4e7ea !important;
+  box-shadow: none !important;
+  min-height: 54px !important;
+}
+
+html.appt-overview-pilot-active header.sticky .h-16 {
+  height: 54px !important;
+  min-height: 54px !important;
+}
+
+/* Workspace canvas */
+.appt-overview-pilot.ref-root {
+  background: var(--app-bg) !important;
+}
+
+.appt-overview-pilot {
+  --canvas: #f6f7f8;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f6;
+  --text-primary: #1b1e23;
+  --text-secondary: #626872;
+  --text-tertiary: #8a919b;
+  --border: #e0e4e8;
+  --border-large: #e5e8eb;
+  --border-soft: #eaedf0;
+  --kpi-icon-surface: #f0f2f4;
+  --kpi-icon-color: #454b53;
+  --chart-line: #394049;
+  --brand-accent: #1b1e23;
+  --state-success: #267a45;
+  --state-success-soft: #eef7f1;
+}
+
+@media (min-width: 1024px) {
+  .appt-overview-pilot.ref-root {
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+  }
+}
+
+.appt-overview-pilot .ref-deco-page-head {
+  margin-bottom: 22px !important;
+  padding-bottom: 14px !important;
+  border-bottom-color: var(--border-subtle) !important;
+}
+
+.appt-overview-pilot .ref-deco-section,
+.appt-overview-pilot .appt-overview-module.ref-deco-section {
+  border-color: var(--neutral-module-border) !important;
+  border-radius: 10px !important;
+}
+
+.appt-overview-pilot .appt-pilot-semantic-positive {
+  color: var(--semantic-success-text) !important;
+}
+
+.appt-overview-pilot .pill-green {
+  background: var(--semantic-success-bg) !important;
+  color: var(--semantic-success-text) !important;
+  border: 1px solid var(--semantic-success-border);
+}
+
+html.appt-overview-pilot-active nav.fixed.bottom-0 {
+  background: var(--surface-primary) !important;
+  border-color: var(--border-default) !important;
+}
+
+html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary,
+html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-primary svg {
+  color: #1b1e23 !important;
+}
+
+html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground,
+html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground,
+html.appt-overview-pilot-active nav.fixed.bottom-0 a.text-muted-foreground svg,
+html.appt-overview-pilot-active nav.fixed.bottom-0 button.text-muted-foreground svg {
+  color: #777e87 !important;
+}

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { Calendar, ChevronDown } from "lucide-react";
+import { mountOverviewPilotRuntimeStyles } from "./appointments-overview-pilot-chrome";
 import StatCards from "./components/StatCards";
 import TodaysSchedule from "./components/TodaysSchedule";
 import BookingsChart from "./components/BookingsChart";
@@ -10,6 +12,8 @@ import QuickActions from "./components/QuickActions";
 import type { OverviewPageActions, OverviewPageModel } from "@/features/appointments/kimi/overview/types";
 import { RefDecoPageHeader } from "../shared/ref-deco-patterns";
 import "./reference.css";
+import "./appointments-overview-neutral-r2.css";
+import "./appointments-overview-soft-cool-slate.css";
 
 type Props = {
   model: OverviewPageModel;
@@ -18,11 +22,14 @@ type Props = {
 };
 
 export default function OverviewView({ model, actions, copied }: Props) {
-  if (false as boolean) console.log("neutral-r2-marker");
+  useEffect(() => {
+    mountOverviewPilotRuntimeStyles();
+  }, []);
+
   return (
     <div
-      data-overview-revision="neutral-r2"
-      className="appt-overview-pilot ref-root min-h-full px-4 pb-10 pt-2 sm:px-7"
+      data-overview-revision="soft-cool-slate-204"
+      className="appt-overview-pilot ref-root min-h-full px-4 pb-10 pt-2 lg:px-7"
     >
       <RefDecoPageHeader
         title="Overview"

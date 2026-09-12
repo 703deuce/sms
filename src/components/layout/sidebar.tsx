@@ -351,6 +351,8 @@ export function Sidebar({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
+  const isAppointmentsOverviewPilot = pathname === "/appointments/overview";
+  const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : SIDEBAR_WIDTH_PX;
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
@@ -491,6 +493,8 @@ export function Sidebar({
         activeRoute={pathname}
         search={search}
         collapsed={collapsed}
+        expandedWidthPx={sidebarExpandedPx}
+        appointmentsOverviewShell={isAppointmentsOverviewPilot}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
         productSwitcher={
@@ -526,6 +530,7 @@ export function Sidebar({
             "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex",
             collapsed ? "lg:w-[56px]" : "lg:w-[224px]",
           )}
+          style={collapsed ? undefined : { width: sidebarExpandedPx }}
         >
           {kimiAside}
         </div>

@@ -1,6 +1,7 @@
 /**
  * Appointments Overview — 60-30-10 palette (scoped).
  * Near-monochrome canvas — charcoal primary actions, semantic color only.
+ * Build token: overview-pilot-neutral-v3 (charcoal primary; not legacy teal #147d74).
  */
 .appt-overview-pilot {
   --canvas: #f7f7f5;
@@ -578,7 +579,11 @@
   fill: var(--chart-line);
 }
 
-.appt-overview-pilot .text-green-600 {
+.appt-overview-pilot .text-green-600:not(.appt-pilot-semantic-positive) {
+  color: var(--text-secondary);
+}
+
+.appt-overview-pilot .appt-pilot-semantic-positive.text-green-600 {
   color: var(--state-success);
 }
 
@@ -816,11 +821,11 @@ html.appt-overview-pilot-active .transovo-sidebar {
 
 html.appt-overview-pilot-active .transovo-sidebar.w-\[224px\],
 html.appt-overview-pilot-active .transovo-sidebar.lg\:w-\[224px\] {
-  width: 232px !important;
+  width: 204px !important;
 }
 
 html.appt-overview-pilot-active .lg\:pl-\[224px\] {
-  padding-left: 232px !important;
+  padding-left: 204px !important;
 }
 
 html.appt-overview-pilot-active .transovo-sidebar .border-border {

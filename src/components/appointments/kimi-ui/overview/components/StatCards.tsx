@@ -20,8 +20,8 @@ export default function StatCards({ stats }: { stats: OverviewStatItem[] }) {
         tint: s.tint,
         highlight: false,
         subClassName:
-          s.icon === "check" || (s.icon === "shield" && /excellent|good/i.test(s.sub))
-            ? "text-green-600 font-medium"
+          /excellent/i.test(s.sub)
+            ? "appt-pilot-semantic-positive font-medium"
             : s.icon === "shield" && /failed/i.test(s.sub)
               ? "text-amber-600 font-medium"
               : "text-gray-400",
