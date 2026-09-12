@@ -236,3 +236,32 @@ EXISTING_CAPABILITIES_DISCOVERED: 18
 EXISTING_CAPABILITIES_PRESERVED: 18  
 HANDOFF_MODES_DISCOVERED: 4  
 ALERT_CHANNELS_DISCOVERED: 3 (email, SMS, in-app)
+
+## Exclusions (`/mctb/setup/exclusions`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_SETUP_EXCLUSIONS_ROUTE | PASS | Canonical; `GET/POST/DELETE /api/mctb/exclusions` |
+| MCTB_SETUP_EXCLUSIONS_LIST | PASS | MCTB + personal_blocked rows |
+| MCTB_SETUP_EXCLUSIONS_ADD | PASS | Modal; E.164 via server normalize |
+| MCTB_SETUP_EXCLUSIONS_EDIT_REASON | PASS | POST upsert |
+| MCTB_SETUP_EXCLUSIONS_REMOVE | PASS | Confirm dialog; mctb_exclusion only |
+| MCTB_SETUP_EXCLUSIONS_PERSONAL_READ_ONLY | PASS | No remove for personal_blocked |
+| MCTB_SETUP_EXCLUSIONS_SEARCH_FILTER | PASS | Phone + reason; source/origin/reason |
+| MCTB_SETUP_EXCLUSIONS_PAGINATION | PASS | Default 10; 5/10/25/50 |
+| MCTB_SETUP_EXCLUSIONS_RUNTIME_SCOPE | PASS | Recovery SMS; precedence doc updated |
+| MCTB_SETUP_EXCLUSIONS_VOICEMAIL_ENTRY | PASS | Same POST from MCTB voicemail |
+| MCTB_SETUP_EXCLUSIONS_DOCS | PASS | Audit + reason/source + matrix |
+| MCTB_SETUP_EXCLUSIONS_TESTS | PASS | `scripts/test-mctb-setup-exclusions.ts` |
+| MCTB_SETUP_EXCLUSIONS_RESPONSIVE | PASS | Screenshots `exclusions_*` |
+| MCTB_SETUP_EXCLUSIONS_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**EXCLUSIONS_PAGE_COMPLETE: YES**  
+EXISTING_CAPABILITIES_DISCOVERED: 8  
+EXISTING_CAPABILITIES_PRESERVED: 8  
+EXCLUSION_SOURCES_DISCOVERED: 2 (`mctb_exclusion`, `personal_blocked`)  
+EXCLUSION_REASON_CODES_MAPPED: 7+  
+BROKEN: 0  
+NO_OP: 0  
+PLACEHOLDER: 0  
+REMOVED_EXISTING_FEATURES: 0

@@ -20,7 +20,7 @@ Documented from `evaluateMissedCallTextEligibility` and `classifyInboundCallOutc
 | 6 | Forwarding requirement (production) | `NOT_FORWARD_EVENT` |
 | 7 | Spam heuristics | `SPAM`, `UNKNOWN_CALLER` |
 | 8 | Duplicate idempotency key / already sent | `ALREADY_SENT` |
-| 9 | Exclusion list | `BLOCKED_NUMBER` |
+| 9 | Exclusion list (`Suppression` phone or `{workspaceId}:p:{caller}` key; MCTB manual rows use `{workspaceId}:mctb:{phone}` matched via `phone`) when `suppressBlockedNumbers` | `BLOCKED_NUMBER` — **automatic recovery SMS only**; not voice block, forwarding, or voicemail |
 | 10 | Contact opt-out | `OPTED_OUT` |
 | 11 | Cooldown window + max per caller | `COOLDOWN_ACTIVE` |
 | 12 | Schedule pause (`isMctbSchedulePaused`) | `MCTB_DISABLED` |
