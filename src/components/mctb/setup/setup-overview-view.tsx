@@ -87,14 +87,30 @@ export function MctbSetupOverviewView() {
 
       if (handoffRes.ok) {
         const h = await handoffRes.json();
-        const recipients = h.data?.recipients || [];
-        const emailOn = recipients.some((r: { email?: string }) => Boolean(r.email));
-        const smsOn = recipients.some((r: { phone?: string }) => Boolean(r.phone));
-        if (!emailOn && !smsOn) setNotificationSummary("No recipients configured");
+        const recipients = (h.data?.recipients || []) as Array<{
+          enabled?: boolean;
+          email?: string | null;
+          mobileE164?: string | null;
+          eventChannels?: Record<string, { email?: boolean; sms?: boolean }>;
+        }>;
+        const active = recipients.filter((r) => r.enabled !== false);
+        const emailOn = active.some(
+          (r) =>
+            Boolean(r.email) &&
+            Object.values(r.eventChannels || {}).some((ch) => ch?.email),
+        );
+        const smsOn = active.some(
+          (r) =>
+            Boolean(r.mobileE164) &&
+            Object.values(r.eventChannels || {}).some((ch) => ch?.sms),
+        );
+        if (active.length === 0) setNotificationSummary("No recipients configured");
         else
           setNotificationSummary(
             `${emailOn ? "Email enabled" : "Email disabled"} · ${smsOn ? "SMS enabled" : "SMS disabled"}`,
           );
+      } else {
+        setNotificationSummary("Unable to load notifications");
       }
 
       if (onboardRes.ok) {
