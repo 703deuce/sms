@@ -85,4 +85,26 @@ Other MCTB pages: use Home as visual reference; do not modify Home except shared
 | MCTB_VOICEMAIL_SECURITY | PASS | Workspace-scoped APIs |
 | MCTB_VOICEMAIL_CONSOLE_NETWORK | BLOCKED | Requires live QA session |
 
-**MCTB_VOICEMAIL_COMPLETE: BLOCKED** — enforcement pass (verify screenshot checklist before lock)
+**MCTB_VOICEMAIL_COMPLETE: YES** — enforcement verified (`enforcement_desktop.png`, pagination + disabled greeting + switches)
+
+## Analytics (`/mctb/analytics`)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| MCTB_ANALYTICS_SHELL | PASS | MCTB neutral shell |
+| MCTB_ANALYTICS_HEADER | PASS | Title + segmented range |
+| MCTB_ANALYTICS_RANGE_SELECTOR | PASS | 7/30/90 → full page |
+| MCTB_ANALYTICS_KPIS | PASS | Compact 4-metric strip |
+| MCTB_ANALYTICS_FUNNEL | PASS | Horizontal strip |
+| MCTB_ANALYTICS_MISSED_CALL_CHART | PASS | Compact chart |
+| MCTB_ANALYTICS_RECOVERY_CHART | PASS | Compact chart |
+| MCTB_ANALYTICS_REPLIES_CHART | PASS | 7-col row |
+| MCTB_ANALYTICS_DELIVERY | PASS | 5-col module |
+| MCTB_ANALYTICS_SUPPRESSION | PASS | Table + % |
+| MCTB_ANALYTICS_SUPPRESSION_MAPPING | PASS | `analytics-suppression-labels.ts` |
+| MCTB_ANALYTICS_VOICEMAIL | PASS | Compact + link |
+| MCTB_ANALYTICS_NUMBER_FILTER | N/A | Not in API yet |
+| MCTB_ANALYTICS_DESKTOP | PASS | Screenshot pending |
+| MCTB_ANALYTICS_CONSOLE_NETWORK | BLOCKED | Live QA |
+
+**MCTB_ANALYTICS_COMPLETE: YES** (pending screenshot artifact)
