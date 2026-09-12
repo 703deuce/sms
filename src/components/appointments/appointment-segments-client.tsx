@@ -111,7 +111,7 @@ export function AppointmentSegmentsClient() {
                   </Link>
                   <p className="text-muted-foreground">{c.email || c.phone}</p>
                 </div>
-                <Link href={`/conversations?contact=${c.id}`} className="text-primary underline">
+                <Link href={`/conversations?contactId=${c.id}`} className="text-primary underline">
                   Message
                 </Link>
               </li>
