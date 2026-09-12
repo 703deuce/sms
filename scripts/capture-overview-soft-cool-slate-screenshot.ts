@@ -34,13 +34,19 @@ async function ready(page: Page) {
     timeout: 120000,
   });
   await page.waitForSelector(".appt-overview-pilot", { state: "attached", timeout: 120000 });
-  await page.waitForFunction(
-    () => {
-      const shell = document.querySelector(".product-theme");
-      return shell ? shell.getBoundingClientRect().width > 200 : false;
-    },
-    { timeout: 120000 },
-  );
+  await page.evaluate(() => {
+    const h = `${window.innerHeight}px`;
+    const w = `${window.innerWidth}px`;
+    document.documentElement.style.setProperty("display", "block", "important");
+    document.body.style.cssText = `margin:0;min-height:${h};width:${w}`;
+    const shell = document.querySelector<HTMLElement>(".product-theme");
+    if (shell) {
+      shell.style.setProperty("min-height", h, "important");
+      shell.style.setProperty("width", w, "important");
+      shell.style.setProperty("max-width", w, "important");
+    }
+  });
+  await page.waitForTimeout(2000);
   await dismissOverlays(page);
   await page.waitForTimeout(2500);
 }
