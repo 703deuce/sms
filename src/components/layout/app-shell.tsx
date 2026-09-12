@@ -191,6 +191,7 @@ export function AppShell({
       ? getAppointmentsPageTitle(pathname)
       : "";
   const mctbTitle = mctbContextActive ? getMctbPageTitle(pathname) || getVoicePageTitle(pathname) : "";
+  const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
   const title = hideChromeTitle || hideAppointmentsHeaderTitle
     ? ""
     : isLauncher
@@ -218,7 +219,6 @@ export function AppShell({
   const isAppointmentsOverviewPilot =
     isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
-  const hideAppointmentsHeaderTitle = pathname.startsWith("/appointments/calendar");
   const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
