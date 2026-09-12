@@ -1,5 +1,9 @@
 /* Shared MCTB shell — soft cool slate; overrides default purple Kimi sidebar. */
 
+.transovo-sidebar-soft-slate .transovo-nav-item {
+  color: #626872 !important;
+}
+
 .transovo-sidebar-soft-slate .transovo-nav-item:hover {
   background-color: #e8ebee !important;
   color: #1b1e23 !important;
@@ -9,18 +13,24 @@
   background-color: #e2e6ea !important;
   color: #1b1e23 !important;
   font-weight: 500 !important;
+  box-shadow: none !important;
 }
 
 .transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"]::before {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+  opacity: 0 !important;
   content: none !important;
   background: transparent !important;
 }
 
-.transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"] svg,
-.transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"] .h-4 {
+.transovo-sidebar-soft-slate .transovo-nav-item svg {
+  color: #6f7680 !important;
+  stroke: #6f7680 !important;
+}
+
+.transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"] svg {
   color: #2a2e34 !important;
   stroke: #2a2e34 !important;
 }
@@ -36,18 +46,6 @@
 .transovo-sidebar-soft-slate .transovo-badge,
 .transovo-sidebar-soft-slate .transovo-badge-dot {
   background-color: #1b1e23 !important;
-}
-
-.product-theme[data-mctb-neutral-shell] .transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"],
-.product-theme[data-mctb-neutral-shell] .transovo-sidebar .transovo-nav-item[data-active="true"] {
-  background-color: #e2e6ea !important;
-  color: #1b1e23 !important;
-}
-
-.product-theme[data-mctb-neutral-shell] .transovo-sidebar .transovo-nav-item[data-active="true"]::before,
-.transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"]::before {
-  display: none !important;
-  content: none !important;
 }
 
 .product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active {

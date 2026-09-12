@@ -57,11 +57,17 @@ function Logo({
         <span
           className={`flex h-7 w-7 items-center justify-center rounded-[6px] shrink-0 ${
             neutralMark
-              ? "border border-[#d8dce0] bg-[#eceff2] text-[#2a2e34]"
+              ? "border border-[#d4d8dc] bg-[#e8eaed] text-[#1b1e23]"
               : "bg-indigo-600 text-white"
           }`}
         >
-          <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+          {neutralMark ? (
+            <span className="text-[11px] font-bold leading-none tracking-tight" aria-hidden>
+              T
+            </span>
+          ) : (
+            <Sparkles className="h-4 w-4" strokeWidth={1.75} />
+          )}
         </span>
         {!collapsed && (
           <span

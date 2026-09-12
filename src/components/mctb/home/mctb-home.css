@@ -46,10 +46,21 @@
 }
 
 .mctb-home-section-title {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   line-height: 21px;
   letter-spacing: -0.01em;
+}
+
+.mctb-home-section-head-action-placeholder {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  visibility: hidden;
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .mctb-home-link {
@@ -337,8 +348,36 @@
   color: #626872;
 }
 
-.mctb-home-bottom-row > * {
+.mctb-home-bottom-pair {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .mctb-home-bottom-pair {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  .mctb-home-bottom-pair > * {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
+  .mctb-home-bottom-pair > *:first-child {
+    grid-column: span 7 / span 7;
+  }
+
+  .mctb-home-bottom-pair > *:last-child {
+    grid-column: span 5 / span 5;
+  }
+
+  .mctb-home-bottom-pair .mctb-home-module {
+    flex: 1 1 auto;
+    min-height: 16.5rem;
+  }
 }
