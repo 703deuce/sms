@@ -14,6 +14,7 @@ import { buildMctbShellNav, buildMassSmsMobileNav, buildVoiceMobileNav } from "@
 import { buildSmsPlatformNav } from "@/lib/products/sms-platform-nav";
 import { resolveProductSidebarNav, isMctbShellActive, isAppointmentsShellActive } from "@/lib/products/resolve-product-nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 import { appointmentsShellHome, isAppointmentsNavItemActive } from "@/lib/products/appointments-routes";
 import { productLogoHome } from "@/lib/products/context";
 import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
@@ -351,7 +352,8 @@ export function Sidebar({
   });
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
   const isAppointmentsOverviewPilot = pathname === "/appointments/overview";
-  const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : SIDEBAR_WIDTH_PX;
+  const softCoolSlateShell = isAppointmentsOverviewPilot || isMctbNeutralShellPath(pathname);
+  const sidebarExpandedPx = softCoolSlateShell ? 204 : SIDEBAR_WIDTH_PX;
 
   const navItems: NavItem[] = useMemo(() => {
     if (realtorMode) return buildRealtorNav(inboxBadge);
@@ -453,7 +455,7 @@ export function Sidebar({
         search={search}
         collapsed={collapsed}
         expandedWidthPx={sidebarExpandedPx}
-        appointmentsOverviewShell={isAppointmentsOverviewPilot}
+        appointmentsOverviewShell={softCoolSlateShell}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
         productSwitcher={

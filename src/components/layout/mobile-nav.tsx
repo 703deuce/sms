@@ -9,6 +9,7 @@ import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { resolveProductShellFromPath, shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbShellActive } from "@/lib/products/resolve-product-nav";
+import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 import { isSmsOnlyAppNav, isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
@@ -58,6 +59,7 @@ export function MobileNav({
   primaryVoiceAgentId?: string | null;
 }) {
   const pathname = usePathname();
+  const mctbNeutral = isMctbNeutralShellPath(pathname);
   const multiProduct = shouldShowProductSwitcher({
     hasMctb,
     hasMassSms,
@@ -130,7 +132,11 @@ export function MobileNav({
                 href={item.href}
                 className={cn(
                   "flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-medium",
-                  active ? "text-primary" : "text-muted-foreground",
+                  active
+                    ? mctbNeutral
+                      ? "mctb-mobile-tab-active text-[#1b1e23]"
+                      : "text-primary"
+                    : "text-muted-foreground",
                 )}
               >
                 <Icon className="h-5 w-5" />

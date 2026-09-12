@@ -9,9 +9,11 @@ import { useEffect, useRef, useState } from "react";
 type SmsCreateMenuProps = {
   variant?: "sidebar" | "header";
   className?: string;
+  /** Graphite primary — Appointments / MCTB neutral shell */
+  neutralPrimary?: boolean;
 };
 
-export function SmsCreateMenu({ variant = "sidebar", className }: SmsCreateMenuProps) {
+export function SmsCreateMenu({ variant = "sidebar", className, neutralPrimary = false }: SmsCreateMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const actions = variant === "header" ? SMS_SEND_ACTIONS : SMS_CREATE_ACTIONS;
@@ -33,10 +35,13 @@ export function SmsCreateMenu({ variant = "sidebar", className }: SmsCreateMenuP
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex items-center justify-center gap-1.5 font-semibold text-white shadow-sm transition hover:bg-[#5558e8]",
+          "flex items-center justify-center gap-1.5 font-semibold text-white shadow-sm transition",
+          neutralPrimary
+            ? "bg-[#1b1e23] hover:bg-[#262a31]"
+            : "bg-[#6366f1] hover:bg-[#5558e8]",
           variant === "sidebar"
-            ? "mt-3 w-full rounded-lg bg-[#6366f1] px-3 py-2.5 text-[13px]"
-            : "h-9 rounded-lg bg-[#6366f1] px-4 text-[13px] sm:inline-flex",
+            ? "mt-3 w-full rounded-lg px-3 py-2.5 text-[13px]"
+            : "h-9 rounded-lg px-4 text-[13px] sm:inline-flex",
         )}
         aria-expanded={open}
         aria-haspopup="menu"

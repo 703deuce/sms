@@ -20,6 +20,7 @@ import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
+import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -216,21 +217,24 @@ export function AppShell({
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
   const isAppointmentsNeutralShell =
     isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
+  const isMctbNeutralShell = isMctbNeutralShellPath(pathname);
   const isAppointmentsOverviewPilot =
     isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
-  const sidebarExpandedPx = isAppointmentsOverviewPilot ? 204 : 224;
+  const softCoolSlateShell = isAppointmentsOverviewPilot || isMctbNeutralShell;
+  const sidebarExpandedPx = softCoolSlateShell ? 204 : 224;
   const sidebarOffset = sidebarCollapsedEffective ? "56px" : `${sidebarExpandedPx}px`;
 
   return (
     <div
       className="product-theme flex h-dvh overflow-hidden bg-background"
       data-appt-overview-shell={isAppointmentsOverviewPilot ? "soft-cool-slate-204" : undefined}
+      data-mctb-neutral-shell={isMctbNeutralShell ? "true" : undefined}
       style={
         {
           "--sidebar-offset": sidebarOffset,
-          "--app-header-height": isAppointmentsOverviewPilot ? "54px" : APP_HEADER_HEIGHT,
-          ...(isAppointmentsNeutralShell
+          "--app-header-height": softCoolSlateShell ? "54px" : APP_HEADER_HEIGHT,
+          ...(isAppointmentsNeutralShell || isMctbNeutralShell
             ? {
                 "--primary": "#1b1e23",
                 "--primary-foreground": "#ffffff",
@@ -278,7 +282,7 @@ export function AppShell({
           sidebarCollapsedEffective ? "lg:pl-[56px]" : "lg:pl-[224px]"
         }`}
         style={
-          !sidebarCollapsedEffective && isAppointmentsOverviewPilot
+          !sidebarCollapsedEffective && softCoolSlateShell
             ? ({ paddingLeft: sidebarExpandedPx } as CSSProperties)
             : undefined
         }
