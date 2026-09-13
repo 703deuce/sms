@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview";
+import type { MctbOverviewPayload, MctbOverviewStatus } from "@/lib/mctb/overview-types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import {
   CheckCircle2,

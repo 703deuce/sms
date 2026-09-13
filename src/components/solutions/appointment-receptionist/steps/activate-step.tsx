@@ -1,6 +1,6 @@
 "use client";
 
-import { buildReceptionistWillList } from "@/lib/solutions/appointment-receptionist/build-agent-config";
+import { buildReceptionistWillList } from "@/lib/solutions/appointment-receptionist/receptionist-will-list";
 import {
   getWizardActivationIssues,
   hasBlockingActivationIssues,

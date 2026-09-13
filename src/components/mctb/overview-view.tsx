@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { MctbOverviewPayload } from "@/lib/mctb/overview";
+import type { MctbOverviewPayload } from "@/lib/mctb/overview-types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
