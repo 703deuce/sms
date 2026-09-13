@@ -3,6 +3,7 @@
  */
 
 import * as ai from "./ai-client";
+import { TelnyxApiError } from "./ai-client";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { strictWebhookBodyParameters } from "@/lib/voice/schema/strict-tool-schema";
 import {
@@ -107,10 +108,20 @@ export async function ensureTransovoSharedWorkflowTools(input: {
     const found = existing.find((t) => t.display_name === displayName)?.id;
     const byName = found || (await findToolByDisplayName(displayName).catch(() => null));
     if (byName) {
-      await ai.updateSharedTool(byName, payload).catch((err) => {
+      try {
+        await ai.updateSharedTool(byName, payload);
+        return byName;
+      } catch (err) {
+        const stale =
+          err instanceof TelnyxApiError && (err.status === 404 || err.status === 410);
+        if (stale) {
+          console.warn("[shared-tools] stale id, recreating", displayName, byName);
+          const created = await ai.createSharedTool(payload);
+          return unwrapToolId(created);
+        }
         console.warn("[shared-tools] update failed", displayName, err);
-      });
-      return byName;
+        return byName;
+      }
     }
 
     try {
