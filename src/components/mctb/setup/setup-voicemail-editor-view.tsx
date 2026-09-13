@@ -2,6 +2,8 @@
 
 import { MctbSetupSectionLayout } from "@/components/mctb/setup/mctb-setup-section-layout";
 import { MctbVoicemailSetupSection } from "@/components/mctb/voicemail-setup-section";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 export function MctbSetupVoicemailEditorView() {
@@ -38,6 +40,14 @@ export function MctbSetupVoicemailEditorView() {
       title="Voicemail"
       description="Configure greeting sources and voicemail behavior for missed calls."
       showSave={false}
+      headerAction={
+        <Link
+          href={MCTB_ROUTES.voicemail}
+          className="mctb-setup-btn mctb-setup-btn--outline text-[13px]"
+        >
+          Open voicemail inbox
+        </Link>
+      }
     >
       <div className="ref-card p-5">
         <MctbVoicemailSetupSection phoneNumberId={phoneNumberId} />
