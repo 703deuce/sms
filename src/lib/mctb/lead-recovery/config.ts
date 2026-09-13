@@ -221,21 +221,52 @@ export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadR
         : "usd",
   };
 
+  const sa = asRecord(raw.serviceAreaPolicy);
   const serviceAreaPolicy = {
+    source: sa.source === "manual" ? "manual" : "workspace",
     inAreaAction:
-      asRecord(raw.serviceAreaPolicy).inAreaAction === "book"
-        ? "book"
-        : asRecord(raw.serviceAreaPolicy).inAreaAction === "callback"
-          ? "callback"
-          : "continue",
+      sa.inAreaAction === "ai_book"
+        ? "ai_book"
+        : sa.inAreaAction === "booking_link"
+          ? "booking_link"
+          : sa.inAreaAction === "callback"
+            ? "callback"
+            : sa.inAreaAction === "notify"
+              ? "notify"
+              : sa.inAreaAction === "book"
+                ? "booking_link"
+                : "continue",
     outOfAreaAction:
-      asRecord(raw.serviceAreaPolicy).outOfAreaAction === "notify"
+      sa.outOfAreaAction === "notify"
         ? "notify"
-        : asRecord(raw.serviceAreaPolicy).outOfAreaAction === "handoff"
+        : sa.outOfAreaAction === "handoff"
           ? "handoff"
           : "decline",
     uncertainAction:
-      asRecord(raw.serviceAreaPolicy).uncertainAction === "handoff" ? "handoff" : "clarify",
+      sa.uncertainAction === "handoff"
+        ? "handoff"
+        : sa.uncertainAction === "notify"
+          ? "notify"
+          : "clarify_zip",
+  };
+
+  const ec = asRecord(raw.existingCustomerPolicy);
+  const existingCustomerPolicy = {
+    treatDifferently: ec.treatDifferently !== false,
+    actions: Array.isArray(ec.actions)
+      ? (ec.actions as LeadRecoveryWorkspaceConfig["existingCustomerPolicy"]["actions"])
+      : ["CREATE_CALLBACK_REQUEST", "SEND_EMAIL_SUMMARY"],
+    notifyRecipientId:
+      typeof ec.notifyRecipientId === "string" ? ec.notifyRecipientId : null,
+  };
+
+  const fq = asRecord(raw.faqPolicy);
+  const faqPolicy = {
+    topics: Array.isArray(fq.topics)
+      ? (fq.topics as LeadRecoveryWorkspaceConfig["faqPolicy"]["topics"])
+      : (["HOURS", "SERVICES", "FAQ"] as LeadRecoveryWorkspaceConfig["faqPolicy"]["topics"]),
+    fallback:
+      fq.fallback === "notify" || fq.fallback === "handoff" ? fq.fallback : "clarify",
   };
 
   const baseConfig: LeadRecoveryWorkspaceConfig = {
@@ -249,6 +280,8 @@ export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadR
     globalBehavior,
     paymentPolicy,
     serviceAreaPolicy,
+    existingCustomerPolicy,
+    faqPolicy,
     migratedFromAiBooking: enabledByAiBooking && !hasStored,
     collectCapabilities: Array.isArray(raw.collectCapabilities)
       ? (raw.collectCapabilities as LeadRecoveryCollectField[])
@@ -300,6 +333,8 @@ export async function saveLeadRecoveryConfig(
     globalBehavior: LeadRecoveryWorkspaceConfig["globalBehavior"];
     paymentPolicy: LeadRecoveryWorkspaceConfig["paymentPolicy"];
     serviceAreaPolicy: LeadRecoveryWorkspaceConfig["serviceAreaPolicy"];
+    existingCustomerPolicy: LeadRecoveryWorkspaceConfig["existingCustomerPolicy"];
+    faqPolicy: LeadRecoveryWorkspaceConfig["faqPolicy"];
     fallbackPolicy: IntentPolicyShape;
     collectCapabilities: LeadRecoveryCollectField[];
     answerCapabilities: LeadRecoveryWorkspaceConfig["answerCapabilities"];

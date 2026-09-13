@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MctbHomeKpiStrip,
+  MctbHomeLeadRecoveryCard,
   MctbHomeNeedsAttention,
   MctbHomeRecentConversations,
   MctbHomeRecentMissedCallsTable,
@@ -151,6 +152,8 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
         ) : null}
 
         <MctbHomeKpiStrip data={data} />
+
+        <MctbHomeLeadRecoveryCard data={data} />
 
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-12 lg:items-stretch lg:gap-3">
           {hasAttention ? (

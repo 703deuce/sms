@@ -20,6 +20,10 @@ import { loadComplianceOverview, loadPhoneNumbers } from "@/lib/workspace-data";
 import { loadAdminMctbTestFlags } from "@/lib/mctb/admin-test-workspace";
 import { loadMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
 import { appProductSourceToPrisma } from "@/lib/mass-texting/product-source";
+import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
+import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
+import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
+import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
 
 export type MctbOverviewStatus =
   | "setup_incomplete"
@@ -66,6 +70,15 @@ export type MctbOverviewPayload = {
     recoveryTexts: number;
     replies: number;
     replyRate: number;
+  };
+  leadRecovery: {
+    enabled: boolean;
+    activePolicyCount: number;
+    policySummary: string;
+    status: "ready" | "needs_attention" | "disabled";
+    statusLabel: string;
+    attentionReason: string | null;
+    attentionHref: string | null;
   };
 };
 
@@ -208,6 +221,29 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       ? "Active"
       : "Inactive";
 
+  const lrConfig = await loadLeadRecoveryConfig(workspaceId);
+  const [lrHealth, aiReadiness] = await Promise.all([
+    computeLeadRecoveryPolicyHealth(workspaceId, lrConfig),
+    evaluateMctbAiBookingReadiness(workspaceId),
+  ]);
+  const activePolicies = LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => lrConfig.enabledScenarios[d.key]);
+  const policySummary = activePolicies.map((d) => d.title.split(" ")[0]).slice(0, 4).join(" · ");
+  let lrStatus: "ready" | "needs_attention" | "disabled" = lrConfig.enabled ? "ready" : "disabled";
+  let attentionReason: string | null = null;
+  let attentionHref: string | null = null;
+  if (lrConfig.enabled) {
+    if (lrHealth.overall === "PROVIDER_BLOCKED" || lrHealth.overall === "NEEDS_CONFIGURATION") {
+      lrStatus = "needs_attention";
+      if (!aiReadiness.providerConnected) {
+        attentionReason = `${aiReadiness.reason === "provider_disconnected" ? "Calendar provider disconnected" : "Booking provider needs setup"}`;
+        attentionHref = "/integrations?provider=microsoft";
+      } else {
+        attentionReason = "One or more policies need configuration";
+        attentionHref = "/mctb/ai-lead-recovery";
+      }
+    }
+  }
+
   return {
     status,
     statusLabel,
@@ -254,6 +290,20 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       recoveryTexts: analytics7d.textsSent,
       replies: analytics7d.replies,
       replyRate: analytics7d.replyRate,
+    },
+    leadRecovery: {
+      enabled: lrConfig.enabled,
+      activePolicyCount: activePolicies.length,
+      policySummary: policySummary || "No policies",
+      status: lrStatus,
+      statusLabel:
+        lrStatus === "ready"
+          ? "Ready"
+          : lrStatus === "needs_attention"
+            ? "Needs attention"
+            : "Disabled",
+      attentionReason,
+      attentionHref,
     },
   };
 }

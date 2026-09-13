@@ -143,9 +143,21 @@ export type LeadRecoveryPaymentPolicy = {
 };
 
 export type LeadRecoveryServiceAreaPolicy = {
-  inAreaAction?: "continue" | "book" | "callback";
+  source?: "workspace" | "manual";
+  inAreaAction?: "continue" | "booking_link" | "ai_book" | "callback" | "notify";
   outOfAreaAction?: "decline" | "notify" | "handoff";
-  uncertainAction?: "clarify" | "handoff";
+  uncertainAction?: "clarify_zip" | "handoff" | "notify";
+};
+
+export type LeadRecoveryExistingCustomerPolicy = {
+  treatDifferently: boolean;
+  actions: LeadRecoveryActionId[];
+  notifyRecipientId?: string | null;
+};
+
+export type LeadRecoveryFaqPolicy = {
+  topics: LeadRecoveryWorkspaceConfig["answerCapabilities"];
+  fallback: "clarify" | "notify" | "handoff";
 };
 
 export type PolicyHealthStatus =
@@ -166,6 +178,8 @@ export type LeadRecoveryWorkspaceConfig = {
   globalBehavior: LeadRecoveryGlobalBehavior;
   paymentPolicy: LeadRecoveryPaymentPolicy;
   serviceAreaPolicy: LeadRecoveryServiceAreaPolicy;
+  existingCustomerPolicy: LeadRecoveryExistingCustomerPolicy;
+  faqPolicy: LeadRecoveryFaqPolicy;
   migratedFromAiBooking?: boolean;
   collectCapabilities: LeadRecoveryCollectField[];
   answerCapabilities: Array<

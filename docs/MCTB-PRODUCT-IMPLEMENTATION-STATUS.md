@@ -74,9 +74,11 @@ Detail: `docs/runtime-rules/providers/STRIPE-CONNECT-TEXT-TO-PAY-CONFORMANCE-AUD
 
 ## Remaining product work (not architecture)
 
-1. **Polish** AI Lead Recovery page (structured test results, all scenario panels, Overview status card).
-2. **Live validation** with real calendar, SMS, Stripe, and migrations in target environment.
-3. Incremental UX on Payments (refund from detail drawer, invoice status copy).
+1. **Live validation** with real calendar, SMS, Stripe, and migrations in target environment.
+2. Incremental UX on Payments (refund from detail drawer, invoice status copy).
+3. Screenshot QA in target environments after live connections.
+
+AI Lead Recovery page completion (structured Test drawer, draft simulation, scenario panels, John hard guard, Overview card, Integrations-owned OAuth) is implemented on `master` — see `/mctb/ai-lead-recovery`.
 
 ---
 

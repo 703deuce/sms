@@ -9,6 +9,7 @@ export const JOHN_PROMPT_VERSION = "2026.08.07.1";
 export function buildJohnSystemPrompt(ctx: {
   business_name: string;
   runtime_context?: JohnRuntimeContext;
+  lead_recovery_constraints?: string;
 }): string {
   const businessName = ctx.business_name || "the business";
   const runtimeBlock = ctx.runtime_context
@@ -105,5 +106,5 @@ unless the runtime confirms that exact state.
 Use retrieved Transovo/business data for factual claims about the business,
 customer, call, conversation, configuration, or system status.
 If the information cannot be retrieved, say that you cannot verify it.
-Never fabricate system state.${runtimeBlock}`;
+Never fabricate system state.${runtimeBlock}${ctx.lead_recovery_constraints || ""}`;
 }

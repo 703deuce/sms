@@ -21,6 +21,12 @@ import {
   getJohnRuntimeModelConfig,
 } from "./model-config";
 import type { JohnRuntimeTurnInput } from "./types";
+import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
+import {
+  buildLeadRecoveryJohnPromptConstraints,
+  enforceJohnRuntimeTurnWithLeadRecovery,
+  sanitizeJohnReplyForLeadRecovery,
+} from "@/lib/mctb/lead-recovery/john-policy-guard";
 
 export const JOHN_RUNTIME_TURN_TOOL: LlmToolDefinition = {
   type: "function",
@@ -105,6 +111,7 @@ export async function runJohnCustomerLlmLoop(input: {
   history?: Array<{ direction: string; body: string }>;
 }): Promise<JohnCustomerLlmResult> {
   const modelRequestId = randomUUID();
+  const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
   const runtimeContext = buildJohnRuntimeContext({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId || input.missedCallEventId,
@@ -158,6 +165,7 @@ export async function runJohnCustomerLlmLoop(input: {
   const systemPrompt = buildJohnSystemPrompt({
     business_name: runtimeContext.business_context.business_name,
     runtime_context: runtimeContext,
+    lead_recovery_constraints: buildLeadRecoveryJohnPromptConstraints(leadRecoveryConfig),
   });
 
   const transcript = buildTranscript(history, input.inboundBody);
@@ -198,7 +206,12 @@ export async function runJohnCustomerLlmLoop(input: {
         } catch {
           args = { utterance: input.inboundBody };
         }
-        runtimeResult = executeJohnRuntimeTurn({ context: runtimeContext, turn: args });
+        const rawRuntime = executeJohnRuntimeTurn({ context: runtimeContext, turn: args });
+        runtimeResult = enforceJohnRuntimeTurnWithLeadRecovery({
+          config: leadRecoveryConfig,
+          turn: args,
+          runtimeResult: rawRuntime,
+        });
         await persistJohnRuntimeTurn({
           workspaceId: input.workspaceId,
           traceId: input.traceId,
@@ -244,8 +257,9 @@ export async function runJohnCustomerLlmLoop(input: {
     });
   }
 
-  const reply =
+  let reply =
     finalReply || synthesizeReply({ inbound: input.inboundBody, runtimeResult });
+  reply = sanitizeJohnReplyForLeadRecovery(reply, leadRecoveryConfig);
 
   await persistJohnAgentTurn({
     workspaceId: input.workspaceId,

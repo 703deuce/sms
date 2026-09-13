@@ -9,15 +9,11 @@ import type {
   PolicyHealthStatus,
 } from "@/lib/mctb/lead-recovery/types";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LeadRecoveryProviderPanel } from "@/components/mctb/lead-recovery/lead-recovery-provider-panel";
+import { LeadRecoveryTestDrawer } from "@/components/mctb/lead-recovery/lead-recovery-test-drawer";
 import "./ai-lead-recovery.css";
 
 type HealthPayload = {
@@ -51,9 +47,7 @@ export function AiLeadRecoveryPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testOpen, setTestOpen] = useState(false);
-  const [testMessage, setTestMessage] = useState("There's water pouring through my ceiling.");
-  const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
-  const [testLoading, setTestLoading] = useState(false);
+  const [knowledge, setKnowledge] = useState<{ approvedCount: number; ready: boolean } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +57,7 @@ export function AiLeadRecoveryPage() {
     setConfig(cfg);
     setDraft(cfg);
     setHealth(json.data?.health as HealthPayload);
+    setKnowledge(json.data?.knowledge as { approvedCount: number; ready: boolean });
     setLoading(false);
   }, []);
 
@@ -93,6 +88,8 @@ export function AiLeadRecoveryPage() {
         globalBehavior: draft.globalBehavior,
         paymentPolicy: draft.paymentPolicy,
         serviceAreaPolicy: draft.serviceAreaPolicy,
+        existingCustomerPolicy: draft.existingCustomerPolicy,
+        faqPolicy: draft.faqPolicy,
         bookingLinkId: draft.bookingLinkId,
         actionCapabilities: draft.actionCapabilities,
         handoffTriggers: draft.handoffTriggers,
@@ -134,16 +131,6 @@ export function AiLeadRecoveryPage() {
         [intent]: { ...prev, ...patch },
       },
     });
-  };
-
-  const runTest = async () => {
-    setTestLoading(true);
-    const res = await fetch(
-      `/api/mctb/lead-recovery/config?simulate=1&message=${encodeURIComponent(testMessage)}`,
-    );
-    const json = await res.json();
-    setTestResult(json.data?.simulation as Record<string, unknown>);
-    setTestLoading(false);
   };
 
   if (loading || !draft) {
@@ -232,38 +219,56 @@ export function AiLeadRecoveryPage() {
             </section>
 
             {draft.enabledScenarios.booking && (
-              <PolicyCard title="Booking" status={draft.scenarioHealth?.booking}>
+              <PolicyCard title="Booking" status={health?.scenarioHealth?.booking}>
                 <p className="lr-panel-desc">When a caller wants to schedule.</p>
                 <BookingModeEditor draft={draft} updatePolicy={updatePolicy} />
               </PolicyCard>
             )}
 
             {draft.enabledScenarios.emergencies && (
-              <PolicyCard title="Emergencies" status={draft.scenarioHealth?.emergencies}>
+              <PolicyCard title="Emergencies" status={health?.scenarioHealth?.emergencies}>
                 <p className="lr-panel-desc">Urgent situations — immediate alerts can send before all fields are collected.</p>
                 <EmergencyEditor draft={draft} updatePolicy={updatePolicy} />
               </PolicyCard>
             )}
 
             {draft.enabledScenarios.take_message && (
-              <PolicyCard title="Take a message" status={draft.scenarioHealth?.take_message}>
+              <PolicyCard title="Take a message" status={health?.scenarioHealth?.take_message}>
                 <TakeMessageEditor draft={draft} updatePolicy={updatePolicy} />
               </PolicyCard>
             )}
 
             {draft.enabledScenarios.pricing && (
-              <PolicyCard title="Pricing questions" status={draft.scenarioHealth?.pricing}>
+              <PolicyCard title="Pricing questions" status={health?.scenarioHealth?.pricing}>
                 <PricingEditor draft={draft} updatePolicy={updatePolicy} />
               </PolicyCard>
             )}
 
             {draft.enabledScenarios.payments && (
-              <PolicyCard title="Payments" status={draft.scenarioHealth?.payments}>
+              <PolicyCard title="Payments" status={health?.scenarioHealth?.payments}>
                 <PaymentsEditor
                   draft={draft}
                   setDraft={setDraft}
                   updatePolicy={updatePolicy}
                 />
+              </PolicyCard>
+            )}
+
+            {draft.enabledScenarios.service_area && (
+              <PolicyCard title="Service-area questions" status={health?.scenarioHealth?.service_area}>
+                <ServiceAreaEditor draft={draft} setDraft={setDraft} />
+              </PolicyCard>
+            )}
+
+            {draft.enabledScenarios.existing_customer && (
+              <PolicyCard title="Existing-customer issues" status={health?.scenarioHealth?.existing_customer}>
+                <ExistingCustomerEditor draft={draft} setDraft={setDraft} updatePolicy={updatePolicy} />
+              </PolicyCard>
+            )}
+
+            {draft.enabledScenarios.general_faq && (
+              <PolicyCard title="Questions & FAQs" status={health?.scenarioHealth?.general_faq}>
+                <FaqEditor draft={draft} setDraft={setDraft} knowledge={knowledge} />
               </PolicyCard>
             )}
 
@@ -279,29 +284,23 @@ export function AiLeadRecoveryPage() {
 
           <aside className="lr-rail">
             <div className="lr-card">
-              <h3 className="lr-card-title">Readiness</h3>
-              <ul className="lr-readiness-list">
-                <li><span>Intent Agent</span><CheckCircle2 size={16} className="lr-ok" /></li>
-                <li><span>Policy Engine</span><CheckCircle2 size={16} className="lr-ok" /></li>
-                <li>
-                  <span>Booking</span>
-                  <span className={statusClass(health?.providers.booking)}>{statusLabel(health?.providers.booking)}</span>
-                </li>
-                <li>
-                  <span>Payments</span>
-                  <span className={statusClass(health?.providers.payments)}>{statusLabel(health?.providers.payments)}</span>
-                </li>
+              <h3 className="lr-card-title">Policy health</h3>
+              <ul className="lr-health-list">
+                {LEAD_RECOVERY_SCENARIO_DEFS.filter((d) => draft.enabledScenarios[d.key]).map((def) => {
+                  const st = health?.scenarioHealth?.[def.key];
+                  return (
+                    <li key={def.key}>
+                      <span>{def.title}</span>
+                      <span className={`lr-status-chip ${statusClass(st)}`}>{statusLabel(st)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
-            <div className="lr-card">
-              <h3 className="lr-card-title">Connected services</h3>
-              <Link href={MCTB_ROUTES.integrations} className="lr-link-row">
-                Manage integrations <ChevronRight size={14} />
-              </Link>
-              <Link href={MCTB_ROUTES.payments} className="lr-link-row">
-                Payments <ChevronRight size={14} />
-              </Link>
-            </div>
+            <LeadRecoveryProviderPanel
+              showBookingTargets={Boolean(draft.enabledScenarios.booking)}
+              onBookingSaved={() => void load()}
+            />
             <div className="lr-card lr-card--locked">
               <h3 className="lr-card-title">Safety rules</h3>
               <ul className="lr-safety">
@@ -315,31 +314,7 @@ export function AiLeadRecoveryPage() {
         </div>
       </div>
 
-      {testOpen && (
-        <div className="lr-drawer-backdrop" role="presentation" onClick={() => setTestOpen(false)}>
-          <div className="lr-drawer" role="dialog" aria-label="Test AI Lead Recovery" onClick={(e) => e.stopPropagation()}>
-            <div className="lr-drawer-head">
-              <h2>Test AI Lead Recovery</h2>
-              <button type="button" className="lr-icon-btn" onClick={() => setTestOpen(false)} aria-label="Close">
-                <X size={18} />
-              </button>
-            </div>
-            <p className="lr-muted">See what Transovo would do — no live provider mutations.</p>
-            <textarea
-              className="lr-textarea"
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-              rows={4}
-            />
-            <button type="button" className="lr-btn lr-btn--primary" onClick={() => void runTest()} disabled={testLoading}>
-              {testLoading ? "Analyzing…" : "Analyze"}
-            </button>
-            {testResult && (
-              <pre className="lr-test-result">{JSON.stringify(testResult, null, 2)}</pre>
-            )}
-          </div>
-        </div>
-      )}
+      <LeadRecoveryTestDrawer open={testOpen} onClose={() => setTestOpen(false)} draft={draft} />
     </MctbPageContainer>
   );
 }
@@ -402,13 +377,13 @@ function BookingModeEditor({
       ))}
       {mode === "SEND_BOOKING_LINK" && (
         <p className="lr-hint">
-          <Link href={MCTB_ROUTES.setupRecovery}>Manage booking links</Link> in Setup → Recovery.
+          <Link href={MCTB_ROUTES.setupLinks}>Manage booking links</Link> in Setup.
         </p>
       )}
       {mode === "AI_BOOK" && (
         <p className="lr-hint">
-          Calendar provider settings sync from{" "}
-          <Link href={MCTB_ROUTES.setupRecovery}>Setup → Recovery</Link> (AI Booking section).
+          Connect calendar in <Link href="/integrations?provider=microsoft">Integrations</Link> and choose
+          the booking target in Connected services (right column).
         </p>
       )}
     </div>
@@ -560,6 +535,210 @@ function PaymentsEditor({
           <option value="known_balance">Known existing charge</option>
           <option value="configured_fixed_fee">Configured fixed fee</option>
           <option value="operator_payment_request">Operator-created payment request</option>
+        </select>
+      </label>
+    </>
+  );
+}
+
+function ServiceAreaEditor({
+  draft,
+  setDraft,
+}: {
+  draft: LeadRecoveryWorkspaceConfig;
+  setDraft: (c: LeadRecoveryWorkspaceConfig) => void;
+}) {
+  const pol = draft.serviceAreaPolicy;
+  const patch = (p: Partial<LeadRecoveryWorkspaceConfig["serviceAreaPolicy"]>) =>
+    setDraft({ ...draft, serviceAreaPolicy: { ...pol, ...p } });
+  return (
+    <>
+      <p className="lr-panel-desc">Geographic answers use configured service area only — never guessed.</p>
+      <label className="lr-field">
+        Source
+        <select value={pol.source || "workspace"} onChange={(e) => patch({ source: e.target.value as "workspace" | "manual" })}>
+          <option value="workspace">Existing service area configuration</option>
+          <option value="manual">Manual policy only</option>
+        </select>
+      </label>
+      <p className="lr-hint">
+        Service area: <strong>{pol.source === "workspace" ? "Configured" : "Needs configuration"}</strong>
+        {" · "}
+        <Link href="/company-brain">Manage service area</Link>
+      </p>
+      <label className="lr-field">
+        In service area
+        <select
+          value={pol.inAreaAction || "continue"}
+          onChange={(e) => patch({ inAreaAction: e.target.value as typeof pol.inAreaAction })}
+        >
+          <option value="continue">Continue qualification</option>
+          <option value="booking_link">Send booking link</option>
+          <option value="ai_book">AI Booking</option>
+          <option value="callback">Create callback</option>
+          <option value="notify">Notify business</option>
+        </select>
+      </label>
+      <label className="lr-field">
+        Outside service area
+        <select
+          value={pol.outOfAreaAction || "decline"}
+          onChange={(e) => patch({ outOfAreaAction: e.target.value as typeof pol.outOfAreaAction })}
+        >
+          <option value="decline">Politely decline</option>
+          <option value="notify">Notify business</option>
+          <option value="handoff">Human handoff</option>
+        </select>
+      </label>
+      <label className="lr-field">
+        Unsure
+        <select
+          value={pol.uncertainAction || "clarify_zip"}
+          onChange={(e) => patch({ uncertainAction: e.target.value as typeof pol.uncertainAction })}
+        >
+          <option value="clarify_zip">Ask ZIP/city</option>
+          <option value="handoff">Human handoff</option>
+          <option value="notify">Notify business</option>
+        </select>
+      </label>
+    </>
+  );
+}
+
+function ExistingCustomerEditor({
+  draft,
+  setDraft,
+  updatePolicy,
+}: {
+  draft: LeadRecoveryWorkspaceConfig;
+  setDraft: (c: LeadRecoveryWorkspaceConfig) => void;
+  updatePolicy: (intent: string, patch: Partial<IntentPolicyShape>) => void;
+}) {
+  const ec = draft.existingCustomerPolicy;
+  const toggleAction = (action: string) => {
+    const set = new Set(ec.actions);
+    if (set.has(action as never)) set.delete(action as never);
+    else set.add(action as never);
+    const actions = [...set];
+    setDraft({ ...draft, existingCustomerPolicy: { ...ec, actions } });
+    updatePolicy("EXISTING_CUSTOMER_ISSUE", { enabled: true, actions, collect: ["ISSUE_DESCRIPTION"] });
+  };
+  return (
+    <>
+      <p className="lr-panel-desc">
+        Choose how Transovo handles customers with an existing job, appointment, or prior visit.
+      </p>
+      <label className="lr-check">
+        <input
+          type="checkbox"
+          checked={ec.treatDifferently}
+          onChange={(e) =>
+            setDraft({
+              ...draft,
+              existingCustomerPolicy: { ...ec, treatDifferently: e.target.checked },
+            })
+          }
+        />
+        Treat existing customers differently from new leads
+      </label>
+      <div className="lr-check-grid">
+        {[
+          ["CREATE_CALLBACK_REQUEST", "Create callback request"],
+          ["SEND_EMAIL_SUMMARY", "Notify service manager"],
+          ["ROUTE_TO_TEAM", "Route to team"],
+          ["ESCALATE_HUMAN", "Human handoff"],
+        ].map(([a, label]) => (
+          <label key={a} className="lr-check">
+            <input type="checkbox" checked={ec.actions.includes(a as never)} onChange={() => toggleAction(a)} />
+            {label}
+          </label>
+        ))}
+      </div>
+      {ec.actions.includes("ROUTE_TO_TEAM") && (
+        <label className="lr-field">
+          Recipient
+          <select
+            value={ec.notifyRecipientId || ""}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                existingCustomerPolicy: { ...ec, notifyRecipientId: e.target.value || null },
+              })
+            }
+          >
+            <option value="">Service Manager</option>
+            <option value="on_call">On-call</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
+const FAQ_TOPICS: Array<{ key: LeadRecoveryWorkspaceConfig["answerCapabilities"][number]; label: string }> = [
+  { key: "HOURS", label: "Business hours" },
+  { key: "SERVICES", label: "Services offered" },
+  { key: "LOCATIONS", label: "Business locations" },
+  { key: "SERVICE_AREA", label: "Service area" },
+  { key: "PRICING", label: "Approved pricing" },
+  { key: "FAQ", label: "General FAQs" },
+];
+
+function FaqEditor({
+  draft,
+  setDraft,
+  knowledge,
+}: {
+  draft: LeadRecoveryWorkspaceConfig;
+  setDraft: (c: LeadRecoveryWorkspaceConfig) => void;
+  knowledge: { approvedCount: number; ready: boolean } | null;
+}) {
+  const fq = draft.faqPolicy;
+  const topics = new Set(draft.answerCapabilities);
+  const toggleTopic = (key: LeadRecoveryWorkspaceConfig["answerCapabilities"][number]) => {
+    const next = new Set(topics);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setDraft({
+      ...draft,
+      answerCapabilities: [...next],
+      faqPolicy: { ...fq, topics: [...next] },
+    });
+  };
+  return (
+    <>
+      <p className="lr-panel-desc">AI may answer only from approved business knowledge.</p>
+      <div className="lr-check-grid">
+        {FAQ_TOPICS.map(({ key, label }) => (
+          <label key={key} className="lr-check">
+            <input type="checkbox" checked={topics.has(key)} onChange={() => toggleTopic(key)} />
+            {label}
+          </label>
+        ))}
+      </div>
+      <p className="lr-hint">
+        Knowledge source: Approved business knowledge ·{" "}
+        {knowledge?.ready
+          ? `Ready · ${knowledge.approvedCount} approved answers`
+          : "Needs setup"}
+        {" · "}
+        <Link href="/company-brain">Manage knowledge</Link>
+      </p>
+      <label className="lr-field">
+        If no supported answer
+        <select
+          value={fq.fallback}
+          onChange={(e) =>
+            setDraft({
+              ...draft,
+              faqPolicy: { ...fq, fallback: e.target.value as typeof fq.fallback },
+            })
+          }
+        >
+          <option value="clarify">Ask clarification</option>
+          <option value="notify">Notify business</option>
+          <option value="handoff">Human handoff</option>
         </select>
       </label>
     </>

@@ -124,6 +124,32 @@ export function statusChip(status: MctbOverviewStatus, label: string) {
   );
 }
 
+export function MctbHomeLeadRecoveryCard({ data }: { data: MctbOverviewPayload }) {
+  const lr = data.leadRecovery;
+  return (
+    <section className="mctb-home-surface mctb-home-lr-card" aria-labelledby="mctb-home-lr">
+      <div className="mctb-home-section-head">
+        <h2 id="mctb-home-lr" className="mctb-home-section-title">AI Lead Recovery</h2>
+        <Link href={MCTB_ROUTES.aiLeadRecovery} className="mctb-home-link">Manage</Link>
+      </div>
+      <p className="mctb-home-lr-line">
+        <strong>{lr.enabled ? "Enabled" : "Disabled"}</strong>
+        {lr.enabled ? ` · ${lr.activePolicyCount} policies active` : null}
+      </p>
+      {lr.enabled && <p className="mctb-home-muted-body">{lr.policySummary}</p>}
+      <p className="mctb-home-lr-status">
+        Status: <span className={lr.status === "ready" ? "mctb-home-setup-value--ok" : "mctb-home-setup-value--warn"}>{lr.statusLabel}</span>
+      </p>
+      {lr.attentionReason && lr.attentionHref ? (
+        <div className="mctb-home-lr-attention">
+          <p>{lr.attentionReason}</p>
+          <Link href={lr.attentionHref} className="mctb-home-link">Fix issue</Link>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
   const kpis = [
     {

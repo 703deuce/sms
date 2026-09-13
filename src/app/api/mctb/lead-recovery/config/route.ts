@@ -8,6 +8,10 @@ import { simulateLeadRecoveryTurn } from "@/lib/mctb/lead-recovery/simulation";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
 import { intentsForEnabledScenarios } from "@/lib/mctb/lead-recovery/scenarios";
 import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
+import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
+import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
+import { getStripeTextToPayCapabilities } from "@/lib/stripe-connect/capabilities";
+import { loadBusinessBrain } from "@/lib/agents/appointment-booking/business-brain";
 
 export async function GET(request: Request) {
   try {
@@ -16,6 +20,33 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const config = await loadLeadRecoveryConfig(auth.workspaceId);
     const health = await computeLeadRecoveryPolicyHealth(auth.workspaceId, config);
+    const [aiBooking, aiReadiness, stripeCaps, brain] = await Promise.all([
+      loadMctbAiBookingConfig(auth.workspaceId),
+      evaluateMctbAiBookingReadiness(auth.workspaceId),
+      getStripeTextToPayCapabilities(auth.workspaceId),
+      loadBusinessBrain(auth.workspaceId),
+    ]);
+    const approvedKnowledge = brain.knowledgeFacts.filter(
+      (f) => (f.status || "approved") === "approved",
+    ).length;
+    const providers = {
+      booking: {
+        provider: aiBooking.provider,
+        connected: aiReadiness.providerConnected,
+        ready: aiReadiness.ready,
+        reason: aiReadiness.reason,
+        calendarLabel: aiBooking.calendarId || aiBooking.serviceName || null,
+        eventTypeLabel: aiBooking.eventTypeUri || aiBooking.eventTypeId || null,
+      },
+      stripe: {
+        connected: stripeCaps.connected,
+        canCharge: stripeCaps.canCreateCheckoutSession,
+      },
+    };
+    const knowledge = {
+      approvedCount: approvedKnowledge,
+      ready: approvedKnowledge > 0,
+    };
     if (url.searchParams.get("simulate") === "1") {
       const message = url.searchParams.get("message") || "";
       const simulation = await simulateLeadRecoveryTurn({
@@ -23,9 +54,9 @@ export async function GET(request: Request) {
         config,
         message,
       });
-      return NextResponse.json({ data: { config, health, simulation } });
+      return NextResponse.json({ data: { config, health, simulation, providers, knowledge } });
     }
-    return NextResponse.json({ data: { config, health } });
+    return NextResponse.json({ data: { config, health, providers, knowledge } });
   } catch (err) {
     return jsonError(err, 500);
   }
@@ -65,6 +96,14 @@ export async function POST(request: Request) {
       serviceAreaPolicy:
         body.serviceAreaPolicy && typeof body.serviceAreaPolicy === "object"
           ? (body.serviceAreaPolicy as import("@/lib/mctb/lead-recovery/types").LeadRecoveryWorkspaceConfig["serviceAreaPolicy"])
+          : undefined,
+      existingCustomerPolicy:
+        body.existingCustomerPolicy && typeof body.existingCustomerPolicy === "object"
+          ? (body.existingCustomerPolicy as import("@/lib/mctb/lead-recovery/types").LeadRecoveryWorkspaceConfig["existingCustomerPolicy"])
+          : undefined,
+      faqPolicy:
+        body.faqPolicy && typeof body.faqPolicy === "object"
+          ? (body.faqPolicy as import("@/lib/mctb/lead-recovery/types").LeadRecoveryWorkspaceConfig["faqPolicy"])
           : undefined,
       intentPolicies:
         body.intentPolicies && typeof body.intentPolicies === "object"

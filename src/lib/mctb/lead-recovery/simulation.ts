@@ -2,14 +2,22 @@ import { runLeadRecoveryIntentAgent } from "@/lib/mctb/lead-recovery/intent-agen
 import { evaluateLeadRecoveryPolicyMulti } from "@/lib/mctb/lead-recovery/intent-plan";
 import type { LeadRecoveryWorkspaceConfig } from "@/lib/mctb/lead-recovery/types";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
+import { formatStructuredSimulation } from "@/lib/mctb/lead-recovery/simulation-ui";
 
 export async function simulateLeadRecoveryTurn(input: {
   workspaceId: string;
   config: LeadRecoveryWorkspaceConfig;
   message: string;
   collectedData?: Record<string, string>;
+  context?: {
+    customerType?: "NEW" | "EXISTING" | "UNKNOWN";
+    businessStatus?: "OPEN" | "CLOSED" | "AUTO";
+  };
 }) {
   const intent = await runLeadRecoveryIntentAgent({ message: input.message });
+  if (input.context?.customerType) {
+    intent.lead_type = input.context.customerType;
+  }
   const conversationState = {
     conversationId: "simulate",
     workspaceId: input.workspaceId,
@@ -48,7 +56,7 @@ export async function simulateLeadRecoveryTurn(input: {
     multi.primary.nextActions.find((a) => a.action === "CUSTOMER_MESSAGE")?.config?.template ||
     "Thanks for reaching out — we'll be in touch shortly.";
 
-  return {
+  const payload = {
     intent,
     primaryPolicy: multi.primary,
     secondaryPolicies: multi.secondaryPlans,
@@ -60,4 +68,5 @@ export async function simulateLeadRecoveryTurn(input: {
       payments: health.providers.payments,
     },
   };
+  return { ...payload, structured: formatStructuredSimulation(payload) };
 }

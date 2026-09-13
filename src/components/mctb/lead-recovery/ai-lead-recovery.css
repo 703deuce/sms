@@ -273,7 +273,7 @@
 }
 
 .lr-drawer {
-  width: min(100%, 600px);
+  width: min(100%, 640px);
   background: #fff;
   height: 100%;
   padding: 20px;
@@ -324,4 +324,146 @@
   background: none;
   border: none;
   cursor: pointer;
+}
+
+.lr-drawer-sub { margin: 4px 0 0; }
+
+.lr-test-context {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.lr-sim-results {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lr-sim-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fafbfc;
+}
+
+.lr-sim-card h3 {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.lr-sim-card--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.lr-sim-dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  padding: 2px 0;
+}
+
+.lr-sim-dl dt { color: #64748b; }
+.lr-sim-dl dd { margin: 0; font-weight: 500; text-align: right; }
+
+.lr-sim-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.lr-sim-list--ol { list-style: decimal; }
+
+.lr-sim-quote {
+  margin: 0;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.lr-sim-tech-toggle { margin-top: 8px; }
+
+.lr-health-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.lr-health-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.lr-provider-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.lr-provider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lr-provider-dl {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+}
+
+.lr-provider-dl div {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.lr-provider-dl dt { color: #64748b; }
+.lr-provider-dl dd { margin: 0; }
+
+.lr-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lr-btn--sm {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.lr-provider-targets {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.lr-provider-subtitle {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .lr-drawer-backdrop {
+    align-items: stretch;
+  }
+  .lr-drawer--test {
+    width: 100%;
+    max-width: none;
+  }
+  .lr-test-context {
+    grid-template-columns: 1fr;
+  }
 }
