@@ -425,6 +425,7 @@ export async function ensureVoiceCallForToolWebhook(input: {
   conversationId?: string | null;
   fromE164?: string | null;
   toE164?: string | null;
+  skipRealtimeSessionInit?: boolean;
 }): Promise<string | null> {
   const { findVoiceCallByTelnyxIds } = await import("@/lib/voice/call-identity");
   const existing = await findVoiceCallByTelnyxIds({
@@ -455,14 +456,16 @@ export async function ensureVoiceCallForToolWebhook(input: {
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"
     );
-    await initializeRealtimeSessionForCall({
-      callId: existing.id,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      telnyxConversationId: input.conversationId,
-      telnyxControlId: input.callControlId,
-      fromE164: input.fromE164,
-    }).catch(() => undefined);
+    if (!input.skipRealtimeSessionInit) {
+      await initializeRealtimeSessionForCall({
+        callId: existing.id,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        telnyxConversationId: input.conversationId,
+        telnyxControlId: input.callControlId,
+        fromE164: input.fromE164,
+      }).catch(() => undefined);
+    }
     return existing.id;
   }
 
@@ -497,7 +500,7 @@ export async function ensureVoiceCallForToolWebhook(input: {
   if (!callId) {
     callId = await createVoiceCallForToolWebhookFallback(input);
   }
-  if (callId) {
+  if (callId && !input.skipRealtimeSessionInit) {
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"
     );

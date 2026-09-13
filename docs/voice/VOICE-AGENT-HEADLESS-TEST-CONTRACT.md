@@ -80,6 +80,20 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npm run test:voice:sce
 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npm run voice:headless
 ```
 
+## Test vs live PSTN (known gaps)
+
+| | Headless / preprod `invokeToolWebhook` | Live Telnyx phone call |
+|---|---|---|
+| Transport | In-process `POST` handler | HTTP to `APP_URL` with **~12–25s tool timeout** |
+| Caller ANI headers | `x-telnyx-from`, body `from` | Often **only** `x-telnyx-call-control-id` |
+| `conversation_id` | Always set in test | Often **missing** on tool webhook |
+| SMS | `RecordingSmsAdapter` (instant) | `sendAppointmentSms` → Telnyx messaging API |
+| Preamble | Same code path historically ran full agent + realtime bootstrap | **Timed out** before handler finished (Telnyx: "The request timed out") |
+
+**Fast path:** `handleWorkflowToolFastPath` for `send_resource` / `search_business_details` skips heavy preamble, resolves ANI from Telnyx conversation metadata when headers are missing, and skips realtime session init.
+
+**Parity test:** `buildTelnyxMinimalToolWebhookRequest` in `telnyx-fixtures.ts`.
+
 ## Development loop
 
 1. Change runtime / prompt / tool code  

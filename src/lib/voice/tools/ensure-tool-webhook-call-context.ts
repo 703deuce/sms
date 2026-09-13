@@ -10,6 +10,8 @@ export async function ensureToolWebhookCallContext(input: {
   callControlId?: string;
   inboundAni?: string;
   toE164FromBody?: string;
+  /** Conversation-workflow SMS tools must respond before Telnyx timeout — skip heavy realtime init. */
+  skipRealtimeSessionInit?: boolean;
 }): Promise<string | undefined> {
   let calledE164 = input.toE164FromBody?.trim() || "";
   if (!calledE164 && input.workspaceId) {
@@ -33,6 +35,7 @@ export async function ensureToolWebhookCallContext(input: {
     callControlId: input.callControlId || null,
     fromE164: input.inboundAni || null,
     toE164: calledE164 || null,
+    skipRealtimeSessionInit: input.skipRealtimeSessionInit,
   }).catch(() => null);
 
   return id || undefined;

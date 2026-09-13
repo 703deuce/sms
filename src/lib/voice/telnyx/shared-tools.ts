@@ -68,7 +68,7 @@ function webhookToolBody(input: {
       description: input.description,
       url: input.url,
       method: "POST",
-      timeout_ms: 12000,
+      timeout_ms: 25000,
       headers: [
         { name: "X-Transovo-Workspace-Id", value: input.workspaceId },
         { name: "X-Transovo-Agent-Id", value: input.agentId },

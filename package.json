@@ -170,6 +170,7 @@
     "test:voice-full": "tsx scripts/test-voice-full.ts",
     "test:voice-audit": "tsx scripts/test-voice-api-audit.ts",
     "test:voice:runtime": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-headless-runtime.ts",
+    "test:voice:tool-parity": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-tool-webhook-parity.ts",
     "test:voice:headless": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-headless-conversation.ts",
     "test:voice:certify": "npm run test:voice:runtime && npm run test:voice:headless",
     "test:voice:scenario": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-scenario.ts",

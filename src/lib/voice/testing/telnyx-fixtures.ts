@@ -14,6 +14,31 @@ export type TelnyxToolWebhookInput = {
   toE164?: string;
 };
 
+/** Matches live PSTN tool webhooks (minimal headers — no caller ANI). */
+export function buildTelnyxMinimalToolWebhookRequest(input: {
+  workspaceId: string;
+  agentId: string;
+  toolType: string;
+  body?: Record<string, unknown>;
+  callControlId: string;
+}): Request {
+  const headers = new Headers({
+    "content-type": "application/json",
+    "x-transovo-workspace-id": input.workspaceId,
+    "x-transovo-agent-id": input.agentId,
+    "x-transovo-tool-type": input.toolType,
+    "x-telnyx-call-control-id": input.callControlId,
+  });
+  return new Request("http://test.internal/api/telnyx/voice/tools", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      ...input.body,
+      call_control_id: input.callControlId,
+    }),
+  });
+}
+
 export function buildTelnyxToolWebhookRequest(input: TelnyxToolWebhookInput): Request {
   const headers = new Headers({
     "content-type": "application/json",

@@ -76,6 +76,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (agentId && toolType && !toolId) {
+      const { handleWorkflowToolFastPath } = await import(
+        "@/lib/voice/tools/workflow-tool-fast-path"
+      );
+      const fastResponse = await handleWorkflowToolFastPath({
+        request,
+        body,
+        workspaceId,
+        agentId,
+        toolType,
+      });
+      if (fastResponse) return fastResponse;
+    }
+
     const prisma = getPrisma();
     let conductorMode = false;
     let runtimeAgentConfig = null as ReturnType<typeof parseVoiceAgentConfig> | null;
