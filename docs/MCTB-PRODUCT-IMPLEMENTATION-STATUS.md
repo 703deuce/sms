@@ -40,7 +40,9 @@ Detail: `docs/MCTB-AI-BOOKING-IMPLEMENTATION-STATUS.md`
 | Text-to-Pay action (policy) | **YES** — authoritative amount required |
 | Domain activity events | **YES** — booking activity ledger + idempotency |
 
-Rulebooks: `docs/runtime-rules/AI-LEAD-RECOVERY-*.md`
+Rulebooks: `docs/runtime-rules/AI-LEAD-RECOVERY-*.md`  
+Capability-driven (not booking-driven): `docs/runtime-rules/AI-LEAD-RECOVERY-CAPABILITY-MODEL.md`  
+Legacy John: fallback-only guard in `john-policy-guard.ts` — Lead Recovery runtime does not depend on John.
 
 ---
 

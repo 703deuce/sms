@@ -10,6 +10,8 @@
 
 Never hardcode workspace behavior in LLM prompts (e.g. “if emergency, text owner”).
 
+Capability model (booking is one action among many): `AI-LEAD-RECOVERY-CAPABILITY-MODEL.md`
+
 ## API
 
 ```ts

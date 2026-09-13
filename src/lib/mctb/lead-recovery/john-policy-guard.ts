@@ -1,3 +1,12 @@
+/**
+ * Legacy John fallback boundary — NOT part of Lead Recovery runtime.
+ *
+ * Inbound SMS order: Handoff → Lead Recovery (`conversation-runtime.ts`) → legacy AI Booking (if LR off)
+ * → customer John LLM fallback only when LR did not handle the turn.
+ *
+ * This module constrains that fallback so John cannot bypass canonical Lead Recovery policy
+ * (actions, pricing, payments, booking). Lead Recovery does NOT call or depend on John.
+ */
 import { isActionPermitted, isKnownAction } from "@/lib/mctb/lead-recovery/action-registry";
 import type {
   LeadRecoveryActionId,

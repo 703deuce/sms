@@ -27,10 +27,14 @@ type AiConfig = {
 };
 
 export function LeadRecoveryProviderPanel({
+  showBookingProvider,
   showBookingTargets,
+  showPaymentsProvider,
   onBookingSaved,
 }: {
+  showBookingProvider: boolean;
   showBookingTargets: boolean;
+  showPaymentsProvider: boolean;
   onBookingSaved?: () => void;
 }) {
   const [providers, setProviders] = useState<ProviderPayload | null>(null);
@@ -42,12 +46,11 @@ export function LeadRecoveryProviderPanel({
   const [testSlots, setTestSlots] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const [lrRes, aiRes] = await Promise.all([
-      fetch("/api/mctb/lead-recovery/config", { cache: "no-store" }),
-      fetch("/api/mctb/ai-booking/config"),
-    ]);
+    const lrRes = await fetch("/api/mctb/lead-recovery/config", { cache: "no-store" });
     const lrJson = await lrRes.json();
     setProviders(lrJson.data?.providers as ProviderPayload);
+    if (!showBookingProvider) return;
+    const aiRes = await fetch("/api/mctb/ai-booking/config");
     if (aiRes.ok) {
       const aiJson = await aiRes.json();
       const cfg = aiJson.data?.config as AiConfig;
@@ -60,7 +63,7 @@ export function LeadRecoveryProviderPanel({
       setTargetId(cfg?.eventTypeUri || cfg?.calendarId || cfg?.eventTypeId || list[0]?.id || "");
       setDuration(cfg?.durationMinutes || 60);
     }
-  }, []);
+  }, [showBookingProvider]);
 
   useEffect(() => {
     void load();
@@ -116,9 +119,10 @@ export function LeadRecoveryProviderPanel({
     <div className="lr-card">
       <h3 className="lr-card-title">Connected services</h3>
 
+      {showBookingProvider && (
       <div className="lr-provider-block">
         <div className="lr-provider-head">
-          <strong>AI Booking</strong>
+          <strong>Scheduling (when policy allows)</strong>
           <span className={bookingProvider?.ready ? "lr-status--ready" : "lr-status--warn"}>
             {bookingProvider?.ready ? "Ready" : "Needs attention"}
           </span>
@@ -155,8 +159,9 @@ export function LeadRecoveryProviderPanel({
           <p className="lr-hint">Sample slots: {testSlots.join(" · ")}</p>
         )}
       </div>
+      )}
 
-      {showBookingTargets && aiCfg && (
+      {showBookingProvider && showBookingTargets && aiCfg && (
         <div className="lr-provider-targets">
           <h4 className="lr-provider-subtitle">Booking target</h4>
           <label className="lr-field">
@@ -181,6 +186,7 @@ export function LeadRecoveryProviderPanel({
         </div>
       )}
 
+      {showPaymentsProvider && (
       <div className="lr-provider-block">
         <div className="lr-provider-head">
           <strong>Stripe Text-to-Pay</strong>
@@ -192,10 +198,13 @@ export function LeadRecoveryProviderPanel({
           Manage connection
         </Link>
       </div>
+      )}
 
+      {showPaymentsProvider && (
       <Link href={MCTB_ROUTES.payments} className="lr-link-row">
         Payments <span>→</span>
       </Link>
+      )}
     </div>
   );
 }

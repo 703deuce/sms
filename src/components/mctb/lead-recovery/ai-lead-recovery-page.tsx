@@ -1,6 +1,11 @@
 "use client";
 
 import { MctbPageContainer } from "@/components/mctb/shell/mctb-page-container";
+import {
+  workspaceUsesAiBookTarget,
+  workspaceUsesBookingProvider,
+  workspaceUsesTextToPay,
+} from "@/lib/mctb/lead-recovery/capabilities";
 import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
 import type {
   IntentPolicyShape,
@@ -19,7 +24,11 @@ import "./ai-lead-recovery.css";
 type HealthPayload = {
   overall: PolicyHealthStatus;
   scenarioHealth: Partial<Record<LeadRecoveryScenarioKey, PolicyHealthStatus>>;
-  providers: { booking: PolicyHealthStatus; payments: PolicyHealthStatus; notifications: PolicyHealthStatus };
+  providers: {
+    booking: PolicyHealthStatus;
+    payments: PolicyHealthStatus;
+    notifications: PolicyHealthStatus;
+  };
 };
 
 function statusLabel(s: PolicyHealthStatus | undefined): string {
@@ -150,7 +159,8 @@ export function AiLeadRecoveryPage() {
             <div>
               <h1 className="lr-title">AI Lead Recovery</h1>
               <p className="lr-subtitle">
-                Choose what Transovo should understand, collect, answer, and do after a missed call.
+                Turn on capabilities (booking, emergencies, payments, and more). Intent detection stays separate
+                from your saved handling policy for each enabled scenario.
               </p>
             </div>
           </div>
@@ -171,7 +181,7 @@ export function AiLeadRecoveryPage() {
 
         {draft.migratedFromAiBooking && (
           <div className="lr-banner lr-banner--info">
-            Your previous AI Booking setup was moved here. Review booking policy below.
+            Your previous AI Booking settings were merged into Lead Recovery. Enable Booking only if you want scheduling as one capability.
           </div>
         )}
 
@@ -181,9 +191,9 @@ export function AiLeadRecoveryPage() {
           <span>AI Lead Recovery <strong>{draft.enabled ? "Enabled" : "Disabled"}</strong></span>
           <span>Policies <strong>{enabledCount} active</strong></span>
           <span>
-            Providers{" "}
-            <strong className={statusClass(health?.providers.booking)}>
-              {statusLabel(health?.providers.booking)}
+            Status{" "}
+            <strong className={statusClass(health?.overall)}>
+              {statusLabel(health?.overall)}
             </strong>
           </span>
           <span>Last saved <strong>{savedAt || "—"}</strong></span>
@@ -298,7 +308,9 @@ export function AiLeadRecoveryPage() {
               </ul>
             </div>
             <LeadRecoveryProviderPanel
-              showBookingTargets={Boolean(draft.enabledScenarios.booking)}
+              showBookingProvider={workspaceUsesBookingProvider(draft)}
+              showBookingTargets={workspaceUsesAiBookTarget(draft)}
+              showPaymentsProvider={workspaceUsesTextToPay(draft)}
               onBookingSaved={() => void load()}
             />
             <div className="lr-card lr-card--locked">
