@@ -1,30 +1,52 @@
 # MCTB AI Booking — provider matrix
 
-AI Booking is a premium MCTB capability: conversational scheduling using the **connected external provider** as system of record. MCTB does not host calendar UI or appointment inventory.
+**AI Booking supported** = configuration + **check availability** + **create booking** all work for the workspace. Reading a calendar alone is insufficient.
 
-**Rule:** Never invent availability. If provider APIs fail or disconnect, fall back to configured **booking link**.
+## Four operations
 
-| Provider | Connected? | Read availability? | Create booking? | Send invite? | Event type support? | Fallback link? | Status |
-|----------|------------|----------------------|-----------------|----------------|---------------------|----------------|--------|
-| **Calendly** | Per workspace OAuth (`calendly` integration) | **Yes** — `listEventTypeAvailableTimes` in `src/lib/integrations/adapters/calendly-actions.ts` | **Yes** — `bookEventInvitee`, `bookNextAvailableSlot` (requires write scopes; reconnect if missing) | Via Calendly invitee flow | Event type URI required for slot query | **Yes** — `MctbBookingLink` | Backend capable; MCTB AI runtime UI **not fully wired** (upgrade gate in Setup) |
-| **Microsoft 365 / Outlook** | Per workspace calendar connection | **Yes** — `getMicrosoftBusy` / calendar view in `src/lib/calendar/providers.ts`; appointments stack uses same | **Yes** — event creation via existing Graph/calendar write paths used by appointments product | **Yes** — calendar invitations where write calendar configured | Uses selected write calendar / meeting methods | **Yes** | Backend capable; MCTB AI runtime UI **not fully wired** |
-| **Google Calendar** | Supported in full scheduler | Yes (busy) in shared calendar lib | Yes in appointments product | Yes | Service/meeting types | Booking link only in MCTB | **MCTB AI Booking: not in v1 matrix** (link-only) |
-| **Square / other URLs** | N/A | No | No | No | N/A | **Yes** — booking link only | Link mode only |
+| Operation | Product meaning |
+|-----------|-----------------|
+| **Get booking/calendar configuration** | Event type / service, duration, timezone, buffers |
+| **Check availability** | Given a time window, return **actual** open slots |
+| **Create booking/event** | Customer chose a returned slot → write to provider |
+| **Return confirmed result** | Provider booking/event id, start/end, invite/status |
 
-## Booking link mode (default)
+## Provider matrix
 
-| Capability | Integration required? |
-|------------|---------------------|
-| Configure multiple `MctbBookingLink` rows | No |
-| Send link in Conversations | No |
-| Include `{{link}}` in initial recovery | No (uses `defaultLinkUrl`) |
+| Provider | Connected? | Read calendar | Check availability | Create booking/event | Send invite | Event type support | Fallback link | AI Booking |
+|----------|------------|---------------|--------------------|----------------------|-------------|-------------------|---------------|------------|
+| **Microsoft 365** | `voiceCalendarConnection` + OAuth tokens | **Verify** — `hasOAuthTokens` + connection row | **Verify** — `getAvailability` (busy + free slots) | **Verify** — `bookAppointment` + `insertMicrosoftEvent` | **Verify** — when write calendar configured | Via `VoiceService` name / calendar selection | **Yes** — `MctbBookingLink` | **Only if all three** |
+| **Calendly** | `integrationConnection` calendly | **Yes** — user/event metadata via API | **Yes** — `listEventTypeAvailableTimes` | **Yes** — `bookEventInvitee` (paid plan + write scopes) | Calendly invitee flow | Event type URI required | **Yes** | **Only if connected + write path works** |
+| **Zoho** | CRM OAuth (`zoho`) | **No** — no calendar adapter in repo | **No** | **No** | N/A | N/A | Booking link only | **No** (inspect before enabling) |
+| **Google Calendar** | Full scheduler | Yes in shared lib | Yes in `getAvailability` | Yes in appointments stack | Yes | Service-based | Link only in MCTB v1 | **Not in MCTB AI v1** (adapter not registered) |
 
-## Implementation notes
+Mechanical audit entrypoint: `auditMctbAiBookingProvider(workspaceId, provider)` in `src/lib/mctb/ai-booking/capabilities.ts`.
 
-- Reuse existing integrations — do **not** add a second Microsoft Graph client for MCTB.
-- Calendly AI path must call real adapter functions; if `bookEventInvitee` returns UNSUPPORTED (plan/scope), respond with fallback link message.
-- Store minimal post-booking metadata on conversation activity (provider, external id, start/end, timezone) — not a parallel Transovo appointment engine unless an existing bridge requires it.
+## Runtime fallback chain
 
-## Verification
+```
+Scheduling intent
+  → AI Booking enabled?
+  → provider connected/healthy?
+  → capabilities.aiBookingSupported?
+  → findAvailableTimes (provider)
+  → offer returned slots / specific-time answer
+  → createBooking (chosen returned slot)
+  → confirm after provider success
+ANY failure → fallback booking link URL
+```
 
-Mechanical checks: `scripts/test-mctb-booking-simplification.ts` and integration cert scripts under `scripts/certify-appointment-stack-live.ts` for Microsoft write paths.
+## Code map
+
+| Layer | Path |
+|-------|------|
+| Service | `src/lib/mctb/ai-booking/service.ts` |
+| Orchestrator | `src/lib/mctb/ai-booking/orchestrator.ts` |
+| Adapters | `src/lib/mctb/ai-booking/providers/*.ts` |
+| API | `src/app/api/mctb/ai-booking/route.ts` |
+| Booking links (separate feature) | `src/lib/mctb/booking-links/*` |
+
+## Tests
+
+- `scripts/test-mctb-ai-booking-service.ts`
+- `scripts/test-mctb-booking-simplification.ts`
