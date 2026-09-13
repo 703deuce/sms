@@ -81,6 +81,8 @@ assert.ok(!apptPage.includes('redirect("/mctb/appointments")'), "canonical appoi
 // —— Docs ——
 assert.ok(existsSync("docs/MCTB-BOOKING-SIMPLIFICATION-AUDIT.md"));
 assert.ok(existsSync("docs/MCTB-AI-BOOKING-PROVIDER-MATRIX.md"));
+assert.ok(existsSync("docs/MCTB-AI-BOOKING-ARCHITECTURE.md"));
+assert.ok(existsSync("src/lib/mctb/ai-booking/service.ts"));
 
 // —— Nav match: removed paths should not highlight calendar nav ——
 const kimi = mapProductionNavToKimi(buildMctbV1Nav());

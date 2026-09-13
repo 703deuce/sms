@@ -60,8 +60,18 @@ export async function handleJohnCustomerSmsReply(input: {
 
   const contact = await prisma.contact.findFirst({
     where: { workspaceId: input.workspaceId, phone: input.fromE164 },
-    select: { id: true },
+    select: { id: true, firstName: true, lastName: true, email: true },
   });
+
+  let conversationId = input.conversationId;
+  if (!conversationId && contact?.id) {
+    const conv = await prisma.conversation.findFirst({
+      where: { workspaceId: input.workspaceId, contactId: contact.id },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+    conversationId = conv?.id ?? null;
+  }
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: input.workspaceId },
@@ -72,7 +82,7 @@ export async function handleJohnCustomerSmsReply(input: {
     workspaceId: input.workspaceId,
     fromE164: input.fromE164,
     body: input.body,
-    conversationId: input.conversationId,
+    conversationId,
   });
 
   if (handoff.handled && handoff.skipAi) {
@@ -100,12 +110,61 @@ export async function handleJohnCustomerSmsReply(input: {
     };
   }
 
+  const { handleMctbAiBookingInboundSms } = await import("@/lib/mctb/ai-booking/conversation-runtime");
+  const customerName =
+    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
+  const aiBooking = await handleMctbAiBookingInboundSms({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: contact?.id,
+    customerPhone: input.fromE164,
+    customerName,
+    customerEmail: contact?.email,
+    body: input.body,
+    timezone: config.timezone,
+  });
+
+  if (aiBooking.handled) {
+    const sender = await resolveMctbSmsSender({
+      workspaceId: input.workspaceId,
+      config,
+    });
+    if (sender?.e164) {
+      await sendQuickSms({
+        workspaceId: input.workspaceId,
+        to: input.fromE164,
+        body: aiBooking.reply,
+        from: sender.e164,
+        idempotencyKey: `mctb-ai-booking:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
+      }).catch(() => undefined);
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            conversationId,
+            direction: "out",
+            body: aiBooking.reply,
+            userName: "AI",
+          },
+        });
+      }
+    }
+    await prisma.missedCallEvent.update({
+      where: { id: recentEvent.id },
+      data: { status: "CUSTOMER_REPLIED" },
+    });
+    return {
+      handled: true,
+      action: aiBooking.action,
+      reply: aiBooking.reply,
+    };
+  }
+
   const llmResult = await runJohnCustomerLlmLoop({
     workspaceId: input.workspaceId,
     traceId: recentEvent.traceId,
     missedCallEventId: recentEvent.id,
     missedAt: recentEvent.detectedAt,
-    conversationId: input.conversationId,
+    conversationId,
     contactId: contact?.id,
     customerPhone: input.fromE164,
     inboundBody: input.body,

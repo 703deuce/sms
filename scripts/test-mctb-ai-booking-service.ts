@@ -22,6 +22,10 @@ const required = [
   "src/lib/mctb/ai-booking/providers/microsoft.ts",
   "src/lib/mctb/ai-booking/providers/zoho.ts",
   "src/app/api/mctb/ai-booking/route.ts",
+  "src/app/api/mctb/ai-booking/config/route.ts",
+  "src/lib/mctb/ai-booking/conversation-runtime.ts",
+  "src/lib/mctb/ai-booking/scheduling-interpreter.ts",
+  "src/lib/mctb/ai-booking/session-store-prisma.ts",
   "docs/MCTB-AI-BOOKING-ARCHITECTURE.md",
 ];
 
@@ -36,6 +40,9 @@ assert.ok(service.includes("export async function findAvailableTimes"));
 assert.ok(service.includes("export async function createBooking"));
 assert.ok(service.includes("export async function getBookingStatus"));
 assert.ok(!service.includes("openai"), "service must not call LLM");
+
+const store = readFileSync("src/lib/mctb/ai-booking/session-store.ts", "utf8");
+assert.ok(store.includes("prismaMctbAiBookingSessionStore"), "production session store must be prisma");
 
 const orchestrator = readFileSync("src/lib/mctb/ai-booking/orchestrator.ts", "utf8");
 assert.ok(orchestrator.includes("findAvailableTimes"));

@@ -84,6 +84,24 @@ export async function orchestrateMctbAiBooking(
       customerEmail: input.customerEmail,
     });
     if (!booked.ok) {
+      if (booked.reason === "slot_taken") {
+        const retry = await findAvailableTimes({
+          workspaceId: input.workspaceId,
+          conversationId: input.conversationId,
+          windowStartUtc: input.windowStartUtc,
+          windowEndUtc: input.windowEndUtc,
+          timezone: input.timezone,
+          maxResults: 12,
+        });
+        if (retry.ok && retry.slots.length) {
+          const offer = pickSlotsToOffer(retry.slots, 3);
+          return {
+            kind: "offer_slots",
+            slots: offer,
+            messageHint: `That time was just taken. I can still do ${offer.map(formatSlotLabel).join(", ")}.`,
+          };
+        }
+      }
       return fallbackResult(input.workspaceId, booked.reason);
     }
     return {

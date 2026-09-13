@@ -30,11 +30,22 @@ export function MctbSetupBookingSection() {
   const [recoveryLinkEnabled, setRecoveryLinkEnabled] = useState(false);
   const [recoveryLinkId, setRecoveryLinkId] = useState<string | null>(null);
   const [recoverySaving, setRecoverySaving] = useState(false);
+  const [aiEntitled, setAiEntitled] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiProvider, setAiProvider] = useState<"microsoft" | "calendly">("microsoft");
+  const [aiTargetId, setAiTargetId] = useState("");
+  const [aiFallbackId, setAiFallbackId] = useState("");
+  const [aiReadiness, setAiReadiness] = useState<string>("");
+  const [aiTargets, setAiTargets] = useState<Array<{ id: string; label: string }>>([]);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testSlots, setTestSlots] = useState<string[]>([]);
 
   const load = useCallback(async () => {
-    const [linksRes, setupRes] = await Promise.all([
+    const [linksRes, setupRes, aiRes] = await Promise.all([
       fetch("/api/mctb/booking-links"),
       fetch("/api/mctb/setup", { cache: "no-store" }),
+      fetch("/api/mctb/ai-booking/config"),
     ]);
     const json = await linksRes.json();
     setLinks((json.data || []) as MctbBookingLinkDto[]);
@@ -46,7 +57,72 @@ export function MctbSetupBookingSection() {
       setRecoveryLinkEnabled(Boolean(defaultUrl && match));
       setRecoveryLinkId(match?.id ?? rows.find((r) => r.isDefault)?.id ?? rows[0]?.id ?? null);
     }
+    if (aiRes.ok) {
+      const aiJson = await aiRes.json();
+      const cfg = aiJson.data?.config;
+      setAiEntitled(Boolean(aiJson.data?.entitled));
+      setAiEnabled(Boolean(cfg?.enabled));
+      setAiProvider(cfg?.provider === "calendly" ? "calendly" : "microsoft");
+      setAiTargetId(cfg?.eventTypeUri || cfg?.calendarId || cfg?.serviceName || "");
+      setAiFallbackId(cfg?.fallbackBookingLinkId || "");
+      setAiReadiness(aiJson.data?.readiness?.ready ? "Ready" : "Needs attention");
+    }
   }, []);
+
+  const loadTargets = useCallback(async (provider: "microsoft" | "calendly") => {
+    const res = await fetch(`/api/mctb/ai-booking/config?targets=1&provider=${provider}`);
+    const json = await res.json();
+    setAiTargets((json.data?.targets || []) as Array<{ id: string; label: string }>);
+  }, []);
+
+  useEffect(() => {
+    void loadTargets(aiProvider).catch(() => setAiTargets([]));
+  }, [aiProvider, loadTargets]);
+
+  const saveAiConfig = async (patch: Record<string, unknown>) => {
+    setAiSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/mctb/ai-booking/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not save AI Booking");
+      setAiReadiness(json.data?.readiness?.ready ? "Ready" : "Needs attention");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const runTestAvailability = async () => {
+    setTestOpen(true);
+    setTestSlots([]);
+    const res = await fetch("/api/mctb/ai-booking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "test_availability",
+        timezone: "America/New_York",
+        windowStartUtc: new Date(Date.now() + 24 * 3600_000).toISOString(),
+        windowEndUtc: new Date(Date.now() + 48 * 3600_000).toISOString(),
+      }),
+    });
+    const json = await res.json();
+    const slots = (json.data?.slots || []) as Array<{ startUtc: string }>;
+    setTestSlots(
+      slots.slice(0, 6).map((s) =>
+        new Date(s.startUtc).toLocaleString("en-US", {
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      ),
+    );
+  };
 
   useEffect(() => {
     void load().catch(() => setLinks([]));
@@ -241,16 +317,113 @@ export function MctbSetupBookingSection() {
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-dashed border-[#dde2ea] bg-[#f9fafb] px-3 py-3">
-          <p className="text-[13px] font-semibold text-[#0a0d12]">AI Booking</p>
+        <div className="rounded-lg border border-[#eaedf0] bg-[#f9fafb] px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[13px] font-semibold text-[#0a0d12]">AI Booking</p>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#7a8494]">Premium</span>
+          </div>
           <p className="mt-1 text-[12px] leading-relaxed text-[#4a5563]">
-            Let Transovo check live Calendly or Microsoft availability and book automatically. Upgrade required.
+            Check live provider availability and complete booking in the conversation. Never invents times.
           </p>
-          <button type="button" className="mt-2 h-9 rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold text-[#0a0d12]">
-            Upgrade
-          </button>
+          {!aiEntitled ? (
+            <button type="button" className="mt-2 h-9 rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold text-[#0a0d12]">
+              Upgrade
+            </button>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <label className="flex items-center gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={aiEnabled}
+                  disabled={aiSaving}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setAiEnabled(on);
+                    void saveAiConfig({ enabled: on, provider: aiProvider });
+                  }}
+                />
+                Enabled
+              </label>
+              <label className="block text-[12px] font-medium text-[#4a5563]">
+                Provider
+                <select
+                  className="mt-1 h-10 w-full rounded-lg border border-[#dde2ea] bg-white px-3 text-[14px]"
+                  value={aiProvider}
+                  disabled={aiSaving}
+                  onChange={(e) => {
+                    const p = e.target.value as "microsoft" | "calendly";
+                    setAiProvider(p);
+                    void saveAiConfig({ provider: p, enabled: aiEnabled });
+                  }}
+                >
+                  <option value="microsoft">Microsoft Calendar</option>
+                  <option value="calendly">Calendly</option>
+                </select>
+              </label>
+              <label className="block text-[12px] font-medium text-[#4a5563]">
+                Scheduling target
+                <select
+                  className="mt-1 h-10 w-full rounded-lg border border-[#dde2ea] bg-white px-3 text-[14px]"
+                  value={aiTargetId}
+                  disabled={aiSaving}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setAiTargetId(id);
+                    void saveAiConfig(
+                      aiProvider === "calendly"
+                        ? { eventTypeUri: id, enabled: aiEnabled, provider: aiProvider }
+                        : { calendarId: id, serviceName: id, enabled: aiEnabled, provider: aiProvider },
+                    );
+                  }}
+                >
+                  <option value="">Select…</option>
+                  {aiTargets.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-[12px] font-medium text-[#4a5563]">
+                Fallback booking link
+                <select
+                  className="mt-1 h-10 w-full rounded-lg border border-[#dde2ea] bg-white px-3 text-[14px]"
+                  value={aiFallbackId}
+                  disabled={aiSaving}
+                  onChange={(e) => {
+                    setAiFallbackId(e.target.value);
+                    void saveAiConfig({ fallbackBookingLinkId: e.target.value || null, enabled: aiEnabled });
+                  }}
+                >
+                  <option value="">None</option>
+                  {links.filter((l) => l.active).map((l) => (
+                    <option key={l.id} value={l.id}>{l.label}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-[12px] text-[#4a5563]">Status: <strong>{aiReadiness}</strong></p>
+              <button
+                type="button"
+                className="h-9 rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold"
+                onClick={() => void runTestAvailability()}
+              >
+                Test availability
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {testOpen ? (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/30 p-4" onClick={() => setTestOpen(false)}>
+          <div className="max-w-md rounded-xl bg-white p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h4 className="text-[15px] font-semibold">Test availability</h4>
+            <p className="mt-2 text-[13px] text-[#4a5563]">Slots returned from your connected provider (tomorrow window).</p>
+            <ul className="mt-3 space-y-1 text-[13px]">
+              {testSlots.length ? testSlots.map((s) => <li key={s}>{s}</li>) : <li>No slots returned</li>}
+            </ul>
+            <button type="button" className="mt-4 text-[13px] font-semibold" onClick={() => setTestOpen(false)}>Close</button>
+          </div>
+        </div>
+      ) : null}
 
       {drawerOpen ? (
         <div

@@ -273,7 +273,9 @@ export function mapConversation(c: {
           ? "in"
           : m.direction === "note"
             ? "note"
-            : "out") as "in" | "out" | "note",
+            : m.direction === "event"
+              ? "event"
+              : "out") as "in" | "out" | "note" | "event",
         body: m.body,
         mediaUrls: m.mediaUrls?.filter(Boolean) ?? [],
         at: new Date(m.createdAt).toISOString(),

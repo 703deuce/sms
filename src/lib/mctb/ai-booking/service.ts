@@ -45,7 +45,7 @@ export async function findAvailableTimes(
 ): Promise<FindAvailableTimesResult> {
   const { config, context, capabilities, fallbackUrl } = await getBookingContext(req.workspaceId);
 
-  if (!config.enabled || config.upgradeRequired) {
+  if (!config.enabled || !config.entitled || config.upgradeRequired) {
     return {
       ok: false,
       reason: "AI Booking is not enabled for this workspace",
@@ -85,7 +85,7 @@ export async function findAvailableTimes(
 
 export async function createBooking(req: CreateBookingRequest): Promise<CreateBookingResult> {
   const { config, context, capabilities } = await getBookingContext(req.workspaceId);
-  if (!config.enabled || config.upgradeRequired) {
+  if (!config.enabled || !config.entitled || config.upgradeRequired) {
     return {
       ok: false,
       reason: "AI Booking is not enabled",
@@ -110,6 +110,48 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
       fallbackRecommended: true,
     };
   }
+
+  const idempotencyKey = `mctb-book:${req.conversationId}:${req.slotId}`;
+  const { getPrisma } = await import("@/lib/db");
+  const prisma = getPrisma();
+  const existing = await prisma.mctbAiBookingSession.findUnique({
+    where: { conversationId: req.conversationId },
+  });
+  if (existing?.idempotencyKey === idempotencyKey && existing.providerBookingId) {
+    return {
+      ok: true,
+      provider: config.provider,
+      providerBookingId: existing.providerBookingId,
+      startUtc: slot.startUtc,
+      endUtc: slot.endUtc,
+      timezone: context.timezone,
+      status: "confirmed",
+    };
+  }
+
+  const revalidate = await findAvailableTimes({
+    workspaceId: req.workspaceId,
+    conversationId: req.conversationId,
+    windowStartUtc: new Date(new Date(slot.startUtc).getTime() - 30 * 60_000).toISOString(),
+    windowEndUtc: new Date(new Date(slot.startUtc).getTime() + 30 * 60_000).toISOString(),
+    timezone: context.timezone,
+    maxResults: 8,
+  });
+  if (revalidate.ok) {
+    const still = revalidate.slots.some((s) => s.slotId === slot.slotId || s.startUtc === slot.startUtc);
+    if (!still) {
+      return {
+        ok: false,
+        reason: "slot_taken",
+        fallbackRecommended: false,
+      };
+    }
+  }
+
+  await prisma.mctbAiBookingSession.updateMany({
+    where: { conversationId: req.conversationId },
+    data: { stage: "BOOKING", idempotencyKey },
+  });
 
   const adapter = getMctbAiBookingAdapter(config.provider);
   const result = await adapter.createBooking(context, config, req, {

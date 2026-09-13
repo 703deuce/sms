@@ -125,6 +125,14 @@ function mapApiMessage(m: ApiConversation["messages"][number], contactName: stri
       time: formatMessageTime(m.at),
     };
   }
+  if (m.direction === "event") {
+    return {
+      id: m.id,
+      kind: "event",
+      eventText: body,
+      time: formatMessageTime(m.at),
+    };
+  }
   const outbound = m.direction === "out";
   const isAi = outbound && (m.user === "AI" || m.user?.toLowerCase().includes("ai "));
   if (media.length > 0) {

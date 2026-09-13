@@ -1,4 +1,5 @@
 import type { MctbAiBookingSession, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
+import { prismaMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store-prisma";
 
 export type MctbAiBookingSessionStore = {
   get(conversationId: string): Promise<MctbAiBookingSession | null>;
@@ -20,7 +21,7 @@ export const inMemoryMctbAiBookingSessionStore: MctbAiBookingSessionStore = {
   },
 };
 
-let activeStore: MctbAiBookingSessionStore = inMemoryMctbAiBookingSessionStore;
+let activeStore: MctbAiBookingSessionStore = prismaMctbAiBookingSessionStore;
 
 export function setMctbAiBookingSessionStore(store: MctbAiBookingSessionStore) {
   activeStore = store;
@@ -36,11 +37,13 @@ export async function recordOfferedSlots(input: {
   provider: MctbAiBookingSession["provider"];
   slots: MctbBookingSlot[];
   window?: { startUtc: string; endUtc: string };
+  stage?: MctbAiBookingSession["stage"];
 }) {
   const session: MctbAiBookingSession = {
     conversationId: input.conversationId,
     workspaceId: input.workspaceId,
     provider: input.provider,
+    stage: input.stage || "AWAITING_SLOT_SELECTION",
     offeredSlots: input.slots,
     lastQueriedWindow: input.window,
     pendingSlotId: null,

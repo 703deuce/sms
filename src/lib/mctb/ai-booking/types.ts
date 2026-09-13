@@ -107,14 +107,26 @@ export type BookingStatusResult =
   | { ok: false; reason: string };
 
 /** Stateful conversation slice — only slots from the last provider query may be booked. */
+export type MctbAiBookingSessionStage =
+  | "IDLE"
+  | "COLLECTING_TIME_PREFERENCE"
+  | "CHECKING_AVAILABILITY"
+  | "AWAITING_SLOT_SELECTION"
+  | "BOOKING"
+  | "CONFIRMED"
+  | "FALLBACK"
+  | "FAILED";
+
 export type MctbAiBookingSession = {
   conversationId: string;
   workspaceId: string;
   provider: MctbAiBookingProviderId;
+  stage?: MctbAiBookingSessionStage;
   offeredSlots: MctbBookingSlot[];
   lastQueriedWindow?: { startUtc: string; endUtc: string };
   pendingSlotId?: string | null;
   updatedAt: string;
+  expiresAt?: string | null;
 };
 
 export type SchedulingIntentKind =

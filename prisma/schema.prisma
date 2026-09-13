@@ -471,6 +471,8 @@ model Workspace {
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
   mctbHandoffConfig MctbHandoffConfig?
   mctbBookingLinks MctbBookingLink[]
+  mctbAiBookingSessions MctbAiBookingSession[]
+  mctbConversationBookingActivities MctbConversationBookingActivity[]
   mctbNotificationRecipients MctbNotificationRecipient[]
   mctbConversationAutomationStates MctbConversationAutomationState[]
   mctbLeadSnapshots MctbLeadSnapshot[]
@@ -5797,6 +5799,45 @@ model MctbBookingLink {
   @@index([workspaceId, active])
   @@index([workspaceId, isDefault])
   @@map("mctb_booking_links")
+}
+
+/// Durable multi-turn AI Booking state for MCTB SMS conversations.
+model MctbAiBookingSession {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  conversationId       String
+  stage                String    @default("IDLE")
+  provider             String?
+  schedulingTargetJson Json?
+  requestedWindowJson  Json?
+  offeredSlotsJson     Json?
+  selectedSlotJson     Json?
+  providerBookingId    String?
+  idempotencyKey       String?   @unique
+  expiresAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId])
+  @@index([workspaceId, updatedAt])
+  @@map("mctb_ai_booking_sessions")
+}
+
+/// Structured booking timeline events for MCTB conversations (not Transovo appointments).
+model MctbConversationBookingActivity {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  contactId      String?
+  kind           String
+  payloadJson    Json     @default("{}")
+  createdAt      DateTime @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("mctb_conversation_booking_activities")
 }
 
 /// Team/owner notification recipient for MCTB handoff events.

@@ -87,6 +87,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ data });
     }
 
+    if (action === "test_availability") {
+      if (!body.windowStartUtc || !body.windowEndUtc) {
+        return NextResponse.json({ error: "window required" }, { status: 400 });
+      }
+      const data = await findAvailableTimes({
+        workspaceId: auth.workspaceId,
+        windowStartUtc: body.windowStartUtc,
+        windowEndUtc: body.windowEndUtc,
+        timezone: body.timezone || "America/New_York",
+        maxResults: 12,
+      });
+      return NextResponse.json({ data });
+    }
+
     if (action === "orchestrate") {
       if (
         !body.conversationId ||

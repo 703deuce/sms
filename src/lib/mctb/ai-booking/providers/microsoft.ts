@@ -18,9 +18,10 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
 
   async getBookingContext(workspaceId, config) {
     const prisma = getPrisma();
-    const conn = config.calendarConnectionId
+    const connId = config.calendarId || config.calendarConnectionId;
+    const conn = connId
       ? await prisma.voiceCalendarConnection.findFirst({
-          where: { id: config.calendarConnectionId, workspaceId, provider: "microsoft" },
+          where: { id: connId, workspaceId, provider: "microsoft" },
         })
       : await prisma.voiceCalendarConnection.findFirst({
           where: { workspaceId, provider: "microsoft", status: "connected" },
