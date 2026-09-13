@@ -1,13 +1,50 @@
+/* MCTB Overview — restrained color hierarchy (overview scope only). */
 .mctb-home {
+  --mctb-text-primary: #0f1216;
+  --mctb-text-secondary: #505862;
+  --mctb-text-tertiary: #8a919b;
+  --mctb-canvas: #eceef1;
+  --mctb-surface: #ffffff;
+  --mctb-surface-inset: #f5f7f9;
+  --mctb-border: #d8dce2;
+  --mctb-border-subtle: #e8ebef;
+  --mctb-accent-teal: #1f6b42;
+  --mctb-accent-teal-soft: #e9f4ee;
+  --mctb-accent-teal-icon: #2d7a52;
+  --mctb-accent-info: #4a6f94;
+  --mctb-accent-info-soft: #edf3f8;
+  --mctb-accent-amber: #9a6700;
+  --mctb-accent-amber-soft: #fff8e8;
+  --mctb-accent-red: #b42318;
+  --mctb-accent-red-soft: #fef3f2;
+
   min-height: 100%;
-  background: #f6f7f8;
-  color: #1b1e23;
+  background: var(--mctb-canvas);
+  color: var(--mctb-text-primary);
 }
 
 .mctb-home-inner {
   margin-inline: auto;
   max-width: 90rem;
   padding: 1.25rem 1.5rem 2rem;
+}
+
+.mctb-home-page-title {
+  color: var(--mctb-text-primary);
+}
+
+.mctb-home-page-subtitle {
+  color: var(--mctb-text-secondary);
+}
+
+.mctb-home-banner-warn {
+  border: 1px solid #e8d48a;
+  background: var(--mctb-accent-amber-soft);
+  color: var(--mctb-accent-amber);
+}
+
+.mctb-home-banner-warn a {
+  color: var(--mctb-accent-teal-icon);
 }
 
 @media (min-width: 1024px) {
@@ -17,10 +54,10 @@
 }
 
 .mctb-home-surface {
-  border: 1px solid #eaedf0;
+  border: 1px solid var(--mctb-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: none;
+  background: var(--mctb-surface);
+  box-shadow: 0 1px 2px rgba(15, 18, 22, 0.04);
 }
 
 .mctb-home-module {
@@ -51,6 +88,7 @@
   font-weight: 600;
   line-height: 21px;
   letter-spacing: -0.01em;
+  color: var(--mctb-text-primary);
 }
 
 .mctb-home-section-head-action-placeholder {
@@ -66,11 +104,12 @@
 .mctb-home-link {
   font-size: 13px;
   font-weight: 500;
-  color: #1b1e23;
+  color: var(--mctb-accent-teal-icon);
   text-decoration: none;
 }
 
 .mctb-home-link:hover {
+  color: var(--mctb-accent-teal);
   text-decoration: underline;
 }
 
@@ -93,35 +132,56 @@
   min-height: 4rem;
   max-height: 4.375rem;
   padding: 0.3125rem 0.625rem;
-  border: 1px solid #eaedf0;
+  border: 1px solid var(--mctb-border);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--mctb-surface);
   text-decoration: none;
   color: inherit;
+  box-shadow: 0 1px 2px rgba(15, 18, 22, 0.03);
 }
 
 .mctb-home-kpi:hover {
-  border-color: #e5e8eb;
-  background: #fafbfc;
+  border-color: #c9ced6;
+  background: var(--mctb-surface);
 }
 
 .mctb-home-kpi-icon {
   display: flex;
-  height: 1.625rem;
-  width: 1.625rem;
+  height: 1.75rem;
+  width: 1.75rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: #f2f4f6;
-  color: #626872;
+  background: var(--mctb-surface-inset);
+  color: var(--mctb-text-secondary);
+}
+
+.mctb-home-kpi-icon--neutral {
+  background: var(--mctb-surface-inset);
+  color: var(--mctb-text-secondary);
+}
+
+.mctb-home-kpi-icon--teal {
+  background: var(--mctb-accent-teal-soft);
+  color: var(--mctb-accent-teal-icon);
+}
+
+.mctb-home-kpi-icon--info {
+  background: var(--mctb-accent-info-soft);
+  color: var(--mctb-accent-info);
+}
+
+.mctb-home-kpi-icon--amber {
+  background: var(--mctb-accent-amber-soft);
+  color: var(--mctb-accent-amber);
 }
 
 .mctb-home-kpi-label {
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
-  color: #626872;
+  color: var(--mctb-text-secondary);
 }
 
 .mctb-home-kpi-value {
@@ -129,16 +189,22 @@
   font-weight: 600;
   line-height: 22px;
   letter-spacing: -0.02em;
+  color: var(--mctb-text-primary);
 }
 
 .mctb-home-kpi-sub {
   font-size: 11px;
   line-height: 16px;
-  color: #8a919b;
+  color: var(--mctb-text-tertiary);
 }
 
 .mctb-home-kpi--attention .mctb-home-kpi-value {
-  color: #9a6700;
+  color: var(--mctb-accent-amber);
+}
+
+.mctb-home-kpi--attention {
+  border-color: #e8d48a;
+  background: linear-gradient(180deg, #fffdf6 0%, var(--mctb-surface) 100%);
 }
 
 .mctb-home-table {
@@ -150,11 +216,12 @@
 .mctb-home-table th {
   padding: 0.375rem 1rem;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 16px;
   text-align: left;
-  color: #8a919b;
-  border-bottom: 1px solid #e5e8eb;
+  color: var(--mctb-text-tertiary);
+  border-bottom: 1px solid var(--mctb-border-subtle);
+  background: var(--mctb-surface-inset);
 }
 
 .mctb-home-table td {
@@ -178,15 +245,43 @@
 }
 
 .mctb-home-caller-primary {
-  font-weight: 500;
+  font-weight: 600;
   line-height: 18px;
-  color: #1b1e23;
+  color: var(--mctb-text-primary);
 }
 
 .mctb-home-caller-secondary {
   font-size: 12px;
   line-height: 17px;
-  color: #8a919b;
+  color: var(--mctb-text-tertiary);
+}
+
+.mctb-home-cell--secondary {
+  color: var(--mctb-text-secondary);
+}
+
+.mctb-home-cell--tertiary {
+  color: var(--mctb-text-tertiary);
+}
+
+.mctb-home-cell--success {
+  color: var(--mctb-accent-teal-icon);
+  font-weight: 500;
+}
+
+.mctb-home-cell--info {
+  color: var(--mctb-accent-info);
+  font-weight: 500;
+}
+
+.mctb-home-cell--pending {
+  color: var(--mctb-accent-amber);
+  font-weight: 500;
+}
+
+.mctb-home-cell--error {
+  color: var(--mctb-accent-red);
+  font-weight: 500;
 }
 
 .mctb-home-status-chip {
@@ -206,23 +301,42 @@
 }
 
 .mctb-home-status-chip--active {
-  background: transparent;
-  color: #5f7569;
-  padding: 0;
+  background: var(--mctb-accent-teal-soft);
+  color: var(--mctb-accent-teal);
+  padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+  border-radius: 999px;
+  font-weight: 500;
 }
 
 .mctb-home-status-chip--active .mctb-home-status-dot {
-  background: #6d8f7a;
+  background: var(--mctb-accent-teal-icon);
+  width: 6px;
+  height: 6px;
 }
 
 .mctb-home-status-chip--paused {
-  background: #f2f4f6;
-  color: #626872;
+  background: var(--mctb-accent-amber-soft);
+  color: var(--mctb-accent-amber);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
 }
 
 .mctb-home-status-chip--attention {
-  background: #fffbeb;
-  color: #9a6700;
+  background: var(--mctb-accent-amber-soft);
+  color: var(--mctb-accent-amber);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.mctb-home-status-chip--setup {
+  background: var(--mctb-surface-inset);
+  color: var(--mctb-text-secondary);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
+  border: 1px solid var(--mctb-border-subtle);
 }
 
 .mctb-home-attention-ok {
@@ -232,12 +346,12 @@
   min-height: 2.75rem;
   max-height: 3rem;
   padding: 0 1rem;
-  border: 1px solid #e5e8eb;
+  border: 1px solid var(--mctb-border-subtle);
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--mctb-accent-teal-soft);
   font-size: 13px;
   font-weight: 500;
-  color: #626872;
+  color: var(--mctb-accent-teal);
 }
 
 /* Inside Recent missed calls — not a separate card */
@@ -259,7 +373,7 @@
 }
 
 .mctb-home-missed-row:hover {
-  background: #f7f8f9;
+  background: var(--mctb-accent-info-soft);
 }
 
 .mctb-home-interactive-row {
@@ -286,8 +400,13 @@
   color: inherit;
 }
 
+.mctb-home-attention-row {
+  border-left: 3px solid transparent;
+}
+
 .mctb-home-attention-row:hover {
-  background: #fafbfc;
+  background: var(--mctb-accent-amber-soft);
+  border-left-color: var(--mctb-accent-amber);
 }
 
 .mctb-home-attention-row:last-child {
@@ -315,14 +434,22 @@
 .mctb-home-setup-label {
   font-size: 13px;
   line-height: 18px;
-  color: #8a919b;
+  color: var(--mctb-text-secondary);
   flex-shrink: 0;
 }
 
 .mctb-home-setup-value {
-  font-weight: 500;
+  font-weight: 600;
   text-align: right;
-  color: #1b1e23;
+  color: var(--mctb-text-primary);
+}
+
+.mctb-home-setup-value--ok {
+  color: var(--mctb-accent-teal-icon);
+}
+
+.mctb-home-setup-value--warn {
+  color: var(--mctb-accent-amber);
 }
 
 .mctb-home-setup-value a {
@@ -342,10 +469,17 @@
   gap: 0.5rem;
   margin-top: auto;
   padding: 0.5rem 1rem;
-  border-top: 1px solid #eaedf0;
+  border-top: 1px solid var(--mctb-border-subtle);
   font-size: 12px;
   line-height: 17px;
-  color: #626872;
+  color: var(--mctb-text-secondary);
+  background: var(--mctb-surface-inset);
+}
+
+.mctb-home-footer-line strong,
+.mctb-home-footer-metric {
+  color: var(--mctb-text-primary);
+  font-weight: 600;
 }
 
 .mctb-home-bottom-pair {

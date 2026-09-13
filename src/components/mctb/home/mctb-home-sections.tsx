@@ -54,13 +54,52 @@ function fmtConvTime(iso: string) {
   }
 }
 
+function semanticCellClass(label: string, kind: "recovery" | "reply"): string {
+  const l = label.toLowerCase();
+  if (kind === "reply") {
+    if (l.includes("needs reply") || l.includes("waiting")) return "mctb-home-cell--pending";
+    if (l.includes("replied") || l.includes("yes")) return "mctb-home-cell--success";
+    return "mctb-home-cell--secondary";
+  }
+  if (l.includes("sent") || l.includes("delivered") || l.includes("recovered")) {
+    return "mctb-home-cell--success";
+  }
+  if (l.includes("pending") || l.includes("scheduled") || l.includes("queued")) {
+    return "mctb-home-cell--pending";
+  }
+  if (l.includes("suppressed") || l.includes("failed") || l.includes("blocked") || l.includes("skipped")) {
+    return "mctb-home-cell--error";
+  }
+  if (l.includes("not sent") || l.includes("—")) return "mctb-home-cell--tertiary";
+  return "mctb-home-cell--secondary";
+}
+
+function setupValueClass(value: string): string {
+  const v = value.toLowerCase();
+  if (v.includes("verified") || v.includes("active") || v.includes("ready") || v.includes("press 1")) {
+    return "mctb-home-setup-value--ok";
+  }
+  if (
+    v.includes("not") ||
+    v.includes("needs") ||
+    v.includes("incomplete") ||
+    v.includes("attention") ||
+    v.includes("paused")
+  ) {
+    return "mctb-home-setup-value--warn";
+  }
+  return "";
+}
+
 export function statusChip(status: MctbOverviewStatus, label: string) {
   const tone =
     status === "active"
       ? "mctb-home-status-chip--active"
       : status === "paused"
         ? "mctb-home-status-chip--paused"
-        : "mctb-home-status-chip--attention";
+        : status === "setup_incomplete"
+          ? "mctb-home-status-chip--setup"
+          : "mctb-home-status-chip--attention";
   return (
     <span className={`mctb-home-status-chip ${tone}`} role="status">
       {status === "active" ? (
@@ -79,6 +118,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: PhoneMissed,
+      iconTone: "neutral" as const,
       attention: false,
     },
     {
@@ -87,6 +127,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: Send,
+      iconTone: "teal" as const,
       attention: false,
     },
     {
@@ -95,6 +136,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
+      iconTone: "info" as const,
       attention: false,
     },
     {
@@ -103,6 +145,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Conversations",
       href: `${MCTB_ROUTES.conversations}?filter=needs_reply`,
       icon: ShieldAlert,
+      iconTone: "amber" as const,
       attention: data.kpis.needsReplyCount > 0,
     },
   ];
@@ -118,7 +161,10 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
             className={`mctb-home-kpi${k.attention ? " mctb-home-kpi--attention" : ""}`}
             role="listitem"
           >
-            <span className="mctb-home-kpi-icon" aria-hidden>
+            <span
+              className={`mctb-home-kpi-icon mctb-home-kpi-icon--${k.iconTone}`}
+              aria-hidden
+            >
               <Icon className="h-4 w-4" strokeWidth={1.75} />
             </span>
             <span className="min-w-0">
@@ -137,7 +183,7 @@ export function MctbHomeAttentionOkStrip({ variant = "card" }: { variant?: "card
   const className = variant === "inline" ? "mctb-home-attention-inline" : "mctb-home-attention-ok";
   return (
     <div className={className} role="status">
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden />
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--mctb-accent-teal-icon)]" aria-hidden />
       <span>Nothing needs attention</span>
     </div>
   );
@@ -198,9 +244,9 @@ export function MctbHomeRecentMissedCallsTable({
                 <td>
                   <span className="mctb-home-caller-primary">{row.callerLabel}</span>
                 </td>
-                <td className="text-[#8a919b]">{fmtTime(row.missedAt)}</td>
-                <td className="text-[#626872]">{row.recoveryLabel}</td>
-                <td className="text-[#626872]">{row.replyLabel}</td>
+                <td className="mctb-home-cell--tertiary">{fmtTime(row.missedAt)}</td>
+                <td className={semanticCellClass(row.recoveryLabel, "recovery")}>{row.recoveryLabel}</td>
+                <td className={semanticCellClass(row.replyLabel, "reply")}>{row.replyLabel}</td>
               </tr>
             ))}
           </tbody>
@@ -307,15 +353,19 @@ export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
         {SETUP_ROWS.map((row) => (
           <Link key={row.key} href={row.href} className="mctb-home-setup-row mctb-home-interactive-row">
             <span className="mctb-home-setup-label">{row.label}</span>
-            <span className="mctb-home-setup-value">{row.value(data)}</span>
+            <span className={`mctb-home-setup-value ${setupValueClass(row.value(data))}`}>
+              {row.value(data)}
+            </span>
           </Link>
         ))}
       </div>
       <div className="mctb-home-footer-line">
         <span>
-          Last 7 days: {data.performanceSnapshot.missedCalls} missed ·{" "}
-          {data.performanceSnapshot.recoveryTexts} recovery text
-          {data.performanceSnapshot.recoveryTexts === 1 ? "" : "s"} · {data.performanceSnapshot.replies} replies
+          Last 7 days:{" "}
+          <span className="mctb-home-footer-metric">{data.performanceSnapshot.missedCalls}</span> missed ·{" "}
+          <span className="mctb-home-footer-metric">{data.performanceSnapshot.recoveryTexts}</span> recovery text
+          {data.performanceSnapshot.recoveryTexts === 1 ? "" : "s"} ·{" "}
+          <span className="mctb-home-footer-metric">{data.performanceSnapshot.replies}</span> replies
         </span>
         <Link href={MCTB_ROUTES.analytics} className="mctb-home-link">
           View analytics →

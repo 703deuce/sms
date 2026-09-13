@@ -122,12 +122,12 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
         <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold leading-[30px] tracking-[-0.02em] text-[#1b1e23]">
+              <h1 className="mctb-home-page-title text-2xl font-semibold leading-[30px] tracking-[-0.02em]">
                 Overview
               </h1>
               {statusChip(data.status, statusLabel)}
             </div>
-            <p className="mt-1 text-sm leading-5 text-[#626872]">
+            <p className="mctb-home-page-subtitle mt-1 text-sm leading-5">
               Missed-call recovery activity, replies, and setup health.
             </p>
           </div>
@@ -142,9 +142,9 @@ export function MctbOverviewView({ initialData = null }: MctbOverviewViewProps) 
         </header>
 
         {!data.setupComplete ? (
-          <p className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-[13px] text-[#9a6700]" role="status">
+          <p className="mctb-home-banner-warn rounded-lg px-3 py-2 text-[13px]" role="status">
             Setup is not complete — finish forwarding and messaging to recover missed calls reliably.{" "}
-            <Link href={MCTB_ROUTES.setupStart} className="font-medium underline">
+            <Link href={MCTB_ROUTES.setupStart} className="font-semibold underline">
               Continue setup
             </Link>
           </p>
