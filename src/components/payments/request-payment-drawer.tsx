@@ -26,6 +26,7 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [expiration, setExpiration] = useState("none");
+  const [deliveryMethod, setDeliveryMethod] = useState<"checkout" | "invoice">("checkout");
   const [preview, setPreview] = useState<{ body: string; modeLabel: string; canSend: boolean } | null>(null);
   const [phase, setPhase] = useState<"form" | "sending" | "success">("form");
   const [sendStep, setSendStep] = useState("");
@@ -61,6 +62,7 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
     setDescription("");
     setNote("");
     setExpiration("none");
+    setDeliveryMethod("checkout");
   }, [open, prefill]);
 
   useEffect(() => {
@@ -115,7 +117,11 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
     }
 
     setPhase("sending");
-    setSendStep("Creating secure payment link…");
+    setSendStep(
+      deliveryMethod === "invoice"
+        ? "Creating and sending invoice…"
+        : "Creating secure payment link…",
+    );
     try {
       const idempotencyKey = `payment-request:${conversationId || "standalone"}:${Date.now()}`;
       const res = await fetch("/api/payment-requests", {
@@ -135,6 +141,7 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
           missedCallId: missedCallId || undefined,
           sourceType,
           expiration,
+          deliveryMethod,
         }),
       });
       setSendStep("Sending request…");
@@ -158,7 +165,9 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
       <div className="payments-drawer" role="dialog" aria-labelledby={`${formId}-title`} aria-modal="true">
         <div className="payments-drawer-header">
           <h2 id={`${formId}-title`} style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Request payment</h2>
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>Send a secure payment link by text.</p>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>
+            Send a secure checkout link or a formal Stripe invoice by text.
+          </p>
         </div>
 
         <div className="payments-drawer-body">
@@ -166,7 +175,10 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
             <div>
               <p style={{ fontWeight: 700 }}>Payment request {smsFailed ? "created" : "sent"}</p>
               <p>{customerName || phone}</p>
-              <p>{formatMoneyMinor(parseAmountToMinor(amount) || 0)} · {description}</p>
+              <p>
+                {formatMoneyMinor(parseAmountToMinor(amount) || 0)} · {description}
+                {deliveryMethod === "invoice" ? " · Invoice sent" : " · Payment link"}
+              </p>
               <p style={{ fontSize: 13, color: "#6b7280" }}>Sent to: {phone}</p>
               {smsFailed ? (
                 <p role="alert" style={{ color: "#b45309", fontSize: 13 }}>
@@ -249,6 +261,36 @@ export function RequestPaymentDrawer({ open, onClose, stripeConnected, prefill, 
               <div className="payments-field">
                 <div className="payments-field-label">Note to customer — optional</div>
                 <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Additional note…" aria-label="Optional note" />
+              </div>
+
+              <div className="payments-field">
+                <div className="payments-field-label">How to collect payment</div>
+                <div className="payments-delivery-options" role="radiogroup" aria-label="Payment collection method">
+                  <label className={`payments-delivery-option ${deliveryMethod === "checkout" ? "payments-delivery-option--on" : ""}`}>
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      checked={deliveryMethod === "checkout"}
+                      onChange={() => setDeliveryMethod("checkout")}
+                    />
+                    <span>
+                      <strong>Secure payment link</strong>
+                      <span className="payments-delivery-hint">Stripe Checkout — pay now</span>
+                    </span>
+                  </label>
+                  <label className={`payments-delivery-option ${deliveryMethod === "invoice" ? "payments-delivery-option--on" : ""}`}>
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      checked={deliveryMethod === "invoice"}
+                      onChange={() => setDeliveryMethod("invoice")}
+                    />
+                    <span>
+                      <strong>Send invoice</strong>
+                      <span className="payments-delivery-hint">Formal invoice with hosted pay page</span>
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <div className="payments-field">

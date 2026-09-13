@@ -1,6 +1,7 @@
 # MCTB AI Booking — implementation status (reconciled)
 
-This document replaces stale screenshots that still say **“Not wired yet.”** Status is verified against `master` code paths.
+> **Canonical summary:** `docs/MCTB-PRODUCT-IMPLEMENTATION-STATUS.md`  
+> This file is the AI Booking–specific detail. Older screenshots saying **“Not wired yet”** are **obsolete**.
 
 | Capability | Status | Evidence |
 |------------|--------|----------|
