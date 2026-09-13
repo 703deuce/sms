@@ -19,6 +19,7 @@ export async function handleJohnCustomerSmsReply(input: {
   toE164: string;
   body: string;
   conversationId?: string | null;
+  providerMessageId?: string | null;
 }) {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.conversationEnabled) {
@@ -143,9 +144,13 @@ export async function handleJohnCustomerSmsReply(input: {
     body: input.body,
     timezone: config.timezone,
     missedCallEventId: recentEvent.id,
+    providerMessageId: input.providerMessageId,
   });
 
   if (leadRecovery.handled) {
+    if (leadRecovery.action === "duplicate_inbound_ignored" || !leadRecovery.reply?.trim()) {
+      return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
+    }
     const sender = await resolveMctbSmsSender({
       workspaceId: input.workspaceId,
       config,

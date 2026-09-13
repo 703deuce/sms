@@ -18,6 +18,12 @@ import {
 import { tryExtractFieldFromMessage } from "@/lib/mctb/lead-recovery/field-collection";
 import type { LeadRecoveryInboundResult } from "@/lib/mctb/lead-recovery/types";
 import { emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
+import {
+  invalidatePendingActions,
+  registerInboundProviderMessage,
+  shouldInvalidatePendingActions,
+  withLeadRecoveryConversationLock,
+} from "@/lib/mctb/lead-recovery/conversation-guard";
 
 export async function handleMctbLeadRecoveryInboundSms(input: {
   workspaceId: string;
@@ -29,6 +35,7 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
   body: string;
   timezone?: string;
   missedCallEventId?: string | null;
+  providerMessageId?: string | null;
 }): Promise<LeadRecoveryInboundResult> {
   const config = await loadLeadRecoveryConfig(input.workspaceId);
   if (!config.enabled || config.policyHealth === "DISABLED") {
@@ -39,6 +46,27 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
   }
 
   const conversationId = input.conversationId;
+
+  return withLeadRecoveryConversationLock(conversationId, async () =>
+    handleMctbLeadRecoveryInboundSmsLocked({ ...input, conversationId, config }),
+  );
+}
+
+async function handleMctbLeadRecoveryInboundSmsLocked(input: {
+  workspaceId: string;
+  conversationId: string;
+  contactId?: string | null;
+  customerPhone: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  body: string;
+  timezone?: string;
+  missedCallEventId?: string | null;
+  providerMessageId?: string | null;
+  config: Awaited<ReturnType<typeof loadLeadRecoveryConfig>>;
+}): Promise<LeadRecoveryInboundResult> {
+  const config = input.config;
+  const conversationId = input.conversationId;
   const session = await getMctbAiBookingSessionStore().get(conversationId);
   const awaitingSlot = session?.stage === "AWAITING_SLOT_SELECTION";
 
@@ -46,6 +74,12 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
     workspaceId: input.workspaceId,
     conversationId,
   });
+
+  const inbound = registerInboundProviderMessage(state, input.providerMessageId);
+  state = inbound.state;
+  if (inbound.duplicate) {
+    return { handled: true, reply: "", action: "duplicate_inbound_ignored" };
+  }
 
   if (awaitingSlot) {
     state = { ...state, phase: "AWAITING_SLOT_SELECTION", activeSpecialist: "SCHEDULING" };
@@ -115,6 +149,10 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
       policy,
       intent,
     };
+  }
+
+  if (shouldInvalidatePendingActions({ intent, body: input.body })) {
+    state = invalidatePendingActions(state);
   }
 
   state = mergeIntentIntoState(state, intent);

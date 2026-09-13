@@ -161,6 +161,7 @@ export async function handleTelnyxInbound(payload: unknown) {
         toE164: parsed.to,
         body: parsed.body,
         conversationId: result.conversationId || null,
+        providerMessageId: parsed.providerMessageId,
       });
       if (john.handled && john.action === "replied") replySent = true;
     } catch (err) {

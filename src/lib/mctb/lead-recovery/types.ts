@@ -211,6 +211,12 @@ export type MultiIntentPolicyResult = {
   executionPlan: IntentExecutionPlanState;
 };
 
+export type LeadRecoveryPendingAction = {
+  action: LeadRecoveryActionId;
+  epoch: number;
+  idempotencyKey?: string;
+};
+
 export type LeadRecoveryConversationState = {
   conversationId: string;
   workspaceId: string;
@@ -224,6 +230,12 @@ export type LeadRecoveryConversationState = {
   qualification: string | null;
   activeSpecialist: "SCHEDULING" | null;
   activeAction: LeadRecoveryActionId | null;
+  /** Monotonic version — bumps on each inbound; used to invalidate stale side effects. */
+  stateVersion?: number;
+  pendingActionEpoch?: number;
+  pendingAction?: LeadRecoveryPendingAction | null;
+  /** Telnyx/Twilio inbound message IDs already processed for this conversation. */
+  processedInboundIds?: string[];
   phase: "IDLE" | "COLLECT" | "EXECUTE" | "AWAITING_SLOT_SELECTION" | "COMPLETE";
   clarificationAttempts: number;
   lastIntent: StructuredLeadIntent | null;

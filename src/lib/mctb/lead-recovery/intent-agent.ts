@@ -211,8 +211,30 @@ export async function runLeadRecoveryIntentAgent(input: {
   sessionPhase?: string | null;
 }): Promise<StructuredLeadIntent> {
   const deterministic = deterministicLeadRecoveryIntent(input);
-  if (deterministic.confidence >= 0.9 || deterministic.primary_intent === "OPT_OUT") {
+  const certAlwaysLlm = process.env.LR_CERT_ALWAYS_LLM === "1";
+  const certDeepSeek = process.env.LR_CERT_FORCE_DEEPSEEK === "1";
+
+  if (
+    !certAlwaysLlm &&
+    (deterministic.confidence >= 0.9 || deterministic.primary_intent === "OPT_OUT")
+  ) {
     return deterministic;
+  }
+
+  if (certDeepSeek) {
+    const { deepSeekStructuredJson } = await import(
+      "@/lib/mctb/lead-recovery/testing/cert-model"
+    );
+    const llm = await deepSeekStructuredJson<Record<string, unknown>>({
+      system: INTENT_AGENT_SYSTEM,
+      user: JSON.stringify({ message: input.message, session_phase: input.sessionPhase }),
+      temperature: 0.1,
+      maxTokens: 500,
+    });
+    // usage recorded in cert-metrics via deepSeekStructuredJson
+    const normalized = normalizeStructuredIntent(llm.data);
+    if (!normalized) return deterministic;
+    return normalized;
   }
 
   const llm = await aiBookingStructuredJson<Record<string, unknown>>({
@@ -225,6 +247,6 @@ export async function runLeadRecoveryIntentAgent(input: {
   if (!llm) return deterministic;
   const normalized = normalizeStructuredIntent(llm);
   if (!normalized) return deterministic;
-  if (normalized.confidence < deterministic.confidence) return deterministic;
+  if (!certAlwaysLlm && normalized.confidence < deterministic.confidence) return deterministic;
   return normalized;
 }

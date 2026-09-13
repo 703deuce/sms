@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { defaultGuardFields } from "@/lib/mctb/lead-recovery/conversation-guard";
 import type {
   LeadRecoveryCollectField,
   LeadRecoveryConversationState,
@@ -36,6 +37,7 @@ function defaultState(input: {
       currentIntent: null,
     },
     updatedAt: new Date().toISOString(),
+    ...defaultGuardFields(),
   };
 }
 
