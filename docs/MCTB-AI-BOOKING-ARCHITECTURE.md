@@ -1,5 +1,7 @@
 # MCTB AI Booking architecture
 
+> **Product context:** AI Booking is one **action** inside **AI Lead Recovery** (`src/lib/mctb/lead-recovery/*`). Inbound MCTB SMS flows: Intent Agent → Policy Engine → (optional) Scheduling Specialist → deterministic booking orchestrator. See `docs/runtime-rules/AI-LEAD-RECOVERY-*.md`.
+
 ## Multi-agent layers (supersedes single-agent design)
 
 | Layer | Role | OpenAI mini? | Provider calls? |

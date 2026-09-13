@@ -124,9 +124,60 @@ export async function handleJohnCustomerSmsReply(input: {
     };
   }
 
-  const { handleMctbAiBookingInboundSms } = await import("@/lib/mctb/ai-booking/conversation-runtime");
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
+
+  const { handleMctbLeadRecoveryInboundSms } = await import(
+    "@/lib/mctb/lead-recovery/conversation-runtime"
+  );
+  const leadRecovery = await handleMctbLeadRecoveryInboundSms({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: contact?.id,
+    customerPhone: input.fromE164,
+    customerName,
+    customerEmail: contact?.email,
+    body: input.body,
+    timezone: config.timezone,
+    missedCallEventId: recentEvent.id,
+  });
+
+  if (leadRecovery.handled) {
+    const sender = await resolveMctbSmsSender({
+      workspaceId: input.workspaceId,
+      config,
+    });
+    if (sender?.e164) {
+      await sendQuickSms({
+        workspaceId: input.workspaceId,
+        to: input.fromE164,
+        body: leadRecovery.reply,
+        from: sender.e164,
+        idempotencyKey: `mctb-lead-recovery:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
+      }).catch(() => undefined);
+      if (conversationId) {
+        await prisma.conversationMessage.create({
+          data: {
+            conversationId,
+            direction: "out",
+            body: leadRecovery.reply,
+            userName: "AI",
+          },
+        });
+      }
+    }
+    await prisma.missedCallEvent.update({
+      where: { id: recentEvent.id },
+      data: { status: "CUSTOMER_REPLIED" },
+    });
+    return {
+      handled: true,
+      action: leadRecovery.action,
+      reply: leadRecovery.reply,
+    };
+  }
+
+  const { handleMctbAiBookingInboundSms } = await import("@/lib/mctb/ai-booking/conversation-runtime");
   const aiBooking = await handleMctbAiBookingInboundSms({
     workspaceId: input.workspaceId,
     conversationId,
