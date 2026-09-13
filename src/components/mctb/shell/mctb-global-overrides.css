@@ -1,0 +1,71 @@
+/**
+ * MCTB universal shell — remap legacy product greens/purples to MCTB blue brand
+ * on every route under [data-mctb-neutral-shell].
+ */
+@import "./mctb-brand-tokens.css";
+
+.product-theme[data-mctb-neutral-shell] .bookable-workspace-pilot,
+.product-theme[data-mctb-neutral-shell] .appt-overview-pilot,
+.product-theme[data-mctb-neutral-shell] .ws-pilot,
+.product-theme[data-mctb-neutral-shell] .cal-page-shell,
+.product-theme[data-mctb-neutral-shell] .mctb-booking-shell {
+  --ws-accent: var(--mctb-brand-icon);
+  --ws-accent-hover: var(--mctb-brand-strong);
+  --ws-accent-soft: var(--mctb-brand-soft);
+  --ws-accent-border: var(--mctb-brand-ring);
+  --ws-accent-rgb: 74, 95, 201;
+  --brand-accent: var(--mctb-brand-icon);
+  --brand-accent-hover: var(--mctb-brand-strong);
+  --brand-accent-soft: var(--mctb-brand-soft);
+  --brand-accent-border: var(--mctb-brand-ring);
+  --primary: var(--mctb-brand-icon);
+  --primary-soft: var(--mctb-brand-soft);
+  --ring: var(--mctb-brand-ring);
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-booking-shell {
+  background: var(--mctb-canvas, #e8ebf0);
+}
+
+.product-theme[data-mctb-neutral-shell] .payments-page a:not(.payments-primary-btn),
+.product-theme[data-mctb-neutral-shell] .mctb-surface-page a {
+  color: var(--mctb-brand-strong);
+}
+
+.product-theme[data-mctb-neutral-shell] .payments-page a:hover,
+.product-theme[data-mctb-neutral-shell] .mctb-surface-page a:hover {
+  color: var(--mctb-brand);
+}
+
+.product-theme[data-mctb-neutral-shell] .text-indigo-600,
+.product-theme[data-mctb-neutral-shell] .text-indigo-700,
+.product-theme[data-mctb-neutral-shell] a.text-indigo-600 {
+  color: var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .bg-indigo-600,
+.product-theme[data-mctb-neutral-shell] .bg-indigo-100 {
+  background-color: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .cal-page-shell .vt-btn.active,
+.product-theme[data-mctb-neutral-shell] .cal-page .vt-btn.active {
+  background: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .stat-icon-indigo,
+.product-theme[data-mctb-neutral-shell] .cal-meeting-badge.tone-indigo {
+  background: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-surface-page {
+  max-width: 90rem;
+  margin-inline: auto;
+  padding: var(--mctb-page-pad-top, 1.5rem) var(--mctb-page-pad-x, 1.75rem)
+    var(--mctb-page-pad-bottom, 2rem);
+  width: 100%;
+  box-sizing: border-box;
+}

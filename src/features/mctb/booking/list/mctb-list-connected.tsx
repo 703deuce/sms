@@ -16,7 +16,7 @@ import type { AppointmentRow } from "@/components/appointments/kimi-ui/list/list
 import { AppointmentsListFilters } from "@/components/appointments/list/appointments-list-filters";
 import "@/components/mctb/booking/mctb-light-booking.css";
 
-const SHELL = "appt-overview-pilot bookable-workspace-pilot";
+const SHELL = "mctb-booking-shell appt-overview-pilot bookable-workspace-pilot";
 
 type Summary = {
   today: number;

@@ -9,8 +9,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
 import {
   clientSafeNextPath,
+  defaultAuthLandingPath,
   navigateAfterAuth,
 } from "@/lib/auth/post-login-navigation";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+import { mctbShellHome } from "@/lib/products/product-shell";
 
 function reservationFromNext(nextPath: string | null): string | undefined {
   if (!nextPath) return undefined;
@@ -25,7 +28,7 @@ function reservationFromNext(nextPath: string | null): string | undefined {
 function voiceProductNext(product: string | null): string | null {
   if (product === "numbers") return "/personal";
   if (product === "mctb") return "/onboarding/mctb";
-  if (product === "voice") return "/dashboard";
+  if (product === "voice") return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
   if (product === "mass_texting" || product === "sms") {
     return "/api/products/open?product=mass_texting";
   }
@@ -35,7 +38,7 @@ function voiceProductNext(product: string | null): string | null {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const defaultNext = "/dashboard";
+  const defaultNext = defaultAuthLandingPath();
   const productNext = voiceProductNext(params.get("product"));
   const nextPath = params.get("next") || productNext || defaultNext;
   const reservationId = useMemo(() => reservationFromNext(params.get("next")), [params]);
@@ -74,7 +77,7 @@ function LoginForm() {
     const redirect =
       clientSafeNextPath(json.redirectPath) ||
       clientSafeNextPath(nextPath) ||
-      "/dashboard";
+      defaultAuthLandingPath();
     navigateAfterAuth(redirect, router);
   }
 

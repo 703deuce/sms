@@ -64,7 +64,7 @@ function isCanceledStatus(status: string) {
 
 function CalendarLoadingShell() {
   return (
-    <div className="cal-page appt-overview-pilot animate-pulse min-h-[70vh]">
+    <div className="cal-page mctb-booking-shell appt-overview-pilot animate-pulse min-h-[70vh]">
       <div className="h-12 rounded bg-[var(--surface)] mb-3" />
       <div className="h-[520px] rounded bg-[var(--surface)]" />
     </div>
@@ -475,7 +475,7 @@ export function MctbCalendarConnected() {
   if (!model) return <CalendarError onRetry={load} />;
 
   return (
-    <div className="appt-overview-pilot bookable-workspace-pilot cal-page-shell">
+    <div className="mctb-booking-shell appt-overview-pilot bookable-workspace-pilot cal-page-shell">
       <header className="mctb-booking-page-header">
         <div>
           <h1 className="mctb-booking-page-title">Calendar</h1>

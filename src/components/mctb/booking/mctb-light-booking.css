@@ -38,7 +38,7 @@
 
 .mctb-booking-shell {
   min-height: 100%;
-  background: var(--surface-muted, #f6f6f4);
+  background: var(--mctb-canvas, #e8ebf0);
 }
 
 .mctb-booking-shell .cal-page-shell {

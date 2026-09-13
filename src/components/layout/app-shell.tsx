@@ -23,6 +23,7 @@ import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
 import "@/components/mctb/shell/mctb-sidebar.css";
 import "@/components/mctb/shell/mctb-design-tokens.css";
+import "@/components/mctb/shell/mctb-global-overrides.css";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
