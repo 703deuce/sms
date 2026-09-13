@@ -10,23 +10,27 @@
  * (scheduling_links:write, shares:write, scheduled_events:write) — connections
  * authorized before those scopes existed must reconnect.
  */
-import { integrationFetch } from "../framework/http";
 import type { AdapterContext } from "../framework/types";
+import {
+  buildCalendlyAvailabilityRequest,
+  calendlyApiFetch,
+  CalendlyConnectorError,
+} from "./calendly-client";
+import { prepareCalendlyBooking } from "./calendly-booking-preflight";
 
-const CALENDLY_API = "https://api.calendly.com";
 const CALENDLY_WRITE_TIMEOUT_MS = 25_000;
 
 function calendlyApi<T = Record<string, unknown>>(
   path: string,
   ctx: AdapterContext,
-  init?: RequestInit & { timeoutMs?: number },
+  init?: RequestInit & { timeoutMs?: number; op?: string },
 ): Promise<T> {
   const timeoutMs =
     init?.method && init.method !== "GET" ? CALENDLY_WRITE_TIMEOUT_MS : init?.timeoutMs;
-  return integrationFetch<T>(`${CALENDLY_API}${path}`, {
+  return calendlyApiFetch<T>(path, ctx, {
     ...init,
-    accessToken: ctx.accessToken,
     timeoutMs,
+    op: init?.op || path.split("?")[0],
   });
 }
 
@@ -35,6 +39,9 @@ function calendlyApi<T = Record<string, unknown>>(
  * Wrap every network call so automation logs surface actionable guidance.
  */
 function wrapCalendlyError(err: unknown, op: string): never {
+  if (err instanceof CalendlyConnectorError) {
+    throw new Error(`${err.code}: ${err.message}`);
+  }
   const message = err instanceof Error ? err.message : String(err);
   if (/401|unauthor|invalid_token|expired/i.test(message)) {
     throw new Error(
@@ -304,7 +311,7 @@ export async function listWebhookSubscriptions(ctx: AdapterContext): Promise<{
 
 /**
  * List available times for an event type (GET /event_type_available_times).
- * Window is capped at 7 days by default (Calendly allows up to 31).
+ * Authoritative bookable slots — CAL-AVL-001. Windows >31d are split (CAL-AVL-002).
  */
 export async function listEventTypeAvailableTimes(
   ctx: AdapterContext,
@@ -315,7 +322,7 @@ export async function listEventTypeAvailableTimes(
   } = {},
 ): Promise<{
   eventTypeUri: string;
-  slots: Array<{ startTime: string; status: string }>;
+  slots: Array<{ startTime: string; status: string; schedulingUrl?: string }>;
 }> {
   try {
     let eventTypeUri = opts.eventTypeUri || null;
@@ -329,21 +336,39 @@ export async function listEventTypeAvailableTimes(
     const end =
       opts.endTime ||
       new Date(Date.now() + 7 * 86400_000).toISOString();
-    const params = new URLSearchParams({
-      event_type: eventTypeUri,
-      start_time: start,
-      end_time: end,
+
+    const built = buildCalendlyAvailabilityRequest({
+      eventTypeUri,
+      startTimeIso: start,
+      endTimeIso: end,
     });
-    const res = await calendlyApi<{
-      collection?: Array<{ start_time?: string; status?: string }>;
-    }>(`/event_type_available_times?${params}`, ctx);
-    const slots = (res.collection || [])
-      .map((s) => ({
-        startTime: String(s.start_time || ""),
-        status: String(s.status || "available"),
-      }))
-      .filter((s) => s.startTime);
-    return { eventTypeUri, slots };
+    const chunks =
+      built.chunks ||
+      [{ start: start, end }];
+
+    const allSlots: Array<{ startTime: string; status: string; schedulingUrl?: string }> = [];
+    for (const chunk of chunks) {
+      const params = new URLSearchParams({
+        event_type: eventTypeUri,
+        start_time: chunk.start,
+        end_time: chunk.end,
+      });
+      const res = await calendlyApi<{
+        collection?: Array<{ start_time?: string; status?: string; scheduling_url?: string }>;
+      }>(`/event_type_available_times?${params}`, ctx, { op: "event_type_available_times" });
+      for (const s of res.collection || []) {
+        const startTime = String(s.start_time || "");
+        if (!startTime) continue;
+        allSlots.push({
+          startTime,
+          status: String(s.status || "available"),
+          schedulingUrl: s.scheduling_url ? String(s.scheduling_url) : undefined,
+        });
+      }
+    }
+    const byStart = new Map<string, { startTime: string; status: string; schedulingUrl?: string }>();
+    for (const s of allSlots) byStart.set(s.startTime, s);
+    return { eventTypeUri, slots: [...byStart.values()] };
   } catch (err) {
     return wrapCalendlyError(err, "list available times");
   }
@@ -390,49 +415,54 @@ export async function bookEventInvitee(
       throw new Error("No event type available — provide eventTypeUri");
     }
 
-    // Resolve location.kind from the event type when the caller did not supply one.
-    let locationKind = opts.locationKind || null;
-    let locationValue = opts.location || null;
-    if (!locationKind) {
-      try {
-        const uuid = uuidFromUri(eventTypeUri);
-        const et = await calendlyApi<{ resource?: CalendlyResource }>(
-          `/event_types/${encodeURIComponent(uuid)}`,
-          ctx,
-        );
-        const locations =
-          (et.resource?.locations as Array<{ kind?: string; location?: string }> | undefined) ||
-          [];
-        const first = locations[0];
-        if (first?.kind) {
-          locationKind = String(first.kind);
-          if (!locationValue && first.location) locationValue = String(first.location);
-        }
-      } catch {
-        // proceed without location — Calendly rejects only when the ET requires one
-      }
+    const preflight = await prepareCalendlyBooking(ctx, {
+      eventTypeUri,
+      startTimeUtc: opts.startTime,
+      name: opts.name,
+      email: opts.email,
+      phone: opts.phone,
+      timezone: opts.timezone || "America/New_York",
+    });
+    if (preflight.status === "MISSING_REQUIRED_DATA") {
+      throw new Error(preflight.message);
+    }
+    if (preflight.status === "EVENT_TYPE_INVALID" || preflight.status === "PLAN_BLOCKED") {
+      throw new Error(preflight.message);
     }
 
     const body: Record<string, unknown> = {
-      event_type: eventTypeUri,
-      start_time: opts.startTime,
+      event_type: preflight.eventTypeUri,
+      start_time: preflight.startTimeUtc,
       invitee: {
-        name: opts.name.trim(),
-        email: opts.email.trim().toLowerCase(),
-        timezone: opts.timezone || "America/New_York",
-        ...(opts.phone ? { text_reminder_number: opts.phone } : {}),
+        name: preflight.invitee.name,
+        email: preflight.invitee.email,
+        timezone: preflight.timezone,
+        ...(preflight.invitee.phone ? { text_reminder_number: preflight.invitee.phone } : {}),
       },
     };
-    if (locationKind) {
-      body.location = {
-        kind: locationKind,
-        ...(locationValue ? { location: locationValue } : {}),
-      };
+    if (opts.locationKind || preflight.location) {
+      const kind = opts.locationKind || preflight.location?.kind;
+      const loc = opts.location || preflight.location?.location;
+      if (kind) {
+        body.location = {
+          kind,
+          ...(loc ? { location: loc } : {}),
+        };
+      }
+    }
+    if (preflight.questionsAndAnswers?.length) {
+      body.questions_and_answers = preflight.questionsAndAnswers.map((q, i) => ({
+        question: q.question,
+        answer: q.answer,
+        position: q.position ?? i + 1,
+      }));
     }
 
+    // CAL-BKG-004: never retry ambiguous invitee creation without reconciliation
     const res = await calendlyApi<{ resource?: CalendlyResource }>("/invitees", ctx, {
       method: "POST",
       body: JSON.stringify(body),
+      op: "invitees/create",
     });
     const resource = res.resource || {};
     const inviteeUri = String(resource.uri || "");

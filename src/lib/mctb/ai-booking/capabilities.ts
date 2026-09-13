@@ -32,18 +32,27 @@ export async function auditMctbAiBookingProvider(
   }
 
   if (provider === "calendly") {
-    const conn = await getConnection(workspaceId, "calendly");
-    const connected = conn?.status === "connected";
-    if (!connected) notes.push("Calendly integration not connected");
-    const readCalendar = connected;
-    const checkAvailability = connected;
-    const createBooking = connected;
-    notes.push("Uses listEventTypeAvailableTimes + bookEventInvitee (calendly-actions.ts)");
+    const { getCalendlyCapabilities } = await import(
+      "@/lib/integrations/adapters/calendly-capabilities"
+    );
+    const { loadMctbAiBookingConfig } = await import("@/lib/mctb/ai-booking/config");
+    const cfg = await loadMctbAiBookingConfig(workspaceId);
+    const caps = await getCalendlyCapabilities(workspaceId, {
+      eventTypeUri: cfg.eventTypeUri,
+    });
+    if (!caps.connected) notes.push("Calendly integration not connected");
+    notes.push(...caps.notes);
+    notes.push("Availability: GET /event_type_available_times; booking: POST /invitees");
+    if (caps.planBlocked) notes.push("Direct booking blocked by Calendly plan — use booking link fallback");
+    if (caps.health === "CONNECTED_MISSING_SCOPES") {
+      notes.push("Reconnect Calendly for AI Booking scopes (availability:read, scheduled_events:write)");
+    }
     return {
-      readCalendar,
-      checkAvailability,
-      createBooking,
-      aiBookingSupported: readCalendar && checkAvailability && createBooking,
+      readCalendar: caps.canReadEventTypes,
+      checkAvailability: caps.canReadAvailability,
+      createBooking: caps.canCreateBooking && caps.directBookingPreflightOk,
+      aiBookingSupported:
+        caps.canReadAvailability && caps.canCreateBooking && caps.directBookingPreflightOk,
       notes,
     };
   }

@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import type { ExternalIntegrationAdapter } from "../framework/adapter";
-import { integrationFetch } from "../framework/http";
+import { calendlyApiFetch } from "./calendly-client";
 import { makeEventIdempotencyKey } from "../framework/events";
 import { verifyCalendlySignature } from "../inbound";
 import type {
@@ -26,6 +26,7 @@ export const CALENDLY_OAUTH_SCOPES = [
   // —— read / webhook (unchanged; reconnect not required for these) ——
   "users:read",
   "event_types:read",
+  "availability:read",
   "scheduled_events:read",
   "webhooks:read",
   "webhooks:write",
@@ -74,10 +75,7 @@ const caps: CapabilityDefinition = {
 };
 
 function api(path: string, ctx: AdapterContext, init?: RequestInit) {
-  return integrationFetch(`https://api.calendly.com${path}`, {
-    ...init,
-    accessToken: ctx.accessToken,
-  });
+  return calendlyApiFetch(path, ctx, { ...init, op: path.split("?")[0] });
 }
 
 /**
@@ -472,7 +470,7 @@ export const calendlyAdapter: ExternalIntegrationAdapter = {
     if (noShow) {
       eventType = "appointment.no_show";
     } else if (eventName.includes("canceled")) {
-      eventType = "appointment.canceled";
+      eventType = p.rescheduled ? "appointment.rescheduled" : "appointment.canceled";
     } else if (p.rescheduled || eventName.includes("reschedule")) {
       eventType = "appointment.rescheduled";
     }

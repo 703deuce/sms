@@ -263,63 +263,82 @@ export async function refreshExternalAccessToken(
   workspaceId: string,
   provider: ExternalProviderId,
 ) {
-  const adapter = getAdapter(provider);
-  if (!adapter.oauth) throw new Error("Not an OAuth provider");
-  const conn = await getConnection(workspaceId, provider);
-  if (!conn?.refreshToken) throw new Error("No refresh token");
-  const refresh = decryptIntegrationSecret(conn.refreshToken);
-  if (!refresh) throw new Error("No refresh token");
+  const { withIntegrationTokenRefreshLock } = await import("./token-refresh-lock");
+  return withIntegrationTokenRefreshLock(workspaceId, provider, async () => {
+    const adapter = getAdapter(provider);
+    if (!adapter.oauth) throw new Error("Not an OAuth provider");
+    let conn = await getConnection(workspaceId, provider);
+    if (!conn?.refreshToken) throw new Error("No refresh token");
 
-  const sandbox = Boolean((conn.configJson as Record<string, unknown> | null)?.sandbox);
-  const oauth = adapter.oauth;
-  const clientId = envOrThrow(
-    sandbox && oauth.sandboxClientIdEnv ? oauth.sandboxClientIdEnv : oauth.clientIdEnv,
-  );
-  const clientSecret = envOrThrow(
-    sandbox && oauth.sandboxClientSecretEnv
-      ? oauth.sandboxClientSecretEnv
-      : oauth.clientSecretEnv,
-  );
-  const tokenUrl =
-    sandbox && oauth.sandboxTokenUrl ? oauth.sandboxTokenUrl : oauth.tokenUrl;
+    const expiresAt = conn.expiresAt ? new Date(conn.expiresAt).getTime() : 0;
+    if (expiresAt > Date.now() + 60_000) {
+      const existing = decryptIntegrationSecret(conn.accessToken);
+      if (existing) return existing;
+    }
 
-  const res = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refresh,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
-  });
-  const json = (await res.json()) as Record<string, unknown>;
-  if (!res.ok) {
+    const refresh = decryptIntegrationSecret(conn.refreshToken);
+    if (!refresh) throw new Error("No refresh token");
+
+    const sandbox = Boolean((conn.configJson as Record<string, unknown> | null)?.sandbox);
+    const oauth = adapter.oauth;
+    const clientId = envOrThrow(
+      sandbox && oauth.sandboxClientIdEnv ? oauth.sandboxClientIdEnv : oauth.clientIdEnv,
+    );
+    const clientSecret = envOrThrow(
+      sandbox && oauth.sandboxClientSecretEnv
+        ? oauth.sandboxClientSecretEnv
+        : oauth.clientSecretEnv,
+    );
+    const tokenUrl =
+      sandbox && oauth.sandboxTokenUrl ? oauth.sandboxTokenUrl : oauth.tokenUrl;
+
+    const res = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refresh,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    const json = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      const errCode = String(json.error || "");
+      if (errCode === "invalid_grant") {
+        conn = await getConnection(workspaceId, provider);
+        const retryAccess = decryptIntegrationSecret(conn?.accessToken || null);
+        const retryExpires = conn?.expiresAt ? new Date(conn.expiresAt).getTime() : 0;
+        if (retryAccess && retryExpires > Date.now() + 30_000) {
+          return retryAccess;
+        }
+      }
+      await upsertConnection({
+        workspaceId,
+        provider,
+        status: "needs_reauth",
+        lastError: String(json.error_description || json.error || "Refresh failed"),
+      });
+      throw new Error(String(json.error_description || json.error || "Refresh failed"));
+    }
+
+    const accessToken = String(json.access_token || "");
+    const newRefresh = json.refresh_token ? String(json.refresh_token) : refresh;
+    const expiresIn = Number(json.expires_in || 0);
     await upsertConnection({
       workspaceId,
       provider,
-      status: "needs_reauth",
-      lastError: String(json.error_description || json.error || "Refresh failed"),
+      status: "connected",
+      accessToken: encryptIntegrationSecret(accessToken),
+      refreshToken: encryptIntegrationSecret(newRefresh),
+      expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : null,
+      lastError: null,
     });
-    throw new Error(String(json.error_description || json.error || "Refresh failed"));
-  }
-
-  const accessToken = String(json.access_token || "");
-  const newRefresh = json.refresh_token ? String(json.refresh_token) : refresh;
-  const expiresIn = Number(json.expires_in || 0);
-  await upsertConnection({
-    workspaceId,
-    provider,
-    status: "connected",
-    accessToken: encryptIntegrationSecret(accessToken),
-    refreshToken: encryptIntegrationSecret(newRefresh),
-    expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : null,
-    lastError: null,
+    return accessToken;
   });
-  return accessToken;
 }
 
 export async function disconnectExternalIntegration(

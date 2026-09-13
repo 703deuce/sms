@@ -30,7 +30,7 @@ Register this **exact** URL (HTTPS, no trailing slash). Built from `APP_URL` via
 Legacy (still public): `{APP_URL}/api/integrations/calendly/webhook?token=…`
 
 ## Scopes (API v2 — least privilege)
-Requested by code (`calendlyAdapter.oauth.scopes`):
+Requested by code (`calendlyAdapter.oauth.scopes`) — includes `availability:read` for AI Booking available-times:
 
 | Scope | Why |
 |-------|-----|

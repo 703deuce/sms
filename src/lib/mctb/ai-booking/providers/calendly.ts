@@ -3,6 +3,8 @@ import {
   bookEventInvitee,
   listEventTypeAvailableTimes,
 } from "@/lib/integrations/adapters/calendly-actions";
+import { getEventTypeDetail } from "@/lib/integrations/adapters/calendly-event-types";
+import { CALENDLY_API_BASE } from "@/lib/integrations/adapters/calendly-client";
 import { getConnection } from "@/lib/integrations/connections";
 import type { MctbAiBookingWorkspaceConfig } from "@/lib/mctb/ai-booking/config";
 import { slotIdFor } from "@/lib/mctb/ai-booking/slot-id";
@@ -43,6 +45,15 @@ export const calendlyAiBookingAdapter: MctbAiBookingProviderAdapter = {
     }
     try {
       const adapterCtx = await buildAdapterContext(req.workspaceId, "calendly");
+      let durationMin = ctx.durationMinutes;
+      if (config.eventTypeUri) {
+        try {
+          const et = await getEventTypeDetail(adapterCtx, config.eventTypeUri);
+          durationMin = et.durationMinutes;
+        } catch {
+          // keep default duration
+        }
+      }
       const { slots: raw } = await listEventTypeAvailableTimes(adapterCtx, {
         eventTypeUri: config.eventTypeUri || undefined,
         startTime: req.windowStartUtc,
@@ -53,7 +64,7 @@ export const calendlyAiBookingAdapter: MctbAiBookingProviderAdapter = {
         .filter((s) => /available/i.test(s.status) || !s.status)
         .map((s) => {
           const startUtc = s.startTime;
-          const end = new Date(new Date(startUtc).getTime() + ctx.durationMinutes * 60_000).toISOString();
+          const end = new Date(new Date(startUtc).getTime() + durationMin * 60_000).toISOString();
           return {
             slotId: slotIdFor(startUtc, end, "calendly"),
             startUtc,
@@ -118,7 +129,7 @@ export const calendlyAiBookingAdapter: MctbAiBookingProviderAdapter = {
       const adapterCtx = await buildAdapterContext(workspaceId, "calendly");
       const eventUri = providerBookingId.startsWith("http")
         ? providerBookingId
-        : `https://api.calendly.com/scheduled_events/${providerBookingId}`;
+        : `${CALENDLY_API_BASE}/scheduled_events/${providerBookingId}`;
       const appt = await getAppointment(adapterCtx, { eventUri });
       const start = String(appt.event?.start_time || "");
       const end = String(appt.event?.end_time || "");

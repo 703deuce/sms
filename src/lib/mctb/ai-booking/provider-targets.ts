@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { buildAdapterContext } from "@/lib/integrations/framework/context";
-import { integrationFetch } from "@/lib/integrations/framework/http";
+import { listCalendlyEventTypes } from "@/lib/integrations/adapters/calendly-event-types";
 
 export type SchedulingTargetOption = {
   id: string;
@@ -39,21 +39,11 @@ export async function listMctbAiBookingSchedulingTargets(
   if (provider === "calendly") {
     try {
       const ctx = await buildAdapterContext(workspaceId, "calendly");
-      const me = await integrationFetch<{ resource?: { uri?: string } }>(
-        "https://api.calendly.com/users/me",
-        { accessToken: ctx.accessToken },
-      );
-      const owner = me.resource?.uri;
-      if (!owner) return [];
-      const res = await integrationFetch<{
-        collection?: Array<{ uri?: string; name?: string; duration?: number }>;
-      }>(`https://api.calendly.com/event_types?user=${encodeURIComponent(owner)}&active=true`, {
-        accessToken: ctx.accessToken,
-      });
-      return (res.collection || []).map((et) => ({
-        id: String(et.uri || ""),
-        label: String(et.name || "Event type"),
-        meta: et.duration ? `${et.duration} min` : undefined,
+      const types = await listCalendlyEventTypes(ctx, { activeOnly: true });
+      return types.map((et) => ({
+        id: et.uri,
+        label: et.name,
+        meta: `${et.durationMinutes} min`,
       }));
     } catch {
       return [];
