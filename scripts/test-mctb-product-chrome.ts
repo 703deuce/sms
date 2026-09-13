@@ -18,10 +18,7 @@ const nested: Array<[string, string]> = [
   ["/mctb/voicemail/inbox", "/mctb/voicemail"],
   ["/mctb/analytics/overview", "/mctb/analytics"],
   ["/mctb/setup/phone", "/mctb/setup"],
-  ["/mctb/calendar/week", "/mctb/calendar"],
-  ["/mctb/appointments/new", "/mctb/appointments"],
-  ["/mctb/booking/types", "/mctb/booking"],
-  ["/mctb/reminders/rules", "/mctb/reminders"],
+  ["/mctb/setup/recovery", "/mctb/setup"],
   ["/payments/requests", "/payments"],
   ["/integrations", "/integrations"],
 ];

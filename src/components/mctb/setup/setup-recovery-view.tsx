@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MctbSetupBookingSection } from "@/components/mctb/setup/mctb-setup-booking-section";
 
 type SetupRuntime = {
   phoneNumberId: string | null;
@@ -727,6 +728,8 @@ export function MctbSetupRecoveryView() {
                 </div>
               </div>
             </section>
+
+            <MctbSetupBookingSection />
 
             <section className="mctb-recovery-module mctb-recovery-module--elevated" aria-labelledby="mctb-rec-guard">
               <h3 id="mctb-rec-guard" className="mctb-recovery-module__title mb-1">

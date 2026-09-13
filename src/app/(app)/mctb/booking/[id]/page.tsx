@@ -1,8 +1,6 @@
-import { MctbBookingSetupConnected } from "@/features/mctb/booking/booking-setup/mctb-booking-setup-connected";
+import { redirect } from "next/navigation";
+import { resolveRemovedMctbSchedulingRedirect } from "@/lib/mctb/removed-scheduling-routes";
 
-type Props = { params: Promise<{ id: string }> };
-
-export default async function MctbBookingTypePage({ params }: Props) {
-  const { id } = await params;
-  return <MctbBookingSetupConnected meetingId={id} />;
+export default function MctbBookingTypeRemovedPage() {
+  redirect(resolveRemovedMctbSchedulingRedirect("/mctb/booking")!);
 }

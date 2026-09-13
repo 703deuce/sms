@@ -470,6 +470,7 @@ model Workspace {
   callbackRequests CallbackRequest[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
   mctbHandoffConfig MctbHandoffConfig?
+  mctbBookingLinks MctbBookingLink[]
   mctbNotificationRecipients MctbNotificationRecipient[]
   mctbConversationAutomationStates MctbConversationAutomationState[]
   mctbLeadSnapshots MctbLeadSnapshot[]
@@ -5778,6 +5779,24 @@ model MctbHandoffConfig {
   workspace                   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("mctb_handoff_configs")
+}
+
+/// External scheduler URLs for MCTB Booking Link mode (not Transovo appointments).
+model MctbBookingLink {
+  id          String   @id @default(cuid())
+  workspaceId String
+  label       String
+  url         String
+  description String?
+  active      Boolean  @default(true)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, active])
+  @@index([workspaceId, isDefault])
+  @@map("mctb_booking_links")
 }
 
 /// Team/owner notification recipient for MCTB handoff events.

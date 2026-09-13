@@ -1,10 +1,6 @@
-import { Suspense } from "react";
-import { MctbCalendarClient } from "@/components/mctb/booking/mctb-calendar-client";
+import { redirect } from "next/navigation";
+import { resolveRemovedMctbSchedulingRedirect } from "@/lib/mctb/removed-scheduling-routes";
 
-export default function MctbCalendarPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading calendar…</div>}>
-      <MctbCalendarClient />
-    </Suspense>
-  );
+export default function MctbCalendarRemovedPage() {
+  redirect(resolveRemovedMctbSchedulingRedirect("/mctb/calendar")!);
 }

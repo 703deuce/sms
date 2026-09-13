@@ -1,10 +1,5 @@
 import {
   BarChart3,
-  Bell,
-  Calendar,
-  CalendarCheck,
-  CalendarCog,
-  ClipboardList,
   CreditCard,
   Home,
   LayoutDashboard,
@@ -22,7 +17,6 @@ export type MctbNavOptions = {
 };
 
 const MCTB_SECTION = "Missed Call Text Back";
-const BOOKING_SECTION = "Booking";
 
 /** Canonical MCTB product-local navigation — grouped by product ownership. */
 export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
@@ -61,27 +55,6 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Setup",
       href: MCTB_ROUTES.setup,
       icon: SlidersHorizontal,
-    },
-    {
-      label: "Calendar",
-      href: MCTB_ROUTES.calendar,
-      icon: Calendar,
-      sectionLabel: BOOKING_SECTION,
-    },
-    {
-      label: "Appointments",
-      href: MCTB_ROUTES.appointments,
-      icon: CalendarCheck,
-    },
-    {
-      label: "Booking Setup",
-      href: MCTB_ROUTES.booking,
-      icon: CalendarCog,
-    },
-    {
-      label: "Reminders",
-      href: MCTB_ROUTES.reminders,
-      icon: Bell,
     },
     {
       label: "Payments",
@@ -129,10 +102,6 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith("/conversations") || pathname.startsWith("/mctb/conversations")) {
     return "Conversations";
   }
-  if (pathname.startsWith(MCTB_ROUTES.calendar)) return "Calendar";
-  if (pathname.startsWith(MCTB_ROUTES.appointments)) return "Appointments";
-  if (pathname.startsWith(MCTB_ROUTES.booking)) return "Booking Setup";
-  if (pathname.startsWith(MCTB_ROUTES.reminders)) return "Reminders";
   if (pathname.startsWith(MCTB_ROUTES.payments)) return "Payments";
   if (pathname === MCTB_ROUTES.integrations || pathname.startsWith("/integrations")) return "Integrations";
 

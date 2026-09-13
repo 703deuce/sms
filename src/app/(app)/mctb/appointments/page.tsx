@@ -1,12 +1,6 @@
-import { Suspense } from "react";
-import { MctbAppointmentsClient } from "@/components/mctb/booking/mctb-appointments-client";
+import { redirect } from "next/navigation";
+import { resolveRemovedMctbSchedulingRedirect } from "@/lib/mctb/removed-scheduling-routes";
 
-export default function MctbAppointmentsPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading appointments…</div>}>
-      <div className="mctb-booking-shell min-h-full">
-        <MctbAppointmentsClient />
-      </div>
-    </Suspense>
-  );
+export default function MctbAppointmentsRemovedPage() {
+  redirect(resolveRemovedMctbSchedulingRedirect("/mctb/appointments")!);
 }

@@ -18,9 +18,9 @@ const bookingActions = readFileSync(
   "src/components/mctb/booking/conversation-booking-actions.tsx",
   "utf8",
 );
-assert.ok(bookingActions.includes("/api/appointments/types"));
+assert.ok(bookingActions.includes("/api/mctb/booking-links"));
 assert.ok(bookingActions.includes("send_booking_link"));
-assert.ok(bookingActions.includes("MCTB_ROUTES.appointmentsNew"));
+assert.ok(!bookingActions.includes("MCTB_ROUTES.appointmentsNew"));
 
 const convPay = readFileSync("src/components/payments/conversation-payments.tsx", "utf8");
 assert.ok(convPay.includes("/api/payment-requests"));

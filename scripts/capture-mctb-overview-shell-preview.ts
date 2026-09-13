@@ -83,11 +83,6 @@ const html = `<!DOCTYPE html>
         ${navItem("Voicemail")}
         ${navItem("Analytics")}
         ${navItem("Setup")}
-        <p class="mctb-sidebar-section-label">Booking</p>
-        ${navItem("Calendar")}
-        ${navItem("Appointments")}
-        ${navItem("Booking Setup")}
-        ${navItem("Reminders")}
         ${navItem("Payments")}
         ${navItem("Integrations")}
       </nav>

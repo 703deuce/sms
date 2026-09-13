@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import { useCallback, useEffect, useState } from "react";
+import type { MctbBookingLinkDto } from "@/lib/mctb/booking-links/service";
+import { bookingLinkHostname } from "@/lib/mctb/booking-links/validate-url";
 
 type Props = {
   conversationId: string;
@@ -12,55 +12,39 @@ type Props = {
   missedCallId?: string | null;
 };
 
-type BookingType = { id: string; name: string; durationMinutes?: number };
-
 export function MctbConversationBookingActions({
   conversationId,
   contactId,
   phone,
-  customerName,
-  missedCallId,
 }: Props) {
   const [linkOpen, setLinkOpen] = useState(false);
-  const [types, setTypes] = useState<BookingType[]>([]);
-  const [selectedTypeId, setSelectedTypeId] = useState("");
-  const [bookingUrl, setBookingUrl] = useState<string | null>(null);
+  const [links, setLinks] = useState<MctbBookingLinkDto[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void fetch("/api/appointments/types?kind=MEETING")
-      .then((r) => r.json())
-      .then((json) => {
-        const rows = (json.data || []) as BookingType[];
-        setTypes(rows);
-        if (rows[0]) setSelectedTypeId(rows[0].id);
-      })
-      .catch(() => setTypes([]));
-    void fetch("/api/appointments/settings")
-      .then((r) => r.json())
-      .then((json) => setBookingUrl(json.data?.bookingUrl || null))
-      .catch(() => setBookingUrl(null));
+  const loadLinks = useCallback(async () => {
+    const res = await fetch("/api/mctb/booking-links?active=1");
+    const json = await res.json();
+    const rows = (json.data || []) as MctbBookingLinkDto[];
+    setLinks(rows);
+    const def = rows.find((r) => r.isDefault) ?? rows[0];
+    if (def) setSelectedId(def.id);
   }, []);
 
-  const bookHref = new URLSearchParams({
-    conversationId,
-    customerPhone: phone,
-    ...(contactId ? { contactId } : {}),
-    ...(customerName ? { customerName } : {}),
-    ...(missedCallId ? { missedCallId } : {}),
-  });
+  useEffect(() => {
+    void loadLinks().catch(() => setLinks([]));
+  }, [loadLinks]);
 
   const sendLink = async () => {
-    if (!contactId || !bookingUrl) {
-      setError("Booking link or contact is unavailable");
+    const link = links.find((l) => l.id === selectedId);
+    if (!contactId || !link) {
+      setError("Choose an active booking link and ensure the contact is linked.");
       return;
     }
     setSending(true);
     setError(null);
     try {
-      const type = types.find((t) => t.id === selectedTypeId);
-      const url = type ? `${bookingUrl}?type=${encodeURIComponent(type.id)}` : bookingUrl;
       const res = await fetch("/api/contacts/actions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,8 +52,9 @@ export function MctbConversationBookingActions({
           action: "send_booking_link",
           contactId,
           phone,
-          bookingUrl: url,
+          bookingUrl: link.url,
           conversationId,
+          bookingLinkLabel: link.label,
         }),
       });
       if (!res.ok) {
@@ -86,18 +71,10 @@ export function MctbConversationBookingActions({
 
   return (
     <>
-      <div style={{ display: "flex", gap: 8, padding: "8px 16px", borderTop: "1px solid #eee", flexWrap: "wrap" }}>
-        <Link
-          href={`${MCTB_ROUTES.appointmentsNew}?${bookHref.toString()}`}
-          className="mctb-booking-primary-btn"
-          style={{ display: "inline-flex", alignItems: "center", textDecoration: "none", minWidth: 0, height: 34, fontSize: 12 }}
-        >
-          Book appointment
-        </Link>
+      <div className="flex flex-wrap gap-2 border-t border-[#eaedf0] px-4 py-2">
         <button
           type="button"
-          className="mctb-booking-primary-btn"
-          style={{ minWidth: 0, height: 34, fontSize: 12, background: "#fff", color: "#111", border: "1px solid #e5e7eb" }}
+          className="inline-flex h-9 items-center rounded-lg border border-[#dde2ea] bg-white px-3 text-[12px] font-semibold text-[var(--mctb-brand-strong,#2f3f85)] hover:bg-[var(--mctb-brand-soft,#e8eefb)]"
           onClick={() => setLinkOpen(true)}
         >
           Send booking link
@@ -109,42 +86,68 @@ export function MctbConversationBookingActions({
           role="dialog"
           aria-modal="true"
           aria-label="Send booking link"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            zIndex: 70,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/35 p-4"
           onClick={() => !sending && setLinkOpen(false)}
         >
           <div
-            style={{ background: "#fff", borderRadius: 10, padding: 20, width: "min(420px, 100%)" }}
+            className="w-full max-w-[min(520px,100%)] rounded-xl border border-[#dde2ea] bg-white p-5 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>Send booking link</h3>
-            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>Choose a booking type</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {types.map((t) => (
-                <label key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-                  <input
-                    type="radio"
-                    name="bookingType"
-                    checked={selectedTypeId === t.id}
-                    onChange={() => setSelectedTypeId(t.id)}
-                  />
-                  <span>{t.name}</span>
-                  {t.durationMinutes ? <span style={{ color: "#9ca3af" }}>{t.durationMinutes} min</span> : null}
-                </label>
-              ))}
-            </div>
-            {error ? <p role="alert" style={{ color: "#b91c1c", fontSize: 12, marginTop: 10 }}>{error}</p> : null}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button type="button" onClick={() => setLinkOpen(false)} disabled={sending}>Cancel</button>
-              <button type="button" className="mctb-booking-primary-btn" onClick={() => void sendLink()} disabled={sending || !contactId}>
+            <h3 className="text-base font-semibold text-[#0a0d12]">Send booking link</h3>
+            <p className="mt-1 text-[13px] text-[#4a5563]">
+              Customer books in your external scheduler — no Transovo appointment is created.
+            </p>
+            {links.length === 0 ? (
+              <p className="mt-4 text-[13px] text-[#7a8494]">
+                No active booking links. Add links under Setup → Recovery.
+              </p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-2">
+                {links.map((link) => (
+                  <li key={link.id}>
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-[13px] ${
+                        selectedId === link.id
+                          ? "border-[var(--mctb-brand-ring,#c5d4f2)] bg-[var(--mctb-brand-soft,#e8eefb)]"
+                          : "border-[#eaedf0]"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="mctbBookingLink"
+                        className="mt-0.5"
+                        checked={selectedId === link.id}
+                        onChange={() => setSelectedId(link.id)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-[#0a0d12]">{link.label}</span>
+                        <span className="block text-[12px] text-[#7a8494]">
+                          {bookingLinkHostname(link.url)}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {error ? (
+              <p role="alert" className="mt-3 text-[12px] font-medium text-[#b42318]">{error}</p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="h-10 rounded-lg px-4 text-[13px] font-medium text-[#4a5563]"
+                onClick={() => setLinkOpen(false)}
+                disabled={sending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="h-10 rounded-lg bg-[#1b1e23] px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+                onClick={() => void sendLink()}
+                disabled={sending || !contactId || links.length === 0}
+              >
                 {sending ? "Sending…" : "Send link"}
               </button>
             </div>

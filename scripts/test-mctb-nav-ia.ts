@@ -14,7 +14,7 @@ const nav = buildMctbV1Nav();
 const labels = nav.map((i) => i.label);
 const hrefs = collectNavHrefs(nav);
 
-assert.equal(labels.length, 12);
+assert.equal(labels.length, 8);
 assert.deepEqual(labels, [
   "Overview",
   "Missed Calls",
@@ -22,10 +22,6 @@ assert.deepEqual(labels, [
   "Voicemail",
   "Analytics",
   "Setup",
-  "Calendar",
-  "Appointments",
-  "Booking Setup",
-  "Reminders",
   "Payments",
   "Integrations",
 ]);
@@ -34,17 +30,21 @@ assert.equal(nav[0].sectionLabel, "Missed Call Text Back");
 assert.equal(nav[0].label, "Overview");
 assert.equal(nav[0].href, "/mctb");
 assert.equal(nav[0].matchExact, true);
-assert.equal(nav[6].sectionLabel, "Booking");
-assert.equal(nav[6].label, "Calendar");
-assert.ok(!nav[10].sectionLabel);
-assert.ok(!nav[11].sectionLabel);
+assert.ok(!nav[6].sectionLabel);
+assert.ok(!nav[7].sectionLabel);
 
 assert.ok(hrefs.includes("/mctb"));
 assert.ok(hrefs.includes("/payments"));
 assert.ok(hrefs.includes("/integrations"));
+assert.ok(!hrefs.includes("/mctb/calendar"));
+assert.ok(!hrefs.includes("/mctb/appointments"));
+assert.ok(!hrefs.includes("/mctb/booking"));
+assert.ok(!hrefs.includes("/mctb/reminders"));
 assert.ok(!labels.includes("Home"));
 assert.ok(!labels.includes("Campaigns"));
 assert.ok(!labels.includes("Numbers"));
+assert.ok(!labels.includes("Calendar"));
+assert.ok(!labels.includes("Booking Setup"));
 
 const mctbOnPayments = resolveProductSidebarNav({
   pathname: "/payments",

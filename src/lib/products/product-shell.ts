@@ -29,10 +29,6 @@ const MCTB_PATH_PREFIXES = [
   "/onboarding/mctb",
   "/analytics/mctb",
   "/mctb",
-  "/mctb/calendar",
-  "/mctb/appointments",
-  "/mctb/booking",
-  "/mctb/reminders",
 ] as const;
 
 const AI_AFTER_HOURS_PATH_PREFIXES = [

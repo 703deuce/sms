@@ -1,5 +1,6 @@
-import { MctbBookingSetupConnected } from "@/features/mctb/booking/booking-setup/mctb-booking-setup-connected";
+import { redirect } from "next/navigation";
+import { resolveRemovedMctbSchedulingRedirect } from "@/lib/mctb/removed-scheduling-routes";
 
-export default function MctbBookingSetupPage() {
-  return <MctbBookingSetupConnected meetingId={null} />;
+export default function MctbBookingRemovedPage() {
+  redirect(resolveRemovedMctbSchedulingRedirect("/mctb/booking")!);
 }
