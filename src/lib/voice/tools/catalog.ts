@@ -924,7 +924,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
             "True when the caller verbally agreed to receive this text (message and data rates may apply).",
         },
       },
-      required: ["resource_type", "verbal_sms_consent"],
+      required: ["resource_type"],
     },
   },
   search_business_details: {

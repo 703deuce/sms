@@ -23,6 +23,8 @@ function resolveInboundAni(request: Request, body: Record<string, unknown>): str
   for (const key of [
     "x-telnyx-from",
     "x-telnyx-caller-id",
+    "x-telnyx-end-user-target",
+    "x-telnyx-calling-number",
     "from",
     "caller",
   ]) {

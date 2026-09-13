@@ -20,6 +20,8 @@ import {
   workflowToolResponse,
   type WorkflowToolResponse,
 } from "@/lib/voice/tools/workflow-tool-contract";
+import { VOICE_RUNTIME_STATE_KEY } from "@/lib/voice/runtime/types";
+import { normalizeCallerAni } from "@/lib/voice/call-identity";
 
 export type SendResourceContext = {
   workspaceId: string;
@@ -69,6 +71,79 @@ async function loadAgentConfig(workspaceId: string, agentId?: string | null) {
   return parseVoiceAgentConfig(raw);
 }
 
+function phoneFromRuntimeMetadata(metadata: Record<string, unknown>): string {
+  const runtime = metadata[VOICE_RUNTIME_STATE_KEY];
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) return "";
+  const collected = (runtime as { collectedFields?: Record<string, unknown> }).collectedFields;
+  if (!collected || typeof collected !== "object") return "";
+  for (const key of ["phone", "caller_phone", "sys_phone", "mobile"]) {
+    const raw = collected[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (raw && typeof raw === "object" && "value" in (raw as object)) {
+      const v = (raw as { value?: unknown }).value;
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  }
+  return "";
+}
+
+async function resolveCallerE164(input: SendResourceContext, callId: string | null): Promise<string> {
+  const direct = normalizeCallerAni(input.callerE164) || normalizeE164(input.callerE164 || "") || "";
+  if (direct && direct !== "unknown") return direct;
+
+  const prisma = getPrisma();
+  if (callId) {
+    const call = await prisma.voiceCall.findFirst({
+      where: { id: callId, workspaceId: input.workspaceId },
+      select: { fromE164: true, metadata: true },
+    });
+    const fromCall = normalizeCallerAni(call?.fromE164);
+    if (fromCall) return fromCall;
+    const meta =
+      call?.metadata && typeof call.metadata === "object" && !Array.isArray(call.metadata)
+        ? (call.metadata as Record<string, unknown>)
+        : {};
+    const fromMeta = normalizeCallerAni(phoneFromRuntimeMetadata(meta));
+    if (fromMeta) return fromMeta;
+    const aniMeta = normalizeCallerAni(
+      typeof meta.ani === "string" ? meta.ani : typeof meta.caller_e164 === "string" ? meta.caller_e164 : "",
+    );
+    if (aniMeta) return aniMeta;
+  }
+
+  const convId = input.telnyxConversationId?.trim();
+  if (convId) {
+    const conv = await prisma.voiceAiConversation.findFirst({
+      where: { workspaceId: input.workspaceId, telnyxConversationId: convId },
+      select: { metadata: true, callId: true },
+    });
+    const convMeta =
+      conv?.metadata && typeof conv.metadata === "object" && !Array.isArray(conv.metadata)
+        ? (conv.metadata as Record<string, unknown>)
+        : {};
+    const fromConv = normalizeCallerAni(
+      typeof convMeta.from === "string"
+        ? convMeta.from
+        : typeof convMeta.caller_e164 === "string"
+          ? convMeta.caller_e164
+          : typeof convMeta.ani === "string"
+            ? convMeta.ani
+            : "",
+    );
+    if (fromConv) return fromConv;
+    if (conv?.callId && conv.callId !== callId) {
+      const linked = await prisma.voiceCall.findFirst({
+        where: { id: conv.callId, workspaceId: input.workspaceId },
+        select: { fromE164: true },
+      });
+      const linkedAni = normalizeCallerAni(linked?.fromE164);
+      if (linkedAni) return linkedAni;
+    }
+  }
+
+  return "";
+}
+
 async function resolveCallId(input: SendResourceContext): Promise<string | null> {
   if (input.callId) return input.callId;
   if (!input.agentId) return null;
@@ -96,7 +171,6 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
   const callId = await resolveCallId(input);
   const prisma = getPrisma();
 
-  let callerE164 = input.callerE164?.trim() || "";
   let calledE164 = input.calledE164?.trim() || "";
   let metadata: Record<string, unknown> = {};
 
@@ -106,9 +180,6 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
       select: { fromE164: true, toE164: true, agentId: true, metadata: true },
     });
     if (call) {
-      if (!callerE164 && call.fromE164 && call.fromE164 !== "unknown") {
-        callerE164 = call.fromE164;
-      }
       if (!calledE164 && call.toE164) calledE164 = call.toE164;
       if (call.metadata && typeof call.metadata === "object" && !Array.isArray(call.metadata)) {
         metadata = call.metadata as Record<string, unknown>;
@@ -116,6 +187,7 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
     }
   }
 
+  let callerE164 = await resolveCallerE164(input, callId);
   callerE164 = normalizeE164(callerE164) || callerE164;
   if (!callerE164 || callerE164 === "unknown") {
     return workflowToolResponse({

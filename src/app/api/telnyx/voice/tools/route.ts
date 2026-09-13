@@ -23,7 +23,10 @@ import {
   isLegacyWorkflowVoicePathEnabled,
 } from "@/lib/voice/architecture/legacy-voice-path";
 import { isInternalBookingConductorMode } from "@/lib/voice/workflow-engine/conductor-mode";
-import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
+import {
+  isConversationWorkflowMode,
+  WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+} from "@/lib/voice/workflow-engine/tool-publish";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 
 function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
@@ -439,7 +442,16 @@ export async function POST(request: Request) {
           });
         }
 
-        if (callId && agentId && isConversationWorkflowMode(runtimeAgentConfig)) {
+        const workflowGraphTool = WORKFLOW_PUBLISHED_WEBHOOK_TOOLS.includes(
+          effectiveToolType as (typeof WORKFLOW_PUBLISHED_WEBHOOK_TOOLS)[number],
+        );
+
+        if (
+          callId &&
+          agentId &&
+          isConversationWorkflowMode(runtimeAgentConfig) &&
+          !workflowGraphTool
+        ) {
           const { ensureVoiceCallState } = await import("@/lib/voice/runtime/call-state");
           const { loadWizardFromAgent } = await import("@/lib/voice/runtime/load-wizard");
           const { filterPublishedToolsForRuntime } = await import(

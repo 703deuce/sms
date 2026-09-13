@@ -19,6 +19,8 @@ import {
 } from "../src/lib/voice/workflow-engine/tool-publish";
 import { deriveLeadRecoveryPolicyFromWizard } from "../src/lib/voice/runtime/wizard-policy-bridge";
 import { isAfterHoursVoiceProfile } from "../src/lib/voice/runtime/voice-profile";
+import { filterPublishedToolsForRuntime } from "../src/lib/voice/runtime/capability-resolver";
+import { emptyVoiceCallState } from "../src/lib/voice/runtime/call-state";
 import { SEND_RESOURCE_WEBHOOK_BODY } from "../src/lib/voice/tools/builtin-webhook-bodies";
 import { getAppBaseUrl } from "../src/lib/messaging/telnyx/config";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
@@ -83,6 +85,22 @@ function main() {
 
   const required = (SEND_RESOURCE_WEBHOOK_BODY.required as string[]) || [];
   assert.ok(required.includes("resource_type"), "send_resource schema has resource_type");
+  assert.ok(
+    !required.includes("verbal_sms_consent"),
+    "verbal_sms_consent optional at webhook (workflow + server consent)",
+  );
+
+  const greetState = emptyVoiceCallState({
+    callId: "call_test",
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+  });
+  const sendOk = filterPublishedToolsForRuntime({
+    requestedTool: "send_resource",
+    callState: greetState,
+    agentConfig: config,
+  });
+  assert.equal(sendOk.allowed, true, "send_resource allowed in GREETING under conversation workflow");
 
   const base = getAppBaseUrl();
   if (base.includes("localhost")) {
