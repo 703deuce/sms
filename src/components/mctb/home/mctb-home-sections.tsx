@@ -79,8 +79,16 @@ function semanticCellClass(label: string, kind: "recovery" | "reply"): string {
 
 function setupValueClass(value: string): string {
   const v = value.toLowerCase();
-  if (v.includes("verified") || v.includes("active") || v.includes("ready") || v.includes("press 1")) {
+  if (v.includes("verified") || v.includes("ready")) {
     return "mctb-home-setup-value--ok";
+  }
+  if (
+    v.includes("failed") ||
+    v.includes("blocked") ||
+    v.includes("suppressed") ||
+    v.includes("error")
+  ) {
+    return "mctb-home-setup-value--error";
   }
   if (
     v.includes("not") ||
@@ -90,6 +98,9 @@ function setupValueClass(value: string): string {
     v.includes("paused")
   ) {
     return "mctb-home-setup-value--warn";
+  }
+  if (v.includes("active") || v.includes("press 1") || v.includes("on")) {
+    return "mctb-home-setup-value--brand";
   }
   return "";
 }
@@ -139,7 +150,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.conversations,
       icon: MessageSquare,
-      iconTone: "info" as const,
+      iconTone: "brand" as const,
       attention: false,
     },
     {
@@ -350,7 +361,10 @@ const SETUP_ROWS: Array<{
 
 export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {
   return (
-    <section className="mctb-home-surface mctb-home-module" aria-labelledby="mctb-home-setup">
+    <section
+      className="mctb-home-surface mctb-home-module mctb-home-setup-module"
+      aria-labelledby="mctb-home-setup"
+    >
       <MctbHomeSectionHead id="mctb-home-setup" title="Setup status" />
       <div className="mctb-home-module-body">
         {SETUP_ROWS.map((row) => (

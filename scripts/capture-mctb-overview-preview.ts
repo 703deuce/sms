@@ -60,7 +60,7 @@ const html = `<!DOCTYPE html>
           <span class="mctb-home-kpi-sub">Today</span></span>
         </a>
         <a class="mctb-home-kpi" href="#">
-          <span class="mctb-home-kpi-icon mctb-home-kpi-icon--info">💬</span>
+          <span class="mctb-home-kpi-icon mctb-home-kpi-icon--brand">💬</span>
           <span><span class="mctb-home-kpi-label">Replies</span>
           <span class="mctb-home-kpi-value" style="display:block">2</span>
           <span class="mctb-home-kpi-sub">Today</span></span>
@@ -126,11 +126,15 @@ const html = `<!DOCTYPE html>
             <p style="margin:2px 0 0;font-size:12px;color:var(--mctb-text-tertiary)">Yes — can I book for Thursday?</p>
           </div>
         </section>
-        <section class="mctb-home-surface mctb-home-module">
+        <section class="mctb-home-surface mctb-home-module mctb-home-setup-module">
           <div class="mctb-home-section-head"><h2 class="mctb-home-section-title">Setup status</h2></div>
           <div class="mctb-home-setup-row">
             <span class="mctb-home-setup-label">Forwarding</span>
             <span class="mctb-home-setup-value mctb-home-setup-value--ok">Verified</span>
+          </div>
+          <div class="mctb-home-setup-row">
+            <span class="mctb-home-setup-label">Recovery</span>
+            <span class="mctb-home-setup-value mctb-home-setup-value--brand">Active</span>
           </div>
           <div class="mctb-home-setup-row">
             <span class="mctb-home-setup-label">Text-back sender</span>
