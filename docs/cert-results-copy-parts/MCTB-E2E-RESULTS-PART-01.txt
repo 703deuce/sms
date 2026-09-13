@@ -1,0 +1,196 @@
+MCTB AI LEAD RECOVERY — FULL E2E SCENARIO-BY-SCENARIO RESULTS
+Copy-friendly transcript of every certification scenario.
+
+Generated: 2026-09-13T23:44:29.146Z
+Semantic model: deepseek-chat (deepseek)
+LR_CERT_FORCE_DEEPSEEK=1  LR_CERT_DISABLE_FALLBACK=1  HEADLESS_PROVIDER_MODE=recording
+
+SUMMARY
+  Scenarios: 67/67 PASS
+  Hard failures: 0
+  FULL_AGENT_PRODUCTION_CERTIFIED: NO
+  SEMANTIC_REGEX_AUTHORITY: 0
+  SEMANTIC_KEYWORD_AUTHORITY: 0
+  JOHN_REACHABLE_FROM_LR: 0
+  CERT_SEMANTIC_SHORTCUTS: 0
+  AVERAGE_MESSAGES_PASSED: 2.5
+  P95_MESSAGES_PASSED: 5
+  OUTBOUND_SMS_COUNT: 111
+  MEASURED_SMS_COUNT: 111
+  ONE_SEGMENT_REPLY_RATE: 86.5%
+  AVG_SEGMENTS_PER_REPLY: 1.15
+
+Per scenario: customer text → DeepSeek intent/scheduling (via production runtime) →
+authorized LR action → outbound SMS → recording provider ledger (find_slots / create_booking / payment / handoff).
+
+FAILURE INDEX
+  (none)
+
+==============================================================================
+SCENARIO 1: booking-link-e2e
+GROUP: BOOKING_LINK
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Send me the booking link."
+  LR handled: true
+  Runtime / tool path: SEND_BOOKING_LINK (SMS with URL)
+  Business SMS reply: "Book here: https://book.example.test/acme-schedule"
+  Outbound SMS capture: "Book here: https://book.example.test/acme-schedule"
+  SMS economics: segments=1 encoding=GSM7 chars=50
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 2: booking-link-sms-fail
+GROUP: FALSE_SUCCESS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can you text me where to schedule?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: collect_NAME
+  Business SMS reply: "What's your name?"
+  Outbound SMS capture: "What's your name?"
+  SMS economics: segments=1 encoding=GSM7 chars=17
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 3: payment-e2e
+GROUP: PAYMENT
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can I pay my deposit?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+  Booking provider calls: (none recorded)
+  Payment provider calls:
+    - {"kind":"create","idempotencyKey":"lr-t2p:cmu0gbxhj62395g645w556l60:PAYMENT_REQUEST","amountMinor":8900,"timestamp":"2026-09-13T23:35:13.088Z"}
+
+==============================================================================
+
+SCENARIO 4: payment-no-amount
+GROUP: PAYMENT
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Send me the payment link."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_amount_required
+  Business SMS reply: "I can't start a payment without an authorized amount. Our team will send a link shortly."
+  Outbound SMS capture: "I can't start a payment without an authorized amount. Our team will send a link shortly."
+  SMS economics: segments=1 encoding=GSM7 chars=88
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 5: payment-change-mind
+GROUP: BURST_RACE
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Send the payment link."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+TURN 2
+  Customer message: "Actually don't."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+  Booking provider calls: (none recorded)
+  Payment provider calls:
+    - {"kind":"create","idempotencyKey":"lr-t2p:cmu0gc1rg3r486v2330171x58:PAYMENT_REQUEST","amountMinor":8900,"timestamp":"2026-09-13T23:35:18.662Z"}
+
+==============================================================================
+
+SCENARIO 6: emergency-burst-e2e
+GROUP: EMERGENCY
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Need plumber"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: collect_ADDRESS
+  Business SMS reply: "What's the service address?"
+  Outbound SMS capture: "What's the service address?"
+  SMS economics: segments=1 encoding=GSM7 chars=27
+
+TURN 2
+  Customer message: "basement flooding"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: collect_ADDRESS
+  Business SMS reply: "What's the service address?"
+  Outbound SMS capture: "What's the service address?"
+  SMS economics: segments=1 encoding=GSM7 chars=27
+
+TURN 3
+  Customer message: "123 Main St"
+  LR handled: true
+  Runtime / tool path: CREATE_CALLBACK_REQUEST / handoff
+  Business SMS reply: "Got it - we'll call you back soon."
+  Outbound SMS capture: "Got it - we'll call you back soon."
+  SMS economics: segments=1 encoding=GSM7 chars=34
+
+  Booking provider calls: (none recorded)
+  Handoff / owner notification calls:
+    - {"workspaceId":"lr_cert_e2e","eventType":"callback_requested","handoffEventId":"e2e-handoff-lr:cmu0gc5ol0x1c306r3f6j6x1o:callback_requested:123 Main St","timestamp":"2026-09-13T23:35:28.274Z"}
+
+==============================================================================
+
+SCENARIO 7: callback-e2e
+GROUP: CALLBACK
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Have somebody call me tomorrow after 5."
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "Got it - we'll call you back soon."
+  Outbound SMS capture: "Got it - we'll call you back soon."
+  SMS economics: segments=1 encoding=GSM7 chars=34
+
+  Booking provider calls: (none recorded)
+  Handoff / owner notification calls:
+    - {"workspaceId":"lr_cert_e2e","eventType":"callback_requested","handoffEventId":"e2e-handoff-lr:cmu0gcb5q5g3l2c0t1k2h540j:callback_requested:Have somebody call me to","timestamp":"2026-09-13T23:35:30.862Z"}
+
+==============================================================================
+
+SCENARIO 8: provider-disconnected-booking
+GROUP: PROVIDER_FAILURE
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can you book me tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI booking fallback link / safe message
+  Business SMS reply: "I'm unable to check live availability right now. You can choose a time here: https://book.example.test/acme-schedule"
+  Outbound SMS capture: "I'm unable to check live availability right now. You can choose a time here: https://book.example.test/acme-schedule"
+  SMS economics: segments=1 encoding=GSM7 chars=116
+
+  Booking provider calls: (none recorded)
+
+==============================================================================

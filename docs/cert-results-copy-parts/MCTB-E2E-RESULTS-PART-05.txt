@@ -1,0 +1,157 @@
+MCTB E2E RESULTS — PART 05 (scenarios 33-40 of 67)
+
+SCENARIO 33: avail-then-reject-slots
+GROUP: AI_BOOKING
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Anything tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "None of those work."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gkmgy1p185i313a2k3r1f
+    - find_slots conv=cmu0gkmgy1p185i313a2k3r1f
+
+==============================================================================
+
+SCENARIO 34: payment-status-paid
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "Yes - your payment went through."
+  Outbound SMS capture: "Yes - your payment went through."
+  SMS economics: segments=1 encoding=GSM7 chars=32
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 35: payment-status-open
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "Your payment is still pending."
+  Outbound SMS capture: "Your payment is still pending."
+  SMS economics: segments=1 encoding=GSM7 chars=30
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 36: payment-status-failed
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "That payment did not go through."
+  Outbound SMS capture: "That payment did not go through."
+  SMS economics: segments=1 encoding=GSM7 chars=32
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 37: payment-status-expired
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "That payment link expired."
+  Outbound SMS capture: "That payment link expired."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 38: payment-status-unknown
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "I don't have a confirmed payment status yet. Our team can check."
+  Outbound SMS capture: "I don't have a confirmed payment status yet. Our team can check."
+  SMS economics: segments=1 encoding=GSM7 chars=64
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 39: payment-status-provider_unavailable
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "I can't check payment status right now. Our team can confirm."
+  Outbound SMS capture: "I can't check payment status right now. Our team can confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=61
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 40: payment-sms-fail-no-duplicate
+GROUP: PAYMENT_FAILURE
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can I pay my deposit?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_sms_failed
+  Business SMS reply: "Your payment link is ready but I couldn't text it. Our team will follow up."
+  Outbound SMS capture: "Your payment link is ready but I couldn't text it. Our team will follow up."
+  SMS economics: segments=1 encoding=GSM7 chars=75
+
+TURN 2
+  Customer message: "Can you resend the payment link?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+  Booking provider calls: (none recorded)
+  Payment provider calls:
+    - {"kind":"create","idempotencyKey":"lr-t2p:cmu0gl8g85j2l5530366r5r07:PAYMENT_REQUEST","amountMinor":8900,"timestamp":"2026-09-13T23:42:27.392Z"}
+
+==============================================================================

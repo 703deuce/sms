@@ -1,0 +1,169 @@
+MCTB E2E RESULTS — PART 08 (scenarios 57-64 of 67)
+
+SCENARIO 57: wrong-number-not-service
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 58: wrong-number-schedule-question
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 59: com-never-mind-pending-booking
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "Never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Just to confirm — would you like to cancel this booking request, or keep looking at the available times (10 AM, 1 PM, or 3 PM tomorrow)?"
+  Outbound SMS capture: "Just to confirm — would you like to cancel this booking request, or keep looking at the available times (10 AM, 1 PM, or 3 PM tomorrow)?"
+  SMS economics: segments=3 encoding=UCS2 chars=136
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gmoe2635i2k1116292l1e
+
+==============================================================================
+
+SCENARIO 60: com-dont-cancel-keep-booking
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "Don't cancel it."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Just to confirm — would you like to book one of the available times (10:00 AM, 1:00 PM, or 3:00 PM tomorrow), or did you mean something else by \"Don't cancel it\"?"
+  Outbound SMS capture: "Just to confirm — would you like to book one of the available times (10:00 AM, 1:00 PM, or 3:00 PM tomorrow), or did you mean something else by \"Don't cancel it\"?"
+  SMS economics: segments=3 encoding=UCS2 chars=162
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gmy4c20051o2u4n633l4q
+
+==============================================================================
+
+SCENARIO 61: com-never-mind-payment-keep-appointment
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Send the payment link."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+TURN 2
+  Customer message: "Never mind the payment link. Keep my appointment."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+  Booking provider calls: (none recorded)
+  Payment provider calls:
+    - {"kind":"create","idempotencyKey":"lr-t2p:cmu0gn7lc0e2u645t0g0j2208:PAYMENT_REQUEST","amountMinor":8900,"timestamp":"2026-09-13T23:43:59.114Z"}
+
+==============================================================================
+
+SCENARIO 62: com-token-never-mind-but-confirm-time
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "I was going to say never mind, but 3 PM is fine."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "You're booked for Mon, Sep 14, 3:00 PM."
+  Outbound SMS capture: "You're booked for Mon, Sep 14, 3:00 PM."
+  SMS economics: segments=1 encoding=GSM7 chars=39
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gnb9k4q630u724x006i6p
+    - find_slots conv=cmu0gnb9k4q630u724x006i6p
+    - create_booking slotId=cert-slot-3pm conv=cmu0gnb9k4q630u724x006i6p
+
+==============================================================================
+
+SCENARIO 63: com-dont-send-payment-book-first
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can I pay my deposit?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_request_sent
+  Business SMS reply: "Payment link sent by text."
+  Outbound SMS capture: "Payment link sent by text."
+  SMS economics: segments=1 encoding=GSM7 chars=26
+
+TURN 2
+  Customer message: "Don't send the payment link yet. Can you book me first?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gnkw64r4p485q3w400d69
+  Payment provider calls:
+    - {"kind":"create","idempotencyKey":"lr-t2p:cmu0gnkw64r4p485q3w400d69:PAYMENT_REQUEST","amountMinor":8900,"timestamp":"2026-09-13T23:44:16.152Z"}
+
+==============================================================================
+
+SCENARIO 64: ctx-yeah-schedule
+GROUP: CONVERSATION_CONTEXT
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
