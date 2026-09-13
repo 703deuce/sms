@@ -58,22 +58,30 @@ export async function auditMctbAiBookingProvider(
   }
 
   if (provider === "microsoft") {
-    const prisma = getPrisma();
-    const conn = await prisma.voiceCalendarConnection.findFirst({
-      where: { workspaceId, provider: "microsoft", status: "connected" },
+    const { loadMctbAiBookingConfig } = await import("@/lib/mctb/ai-booking/config");
+    const { getMicrosoftCalendarCapabilities } = await import(
+      "@/lib/microsoft/calendar-capabilities"
+    );
+    const cfg = await loadMctbAiBookingConfig(workspaceId);
+    const caps = await getMicrosoftCalendarCapabilities(workspaceId, {
+      calendarConnectionId: cfg.calendarId,
     });
-    const calCfg = (conn?.config || {}) as CalendarConfig;
-    const readCalendar = Boolean(conn && hasOAuthTokens(calCfg));
-    if (!readCalendar) notes.push("No connected Microsoft calendar with valid OAuth tokens");
-    const checkAvailability = readCalendar;
-    const createBooking = readCalendar;
-    notes.push("Uses getAvailability + bookAppointment (voice/calendar/booking.ts)");
-    notes.push("Requires VoiceService + write calendar configuration for reliable booking");
+    if (!caps.connected) notes.push("No connected Microsoft calendar with valid OAuth tokens");
+    notes.push(...caps.notes);
+    notes.push("Availability: getSchedule (work/school) or calendarView + Transovo booking policy");
+    notes.push("Booking: POST calendar event via microsoftGraphFetch (transactionId for idempotency)");
+    if (caps.health === "CONNECTED_NO_REFRESH") {
+      notes.push("Reconnect Microsoft with offline_access for unattended AI Booking");
+    }
+    if (caps.accountType === "personal") {
+      notes.push("Personal account: no delegated getSchedule — calendarView busy derivation");
+    }
     return {
-      readCalendar,
-      checkAvailability,
-      createBooking,
-      aiBookingSupported: readCalendar && checkAvailability && createBooking,
+      readCalendar: caps.canReadEvents,
+      checkAvailability: caps.connected && caps.calendarSelected,
+      createBooking: caps.canCreateBooking,
+      aiBookingSupported:
+        caps.canCreateBooking && caps.calendarSelected && caps.calendarEditable,
       notes,
     };
   }

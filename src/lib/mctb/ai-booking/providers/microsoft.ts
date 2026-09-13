@@ -84,6 +84,27 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
       return { ok: false, reason: "Microsoft calendar is not connected", fallbackRecommended: true };
     }
     try {
+      const { prepareMicrosoftBooking } = await import("@/lib/microsoft/booking-preflight");
+      const preflight = await prepareMicrosoftBooking({
+        workspaceId: req.workspaceId,
+        calendarConnectionId: ctx.calendarId || config.calendarId,
+        customerName: req.customerName,
+        customerEmail: req.customerEmail,
+        conversationId: req.conversationId,
+        slotStartUtc: resolvedSlot.startUtc,
+        requireCustomerInvite: false,
+      });
+      if (preflight.status === "MISSING_REQUIRED_DATA") {
+        return {
+          ok: false,
+          reason: preflight.message,
+          fallbackRecommended: false,
+        };
+      }
+      if (preflight.status === "NOT_READY") {
+        return { ok: false, reason: preflight.message, fallbackRecommended: true };
+      }
+
       const result = await bookAppointment(req.workspaceId, {
         serviceName: config.serviceName || ctx.serviceName || "Consultation",
         startsAt: resolvedSlot.startUtc,
@@ -99,6 +120,7 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
       if (!appointmentId && !(result as { ok?: boolean }).ok) {
         throw new Error("Microsoft booking did not return appointment id");
       }
+      const inviteSent = preflight.inviteAttendee && Boolean(req.customerEmail?.trim());
       return {
         ok: true,
         provider: "microsoft",
@@ -107,7 +129,7 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
         endUtc: resolvedSlot.endUtc,
         timezone: ctx.timezone,
         status: "confirmed",
-        inviteSent: true,
+        inviteSent,
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Microsoft booking failed";

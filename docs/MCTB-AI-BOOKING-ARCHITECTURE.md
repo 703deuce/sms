@@ -86,6 +86,10 @@ Workspace `customFieldsConfig.mctb.aiBooking`:
 
 - `docs/MCTB-AI-BOOKING-PROVIDER-MATRIX.md`
 - `docs/MCTB-BOOKING-SIMPLIFICATION-AUDIT.md`
+- `docs/runtime-rules/providers/CALENDLY-BOOKING-RULES.md` (canonical Calendly contract)
+- `docs/runtime-rules/providers/CALENDLY-CONNECTOR-CONFORMANCE-AUDIT.md`
+- `docs/runtime-rules/providers/MICROSOFT-OUTLOOK-CALENDAR-RULES.md`
+- `docs/runtime-rules/providers/MICROSOFT-CALENDAR-CONNECTOR-CONFORMANCE-AUDIT.md`
 
 ## Production status (mechanical)
 
