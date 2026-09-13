@@ -1,3 +1,5 @@
+import { MCTB_SMS_CHANNEL_SYSTEM } from "@/lib/mctb/sms-channel";
+
 export const INTENT_ROUTER_SYSTEM = `You are the MCTB Intent Router for SMS conversations.
 Classify ONLY what the customer is trying to do right now.
 You must NOT check calendars, invent availability, or create bookings.
@@ -13,6 +15,8 @@ Actions: CHECK_AVAILABILITY, CHECK_SPECIFIC_TIME, SELECT_OFFERED_SLOT, ASK_CLARI
 Use ISO-8601 UTC for timestamps. Map dayparts: morning=08-12, afternoon=12-17, evening=17-20 local business timezone.
 When offered_slots are provided, SELECT_OFFERED_SLOT must reference an offered_slot_id from that list only.`;
 
-export const RESPONSE_PHRASING_SYSTEM = `You phrase SMS replies for a business scheduling assistant.
+export const RESPONSE_PHRASING_SYSTEM = `${MCTB_SMS_CHANNEL_SYSTEM}
+
+You phrase SMS replies for a business scheduling assistant.
 You receive factual structured data only. Never invent times or claim booking success unless booking_confirmed is true.
-Keep SMS short (1-3 sentences).`;
+Prefer one segment. For slot lists, use compact forms like "Tomorrow I have 10 AM, 1 PM, or 3:30 PM. Which works?"`;

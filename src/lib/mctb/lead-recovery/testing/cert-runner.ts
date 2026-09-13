@@ -25,6 +25,7 @@ import {
   withLeadRecoveryConversationLock,
 } from "@/lib/mctb/lead-recovery/conversation-guard";
 import { resetCertMetrics, snapshotCertMetrics } from "@/lib/mctb/lead-recovery/testing/cert-metrics";
+import { runSmsSegmentCertification } from "@/lib/mctb/lead-recovery/testing/cert-sms";
 import type {
   IntentPolicyShape,
   LeadRecoveryIntent,
@@ -49,6 +50,19 @@ export type CertMetrics = {
   inputTokens: number;
   outputTokens: number;
   unrequestedActionAttempts: number;
+  smsSamples: number;
+  avgResponseCharacters: number;
+  p95ResponseCharacters: number;
+  avgSegmentsPerReply: number;
+  p95SegmentsPerReply: number;
+  percentOneSegment: number;
+  percentTwoSegments: number;
+  percent3PlusSegments: number;
+  oneSegmentReplyRate: number;
+  threePlusSegmentReplyRate: number;
+  unnecessaryUcs2Count: number;
+  unnecessary3PlusSegmentCount: number;
+  multiOutboundPerTurnRate: number;
   hardFailures: CertFailure[];
   softFailures: CertFailure[];
 };
@@ -126,6 +140,7 @@ export function runDeterministicRuntimeCert(): { passed: number; total: number; 
     "scripts/test-mctb-lead-recovery-conformance-audit.ts",
     "scripts/test-mctb-lead-recovery-intent.ts",
     "scripts/test-mctb-lead-recovery-conversation-guard.ts",
+    "scripts/test-sms-segment-encoding.ts",
   ];
   const errors: string[] = [];
   let passed = 0;
@@ -500,6 +515,10 @@ export async function runDeepSeekCertification(input?: {
     }
   }
 
+  const smsCert = await runSmsSegmentCertification({ deepSeekPhrasing: true });
+  for (const f of smsCert.hardFailures) hardFailures.push(f);
+  for (const f of smsCert.softFailures) softFailures.push(f);
+
   const intentAccuracy = intentTotal ? (intentPassed / intentTotal) * 100 : 0;
   const usage = snapshotCertMetrics();
   const metrics: CertMetrics = {
@@ -514,6 +533,19 @@ export async function runDeepSeekCertification(input?: {
     inputTokens: usage.inputTokens || inputTokens,
     outputTokens: usage.outputTokens || outputTokens,
     unrequestedActionAttempts: usage.unrequestedActionAttempts,
+    smsSamples: smsCert.metrics.samples,
+    avgResponseCharacters: smsCert.metrics.avgCharacters,
+    p95ResponseCharacters: smsCert.metrics.p95Characters,
+    avgSegmentsPerReply: smsCert.metrics.avgSegments,
+    p95SegmentsPerReply: smsCert.metrics.p95Segments,
+    percentOneSegment: smsCert.metrics.percentOneSegment,
+    percentTwoSegments: smsCert.metrics.percentTwoSegments,
+    percent3PlusSegments: smsCert.metrics.percent3PlusSegments,
+    oneSegmentReplyRate: smsCert.metrics.oneSegmentReplyRate,
+    threePlusSegmentReplyRate: smsCert.metrics.threePlusSegmentReplyRate,
+    unnecessaryUcs2Count: smsCert.metrics.unnecessaryUcs2Count,
+    unnecessary3PlusSegmentCount: smsCert.metrics.unnecessary3PlusSegmentCount,
+    multiOutboundPerTurnRate: smsCert.metrics.multiOutboundPerTurnRate,
     hardFailures,
     softFailures,
   };
@@ -521,7 +553,8 @@ export async function runDeepSeekCertification(input?: {
   const ready =
     hardFailures.length === 0 &&
     det.passed === det.total &&
-    intentAccuracy >= 85;
+    intentAccuracy >= 85 &&
+    smsCert.metrics.unnecessary3PlusSegmentCount === 0;
 
   return { metrics, model: cfg.model, ready };
 }
@@ -578,6 +611,23 @@ export function formatCertReport(input: {
 | DUPLICATE_SIDE_EFFECT_RATE | 0 (concurrency guards certified) |
 | Est. cost / 1k intent probes | ~$${convPer1k.toFixed(4)} |
 
+## SMS segment economics (production rule)
+
+| Metric | Value |
+|--------|-------|
+| AVG_RESPONSE_CHARACTERS | ${m.avgResponseCharacters.toFixed(0)} |
+| P95_RESPONSE_CHARACTERS | ${m.p95ResponseCharacters} |
+| AVG_SEGMENTS_PER_AI_REPLY | ${m.avgSegmentsPerReply.toFixed(2)} |
+| P95_SEGMENTS_PER_AI_REPLY | ${m.p95SegmentsPerReply} |
+| ONE_SEGMENT_REPLY_RATE | ${m.oneSegmentReplyRate.toFixed(1)}% |
+| PERCENT_TWO_SEGMENTS | ${m.percentTwoSegments.toFixed(1)}% |
+| THREE_PLUS_SEGMENT_REPLY_RATE | ${m.threePlusSegmentReplyRate.toFixed(1)}% |
+| UNNECESSARY_3_PLUS_SEGMENT_COUNT | ${m.unnecessary3PlusSegmentCount} |
+| UNNECESSARY_UCS2_COUNT | ${m.unnecessaryUcs2Count} |
+| MULTI_OUTBOUND_PER_TURN_RATE | ${m.multiOutboundPerTurnRate.toFixed(1)}% |
+
+Ordinary replies with **3+ segments** or **unnecessary UCS-2** are **hard certification failures**.
+
 ## Latency (intent agent / DeepSeek)
 
 | P50 | P95 | P99 |
@@ -610,6 +660,9 @@ Real-model scenarios ................. ${m.intentPassed}/${m.intentTotal} PASS
 Intent accuracy ...................... ${m.intentAccuracy.toFixed(1)}%
 Secondary-intent accuracy ............ ${secondaryAcc.toFixed(1)}%
 Unrequested actions (blocked) ........ ${m.unrequestedActionAttempts}
+One-segment reply rate ............... ${m.oneSegmentReplyRate.toFixed(1)}%
+P95 segments per reply ............... ${m.p95SegmentsPerReply}
+3+ segment failures (ordinary) ..... ${m.unnecessary3PlusSegmentCount}
 Hard failures ........................ ${m.hardFailures.length}
 Est. DeepSeek cost ................... $${estCost.toFixed(4)}
 READY_FOR_PRODUCTION_REVIEW .......... ${input.ready ? "YES" : "NO"}

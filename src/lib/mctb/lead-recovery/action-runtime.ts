@@ -12,6 +12,7 @@ import type {
 } from "@/lib/mctb/lead-recovery/types";
 import { isKnownAction } from "@/lib/mctb/lead-recovery/action-registry";
 import { promptForCollectField } from "@/lib/mctb/lead-recovery/field-collection";
+import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
 
 export type ActionRuntimeContext = {
   workspaceId: string;
@@ -120,21 +121,19 @@ export async function executeLeadRecoveryActions(
       }
       case "SEND_BOOKING_LINK": {
         const url = await resolveBookingUrl(ctx.workspaceId, ctx.config);
-        reply = url
-          ? `You can pick a time here: ${url}`
-          : "We'll send you a booking link shortly.";
+        reply = url ? `Book here: ${url}` : "We'll text you a booking link shortly.";
         action = "booking_link_sent";
         break;
       }
       case "AI_BOOK": {
         delegateAiBooking = true;
         action = "ai_book_delegate";
-        if (!reply) reply = "Let me check availability for you.";
+        if (!reply) reply = "Checking availability — one moment.";
         break;
       }
       case "CREATE_CALLBACK_REQUEST": {
         await notifyBusiness(ctx, "callback_requested");
-        if (!reply) reply = "Got it — we'll call you back as soon as we can.";
+        if (!reply) reply = "Got it — we'll call you back soon.";
         action = "callback_requested";
         break;
       }
@@ -153,7 +152,7 @@ export async function executeLeadRecoveryActions(
       case "ESCALATE_HUMAN": {
         await notifyBusiness(ctx, "human_required");
         escalateHuman = true;
-        if (!reply) reply = "I've connected you with our team — someone will follow up shortly.";
+        if (!reply) reply = "Our team will follow up shortly.";
         action = "escalate_human";
         break;
       }
@@ -170,7 +169,7 @@ export async function executeLeadRecoveryActions(
         }
         if (!amountMinor) {
           reply =
-            "I can't start a payment without an authorized amount on file. Our team will send you a secure payment link shortly.";
+            "I can't start a payment without an authorized amount. Our team will send a link shortly.";
           action = "payment_amount_required";
           break;
         }
@@ -190,11 +189,10 @@ export async function executeLeadRecoveryActions(
             idempotencyKey,
             sendSms: true,
           });
-          reply =
-            "I've sent a secure payment link by text. Let us know once you've completed payment.";
+          reply = "Payment link sent by text.";
           action = "payment_request_sent";
         } catch {
-          reply = "We couldn't start the payment right now. Our team will follow up.";
+          reply = "Couldn't start payment — our team will follow up.";
           action = "payment_failed";
         }
         break;
@@ -212,8 +210,7 @@ export async function executeLeadRecoveryActions(
       }
       case "ANSWER_APPROVED_INFORMATION": {
         if (!reply) {
-          reply =
-            "I can only share details we've configured for our business. What would you like to know?";
+          reply = "What would you like to know?";
         }
         action = "approved_info";
         break;
@@ -226,11 +223,11 @@ export async function executeLeadRecoveryActions(
   }
 
   if (!reply) {
-    reply = "Thanks for your message — we'll be in touch shortly.";
+    reply = "Thanks — we'll be in touch shortly.";
   }
 
   return {
-    reply,
+    reply: finalizeMctbOutboundSms(reply),
     action,
     delegateAiBooking,
     suppressContact,

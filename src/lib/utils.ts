@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { estimateSmsSegmentsFromAnalysis } from "@/lib/sms/segment-encoding";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -32,11 +33,6 @@ export function formatCurrency(n: number) {
 }
 
 export function estimateSmsSegments(body: string) {
-  const length = body.length;
-  if (length === 0) return { characters: 0, segments: 0 };
-  const isUnicode = /[^\x00-\x7F]/.test(body);
-  const limit = isUnicode ? 70 : 160;
-  const concatLimit = isUnicode ? 67 : 153;
-  if (length <= limit) return { characters: length, segments: 1 };
-  return { characters: length, segments: Math.ceil(length / concatLimit) };
+  const { characters, segments } = estimateSmsSegmentsFromAnalysis(body);
+  return { characters, segments };
 }
