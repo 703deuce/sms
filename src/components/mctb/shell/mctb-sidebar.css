@@ -1,0 +1,174 @@
+/**
+ * MCTB main sidebar — matches Overview Transovo identity (visual only).
+ * Scoped to product chrome: [data-mctb-neutral-shell].
+ */
+@import "./mctb-brand-tokens.css";
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell.transovo-sidebar-soft-slate {
+  background-color: #eef0f2 !important;
+  border-color: #c8ced8 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .h-14 {
+  border-color: #dde1e5 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .h-14 .text-\[15px\] {
+  color: var(--mctb-text-primary, #0a0d12);
+  font-weight: 600;
+}
+
+/* Section group labels — not clickable */
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-section-label {
+  margin: 0;
+  padding: 18px 12px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a8494;
+  user-select: none;
+  pointer-events: none;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-section-label:first-of-type {
+  padding-top: 14px;
+}
+
+/* Nav rows */
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  max-height: 44px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: #0a0d12;
+  background: transparent;
+  border: none;
+  text-decoration: none;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: #5c6573;
+  stroke: #5c6573;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-item:hover {
+  background-color: #e8ebee !important;
+  color: #0a0d12 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-item:hover .mctb-sidebar-nav-icon {
+  color: #3a4049;
+  stroke: #3a4049;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-item[data-active="true"] {
+  background-color: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-nav-item[data-active="true"] .mctb-sidebar-nav-icon {
+  color: var(--mctb-brand-icon) !important;
+  stroke: var(--mctb-brand-icon) !important;
+}
+
+/* Legacy class on same nodes — neutralize soft-slate gray defaults under MCTB chrome */
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item.mctb-sidebar-nav-item {
+  color: #0a0d12 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item.mctb-sidebar-nav-item svg:not(.mctb-sidebar-nav-icon) {
+  color: #5c6573 !important;
+  stroke: #5c6573 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item[data-active="true"] {
+  background-color: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item[data-active="true"] svg {
+  color: var(--mctb-brand-icon) !important;
+  stroke: var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item[data-active="true"]::before {
+  display: none !important;
+  content: none !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-nav-item:hover {
+  background-color: #e8ebee !important;
+  color: #0a0d12 !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-badge,
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-badge-dot {
+  background-color: var(--mctb-brand-strong) !important;
+  color: #fff !important;
+}
+
+/* Footer — credits / upgrade */
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-footer-card {
+  border: 1px solid #dde2ea;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-footer-card .mctb-sidebar-upgrade-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mctb-brand-strong);
+  text-decoration: none;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-footer-card .mctb-sidebar-upgrade-link:hover {
+  color: var(--mctb-brand);
+  text-decoration: underline;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-credits-bar {
+  background-color: #e5e8eb !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .transovo-credits-fill {
+  background: var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-user-avatar {
+  background: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+  border: 1px solid var(--mctb-brand-ring);
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-sidebar-shell .shrink-0.border-t {
+  border-color: #dde1e5 !important;
+}
+
+/* Mobile bottom tabs */
+.product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active {
+  color: var(--mctb-brand-strong) !important;
+  background: color-mix(in srgb, var(--mctb-brand-soft) 70%, transparent);
+}
+
+.product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active svg {
+  color: var(--mctb-brand-icon);
+  stroke: var(--mctb-brand-icon);
+}

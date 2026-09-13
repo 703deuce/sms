@@ -127,9 +127,14 @@ function ExpandedNavRow({
 }) {
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
-  const className = appointmentsOverviewShell
-    ? "transovo-nav-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:bg-[#e8ebee] hover:text-[#1b1e23] min-h-[34px]"
-    : "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
+  const className = mctbBrandMark
+    ? "transovo-nav-item mctb-sidebar-nav-item"
+    : appointmentsOverviewShell
+      ? "transovo-nav-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:bg-[#e8ebee] hover:text-[#1b1e23] min-h-[34px]"
+      : "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
+  const iconClassName = mctbBrandMark
+    ? "mctb-sidebar-nav-icon shrink-0"
+    : "h-4 w-4 shrink-0";
   const rowStyle = overviewNavRowStyle(active, appointmentsOverviewShell, mctbBrandMark);
   const iconStyle = overviewNavIconStyle(active, appointmentsOverviewShell, mctbBrandMark);
 
@@ -142,7 +147,7 @@ function ExpandedNavRow({
         className={className}
         style={rowStyle}
       >
-        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} style={iconStyle} />
+        <Icon className={iconClassName} strokeWidth={1.75} style={iconStyle} />
         <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
         {item.badge != null && Number(item.badge) > 0 && (
           <span className="transovo-badge">{item.badge}</span>
@@ -163,7 +168,7 @@ function ExpandedNavRow({
       className={className}
       style={rowStyle}
     >
-      <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} style={iconStyle} />
+      <Icon className={iconClassName} strokeWidth={1.75} style={iconStyle} />
       <span className="flex-1 text-left whitespace-nowrap">{item.label}</span>
       {hasPositiveBadge(item.badge) && (
         <span className="transovo-badge">{item.badge}</span>
@@ -242,6 +247,7 @@ export function TransovoSidebar({
       className={cn(
         "transovo-sidebar flex h-screen flex-col border-r border-border bg-card",
         appointmentsOverviewShell && "transovo-sidebar-soft-slate",
+        mctbBrandMark && "mctb-sidebar-shell",
       )}
       style={{
         width: collapsed ? 56 : expandedWidthPx,
@@ -286,7 +292,13 @@ export function TransovoSidebar({
           return (
             <div key={item.label}>
               {item.sectionLabel ? (
-                <p className="px-2 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <p
+                  className={
+                    mctbBrandMark
+                      ? "mctb-sidebar-section-label"
+                      : "px-2 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                  }
+                >
                   {item.sectionLabel}
                 </p>
               ) : null}
@@ -341,9 +353,11 @@ export function TransovoSidebar({
             <span
               title={user.name}
               className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold ${
-                appointmentsOverviewShell
-                  ? "bg-[#e2e6ea] text-[#1b1e23]"
-                  : "bg-indigo-100 text-indigo-700"
+                mctbBrandMark
+                  ? "mctb-sidebar-user-avatar"
+                  : appointmentsOverviewShell
+                    ? "bg-[#e2e6ea] text-[#1b1e23]"
+                    : "bg-indigo-100 text-indigo-700"
               }`}
             >
               {user.initials}
@@ -363,9 +377,11 @@ export function TransovoSidebar({
           <>
             <div
               className={
-                appointmentsOverviewShell
-                  ? "rounded-lg border border-[#dee2e6] bg-white px-2.5 py-2.5"
-                  : "rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+                mctbBrandMark
+                  ? "mctb-sidebar-footer-card"
+                  : appointmentsOverviewShell
+                    ? "rounded-lg border border-[#dee2e6] bg-white px-2.5 py-2.5"
+                    : "rounded-lg border border-border bg-muted/40 px-3 py-2.5"
               }
             >
               <div className="flex items-center justify-between">
@@ -373,9 +389,11 @@ export function TransovoSidebar({
                 <Link
                   href={upgradeHref}
                   className={
-                    appointmentsOverviewShell
-                      ? "text-[11px] font-medium text-[#1b1e23] hover:underline"
-                      : "text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                    mctbBrandMark
+                      ? "mctb-sidebar-upgrade-link"
+                      : appointmentsOverviewShell
+                        ? "text-[11px] font-medium text-[#1b1e23] hover:underline"
+                        : "text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
                   }
                 >
                   Upgrade
@@ -392,9 +410,11 @@ export function TransovoSidebar({
             <div className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-muted/60 cursor-pointer">
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                  appointmentsOverviewShell
-                    ? "bg-[#e2e6ea] text-[#1b1e23]"
-                    : "bg-indigo-100 text-indigo-700"
+                  mctbBrandMark
+                    ? "mctb-sidebar-user-avatar"
+                    : appointmentsOverviewShell
+                      ? "bg-[#e2e6ea] text-[#1b1e23]"
+                      : "bg-indigo-100 text-indigo-700"
                 }`}
               >
                 {user.initials}

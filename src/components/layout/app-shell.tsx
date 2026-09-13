@@ -20,7 +20,8 @@ import { isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { isSmsShellRoute } from "@/lib/products/sms-routes";
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
-import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
+import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
+import "@/components/mctb/shell/mctb-sidebar.css";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -235,7 +236,7 @@ export function AppShell({
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
   const isAppointmentsNeutralShell =
     isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
-  const isMctbNeutralShell = isMctbNeutralShellPath(pathname);
+  const isMctbNeutralShell = isMctbProductChromePath(pathname, productShell);
   const isAppointmentsOverviewPilot =
     isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));

@@ -16,7 +16,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { isAppointmentsProductPath } from "@/lib/products/appointments-routes";
-import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
+import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
+import { useProductShell } from "@/components/products/product-shell-tabs";
 
 type SearchResult = {
   id: string;
@@ -75,8 +76,9 @@ export function Header({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { shell: productShell } = useProductShell(hasMctb, hasSms, false);
   const appointmentsChrome = isAppointmentsProductPath(pathname);
-  const mctbChrome = isMctbNeutralShellPath(pathname);
+  const mctbChrome = isMctbProductChromePath(pathname, productShell);
   const neutralChrome = appointmentsChrome || mctbChrome;
   const showMassSmsChrome = hasSms && !appointmentsChrome;
   const [numberId, setNumberId] = useState(

@@ -9,7 +9,8 @@ import { buildMassSmsMobileNav, buildVoiceMobileNav } from "@/lib/products/voice
 import { useProductShell } from "@/components/products/product-shell-tabs";
 import { resolveProductShellFromPath, shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbShellActive } from "@/lib/products/resolve-product-nav";
-import { isMctbNeutralShellPath } from "@/lib/products/mctb-shell";
+import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
 import { isSmsOnlyAppNav, isAppointmentsV1Primary } from "@/lib/workspace/platform-launch";
 import { cn } from "@/lib/utils";
 import {
@@ -59,13 +60,13 @@ export function MobileNav({
   primaryVoiceAgentId?: string | null;
 }) {
   const pathname = usePathname();
-  const mctbNeutral = isMctbNeutralShellPath(pathname);
   const multiProduct = shouldShowProductSwitcher({
     hasMctb,
     hasMassSms,
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
+  const mctbNeutral = isMctbProductChromePath(pathname, productShell);
 
   const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
@@ -123,8 +124,11 @@ export function MobileNav({
         >
           {items.map((item) => {
             const Icon = item.icon;
-            const active = isMctbShellActive(pathname, multiProduct, productShell)
-              ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const mctbShell = isMctbShellActive(pathname, multiProduct, productShell);
+            const active = mctbShell
+              ? item.href === MCTB_ROUTES.home
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`)
               : isAppointmentsNavItemActive(item.href, pathname);
             return (
               <Link

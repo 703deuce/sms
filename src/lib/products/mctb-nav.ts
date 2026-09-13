@@ -10,7 +10,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   PhoneMissed,
-  Puzzle,
+  Plug,
   SlidersHorizontal,
   Voicemail,
 } from "lucide-react";
@@ -91,7 +91,7 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
     {
       label: "Integrations",
       href: MCTB_ROUTES.integrations,
-      icon: Puzzle,
+      icon: Plug,
     },
   ];
 }
