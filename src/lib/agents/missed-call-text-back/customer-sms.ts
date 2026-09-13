@@ -127,6 +127,9 @@ export async function handleJohnCustomerSmsReply(input: {
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
 
+  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+  const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
+
   const { handleMctbLeadRecoveryInboundSms } = await import(
     "@/lib/mctb/lead-recovery/conversation-runtime"
   );
@@ -178,7 +181,9 @@ export async function handleJohnCustomerSmsReply(input: {
   }
 
   const { handleMctbAiBookingInboundSms } = await import("@/lib/mctb/ai-booking/conversation-runtime");
-  const aiBooking = await handleMctbAiBookingInboundSms({
+  const aiBooking = leadRecoveryConfig.enabled
+    ? { handled: false as const }
+    : await handleMctbAiBookingInboundSms({
     workspaceId: input.workspaceId,
     conversationId,
     contactId: contact?.id,
@@ -187,7 +192,7 @@ export async function handleJohnCustomerSmsReply(input: {
     customerEmail: contact?.email,
     body: input.body,
     timezone: config.timezone,
-  });
+      });
 
   if (aiBooking.handled) {
     const sender = await resolveMctbSmsSender({

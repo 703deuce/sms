@@ -29,6 +29,12 @@ function defaultState(input: {
     phase: "IDLE",
     clarificationAttempts: 0,
     lastIntent: null,
+    intentPlan: {
+      pendingIntents: [],
+      completedIntents: [],
+      blockedIntents: [],
+      currentIntent: null,
+    },
     updatedAt: new Date().toISOString(),
   };
 }

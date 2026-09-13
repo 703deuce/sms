@@ -158,9 +158,45 @@ export async function executeLeadRecoveryActions(
         break;
       }
       case "SEND_TEXT_TO_PAY": {
-        reply =
-          "I can't start a payment without an amount on file. Our team will send you a secure payment link.";
-        action = "payment_needs_amount";
+        const payCfg = ctx.config.paymentPolicy;
+        if (!payCfg.textToPayEnabled && !ctx.config.actionCapabilities.includes("SEND_TEXT_TO_PAY")) {
+          reply = "Payments aren't enabled for automated texts. Our team will follow up.";
+          action = "payment_disabled";
+          break;
+        }
+        let amountMinor: number | null = null;
+        if (payCfg.amountAuthority === "configured_fixed_fee" && payCfg.fixedFeeAmountMinor) {
+          amountMinor = payCfg.fixedFeeAmountMinor;
+        }
+        if (!amountMinor) {
+          reply =
+            "I can't start a payment without an authorized amount on file. Our team will send you a secure payment link shortly.";
+          action = "payment_amount_required";
+          break;
+        }
+        const { createAndSendPaymentRequest } = await import("@/lib/payment-requests/service");
+        const idempotencyKey = `lr-t2p:${ctx.conversationId}:${ctx.intent.primary_intent}`;
+        try {
+          await createAndSendPaymentRequest({
+            workspaceId: ctx.workspaceId,
+            customerPhoneE164: ctx.customerPhone,
+            amountMinor,
+            currency: payCfg.fixedFeeCurrency || "usd",
+            description: ctx.collectedFields.REASON || ctx.intent.reason_for_contact || "Payment",
+            customerName: ctx.customerName,
+            contactId: ctx.contactId,
+            conversationId: ctx.conversationId,
+            sourceType: "conversation",
+            idempotencyKey,
+            sendSms: true,
+          });
+          reply =
+            "I've sent a secure payment link by text. Let us know once you've completed payment.";
+          action = "payment_request_sent";
+        } catch {
+          reply = "We couldn't start the payment right now. Our team will follow up.";
+          action = "payment_failed";
+        }
         break;
       }
       case "SUPPRESS_CONTACT": {

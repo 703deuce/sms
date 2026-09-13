@@ -7,6 +7,12 @@ import type {
   LeadRecoveryWorkspaceConfig,
 } from "@/lib/mctb/lead-recovery/types";
 import { LEAD_RECOVERY_INTENTS } from "@/lib/mctb/lead-recovery/types";
+import {
+  defaultEnabledScenarios,
+  intentsForEnabledScenarios,
+} from "@/lib/mctb/lead-recovery/scenarios";
+import type { LeadRecoveryScenarioKey } from "@/lib/mctb/lead-recovery/types";
+import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -165,21 +171,85 @@ export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadR
 
   const enabled = enabledExplicit || enabledByAiBooking;
 
-  let policyHealth: LeadRecoveryWorkspaceConfig["policyHealth"] = "DISABLED";
-  if (enabled) {
-    const bookingPolicy = intentPolicies.BOOKING_REQUEST;
-    const needsBookingConfig =
-      bookingPolicy?.actions?.includes("AI_BOOK") && !aiBooking.enabled && !aiBooking.entitled;
-    policyHealth = needsBookingConfig ? "NEEDS_CONFIGURATION" : "READY";
-  }
+  const storedScenarios = asRecord(raw.enabledScenarios) as Partial<
+    Record<LeadRecoveryScenarioKey, boolean>
+  >;
+  const enabledScenarios =
+    Object.keys(storedScenarios).length > 0
+      ? storedScenarios
+      : defaultEnabledScenarios(aiBooking.enabled);
 
-  return {
+  const enabledIntents =
+    Array.isArray(raw.enabledIntents) && raw.enabledIntents.length > 0
+      ? parseIntentList(raw.enabledIntents)
+      : intentsForEnabledScenarios(enabledScenarios);
+
+  const globalBehavior = {
+    tone:
+      raw.globalBehavior && asRecord(raw.globalBehavior).tone === "friendly"
+        ? "friendly"
+        : raw.globalBehavior && asRecord(raw.globalBehavior).tone === "concise"
+          ? "concise"
+          : "professional",
+    maxClarificationAttempts:
+      typeof asRecord(raw.globalBehavior).maxClarificationAttempts === "number"
+        ? (asRecord(raw.globalBehavior).maxClarificationAttempts as number)
+        : 1,
+    followUpEnabled: asRecord(raw.globalBehavior).followUpEnabled === true,
+    followUpDelayMinutes:
+      typeof asRecord(raw.globalBehavior).followUpDelayMinutes === "number"
+        ? (asRecord(raw.globalBehavior).followUpDelayMinutes as number)
+        : 60,
+    captureOnly: globalMode === "CAPTURE_ONLY",
+  };
+
+  const paymentPolicy = {
+    textToPayEnabled: asRecord(raw.paymentPolicy).textToPayEnabled === true,
+    amountAuthority:
+      asRecord(raw.paymentPolicy).amountAuthority === "configured_fixed_fee"
+        ? "configured_fixed_fee"
+        : asRecord(raw.paymentPolicy).amountAuthority === "operator_payment_request"
+          ? "operator_payment_request"
+          : "known_balance",
+    fixedFeeAmountMinor:
+      typeof asRecord(raw.paymentPolicy).fixedFeeAmountMinor === "number"
+        ? (asRecord(raw.paymentPolicy).fixedFeeAmountMinor as number)
+        : null,
+    fixedFeeCurrency:
+      typeof asRecord(raw.paymentPolicy).fixedFeeCurrency === "string"
+        ? (asRecord(raw.paymentPolicy).fixedFeeCurrency as string)
+        : "usd",
+  };
+
+  const serviceAreaPolicy = {
+    inAreaAction:
+      asRecord(raw.serviceAreaPolicy).inAreaAction === "book"
+        ? "book"
+        : asRecord(raw.serviceAreaPolicy).inAreaAction === "callback"
+          ? "callback"
+          : "continue",
+    outOfAreaAction:
+      asRecord(raw.serviceAreaPolicy).outOfAreaAction === "notify"
+        ? "notify"
+        : asRecord(raw.serviceAreaPolicy).outOfAreaAction === "handoff"
+          ? "handoff"
+          : "decline",
+    uncertainAction:
+      asRecord(raw.serviceAreaPolicy).uncertainAction === "handoff" ? "handoff" : "clarify",
+  };
+
+  const baseConfig: LeadRecoveryWorkspaceConfig = {
     enabled,
     version: typeof raw.version === "number" ? raw.version : 1,
     globalMode,
-    enabledIntents: parseIntentList(raw.enabledIntents),
+    enabledScenarios,
+    enabledIntents,
     intentPolicies,
     fallbackPolicy: parsePolicy(raw.fallbackPolicy) || DEFAULT_FALLBACK,
+    globalBehavior,
+    paymentPolicy,
+    serviceAreaPolicy,
+    migratedFromAiBooking: enabledByAiBooking && !hasStored,
     collectCapabilities: Array.isArray(raw.collectCapabilities)
       ? (raw.collectCapabilities as LeadRecoveryCollectField[])
       : ["NAME", "EMAIL", "ADDRESS", "REASON", "SERVICE_CATEGORY", "URGENCY"],
@@ -207,7 +277,15 @@ export async function loadLeadRecoveryConfig(workspaceId: string): Promise<LeadR
       typeof raw.bookingLinkId === "string"
         ? raw.bookingLinkId
         : aiBooking.fallbackBookingLinkId,
-    policyHealth,
+    policyHealth: "DISABLED",
+    scenarioHealth: {},
+  };
+
+  const health = await computeLeadRecoveryPolicyHealth(workspaceId, baseConfig);
+  return {
+    ...baseConfig,
+    policyHealth: health.overall,
+    scenarioHealth: health.scenarioHealth,
   };
 }
 
@@ -217,7 +295,11 @@ export async function saveLeadRecoveryConfig(
     enabled: boolean;
     globalMode: LeadRecoveryWorkspaceConfig["globalMode"];
     enabledIntents: LeadRecoveryIntent[];
+    enabledScenarios: Partial<Record<LeadRecoveryScenarioKey, boolean>>;
     intentPolicies: Partial<Record<LeadRecoveryIntent, IntentPolicyShape>>;
+    globalBehavior: LeadRecoveryWorkspaceConfig["globalBehavior"];
+    paymentPolicy: LeadRecoveryWorkspaceConfig["paymentPolicy"];
+    serviceAreaPolicy: LeadRecoveryWorkspaceConfig["serviceAreaPolicy"];
     fallbackPolicy: IntentPolicyShape;
     collectCapabilities: LeadRecoveryCollectField[];
     answerCapabilities: LeadRecoveryWorkspaceConfig["answerCapabilities"];

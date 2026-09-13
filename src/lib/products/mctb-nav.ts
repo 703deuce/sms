@@ -8,6 +8,7 @@ import {
   Plug,
   SlidersHorizontal,
   Voicemail,
+  Sparkles,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -45,6 +46,11 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "Voicemail",
       href: MCTB_ROUTES.voicemail,
       icon: Voicemail,
+    },
+    {
+      label: "AI Lead Recovery",
+      href: MCTB_ROUTES.aiLeadRecovery,
+      icon: Sparkles,
     },
     {
       label: "Analytics",

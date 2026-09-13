@@ -63,7 +63,8 @@ export const ACTION_REGISTRY: Record<LeadRecoveryActionId, ActionRegistryEntry> 
     id: "SEND_TEXT_TO_PAY",
     requiredFields: [],
     providerDependency: "stripe",
-    description: "Payment policy → PaymentRequest → Stripe adapter",
+    requiresEntitlement: "text_to_pay",
+    description: "Payment policy → PaymentRequest → Stripe adapter; authoritative amount required",
   },
   CHECK_PAYMENT_STATUS: {
     id: "CHECK_PAYMENT_STATUS",

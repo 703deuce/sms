@@ -8,18 +8,23 @@ import type {
 } from "@/lib/mctb/lead-recovery/types";
 import { pickPrimaryIntentForPolicy } from "@/lib/mctb/lead-recovery/policy-precedence";
 import { isActionPermitted } from "@/lib/mctb/lead-recovery/action-registry";
+import type { LeadRecoveryIntent } from "@/lib/mctb/lead-recovery/types";
 
-function policyForIntent(
+const EMERGENCY_IMMEDIATE_ACTIONS = new Set([
+  "SEND_OWNER_SMS",
+  "SEND_TEAM_SMS",
+  "ROUTE_TO_ON_CALL",
+  "ESCALATE_HUMAN",
+  "CREATE_CALLBACK_REQUEST",
+]);
+
+function policyForIntentKey(
   config: LeadRecoveryWorkspaceConfig,
-  intent: StructuredLeadIntent,
+  intentKey: LeadRecoveryIntent,
 ): { policy: IntentPolicyShape; policyId: string } {
-  const primary = pickPrimaryIntentForPolicy({
-    primary: intent.primary_intent,
-    secondary: intent.secondary_intents,
-  });
-  const specific = config.intentPolicies[primary];
+  const specific = config.intentPolicies[intentKey];
   if (specific?.enabled) {
-    return { policy: specific, policyId: `intent:${primary}` };
+    return { policy: specific, policyId: `intent:${intentKey}` };
   }
   return { policy: config.fallbackPolicy, policyId: "fallback" };
 }
@@ -103,13 +108,14 @@ export function simulateLeadRecoveryPolicy(input: {
   });
 }
 
-export function evaluateLeadRecoveryPolicy(input: {
+export function evaluateLeadRecoveryPolicyForIntent(input: {
   workspace: LeadRecoveryWorkspaceConfig;
   intent: StructuredLeadIntent;
+  targetIntent: LeadRecoveryIntent;
   collectedData: Partial<Record<LeadRecoveryCollectField, string>>;
   conversationState: LeadRecoveryConversationState;
 }): PolicyEvaluationResult {
-  const { policy: rawPolicy, policyId } = policyForIntent(input.workspace, input.intent);
+  const { policy: rawPolicy, policyId } = policyForIntentKey(input.workspace, input.targetIntent);
   const policy = applyGlobalMode(input.workspace, rawPolicy);
   const collected = { ...input.collectedData };
 
@@ -135,7 +141,7 @@ export function evaluateLeadRecoveryPolicy(input: {
 
   if (escalation && input.workspace.handoffTriggers.complaint && input.intent.complaint) {
     return {
-      intent: input.intent.primary_intent,
+      intent: input.targetIntent,
       matchedPolicyId: policyId,
       phase: "HANDOFF",
       missingFields,
@@ -153,7 +159,7 @@ export function evaluateLeadRecoveryPolicy(input: {
 
   if (input.intent.confidence < 0.45 && input.conversationState.clarificationAttempts < 1) {
     return {
-      intent: input.intent.primary_intent,
+      intent: input.targetIntent,
       matchedPolicyId: policyId,
       phase: "CLARIFY",
       missingFields,
@@ -180,12 +186,27 @@ export function evaluateLeadRecoveryPolicy(input: {
 
   if (missingFields.length > 0) {
     const field = missingFields[0];
+    const immediate =
+      input.targetIntent === "EMERGENCY_OR_URGENT"
+        ? permittedActions
+            .filter((a) => EMERGENCY_IMMEDIATE_ACTIONS.has(a))
+            .map((action) => ({
+              action,
+              config:
+                action === "CUSTOMER_MESSAGE"
+                  ? { template: policy.customerMessage }
+                  : policy.providerConfiguration,
+            }))
+        : [];
     return {
-      intent: input.intent.primary_intent,
+      intent: input.targetIntent,
       matchedPolicyId: policyId,
       phase: "COLLECT",
       missingFields,
-      nextActions: [{ action: "COLLECT_FIELD", field }],
+      nextActions: [
+        ...immediate,
+        { action: "COLLECT_FIELD", field },
+      ],
       blockedActions,
       permittedActions,
       responseConstraints: {
@@ -208,7 +229,7 @@ export function evaluateLeadRecoveryPolicy(input: {
     }));
 
   return {
-    intent: input.intent.primary_intent,
+    intent: input.targetIntent,
     matchedPolicyId: policyId,
     phase: "EXECUTE",
     missingFields: [],
@@ -217,9 +238,26 @@ export function evaluateLeadRecoveryPolicy(input: {
     permittedActions,
     responseConstraints: {
       customerMessageTemplate: policy.customerMessage,
-      mustNotInventPricing: input.intent.primary_intent === "PRICING_QUESTION",
+      mustNotInventPricing:
+        input.targetIntent === "PRICING_QUESTION" || input.targetIntent === "ESTIMATE_REQUEST",
       mustNotInventAvailability: true,
     },
     escalation,
   };
+}
+
+export function evaluateLeadRecoveryPolicy(input: {
+  workspace: LeadRecoveryWorkspaceConfig;
+  intent: StructuredLeadIntent;
+  collectedData: Partial<Record<LeadRecoveryCollectField, string>>;
+  conversationState: LeadRecoveryConversationState;
+}): PolicyEvaluationResult {
+  const target = pickPrimaryIntentForPolicy({
+    primary: input.intent.primary_intent,
+    secondary: input.intent.secondary_intents,
+  });
+  return evaluateLeadRecoveryPolicyForIntent({
+    ...input,
+    targetIntent: target,
+  });
 }

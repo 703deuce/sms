@@ -55,3 +55,9 @@ Loader/saver: `src/lib/mctb/lead-recovery/config.ts`
 ## Defaults
 
 When `leadRecovery` is absent but `mctb.aiBooking.enabled` is true, loader enables lead recovery and maps booking policy to `AI_BOOK`.
+
+## Migration / duplicate runtime
+
+- **UI:** `/mctb/ai-lead-recovery` is the canonical policy editor; `mctb.aiBooking` setup fields remain for provider OAuth/targets only until fully merged.
+- **Runtime:** When `leadRecovery.enabled`, legacy top-level `handleMctbAiBookingInboundSms` bypass is **disabled**; `AI_BOOK` enters only via Lead Recovery action routing.
+- **Removal target:** Delete standalone AI Booking SMS shortcut after all workspaces persist `leadRecovery` (no synthetic-only config).

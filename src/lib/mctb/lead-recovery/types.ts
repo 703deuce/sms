@@ -117,13 +117,56 @@ export type IntentPolicyShape = {
   escalation?: { escalateHuman?: boolean };
 };
 
+export type LeadRecoveryScenarioKey =
+  | "take_message"
+  | "booking"
+  | "emergencies"
+  | "pricing"
+  | "service_area"
+  | "payments"
+  | "existing_customer"
+  | "general_faq";
+
+export type LeadRecoveryGlobalBehavior = {
+  tone?: "professional" | "friendly" | "concise";
+  maxClarificationAttempts?: number;
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  captureOnly?: boolean;
+};
+
+export type LeadRecoveryPaymentPolicy = {
+  textToPayEnabled?: boolean;
+  amountAuthority?: "known_balance" | "configured_fixed_fee" | "operator_payment_request";
+  fixedFeeAmountMinor?: number | null;
+  fixedFeeCurrency?: string;
+};
+
+export type LeadRecoveryServiceAreaPolicy = {
+  inAreaAction?: "continue" | "book" | "callback";
+  outOfAreaAction?: "decline" | "notify" | "handoff";
+  uncertainAction?: "clarify" | "handoff";
+};
+
+export type PolicyHealthStatus =
+  | "READY"
+  | "NEEDS_CONFIGURATION"
+  | "PROVIDER_BLOCKED"
+  | "UPGRADE_REQUIRED"
+  | "DISABLED";
+
 export type LeadRecoveryWorkspaceConfig = {
   enabled: boolean;
   version: number;
   globalMode: LeadRecoveryGlobalMode;
+  enabledScenarios: Partial<Record<LeadRecoveryScenarioKey, boolean>>;
   enabledIntents: LeadRecoveryIntent[];
   intentPolicies: Partial<Record<LeadRecoveryIntent, IntentPolicyShape>>;
   fallbackPolicy: IntentPolicyShape;
+  globalBehavior: LeadRecoveryGlobalBehavior;
+  paymentPolicy: LeadRecoveryPaymentPolicy;
+  serviceAreaPolicy: LeadRecoveryServiceAreaPolicy;
+  migratedFromAiBooking?: boolean;
   collectCapabilities: LeadRecoveryCollectField[];
   answerCapabilities: Array<
     "HOURS" | "LOCATIONS" | "SERVICE_AREA" | "SERVICES" | "PRICING" | "FAQ" | "BOOKING_AVAILABILITY"
@@ -137,7 +180,21 @@ export type LeadRecoveryWorkspaceConfig = {
     highValue: boolean;
   };
   bookingLinkId?: string | null;
-  policyHealth: "READY" | "NEEDS_CONFIGURATION" | "DISABLED";
+  policyHealth: PolicyHealthStatus;
+  scenarioHealth: Partial<Record<LeadRecoveryScenarioKey, PolicyHealthStatus>>;
+};
+
+export type IntentExecutionPlanState = {
+  pendingIntents: LeadRecoveryIntent[];
+  completedIntents: LeadRecoveryIntent[];
+  blockedIntents: LeadRecoveryIntent[];
+  currentIntent: LeadRecoveryIntent | null;
+};
+
+export type MultiIntentPolicyResult = {
+  primary: PolicyEvaluationResult;
+  secondaryPlans: Array<{ intent: LeadRecoveryIntent; plan: PolicyEvaluationResult }>;
+  executionPlan: IntentExecutionPlanState;
 };
 
 export type LeadRecoveryConversationState = {
@@ -156,6 +213,8 @@ export type LeadRecoveryConversationState = {
   phase: "IDLE" | "COLLECT" | "EXECUTE" | "AWAITING_SLOT_SELECTION" | "COMPLETE";
   clarificationAttempts: number;
   lastIntent: StructuredLeadIntent | null;
+  intentPlan: IntentExecutionPlanState;
+  paymentAmountRequired?: boolean;
   updatedAt: string;
 };
 

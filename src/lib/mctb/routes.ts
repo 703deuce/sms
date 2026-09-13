@@ -5,6 +5,7 @@ export const MCTB_ROUTES = {
   missedCallDetail: (id: string) => `/mctb/missed-calls/${id}`,
   conversations: "/mctb/conversations",
   voicemail: "/mctb/voicemail",
+  aiLeadRecovery: "/mctb/ai-lead-recovery",
   analytics: "/mctb/analytics",
   setup: "/mctb/setup",
   setupStart: "/mctb/setup/start",

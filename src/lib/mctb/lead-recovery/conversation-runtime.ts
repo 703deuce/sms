@@ -6,6 +6,8 @@ import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-stor
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import { runLeadRecoveryIntentAgent } from "@/lib/mctb/lead-recovery/intent-agent";
 import { evaluateLeadRecoveryPolicy } from "@/lib/mctb/lead-recovery/policy-engine";
+import { evaluateLeadRecoveryPolicyMulti, markIntentCompleted } from "@/lib/mctb/lead-recovery/intent-plan";
+import { recordLeadRecoveryDomainEvent, actionToDomainEvent } from "@/lib/mctb/lead-recovery/domain-events";
 import { executeLeadRecoveryActions } from "@/lib/mctb/lead-recovery/action-runtime";
 import {
   applyCollectedField,
@@ -120,18 +122,54 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
     state = { ...state, clarificationAttempts: state.clarificationAttempts + 1 };
   }
 
-  const policy = evaluateLeadRecoveryPolicy({
+  const multi = evaluateLeadRecoveryPolicyMulti({
     workspace: config,
     intent,
     collectedData: state.collectedFields,
     conversationState: state,
   });
+  const policy = multi.primary;
 
   state = {
     ...state,
+    intentPlan: multi.executionPlan,
     missingFields: policy.missingFields,
     phase: policy.phase === "COLLECT" ? "COLLECT" : policy.phase === "EXECUTE" ? "EXECUTE" : state.phase,
   };
+
+  await recordLeadRecoveryDomainEvent({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: input.contactId,
+    kind: "INTENT_IDENTIFIED",
+    idempotencyKey: `intent:${conversationId}:${input.body.slice(0, 32)}`,
+    payload: {
+      primary: intent.primary_intent,
+      secondary: intent.secondary_intents,
+      confidence: intent.confidence,
+    },
+  }).catch(() => undefined);
+
+  await recordLeadRecoveryDomainEvent({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: input.contactId,
+    kind: "POLICY_MATCHED",
+    idempotencyKey: `policy:${conversationId}:${policy.matchedPolicyId}:${input.body.slice(0, 16)}`,
+    payload: { matchedPolicyId: policy.matchedPolicyId, intent: policy.intent },
+  }).catch(() => undefined);
+
+  let replyPrefix = "";
+  const pricingSecondary = multi.secondaryPlans.find(
+    (p) => p.intent === "PRICING_QUESTION" || p.intent === "ESTIMATE_REQUEST",
+  );
+  if (
+    pricingSecondary &&
+    policy.intent !== pricingSecondary.intent &&
+    pricingSecondary.plan.responseConstraints.customerMessageTemplate
+  ) {
+    replyPrefix = `${pricingSecondary.plan.responseConstraints.customerMessageTemplate} `;
+  }
 
   const runtime = await executeLeadRecoveryActions({
     workspaceId: input.workspaceId,
@@ -168,9 +206,14 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
         activeSpecialist: "SCHEDULING",
         phase: "AWAITING_SLOT_SELECTION",
       });
+      const combinedReply = replyPrefix ? `${replyPrefix}${booking.reply}` : booking.reply;
+      state = {
+        ...state,
+        intentPlan: markIntentCompleted(state.intentPlan, "BOOKING_REQUEST"),
+      };
       return {
         handled: true,
-        reply: booking.reply,
+        reply: combinedReply,
         action: booking.action,
         policy,
         intent,
@@ -196,11 +239,32 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
     return { handled: false, reason: "defer_to_john" };
   }
 
+  const domainKind = actionToDomainEvent(runtime.action);
+  if (domainKind) {
+    await recordLeadRecoveryDomainEvent({
+      workspaceId: input.workspaceId,
+      conversationId,
+      contactId: input.contactId,
+      kind: domainKind,
+      idempotencyKey: `${domainKind}:${conversationId}:${runtime.action}`,
+      payload: { action: runtime.action },
+    }).catch(() => undefined);
+  }
+
+  if (policy.phase === "EXECUTE" && policy.intent) {
+    state = {
+      ...state,
+      intentPlan: markIntentCompleted(state.intentPlan, policy.intent),
+    };
+  }
+
   await saveLeadRecoveryState(state);
+
+  const finalReply = replyPrefix ? `${replyPrefix}${runtime.reply}` : runtime.reply;
 
   return {
     handled: true,
-    reply: runtime.reply,
+    reply: finalReply,
     action: runtime.action,
     policy,
     intent,
