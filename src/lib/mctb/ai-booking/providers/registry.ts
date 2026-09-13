@@ -13,6 +13,12 @@ const ADAPTERS: Record<MctbAiBookingProviderId, MctbAiBookingProviderAdapter> = 
 export function getMctbAiBookingAdapter(
   provider: MctbAiBookingProviderId,
 ): MctbAiBookingProviderAdapter {
+  const { isRecordingBookingMode, recordingAiBookingAdapter } = require(
+    "@/lib/mctb/lead-recovery/testing/recording/recording-booking",
+  ) as typeof import("@/lib/mctb/lead-recovery/testing/recording/recording-booking");
+  if (isRecordingBookingMode()) {
+    return recordingAiBookingAdapter;
+  }
   return ADAPTERS[provider];
 }
 

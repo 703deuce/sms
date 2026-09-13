@@ -19,6 +19,11 @@ export type RecordedSms = {
 
 const outbox: RecordedSms[] = [];
 const idempotencyIndex = new Map<string, string>();
+let injectNextSmsFailure = false;
+
+export function setRecordingSmsNextFailure(fail: boolean) {
+  injectNextSmsFailure = fail;
+}
 
 export function clearRecordingSmsOutbox(): void {
   outbox.length = 0;
@@ -41,6 +46,10 @@ export function isRecordingSmsMode(): boolean {
 export async function deliverRecordingSms(
   input: QuickSendSmsInput,
 ): Promise<{ sid: string; status: string; trackingToken?: string }> {
+  if (injectNextSmsFailure) {
+    injectNextSmsFailure = false;
+    throw new Error("LR_E2E: SMS send injected failure");
+  }
   const to = normalizeE164(input.to);
   const from = normalizeE164(input.from || "+15714073615") || "+15714073615";
   const key = input.idempotencyKey?.trim();

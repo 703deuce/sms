@@ -11,6 +11,17 @@ export async function recordMctbHandoffEvent(input: {
   urgencyAssessmentId?: string | null;
   metadata?: Record<string, unknown>;
 }) {
+  if (process.env.LR_CERT_E2E === "1") {
+    return {
+      event: {
+        id: `e2e-handoff-${input.idempotencyKey}`,
+        workspaceId: input.workspaceId,
+        eventType: input.eventType,
+        idempotencyKey: input.idempotencyKey,
+      },
+      created: true,
+    };
+  }
   const prisma = getPrisma();
   const existing = await prisma.mctbHandoffEvent.findUnique({
     where: { idempotencyKey: input.idempotencyKey },

@@ -38,6 +38,24 @@ function toDto(row: {
 
 export async function listMctbBookingLinks(workspaceId: string, activeOnly = false) {
   const prisma = getPrisma();
+  if (!prisma.mctbBookingLink?.findMany) {
+    if (process.env.LR_CERT_E2E === "1" && process.env.LR_E2E_BOOKING_URL) {
+      return [
+        {
+          id: "lr-e2e-booking-link",
+          label: "E2E",
+          url: process.env.LR_E2E_BOOKING_URL,
+          description: null,
+          active: true,
+          isDefault: true,
+          hostname: bookingLinkHostname(process.env.LR_E2E_BOOKING_URL),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+    }
+    return [];
+  }
   const rows = await prisma.mctbBookingLink.findMany({
     where: { workspaceId, ...(activeOnly ? { active: true } : {}) },
     orderBy: [{ isDefault: "desc" }, { label: "asc" }],

@@ -598,7 +598,8 @@ export function formatCertReport(input: {
 | Hard failures | ${m.hardFailures.length} |
 | Soft failures | ${m.softFailures.length} |
 | Unrequested action attempts (blocked by runtime) | ${m.unrequestedActionAttempts} |
-| READY_FOR_PRODUCTION_REVIEW | **${input.ready ? "YES" : "NO"}** |
+| INTENT_CERT_ONLY (not full E2E) | **${input.ready ? "PASS" : "FAIL"}** |
+| FULL_AGENT_PRODUCTION_CERTIFIED | **Run \`mctb-lead-recovery-e2e-cert.ts\`** |
 
 ## Scoring
 
@@ -665,7 +666,8 @@ P95 segments per reply ............... ${m.p95SegmentsPerReply}
 3+ segment failures (ordinary) ..... ${m.unnecessary3PlusSegmentCount}
 Hard failures ........................ ${m.hardFailures.length}
 Est. DeepSeek cost ................... $${estCost.toFixed(4)}
-READY_FOR_PRODUCTION_REVIEW .......... ${input.ready ? "YES" : "NO"}
+INTENT_CERT_ONLY ..................... ${input.ready ? "PASS" : "FAIL"}
+FULL_AGENT_PRODUCTION_CERTIFIED .... see E2E cert script
 \`\`\`
 `;
 }

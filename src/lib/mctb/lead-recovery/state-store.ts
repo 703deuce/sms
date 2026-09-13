@@ -11,6 +11,18 @@ import type {
 
 const STATE_KEY = "leadRecovery";
 
+const e2eInMemoryState = new Map<string, LeadRecoveryConversationState>();
+
+function e2eStateKey(workspaceId: string, conversationId: string) {
+  return `${workspaceId}:${conversationId}`;
+}
+
+function useE2eInMemoryState(): boolean {
+  if (process.env.LR_CERT_E2E !== "1") return false;
+  const prisma = getPrisma();
+  return !prisma.mctbConversationAutomationState?.findUnique;
+}
+
 function defaultState(input: {
   workspaceId: string;
   conversationId: string;
@@ -45,6 +57,11 @@ export async function loadLeadRecoveryState(input: {
   workspaceId: string;
   conversationId: string;
 }): Promise<LeadRecoveryConversationState> {
+  if (useE2eInMemoryState()) {
+    const hit = e2eInMemoryState.get(e2eStateKey(input.workspaceId, input.conversationId));
+    if (hit) return hit;
+    return defaultState(input);
+  }
   const prisma = getPrisma();
   const row = await prisma.mctbConversationAutomationState.findUnique({
     where: { conversationId: input.conversationId },
@@ -59,6 +76,13 @@ export async function loadLeadRecoveryState(input: {
 }
 
 export async function saveLeadRecoveryState(state: LeadRecoveryConversationState): Promise<void> {
+  if (useE2eInMemoryState()) {
+    e2eInMemoryState.set(
+      e2eStateKey(state.workspaceId, state.conversationId),
+      { ...state, updatedAt: new Date().toISOString() },
+    );
+    return;
+  }
   const prisma = getPrisma();
   const existing = await prisma.mctbConversationAutomationState.findUnique({
     where: { conversationId: state.conversationId },

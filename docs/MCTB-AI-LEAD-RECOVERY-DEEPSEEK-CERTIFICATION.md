@@ -15,7 +15,7 @@
 | Hard failures | 0 |
 | Soft failures | 1 |
 | Unrequested action attempts (blocked by runtime) | 0 |
-| READY_FOR_PRODUCTION_REVIEW | **YES** |
+| INTENT_CERT_ONLY (see E2E doc) | **YES** |
 
 ## Scoring
 
@@ -84,3 +84,43 @@ Hard failures ........................ 0
 Est. DeepSeek cost ................... $0.0027
 READY_FOR_PRODUCTION_REVIEW .......... YES
 ```
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.
+
+
+## Full agent E2E (separate run)
+
+See `docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md`.

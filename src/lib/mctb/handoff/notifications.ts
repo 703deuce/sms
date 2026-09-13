@@ -51,6 +51,12 @@ export async function deliverMctbHandoffNotifications(input: {
   conversationId?: string | null;
   missedCallEventId?: string | null;
 }) {
+  const { isRecordingHandoffMode, deliverRecordingHandoffNotifications } = await import(
+    "@/lib/mctb/lead-recovery/testing/recording/recording-handoff"
+  );
+  if (isRecordingHandoffMode()) {
+    return deliverRecordingHandoffNotifications(input);
+  }
   const config = await loadMctbHandoffConfig(input.workspaceId);
   const recipients = (await loadMctbNotificationRecipients(input.workspaceId)).filter(
     (r) => r.enabled,

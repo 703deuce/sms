@@ -205,6 +205,12 @@ async function attachConversationOutboundMessage(input: {
 }
 
 export async function createAndSendPaymentRequest(input: PaymentRequestCreateInput) {
+  const { isRecordingPaymentMode, recordingCreateAndSendPaymentRequest } = await import(
+    "@/lib/mctb/lead-recovery/testing/recording/recording-payment"
+  );
+  if (isRecordingPaymentMode()) {
+    return recordingCreateAndSendPaymentRequest(input);
+  }
   const prisma = getPrisma();
   const phone = normalizeE164(input.customerPhoneE164);
 

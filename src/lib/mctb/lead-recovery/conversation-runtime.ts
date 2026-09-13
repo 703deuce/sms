@@ -20,6 +20,7 @@ import type { LeadRecoveryInboundResult } from "@/lib/mctb/lead-recovery/types";
 import { emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
 import {
   invalidatePendingActions,
+  markPendingAction,
   registerInboundProviderMessage,
   shouldInvalidatePendingActions,
   withLeadRecoveryConversationLock,
@@ -209,6 +210,24 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     replyPrefix = `${pricingSecondary.plan.responseConstraints.customerMessageTemplate} `;
   }
 
+  const writeEpoch = state.stateVersion ?? 0;
+  const consequential = policy.nextActions.find((a) =>
+    [
+      "SEND_TEXT_TO_PAY",
+      "AI_BOOK",
+      "SEND_BOOKING_LINK",
+      "CREATE_CALLBACK_REQUEST",
+      "SEND_OWNER_SMS",
+    ].includes(a.action),
+  );
+  if (consequential && policy.phase === "EXECUTE") {
+    state = markPendingAction(state, {
+      action: consequential.action,
+      epoch: writeEpoch,
+    });
+    await saveLeadRecoveryState(state);
+  }
+
   const runtime = await executeLeadRecoveryActions({
     workspaceId: input.workspaceId,
     conversationId,
@@ -222,6 +241,7 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     intent,
     policy,
     collectedFields: state.collectedFields,
+    writeEpoch,
   });
 
   if (runtime.delegateAiBooking) {

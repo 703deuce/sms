@@ -13,6 +13,7 @@ import type {
 import { isKnownAction } from "@/lib/mctb/lead-recovery/action-registry";
 import { promptForCollectField } from "@/lib/mctb/lead-recovery/field-collection";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
+import { authorizeProviderWrite } from "@/lib/mctb/lead-recovery/provider-write-gate";
 
 export type ActionRuntimeContext = {
   workspaceId: string;
@@ -27,6 +28,8 @@ export type ActionRuntimeContext = {
   intent: StructuredLeadIntent;
   policy: PolicyEvaluationResult;
   collectedFields: Partial<Record<LeadRecoveryCollectField, string>>;
+  /** Epoch captured when consequential action was armed — required for provider writes. */
+  writeEpoch?: number;
 };
 
 export type ActionRuntimeResult = {
@@ -39,6 +42,9 @@ export type ActionRuntimeResult = {
 };
 
 async function resolveBookingUrl(workspaceId: string, config: LeadRecoveryWorkspaceConfig): Promise<string | null> {
+  if (process.env.LR_CERT_E2E === "1") {
+    return process.env.LR_E2E_BOOKING_URL || "https://book.example.test/acme-schedule";
+  }
   if (config.bookingLinkId) {
     const prisma = getPrisma();
     const row = await prisma.mctbBookingLink.findFirst({
@@ -78,15 +84,19 @@ async function notifyBusiness(
     leadSnapshotId: snapshot.id,
     metadata: { source: "lead_recovery", intent: input.intent.primary_intent },
   });
-  await deliverMctbHandoffNotifications({
-    workspaceId: input.workspaceId,
-    handoffEventId: event.id,
-    eventType,
-    urgent: eventType === "urgent_detected",
-    facts: customerFacts,
-    derived: { requestedAction: input.intent.primary_intent },
-    conversationId: input.conversationId,
-  });
+  try {
+    await deliverMctbHandoffNotifications({
+      workspaceId: input.workspaceId,
+      handoffEventId: event.id,
+      eventType,
+      urgent: eventType === "urgent_detected",
+      facts: customerFacts,
+      derived: { requestedAction: input.intent.primary_intent },
+      conversationId: input.conversationId,
+    });
+  } catch {
+    /* notification failure must not crash turn — customer reply must stay truthful */
+  }
 }
 
 export async function executeLeadRecoveryActions(
@@ -173,10 +183,23 @@ export async function executeLeadRecoveryActions(
           action = "payment_amount_required";
           break;
         }
+        if (ctx.writeEpoch !== undefined) {
+          const auth = await authorizeProviderWrite({
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            action: "SEND_TEXT_TO_PAY",
+            writeEpoch: ctx.writeEpoch,
+          });
+          if (!auth.ok) {
+            reply = auth.customerMessage;
+            action = "payment_stale_blocked";
+            break;
+          }
+        }
         const { createAndSendPaymentRequest } = await import("@/lib/payment-requests/service");
         const idempotencyKey = `lr-t2p:${ctx.conversationId}:${ctx.intent.primary_intent}`;
         try {
-          await createAndSendPaymentRequest({
+          const payResult = await createAndSendPaymentRequest({
             workspaceId: ctx.workspaceId,
             customerPhoneE164: ctx.customerPhone,
             amountMinor,
@@ -189,8 +212,13 @@ export async function executeLeadRecoveryActions(
             idempotencyKey,
             sendSms: true,
           });
-          reply = "Payment link sent by text.";
-          action = "payment_request_sent";
+          if (payResult && "smsFailed" in payResult && payResult.smsFailed) {
+            reply = "Your payment link is ready but I couldn't text it. Our team will follow up.";
+            action = "payment_sms_failed";
+          } else {
+            reply = "Payment link sent by text.";
+            action = "payment_request_sent";
+          }
         } catch {
           reply = "Couldn't start payment — our team will follow up.";
           action = "payment_failed";
