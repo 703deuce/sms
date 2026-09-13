@@ -40,15 +40,14 @@ export function MctbSetupVoicemailEditorView() {
       title="Voicemail"
       description="Configure greeting sources and voicemail behavior for missed calls."
       showSave={false}
-      headerAction={
-        <Link
-          href={MCTB_ROUTES.voicemail}
-          className="mctb-setup-btn mctb-setup-btn--outline text-[13px]"
-        >
-          Open voicemail inbox
-        </Link>
-      }
     >
+      <p className="mb-4 text-[13px] text-muted-foreground">
+        Greeting and call-flow settings live here.{" "}
+        <Link href={MCTB_ROUTES.voicemail} className="font-medium text-foreground underline">
+          Open voicemail inbox
+        </Link>{" "}
+        for messages, transcripts, and greeting studio.
+      </p>
       <div className="ref-card p-5">
         <MctbVoicemailSetupSection phoneNumberId={phoneNumberId} />
       </div>
