@@ -97,6 +97,8 @@ export async function POST(request: Request) {
       expiresAt,
       idempotencyKey: idempotencyKey || null,
       sendSms: body.sendSms !== false,
+      deliveryMethod:
+        body.deliveryMethod === "invoice" || body.sendInvoice === true ? "invoice" : "checkout",
     });
 
     return NextResponse.json({ data: result });

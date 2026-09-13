@@ -26,6 +26,8 @@ export type PaymentRequestCreateInput = {
   expiresAt?: Date | null;
   idempotencyKey?: string | null;
   sendSms?: boolean;
+  /** User-facing: secure checkout link (default) or formal Send Invoice. */
+  deliveryMethod?: "checkout" | "invoice";
 };
 
 export type PaymentRequestListFilters = {
@@ -69,6 +71,7 @@ export type PaymentRequestView = {
   amountPaidMinor: number | null;
   smsError: string | null;
   processorCheckoutId: string | null;
+  collectionMethod: string;
   messageId: string | null;
 };
 

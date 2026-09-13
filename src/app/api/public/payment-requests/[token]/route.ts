@@ -53,12 +53,29 @@ export async function GET(request: Request, ctx: Ctx) {
   }
 
   await recordPaymentRequestOpen(token);
+  const stripe = getStripe();
+
+  if (resolved.row.collectionMethod === "invoice") {
+    const hosted = resolved.row.processorHostedInvoiceUrl;
+    if (hosted) {
+      return NextResponse.redirect(hosted, 302);
+    }
+    const invoiceId = resolved.row.processorInvoiceId;
+    const acct = resolved.row.processorConnectedAccountId;
+    if (invoiceId && acct && stripe) {
+      const inv = await stripe.invoices.retrieve(invoiceId, {}, { stripeAccount: acct });
+      if (inv.hosted_invoice_url) {
+        return NextResponse.redirect(inv.hosted_invoice_url, 302);
+      }
+    }
+    return NextResponse.json({ error: "Invoice unavailable" }, { status: 503 });
+  }
+
   const checkoutId = resolved.row.processorCheckoutId;
   if (!checkoutId) {
     return NextResponse.json({ error: "Checkout unavailable" }, { status: 503 });
   }
 
-  const stripe = getStripe();
   if (!stripe || !resolved.row.processorConnectedAccountId) {
     return NextResponse.json({ error: "Payments unavailable" }, { status: 503 });
   }

@@ -197,6 +197,11 @@ Codes in `MicrosoftConnectorError`. Never expose raw Graph JSON in SMS.
 
 ---
 
+## Full operations appendix — MS-OPS-099
+
+Per-operation contracts (endpoint, permissions, account types, idempotency, errors, examples):  
+**`MICROSOFT-OUTLOOK-CALENDAR-OPERATIONS-APPENDIX.md`** — required for provider conformance; not deferred as “structured for expansion.”
+
 ## Definition of done — MS-DONE-098
 
 See `MICROSOFT-CALENDAR-CONNECTOR-CONFORMANCE-AUDIT.md`.

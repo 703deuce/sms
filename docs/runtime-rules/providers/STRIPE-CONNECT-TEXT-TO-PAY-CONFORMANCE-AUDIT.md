@@ -29,12 +29,17 @@
 | ST-PAY-001 | Success URL not authority | **RISK** (`?paid=1`) | **COMPLIANT** | Success URL → `?return=1` only |
 | ST-WHK-001 | Signature verification | COMPLIANT | COMPLIANT | `verifyAndParseStripeWebhook` |
 | ST-WHK-002 | Event id dedupe | COMPLIANT | COMPLIANT | `providerWebhookEvent` |
+| ST-WHK-004 | `event.account` tenant validation | **MISSING** | **COMPLIANT** | `tenant-validation.ts`, webhook authorize |
+| ST-INV-001 | Send Invoice on connected account | **NOT_WIRED** | **COMPLIANT** | `stripe-invoice.ts`, `invoice.ts` |
+| ST-RFD-001 | Connected-account refunds + ledger | **MISSING** | **COMPLIANT** | `refunds.ts`, `payment_request_refunds` |
+| ST-REC-001 | Single PAID reconciliation | **PARTIAL** | **COMPLIANT** | `reconcile.ts` |
 | ST-ARCH-102 | LLM money mutations | COMPLIANT | COMPLIANT | No agent Stripe imports |
 
 ## Mechanical checks
 
 ```bash
 npx tsx scripts/test-stripe-text-to-pay-conformance.ts
+npx tsx scripts/test-stripe-text-to-pay-provider-completion.ts
 npx tsx scripts/test-payment-requests.ts
 ```
 
@@ -51,12 +56,18 @@ npx tsx scripts/test-payment-requests.ts
 | `ONE_CANONICAL_STRIPE_CLIENT` | **YES** |
 | `CHECKOUT` | **CONNECTED_AND_WORKING** |
 | `PAYMENT_LINKS` | **INTENTIONALLY_LIMITED** (not per-SMS default) |
-| `INVOICES` | **NOT_LAUNCH_REQUIRED** (documented) |
+| `STRIPE_SEND_INVOICE` | **CONNECTED_AND_WORKING** |
+| `STRIPE_CONNECTED_ACCOUNT_REFUNDS` | **CONNECTED_AND_WORKING** |
+| `STRIPE_EVENT_ACCOUNT_TENANT_VALIDATION` | **CONNECTED_AND_WORKING** |
+| `STRIPE_WEBHOOK_DEDUPE` | **CONNECTED_AND_WORKING** |
+| `STRIPE_DUPLICATE_PAYMENT_CONFIRMED_EVENTS` | **0** (reconcile service) |
+| `PAYMENT_LINKS` | **INTENTIONALLY_NOT_DEFAULT** |
 | `WEBHOOKS` | **CONNECTED_AND_WORKING** |
-| `PAID_FROM_WEBHOOK_API_ONLY` | **YES** |
+| `PAID_FROM_VERIFIED_PROVIDER_STATE_ONLY` | **YES** |
 | `PAID_FROM_SUCCESS_URL` | **NO** |
+| `CROSS_WORKSPACE_STRIPE_MUTATIONS` | **0** (tenant gate) |
 | `UNAPPROVED_STRIPE_PAYMENT_BYPASSES` | **0** (Text-to-Pay uses connector) |
-| `UNRESOLVED_NON_COMPLIANCE` | **0** |
+| `UNRESOLVED_STRIPE_NON_COMPLIANCE` | **0** |
 
 ## Approved non–Text-to-Pay Stripe usage
 

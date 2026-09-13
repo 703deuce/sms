@@ -52,7 +52,27 @@ function checkoutTransactionType(session: Stripe.Checkout.Session) {
   return resolveMarketplaceTransactionType((session.metadata || {}) as Record<string, string>);
 }
 
-async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+async function authorizePaymentRequestConnectEvent(
+  event: Stripe.Event,
+  metadata: Record<string, string | undefined>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const requestId = metadata.transovo_payment_request_id;
+  const workspaceId = metadata.workspace_id;
+  if (!requestId || !workspaceId) return { ok: false, reason: "missing_metadata" };
+
+  const { assertConnectEventAuthorizedForPaymentRequest } = await import(
+    "@/lib/stripe-connect/tenant-validation"
+  );
+  const auth = await assertConnectEventAuthorizedForPaymentRequest({
+    event,
+    paymentRequestId: requestId,
+    metadataWorkspaceId: workspaceId,
+  });
+  if (!auth.authorized) return { ok: false, reason: auth.reason };
+  return { ok: true };
+}
+
+async function routeCheckoutSessionCompleted(event: Stripe.Event, session: Stripe.Checkout.Session) {
   const tx = checkoutTransactionType(session);
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   const { isMassTextingCheckoutMetadata, handleMassTextingCheckoutCompleted } = await import(
@@ -94,8 +114,23 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   }
   const { isPaymentRequestCheckoutMetadata } = await import("@/lib/payment-requests/stripe-checkout");
   if (isPaymentRequestCheckoutMetadata(metadata)) {
+    const auth = await authorizePaymentRequestConnectEvent(event, metadata);
+    if (!auth.ok) {
+      return {
+        subsystem: "payment_request" as const,
+        skipped: true as const,
+        securityViolation: auth.reason,
+      };
+    }
     const { handlePaymentRequestCheckoutCompleted } = await import("@/lib/payment-requests/service");
-    return handlePaymentRequestCheckoutCompleted(session);
+    const source =
+      event.type === "checkout.session.async_payment_succeeded"
+        ? "checkout_async"
+        : "checkout_session";
+    return handlePaymentRequestCheckoutCompleted(session, {
+      stripeEventId: event.id,
+      source,
+    });
   }
 
   const { isAppointmentCheckoutMetadata, handleAppointmentCheckoutCompleted } = await import(
@@ -111,8 +146,8 @@ async function routeCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   return { subsystem: "none" as const, skipped: true };
 }
 
-async function routeCheckoutSessionAsyncSucceeded(session: Stripe.Checkout.Session) {
-  return routeCheckoutSessionCompleted(session);
+async function routeCheckoutSessionAsyncSucceeded(event: Stripe.Event, session: Stripe.Checkout.Session) {
+  return routeCheckoutSessionCompleted(event, session);
 }
 
 async function routeCheckoutSessionAsyncFailed(session: Stripe.Checkout.Session) {
@@ -179,7 +214,36 @@ async function routeSubscriptionEvent(
   return { subsystem: "saas_billing" as const };
 }
 
-async function routeInvoicePaid(invoice: Stripe.Invoice) {
+async function routeConnectPaymentRequestInvoice(
+  event: Stripe.Event,
+  invoice: Stripe.Invoice,
+): Promise<{ handled: boolean; subsystem: string; skipped?: boolean; securityViolation?: string } | null> {
+  const metadata = (invoice.metadata || {}) as Record<string, string | undefined>;
+  const { isPaymentRequestCheckoutMetadata } = await import("@/lib/payment-requests/stripe-checkout");
+  if (!isPaymentRequestCheckoutMetadata(metadata)) return null;
+
+  const auth = await authorizePaymentRequestConnectEvent(event, metadata);
+  if (!auth.ok) {
+    return {
+      handled: false,
+      subsystem: "payment_request",
+      skipped: true,
+      securityViolation: auth.reason,
+    };
+  }
+
+  const { handlePaymentRequestInvoicePaid } = await import("@/lib/payment-requests/service");
+  return {
+    handled: true,
+    subsystem: "payment_request",
+    ...(await handlePaymentRequestInvoicePaid(invoice, { stripeEventId: event.id })),
+  };
+}
+
+async function routeInvoicePaid(event: Stripe.Event, invoice: Stripe.Invoice) {
+  const connectPr = await routeConnectPaymentRequestInvoice(event, invoice);
+  if (connectPr) return connectPr;
+
   await handlePlatformInvoicePaid(invoice);
   const subscriptionId = invoiceSubscriptionId(invoice);
   if (subscriptionId) {
@@ -246,9 +310,9 @@ async function processStripeEvent(event: Stripe.Event) {
 
   switch (event.type) {
     case "checkout.session.completed":
-      return routeCheckoutSessionCompleted(obj as unknown as Stripe.Checkout.Session);
+      return routeCheckoutSessionCompleted(event, obj as unknown as Stripe.Checkout.Session);
     case "checkout.session.async_payment_succeeded":
-      return routeCheckoutSessionAsyncSucceeded(obj as unknown as Stripe.Checkout.Session);
+      return routeCheckoutSessionAsyncSucceeded(event, obj as unknown as Stripe.Checkout.Session);
     case "checkout.session.async_payment_failed":
       return routeCheckoutSessionAsyncFailed(obj as unknown as Stripe.Checkout.Session);
     case "checkout.session.expired": {
@@ -285,7 +349,7 @@ async function processStripeEvent(event: Stripe.Event) {
       return { subsystem: "platform_product" as const, action: "overage_billed" };
     case "invoice.paid":
     case "invoice.payment_succeeded":
-      return routeInvoicePaid(obj as unknown as Stripe.Invoice);
+      return routeInvoicePaid(event, obj as unknown as Stripe.Invoice);
     case "invoice.payment_failed":
       return routeInvoiceFailed(obj as unknown as Stripe.Invoice);
     case "customer.subscription.created":

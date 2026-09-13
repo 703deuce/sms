@@ -68,8 +68,8 @@ UI and runtime share this service.
 | Mode | Text-to-Pay launch | Implementation |
 |------|-------------------|----------------|
 | **Checkout Session** | **Primary** per-request SMS link | `createDirectChargeCheckoutSession` |
-| **Invoice** | Formal invoice option (future / product flag) | Connected-account Customer + Invoice lifecycle |
-| **Payment Link** | Reusable catalog links only | Not per arbitrary SMS amount by default |
+| **Invoice (Send Invoice)** | **Supported** — `deliveryMethod: invoice` | `createAndSendDirectChargeInvoice` + `createPaymentRequestStripeInvoice` |
+| **Payment Link** | **SUPPORTED_PROVIDER_CAPABILITY** | **INTENTIONALLY_NOT_DEFAULT** — not launch Text-to-Pay UI |
 | **PaymentIntent / Elements** | Only if embedded UI required | PCI via Stripe.js |
 
 ---
@@ -111,16 +111,42 @@ Async methods: `checkout.session.completed` with unpaid `payment_status` → `pa
 | ST-WHK-001 | Verify `Stripe-Signature` on raw body |
 | ST-WHK-002 | Dedupe `event.id` (`providerWebhookEvent`) |
 | ST-WHK-003 | Connect events include `event.account` — resolve workspace via `merchantAccountId` |
+| ST-WHK-004 | **Tenant authorization:** `event.account` → canonical connection → workspace; PaymentRequest must belong to that workspace. Metadata is correlation only. |
 
-Critical events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `account.updated`, `account.application.deauthorized`.
+Critical events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `invoice.paid`, `invoice.payment_succeeded`, `account.updated`, `account.application.deauthorized`.
+
+Implementation: `src/lib/stripe-connect/tenant-validation.ts`, `authorizePaymentRequestConnectEvent` in webhook handler.
+
+---
+
+## Send Invoice — ST-INV-001
+
+| Step | Rule |
+|------|------|
+| Customer | Stripe Customer on **connected account** (`getOrCreateStripeCustomerForContact` or ephemeral create) |
+| Items | `invoiceItems.create` on connected account |
+| Invoice | `collection_method: send_invoice`, finalize, `sendInvoice` |
+| Persist | `processorInvoiceId`, `processorHostedInvoiceUrl`, `collectionMethod: invoice` on PaymentRequest |
+| PAID | `invoice.paid` / `invoice.payment_succeeded` with `status=paid` only — via `reconcilePaymentRequestPaid` |
+| States | draft/open/paid/void/uncollectible — do not mark Transovo `sent` as Stripe `paid` |
 
 ---
 
 ## Refunds — ST-RFD-001
 
-Direct charge refunds: `stripe.refunds.create(..., { stripeAccount: acct_xxx })`.
+Direct charge refunds: `createDirectChargeRefund` → `stripe.refunds.create(..., { stripeAccount: acct_xxx })`.
 
-Application fee refund policy is product-defined (`refund_application_fee`).
+Ledger: `payment_request_refunds` — never overwrite original payment row; update `amountRefundedMinor` + `partially_refunded` / `refunded`.
+
+Application fee: `STRIPE_TEXT_TO_PAY_REFUND_APPLICATION_FEE_POLICY = NOT_APPLICABLE` (no application fees on Text-to-Pay today).
+
+API: `POST /api/payment-requests/{id}/refund`
+
+---
+
+## Reconciliation — ST-REC-001
+
+Single paid transition: `reconcilePaymentRequestPaid` — prevents duplicate `payment_received` from `checkout.session.completed` + `async_payment_succeeded`.
 
 ---
 

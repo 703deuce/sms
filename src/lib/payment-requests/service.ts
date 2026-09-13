@@ -10,6 +10,8 @@ import { resolveAppointmentOutboundSmsRoute } from "@/lib/appointments/sms-sende
 import { recordPaymentRequestEvent } from "@/lib/payment-requests/events";
 import { buildPaymentRequestPublicUrl } from "@/lib/payment-requests/public-url";
 import { createPaymentRequestStripeCheckout } from "@/lib/payment-requests/stripe-checkout";
+import { createPaymentRequestStripeInvoice } from "@/lib/payment-requests/stripe-invoice";
+import { reconcilePaymentRequestPaid } from "@/lib/payment-requests/reconcile";
 import { resolvePaymentRequestMessaging } from "@/lib/payment-requests/messaging";
 import { statusFilterMatches } from "@/lib/payment-requests/status";
 import type {
@@ -54,6 +56,7 @@ function mapRow(row: PaymentRequest): PaymentRequestView {
     amountPaidMinor: row.amountPaidMinor,
     smsError: row.smsError,
     processorCheckoutId: row.processorCheckoutId,
+    collectionMethod: row.collectionMethod || "checkout",
     messageId: row.messageId,
   };
 }
@@ -248,47 +251,101 @@ export async function createAndSendPaymentRequest(input: PaymentRequestCreateInp
     actorUserId: input.createdByUserId,
   });
 
-  const checkout = await createPaymentRequestStripeCheckout({
-    workspaceId: input.workspaceId,
-    paymentRequestId: row.id,
-    amountMinor: row.amountMinor,
-    currency: row.currency,
-    description: row.description,
-    sourceType: row.sourceType,
-    conversationId: row.conversationId,
-    appointmentId: row.appointmentId,
-    publicToken: row.publicToken,
-  });
+  const deliveryMethod = input.deliveryMethod === "invoice" ? "invoice" : "checkout";
 
-  if ("error" in checkout) {
+  if (deliveryMethod === "invoice") {
+    const invoice = await createPaymentRequestStripeInvoice({
+      workspaceId: input.workspaceId,
+      paymentRequestId: row.id,
+      amountMinor: row.amountMinor,
+      currency: row.currency,
+      description: row.description,
+      sourceType: row.sourceType,
+      customerPhoneE164: phone,
+      customerName: input.customerName,
+      customerEmail: undefined,
+      contactId: input.contactId,
+      conversationId: row.conversationId,
+      appointmentId: row.appointmentId,
+      publicToken: row.publicToken,
+    });
+
+    if ("error" in invoice) {
+      row = await prisma.paymentRequest.update({
+        where: { id: row.id },
+        data: { status: "failed", failedAt: new Date(), smsError: invoice.error },
+      });
+      await recordPaymentRequestEvent({
+        paymentRequestId: row.id,
+        workspaceId: input.workspaceId,
+        eventType: "invoice_failed",
+        payload: { error: invoice.error },
+      });
+      throw new Error(invoice.error);
+    }
+
     row = await prisma.paymentRequest.update({
       where: { id: row.id },
-      data: { status: "failed", failedAt: new Date(), smsError: checkout.error },
+      data: {
+        status: "ready",
+        collectionMethod: "invoice",
+        processorInvoiceId: invoice.invoiceId,
+        processorHostedInvoiceUrl: invoice.hostedInvoiceUrl,
+        processorConnectedAccountId: invoice.connectedAccountId,
+        customerId: invoice.stripeCustomerId,
+      },
     });
+
     await recordPaymentRequestEvent({
       paymentRequestId: row.id,
       workspaceId: input.workspaceId,
-      eventType: "checkout_failed",
-      payload: { error: checkout.error },
+      eventType: "invoice_sent",
+      payload: { invoiceId: invoice.invoiceId, hostedInvoiceUrl: invoice.hostedInvoiceUrl },
     });
-    throw new Error(checkout.error);
+  } else {
+    const checkout = await createPaymentRequestStripeCheckout({
+      workspaceId: input.workspaceId,
+      paymentRequestId: row.id,
+      amountMinor: row.amountMinor,
+      currency: row.currency,
+      description: row.description,
+      sourceType: row.sourceType,
+      conversationId: row.conversationId,
+      appointmentId: row.appointmentId,
+      publicToken: row.publicToken,
+    });
+
+    if ("error" in checkout) {
+      row = await prisma.paymentRequest.update({
+        where: { id: row.id },
+        data: { status: "failed", failedAt: new Date(), smsError: checkout.error },
+      });
+      await recordPaymentRequestEvent({
+        paymentRequestId: row.id,
+        workspaceId: input.workspaceId,
+        eventType: "checkout_failed",
+        payload: { error: checkout.error },
+      });
+      throw new Error(checkout.error);
+    }
+
+    row = await prisma.paymentRequest.update({
+      where: { id: row.id },
+      data: {
+        status: "ready",
+        collectionMethod: "checkout",
+        processorCheckoutId: checkout.sessionId,
+        processorConnectedAccountId: checkout.connectedAccountId,
+      },
+    });
+
+    await recordPaymentRequestEvent({
+      paymentRequestId: row.id,
+      workspaceId: input.workspaceId,
+      eventType: "checkout_created",
+      payload: { sessionId: checkout.sessionId },
+    });
   }
-
-  row = await prisma.paymentRequest.update({
-    where: { id: row.id },
-    data: {
-      status: "ready",
-      processorCheckoutId: checkout.sessionId,
-      processorConnectedAccountId: checkout.connectedAccountId,
-    },
-  });
-
-  await recordPaymentRequestEvent({
-    paymentRequestId: row.id,
-    workspaceId: input.workspaceId,
-    eventType: "checkout_created",
-    payload: { sessionId: checkout.sessionId },
-  });
 
   const publicUrl = buildPaymentRequestPublicUrl(row.publicToken);
   const shouldSend = input.sendSms !== false;
@@ -615,13 +672,16 @@ export async function listPaymentRequestsForConversation(
   return rows.map(mapRow);
 }
 
-export async function handlePaymentRequestCheckoutCompleted(session: {
-  id: string;
-  metadata?: Record<string, string | null | undefined> | null;
-  amount_total?: number | null;
-  payment_intent?: string | null;
-  payment_status?: string | null;
-}) {
+export async function handlePaymentRequestCheckoutCompleted(
+  session: {
+    id: string;
+    metadata?: Record<string, string | null | undefined> | null;
+    amount_total?: number | null;
+    payment_intent?: string | null;
+    payment_status?: string | null;
+  },
+  opts?: { stripeEventId?: string | null; source?: "checkout_session" | "checkout_async" },
+) {
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   const requestId = metadata.transovo_payment_request_id;
   const workspaceId = metadata.workspace_id;
@@ -632,17 +692,18 @@ export async function handlePaymentRequestCheckoutCompleted(session: {
     where: { id: requestId, workspaceId },
   });
   if (!row) return { handled: false as const, skipped: true as const };
-  if (row.status === "paid") return { handled: true as const, paymentRequestId: row.id, duplicate: true as const };
 
   const { isCheckoutSessionPaid } = await import("@/lib/stripe-connect/constants");
   if (!isCheckoutSessionPaid(session)) {
-    await recordPaymentRequestEvent({
-      paymentRequestId: row.id,
-      workspaceId,
-      eventType: "payment_processing",
-      actorType: "provider",
-      payload: { sessionId: session.id, payment_status: session.payment_status || "unpaid" },
-    });
+    if (row.status !== "paid") {
+      await recordPaymentRequestEvent({
+        paymentRequestId: row.id,
+        workspaceId,
+        eventType: "payment_processing",
+        actorType: "provider",
+        payload: { sessionId: session.id, payment_status: session.payment_status || "unpaid" },
+      });
+    }
     return {
       handled: true as const,
       paymentRequestId: row.id,
@@ -656,26 +717,76 @@ export async function handlePaymentRequestCheckoutCompleted(session: {
       ? session.payment_intent
       : session.payment_intent || null;
 
-  await prisma.paymentRequest.update({
-    where: { id: row.id },
-    data: {
-      status: "paid",
-      paidAt: new Date(),
-      amountPaidMinor: amountCents,
-      processorPaymentIntentId: paymentIntent,
-      processorCheckoutId: session.id,
-    },
-  });
+  const source =
+    opts?.source ||
+    (opts?.stripeEventId?.includes("async") ? "checkout_async" : "checkout_session");
 
-  await recordPaymentRequestEvent({
+  const result = await reconcilePaymentRequestPaid({
     paymentRequestId: row.id,
     workspaceId,
-    eventType: "payment_received",
-    actorType: "provider",
-    payload: { sessionId: session.id, paymentIntent },
+    source,
+    amountMinor: amountCents,
+    processorCheckoutId: session.id,
+    processorPaymentIntentId: paymentIntent,
+    stripeEventId: opts?.stripeEventId,
   });
 
-  return { handled: true as const, paymentRequestId: row.id };
+  return {
+    handled: true as const,
+    paymentRequestId: row.id,
+    duplicate: result.duplicate,
+  };
+}
+
+export async function handlePaymentRequestInvoicePaid(
+  invoice: {
+    id: string;
+    metadata?: Record<string, string | null | undefined> | null;
+    amount_paid?: number | null;
+    total?: number | null;
+    payment_intent?: string | null;
+    charge?: string | null;
+    status?: string | null;
+    paid?: boolean | null;
+  },
+  opts?: { stripeEventId?: string | null },
+) {
+  const metadata = (invoice.metadata || {}) as Record<string, string | undefined>;
+  const requestId = metadata.transovo_payment_request_id;
+  const workspaceId = metadata.workspace_id;
+  if (!requestId || !workspaceId) return { handled: false as const, skipped: true as const };
+
+  const { isStripeInvoicePaid } = await import("@/lib/stripe-connect/invoice");
+  if (!isStripeInvoicePaid({ status: invoice.status || null, paid: invoice.paid === true })) {
+    return { handled: true as const, paymentRequestId: requestId, awaitingPayment: true as const };
+  }
+
+  const amountMinor =
+    invoice.amount_paid ?? invoice.total ?? (await getPrisma().paymentRequest.findFirst({
+      where: { id: requestId, workspaceId },
+      select: { amountMinor: true },
+    }))?.amountMinor ?? 0;
+
+  const paymentIntent =
+    typeof invoice.payment_intent === "string" ? invoice.payment_intent : null;
+  const chargeId = typeof invoice.charge === "string" ? invoice.charge : null;
+
+  const result = await reconcilePaymentRequestPaid({
+    paymentRequestId: requestId,
+    workspaceId,
+    source: "invoice",
+    amountMinor,
+    processorInvoiceId: invoice.id,
+    processorPaymentIntentId: paymentIntent,
+    processorChargeId: chargeId,
+    stripeEventId: opts?.stripeEventId,
+  });
+
+  return {
+    handled: true as const,
+    paymentRequestId: requestId,
+    duplicate: result.duplicate,
+  };
 }
 
 /** Reusable hook for appointments — manual payment request later. */

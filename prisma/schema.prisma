@@ -380,6 +380,7 @@ model Workspace {
   emailToSmsAddresses EmailToSmsAddress[]
   paymentLinks PaymentLink[]
   paymentRequests PaymentRequest[]
+  paymentRequestRefunds PaymentRequestRefund[]
   portRequests PortRequest[]
   portOutRequests PortOutRequest[]
   humanCalls HumanCall[]
@@ -3710,6 +3711,9 @@ model PaymentRequest {
   deliveryStatus             PaymentRequestDeliveryStatus @default(not_sent)
   processorCheckoutId        String?
   processorPaymentLinkId     String?
+  processorInvoiceId         String?
+  processorHostedInvoiceUrl  String?
+  collectionMethod           String                       @default("checkout")
   processorPaymentIntentId   String?
   processorChargeId          String?
   publicToken                String                       @unique
@@ -3738,6 +3742,7 @@ model PaymentRequest {
   updatedAt                  DateTime                     @updatedAt
   workspace                  Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events                     PaymentRequestEvent[]
+  refunds                    PaymentRequestRefund[]
 
   @@index([workspaceId, status, createdAt])
   @@index([workspaceId, customerPhoneE164])
@@ -3761,6 +3766,31 @@ model PaymentRequestEvent {
   @@index([paymentRequestId, createdAt])
   @@index([workspaceId, createdAt])
   @@map("payment_request_events")
+}
+
+/// Refund ledger for Text-to-Pay PaymentRequest (direct charge on connected account).
+model PaymentRequestRefund {
+  id                         String         @id @default(cuid())
+  workspaceId                String
+  paymentRequestId           String
+  stripeConnectedAccountId   String
+  stripeRefundId             String         @unique
+  stripePaymentIntentId      String?
+  stripeChargeId             String?
+  amountMinor                Int
+  currency                   String         @default("usd")
+  status                     String         @default("pending")
+  reason                     String?
+  refundApplicationFee       Boolean?
+  createdAt                  DateTime       @default(now())
+  completedAt                DateTime?
+  failedAt                   DateTime?
+  paymentRequest             PaymentRequest @relation(fields: [paymentRequestId], references: [id], onDelete: Cascade)
+  workspace                  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([paymentRequestId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("payment_request_refunds")
 }
 
 model HumanCall {

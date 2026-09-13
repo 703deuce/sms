@@ -4,7 +4,8 @@
 
 | Code path | Charge type | Object ownership | Connected account | Platform fee | Refund context | Webhook scope | Compliant? |
 |-----------|-------------|----------------|-------------------|--------------|----------------|---------------|------------|
-| `payment-requests/stripe-checkout.ts` | **DIRECT** | Connected account | `stripeAccount` on create | None in code | Connected `stripeAccount` (when refunds added) | Connect events + metadata | **YES** |
+| `payment-requests/stripe-checkout.ts` | **DIRECT** | Connected account | `stripeAccount` on create | None in code | `createDirectChargeRefund` + `payment_request_refunds` | Connect events + `event.account` tenant gate | **YES** |
+| `payment-requests/stripe-invoice.ts` | **DIRECT** | Connected account | `stripeAccount` on Customer/Invoice | None | Same refund path | `invoice.paid` + tenant gate | **YES** |
 | `merchant-payments/stripe-connect.ts` `createStripeConnectCheckout` | **DIRECT** | Connected account | `stripeAccount` | None | `refundStripeConnectPayment` uses `stripeAccount` | `appointment_merchant_payment` metadata | **YES** |
 | `appointments/service-booking/store-checkout.ts` | **DIRECT** | Connected account | `stripeAccount` | Per store config | Connected | Membership/store metadata | **YES** (not Text-to-Pay) |
 | `mass-texting/stripe-checkout.ts` | **PLATFORM** | Platform account | N/A | Platform billing | Platform | Platform webhooks | N/A (not Text-to-Pay) |

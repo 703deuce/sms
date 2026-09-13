@@ -242,6 +242,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   paymentLink: "payment_links",
   paymentRequest: "payment_requests",
   paymentRequestEvent: "payment_request_events",
+  paymentRequestRefund: "payment_request_refunds",
   portRequest: "PortRequest",
   portOutRequest: "port_out_requests",
   humanCall: "human_calls",
