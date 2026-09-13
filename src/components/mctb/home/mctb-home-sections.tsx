@@ -383,6 +383,12 @@ const SETUP_ROWS: Array<{
     value: (d) => d.setupHealth.senderLabel,
   },
   { key: "recovery", label: "Recovery", href: MCTB_ROUTES.setupRecovery, value: (d) => d.setupHealth.recoveryLabel },
+  {
+    key: "call-handling",
+    label: "Call recovery",
+    href: MCTB_ROUTES.voiceAgent,
+    value: (d) => `${d.callHandling.modeLabel} · ${d.callHandling.forwardingLabel}`,
+  },
 ];
 
 export function MctbHomeSetupStatus({ data }: { data: MctbOverviewPayload }) {

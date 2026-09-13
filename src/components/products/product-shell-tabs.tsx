@@ -107,8 +107,11 @@ export function ProductShellSwitcher({
   const router = useRouter();
   const entitlement = { hasMctb, hasMassSms, hasAiAfterHours };
   const { shell, setShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
+  const pathname = usePathname();
   const visibleShells = visibleProductShells(entitlement);
-  const showSwitcher = visibleShells.length >= 2;
+  const hideForMctbVoiceAgent =
+    pathname === "/mctb/voice-agent" || pathname.startsWith("/mctb/voice-agent/");
+  const showSwitcher = visibleShells.length >= 2 && !hideForMctbVoiceAgent;
   const [open, setOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -8,8 +8,12 @@ import {
   WIZARD_HANDOFF_NAME,
 } from "./transfer-utils";
 import { resolveWizardRoutingMode } from "./routing-mode";
-import { buildCallerAmyPromptFromModules } from "@/lib/agents/appointment-booking/intelligence/caller-prompt";
+import { compileVoiceAgentPromptFromWizard } from "@/lib/voice/prompt/compile-voice-agent-prompt";
+import { buildBusinessKnowledgePromptSection } from "@/lib/voice/prompt/build-business-context";
 import { applyAmyMinimumSideEffectConfig } from "@/lib/voice/telnyx/amy-minimum-side-effect";
+import { buildDefaultOutboundSmsMessaging } from "@/lib/voice/sms/voice-outbound-sms-config";
+
+export { buildBusinessKnowledgePromptSection };
 
 const KNOWLEDGE_FALLBACK_PHRASE =
   "Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section below — do not call any tool for those topics. " +
@@ -18,52 +22,6 @@ const KNOWLEDGE_FALLBACK_PHRASE =
 
 const DEFAULT_RECORDING_DISCLOSURE =
   "This call may be recorded for quality and training purposes.";
-
-/** Pull configured wizard knowledge into a prompt block the voice model can answer from. */
-export function buildBusinessKnowledgePromptSection(
-  state: AppointmentReceptionistWizardState,
-): string {
-  const lines: string[] = [];
-  const business = state.businessName?.trim();
-  if (business) lines.push(`Business name: ${business}`);
-  if (state.phoneNumberE164) lines.push(`Main phone: ${state.phoneNumberE164}`);
-  if (state.websiteUrl?.trim()) lines.push(`Website: ${state.websiteUrl.trim()}`);
-  if (state.timezone) lines.push(`Time zone: ${state.timezone}`);
-
-  const facts = (state.knowledgeItems || []).filter((item) => {
-    const summary = (item.summary || "").trim();
-    if (!summary) return false;
-    // Skip unused defaults and unapproved website imports.
-    if (item.status === "missing" || item.status === "pending_review") return false;
-    if (item.status === "extracted" || item.status === "rejected" || item.status === "outdated")
-      return false;
-    return true;
-  });
-
-  if (facts.length) {
-    lines.push("");
-    lines.push("Known facts (answer from these — do not say you lack access when the answer is here):");
-    for (const item of facts) {
-      lines.push(`- ${item.label}: ${item.summary.trim()}`);
-    }
-  }
-
-  const enabledTypes = (state.appointmentTypes || []).filter((t) => t.enabled);
-  if (enabledTypes.length) {
-    lines.push("");
-    lines.push("Bookable appointment types:");
-    for (const t of enabledTypes) {
-      const bits = [
-        t.name,
-        t.durationMin ? `${t.durationMin} min` : null,
-        t.bookingHours || null,
-      ].filter(Boolean);
-      lines.push(`- ${bits.join(" · ")}`);
-    }
-  }
-
-  return lines.join("\n").trim();
-}
 
 function interpolateGreeting(state: AppointmentReceptionistWizardState) {
   const business = state.businessName.trim() || "our office";
@@ -122,7 +80,7 @@ function buildTranscriptionKeyterms(state: AppointmentReceptionistWizardState): 
 }
 
 export function buildSystemPrompt(state: AppointmentReceptionistWizardState): string {
-  return buildCallerAmyPromptFromModules(state);
+  return compileVoiceAgentPromptFromWizard(state);
 }
 
 /** Legacy monolithic prompt — retained for reference and tests. */
@@ -501,6 +459,11 @@ export function buildWizardAgentConfig(
       smsConfirmations:
         state.bookingBehavior.sendSmsAfterBooking ||
         state.capabilities.includes("send_sms_confirmations"),
+      ...buildDefaultOutboundSmsMessaging({
+        voiceInboundE164: state.phoneNumberE164,
+        dedicatedPhoneNumberId: state.outboundSmsPhoneNumberId ?? null,
+        dedicatedE164: state.outboundSmsE164 ?? null,
+      }),
     },
     conversationFlow: {
       sections: [

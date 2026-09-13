@@ -24,6 +24,11 @@ import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import { computeLeadRecoveryPolicyHealth } from "@/lib/mctb/lead-recovery/policy-health";
 import { LEAD_RECOVERY_SCENARIO_DEFS } from "@/lib/mctb/lead-recovery/scenarios";
 import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
+import {
+  INBOUND_HANDLING_MODE_LABELS,
+  loadMctbLineInboundConfig,
+  resolveInboundHandlingDecision,
+} from "@/lib/mctb/inbound-handling";
 
 export type MctbOverviewStatus =
   | "setup_incomplete"
@@ -79,6 +84,12 @@ export type MctbOverviewPayload = {
     statusLabel: string;
     attentionReason: string | null;
     attentionHref: string | null;
+  };
+  callHandling: {
+    mode: "MCTB_RECOVERY" | "VOICE_AGENT";
+    modeLabel: string;
+    forwardingLabel: string;
+    ingressE164: string | null;
   };
 };
 
@@ -291,6 +302,17 @@ export async function loadMctbOverview(workspaceId: string): Promise<MctbOvervie
       replies: analytics7d.replies,
       replyRate: analytics7d.replyRate,
     },
+    callHandling: await (async () => {
+      const line = await loadMctbLineInboundConfig({ workspaceId });
+      const decision = await resolveInboundHandlingDecision({ workspaceId });
+      const mode = line?.inboundHandlingMode ?? "MCTB_RECOVERY";
+      return {
+        mode,
+        modeLabel: INBOUND_HANDLING_MODE_LABELS[mode],
+        forwardingLabel: line?.forwardingVerified ? "Already connected" : "Pending",
+        ingressE164: line?.ingressE164 ?? null,
+      };
+    })(),
     leadRecovery: {
       enabled: lrConfig.enabled,
       activePolicyCount: activePolicies.length,

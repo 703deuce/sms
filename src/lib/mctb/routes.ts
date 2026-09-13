@@ -6,6 +6,7 @@ export const MCTB_ROUTES = {
   conversations: "/mctb/conversations",
   voicemail: "/mctb/voicemail",
   aiLeadRecovery: "/mctb/ai-lead-recovery",
+  voiceAgent: "/mctb/voice-agent",
   analytics: "/mctb/analytics",
   setup: "/mctb/setup",
   setupStart: "/mctb/setup/start",

@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Voicemail,
   Sparkles,
+  AudioLines,
 } from "lucide-react";
 import type { NavItem } from "@/lib/nav";
 import { MCTB_ROUTES } from "@/lib/mctb/routes";
@@ -51,6 +52,11 @@ export function buildMctbV1Nav(options: MctbNavOptions = {}): NavItem[] {
       label: "AI Lead Recovery",
       href: MCTB_ROUTES.aiLeadRecovery,
       icon: Sparkles,
+    },
+    {
+      label: "Voice Agent",
+      href: MCTB_ROUTES.voiceAgent,
+      icon: AudioLines,
     },
     {
       label: "Analytics",
@@ -101,6 +107,7 @@ export function getMctbPageTitle(pathname: string): string {
   if (pathname.startsWith(MCTB_ROUTES.analytics) || pathname.startsWith("/analytics/mctb")) {
     return "Analytics";
   }
+  if (pathname.startsWith(MCTB_ROUTES.voiceAgent)) return "Voice Agent";
   if (pathname.startsWith(MCTB_ROUTES.setup)) return "Setup";
   if (pathname.startsWith(MCTB_ROUTES.numbers)) return "Numbers";
   if (pathname.startsWith(MCTB_ROUTES.complianceConsent)) return "Consent Log";

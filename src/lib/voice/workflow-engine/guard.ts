@@ -13,6 +13,9 @@ const GUARD_EXEMPT = new Set([
   "get_workflow_requirements",
   "check_customer_fields",
   "check_field_requirements",
+  /** Conversation-workflow surface — must work before VoiceCall row exists (TeXML-direct). */
+  "send_resource",
+  "search_business_details",
 ]);
 
 export async function assertToolAllowed(input: {

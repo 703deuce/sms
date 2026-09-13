@@ -354,6 +354,35 @@ export async function POST(request: Request) {
         published = true;
         triggerDeployments = triggerResult.deployments;
 
+        if (published && state.phoneNumberId) {
+          const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
+          if (isMctbV1Primary()) {
+            const { setInboundHandlingMode } = await import(
+              "@/lib/mctb/inbound-handling/switch-mode"
+            );
+            const { persistMctbLineInboundConfig } = await import(
+              "@/lib/mctb/inbound-handling/line-config"
+            );
+            await persistMctbLineInboundConfig({
+              workspaceId: auth.workspaceId,
+              phoneNumberId: state.phoneNumberId,
+              patch: { voiceAgentId: agentId },
+            }).catch(() => undefined);
+            await setInboundHandlingMode({
+              workspaceId: auth.workspaceId,
+              mode: "VOICE_AGENT",
+              phoneNumberId: state.phoneNumberId,
+              voiceAgentId: agentId,
+            }).catch((err) => {
+              warnings.push(
+                err instanceof Error
+                  ? `Voice call-handling mode: ${err.message}`
+                  : "Voice call-handling mode switch failed",
+              );
+            });
+          }
+        }
+
         await upsertAppointmentReceptionistSetup({
           workspaceId: auth.workspaceId,
           agentId,

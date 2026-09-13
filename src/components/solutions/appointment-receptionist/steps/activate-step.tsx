@@ -26,12 +26,15 @@ export function ActivateStep({
   patch,
   onActivate,
   onGoToTest,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   onActivate?: () => void | Promise<void>;
   onGoToTest?: () => void;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const will = buildReceptionistWillList(state);
   const phone = state.phoneNumberE164
     ? formatPhone(state.phoneNumberE164)
@@ -185,11 +188,12 @@ export function ActivateStep({
       <div className="min-w-0 flex-1 space-y-6">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            Make your receptionist live
+            {isMctb ? "Ready to turn on your voice agent?" : "Make your receptionist live"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Activate pushes knowledge, transfer destinations, appointment types, and insights
-            to the live agent.
+            {isMctb
+              ? "Review anything that still needs attention before the agent answers calls."
+              : "Activate pushes knowledge, transfer destinations, appointment types, and insights to the live agent."}
           </p>
         </div>
 

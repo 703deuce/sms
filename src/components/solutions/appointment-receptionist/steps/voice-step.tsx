@@ -15,10 +15,13 @@ const ALL_VOICES = [...WIZARD_VOICES, ...WIZARD_VOICE_BACKUPS];
 export function VoiceStep({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -83,10 +86,12 @@ export function VoiceStep({
       <div className="min-w-0 flex-1 space-y-6">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            Who is your receptionist?
+            {isMctb ? "How should your agent sound?" : "Who is your receptionist?"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Identity, greeting, and voice — play each clip, then test live on the next step.
+            {isMctb
+              ? "Set identity, greeting, and voice — preview clips, then test live on the next step."
+              : "Identity, greeting, and voice — play each clip, then test live on the next step."}
           </p>
         </div>
 

@@ -477,7 +477,10 @@ assert(
             .appointmentReceptionistWizard || {}),
     ),
   );
-  assert("default agent name matches voice Astra", createDefaultWizardState().agentName === "Astra");
+  assert(
+    "default agent spoken name is Amy",
+    createDefaultWizardState().agentName === "Amy",
+  );
   void startup;
 }
 
@@ -510,15 +513,15 @@ assert(
       cfg.dynamicVariables?.current_date == null,
   );
   assert(
-    "booking enables resolve_datetime tool",
-    Array.isArray(cfg.enabledBuiltinTools) &&
-      cfg.enabledBuiltinTools.includes("resolve_datetime"),
+    "minimum-side-effect workflow mode active for Telnyx publish",
+    Boolean(
+      (cfg.advanced as { minimumSideEffectMode?: boolean })?.minimumSideEffectMode,
+    ),
   );
   assert(
-    "booking enables find_appointments + reschedule",
+    "published tool surface includes send_resource for booking links",
     Array.isArray(cfg.enabledBuiltinTools) &&
-      cfg.enabledBuiltinTools.includes("find_appointments") &&
-      cfg.enabledBuiltinTools.includes("reschedule_appointment"),
+      cfg.enabledBuiltinTools.includes("send_resource"),
   );
 }
 

@@ -220,10 +220,13 @@ function upsertItem(
 export function InformationStep({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -498,7 +501,7 @@ export function InformationStep({
       <div className="min-w-0 flex-1 space-y-8">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            What should your agent know?
+            {isMctb ? "Business Knowledge" : "What should your agent know?"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Add business information so the AI can answer with confidence. Facts

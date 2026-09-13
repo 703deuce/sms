@@ -32,11 +32,44 @@ const GREETING_OPTIONS: Array<{ id: ConnectionGreetingMode; label: string }> = [
 export function PhoneStep({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const [numbers, setNumbers] = useState<PhoneRow[]>([]);
+  const [mctbLineReuse, setMctbLineReuse] = useState<{
+    ingressE164: string;
+    forwardingStatus: string;
+    businessLineE164: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isMctb) return;
+    fetch("/api/mctb/inbound-handling")
+      .then((r) => r.json())
+      .then((j) => {
+        const fwd = j.data?.forwarding;
+        const line = j.data?.line;
+        if (!fwd?.ingressE164) return;
+        setMctbLineReuse({
+          ingressE164: fwd.ingressE164,
+          forwardingStatus: fwd.status,
+          businessLineE164: fwd.businessLineE164,
+        });
+        if (!state.phoneNumberId && line?.phoneNumberId) {
+          patch({
+            phoneNumberId: line.phoneNumberId,
+            phoneNumberE164: line.ingressE164,
+            numberSource: "forward_existing",
+          });
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMctb]);
 
   useEffect(() => {
     fetch("/api/phone/numbers")
@@ -90,7 +123,7 @@ export function PhoneStep({
       <div className="min-w-0 flex-1 space-y-8">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            Where should the receptionist answer?
+            {isMctb ? "Where should the agent answer?" : "Where should the receptionist answer?"}
           </h2>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {[
@@ -119,7 +152,39 @@ export function PhoneStep({
           </div>
         </div>
 
+        {isMctb && mctbLineReuse ? (
+          <InfoCallout>
+            <p className="font-medium">Your business line is already connected</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {mctbLineReuse.businessLineE164
+                ? `Calls from ${formatPhone(mctbLineReuse.businessLineE164)} forward to Transovo after no answer.`
+                : "Calls forward to Transovo after no answer."}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Transovo number {formatPhone(mctbLineReuse.ingressE164)} · Forwarding{" "}
+              {mctbLineReuse.forwardingStatus === "connected" ? "already connected" : "pending"}
+            </p>
+          </InfoCallout>
+        ) : null}
+
         <div className="grid gap-3 md:grid-cols-3">
+          {isMctb && mctbLineReuse ? (
+            <SelectableCard
+              selected={
+                state.phoneNumberId &&
+                state.numberSource === "forward_existing"
+              }
+              onClick={() =>
+                patch({
+                  numberSource: "forward_existing",
+                  phoneNumberId: state.phoneNumberId,
+                  phoneNumberE164: mctbLineReuse.ingressE164,
+                })
+              }
+              title="Use existing MCTB line"
+              description="Recommended — same forwarding you already set up for missed-call recovery."
+            />
+          ) : null}
           <SelectableCard
             selected={state.numberSource === "existing"}
             onClick={() => patch({ numberSource: "existing" as NumberSource })}

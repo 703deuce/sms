@@ -25,12 +25,15 @@ export function TestStep({
   state,
   patch,
   onEnsureAgent,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   /** Persist draft + build_for_test so WebRTC can talk to the real assistant. */
   onEnsureAgent?: () => Promise<{ agentId: string; telnyxAssistantId?: string | null } | null>;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const scenarios = useMemo(
     () => testScenariosForCapabilities(state.capabilities),
     [state.capabilities],
@@ -125,11 +128,12 @@ export function TestStep({
       <div className="min-w-0 flex-1 space-y-4">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            Test your receptionist
+            {isMctb ? "Test your voice agent" : "Test your receptionist"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Talk back and forth with the real Telnyx assistant — same voice and tools as
-            after you activate. Guided scenarios below help you know what to try.
+            {isMctb
+              ? "Try real scenarios before the agent answers customer calls."
+              : "Talk back and forth with the real Telnyx assistant — same voice and tools as after you activate. Guided scenarios below help you know what to try."}
           </p>
         </div>
 

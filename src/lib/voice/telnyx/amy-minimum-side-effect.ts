@@ -23,7 +23,7 @@ export const MINIMUM_SIDE_EFFECT_PROMPT = [
   "MINIMUM-SIDE-EFFECT RELIABILITY:",
   "1. Answer company questions from the Business knowledge section — zero tools.",
   "2. Capture caller information conversationally — software saves it; do not call record_call_fact.",
-  "3. For booking, quotes, financing, or forms: use send_resource with the matching resource_type when in the Action node.",
+  "3. For booking links, quotes, financing, or forms: use send_resource with resource_type and verbal_sms_consent after the caller agrees to text.",
   "4. Transfer only when the caller needs a person — use native Transfer in the Human node.",
   "5. Target 0–1 live external tool calls per ordinary turn.",
   "6. Confirm SMS only after send_resource returns success.",

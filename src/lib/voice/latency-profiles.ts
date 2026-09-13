@@ -377,6 +377,7 @@ export const SYNC_TOOL_TYPES = new Set([
   "runtime_turn",
   "record_current_field",
   "get_runtime_context",
+  "send_resource",
 ]);
 
 /** Tools that should run async (do not block spoken turn). */
@@ -405,6 +406,7 @@ export const SYNC_TOOL_FILLERS: Record<string, string> = {
   runtime_turn: "Okay, hold on — let me check on that.",
   record_current_field: "Got it, one moment.",
   get_runtime_context: "One moment.",
+  send_resource: "Sure — I'll send that text in just a moment.",
 };
 
 /**

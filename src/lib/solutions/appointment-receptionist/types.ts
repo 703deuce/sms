@@ -121,6 +121,13 @@ export type AppointmentReceptionistWizardState = {
   numberSource: NumberSource;
   phoneNumberId: string | null;
   phoneNumberE164: string | null;
+  /**
+   * Outbound SMS for voice tools (booking links). Independent of voice inbound DID.
+   * When unset, toll-free voice → workspace preferred texting number (e.g. 571).
+   */
+  outboundSmsMode?: "auto" | "workspace_preferred" | "same_as_voice_line" | "explicit_number";
+  outboundSmsPhoneNumberId?: string | null;
+  outboundSmsE164?: string | null;
   ringBehavior: "ai_immediate" | "ring_team_first" | "after_hours" | "custom" | "line_busy";
   ringTeamSeconds: number;
   callRecording: "off" | "all" | "inbound_only";

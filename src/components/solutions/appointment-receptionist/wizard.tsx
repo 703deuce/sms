@@ -11,10 +11,15 @@ import {
   hireWizardHeadline,
   AMY_FIXED_CAPABILITIES,
 } from "@/lib/solutions/appointment-receptionist/wizard-presets";
-import {
-  type AppointmentReceptionistWizardState,
-} from "@/lib/solutions/appointment-receptionist/types";
+import { type AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { toErrorMessage } from "@/lib/errors";
+import { MCTB_ROUTES } from "@/lib/mctb/routes";
+import {
+  mctbVisibleWizardSteps,
+  stepIndexFromQuery,
+  stepQueryFromIndex,
+} from "@/lib/mctb/voice-agent/wizard-steps";
+import { computeMctbWizardStepReadiness } from "@/lib/mctb/voice-agent/step-readiness";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { WizardStepper } from "./wizard-stepper";
@@ -28,15 +33,40 @@ import { TestStep } from "./steps/test-step";
 import { ActivateStep } from "./steps/activate-step";
 import { wizardPatchFromCompanyBrain } from "@/lib/solutions/appointment-receptionist/hydrate-from-brain";
 
-const STORAGE_KEY = "transovo.appointment-receptionist.wizard.v1";
+const STORAGE_KEY_LEGACY = "transovo.appointment-receptionist.wizard.v1";
+const STORAGE_KEY_MCTB = "transovo.mctb.voice-agent.wizard.v1";
 
-export function AppointmentReceptionistWizard() {
+export type AppointmentReceptionistWizardProps = {
+  presentation?: "legacy" | "mctb";
+  onAgentStatusChange?: (status: "draft" | "active" | "needs_attention" | null) => void;
+  onAgentIdChange?: (agentId: string | null) => void;
+};
+
+function mctbDefaultState(): AppointmentReceptionistWizardState {
+  const base = applyWizardPreset(createDefaultWizardState(), "after_hours");
+  return {
+    ...base,
+    solutionName: "After-Hours Voice Agent",
+    role: "After-hours voice agent",
+  };
+}
+
+export function AppointmentReceptionistWizard({
+  presentation = "legacy",
+  onAgentStatusChange,
+  onAgentIdChange,
+}: AppointmentReceptionistWizardProps) {
+  const isMctb = presentation === "mctb";
+  const storageKey = isMctb ? STORAGE_KEY_MCTB : STORAGE_KEY_LEGACY;
   const router = useRouter();
   const searchParams = useSearchParams();
   const preset = searchParams?.get("preset");
-  const hireMode = searchParams?.get("hire") === "amy";
+  const hireMode = !isMctb && searchParams?.get("hire") === "amy";
   const [stepIndex, setStepIndex] = useState(0);
+  const [agentLifecycle, setAgentLifecycle] = useState<"draft" | "active" | null>(null);
+  const [hasCalendarConnection, setHasCalendarConnection] = useState(false);
   const [state, setState] = useState<AppointmentReceptionistWizardState>(() => {
+    if (isMctb) return mctbDefaultState();
     const base = applyWizardPreset(createDefaultWizardState(), preset);
     if (hireMode) {
       return {
@@ -58,12 +88,15 @@ export function AppointmentReceptionistWizard() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    onAgentIdChange?.(state.agentId || null);
+  }, [state.agentId, onAgentIdChange]);
+
+  useEffect(() => {
     let cancelled = false;
     async function hydrate() {
       try {
         const setupId = searchParams?.get("setupId");
         const agentId = searchParams?.get("agentId");
-        // Server durable state wins over localStorage when reopening a setup.
         if (setupId || agentId) {
           const qs = new URLSearchParams();
           if (setupId) qs.set("setupId", setupId);
@@ -75,33 +108,48 @@ export function AppointmentReceptionistWizard() {
             const json = await res.json();
             const loaded = json?.data;
             if (loaded?.state && !cancelled) {
-              const base = applyWizardPreset(
-                createDefaultWizardState(),
-                preset || loaded.state.preset || null,
-              );
+              const base = isMctb
+                ? mctbDefaultState()
+                : applyWizardPreset(
+                    createDefaultWizardState(),
+                    preset || loaded.state.preset || null,
+                  );
               setState({
                 ...base,
                 ...loaded.state,
                 setupId: loaded.setupId || undefined,
                 agentId: loaded.agentId || loaded.state.agentId,
                 outcomeSlug: loaded.outcomeSlug || loaded.state.outcomeSlug,
-                preset: preset || loaded.state.preset || null,
+                preset: isMctb
+                  ? loaded.state.preset || "after_hours"
+                  : preset || loaded.state.preset || null,
               });
-              setStepIndex(0);
+              const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
+              const life =
+                statusRaw === "ACTIVE" ? "active" : statusRaw === "DRAFT" ? "draft" : null;
+              setAgentLifecycle(life);
+              onAgentStatusChange?.(
+                life === "active"
+                  ? "active"
+                  : life === "draft"
+                    ? "draft"
+                    : "needs_attention",
+              );
+              const fromUrl = stepIndexFromQuery(
+                searchParams?.get("step"),
+                mctbVisibleWizardSteps(loaded.state),
+              );
+              setStepIndex(fromUrl ?? 0);
               setHydrated(true);
               return;
             }
           }
         }
 
-        const raw = localStorage.getItem(STORAGE_KEY);
-        // Fresh Solutions-view presets always win over a stale local draft.
-        if (preset) {
+        const raw = localStorage.getItem(storageKey);
+        if (preset && !isMctb) {
           setState(
-            applyWizardPreset(
-              { ...createDefaultWizardState(), preset },
-              preset,
-            ),
+            applyWizardPreset({ ...createDefaultWizardState(), preset }, preset),
           );
           setStepIndex(0);
         } else if (raw) {
@@ -110,26 +158,36 @@ export function AppointmentReceptionistWizard() {
             state?: AppointmentReceptionistWizardState;
           };
           const draftPreset = parsed.state?.preset || null;
-          // Booking setup URL has no ?preset= — never restore an answering /
-          // overflow / after-hours draft into the Book Appointments wizard.
           const answeringDraft =
-            draftPreset === "every_call" ||
-            draftPreset === "nobody_answers" ||
-            draftPreset === "after_hours" ||
-            draftPreset === "lead_capture" ||
-            draftPreset === "service_intake";
+            !isMctb &&
+            (draftPreset === "every_call" ||
+              draftPreset === "nobody_answers" ||
+              draftPreset === "after_hours" ||
+              draftPreset === "lead_capture" ||
+              draftPreset === "service_intake");
           if (answeringDraft || !parsed.state) {
-            setState(createDefaultWizardState());
+            setState(isMctb ? mctbDefaultState() : createDefaultWizardState());
             setStepIndex(0);
           } else {
-            setState({ ...createDefaultWizardState(), ...parsed.state });
+            setState({
+              ...(isMctb ? mctbDefaultState() : createDefaultWizardState()),
+              ...parsed.state,
+            });
             if (typeof parsed.stepIndex === "number") {
               setStepIndex(Math.min(Math.max(parsed.stepIndex, 0), 7));
             }
           }
         } else {
-          setState(createDefaultWizardState());
+          setState(isMctb ? mctbDefaultState() : createDefaultWizardState());
           setStepIndex(0);
+        }
+
+        if (isMctb) {
+          const fromUrl = stepIndexFromQuery(
+            searchParams?.get("step"),
+            mctbVisibleWizardSteps(state),
+          );
+          if (fromUrl !== null) setStepIndex(fromUrl);
         }
       } catch {
         // ignore corrupt draft
@@ -140,9 +198,8 @@ export function AppointmentReceptionistWizard() {
     return () => {
       cancelled = true;
     };
-  }, [preset, searchParams, hireMode]);
+  }, [preset, searchParams, hireMode, isMctb, storageKey, onAgentStatusChange]);
 
-  // Hire path skips Information — pull Company Brain into wizard state for activation checks.
   useEffect(() => {
     if (!hydrated || !hireMode) return;
     let cancelled = false;
@@ -151,9 +208,9 @@ export function AppointmentReceptionistWizard() {
         const res = await fetch("/api/company-brain", { cache: "no-store" });
         if (!res.ok || cancelled) return;
         const json = await res.json();
-        const patch = wizardPatchFromCompanyBrain(json?.data);
-        if (Object.keys(patch).length) {
-          setState((prev) => ({ ...prev, ...patch }));
+        const brainPatch = wizardPatchFromCompanyBrain(json?.data);
+        if (Object.keys(brainPatch).length) {
+          setState((prev) => ({ ...prev, ...brainPatch }));
         }
       } catch {
         /* optional */
@@ -167,11 +224,39 @@ export function AppointmentReceptionistWizard() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ stepIndex, state }));
+      localStorage.setItem(storageKey, JSON.stringify({ stepIndex, state }));
     } catch {
       // ignore quota
     }
-  }, [hydrated, stepIndex, state]);
+  }, [hydrated, stepIndex, state, storageKey]);
+
+  useEffect(() => {
+    if (!hydrated || !isMctb) return;
+    void (async () => {
+      try {
+        const [calRes, intRes] = await Promise.all([
+          fetch("/api/integrations/calendars"),
+          fetch("/api/integrations/connections"),
+        ]);
+        const calJson = await calRes.json().catch(() => ({ data: [] }));
+        const intJson = await intRes.json().catch(() => ({ data: {} }));
+        const rows = (calJson.data || []) as Array<{ status?: string }>;
+        const connections = (intJson.data?.connections || []) as Array<{
+          provider?: string;
+          status?: string;
+        }>;
+        const liveCal = rows.some((r) => r.status === "connected" || r.status === "active");
+        const liveInt = connections.some(
+          (c) =>
+            (c.provider === "microsoft" || c.provider === "calendly") &&
+            (c.status === "connected" || c.status === "active"),
+        );
+        setHasCalendarConnection(liveCal || liveInt || state.calendarConnected);
+      } catch {
+        setHasCalendarConnection(state.calendarConnected);
+      }
+    })();
+  }, [hydrated, isMctb, state.calendarConnected]);
 
   const patch = useCallback((p: Partial<AppointmentReceptionistWizardState>) => {
     setState((prev) => ({ ...prev, ...p }));
@@ -179,23 +264,52 @@ export function AppointmentReceptionistWizard() {
 
   const steps = useMemo(
     () =>
-      visibleWizardSteps(state, {
-        hireMode,
-        brainAlreadyDone: hireMode,
-      }),
-    [state, hireMode],
+      isMctb
+        ? mctbVisibleWizardSteps(state)
+        : visibleWizardSteps(state, {
+            hireMode,
+            brainAlreadyDone: hireMode,
+          }),
+    [state, hireMode, isMctb],
   );
-  const headline = useMemo(
+
+  const stepStatuses = useMemo(
     () =>
-      hireMode
-        ? hireWizardHeadline(state.agentName || "Amy")
-        : wizardHeadline(state.preset || preset),
-    [hireMode, state.agentName, state.preset, preset],
+      isMctb
+        ? computeMctbWizardStepReadiness(state, {
+            hasCalendarConnection,
+            agentStatus: agentLifecycle === "active" ? "active" : agentLifecycle,
+          })
+        : undefined,
+    [isMctb, state, hasCalendarConnection, agentLifecycle],
   );
+
+  const headline = useMemo(() => {
+    if (isMctb) {
+      return {
+        title: "After-Hours Voice Agent",
+        subtitle:
+          "Answer missed and after-hours calls with an AI agent that follows your business rules.",
+      };
+    }
+    return hireMode
+      ? hireWizardHeadline(state.agentName || "Amy")
+      : wizardHeadline(state.preset || preset);
+  }, [hireMode, state.agentName, state.preset, preset, isMctb]);
 
   useEffect(() => {
     setStepIndex((i) => Math.min(i, Math.max(0, steps.length - 1)));
   }, [steps.length]);
+
+  function postSavePath(agentId: string, step?: string) {
+    if (isMctb) {
+      const params = new URLSearchParams();
+      if (step) params.set("step", step);
+      params.set("agentId", agentId);
+      return `${MCTB_ROUTES.voiceAgent}?${params.toString()}`;
+    }
+    return hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`;
+  }
 
   async function persist(
     action: "save_draft" | "activate" | "create_draft",
@@ -236,7 +350,7 @@ export function AppointmentReceptionistWizard() {
         setupId,
         outcomeSlug,
         telnyxAssistantId,
-        preset: preset || payload.preset || null,
+        preset: isMctb ? payload.preset || "after_hours" : preset || payload.preset || null,
         ...(stateOverride || {}),
       });
       if (warnings.length) {
@@ -250,14 +364,21 @@ export function AppointmentReceptionistWizard() {
           );
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
-        // Schedule / draft-style activate keeps the agent and may show a warning.
         if (!json.data.published && payload.activationMode === "schedule") {
-          localStorage.removeItem(STORAGE_KEY);
-          router.push(hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`);
+          localStorage.removeItem(storageKey);
+          router.push(postSavePath(agentId, "activate"));
           return { agentId, telnyxAssistantId, clonedAgentId };
         }
-        localStorage.removeItem(STORAGE_KEY);
-        router.push(hireMode ? `/agents/${agentId}` : `/voice/agents/${agentId}`);
+        if (json.data.published) {
+          setAgentLifecycle("active");
+          onAgentStatusChange?.("active");
+        }
+        if (isMctb) {
+          router.push(postSavePath(agentId, "activate"));
+          return { agentId, telnyxAssistantId, clonedAgentId };
+        }
+        localStorage.removeItem(storageKey);
+        router.push(postSavePath(agentId));
         return { agentId, telnyxAssistantId, clonedAgentId };
       }
       return { agentId, telnyxAssistantId, clonedAgentId };
@@ -275,28 +396,39 @@ export function AppointmentReceptionistWizard() {
     return saved;
   }
 
+  const goToStep = useCallback(
+    (index: number) => {
+      const next = Math.min(Math.max(index, 0), steps.length - 1);
+      setStepIndex(next);
+      if (isMctb) {
+        const q = stepQueryFromIndex(next, steps);
+        const params = new URLSearchParams(searchParams?.toString() || "");
+        params.set("step", q);
+        if (state.agentId) params.set("agentId", state.agentId);
+        router.replace(`${MCTB_ROUTES.voiceAgent}?${params.toString()}`, { scroll: false });
+      }
+    },
+    [isMctb, router, searchParams, state.agentId, steps],
+  );
+
   async function onContinue() {
     if (stepIndex < steps.length - 1) {
       if (stepIndex === 0 && !state.agentId) {
         const created = await persist("create_draft");
-        if (!created?.agentId) {
-          // Stay on Goals so the user can fix errors — do not skip ahead.
-          return;
-        }
+        if (!created?.agentId) return;
       }
-      // Entering Test: save latest voice + config so live talk-back can build.
       if (steps[stepIndex + 1]?.id === "test") {
         const saved = await persist("save_draft");
         if (!saved?.agentId) return;
       }
-      setStepIndex((i) => i + 1);
+      goToStep(stepIndex + 1);
       return;
     }
     if (state.activationMode === "save_draft") {
       const saved = await persist("save_draft");
       if (saved?.agentId) {
-        localStorage.removeItem(STORAGE_KEY);
-        router.push(hireMode ? `/agents/${saved.agentId}` : `/voice/agents/${saved.agentId}`);
+        if (!isMctb) localStorage.removeItem(storageKey);
+        router.push(postSavePath(saved.agentId, isMctb ? "activate" : undefined));
       }
       return;
     }
@@ -306,8 +438,8 @@ export function AppointmentReceptionistWizard() {
       );
       const saved = await persist("save_draft");
       if (saved?.agentId) {
-        localStorage.removeItem(STORAGE_KEY);
-        router.push(hireMode ? `/agents/${saved.agentId}` : `/voice/agents/${saved.agentId}`);
+        if (!isMctb) localStorage.removeItem(storageKey);
+        router.push(postSavePath(saved.agentId, isMctb ? "activate" : undefined));
       }
       return;
     }
@@ -319,59 +451,107 @@ export function AppointmentReceptionistWizard() {
   }
 
   const step = steps[stepIndex];
+  const stepPresentation = isMctb ? "mctb" : "legacy";
 
   return (
-    <div className="flex min-h-[calc(100vh-7rem)] flex-col">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            {headline.title}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{headline.subtitle}</p>
+    <div
+      className={
+        isMctb
+          ? "mctb-va-wizard flex flex-col"
+          : "flex min-h-[calc(100vh-7rem)] flex-col"
+      }
+    >
+      {!isMctb ? (
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+              {headline.title}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{headline.subtitle}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5">
-        <WizardStepper steps={steps} currentIndex={stepIndex} />
+      {isMctb ? (
+        <p className="mctb-va-mobile-step" aria-live="polite">
+          Step {stepIndex + 1} of {steps.length} · {step?.label}
+        </p>
+      ) : null}
+
+      <div
+        className={
+          isMctb
+            ? "mctb-va-stepper-wrap"
+            : "mb-6 rounded-xl border border-border bg-card px-3 py-4 sm:px-5"
+        }
+      >
+        <WizardStepper
+          steps={steps}
+          currentIndex={stepIndex}
+          presentation={presentation}
+          stepStatuses={stepStatuses}
+          onStepSelect={isMctb ? goToStep : undefined}
+        />
       </div>
 
       <div className="flex-1">
         {step?.id === "goals" ? (
-          <GoalsStep state={state} patch={patch} hireMode={hireMode} />
+          <GoalsStep
+            state={state}
+            patch={patch}
+            hireMode={hireMode}
+            presentation={stepPresentation}
+          />
         ) : null}
-        {step?.id === "phone" ? <PhoneStep state={state} patch={patch} /> : null}
+        {step?.id === "phone" ? (
+          <PhoneStep state={state} patch={patch} presentation={stepPresentation} />
+        ) : null}
         {step?.id === "information" ? (
-          <InformationStep state={state} patch={patch} />
+          <InformationStep state={state} patch={patch} presentation={stepPresentation} />
         ) : null}
         {step?.id === "appointments" ? (
-          <AppointmentsStep state={state} patch={patch} />
+          <AppointmentsStep state={state} patch={patch} presentation={stepPresentation} />
         ) : null}
         {step?.id === "call-handling" ? (
-          <CallHandlingStep state={state} patch={patch} />
+          <CallHandlingStep state={state} patch={patch} presentation={stepPresentation} />
         ) : null}
-        {step?.id === "voice" ? <VoiceStep state={state} patch={patch} /> : null}
+        {step?.id === "voice" ? (
+          <VoiceStep state={state} patch={patch} presentation={stepPresentation} />
+        ) : null}
         {step?.id === "test" ? (
-          <TestStep state={state} patch={patch} onEnsureAgent={ensureAgentForTest} />
+          <TestStep
+            state={state}
+            patch={patch}
+            onEnsureAgent={ensureAgentForTest}
+            presentation={stepPresentation}
+          />
         ) : null}
         {step?.id === "activate" ? (
           <ActivateStep
             state={state}
             patch={patch}
+            presentation={stepPresentation}
             onActivate={() => void persist("activate", { activationMode: "activate_now" })}
             onGoToTest={() => {
               const testIdx = steps.findIndex((s) => s.id === "test");
-              if (testIdx >= 0) setStepIndex(testIdx);
+              if (testIdx >= 0) goToStep(testIdx);
             }}
           />
         ) : null}
       </div>
 
-      <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5">
+      <div
+        className={
+          isMctb
+            ? "mctb-va-footer sticky bottom-0 z-20 mt-6"
+            : "sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-card/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mt-8 lg:rounded-xl lg:border lg:px-5"
+        }
+      >
         <div className="flex items-center justify-between gap-3">
           <Button
             variant="outline"
             disabled={stepIndex === 0 || busy}
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            onClick={() => goToStep(stepIndex - 1)}
           >
             Back
           </Button>
@@ -381,9 +561,10 @@ export function AppointmentReceptionistWizard() {
             ) : null}
             <div className="flex gap-2">
               <Button variant="outline" disabled={busy} onClick={() => void onSaveDraft()}>
-                Save draft
+                {isMctb ? "Save" : "Save draft"}
               </Button>
               <Button
+                className={isMctb ? "btn-primary-mctb" : undefined}
                 data-testid={
                   stepIndex === steps.length - 1 ? "wizard-activate-footer" : "wizard-continue"
                 }

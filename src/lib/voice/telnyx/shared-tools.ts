@@ -5,6 +5,10 @@
 import * as ai from "./ai-client";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { strictWebhookBodyParameters } from "@/lib/voice/schema/strict-tool-schema";
+import {
+  SEARCH_BUSINESS_DETAILS_WEBHOOK_BODY,
+  SEND_RESOURCE_WEBHOOK_BODY,
+} from "@/lib/voice/tools/builtin-webhook-bodies";
 
 export type TransovoSharedToolSet = {
   sendResourceId: string | null;
@@ -90,11 +94,6 @@ export async function ensureTransovoSharedWorkflowTools(input: {
     urlPath: string,
     body: Record<string, unknown>,
   ): Promise<string | null> {
-    const found = existing.find((t) => t.display_name === displayName)?.id;
-    if (found) return found;
-    const byName = await findToolByDisplayName(displayName).catch(() => null);
-    if (byName) return byName;
-
     const payload = webhookToolBody({
       name: displayName,
       description,
@@ -105,6 +104,15 @@ export async function ensureTransovoSharedWorkflowTools(input: {
       bodyParameters: body,
     });
 
+    const found = existing.find((t) => t.display_name === displayName)?.id;
+    const byName = found || (await findToolByDisplayName(displayName).catch(() => null));
+    if (byName) {
+      await ai.updateSharedTool(byName, payload).catch((err) => {
+        console.warn("[shared-tools] update failed", displayName, err);
+      });
+      return byName;
+    }
+
     try {
       const created = await ai.createSharedTool(payload);
       return unwrapToolId(created);
@@ -114,39 +122,22 @@ export async function ensureTransovoSharedWorkflowTools(input: {
     }
   }
 
+  const unifiedToolsUrl = "/api/telnyx/voice/tools";
+
   const sendResourceId = await ensureWebhookTool(
     TOOL_DISPLAY_NAMES.sendResource,
     "send_resource",
-    "Send an approved resource link to the caller by SMS. Only provide resource_type.",
-    "/api/voice/tools/send-resource",
-    {
-      type: "object",
-      properties: {
-        resource_type: {
-          type: "string",
-          enum: ["booking", "quote", "financing", "directions", "photo_upload"],
-          description: "Which approved resource link to text the caller.",
-        },
-      },
-      required: ["resource_type"],
-    },
+    "Send an approved resource link to the caller by SMS. Requires verbal_sms_consent when the caller agreed to text.",
+    unifiedToolsUrl,
+    SEND_RESOURCE_WEBHOOK_BODY,
   );
 
   const searchDetailsId = await ensureWebhookTool(
     TOOL_DISPLAY_NAMES.searchDetails,
     "search_business_details",
     "Search detailed business or product documentation for long-tail questions.",
-    "/api/voice/tools/search-details",
-    {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "The specific detailed question to look up.",
-        },
-      },
-      required: ["query"],
-    },
+    unifiedToolsUrl,
+    SEARCH_BUSINESS_DETAILS_WEBHOOK_BODY,
   );
 
   let hangupId =

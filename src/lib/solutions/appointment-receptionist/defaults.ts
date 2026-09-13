@@ -321,6 +321,8 @@ export function applyWizardPreset(
           "answer_questions",
           "take_messages",
           "transfer_calls",
+          "book_appointments",
+          "send_sms_confirmations",
         ],
         testScenario: "business_question",
       };

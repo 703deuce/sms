@@ -1,15 +1,82 @@
 "use client";
 
+import type { WizardStepStatus } from "@/lib/mctb/voice-agent/step-readiness";
 import { cn } from "@/lib/utils";
 import { Check } from "lucide-react";
 
 export function WizardStepper({
   steps,
   currentIndex,
+  presentation = "legacy",
+  stepStatuses,
+  onStepSelect,
 }: {
   steps: Array<{ id: string; label: string }>;
   currentIndex: number;
+  presentation?: "legacy" | "mctb";
+  stepStatuses?: Partial<Record<string, WizardStepStatus>>;
+  onStepSelect?: (index: number) => void;
 }) {
+  if (presentation === "mctb") {
+    return (
+      <nav aria-label="Setup progress" className="mctb-va-stepper w-full overflow-x-auto">
+        <ol className="flex min-w-max items-center gap-0">
+          {steps.map((step, index) => {
+            const done =
+              stepStatuses?.[step.id] === "COMPLETE" || index < currentIndex;
+            const active = index === currentIndex;
+            const attention = stepStatuses?.[step.id] === "NEEDS_ATTENTION";
+            const blocked = stepStatuses?.[step.id] === "BLOCKED";
+            const circleClass = cn(
+              "step-circle relative",
+              active && "step-circle--active",
+              done && !active && "step-circle--done",
+              attention && "step-circle--attention",
+              blocked && !active && "step-circle--attention",
+            );
+            const labelClass = cn("step-label", active && "step-label--active");
+            const content = (
+              <>
+                <span className={circleClass}>
+                  {done && !active ? (
+                    <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden />
+                  ) : (
+                    index + 1
+                  )}
+                </span>
+                <span className={labelClass}>{step.label}</span>
+              </>
+            );
+            return (
+              <li key={step.id} className="flex items-center">
+                {onStepSelect ? (
+                  <button
+                    type="button"
+                    className="flex flex-col items-center gap-0 px-1 sm:px-2"
+                    onClick={() => onStepSelect(index)}
+                    aria-current={active ? "step" : undefined}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div className="flex flex-col items-center gap-0 px-1 sm:px-2">{content}</div>
+                )}
+                {index < steps.length - 1 ? (
+                  <div
+                    className={cn(
+                      "mb-5 h-px w-5 sm:w-8",
+                      done ? "bg-[var(--mctb-va-accent,#3d5a80)]/40" : "bg-[#e2e6ec]",
+                    )}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    );
+  }
+
   return (
     <nav aria-label="Setup progress" className="w-full overflow-x-auto pb-1">
       <ol className="flex min-w-max items-center gap-0">

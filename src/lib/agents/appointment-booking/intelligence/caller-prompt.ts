@@ -3,15 +3,12 @@
  */
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import {
-  buildBusinessKnowledgePromptSection,
-  buildSystemPromptLegacy,
-} from "@/lib/solutions/appointment-receptionist/build-agent-config";
+import { buildSystemPromptLegacy } from "@/lib/solutions/appointment-receptionist/build-agent-config";
 import {
   normalizeWizardCollectFields,
   type AgentCollectionField,
 } from "@/lib/agents/appointment-booking/collection-fields";
-import { compilePromptModules, CALLER_AMY_DEFAULT_MODULES } from "./prompt-modules";
+import { compileVoiceAgentPromptFromWizard } from "@/lib/voice/prompt/compile-voice-agent-prompt";
 
 export function formatCustomFieldsForPrompt(fields: AgentCollectionField[]): string {
   const enabled = fields.filter((f) => f.enabled);
@@ -32,35 +29,7 @@ export function formatCustomFieldsForPrompt(fields: AgentCollectionField[]): str
 export function buildCallerAmyPromptFromModules(
   state: AppointmentReceptionistWizardState,
 ): string {
-  const fields = normalizeWizardCollectFields(state.collectFields);
-  const businessKnowledge = buildBusinessKnowledgePromptSection(state);
-  const transferSummary = state.transferDestinationName
-    ? `Transfer to ${state.transferDestinationName}${state.transferDestinationPhone ? ` (${state.transferDestinationPhone})` : ""} when policy requires.`
-    : "Transfer per AgentVersion transfer policy.";
-
-  const bookingSummary = [
-    `Booking: ${state.capabilities.includes("book_appointments") ? "enabled" : "disabled"}.`,
-    `Final confirmation: ${state.bookingBehavior.confirmBeforeBooking ? "required" : "not required"}.`,
-    `SMS confirmation: ${state.bookingBehavior.sendSmsAfterBooking ? "enabled" : "disabled"}.`,
-  ].join(" ");
-
-  const modulePrompt = compilePromptModules({
-    modules: CALLER_AMY_DEFAULT_MODULES,
-    context: {
-      agentName: state.agentName || "Amy",
-      businessName: state.businessName || "the business",
-      timezone: state.timezone || "America/New_York",
-      bookingPolicySummary: bookingSummary,
-      customFieldsSummary:
-        "Field requirements come from get_runtime_context (current_field, missing_fields, allowed_tools). " +
-        "Use record_current_field during collection and continue_workflow for workflow steps — never runtime_turn.",
-      transferPolicySummary: transferSummary,
-      fallbackPolicySummary: `On transfer failure: ${state.transferFallback.replaceAll("_", " ")}.`,
-      businessKnowledge,
-    },
-  });
-
-  return modulePrompt;
+  return compileVoiceAgentPromptFromWizard(state);
 }
 
 export function compileCustomFieldTestFixtures(fields: AgentCollectionField[]): Array<{

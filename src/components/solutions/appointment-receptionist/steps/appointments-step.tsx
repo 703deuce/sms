@@ -23,13 +23,22 @@ const CALENDARS = [
   { id: "internal", label: "Transovo Calendar" },
 ];
 
+const MCTB_BOOKING_PROVIDERS = [
+  { id: "microsoft", label: "Microsoft Calendar" },
+  { id: "calendly", label: "Calendly" },
+];
+
 export function AppointmentsStep({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
+  const providerCards = isMctb ? MCTB_BOOKING_PROVIDERS : CALENDARS;
   const selected =
     state.appointmentTypes.find((t) => t.id === state.selectedAppointmentTypeId) ||
     state.appointmentTypes[0];
@@ -123,7 +132,13 @@ export function AppointmentsStep({
             return;
           }
           // No live Calendly — send user to Integrations to connect.
-          window.location.href = "/integrations/native/calendly";
+          window.location.href = isMctb
+            ? "/integrations/native/calendly"
+            : "/integrations/native/calendly";
+          return;
+        }
+        if (isMctb && provider === "microsoft") {
+          window.location.href = "/integrations";
           return;
         }
         // acuity / calcom not wired for live booking yet
@@ -219,13 +234,21 @@ export function AppointmentsStep({
       <div className="min-w-0 flex-1 space-y-6">
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            What can callers book?
+            {isMctb ? "Booking" : "What can callers book?"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Connect a calendar to show real-time availability.
+            {isMctb
+              ? "Choose how the voice agent handles scheduling. Connections are managed in Integrations."
+              : "Connect a calendar to show real-time availability."}
           </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-            {CALENDARS.map((cal) => {
+          <div
+            className={
+              isMctb
+                ? "mt-4 grid gap-2 sm:grid-cols-2"
+                : "mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6"
+            }
+          >
+            {providerCards.map((cal) => {
               const connected = isProviderConnected(cal.id);
               const row = calendars.find((c) => c.provider === cal.id);
               return (
@@ -239,8 +262,8 @@ export function AppointmentsStep({
                       ? "Connecting…"
                       : connected
                         ? "Connected"
-                        : ["calendly", "acuity", "calcom"].includes(cal.id)
-                          ? "Connect via Integrations"
+                        : isMctb || ["calendly", "acuity", "calcom"].includes(cal.id)
+                          ? "Connect in Integrations"
                           : row?.status === "pending_oauth"
                             ? "Finish OAuth"
                             : row?.status === "pending"

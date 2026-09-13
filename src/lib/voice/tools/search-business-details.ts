@@ -4,6 +4,8 @@
  */
 
 import { resolveBusinessAnswer } from "@/lib/voice/knowledge/resolve-business-answer";
+import { evaluateRagGate } from "@/lib/voice/runtime/rag-gate";
+import { emitVoiceTrace, VOICE_TRACE_KINDS } from "@/lib/voice/runtime/trace-events";
 import {
   workflowToolResponse,
   type WorkflowToolResponse,
@@ -29,6 +31,35 @@ export async function executeSearchBusinessDetails(input: {
       status: "temporarily_unavailable",
       result: "agent_context_missing",
       speak: "I'm having trouble looking that up right now.",
+    });
+  }
+
+  const ragGate = evaluateRagGate(query);
+  if (input.callId) {
+    await emitVoiceTrace(input.callId, VOICE_TRACE_KINDS.RAG_GATE, {
+      query,
+      route: ragGate.route,
+      reason: ragGate.reason,
+    });
+  }
+
+  if (ragGate.route === "prompt_context") {
+    return workflowToolResponse({
+      status: "not_allowed",
+      result: "use_prompt_context",
+      speak:
+        "Answer from the Business knowledge section in your instructions — do not retrieve for routine hours, address, services, pricing, or FAQs.",
+      dynamicVariables: { rag_route: ragGate.route, rag_reason: ragGate.reason },
+    });
+  }
+
+  if (ragGate.route === "runtime_authoritative") {
+    return workflowToolResponse({
+      status: "not_allowed",
+      result: "runtime_authoritative_required",
+      speak:
+        "That requires a live check — use the appropriate scheduling, payment, or transfer workflow instead of knowledge lookup.",
+      dynamicVariables: { rag_route: ragGate.route, rag_reason: ragGate.reason },
     });
   }
 

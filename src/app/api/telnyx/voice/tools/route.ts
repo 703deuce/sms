@@ -23,6 +23,7 @@ import {
   isLegacyWorkflowVoicePathEnabled,
 } from "@/lib/voice/architecture/legacy-voice-path";
 import { isInternalBookingConductorMode } from "@/lib/voice/workflow-engine/conductor-mode";
+import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 
 function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
@@ -212,17 +213,17 @@ export async function POST(request: Request) {
     // TeXML-direct calls may not have a VoiceCall row until hangup — create early
     // so the first get_runtime_context / record_current_field has a callId.
     if (workspaceId && agentId && (callControlId || conversationId)) {
-      const { ensureVoiceCallForToolWebhook } = await import(
-        "@/lib/voice/ensure-call-from-event"
+      const { ensureToolWebhookCallContext } = await import(
+        "@/lib/voice/tools/ensure-tool-webhook-call-context"
       );
-      const ensuredId = await ensureVoiceCallForToolWebhook({
+      const ensuredId = await ensureToolWebhookCallContext({
         workspaceId,
         agentId,
-        callControlId: callControlId || null,
-        conversationId: conversationId || null,
-        fromE164: inboundAni || null,
-        toE164: toE164FromBody || null,
-      }).catch(() => null);
+        callControlId: callControlId || undefined,
+        conversationId: conversationId || undefined,
+        inboundAni: inboundAni || undefined,
+        toE164FromBody: toE164FromBody || undefined,
+      }).catch(() => undefined);
       if (ensuredId) callId = ensuredId;
     }
 
@@ -253,7 +254,7 @@ export async function POST(request: Request) {
     }
 
     // Last-resort create when ensureVoiceCallForToolWebhook could not resolve workspace phone.
-    if (!callId && callControlId && agentId) {
+    if (!callId && (callControlId || conversationId) && agentId) {
       const agent = await prisma.voiceAgent.findFirst({
         where: { id: agentId, workspaceId },
         select: {
@@ -400,19 +401,24 @@ export async function POST(request: Request) {
           serviceName,
         });
         if (!guard.allowed) {
-          const blocked = {
-            ok: false,
-            success: false,
-            error: guard.error_code || "TOOL_NOT_ALLOWED",
-            error_code: guard.error_code,
-            speak: guard.speak,
-            retryable: guard.retryable ?? false,
-            next_action: guard.next_action,
-            workflow_state: guard.state,
-            allowed_tools: guard.allowed_tools,
-            current_field: guard.current_field || null,
-            workflow_complete: guard.workflow_complete ?? false,
-          };
+          const { normalizeVoiceToolResult } = await import("@/lib/voice/runtime/tool-result");
+          const blocked = normalizeVoiceToolResult({
+            action: effectiveToolType,
+            raw: {
+              ok: false,
+              success: false,
+              error: guard.error_code || "TOOL_NOT_ALLOWED",
+              error_code: guard.error_code,
+              speak: guard.speak,
+              retryable: guard.retryable ?? false,
+              fallback: "capture_message",
+              next_action: guard.next_action,
+              workflow_state: guard.state,
+              allowed_tools: guard.allowed_tools,
+              current_field: guard.current_field || null,
+              workflow_complete: guard.workflow_complete ?? false,
+            },
+          });
           if (execution) {
             await prisma.voiceToolExecution
               .update({
@@ -427,7 +433,80 @@ export async function POST(request: Request) {
               })
               .catch(() => undefined);
           }
-          return telnyxToolJson(blocked);
+          return telnyxToolJson({
+            ...blocked,
+            speak: blocked.caller_safe_summary,
+          });
+        }
+
+        if (callId && agentId && isConversationWorkflowMode(runtimeAgentConfig)) {
+          const { ensureVoiceCallState } = await import("@/lib/voice/runtime/call-state");
+          const { loadWizardFromAgent } = await import("@/lib/voice/runtime/load-wizard");
+          const { filterPublishedToolsForRuntime } = await import(
+            "@/lib/voice/runtime/capability-resolver"
+          );
+          const wizard = await loadWizardFromAgent(workspaceId, agentId);
+          const voiceState = await ensureVoiceCallState({
+            callId,
+            workspaceId,
+            agentId,
+            callerPhone: inboundAni || null,
+            wizard: wizard || undefined,
+          });
+          const capCheck = filterPublishedToolsForRuntime({
+            requestedTool: effectiveToolType,
+            callState: voiceState,
+            agentConfig: runtimeAgentConfig,
+          });
+          if (!capCheck.allowed) {
+            const { normalizeVoiceToolResult } = await import("@/lib/voice/runtime/tool-result");
+            const denied = normalizeVoiceToolResult({
+              action: effectiveToolType,
+              raw: {
+                ok: false,
+                error_code: "TOOL_NOT_ALLOWED",
+                speak:
+                  "I'm not able to do that right now. I can take a message or answer from what I already know about the business.",
+                retryable: false,
+                fallback: "capture_message",
+                allowed_tools: voiceState.allowedTools,
+              },
+            });
+            if (execution) {
+              await prisma.voiceToolExecution
+                .update({
+                  where: { id: execution.id },
+                  data: {
+                    status: "failed",
+                    output: denied as object,
+                    errorMessage: capCheck.reason || "capability_denied",
+                    latencyMs: Date.now() - start,
+                    completedAt: new Date(),
+                  },
+                })
+                .catch(() => undefined);
+            }
+            return telnyxToolJson({
+              ...denied,
+              speak: denied.caller_safe_summary,
+              allowed_tools: voiceState.allowedTools,
+            });
+          }
+        }
+
+        if (effectiveToolType === "send_resource" && !callId && agentId && (callControlId || conversationId)) {
+          const { ensureToolWebhookCallContext } = await import(
+            "@/lib/voice/tools/ensure-tool-webhook-call-context"
+          );
+          const ensured = await ensureToolWebhookCallContext({
+            workspaceId,
+            agentId,
+            callControlId: callControlId || undefined,
+            conversationId: conversationId || undefined,
+            inboundAni: inboundAni || undefined,
+            toE164FromBody: toE164FromBody || undefined,
+          }).catch(() => undefined);
+          if (ensured) callId = ensured;
         }
 
         if (callId && inboundAni) {
@@ -439,6 +518,15 @@ export async function POST(request: Request) {
           }).catch(() => undefined);
         }
 
+        let calledE164ForTool = toE164FromBody;
+        if (!calledE164ForTool && agentId) {
+          const { loadMctbLineInboundConfig } = await import(
+            "@/lib/mctb/inbound-handling/line-config"
+          );
+          const line = await loadMctbLineInboundConfig({ workspaceId }).catch(() => null);
+          if (line?.ingressE164) calledE164ForTool = line.ingressE164;
+        }
+
         const result = (await executeBuiltinVoiceAction({
           workspaceId,
           agentId,
@@ -447,6 +535,12 @@ export async function POST(request: Request) {
           input: {
             ...effectiveBody,
             call_control_id: callControlId || body.call_control_id,
+            conversation_id: conversationId || body.conversation_id,
+            telnyx_conversation_id: conversationId,
+            from: inboundAni || body.from,
+            caller_e164: inboundAni,
+            called_e164: calledE164ForTool,
+            to: calledE164ForTool || body.to,
           },
         })) as Record<string, unknown>;
         const hasFieldSave =
@@ -488,17 +582,24 @@ export async function POST(request: Request) {
             })
             .catch(() => undefined);
         }
+        const { normalizeVoiceToolResult } = await import("@/lib/voice/runtime/tool-result");
+        const normalized = normalizeVoiceToolResult({
+          action: effectiveToolType,
+          raw: result,
+        });
         return telnyxToolJson({
           ...result,
-          ok: result.ok !== false,
+          ...normalized,
+          ok: normalized.ok,
           agentId,
           executionId: execution?.id,
           speak:
             typeof result.speak === "string"
               ? result.speak
-              : opSucceeded
-                ? undefined
-                : "I wasn't able to complete that just now. I can take a message or try something else.",
+              : normalized.caller_safe_summary ||
+                (opSucceeded
+                  ? undefined
+                  : "I wasn't able to complete that just now. I can take a message or try something else."),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

@@ -341,6 +341,83 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
  * first tool invocation may arrive minutes before hangup. Without a call row,
  * get_runtime_context / record_current_field / continue_workflow all fail.
  */
+async function createVoiceCallForToolWebhookFallback(input: {
+  workspaceId: string;
+  agentId: string;
+  callControlId?: string | null;
+  conversationId?: string | null;
+  fromE164?: string | null;
+  toE164?: string | null;
+}): Promise<string | null> {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+    select: {
+      id: true,
+      publishedVersionId: true,
+      phoneNumberId: true,
+      telnyxAssistantId: true,
+    },
+  });
+  if (!agent) return null;
+
+  let toE164 = input.toE164?.trim() || "";
+  if (toE164) toE164 = normalizeE164(toE164) || toE164;
+
+  if (!toE164 && agent.phoneNumberId) {
+    const pn = await prisma.phoneNumber.findFirst({
+      where: { id: agent.phoneNumberId },
+      select: { e164: true },
+    });
+    toE164 = pn?.e164 || "";
+  }
+
+  if (!toE164) {
+    try {
+      const { loadMctbLineInboundConfig } = await import(
+        "@/lib/mctb/inbound-handling/line-config"
+      );
+      const line = await loadMctbLineInboundConfig({ workspaceId: input.workspaceId });
+      if (line?.voiceAgentId === agent.id) {
+        toE164 = line.ingressE164;
+      }
+    } catch {
+      // optional MCTB line lookup
+    }
+  }
+
+  if (!toE164) return null;
+
+  const fromRaw = input.fromE164?.trim() || "";
+  const fromE164 = fromRaw ? normalizeE164(fromRaw) || fromRaw : "unknown";
+  const now = new Date();
+
+  const created = await prisma.voiceCall
+    .create({
+      data: {
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        agentVersionId: agent.publishedVersionId,
+        phoneNumberId: agent.phoneNumberId,
+        direction: "INBOUND",
+        status: "IN_PROGRESS",
+        fromE164,
+        toE164,
+        telnyxCallControlId: input.callControlId?.trim() || null,
+        telnyxConversationId: input.conversationId?.trim() || null,
+        startedAt: now,
+        answeredAt: now,
+        metadata: {
+          source: "telnyx_tool_webhook_fallback",
+          assistantId: agent.telnyxAssistantId,
+        } as object,
+      },
+    })
+    .catch(() => null);
+
+  return created?.id || null;
+}
+
 export async function ensureVoiceCallForToolWebhook(input: {
   workspaceId: string;
   agentId: string;
@@ -396,6 +473,11 @@ export async function ensureVoiceCallForToolWebhook(input: {
   const from = input.fromE164?.trim() || "";
   const to = input.toE164?.trim() || "";
 
+  const agentRow = await getPrisma().voiceAgent.findFirst({
+    where: { id: input.agentId, workspaceId: input.workspaceId },
+    select: { telnyxAssistantId: true },
+  });
+
   const ensured = await ensureVoiceCallForTelnyxEvent({
     eventType: "call.answered",
     eventPayload: {
@@ -404,12 +486,17 @@ export async function ensureVoiceCallForToolWebhook(input: {
       telnyx_conversation_id: conversationId || undefined,
       from: from || undefined,
       to: to || undefined,
+      assistant_id: agentRow?.telnyxAssistantId || undefined,
+      ai_assistant_id: agentRow?.telnyxAssistantId || undefined,
       direction: "incoming",
       source: "telnyx_tool_webhook_ensure",
     },
   }).catch(() => null);
 
-  const callId = ensured?.callId || null;
+  let callId = ensured?.callId || null;
+  if (!callId) {
+    callId = await createVoiceCallForToolWebhookFallback(input);
+  }
   if (callId) {
     const { initializeRealtimeSessionForCall } = await import(
       "@/lib/voice/realtime-session/init"

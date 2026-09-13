@@ -63,11 +63,14 @@ export function GoalsStep({
   state,
   patch,
   hireMode = false,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
   hireMode?: boolean;
+  presentation?: "legacy" | "mctb";
 }) {
+  const isMctb = presentation === "mctb";
   const options = capabilityOptionsForPreset(state.preset);
   const answerOptions = answerWhenOptionsForPreset(state.preset);
   const panel = goalsSidePanelCopy(state.preset);
@@ -271,10 +274,12 @@ export function GoalsStep({
 
         <div>
           <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">
-            What should this agent do?
+            {isMctb ? "What should your voice agent handle?" : "What should this agent do?"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Options match this agent type — select all that apply.
+            {isMctb
+              ? "Choose what the agent is allowed to help callers with."
+              : "Options match this agent type — select all that apply."}
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {options.map((opt) => {
@@ -324,49 +329,76 @@ export function GoalsStep({
         </div>
       </div>
 
-      <SidePanel title="Recommended setup">
-        <div className="space-y-4 text-sm">
-          <div className="rounded-xl border border-border bg-muted/40 p-3">
-            <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              Outcome
+      <SidePanel title={isMctb ? "Agent summary" : "Recommended setup"}>
+        {isMctb ? (
+          <ul className="space-y-2 text-xs text-muted-foreground">
+            <li>
+              <span className="font-semibold text-foreground">Purpose:</span> After-hours call
+              recovery
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Enabled capabilities:</span>{" "}
+              {state.capabilities.length}
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Policy source:</span> AI Lead
+              Recovery
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Booking:</span>{" "}
+              {state.capabilities.includes("book_appointments") ? "Available" : "Off"}
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">Transfer:</span>{" "}
+              {state.capabilities.includes("transfer_calls")
+                ? state.transferDestinationPhone?.trim()
+                  ? "Ready"
+                  : "Needs setup"
+                : "Off"}
+            </li>
+          </ul>
+        ) : (
+          <div className="space-y-4 text-sm">
+            <div className="rounded-xl border border-border bg-muted/40 p-3">
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <Sparkles className="h-3.5 w-3.5" />
+                Outcome
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">{panel.outcome}</p>
             </div>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {panel.outcome}
-            </p>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Required products
+              </p>
+              <ul className="mt-2 space-y-2 text-xs">
+                {panel.required.map((r) => (
+                  <li key={r.label} className="flex gap-2">
+                    <span className={`mt-0.5 h-2 w-2 rounded-full ${r.tone}`} />
+                    <span>
+                      <strong>{r.label}</strong> — {r.detail}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Optional products
+              </p>
+              <ul className="mt-2 space-y-2 text-xs">
+                {panel.optional.map((o) => (
+                  <li key={o} className="flex gap-2">
+                    <span className="mt-0.5 h-2 w-2 rounded-full bg-muted-foreground/40" />
+                    {o}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <InfoCallout>
+              After you continue, we&apos;ll generate your visual workflow for this agent.
+            </InfoCallout>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Required products
-            </p>
-            <ul className="mt-2 space-y-2 text-xs">
-              {panel.required.map((r) => (
-                <li key={r.label} className="flex gap-2">
-                  <span className={`mt-0.5 h-2 w-2 rounded-full ${r.tone}`} />
-                  <span>
-                    <strong>{r.label}</strong> — {r.detail}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Optional products
-            </p>
-            <ul className="mt-2 space-y-2 text-xs">
-              {panel.optional.map((o) => (
-                <li key={o} className="flex gap-2">
-                  <span className="mt-0.5 h-2 w-2 rounded-full bg-muted-foreground/40" />
-                  {o}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <InfoCallout>
-            After you continue, we&apos;ll generate your visual workflow for this agent.
-          </InfoCallout>
-        </div>
+        )}
       </SidePanel>
     </div>
   );

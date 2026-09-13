@@ -27,7 +27,7 @@ export const HARBOR_DRAIN_PROS_WIZARD_CONTENT = {
     "We do not perform new construction rough-in plumbing — service, repair, and replacement only.",
   businessAddress: "San Francisco, CA",
   greeting:
-    "Thank you for calling Harbor Drain Pros. This is Amy, your appointment booking agent. How may I help you today?",
+    "Thank you for calling Harbor Drain Pros. This is Amy, the after-hours assistant. How can I help you?",
 };
 
 export function harborDrainProsKnowledgeItems(): AppointmentReceptionistWizardState["knowledgeItems"] {

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { InfoCallout, RadioRow, SidePanel, StatusPill } from "../ui";
 
-const FLOW_STEPS = [
+const LEGACY_BOOKING_FLOW_STEPS = [
   "Understand request",
   "Identify appointment type",
   "Collect caller information",
@@ -25,12 +25,22 @@ const FLOW_STEPS = [
   "Send confirmation",
 ];
 
+const MCTB_VOICE_FLOW_STEPS = [
+  "Understand request",
+  "Apply business policy",
+  "Collect what's needed",
+  "Perform allowed action",
+  "Confirm or hand off",
+];
+
 export function CallHandlingStep({
   state,
   patch,
+  presentation = "legacy",
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
+  presentation?: "legacy" | "mctb";
 }) {
   const b = state.bookingBehavior;
   const booking = hasBookingCapability(state.capabilities);
@@ -46,15 +56,19 @@ export function CallHandlingStep({
             Configure transfers, messages
             {booking ? ", and booking behavior" : ", and fallbacks"}.
           </p>
-          {booking ? (
+          {(booking || presentation === "mctb") ? (
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
-            {FLOW_STEPS.map((step, i) => (
+            {(presentation === "mctb" ? MCTB_VOICE_FLOW_STEPS : LEGACY_BOOKING_FLOW_STEPS).map((step, i) => (
               <div key={step} className="flex items-center gap-2">
                 <div className="flex h-16 w-24 flex-col items-center justify-center rounded-lg border border-border bg-muted/30 px-2 text-center">
                   <span className="text-[10px] font-semibold text-primary">{i + 1}</span>
                   <span className="text-[10px] leading-tight text-foreground">{step}</span>
                 </div>
-                {i < FLOW_STEPS.length - 1 ? (
+                {i <
+                (presentation === "mctb"
+                  ? MCTB_VOICE_FLOW_STEPS
+                  : LEGACY_BOOKING_FLOW_STEPS).length -
+                  1 ? (
                   <ArrowRight className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
                 ) : null}
               </div>

@@ -910,7 +910,7 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "send_resource",
     toolType: "send_resource",
     description:
-      "Send an approved resource link to the caller by SMS. Provide only resource_type.",
+      "Send an approved resource link to the caller by SMS. Requires verbal_sms_consent when not already on file.",
     body: {
       type: "object",
       properties: {
@@ -918,8 +918,13 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
           type: "string",
           enum: ["booking", "quote", "financing", "directions", "photo_upload"],
         },
+        verbal_sms_consent: {
+          type: "boolean",
+          description:
+            "True when the caller verbally agreed to receive this text (message and data rates may apply).",
+        },
       },
-      required: ["resource_type"],
+      required: ["resource_type", "verbal_sms_consent"],
     },
   },
   search_business_details: {

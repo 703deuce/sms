@@ -769,12 +769,25 @@ export async function executeBuiltinVoiceAction(input: {
     case "send_resource": {
       const { executeSendResource } = await import("./send-resource");
       const { telnyxToolJsonBody } = await import("./workflow-tool-contract");
+      const consentRaw = args.verbal_sms_consent ?? args.verbalSmsConsent ?? args.sms_consent;
       const result = await executeSendResource({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         callId: input.callId,
         resourceType: String(args.resource_type || args.resourceType || ""),
         forceResend: Boolean(args.force_resend || args.resend),
+        verbalSmsConsent:
+          consentRaw === true || consentRaw === "true"
+            ? true
+            : consentRaw === false || consentRaw === "false"
+              ? false
+              : undefined,
+        telnyxConversationId: String(
+          args.telnyx_conversation_id || args.conversation_id || "",
+        ) || null,
+        telnyxCallControlId: String(args.call_control_id || args.callControlId || "") || null,
+        callerE164: String(args.from || args.caller || args.caller_e164 || "") || null,
+        calledE164: String(args.to || args.called || args.called_e164 || "") || null,
       });
       return telnyxToolJsonBody(result);
     }

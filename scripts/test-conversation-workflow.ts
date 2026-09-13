@@ -16,6 +16,7 @@ import {
 import { applyAmyMinimumSideEffectConfig } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import { workflowToolResponse } from "../src/lib/voice/tools/workflow-tool-contract";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
+import { applyWizardPreset, createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 
 const failures: string[] = [];
 function check(name: string, cond: boolean, detail?: string) {
@@ -72,6 +73,30 @@ check(
 
 const expressionEdges = edges.filter((e) => e.condition?.type === "expression");
 check("workflow has deterministic expression edges", expressionEdges.length >= 2);
+
+const afterHoursWizard = applyWizardPreset(createDefaultWizardState(), "after_hours");
+const ahConfig = applyAmyMinimumSideEffectConfig({
+  enabledBuiltinTools: [],
+  advanced: { appointmentReceptionistWizard: afterHoursWizard },
+} as VoiceAgentConfig);
+const ahGraph = buildAmyConversationWorkflow(toolIds, ahConfig);
+const ahGeneral = (ahGraph.nodes as Array<{ id: string; instructions?: string }>).find(
+  (n) => n.id === WORKFLOW_NODE_IDS.GENERAL,
+);
+check(
+  "after-hours GENERAL includes booking-link intake",
+  Boolean(ahGeneral?.instructions?.includes("Do not call send_resource until")),
+);
+const ahEdges = ahGraph.edges as Array<{ id?: string; condition?: { type?: string; prompt?: string } }>;
+const ahActionEdge = ahEdges.find((e) => e.id === "e_general_action");
+check(
+  "after-hours ACTION edge requires SMS consent",
+  Boolean(ahActionEdge?.condition?.prompt?.includes("agreed to receive a text")),
+);
+check(
+  "after-hours has consent_required return to GENERAL",
+  ahEdges.some((e) => e.id === "e_action_general_consent"),
+);
 
 const contract = workflowToolResponse({
   status: "success",
