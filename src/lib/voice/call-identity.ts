@@ -123,7 +123,12 @@ export async function findVoiceCallByTelnyxIds(input: {
     if (byConv) return byConv;
   }
 
-  if (input.agentId) {
+  // Only fall back to "recent live call for agent" when Telnyx did not send leg ids.
+  // Otherwise a new call_control_id could incorrectly attach to another caller's session.
+  const hasTelnyxLegId = Boolean(
+    input.callControlId?.trim() || input.conversationId?.trim(),
+  );
+  if (input.agentId && !hasTelnyxLegId) {
     const since = new Date(Date.now() - 10 * 60 * 1000);
     const recent = await prisma.voiceCall.findFirst({
       where: {

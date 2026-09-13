@@ -32,6 +32,13 @@ export type QuickSendSmsInput = {
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
+  const { isRecordingSmsMode, deliverRecordingSms } = await import(
+    "@/lib/voice/testing/headless/recording-sms"
+  );
+  if (isRecordingSmsMode()) {
+    return deliverRecordingSms(input);
+  }
+
   if (!input.demoBypass) {
     const entitlement = await checkCreditBalance(input.workspaceId);
     if (!entitlement.ok) throw new Error(entitlement.error);

@@ -1,0 +1,15 @@
+{
+  "name": "booking-link-two-turn",
+  "description": "FAQ from prompt, then request booking link by SMS with consent",
+  "workspaceFixture": "woodbridge_plumbing_test",
+  "turns": [
+    { "caller": "What do you guys do?" },
+    { "caller": "Can you text me the booking link?" },
+    { "caller": "Yes, you can text me. Message and data rates may apply." }
+  ],
+  "expect": {
+    "tools": [{ "type": "send_resource", "count": 1 }],
+    "smsCount": 1,
+    "forbiddenTools": ["search_business_details"]
+  }
+}
