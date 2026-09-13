@@ -59,11 +59,21 @@ function mapRow(row: PaymentRequest): PaymentRequestView {
 }
 
 export async function getStripeConnectionSummary(workspaceId: string) {
-  const conn = await getMerchantConnection(workspaceId, "STRIPE");
+  const { getStripeTextToPayCapabilities } = await import("@/lib/stripe-connect/capabilities");
+  const caps = await getStripeTextToPayCapabilities(workspaceId);
   return {
-    connected: Boolean(conn?.chargesEnabled && conn.merchantAccountId),
-    status: conn?.status ?? "not_connected",
-    merchantAccountId: conn?.merchantAccountId ?? null,
+    connected: caps.canCreateCheckoutSession,
+    status:
+      caps.health === "DISCONNECTED"
+        ? "not_connected"
+        : caps.health === "STRIPE_CONNECTED_NOT_PAYMENT_READY"
+          ? "onboarding_incomplete"
+          : caps.needsAttention
+            ? "needs_attention"
+            : "connected",
+    merchantAccountId: caps.accountId,
+    paymentReady: caps.liveModeReady,
+    health: caps.health,
   };
 }
 
@@ -610,6 +620,7 @@ export async function handlePaymentRequestCheckoutCompleted(session: {
   metadata?: Record<string, string | null | undefined> | null;
   amount_total?: number | null;
   payment_intent?: string | null;
+  payment_status?: string | null;
 }) {
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   const requestId = metadata.transovo_payment_request_id;
@@ -622,6 +633,22 @@ export async function handlePaymentRequestCheckoutCompleted(session: {
   });
   if (!row) return { handled: false as const, skipped: true as const };
   if (row.status === "paid") return { handled: true as const, paymentRequestId: row.id, duplicate: true as const };
+
+  const { isCheckoutSessionPaid } = await import("@/lib/stripe-connect/constants");
+  if (!isCheckoutSessionPaid(session)) {
+    await recordPaymentRequestEvent({
+      paymentRequestId: row.id,
+      workspaceId,
+      eventType: "payment_processing",
+      actorType: "provider",
+      payload: { sessionId: session.id, payment_status: session.payment_status || "unpaid" },
+    });
+    return {
+      handled: true as const,
+      paymentRequestId: row.id,
+      awaitingAsyncPayment: true as const,
+    };
+  }
 
   const amountCents = session.amount_total ?? row.amountMinor;
   const paymentIntent =

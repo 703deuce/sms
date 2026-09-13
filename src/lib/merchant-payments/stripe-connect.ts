@@ -5,7 +5,6 @@ import { getStripe } from "@/lib/stripe/client";
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import { createId } from "@/lib/supabase/id";
 import {
-  getDecryptedAccessToken,
   getMerchantConnection,
   upsertMerchantConnection,
   type ConnectionRecord,
@@ -233,10 +232,16 @@ export async function handleStripeConnectCheckoutCompleted(session: {
   metadata?: Record<string, string | null | undefined> | null;
   amount_total?: number | null;
   payment_intent?: string | null;
+  payment_status?: string | null;
 }) {
   const metadata = (session.metadata || {}) as Record<string, string | undefined>;
   if (metadata.transaction_type !== MERCHANT_PAYMENT_TRANSACTION_TYPE) {
     return { handled: false, skipped: true };
+  }
+
+  const { isCheckoutSessionPaid } = await import("@/lib/stripe-connect/constants");
+  if (!isCheckoutSessionPaid(session)) {
+    return { handled: true, skipped: false, awaitingAsyncPayment: true };
   }
 
   const appointmentId = metadata.appointmentId;

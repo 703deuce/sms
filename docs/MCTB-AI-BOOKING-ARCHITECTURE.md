@@ -90,6 +90,8 @@ Workspace `customFieldsConfig.mctb.aiBooking`:
 - `docs/runtime-rules/providers/CALENDLY-CONNECTOR-CONFORMANCE-AUDIT.md`
 - `docs/runtime-rules/providers/MICROSOFT-OUTLOOK-CALENDAR-RULES.md`
 - `docs/runtime-rules/providers/MICROSOFT-CALENDAR-CONNECTOR-CONFORMANCE-AUDIT.md`
+- `docs/runtime-rules/providers/STRIPE-CONNECT-TEXT-TO-PAY-RULES.md`
+- `docs/runtime-rules/providers/STRIPE-CONNECT-TEXT-TO-PAY-CONFORMANCE-AUDIT.md`
 
 ## Production status (mechanical)
 
