@@ -72,3 +72,19 @@ Workspace `customFieldsConfig.mctb.aiBooking`:
 
 - `docs/MCTB-AI-BOOKING-PROVIDER-MATRIX.md`
 - `docs/MCTB-BOOKING-SIMPLIFICATION-AUDIT.md`
+
+## Production status (mechanical)
+
+| Flag | Expected |
+|------|----------|
+| `AI_BOOKING_SETUP_UI` | CONNECTED_AND_WORKING |
+| `AI_BOOKING_CONFIG_PERSISTENCE` | `customFieldsConfig.mctb.aiBooking` via `/api/mctb/ai-booking/config` |
+| `NL_SCHEDULING_INTERPRETER` | `scheduling-interpreter.ts` (deterministic) |
+| `CONVERSATION_INTENT_ROUTING` | `conversation-runtime.ts` → `handleJohnCustomerSmsReply` |
+| `DURABLE_BOOKING_SESSION` | `mctb_ai_booking_sessions` (Prisma) |
+| `BOOKING_CONFIRMED_ACTIVITY` | `mctb_conversation_booking_activities` + `direction=event` message |
+| `FALLBACK_BOOKING_LINK` | configured `fallbackBookingLinkId` |
+| `IN_MEMORY_PRODUCTION_SESSION_STORE` | **NO** (default `prismaMctbAiBookingSessionStore`) |
+| `INVENTED_AVAILABILITY` | **0** (provider-only slots) |
+
+**Entitlement:** `hasMctbAiBookingEntitlement()` — set `mctb.aiBooking.entitled: true` or `workspaceLimits.limits.mctbAiBookingEntitled: true` (paid workspaces default unless explicitly false).

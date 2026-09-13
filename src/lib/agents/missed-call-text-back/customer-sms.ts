@@ -71,6 +71,20 @@ export async function handleJohnCustomerSmsReply(input: {
       select: { id: true },
     });
     conversationId = conv?.id ?? null;
+    if (!conversationId) {
+      const created = await prisma.conversation.create({
+        data: {
+          workspaceId: input.workspaceId,
+          contactId: contact.id,
+          productSource: "MCTB",
+          missedCallEventId: recentEvent.id,
+          fromE164: input.toE164,
+          status: "OPEN",
+        },
+        select: { id: true },
+      });
+      conversationId = created.id;
+    }
   }
 
   const workspace = await prisma.workspace.findUnique({
