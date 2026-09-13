@@ -6,7 +6,8 @@ import {
 } from "@/lib/products/access-guards";
 import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
-import { isSmsOnlyAppNav, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import { mctbShellHome } from "@/lib/products/product-shell";
+import { isMctbV1Primary, isSmsOnlyAppNav, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
 
 export {
   preferredProductFromPath,
@@ -34,6 +35,10 @@ export function resolvePostLoginPath(
 ): string {
   const next = options?.nextPath;
   if (isSafeNextPath(next)) return next;
+
+  if (isMctbV1Primary() && access.hasVoice) {
+    return mctbShellHome();
+  }
 
   const active = activeProductKeys(access).filter(
     (key) => !(isSmsStandaloneHidden() && key === "sms"),

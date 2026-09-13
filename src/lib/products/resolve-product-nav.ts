@@ -9,7 +9,8 @@ import {
   type ProductShell,
 } from "@/lib/products/product-shell";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
-import { isAppointmentsV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
+import { resolveMctbLaunchProductShell } from "@/lib/mctb/universal-shell";
+import { isAppointmentsV1Primary, isMctbV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 
 export type ResolveProductNavInput = {
   pathname: string;
@@ -20,6 +21,7 @@ export type ResolveProductNavInput = {
   showTryIt?: boolean;
   productFeatures?: WorkspaceFeatureSnapshot | null;
   hasSms?: boolean;
+  hasMctb?: boolean;
   smartRoutingFlowId?: string | null;
 };
 
@@ -27,11 +29,15 @@ function resolveEffectiveProductShell(
   pathname: string,
   productShell: ProductShell,
   multiProduct: boolean,
+  hasMctb = false,
 ): ProductShell | null {
+  const launchShell = resolveMctbLaunchProductShell(pathname, productShell, hasMctb);
+  if (launchShell) return launchShell;
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell) return pathShell;
   if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return "mctb";
   if (multiProduct) return productShell;
+  if (isMctbV1Primary() && hasMctb) return "mctb";
   return null;
 }
 
@@ -41,6 +47,7 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     input.pathname,
     input.productShell,
     input.multiProduct,
+    input.hasMctb,
   );
 
   if (effectiveShell === "mctb") {
@@ -56,6 +63,10 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     return buildAiAfterHoursNav({
       primaryVoiceAgentId: input.primaryVoiceAgentId ?? null,
     });
+  }
+
+  if (isMctbV1Primary() && input.hasMctb) {
+    return buildMctbV1Nav({ inboxBadge: input.inboxBadge });
   }
 
   if (isAppointmentsV1Primary()) {
@@ -88,6 +99,7 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     input.pathname,
     input.productShell,
     input.multiProduct,
+    input.hasMctb,
   );
 
   if (effectiveShell === "mctb") {
@@ -110,13 +122,19 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
   return buildMctbV1MobileNav({ inboxBadge: input.inboxBadge });
 }
 
-export function isMctbShellActive(pathname: string, multiProduct: boolean, productShell: ProductShell): boolean {
+export function isMctbShellActive(
+  pathname: string,
+  multiProduct: boolean,
+  productShell: ProductShell,
+  hasMctb = false,
+): boolean {
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell === "mctb") return true;
   if (pathShell === "appointments" || pathShell === "mass_sms" || pathShell === "ai_after_hours") {
     return false;
   }
   if (isMctbSharedWorkspacePath(pathname) && productShell === "mctb") return true;
+  if (isMctbV1Primary() && hasMctb) return true;
   return multiProduct && productShell === "mctb";
 }
 
@@ -124,7 +142,9 @@ export function isAppointmentsShellActive(
   pathname: string,
   multiProduct: boolean,
   productShell: ProductShell,
+  hasMctb = false,
 ): boolean {
+  if (isMctbV1Primary() && hasMctb) return false;
   const pathShell = resolveProductShellFromPath(pathname);
   if (pathShell === "appointments") return true;
   if (pathShell === "mctb") return false;

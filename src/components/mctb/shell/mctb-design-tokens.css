@@ -1,0 +1,48 @@
+/**
+ * Transovo MCTB — global design tokens (shell + pages).
+ * Brand: muted medium blue / blue-violet (not green).
+ */
+@import "./mctb-brand-tokens.css";
+
+.product-theme[data-mctb-neutral-shell] {
+  --mctb-canvas: #e8ebf0;
+  --mctb-page-max: 90rem;
+  --mctb-page-pad-x: 1.75rem;
+  --mctb-page-pad-top: 1.5rem;
+  --mctb-page-pad-bottom: 2rem;
+}
+
+@media (max-width: 1023px) {
+  .product-theme[data-mctb-neutral-shell] {
+    --mctb-page-pad-x: 1.25rem;
+    --mctb-page-pad-top: 1.25rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .product-theme[data-mctb-neutral-shell] {
+    --mctb-page-pad-x: 1rem;
+  }
+}
+
+.mctb-page-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  background: var(--mctb-canvas, #e8ebf0);
+}
+
+.mctb-page-container {
+  margin-inline: auto;
+  max-width: var(--mctb-page-max, 90rem);
+  width: 100%;
+  padding: var(--mctb-page-pad-top, 1.5rem) var(--mctb-page-pad-x, 1.75rem)
+    var(--mctb-page-pad-bottom, 2rem);
+  box-sizing: border-box;
+}
+
+.mctb-page-container--flush {
+  padding-left: 0;
+  padding-right: 0;
+  max-width: none;
+}

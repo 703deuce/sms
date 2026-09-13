@@ -4,7 +4,12 @@
  */
 import { appointmentsShellHome } from "@/lib/products/appointments-routes";
 import { isAppointmentsMessagesPath } from "@/lib/products/appointments-messages-routes";
-import { isSmsOnlyAppNav, isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
+import {
+  isSmsOnlyAppNav,
+  isAppointmentsV1Primary,
+  isMctbV1Primary,
+  isSmsStandaloneHidden,
+} from "@/lib/workspace/platform-launch";
 
 export type ProductShell = "appointments" | "mass_sms" | "mctb" | "ai_after_hours";
 
@@ -176,6 +181,7 @@ export function defaultProductShell(input: {
   hasMassSms: boolean;
   hasAiAfterHours?: boolean;
 }): ProductShell {
+  if (isMctbV1Primary() && input.hasMctb) return "mctb";
   if (isAppointmentsV1Primary()) return "appointments";
   if (input.hasMassSms) return "mass_sms";
   if (input.hasAiAfterHours) return "ai_after_hours";

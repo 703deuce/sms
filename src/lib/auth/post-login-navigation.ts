@@ -1,4 +1,6 @@
 import { normalizeAppointmentsPostLoginPath } from "@/lib/products/appointments-home-redirect";
+import { mctbShellHome } from "@/lib/products/product-shell";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
 
 /** Client-side navigation after login/signup — API routes need full page loads. */
 export function navigateAfterAuth(
@@ -15,11 +17,16 @@ export function navigateAfterAuth(
 }
 
 /** Paths safe for client router.push (not API routes or auth pages). */
-export function clientSafeNextPath(path: string | null | undefined, fallback = "/dashboard"): string {
-  if (!path?.trim()) return fallback;
-  if (!path.startsWith("/") || path.startsWith("//")) return fallback;
-  if (path.startsWith("/login") || path.startsWith("/signup")) return fallback;
-  if (path.startsWith("/api/")) return fallback;
+export function defaultAuthLandingPath(): string {
+  return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
+}
+
+export function clientSafeNextPath(path: string | null | undefined, fallback?: string): string {
+  const landing = fallback ?? defaultAuthLandingPath();
+  if (!path?.trim()) return landing;
+  if (!path.startsWith("/") || path.startsWith("//")) return landing;
+  if (path.startsWith("/login") || path.startsWith("/signup")) return landing;
+  if (path.startsWith("/api/")) return landing;
   return normalizeAppointmentsPostLoginPath(path);
 }
 

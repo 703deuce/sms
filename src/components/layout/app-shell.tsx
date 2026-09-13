@@ -22,6 +22,7 @@ import { useProductShell } from "@/components/products/product-shell-tabs";
 import { shouldShowProductSwitcher } from "@/lib/products/product-shell";
 import { isMctbProductChromePath } from "@/lib/products/mctb-shell";
 import "@/components/mctb/shell/mctb-sidebar.css";
+import "@/components/mctb/shell/mctb-design-tokens.css";
 import { isAppointmentsShellActive, isMctbShellActive } from "@/lib/products/resolve-product-nav";
 import type { SolutionNavInstance } from "@/lib/solutions-nav";
 import type { CurrentProduct } from "@/lib/products/types";
@@ -62,6 +63,7 @@ function shouldAutoCollapseSidebar(path: string) {
 
 function isAppointmentsKimiFullBleedRoute(pathname: string): boolean {
   if (!isAppointmentsV1Primary()) return false;
+  if (pathname.startsWith("/mctb")) return false;
   return isKimiIntegratedRoute(pathname) && !pathname.startsWith("/automations");
 }
 
@@ -203,8 +205,13 @@ export function AppShell({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasSms, hasAiAfterHours);
-  const mctbContextActive = isMctbShellActive(pathname, multiProduct, productShell);
-  const appointmentsContextActive = isAppointmentsShellActive(pathname, multiProduct, productShell);
+  const mctbContextActive = isMctbShellActive(pathname, multiProduct, productShell, hasMctb);
+  const appointmentsContextActive = isAppointmentsShellActive(
+    pathname,
+    multiProduct,
+    productShell,
+    hasMctb,
+  );
   const smsPlatformTitle = isSmsShellRoute(pathname) ? getSmsPlatformPageTitle(pathname) : "";
   const appointmentsTitle =
     appointmentsContextActive && isAppointmentsProductPath(pathname)
@@ -216,10 +223,10 @@ export function AppShell({
     ? ""
     : isLauncher
       ? "Your Transovo Products"
-      : appointmentsTitle
-        ? appointmentsTitle
-        : mctbTitle
-          ? mctbTitle
+      : mctbTitle
+        ? mctbTitle
+        : appointmentsTitle
+          ? appointmentsTitle
         : smsPlatformTitle
           ? smsPlatformTitle
           : currentProduct === "numbers"
@@ -236,7 +243,7 @@ export function AppShell({
   const sidebarCollapsedEffective = autoCollapseSidebar || sidebarCollapsed;
   const isAppointmentsNeutralShell =
     isAppointmentsV1Primary() && isAppointmentsProductPath(pathname);
-  const isMctbNeutralShell = isMctbProductChromePath(pathname, productShell);
+  const isMctbNeutralShell = isMctbProductChromePath(pathname, productShell, { hasMctb });
   const isAppointmentsOverviewPilot =
     isAppointmentsNeutralShell &&
     (pathname === "/appointments/overview" || pathname.startsWith("/appointments/calendar"));
@@ -354,7 +361,11 @@ export function AppShell({
                     : "flex min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-28 pt-5 lg:px-6 lg:pb-8"
           }
         >
-          {children}
+          {isMctbNeutralShell ? (
+            <div className="mctb-page-canvas min-h-full">{children}</div>
+          ) : (
+            children
+          )}
         </main>
       </div>
       <MobileNav

@@ -374,6 +374,7 @@ export function Sidebar({
       showTryIt,
       productFeatures,
       hasSms,
+      hasMctb,
       smartRoutingFlowId: smartRoutingFlowIdFromPath(pathname),
     });
   }, [
@@ -457,7 +458,7 @@ export function Sidebar({
         collapsed={collapsed}
         expandedWidthPx={sidebarExpandedPx}
         appointmentsOverviewShell={softCoolSlateShell}
-        mctbBrandMark={isMctbProductChromePath(pathname, productShell)}
+        mctbBrandMark={isMctbProductChromePath(pathname, productShell, { hasMctb })}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
         productSwitcher={

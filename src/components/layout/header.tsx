@@ -78,7 +78,7 @@ export function Header({
   const pathname = usePathname();
   const { shell: productShell } = useProductShell(hasMctb, hasSms, false);
   const appointmentsChrome = isAppointmentsProductPath(pathname);
-  const mctbChrome = isMctbProductChromePath(pathname, productShell);
+  const mctbChrome = isMctbProductChromePath(pathname, productShell, { hasMctb });
   const neutralChrome = appointmentsChrome || mctbChrome;
   const showMassSmsChrome = hasSms && !appointmentsChrome;
   const [numberId, setNumberId] = useState(

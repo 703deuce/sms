@@ -6,8 +6,9 @@ import { buildMctbV1Nav } from "../src/lib/products/mctb-nav";
 import { mapProductionNavToKimi } from "../src/components/kimi/sidebar/map-nav";
 
 assert.equal(isMctbNeutralShellPath("/mctb/setup/phone"), true);
-assert.equal(isMctbProductChromePath("/payments", "mctb"), true);
-assert.equal(isMctbProductChromePath("/payments", "appointments"), false);
+assert.equal(isMctbProductChromePath("/payments", "mctb", { hasMctb: true }), true);
+assert.equal(isMctbProductChromePath("/payments", "appointments", { hasMctb: true }), true);
+assert.equal(isMctbProductChromePath("/payments", "appointments", { hasMctb: false }), false);
 assert.equal(isMctbProductChromePath("/integrations", "mctb"), true);
 
 const kimi = mapProductionNavToKimi(buildMctbV1Nav());

@@ -66,7 +66,7 @@ export function MobileNav({
     hasAiAfterHours,
   });
   const { shell: productShell } = useProductShell(hasMctb, hasMassSms, hasAiAfterHours);
-  const mctbNeutral = isMctbProductChromePath(pathname, productShell);
+  const mctbNeutral = isMctbProductChromePath(pathname, productShell, { hasMctb });
 
   const voiceItems = buildVoiceMobileNav({ showTryIt, productFeatures }).map((item, i) => ({
     ...item,
@@ -124,7 +124,7 @@ export function MobileNav({
         >
           {items.map((item) => {
             const Icon = item.icon;
-            const mctbShell = isMctbShellActive(pathname, multiProduct, productShell);
+            const mctbShell = isMctbShellActive(pathname, multiProduct, productShell, hasMctb);
             const active = mctbShell
               ? item.href === MCTB_ROUTES.home
                 ? pathname === item.href

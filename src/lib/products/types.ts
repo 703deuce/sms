@@ -1,3 +1,6 @@
+import { mctbShellHome } from "@/lib/products/product-shell";
+import { isMctbV1Primary } from "@/lib/workspace/platform-launch";
+
 /** Transovo product keys — voice + numbers are launch products; SMS is add-on/future. */
 export type ProductKey = "sms" | "numbers" | "voice";
 
@@ -47,7 +50,7 @@ export function productLabel(product: ProductKey): string {
 export function productHomePath(product: ProductKey): string {
   switch (product) {
     case "voice":
-      return "/dashboard";
+      return isMctbV1Primary() ? mctbShellHome() : "/dashboard";
     case "sms":
       return "/sms/dashboard";
     case "numbers":

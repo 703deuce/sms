@@ -5,13 +5,14 @@
  */
 :root,
 .product-theme[data-mctb-neutral-shell] {
-  --mctb-brand: #35466b;
-  --mctb-brand-icon: #3f5280;
-  --mctb-brand-soft: #e8edf6;
-  --mctb-brand-strong: #283656;
-  --mctb-brand-ring: #c5d0e6;
-  --mctb-info: #4a5f85;
-  --mctb-info-soft: #eef2f9;
+  /* Transovo marketing-aligned blue / blue-violet (MCTB accent) */
+  --mctb-brand: #3d4f9f;
+  --mctb-brand-icon: #4a5fc9;
+  --mctb-brand-soft: #e8eefb;
+  --mctb-brand-strong: #2f3f85;
+  --mctb-brand-ring: #c5d4f2;
+  --mctb-info: #4a5fc9;
+  --mctb-info-soft: #eef3fc;
   --mctb-success: #1f6b42;
   --mctb-success-soft: #e9f4ee;
   --mctb-accent-amber: #9a6700;
