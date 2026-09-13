@@ -61,8 +61,11 @@ function semanticCellClass(label: string, kind: "recovery" | "reply"): string {
     if (l.includes("replied") || l.includes("yes")) return "mctb-home-cell--success";
     return "mctb-home-cell--secondary";
   }
-  if (l.includes("sent") || l.includes("delivered") || l.includes("recovered")) {
+  if (l.includes("sent") || l.includes("recovered")) {
     return "mctb-home-cell--success";
+  }
+  if (l.includes("delivered")) {
+    return "mctb-home-cell--info";
   }
   if (l.includes("pending") || l.includes("scheduled") || l.includes("queued")) {
     return "mctb-home-cell--pending";
@@ -127,7 +130,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: Send,
-      iconTone: "teal" as const,
+      iconTone: "brand" as const,
       attention: false,
     },
     {
@@ -183,7 +186,7 @@ export function MctbHomeAttentionOkStrip({ variant = "card" }: { variant?: "card
   const className = variant === "inline" ? "mctb-home-attention-inline" : "mctb-home-attention-ok";
   return (
     <div className={className} role="status">
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--mctb-accent-teal-icon)]" aria-hidden />
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--mctb-brand-icon)]" aria-hidden />
       <span>Nothing needs attention</span>
     </div>
   );

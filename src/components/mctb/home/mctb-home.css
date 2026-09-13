@@ -1,18 +1,24 @@
-/* MCTB Overview — restrained color hierarchy (overview scope only). */
+/* MCTB Overview — brand indigo + semantic colors (overview scope only). */
 .mctb-home {
-  --mctb-text-primary: #0f1216;
-  --mctb-text-secondary: #505862;
-  --mctb-text-tertiary: #8a919b;
-  --mctb-canvas: #eceef1;
+  --mctb-text-primary: #0a0d12;
+  --mctb-text-secondary: #4a5563;
+  --mctb-text-tertiary: #7a8494;
+  --mctb-canvas: #e3e6ec;
   --mctb-surface: #ffffff;
-  --mctb-surface-inset: #f5f7f9;
-  --mctb-border: #d8dce2;
-  --mctb-border-subtle: #e8ebef;
-  --mctb-accent-teal: #1f6b42;
-  --mctb-accent-teal-soft: #e9f4ee;
-  --mctb-accent-teal-icon: #2d7a52;
-  --mctb-accent-info: #4a6f94;
-  --mctb-accent-info-soft: #edf3f8;
+  --mctb-surface-inset: #f3f5f8;
+  --mctb-border: #c8ced8;
+  --mctb-border-subtle: #dde2ea;
+  /* Brand — muted indigo / slate-blue (not green) */
+  --mctb-brand: #3d4a6e;
+  --mctb-brand-icon: #4a5880;
+  --mctb-brand-soft: #eceff7;
+  --mctb-brand-strong: #2f3a58;
+  /* Informational cool accent (secondary to brand) */
+  --mctb-info: #5a6d8f;
+  --mctb-info-soft: #eef2f8;
+  /* Semantic only */
+  --mctb-success: #1f6b42;
+  --mctb-success-soft: #e9f4ee;
   --mctb-accent-amber: #9a6700;
   --mctb-accent-amber-soft: #fff8e8;
   --mctb-accent-red: #b42318;
@@ -44,7 +50,7 @@
 }
 
 .mctb-home-banner-warn a {
-  color: var(--mctb-accent-teal-icon);
+  color: var(--mctb-brand-icon);
 }
 
 @media (min-width: 1024px) {
@@ -57,7 +63,7 @@
   border: 1px solid var(--mctb-border);
   border-radius: 8px;
   background: var(--mctb-surface);
-  box-shadow: 0 1px 2px rgba(15, 18, 22, 0.04);
+  box-shadow: 0 1px 3px rgba(10, 13, 18, 0.06);
 }
 
 .mctb-home-module {
@@ -103,13 +109,13 @@
 
 .mctb-home-link {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--mctb-accent-teal-icon);
+  font-weight: 600;
+  color: var(--mctb-brand-icon);
   text-decoration: none;
 }
 
 .mctb-home-link:hover {
-  color: var(--mctb-accent-teal);
+  color: var(--mctb-brand-strong);
   text-decoration: underline;
 }
 
@@ -159,12 +165,12 @@
 
 .mctb-home-kpi-icon--neutral {
   background: var(--mctb-surface-inset);
-  color: var(--mctb-text-secondary);
+  color: var(--mctb-text-primary);
 }
 
-.mctb-home-kpi-icon--teal {
-  background: var(--mctb-accent-teal-soft);
-  color: var(--mctb-accent-teal-icon);
+.mctb-home-kpi-icon--brand {
+  background: var(--mctb-brand-soft);
+  color: var(--mctb-brand-icon);
 }
 
 .mctb-home-kpi-icon--info {
@@ -186,7 +192,7 @@
 
 .mctb-home-kpi-value {
   font-size: 19px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 22px;
   letter-spacing: -0.02em;
   color: var(--mctb-text-primary);
@@ -265,12 +271,12 @@
 }
 
 .mctb-home-cell--success {
-  color: var(--mctb-accent-teal-icon);
-  font-weight: 500;
+  color: var(--mctb-success);
+  font-weight: 600;
 }
 
 .mctb-home-cell--info {
-  color: var(--mctb-accent-info);
+  color: var(--mctb-brand-icon);
   font-weight: 500;
 }
 
@@ -301,15 +307,16 @@
 }
 
 .mctb-home-status-chip--active {
-  background: var(--mctb-accent-teal-soft);
-  color: var(--mctb-accent-teal);
+  background: var(--mctb-brand-soft);
+  color: var(--mctb-brand);
   padding: 0.125rem 0.5rem 0.125rem 0.375rem;
   border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
+  border: 1px solid #d5dbe8;
 }
 
 .mctb-home-status-chip--active .mctb-home-status-dot {
-  background: var(--mctb-accent-teal-icon);
+  background: var(--mctb-brand-icon);
   width: 6px;
   height: 6px;
 }
@@ -348,10 +355,10 @@
   padding: 0 1rem;
   border: 1px solid var(--mctb-border-subtle);
   border-radius: 8px;
-  background: var(--mctb-accent-teal-soft);
+  background: var(--mctb-brand-soft);
   font-size: 13px;
   font-weight: 500;
-  color: var(--mctb-accent-teal);
+  color: var(--mctb-brand);
 }
 
 /* Inside Recent missed calls — not a separate card */
@@ -373,7 +380,7 @@
 }
 
 .mctb-home-missed-row:hover {
-  background: var(--mctb-accent-info-soft);
+  background: var(--mctb-brand-soft);
 }
 
 .mctb-home-interactive-row {
@@ -445,7 +452,8 @@
 }
 
 .mctb-home-setup-value--ok {
-  color: var(--mctb-accent-teal-icon);
+  color: var(--mctb-success);
+  font-weight: 600;
 }
 
 .mctb-home-setup-value--warn {
