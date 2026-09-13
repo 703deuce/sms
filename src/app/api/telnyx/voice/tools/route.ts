@@ -56,8 +56,9 @@ function resolveInboundAni(request: Request, body: Record<string, unknown>): str
  * Never hang up from this route — tool failures return speakable errors.
  */
 export async function POST(request: Request) {
+  const ingressStartedAt = Date.now();
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const ingress = await recordToolWebhookIngress({ request, body });
+  const ingress = await recordToolWebhookIngress({ request, body, ingressStartedAt });
 
   try {
     const workspaceId = request.headers.get("x-transovo-workspace-id") || "";
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         workspaceId,
         agentId,
         toolType,
+        ingressStartedAt,
       });
       if (fastResponse) return fastResponse;
     }

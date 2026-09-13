@@ -22,6 +22,14 @@ import {
 } from "@/lib/voice/tools/workflow-tool-contract";
 import { VOICE_RUNTIME_STATE_KEY } from "@/lib/voice/runtime/types";
 import { normalizeCallerAni } from "@/lib/voice/call-identity";
+import { isAfterHoursVoiceProfile } from "@/lib/voice/runtime/voice-profile";
+import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import { evaluateSendResourceConsent } from "@/lib/voice/tools/send-resource-consent-runtime";
+import {
+  confirmSmsConsentForCall,
+  mergeSendResourceSession,
+  readSendResourceSession,
+} from "@/lib/voice/tools/send-resource-session";
 
 export type SendResourceContext = {
   workspaceId: string;
@@ -45,15 +53,9 @@ function sessionKey(input: SendResourceContext): string {
   );
 }
 
-function consentAllowed(input: {
-  resourceType: string;
-  priorConsent: boolean;
-  verbalSmsConsent?: boolean;
-}): boolean {
-  if (input.priorConsent || input.verbalSmsConsent === true) return true;
-  // Workflow routes to send_resource only after the caller agreed to SMS; model often omits the flag.
-  if (input.verbalSmsConsent === false) return false;
-  return input.resourceType === "booking";
+function wizardFromAgentConfig(config: ReturnType<typeof parseVoiceAgentConfig> | null) {
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  return advanced.appointmentReceptionistWizard as AppointmentReceptionistWizardState | undefined;
 }
 
 async function loadAgentConfig(workspaceId: string, agentId?: string | null) {
@@ -224,17 +226,49 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
     });
   }
 
-  const priorConsent =
-    metadata.verbal_sms_consent === true || metadata.sms_verbal_consent === true;
-  if (!consentAllowed({ resourceType, priorConsent, verbalSmsConsent: input.verbalSmsConsent })) {
+  const wizard = wizardFromAgentConfig(config);
+  const afterHoursProfile = wizard ? isAfterHoursVoiceProfile(wizard) : false;
+  const consentDecision = await evaluateSendResourceConsent({
+    resourceType,
+    afterHoursProfile,
+    callMetadata: metadata,
+    callId,
+    verbalSmsConsent: input.verbalSmsConsent,
+    conversationId: input.telnyxConversationId,
+    probeDeadlineMs: Date.now() + 2000,
+  });
+
+  if (!consentDecision.allowed) {
+    if (callId) {
+      await mergeSendResourceSession(callId, {
+        last_send_resource_denied_at: new Date().toISOString(),
+        last_send_resource_denied_reason: consentDecision.reason,
+      });
+    }
     return workflowToolResponse({
       status: "not_allowed",
       result: "sms_consent_required",
       speak:
-        "I need your permission before I text you. Is it okay if I send that link by text? Message and data rates may apply.",
+        consentDecision.reason === "booking_not_offered"
+          ? "I can text you a booking link — is it okay if I send that by text? Message and data rates may apply."
+          : "I need your permission before I text you. Is it okay if I send that link by text? Message and data rates may apply.",
       dynamicVariables: { resource_send_status: "consent_required" },
     });
   }
+
+  if (callId && consentDecision.shouldPersistConsent) {
+    await confirmSmsConsentForCall(callId);
+    const refreshed = await prisma.voiceCall.findFirst({
+      where: { id: callId },
+      select: { metadata: true },
+    });
+    if (refreshed?.metadata && typeof refreshed.metadata === "object") {
+      metadata = refreshed.metadata as Record<string, unknown>;
+    }
+  }
+
+  const session = readSendResourceSession(metadata);
+  const consentVersion = session.consent_action_version ?? 0;
 
   const priorType = String(metadata.resource_send_type || "");
   const priorStatus = String(metadata.resource_send_status || "");
@@ -264,9 +298,10 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
   }
 
   const key = sessionKey({ ...input, callId });
+  const logicalKey = `${key}:booking:${resourceType}:v${consentVersion}`;
   const resolved = resolveVoiceSmsTemplate({
     templateId,
-    callId: key,
+    callId: logicalKey,
     businessName: resources.businessName,
     bookingUrl: resources.bookingUrl,
     websiteUrl: resources.websiteUrl,

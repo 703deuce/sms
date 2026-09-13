@@ -4,6 +4,7 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-headless-runtime.ts
  */
 import {
+  certifyBookingConsentGate,
   certifySendResourcePhrases,
   certifySendResourceRuntime,
 } from "../src/lib/voice/testing/headless/runtime-cert";
@@ -22,6 +23,14 @@ async function main() {
       process.exit(1);
     }
     console.log("send_resource runtime: PASS");
+
+    const consent = await certifyBookingConsentGate(fixture);
+    if (!consent.passed) {
+      console.error("BOOKING CONSENT GATE — FAIL");
+      for (const e of consent.errors) console.error(" -", e);
+      process.exit(1);
+    }
+    console.log("booking consent gate (early deny + post-consent send): PASS");
 
     const phrases = await certifySendResourcePhrases(fixture);
     console.log(

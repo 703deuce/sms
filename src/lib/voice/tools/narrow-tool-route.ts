@@ -76,6 +76,7 @@ export async function handleNarrowVoiceToolRequest(
       callControlId: callControlId || undefined,
       inboundAni: inboundAni || undefined,
       toE164FromBody: toFromBody || undefined,
+      skipRealtimeSessionInit: true,
     });
   }
 
@@ -99,15 +100,33 @@ export async function handleNarrowVoiceToolRequest(
     );
   }
 
-  const result = await handler({
-    workspaceId,
-    agentId: agentId || null,
-    callId: callId || null,
-    body,
-    conversationId: conversationId || undefined,
-    callControlId: callControlId || undefined,
-    inboundAni: inboundAni || undefined,
-  });
+  let result: WorkflowToolResponse;
+  try {
+    result = await handler({
+      workspaceId,
+      agentId: agentId || null,
+      callId: callId || null,
+      body,
+      conversationId: conversationId || undefined,
+      callControlId: callControlId || undefined,
+      inboundAni: inboundAni || undefined,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[voice/tools/${toolType}]`, message);
+    return NextResponse.json(
+      formatTelnyxToolPayload(
+        telnyxToolJsonBody({
+          ok: false,
+          status: "temporarily_unavailable",
+          result: "tool_handler_error",
+          speak:
+            "I wasn't able to complete that just now. I can take your information for a callback instead.",
+        }),
+      ),
+      { status: 200 },
+    );
+  }
 
   if (callId && result.dynamic_variables) {
     const call = await prisma.voiceCall.findUnique({

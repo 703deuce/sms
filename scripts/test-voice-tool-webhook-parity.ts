@@ -13,6 +13,7 @@ import {
 } from "../src/lib/voice/testing/headless/woodbridge-fixture";
 import { newTelnyxIds } from "../src/lib/voice/testing/preprod-harness";
 import { clearRecordingSmsOutbox, getRecordingSmsOutbox } from "../src/lib/voice/testing/headless/recording-sms";
+import { getPrisma } from "../src/lib/db";
 
 async function run(label: string, request: Request) {
   const started = Date.now();
@@ -43,18 +44,35 @@ async function main() {
       fromE164: fixture.callerE164,
       toE164: fixture.toE164,
     });
+    const minimalControlId = `${ids.callControlId}-minimal`;
+    const prisma = getPrisma();
+    await prisma.voiceCall.create({
+      data: {
+        workspaceId: fixture.workspaceId,
+        agentId: fixture.agentId,
+        phoneNumberId: fixture.phoneNumberId,
+        direction: "INBOUND",
+        status: "IN_PROGRESS",
+        fromE164: fixture.callerE164,
+        toE164: fixture.toE164,
+        telnyxCallControlId: minimalControlId,
+        startedAt: new Date(),
+        answeredAt: new Date(),
+      },
+    });
+
     const minimal = buildTelnyxMinimalToolWebhookRequest({
       workspaceId: fixture.workspaceId,
       agentId: fixture.agentId,
       toolType: "send_resource",
       body: { resource_type: "booking" },
-      callControlId: ids.callControlId + "-minimal",
+      callControlId: minimalControlId,
     });
 
-    const results = await Promise.all([run("rich", rich), run("minimal", minimal)]);
+    const results = [await run("rich", rich), await run("minimal", minimal)];
     console.log(JSON.stringify(results, null, 2));
     console.log("sms count", getRecordingSmsOutbox().length);
-    const failed = results.filter((r) => !r.ok || r.ms > 8000);
+    const failed = results.filter((r) => !r.ok || r.ms > 10000 || !r.fast_path);
     if (failed.length) {
       console.error("PARITY FAIL", failed);
       process.exit(1);

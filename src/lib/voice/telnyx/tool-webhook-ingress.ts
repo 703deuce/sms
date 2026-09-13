@@ -63,6 +63,7 @@ export type ToolWebhookIngressRecord = {
 export async function recordToolWebhookIngress(input: {
   request: Request;
   body: Record<string, unknown>;
+  ingressStartedAt?: number;
 }): Promise<ToolWebhookIngressRecord> {
   const { request, body } = input;
   const workspaceId = request.headers.get("x-transovo-workspace-id")?.trim() || "";
@@ -90,7 +91,15 @@ export async function recordToolWebhookIngress(input: {
     )
     .digest("hex");
 
+  const receivedAt = input.ingressStartedAt ?? Date.now();
+  const telnyxRequestId =
+    request.headers.get("x-request-id") ||
+    request.headers.get("x-telnyx-request-id") ||
+    "";
   const ingressId = `voice-tool-ingress:${fingerprint}`;
+  const providerEventId = telnyxRequestId
+    ? `voice-tool-ingress:${telnyxRequestId}`
+    : `${ingressId}:${receivedAt}`;
 
   const record: ToolWebhookIngressRecord = {
     ingressId,
@@ -106,6 +115,9 @@ export async function recordToolWebhookIngress(input: {
     "[telnyx/voice/tools/ingress]",
     JSON.stringify({
       ingressId,
+      providerEventId,
+      receivedAt,
+      telnyxRequestId: telnyxRequestId || null,
       workspaceId: workspaceId || null,
       agentId: agentId || null,
       toolType: toolType || null,
@@ -119,12 +131,11 @@ export async function recordToolWebhookIngress(input: {
 
   try {
     const prisma = getPrisma();
-    await prisma.providerWebhookEvent.upsert({
-      where: { providerEventId: ingressId },
-      create: {
+    await prisma.providerWebhookEvent.create({
+      data: {
         provider: "telnyx",
         eventType: "voice.tool_webhook.ingress",
-        providerEventId: ingressId,
+        providerEventId,
         workspaceId: workspaceId || undefined,
         payload: {
           ...record,
@@ -132,13 +143,6 @@ export async function recordToolWebhookIngress(input: {
           body: bodyPreview(body),
         } as object,
         status: "received",
-      },
-      update: {
-        payload: {
-          ...record,
-          headers: headerSnapshot(request),
-          body: bodyPreview(body),
-        } as object,
       },
     });
   } catch (err) {

@@ -22,6 +22,7 @@ import { isAfterHoursVoiceProfile } from "../src/lib/voice/runtime/voice-profile
 import { filterPublishedToolsForRuntime } from "../src/lib/voice/runtime/capability-resolver";
 import { emptyVoiceCallState } from "../src/lib/voice/runtime/call-state";
 import { SEND_RESOURCE_WEBHOOK_BODY } from "../src/lib/voice/tools/builtin-webhook-bodies";
+import { sendResourceConsentAllowed } from "../src/lib/voice/tools/send-resource-consent";
 import { getAppBaseUrl } from "../src/lib/messaging/telnyx/config";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
@@ -88,6 +89,26 @@ function main() {
   assert.ok(
     !required.includes("verbal_sms_consent"),
     "verbal_sms_consent optional at webhook (workflow + server consent)",
+  );
+
+  assert.equal(
+    sendResourceConsentAllowed({
+      resourceType: "booking",
+      priorConsent: false,
+      afterHoursProfile: true,
+    }),
+    false,
+    "after-hours booking SMS blocked without explicit consent",
+  );
+  assert.equal(
+    sendResourceConsentAllowed({
+      resourceType: "booking",
+      priorConsent: false,
+      verbalSmsConsent: true,
+      afterHoursProfile: true,
+    }),
+    true,
+    "after-hours booking SMS allowed after verbal yes",
   );
 
   const greetState = emptyVoiceCallState({
