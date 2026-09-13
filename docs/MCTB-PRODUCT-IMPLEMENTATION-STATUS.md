@@ -3,6 +3,8 @@
 **Last reconciled:** 2026-09-13  
 **Supersedes:** Older screenshots or notes that say AI Booking is “not wired yet,” Stripe invoice mode is “future only,” or Lead Recovery is “backend only.”
 
+**Completion boundary (what is allowed next):** `docs/MCTB-AI-LEAD-RECOVERY-COMPLETION-BOUNDARY.md`
+
 ---
 
 ## AI Booking (runtime)
@@ -39,10 +41,14 @@ Detail: `docs/MCTB-AI-BOOKING-IMPLEMENTATION-STATUS.md`
 | Multi-intent sequencing | **YES** — `intent-plan.ts` |
 | Text-to-Pay action (policy) | **YES** — authoritative amount required |
 | Domain activity events | **YES** — booking activity ledger + idempotency |
+| Simulation + draft test API | **YES** — UI-serving only, no side effects |
+| John hard guard | **YES** — legacy fallback boundary only |
 
 Rulebooks: `docs/runtime-rules/AI-LEAD-RECOVERY-*.md`  
 Capability-driven (not booking-driven): `docs/runtime-rules/AI-LEAD-RECOVERY-CAPABILITY-MODEL.md`  
-Legacy John: fallback-only guard in `john-policy-guard.ts` — Lead Recovery runtime does not depend on John.
+**Integrations** own OAuth; **AI Lead Recovery** owns policy, targets, and when connections are used. **No hidden Booking Setup product path.**
+
+Backend pieces listed in the completion boundary (simulate, guard, config, readiness reads) exist **to complete approved UI/guardrails** — not to reopen architecture.
 
 ---
 
@@ -71,16 +77,19 @@ Detail: `docs/runtime-rules/providers/STRIPE-CONNECT-TEXT-TO-PAY-CONFORMANCE-AUD
 
 - Microsoft full operations appendix: **YES**
 - Stripe + Microsoft conformance tests in `scripts/test-*-conformance*.ts`
+- Calendly validation = **AI scheduling integration** where enabled — not a Calendly-backed Calendar product page
 
 ---
 
-## Remaining product work (not architecture)
+## Remaining work (not architecture)
 
-1. **Live validation** with real calendar, SMS, Stripe, and migrations in target environment.
-2. Incremental UX on Payments (refund from detail drawer, invoice status copy).
-3. Screenshot QA in target environments after live connections.
+Per `docs/MCTB-AI-LEAD-RECOVERY-COMPLETION-BOUNDARY.md`:
 
-AI Lead Recovery page completion (structured Test drawer, draft simulation, scenario panels, John hard guard, Overview card, Integrations-owned OAuth) is implemented on `master` — see `/mctb/ai-lead-recovery`.
+1. **Payments polish** — refund from detail, invoice status copy, confirmation/error states (UI only).
+2. **Live validation** — real Microsoft, Calendly, Stripe, SMS after migrations and connections.
+3. **Screenshot QA** — deployed authenticated MCTB shell (Overview, LR page, Test drawer, Payments, mobile).
+
+AI Lead Recovery **application** UI + guards are implemented on `master`; finish line is **live env + QA**, not more model design.
 
 ---
 
@@ -90,3 +99,4 @@ AI Lead Recovery page completion (structured Test drawer, draft simulation, scen
 - “BOOKING_CONFIRMED not persisted”
 - “Stripe Send Invoice not implemented” (backend + UI selector)
 - “Lead Recovery needs a new architecture pass”
+- “Still implementing Lead Recovery backend architecture” (simulate/guard/config are **complete for UI** unless a test fails)
