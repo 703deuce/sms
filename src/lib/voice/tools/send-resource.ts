@@ -7,7 +7,7 @@
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { sendQuickSms } from "@/lib/sms/send-quick";
+import { sendAppointmentSms } from "@/lib/appointments/sms-sender";
 import { resolveVoiceSmsTemplate } from "@/lib/voice/sms/voice-sms-templates";
 import {
   resourceTypeToTemplateId,
@@ -279,7 +279,7 @@ export async function executeSendResource(input: SendResourceContext): Promise<W
       agentId: input.agentId,
       config,
     });
-    await sendQuickSms({
+    await sendAppointmentSms({
       workspaceId: input.workspaceId,
       to: callerE164,
       from: fromE164,
