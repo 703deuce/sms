@@ -17,7 +17,7 @@ export function getOpenAiModel() {
 export async function openAiChatCompletion(
   system: string,
   user: string,
-  options?: { temperature?: number; maxTokens?: number },
+  options?: { temperature?: number; maxTokens?: number; model?: string },
 ): Promise<string | null> {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) return null;
@@ -29,7 +29,7 @@ export async function openAiChatCompletion(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: getOpenAiModel(),
+      model: options?.model?.trim() || getOpenAiModel(),
       temperature: options?.temperature ?? 0.4,
       max_tokens: options?.maxTokens ?? 800,
       messages: [

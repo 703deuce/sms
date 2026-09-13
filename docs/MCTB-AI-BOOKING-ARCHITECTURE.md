@@ -1,5 +1,19 @@
 # MCTB AI Booking architecture
 
+## Multi-agent layers (supersedes single-agent design)
+
+| Layer | Role | OpenAI mini? | Provider calls? |
+|-------|------|--------------|-----------------|
+| **1 — Intent Router** | What does the customer want? | Yes (`agents/router.ts`) | **No** |
+| **2 — Scheduling Specialist** | Date/time windows & slot selection | Yes (`agents/scheduling-specialist.ts`) | **No** |
+| **3 — Deterministic orchestrator** | Config, adapters, booking, session | **No** | **Yes** |
+
+- Reuses **`@/lib/ai/openai`** (`OPENAI_API_KEY`, `OPENAI_MODEL` / `gpt-5-nano` default).
+- Optional overrides: `AI_BOOKING_ROUTER_MODEL`, `AI_BOOKING_SCHEDULER_MODEL` (no second API key).
+- Without OpenAI key: deterministic router/specialist fallbacks (`scheduling-interpreter.ts`).
+- **Active session shortcut:** `AWAITING_SLOT_SELECTION` bypasses broad router when state is explicit.
+- Response phrasing may use mini model; **facts** come only from orchestrator/provider.
+
 ## Product split
 
 | Feature | What it is | Technical layer |
@@ -86,5 +100,13 @@ Workspace `customFieldsConfig.mctb.aiBooking`:
 | `FALLBACK_BOOKING_LINK` | configured `fallbackBookingLinkId` |
 | `IN_MEMORY_PRODUCTION_SESSION_STORE` | **NO** (default `prismaMctbAiBookingSessionStore`) |
 | `INVENTED_AVAILABILITY` | **0** (provider-only slots) |
+| `ROUTER_AGENT` | CONNECTED_AND_WORKING |
+| `SCHEDULING_SPECIALIST` | CONNECTED_AND_WORKING |
+| `OPENAI_EXISTING_CLIENT_REUSED` | YES |
+| `NEW_OPENAI_API_KEY` | NO |
+| `PROVIDER_ACTIONS_CALLED_DIRECTLY_BY_LLM` | NO |
+| `DETERMINISTIC_BOOKING_ORCHESTRATOR` | CONNECTED_AND_WORKING (`orchestrator.ts` + provider adapters) |
+| `BOOKING_CONFIRMATION_WITHOUT_PROVIDER_SUCCESS` | **0** |
+| `DURABLE_MULTI_TURN_STATE` | CONNECTED_AND_WORKING (`mctb_ai_booking_sessions`) |
 
 **Entitlement:** `hasMctbAiBookingEntitlement()` — set `mctb.aiBooking.entitled: true` or `workspaceLimits.limits.mctbAiBookingEntitled: true` (paid workspaces default unless explicitly false).

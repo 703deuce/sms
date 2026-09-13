@@ -27,6 +27,8 @@ export type OrchestrateAiBookingInput = {
   specificTimeUtc?: string | null;
   /** Customer reply when choosing among offered slots */
   choiceUtterance?: string | null;
+  /** When specialist resolved a concrete offered slot id */
+  selectedSlotId?: string | null;
   /** When true, attempt createBooking for resolved slot */
   confirmBooking?: boolean;
 };
@@ -58,6 +60,9 @@ export async function orchestrateMctbAiBooking(
   if (input.confirmBooking || input.choiceUtterance) {
     const offered = session?.offeredSlots ?? [];
     const chosen =
+      (input.selectedSlotId
+        ? offered.find((s) => s.slotId === input.selectedSlotId) ?? null
+        : null) ??
       (input.choiceUtterance
         ? resolveOfferedSlotChoice(offered, input.choiceUtterance)
         : null) ??
