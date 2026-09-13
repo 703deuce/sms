@@ -54,7 +54,7 @@ const html = `<!DOCTYPE html>
           <span class="mctb-home-kpi-sub">Today</span></span>
         </a>
         <a class="mctb-home-kpi" href="#">
-          <span class="mctb-home-kpi-icon mctb-home-kpi-icon--brand">➤</span>
+          <span class="mctb-home-kpi-icon mctb-home-kpi-icon--neutral">➤</span>
           <span><span class="mctb-home-kpi-label">Recovery texts sent</span>
           <span class="mctb-home-kpi-value" style="display:block">3</span>
           <span class="mctb-home-kpi-sub">Today</span></span>

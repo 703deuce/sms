@@ -1,4 +1,6 @@
-/* MCTB Overview — brand indigo + semantic colors (overview scope only). */
+/* MCTB Overview — Transovo brand + semantic colors (layout unchanged). */
+@import "../shell/mctb-brand-tokens.css";
+
 .mctb-home {
   --mctb-text-primary: #0a0d12;
   --mctb-text-secondary: #4a5563;
@@ -8,22 +10,6 @@
   --mctb-surface-inset: #f3f5f8;
   --mctb-border: #c8ced8;
   --mctb-border-subtle: #dde2ea;
-  /* Brand — muted indigo / slate-blue (primary non-neutral accent) */
-  --mctb-brand: #35466b;
-  --mctb-brand-icon: #3f5280;
-  --mctb-brand-soft: #dfe6f4;
-  --mctb-brand-strong: #283656;
-  --mctb-brand-ring: #c5d0e6;
-  /* Informational — aligned to brand family */
-  --mctb-info: #4a5f85;
-  --mctb-info-soft: #e8edf6;
-  /* Semantic only */
-  --mctb-success: #1f6b42;
-  --mctb-success-soft: #e9f4ee;
-  --mctb-accent-amber: #9a6700;
-  --mctb-accent-amber-soft: #fff8e8;
-  --mctb-accent-red: #b42318;
-  --mctb-accent-red-soft: #fef3f2;
 
   min-height: 100%;
   background: var(--mctb-canvas);
@@ -108,16 +94,33 @@
   white-space: nowrap;
 }
 
+.mctb-home-muted-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mctb-text-primary);
+}
+
+.mctb-home-muted-body {
+  font-size: 12px;
+  color: var(--mctb-text-tertiary);
+}
+
 .mctb-home-link {
   font-size: 13px;
   font-weight: 600;
-  color: var(--mctb-brand-icon);
+  color: var(--mctb-brand-strong);
   text-decoration: none;
 }
 
 .mctb-home-link:hover {
-  color: var(--mctb-brand-strong);
+  color: var(--mctb-brand);
   text-decoration: underline;
+}
+
+.mctb-home-link:focus-visible {
+  outline: 2px solid var(--mctb-brand-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .mctb-home-kpi-strip {
@@ -148,8 +151,13 @@
 }
 
 .mctb-home-kpi:hover {
-  border-color: #c9ced6;
+  border-color: var(--mctb-brand-ring);
   background: var(--mctb-surface);
+}
+
+.mctb-home-kpi:focus-visible {
+  outline: 2px solid var(--mctb-brand-ring);
+  outline-offset: 2px;
 }
 
 .mctb-home-kpi-icon {
@@ -282,8 +290,8 @@
 }
 
 .mctb-home-cell--info {
-  color: var(--mctb-brand-icon);
-  font-weight: 500;
+  color: var(--mctb-info);
+  font-weight: 600;
 }
 
 .mctb-home-cell--pending {
@@ -362,11 +370,12 @@
   max-height: 3rem;
   padding: 0 1rem;
   border: 1px solid var(--mctb-border-subtle);
+  border-left: 3px solid var(--mctb-brand-icon);
   border-radius: 8px;
-  background: var(--mctb-brand-soft);
+  background: var(--mctb-surface);
   font-size: 13px;
   font-weight: 500;
-  color: var(--mctb-brand);
+  color: var(--mctb-text-secondary);
 }
 
 /* Inside Recent missed calls — not a separate card */
@@ -377,10 +386,11 @@
   min-height: 2.75rem;
   padding: 0 1rem;
   border-bottom: 1px solid #e5e8eb;
+  border-left: 3px solid var(--mctb-brand-icon);
   font-size: 13px;
   font-weight: 500;
-  color: #626872;
-  background: #ffffff;
+  color: var(--mctb-text-secondary);
+  background: var(--mctb-surface);
 }
 
 .mctb-home-missed-row {
@@ -396,7 +406,7 @@
 }
 
 .mctb-home-interactive-row:hover {
-  background: #f7f8f9;
+  background: color-mix(in srgb, var(--mctb-brand-soft) 55%, var(--mctb-surface));
 }
 
 .mctb-home-missed-row:focus-visible {
@@ -446,9 +456,13 @@
   border-bottom: none;
 }
 
+.mctb-home-setup-module {
+  border-top: 2px solid var(--mctb-brand-ring);
+}
+
 .mctb-home-setup-module .mctb-home-section-head {
-  background: linear-gradient(180deg, var(--mctb-brand-soft) 0%, var(--mctb-surface) 72%);
-  border-bottom-color: var(--mctb-brand-ring);
+  background: var(--mctb-surface);
+  border-bottom-color: var(--mctb-border-subtle);
 }
 
 .mctb-home-setup-label {

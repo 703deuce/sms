@@ -1,0 +1,21 @@
+/**
+ * Transovo MCTB — muted indigo / slate-blue accent (product identity).
+ * Scoped imports: overview content + MCTB neutral shell nav.
+ * ~90% neutral surfaces; brand is for active, links, selection, informational emphasis.
+ */
+:root,
+.product-theme[data-mctb-neutral-shell] {
+  --mctb-brand: #35466b;
+  --mctb-brand-icon: #3f5280;
+  --mctb-brand-soft: #e8edf6;
+  --mctb-brand-strong: #283656;
+  --mctb-brand-ring: #c5d0e6;
+  --mctb-info: #4a5f85;
+  --mctb-info-soft: #eef2f9;
+  --mctb-success: #1f6b42;
+  --mctb-success-soft: #e9f4ee;
+  --mctb-accent-amber: #9a6700;
+  --mctb-accent-amber-soft: #fff8e8;
+  --mctb-accent-red: #b42318;
+  --mctb-accent-red-soft: #fef3f2;
+}

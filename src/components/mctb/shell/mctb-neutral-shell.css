@@ -1,4 +1,5 @@
 /* Shared MCTB shell — soft cool slate; overrides default purple Kimi sidebar. */
+@import "./mctb-brand-tokens.css";
 
 .transovo-sidebar-soft-slate .transovo-nav-item {
   color: #626872 !important;
@@ -49,5 +50,22 @@
 }
 
 .product-theme[data-mctb-neutral-shell] .mctb-mobile-tab-active {
-  color: #1b1e23 !important;
+  color: var(--mctb-brand-strong) !important;
+}
+
+/* Transovo brand accent — navigation selection (MCTB only; appointments stays charcoal). */
+.product-theme[data-mctb-neutral-shell] .transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"] {
+  background-color: var(--mctb-brand-soft) !important;
+  color: var(--mctb-brand-strong) !important;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-sidebar-soft-slate .transovo-nav-item[data-active="true"] svg {
+  color: var(--mctb-brand-icon) !important;
+  stroke: var(--mctb-brand-icon) !important;
+}
+
+.product-theme[data-mctb-neutral-shell] .transovo-sidebar-soft-slate .transovo-credits-fill {
+  background: var(--mctb-brand-icon) !important;
 }

@@ -456,6 +456,7 @@ export function Sidebar({
         collapsed={collapsed}
         expandedWidthPx={sidebarExpandedPx}
         appointmentsOverviewShell={softCoolSlateShell}
+        mctbBrandMark={isMctbNeutralShellPath(pathname)}
         onToggleCollapse={onToggleCollapse}
         homeHref={homeHref}
         productSwitcher={

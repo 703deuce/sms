@@ -35,16 +35,20 @@ export interface TransovoSidebarProps {
   expandedWidthPx?: number;
   /** Appointments overview — slate nav (inline; avoids teal `text-primary`). */
   appointmentsOverviewShell?: boolean;
+  /** MCTB product — muted indigo mark in sidebar header. */
+  mctbBrandMark?: boolean;
 }
 
 function Logo({
   collapsed,
   homeHref,
   neutralMark,
+  mctbBrandMark,
 }: {
   collapsed: boolean;
   homeHref: string;
   neutralMark?: boolean;
+  mctbBrandMark?: boolean;
 }) {
   return (
     <div
@@ -56,12 +60,14 @@ function Logo({
       <Link href={homeHref} className="flex items-center gap-2">
         <span
           className={`flex h-7 w-7 items-center justify-center rounded-[6px] shrink-0 ${
-            neutralMark
-              ? "border border-[#d4d8dc] bg-[#e8eaed] text-[#1b1e23]"
-              : "bg-indigo-600 text-white"
+            mctbBrandMark
+              ? "border border-[var(--mctb-brand-ring)] bg-[var(--mctb-brand-soft)] text-[var(--mctb-brand-strong)]"
+              : neutralMark
+                ? "border border-[#d4d8dc] bg-[#e8eaed] text-[#1b1e23]"
+                : "bg-indigo-600 text-white"
           }`}
         >
-          {neutralMark ? (
+          {neutralMark || mctbBrandMark ? (
             <span className="text-[11px] font-bold leading-none tracking-tight" aria-hidden>
               T
             </span>
@@ -86,28 +92,46 @@ function Logo({
 const OVERVIEW_NAV_ACTIVE = { backgroundColor: "#e2e6ea", color: "#1b1e23" } as const;
 const OVERVIEW_NAV_ICON_ACTIVE = { color: "#2a2e34" } as const;
 
+function overviewNavRowStyle(
+  active: boolean,
+  appointmentsOverviewShell?: boolean,
+  mctbBrandMark?: boolean,
+) {
+  if (!appointmentsOverviewShell || !active || mctbBrandMark) return undefined;
+  return OVERVIEW_NAV_ACTIVE;
+}
+
+function overviewNavIconStyle(
+  active: boolean,
+  appointmentsOverviewShell?: boolean,
+  mctbBrandMark?: boolean,
+) {
+  if (!appointmentsOverviewShell || !active || mctbBrandMark) return undefined;
+  return OVERVIEW_NAV_ICON_ACTIVE;
+}
+
 function ExpandedNavRow({
   item,
   active,
   expanded,
   onToggleExpand,
   appointmentsOverviewShell,
+  mctbBrandMark,
 }: {
   item: KimiNavItem;
   active: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
   appointmentsOverviewShell?: boolean;
+  mctbBrandMark?: boolean;
 }) {
   const Icon = item.icon;
   const hasChildren = !!item.children?.length;
   const className = appointmentsOverviewShell
     ? "transovo-nav-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-0 text-[13px] font-medium leading-[18px] text-[#626872] hover:bg-[#e8ebee] hover:text-[#1b1e23] min-h-[34px]"
     : "transovo-nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] text-muted-foreground hover:text-foreground";
-  const rowStyle =
-    appointmentsOverviewShell && active ? OVERVIEW_NAV_ACTIVE : undefined;
-  const iconStyle =
-    appointmentsOverviewShell && active ? OVERVIEW_NAV_ICON_ACTIVE : undefined;
+  const rowStyle = overviewNavRowStyle(active, appointmentsOverviewShell, mctbBrandMark);
+  const iconStyle = overviewNavIconStyle(active, appointmentsOverviewShell, mctbBrandMark);
 
   if (hasChildren) {
     return (
@@ -152,10 +176,12 @@ function CollapsedNavButton({
   item,
   active,
   appointmentsOverviewShell,
+  mctbBrandMark,
 }: {
   item: KimiNavItem;
   active: boolean;
   appointmentsOverviewShell?: boolean;
+  mctbBrandMark?: boolean;
 }) {
   const Icon = item.icon;
   return (
@@ -164,7 +190,7 @@ function CollapsedNavButton({
       data-active={active ? "true" : undefined}
       title={item.label}
       className="transovo-nav-item relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
-      style={active && appointmentsOverviewShell ? OVERVIEW_NAV_ACTIVE : undefined}
+      style={overviewNavRowStyle(active, appointmentsOverviewShell, mctbBrandMark)}
     >
       <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
       {hasPositiveBadge(item.badge) && (
@@ -191,6 +217,7 @@ export function TransovoSidebar({
   productSwitcher,
   expandedWidthPx = 224,
   appointmentsOverviewShell = false,
+  mctbBrandMark = false,
 }: TransovoSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
@@ -223,7 +250,12 @@ export function TransovoSidebar({
           : {}),
       }}
     >
-      <Logo collapsed={collapsed} homeHref={homeHref} neutralMark={appointmentsOverviewShell} />
+      <Logo
+        collapsed={collapsed}
+        homeHref={homeHref}
+        neutralMark={appointmentsOverviewShell && !mctbBrandMark}
+        mctbBrandMark={mctbBrandMark}
+      />
 
       {productSwitcher ? (
         <div className={collapsed ? "px-1" : "px-0"}>{productSwitcher}</div>
@@ -243,6 +275,7 @@ export function TransovoSidebar({
                 item={item}
                 active={active}
                 appointmentsOverviewShell={appointmentsOverviewShell}
+                mctbBrandMark={mctbBrandMark}
               />
             );
           }
@@ -272,6 +305,7 @@ export function TransovoSidebar({
                 expanded={expanded}
                 onToggleExpand={() => toggleGroup(item.label)}
                 appointmentsOverviewShell={appointmentsOverviewShell}
+                mctbBrandMark={mctbBrandMark}
               />
               {item.children && expanded && (
                 <div className="ml-[26px] mt-0.5 space-y-0.5 border-l border-border pl-2">
@@ -281,11 +315,11 @@ export function TransovoSidebar({
                       href={child.href}
                       data-active={isChildNavActive(child.href, bestMatch) ? "true" : undefined}
                       className="transovo-nav-item flex w-full items-center rounded-md px-2 py-[6px] text-[13px] text-muted-foreground hover:text-foreground"
-                      style={
-                        appointmentsOverviewShell && isChildNavActive(child.href, bestMatch)
-                          ? OVERVIEW_NAV_ACTIVE
-                          : undefined
-                      }
+                      style={overviewNavRowStyle(
+                        isChildNavActive(child.href, bestMatch),
+                        appointmentsOverviewShell,
+                        mctbBrandMark,
+                      )}
                     >
                       <span className="whitespace-nowrap">{child.label}</span>
                     </Link>

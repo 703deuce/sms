@@ -141,7 +141,7 @@ export function MctbHomeKpiStrip({ data }: { data: MctbOverviewPayload }) {
       sub: "Today",
       href: MCTB_ROUTES.missedCalls,
       icon: Send,
-      iconTone: "brand" as const,
+      iconTone: "neutral" as const,
       attention: false,
     },
     {
@@ -226,8 +226,8 @@ export function MctbHomeRecentMissedCallsTable({
       {attentionOkInline ? <MctbHomeAttentionOkStrip variant="inline" /> : null}
       {data.recentMissedCalls.length === 0 ? (
         <div className="px-4 py-6 text-center">
-          <p className="text-[13px] font-medium text-[#1b1e23]">No missed calls yet today.</p>
-          <p className="mt-1 text-[12px] text-[#8a919b]">Missed calls will appear here when they occur.</p>
+          <p className="mctb-home-muted-title">No missed calls yet today.</p>
+          <p className="mctb-home-muted-body mt-1">Missed calls will appear here when they occur.</p>
         </div>
       ) : (
         <table className="mctb-home-table">
@@ -282,12 +282,12 @@ export function MctbHomeNeedsAttention({ items }: { items: MctbAttentionItem[] }
         {items.map((item) => (
           <Link key={item.id} href={item.href} className="mctb-home-attention-row">
             <div className="min-w-0">
-              <p className="text-[13px] font-medium leading-[18px] text-[#1b1e23]">{item.title}</p>
+              <p className="mctb-home-muted-title leading-[18px]">{item.title}</p>
               {item.subtitle ? (
-                <p className="truncate text-[12px] leading-[17px] text-[#8a919b]">{item.subtitle}</p>
+                <p className="mctb-home-muted-body truncate leading-[17px]">{item.subtitle}</p>
               ) : null}
             </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-[#8a919b]" aria-hidden />
+            <ChevronRight className="h-4 w-4 shrink-0 text-[var(--mctb-text-tertiary)]" aria-hidden />
           </Link>
         ))}
       </div>
@@ -309,8 +309,8 @@ export function MctbHomeRecentConversations({ data }: { data: MctbOverviewPayloa
       />
       {data.recentConversations.length === 0 ? (
         <div className="px-4 py-5 text-center">
-          <p className="text-[13px] font-medium text-[#1b1e23]">No recent conversations.</p>
-          <p className="mt-1 text-[12px] text-[#8a919b]">
+          <p className="mctb-home-muted-title">No recent conversations.</p>
+          <p className="mctb-home-muted-body mt-1">
             Replies and text-back conversations will appear here.
           </p>
         </div>
@@ -323,13 +323,13 @@ export function MctbHomeRecentConversations({ data }: { data: MctbOverviewPayloa
                 className="mctb-home-interactive-row flex items-start justify-between gap-3 px-4 py-2.5"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium leading-[18px] text-[#1b1e23]">{c.label}</p>
-                  <p className="truncate text-[12px] leading-[17px] text-[#8a919b]">{c.preview}</p>
+                  <p className="mctb-home-muted-title truncate leading-[18px]">{c.label}</p>
+                  <p className="mctb-home-muted-body truncate leading-[17px]">{c.preview}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[11px] text-[#8a919b]">{fmtConvTime(c.updatedAt)}</p>
+                  <p className="mctb-home-muted-body text-[11px]">{fmtConvTime(c.updatedAt)}</p>
                   {c.needsReply ? (
-                    <span className="mt-0.5 inline-block text-[11px] font-medium text-[#9a6700]">Needs reply</span>
+                    <span className="mctb-home-cell--pending mt-0.5 inline-block text-[11px]">Needs reply</span>
                   ) : null}
                 </div>
               </Link>
