@@ -79,9 +79,16 @@ function rowToDto(row: {
 
 export async function loadMctbHandoffConfig(workspaceId: string): Promise<MctbHandoffConfigDto> {
   const prisma = getPrisma();
-  const row = await prisma.mctbHandoffConfig.findUnique({ where: { workspaceId } });
-  if (!row) return defaultHandoffConfig();
-  return rowToDto(row);
+  if (!prisma.mctbHandoffConfig?.findUnique) {
+    return defaultHandoffConfig();
+  }
+  try {
+    const row = await prisma.mctbHandoffConfig.findUnique({ where: { workspaceId } });
+    if (!row) return defaultHandoffConfig();
+    return rowToDto(row);
+  } catch {
+    return defaultHandoffConfig();
+  }
 }
 
 export async function ensureMctbHandoffConfig(workspaceId: string) {

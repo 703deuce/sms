@@ -124,6 +124,11 @@ export async function processMctbInboundReply(input: {
   const facts = buildSnapshotFactsFromCaptured(captured, input.fromE164, customerMessages);
 
   if (callerRepliedCreated && mode === "notify_only") {
+    const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+    const leadRecovery = await loadLeadRecoveryConfig(input.workspaceId);
+    const leadRecoverySmsActive =
+      leadRecovery.enabled && leadRecovery.policyHealth !== "DISABLED";
+
     await deliverHandoff({
       workspaceId: input.workspaceId,
       handoffEventId: callerRepliedEvent.id,
@@ -140,19 +145,33 @@ export async function processMctbInboundReply(input: {
     });
     if (conversationId) {
       await updateAutomationState(conversationId, {
-        state: urgent ? "urgent" : callbackRequested ? "callback_requested" : "needs_human",
+        state: leadRecoverySmsActive
+          ? "automation_active"
+          : urgent
+            ? "urgent"
+            : callbackRequested
+              ? "callback_requested"
+              : "needs_human",
         capturedFieldsJson: captured,
-        followUpStatus: "needs_follow_up",
+        followUpStatus: leadRecoverySmsActive ? null : "needs_follow_up",
       });
     }
-    await prisma.missedCallEvent.update({
-      where: { id: missedEvent.id },
-      data: { status: "CUSTOMER_REPLIED" },
-    });
+    if (!leadRecoverySmsActive) {
+      await prisma.missedCallEvent.update({
+        where: { id: missedEvent.id },
+        data: { status: "CUSTOMER_REPLIED" },
+      });
+      return {
+        handled: true,
+        skipAi: true,
+        automationReply: null,
+        eventType: "caller_replied",
+        handoffEventId: callerRepliedEvent.id,
+      };
+    }
     return {
       handled: true,
-      skipAi: true,
-      automationReply: null,
+      skipAi: false,
       eventType: "caller_replied",
       handoffEventId: callerRepliedEvent.id,
     };

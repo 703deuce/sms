@@ -63,11 +63,7 @@ export function isHumanActiveState(state: string | null | undefined): boolean {
   return state === "human_active" || state === "needs_human" || state === "resolved";
 }
 
+/** Only hard-stop customer SMS automation — not internal follow-up flags like needs_human. */
 export function shouldBlockAutomation(state: string | null | undefined): boolean {
-  return (
-    state === "human_active" ||
-    state === "needs_human" ||
-    state === "resolved" ||
-    state === "appointment_booked"
-  );
+  return state === "human_active" || state === "resolved" || state === "appointment_booked";
 }
