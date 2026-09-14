@@ -4,6 +4,7 @@
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { isAfterHoursVoiceProfile } from "@/lib/voice/runtime/voice-profile";
+import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
 import {
   expressionEdgeCondition,
   exprVarEqualsBool,
@@ -14,6 +15,7 @@ import {
 export const WORKFLOW_NODE_IDS = {
   GENERAL: "n_general",
   ACTION: "n_action",
+  LIVE_BOOKING: "n_live_booking",
   DETAILED_LOOKUP: "n_detailed_lookup",
   HUMAN: "n_human",
   RECOVERY: "n_recovery",
@@ -23,6 +25,7 @@ export const WORKFLOW_NODE_IDS = {
 export type WorkflowSharedToolIds = {
   sendResource?: string | null;
   searchDetails?: string | null;
+  voiceAiBooking?: string | null;
   hangup?: string | null;
   transfer?: string | null;
   retrieval?: string | null;
@@ -48,6 +51,21 @@ const AFTER_HOURS_GENERAL_APPEND = [
   "Do not call send_resource until they clearly say yes to texting.",
   "Do not say you are saving a request or that the team will follow up unless SMS is declined or send_resource failed.",
   "Never repeat the same opening line twice — always advance the conversation.",
+].join(" ");
+
+const CANONICAL_BOOKING_GENERAL_APPEND = [
+  "For scheduling: you can check the live Microsoft calendar and book on this call.",
+  "When they want to schedule or ask what is open, move to Live Booking and use voice_ai_booking_turn.",
+  "Only offer a text booking link if they refuse live scheduling or the calendar tool fails.",
+  "Never repeat the same opening line twice — always advance the conversation.",
+].join(" ");
+
+const LIVE_BOOKING_INSTRUCTIONS = [
+  "The caller wants to schedule, check availability, or confirm an appointment time on the live calendar.",
+  "Call voice_ai_booking_turn once with utterance = their latest words (verbatim).",
+  "Use confirm_booking true only after they clearly agree to a specific offered time.",
+  "Speak naturally from the tool response — never invent times or claim booked without tool success.",
+  "If the tool suggests fallback, offer a booking link by text only with consent.",
 ].join(" ");
 
 const DETAILED_LOOKUP_INSTRUCTIONS = [
@@ -86,13 +104,18 @@ export function buildAmyConversationWorkflow(
 ): Record<string, unknown> {
   const wizard = wizardFromConfig(config);
   const afterHours = wizard ? isAfterHoursVoiceProfile(wizard) : false;
-  const generalInstructions = afterHours
-    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${AFTER_HOURS_GENERAL_APPEND}`
-    : "Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs.";
+  const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(config);
+  const generalInstructions = canonicalBooking
+    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${CANONICAL_BOOKING_GENERAL_APPEND}`
+    : afterHours
+      ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${AFTER_HOURS_GENERAL_APPEND}`
+      : "Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs.";
   const actionInstructions = afterHours ? AFTER_HOURS_ACTION_INSTRUCTIONS : ACTION_INSTRUCTIONS;
   const actionEdgeLlm = afterHours
     ? "The caller clearly agreed to receive a text message with a booking, quote, financing, or directions link (yes to SMS)."
     : "The caller wants to schedule, book, get a quote, receive financing information, directions, or asks to be texted a link.";
+  const liveBookingEdgeLlm =
+    "The caller wants to schedule an appointment, check availability, pick a time, or continue booking on the live calendar (not merely asking for a link by text).";
 
   const nodes: Record<string, unknown>[] = [
     {
@@ -115,6 +138,20 @@ export function buildAmyConversationWorkflow(
       tools_mode: "replace",
       position: { x: 360, y: 40 },
     },
+    ...(canonicalBooking && toolIds.voiceAiBooking
+      ? [
+          {
+            id: WORKFLOW_NODE_IDS.LIVE_BOOKING,
+            name: "Live Booking",
+            type: "prompt",
+            instructions_mode: "append",
+            instructions: LIVE_BOOKING_INSTRUCTIONS,
+            shared_tool_ids: [toolIds.voiceAiBooking],
+            tools_mode: "replace",
+            position: { x: 360, y: 120 },
+          },
+        ]
+      : []),
     {
       id: WORKFLOW_NODE_IDS.DETAILED_LOOKUP,
       name: "Detailed Lookup",
@@ -161,11 +198,33 @@ export function buildAmyConversationWorkflow(
   ];
 
   const edges: Record<string, unknown>[] = [
+    ...(canonicalBooking && toolIds.voiceAiBooking
+      ? [
+          {
+            id: "e_general_live_booking",
+            start_node_id: WORKFLOW_NODE_IDS.GENERAL,
+            target: { type: "node", node_id: WORKFLOW_NODE_IDS.LIVE_BOOKING },
+            condition: llmEdgeCondition(liveBookingEdgeLlm),
+          },
+          {
+            id: "e_live_booking_general",
+            start_node_id: WORKFLOW_NODE_IDS.LIVE_BOOKING,
+            target: { type: "node", node_id: WORKFLOW_NODE_IDS.GENERAL },
+            condition: llmEdgeCondition(
+              "The scheduling step is done for now, the caller changed subject, or they only have a general business question.",
+            ),
+          },
+        ]
+      : []),
     {
       id: "e_general_action",
       start_node_id: WORKFLOW_NODE_IDS.GENERAL,
       target: { type: "node", node_id: WORKFLOW_NODE_IDS.ACTION },
-      condition: llmEdgeCondition(actionEdgeLlm),
+      condition: llmEdgeCondition(
+        canonicalBooking
+          ? "The caller wants a quote, financing, directions, or other resource sent by text (not live calendar scheduling)."
+          : actionEdgeLlm,
+      ),
     },
     {
       id: "e_general_lookup",
@@ -262,6 +321,8 @@ export function workflowNodeExpectedTools(
       return [];
     case WORKFLOW_NODE_IDS.ACTION:
       return toolIds.sendResource ? ["send_resource"] : [];
+    case WORKFLOW_NODE_IDS.LIVE_BOOKING:
+      return toolIds.voiceAiBooking ? ["voice_ai_booking_turn"] : [];
     case WORKFLOW_NODE_IDS.DETAILED_LOOKUP:
       return [
         ...(toolIds.searchDetails ? ["search_business_details"] : []),

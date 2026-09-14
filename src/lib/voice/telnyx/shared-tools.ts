@@ -10,10 +10,12 @@ import {
   SEARCH_BUSINESS_DETAILS_WEBHOOK_BODY,
   SEND_RESOURCE_WEBHOOK_BODY,
 } from "@/lib/voice/tools/builtin-webhook-bodies";
+import { BUILTIN_WEBHOOK_BODIES } from "@/lib/voice/tools/catalog";
 
 export type TransovoSharedToolSet = {
   sendResourceId: string | null;
   searchDetailsId: string | null;
+  voiceAiBookingId: string | null;
   hangupId: string | null;
   transferId: string | null;
 };
@@ -21,6 +23,7 @@ export type TransovoSharedToolSet = {
 const TOOL_DISPLAY_NAMES = {
   sendResource: "transovo-send-resource",
   searchDetails: "transovo-search-business-details",
+  voiceAiBooking: "transovo-voice-ai-booking-turn",
   hangup: "transovo-hangup",
   transfer: "transovo-transfer",
 } as const;
@@ -151,6 +154,17 @@ export async function ensureTransovoSharedWorkflowTools(input: {
     SEARCH_BUSINESS_DETAILS_WEBHOOK_BODY,
   );
 
+  const voiceBookingDef = BUILTIN_WEBHOOK_BODIES.voice_ai_booking_turn;
+  const voiceAiBookingId = voiceBookingDef
+    ? await ensureWebhookTool(
+        TOOL_DISPLAY_NAMES.voiceAiBooking,
+        voiceBookingDef.toolType,
+        voiceBookingDef.description,
+        unifiedToolsUrl,
+        voiceBookingDef.body,
+      )
+    : null;
+
   let hangupId =
     existing.find((t) => t.display_name === TOOL_DISPLAY_NAMES.hangup)?.id || null;
   if (!hangupId) {
@@ -195,5 +209,5 @@ export async function ensureTransovoSharedWorkflowTools(input: {
     }
   }
 
-  return { sendResourceId, searchDetailsId, hangupId, transferId };
+  return { sendResourceId, searchDetailsId, voiceAiBookingId, hangupId, transferId };
 }

@@ -391,10 +391,14 @@ export async function publishVoiceAgent(
   const { attachPythonRuntimeBootstrapSnapshot } = await import(
     "./python-runtime-bridge/build-bootstrap-snapshot"
   );
-  const config = attachPythonRuntimeBootstrapSnapshot(
+  let config = attachPythonRuntimeBootstrapSnapshot(
     recompileReceptionistFromDraft(applied.config),
     { workspaceId, agentId, agentName: agent.name },
   );
+  const { enrichVoiceAgentConfigForCanonicalAiBooking } = await import(
+    "./ai-booking/publish-config"
+  );
+  config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agentId, config);
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone:
       !config.identity?.directions?.length ||

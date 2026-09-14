@@ -86,10 +86,11 @@ async function main() {
         calendar: "default",
         status: "ready",
         requiredFields: [],
-        bookingPermission: "send_booking_link",
+        bookingPermission: "book_directly",
         enabled: true,
       },
     ],
+    calendarConnected: true,
   };
 
   let draftConfig = buildWizardAgentConfig(wizard);

@@ -6,7 +6,7 @@ import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appoint
 import type { LeadRecoveryActionId, PolicyEvaluationResult } from "@/lib/mctb/lead-recovery/types";
 import {
   isConversationWorkflowMode,
-  WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+  resolveCallerAmyPublishedWebhookTools,
 } from "@/lib/voice/workflow-engine/tool-publish";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import type { VoiceAfterHoursCallState, VoiceWorkflowState } from "./types";
@@ -133,7 +133,14 @@ function wizardTransferEnabled(wizard: AppointmentReceptionistWizardState): bool
   return Boolean(wizard.transferDestinationPhone?.trim());
 }
 
-const WORKFLOW_GRAPH_TOOLS = new Set<string>(WORKFLOW_PUBLISHED_WEBHOOK_TOOLS);
+export function isWorkflowGraphPublishedTool(
+  toolType: string,
+  agentConfig?: VoiceAgentConfig | null,
+): boolean {
+  if (!isConversationWorkflowMode(agentConfig)) return false;
+  const allowed = resolveCallerAmyPublishedWebhookTools(agentConfig);
+  return allowed.includes(toolType);
+}
 
 export function filterPublishedToolsForRuntime(input: {
   requestedTool: string;
@@ -145,7 +152,7 @@ export function filterPublishedToolsForRuntime(input: {
   }
   // Telnyx conversation-workflow nodes decide when send_resource / search run.
   // Server runtime state (often GREETING on first tool) must not double-block SMS.
-  if (WORKFLOW_GRAPH_TOOLS.has(input.requestedTool)) {
+  if (isWorkflowGraphPublishedTool(input.requestedTool, input.agentConfig)) {
     return { allowed: true };
   }
   if (!input.callState?.allowedTools?.length) {

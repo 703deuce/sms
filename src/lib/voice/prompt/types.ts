@@ -25,6 +25,8 @@ export type VoicePromptCompileInput = {
   retrievedKnowledge?: string;
   /** Omit empty sections to save tokens. */
   omitEmptySections?: boolean;
+  /** When AI_BOOK, overrides after-hours link-only booking policy in compiled prompt. */
+  voiceBookingMode?: "AI_BOOK" | "SEND_BOOKING_LINK" | "COLLECT_ONLY";
 };
 
 export type CompiledVoicePromptSectionId =

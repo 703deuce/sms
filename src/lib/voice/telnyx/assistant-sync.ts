@@ -17,7 +17,10 @@ import {
   isMinimumSideEffectMode,
   MINIMUM_SIDE_EFFECT_PROMPT,
   CONVERSATION_WORKFLOW_PROMPT,
+  CANONICAL_AI_BOOKING_WORKFLOW_PROMPT,
 } from "./amy-minimum-side-effect";
+import { enrichVoiceAgentConfigForCanonicalAiBooking } from "@/lib/voice/ai-booking/publish-config";
+import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
 import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
 import {
   CONDUCTOR_RUNTIME_AUTHORITY,
@@ -205,6 +208,9 @@ export async function syncTelnyxAssistant(
     return { mode: "mock", assistantId: agent.telnyxAssistantId };
   }
 
+  config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agent.id, config);
+  const canonicalAiBooking = isVoiceCanonicalAiBookingPublishMode(config);
+
   const digest = await buildShortKnowledgeDigest(workspaceId, agent.id);
   const bucketIds = await getAgentRagBucketIds(workspaceId, agent.id);
   const agentTools = await loadAgentTools(workspaceId, agent.id, config);
@@ -339,8 +345,9 @@ export async function syncTelnyxAssistant(
     // Soft prompt guidance only — not hard truncation or provider timing.
     CONVERSATIONAL_PROMPT_GUIDANCE,
     TELNYX_SPEECH_PROMPT_GUIDANCE,
-    minimumSideEffect ? MINIMUM_SIDE_EFFECT_PROMPT : "",
+    minimumSideEffect && !canonicalAiBooking ? MINIMUM_SIDE_EFFECT_PROMPT : "",
     conversationWorkflow ? CONVERSATION_WORKFLOW_PROMPT : "",
+    conversationWorkflow && canonicalAiBooking ? CANONICAL_AI_BOOKING_WORKFLOW_PROMPT : "",
     conductorMode ? CONDUCTOR_RUNTIME_AUTHORITY : "",
     isDeepgramFluxModel(
       config.transcription?.sttModel || process.env.VOICE_TRANSCRIPTION_MODEL,
@@ -352,11 +359,13 @@ export async function syncTelnyxAssistant(
       ? "You have a knowledge retrieval tool backed by uploaded business documents (PDFs, manuals, long-form docs). Use it only when the caller asks about material from those uploads that is not already in the Business knowledge section. Do not use it for basic hours, services, or company overview questions."
       : "",
     "Never claim an external action succeeded until the application tool confirms it.",
-    minimumSideEffect
-      ? "For booking or estimates, text an approved link with send_sms — do not book live on the phone."
-      : conductorMode
-        ? "Never tell a caller an appointment is booked until runtime_turn returns success with a confirmed appointment."
-        : "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
+    canonicalAiBooking
+      ? "For scheduling: use voice_ai_booking_turn (live Microsoft calendar). Do not send_resource booking links unless the caller refuses live booking or the calendar tool fails."
+      : minimumSideEffect
+        ? "For booking or estimates, text an approved link with send_resource — do not book live on the phone."
+        : conductorMode
+          ? "Never tell a caller an appointment is booked until runtime_turn returns success with a confirmed appointment."
+          : "Never tell a caller an appointment is booked until book_appointment returns success with ok=true.",
     minimumSideEffect
       ? ""
       : "If book_appointment fails or returns an error, explain the issue and offer alternatives.",

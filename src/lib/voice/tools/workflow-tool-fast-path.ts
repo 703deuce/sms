@@ -5,10 +5,16 @@ import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db";
 import { executeBuiltinVoiceAction } from "@/lib/voice/tools/builtin-actions";
 import { formatTelnyxToolPayload } from "@/lib/voice/telnyx/format-speak-text";
-import { WORKFLOW_PUBLISHED_WEBHOOK_TOOLS } from "@/lib/voice/workflow-engine/tool-publish";
+import {
+  CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
+  WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+} from "@/lib/voice/workflow-engine/tool-publish";
 import { resolveToolWebhookContext } from "@/lib/voice/tools/tool-webhook-context";
 
-export const WORKFLOW_FAST_TOOL_SET = new Set<string>(WORKFLOW_PUBLISHED_WEBHOOK_TOOLS);
+export const WORKFLOW_FAST_TOOL_SET = new Set<string>([
+  ...WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+  ...CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
+]);
 
 function telnyxJson(payload: Record<string, unknown>) {
   return NextResponse.json(formatTelnyxToolPayload(payload), { status: 200 });
@@ -186,13 +192,19 @@ export async function handleWorkflowToolFastPath(input: {
         .catch(() => undefined);
     }
     console.error("[voice/tool-fast-path] error", message);
+    const speak =
+      input.toolType === "voice_ai_booking_turn"
+        ? "I'm having trouble checking the calendar right now. I can take your preferred time and have someone call you back."
+        : input.toolType === "send_resource"
+          ? "I wasn't able to send that text just now. I can take your information for a callback instead."
+          : "I wasn't able to complete that just now. I can take a message for the team.";
+
     return telnyxJson({
       ok: false,
       status: "temporarily_unavailable",
       result: "tool_handler_error",
       error: message,
-      speak:
-        "I wasn't able to send that text just now. I can take your information for a callback instead.",
+      speak,
       fast_path: true,
       latency_ms: latencyMs,
       executionId: execution?.id,

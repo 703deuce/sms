@@ -18,6 +18,13 @@ export const WORKFLOW_PUBLISHED_WEBHOOK_TOOLS = [
   "search_business_details",
 ] as const;
 
+/** Exposed on Telnyx when workspace MCTB AI Booking is ready (AI_BOOK). */
+export const CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS = [
+  "voice_ai_booking_turn",
+  "calendar_availability",
+  "book_appointment",
+] as const;
+
 /** Minimum side-effect flat surface (pre-workflow). */
 export const CALLER_AMY_MINIMUM_WEBHOOK_TOOLS = [
   "send_sms",
@@ -47,6 +54,13 @@ export function isConversationWorkflowMode(
   return advanced.conversationWorkflowMode === true;
 }
 
+export function isVoiceCanonicalAiBookingPublishMode(
+  config?: { advanced?: Record<string, unknown> } | null,
+): boolean {
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  return advanced.voiceCanonicalAiBooking === true;
+}
+
 export function resolveCallerAmyPublishedWebhookTools(
   config?: { advanced?: Record<string, unknown> } | null,
 ): readonly string[] {
@@ -55,6 +69,12 @@ export function resolveCallerAmyPublishedWebhookTools(
     return CONDUCTOR_PUBLISHED_WEBHOOK_TOOLS;
   }
   if (advanced.conversationWorkflowMode === true) {
+    if (isVoiceCanonicalAiBookingPublishMode(config)) {
+      return [
+        ...WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+        ...CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
+      ];
+    }
     return WORKFLOW_PUBLISHED_WEBHOOK_TOOLS;
   }
   if (advanced.minimumSideEffectMode === true) {

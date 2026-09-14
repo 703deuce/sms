@@ -38,6 +38,15 @@ export const CONVERSATION_WORKFLOW_PROMPT = [
   "Never invent URLs or claim an action succeeded before the tool confirms it.",
 ].join("\n");
 
+export const CANONICAL_AI_BOOKING_WORKFLOW_PROMPT = [
+  "LIVE CALENDAR BOOKING (Microsoft — canonical):",
+  "When the caller wants to schedule, check availability, or confirm a time, use the Live Booking workflow step.",
+  "Call voice_ai_booking_turn once per turn with utterance = the caller's exact words.",
+  "Set confirm_booking true only after they clearly agree to a specific offered time.",
+  "Never invent appointment times or claim booked until the tool confirms success.",
+  "Do not offer SMS booking links unless the caller refuses live booking or the tool returns a fallback.",
+].join("\n");
+
 export function applyAmyMinimumSideEffectConfig(
   config: VoiceAgentConfig,
 ): VoiceAgentConfig {

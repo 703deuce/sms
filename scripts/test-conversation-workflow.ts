@@ -9,6 +9,7 @@ import {
 } from "../src/lib/voice/telnyx/conversation-workflow";
 import {
   WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
+  CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
   WORKFLOW_RETIRED_FLAT_TOOLS,
   filterToolsForCallerAmyPublish,
   isConversationWorkflowMode,
@@ -47,6 +48,31 @@ const edges = graph.edges as Array<{ condition?: { type?: string } }>;
 
 check("workflow starts at GENERAL", graph.start_node_id === WORKFLOW_NODE_IDS.GENERAL);
 check("workflow has 6 nodes", nodes.length === 6);
+
+const canonicalConfig = {
+  ...config,
+  enabledBuiltinTools: [
+    ...(config.enabledBuiltinTools || []),
+    ...CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
+  ],
+  advanced: { ...(config.advanced || {}), voiceCanonicalAiBooking: true },
+} as VoiceAgentConfig;
+const canonicalPublished = filterToolsForCallerAmyPublish(
+  canonicalConfig.enabledBuiltinTools || [],
+  canonicalConfig,
+);
+for (const tool of CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS) {
+  check(`canonical publish includes ${tool}`, canonicalPublished.includes(tool));
+}
+const canonicalGraph = buildAmyConversationWorkflow(
+  { ...toolIds, voiceAiBooking: "st_booking" },
+  canonicalConfig,
+);
+const canonicalNodes = canonicalGraph.nodes as Array<{ id: string }>;
+check(
+  "canonical workflow has Live Booking node",
+  canonicalNodes.some((n) => n.id === WORKFLOW_NODE_IDS.LIVE_BOOKING),
+);
 check(
   "GENERAL uses tools_mode replace with zero tools",
   nodes.find((n) => n.id === WORKFLOW_NODE_IDS.GENERAL)?.tools_mode === "replace" &&

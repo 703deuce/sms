@@ -23,10 +23,9 @@ import {
   isLegacyWorkflowVoicePathEnabled,
 } from "@/lib/voice/architecture/legacy-voice-path";
 import { isInternalBookingConductorMode } from "@/lib/voice/workflow-engine/conductor-mode";
-import {
-  isConversationWorkflowMode,
-  WORKFLOW_PUBLISHED_WEBHOOK_TOOLS,
-} from "@/lib/voice/workflow-engine/tool-publish";
+import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
+import { isWorkflowGraphPublishedTool } from "@/lib/voice/runtime/capability-resolver";
+import { enrichVoiceAgentConfigForCanonicalAiBooking } from "@/lib/voice/ai-booking/publish-config";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 
 function telnyxToolJson(payload: Record<string, unknown>, init?: ResponseInit) {
@@ -120,6 +119,11 @@ export async function POST(request: Request) {
       runtimeAgentConfig = agent.publishedVersionId
         ? await loadVoiceAgentRuntimeConfig(workspaceId, agentId)
         : parseVoiceAgentConfig(agent.draftConfig);
+      runtimeAgentConfig = await enrichVoiceAgentConfigForCanonicalAiBooking(
+        workspaceId,
+        agentId,
+        runtimeAgentConfig,
+      );
       conductorMode = isInternalBookingConductorMode(runtimeAgentConfig);
       const agentConfig = runtimeAgentConfig;
       if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {
@@ -458,8 +462,9 @@ export async function POST(request: Request) {
           });
         }
 
-        const workflowGraphTool = WORKFLOW_PUBLISHED_WEBHOOK_TOOLS.includes(
-          effectiveToolType as (typeof WORKFLOW_PUBLISHED_WEBHOOK_TOOLS)[number],
+        const workflowGraphTool = isWorkflowGraphPublishedTool(
+          effectiveToolType,
+          runtimeAgentConfig,
         );
 
         if (

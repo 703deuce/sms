@@ -16,6 +16,7 @@ const GUARD_EXEMPT = new Set([
   /** Conversation-workflow surface — must work before VoiceCall row exists (TeXML-direct). */
   "send_resource",
   "search_business_details",
+  "voice_ai_booking_turn",
 ]);
 
 export async function assertToolAllowed(input: {
@@ -137,6 +138,13 @@ export async function assertToolAllowed(input: {
   }
 
   if (GUARD_EXEMPT.has(canonical) || GUARD_EXEMPT.has(input.toolType)) {
+    if (canonical === "voice_ai_booking_turn" || input.toolType === "voice_ai_booking_turn") {
+      return {
+        allowed: true,
+        state: "BOOKING_REQUEST",
+        allowed_tools: ["voice_ai_booking_turn", "hangup"],
+      };
+    }
     const { state } = await computeWorkflowState({
       callId: input.callId,
       workspaceId: input.workspaceId,

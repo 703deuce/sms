@@ -108,9 +108,57 @@ function initialCallStatus(input: {
   return "RINGING";
 }
 
+async function resolveInboundPhoneForWorkspace(input: {
+  workspaceId: string;
+  e164: string;
+  agentId?: string | null;
+}) {
+  const prisma = getPrisma();
+  const e164 = normalizeE164(input.e164) || input.e164;
+
+  if (input.agentId) {
+    const agent = await prisma.voiceAgent.findFirst({
+      where: { id: input.agentId, workspaceId: input.workspaceId },
+      select: { phoneNumberId: true },
+    });
+    if (agent?.phoneNumberId) {
+      const byAgentPhone = await prisma.phoneNumber.findFirst({
+        where: { id: agent.phoneNumberId, workspaceId: input.workspaceId },
+        select: { id: true, workspaceId: true, e164: true },
+      });
+      if (byAgentPhone) return byAgentPhone;
+    }
+  }
+
+  const byWs = await prisma.phoneNumber.findFirst({
+    where: { workspaceId: input.workspaceId, e164 },
+    orderBy: { purchasedAt: "desc" },
+    select: { id: true, workspaceId: true, e164: true },
+  });
+  if (byWs) return byWs;
+
+  try {
+    const { loadMctbLineInboundConfig } = await import("@/lib/mctb/inbound-handling/line-config");
+    const line = await loadMctbLineInboundConfig({ workspaceId: input.workspaceId });
+    if (line?.ingressE164 === e164 && line.phoneNumberId) {
+      return prisma.phoneNumber.findFirst({
+        where: { id: line.phoneNumberId, workspaceId: input.workspaceId },
+        select: { id: true, workspaceId: true, e164: true },
+      });
+    }
+  } catch {
+    // optional
+  }
+
+  return null;
+}
+
 export async function ensureVoiceCallForTelnyxEvent(input: {
   eventType: string;
   eventPayload: Record<string, unknown>;
+  /** Tool webhooks / ingress handlers pin workspace to avoid duplicate-e164 collisions. */
+  expectedWorkspaceId?: string | null;
+  expectedAgentId?: string | null;
 }): Promise<{ callId: string; created: boolean; enrolled: boolean } | null> {
   const prisma = getPrisma();
   const p = input.eventPayload;
@@ -127,12 +175,20 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   const from = fromRaw ? normalizeE164(fromRaw) || fromRaw : "";
   const times = parseEventTimes(p);
 
+  const expectedWorkspaceId = input.expectedWorkspaceId?.trim() || null;
+
   if (controlId) {
     const byControl = await prisma.voiceCall.findFirst({
-      where: { telnyxCallControlId: controlId },
-      select: { id: true, workspaceId: true, fromE164: true },
+      where: {
+        telnyxCallControlId: controlId,
+        ...(expectedWorkspaceId ? { workspaceId: expectedWorkspaceId } : {}),
+      },
+      select: { id: true, workspaceId: true, fromE164: true, status: true, endedAt: true },
     });
-    if (byControl) {
+    if (
+      byControl &&
+      (!expectedWorkspaceId || byControl.workspaceId === expectedWorkspaceId)
+    ) {
       if (from) {
         await backfillCallAni({
           callId: byControl.id,
@@ -146,10 +202,14 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   }
   if (conversationId) {
     const byConv = await prisma.voiceCall.findFirst({
-      where: { telnyxConversationId: conversationId },
-      select: { id: true, workspaceId: true, fromE164: true },
+      where: {
+        telnyxConversationId: conversationId,
+        ...(expectedWorkspaceId ? { workspaceId: expectedWorkspaceId } : {}),
+      },
+      orderBy: { startedAt: "desc" },
+      select: { id: true, workspaceId: true, fromE164: true, status: true, endedAt: true },
     });
-    if (byConv) {
+    if (byConv && (!expectedWorkspaceId || byConv.workspaceId === expectedWorkspaceId)) {
       if (from) {
         await backfillCallAni({
           callId: byConv.id,
@@ -173,7 +233,49 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
   let agentId: string | null = null;
   let agentVersionId: string | null = null;
 
-  if (to) {
+  const expectedAgentId = input.expectedAgentId?.trim() || null;
+
+  if (expectedWorkspaceId && to) {
+    const pn = await resolveInboundPhoneForWorkspace({
+      workspaceId: expectedWorkspaceId,
+      e164: to,
+      agentId: expectedAgentId,
+    });
+    if (pn) {
+      workspaceId = pn.workspaceId;
+      phoneNumberId = pn.id;
+      if (expectedAgentId) {
+        agentId = expectedAgentId;
+        const agent = await prisma.voiceAgent.findFirst({
+          where: { id: expectedAgentId, workspaceId: expectedWorkspaceId },
+          select: { publishedVersionId: true },
+        });
+        agentVersionId = agent?.publishedVersionId || null;
+      } else {
+        const { resolveInboundAiAgent } = await import("@/lib/voice/agent-phone");
+        const ai = await resolveInboundAiAgent(pn.workspaceId, pn.id);
+        if (ai) {
+          agentId = ai.id;
+          const agent = await prisma.voiceAgent.findFirst({
+            where: { id: ai.id },
+            select: { publishedVersionId: true },
+          });
+          agentVersionId = agent?.publishedVersionId || null;
+        }
+      }
+    } else {
+      workspaceId = expectedWorkspaceId;
+      if (expectedAgentId) {
+        agentId = expectedAgentId;
+        const agent = await prisma.voiceAgent.findFirst({
+          where: { id: expectedAgentId, workspaceId: expectedWorkspaceId },
+          select: { publishedVersionId: true, phoneNumberId: true },
+        });
+        agentVersionId = agent?.publishedVersionId || null;
+        phoneNumberId = agent?.phoneNumberId || null;
+      }
+    }
+  } else if (to) {
     const pn = await prisma.phoneNumber.findFirst({
       where: { e164: to },
       select: { id: true, workspaceId: true },
@@ -196,7 +298,10 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
 
   if (!workspaceId && assistantId) {
     const agent = await prisma.voiceAgent.findFirst({
-      where: { telnyxAssistantId: assistantId },
+      where: {
+        telnyxAssistantId: assistantId,
+        ...(expectedWorkspaceId ? { workspaceId: expectedWorkspaceId } : {}),
+      },
       select: {
         id: true,
         workspaceId: true,
@@ -483,6 +588,8 @@ export async function ensureVoiceCallForToolWebhook(input: {
 
   const ensured = await ensureVoiceCallForTelnyxEvent({
     eventType: "call.answered",
+    expectedWorkspaceId: input.workspaceId,
+    expectedAgentId: input.agentId,
     eventPayload: {
       call_control_id: controlId || undefined,
       conversation_id: conversationId || undefined,
@@ -497,6 +604,13 @@ export async function ensureVoiceCallForToolWebhook(input: {
   }).catch(() => null);
 
   let callId = ensured?.callId || null;
+  if (callId) {
+    const row = await getPrisma().voiceCall.findFirst({
+      where: { id: callId, workspaceId: input.workspaceId },
+      select: { id: true },
+    });
+    if (!row) callId = null;
+  }
   if (!callId) {
     callId = await createVoiceCallForToolWebhookFallback(input);
   }

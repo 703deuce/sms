@@ -572,6 +572,7 @@ const TEMPLATE_DEFAULTS: Record<string, readonly string[]> = {
     "escalate_human",
     "create_task",
     "resolve_datetime",
+    "voice_ai_booking_turn",
     "calendar_availability",
     "hold_appointment_slot",
     "release_appointment_hold",

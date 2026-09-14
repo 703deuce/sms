@@ -7,6 +7,7 @@ import * as ai from "./ai-client";
 import { buildAmyConversationWorkflow } from "./conversation-workflow";
 import { ensureTransovoSharedWorkflowTools } from "./shared-tools";
 import { getAgentRagBucketIds } from "../knowledge-processor";
+import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
 
 export async function syncConversationWorkflowToTelnyx(input: {
   assistantId: string;
@@ -29,10 +30,13 @@ export async function syncConversationWorkflowToTelnyx(input: {
   const bucketIds = await getAgentRagBucketIds(input.workspaceId, input.agentId);
   const retrievalId = null;
 
+  const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(input.config);
+
   const conversation_flow = buildAmyConversationWorkflow(
     {
       sendResource: shared.sendResourceId,
       searchDetails: shared.searchDetailsId,
+      voiceAiBooking: canonicalBooking ? shared.voiceAiBookingId : null,
       hangup: shared.hangupId,
       transfer: shared.transferId,
       retrieval: retrievalId,
@@ -43,6 +47,7 @@ export async function syncConversationWorkflowToTelnyx(input: {
   const tool_ids = [
     shared.sendResourceId,
     shared.searchDetailsId,
+    ...(canonicalBooking ? [shared.voiceAiBookingId] : []),
     shared.hangupId,
     shared.transferId,
   ].filter(Boolean) as string[];

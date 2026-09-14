@@ -378,6 +378,7 @@ export const SYNC_TOOL_TYPES = new Set([
   "record_current_field",
   "get_runtime_context",
   "send_resource",
+  "voice_ai_booking_turn",
 ]);
 
 /** Tools that should run async (do not block spoken turn). */
@@ -407,6 +408,7 @@ export const SYNC_TOOL_FILLERS: Record<string, string> = {
   record_current_field: "Got it, one moment.",
   get_runtime_context: "One moment.",
   send_resource: "Sure — I'll send that text in just a moment.",
+  voice_ai_booking_turn: "Okay — let me check the calendar for you.",
 };
 
 /**

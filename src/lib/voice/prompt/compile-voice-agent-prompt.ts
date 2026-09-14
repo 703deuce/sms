@@ -84,7 +84,19 @@ function formatKnownFields(known?: Record<string, string | null | undefined>): s
   return entries.map(([k, v]) => `- ${k}: ${v}`).join("\n");
 }
 
-function buildBookingPolicySummary(state: AppointmentReceptionistWizardState): string {
+function buildBookingPolicySummary(
+  state: AppointmentReceptionistWizardState,
+  voiceBookingMode?: "AI_BOOK" | "SEND_BOOKING_LINK" | "COLLECT_ONLY",
+): string {
+  if (voiceBookingMode === "AI_BOOK") {
+    return [
+      "Live calendar booking is enabled (Microsoft via voice_ai_booking_turn).",
+      "Check availability and book only through voice_ai_booking_turn or calendar_availability + book_appointment.",
+      "Do not offer SMS booking links unless the caller refuses live booking or the calendar tool fails.",
+      "Never invent times or confirm booked until the tool succeeds.",
+    ].join(" ");
+  }
+
   const afterHours = isAfterHoursVoiceProfile(state);
   if (afterHours) {
     const link = state.appointmentTypes.some(
@@ -172,7 +184,7 @@ export function compileVoiceAgentPrompt(
   if (business.callHandling) sections.callHandling = business.callHandling;
 
   sections.workspacePolicy = buildWorkspacePolicyContext(wizard);
-  sections.bookingPolicy = buildBookingPolicySummary(wizard);
+  sections.bookingPolicy = buildBookingPolicySummary(wizard, input.voiceBookingMode);
   sections.dateTimePolicy = isAfterHoursVoiceProfile(wizard)
     ? `Business timezone: {{business_timezone}} (${wizard.timezone || "America/New_York"}).
 Use timezone for hours and urgency only — do not negotiate appointment times on this call.`
