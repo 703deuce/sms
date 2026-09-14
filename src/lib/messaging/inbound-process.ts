@@ -730,43 +730,51 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
-  // Away / business-hours auto-reply (once per contact per day).
-  // User-configured after-hours auto replies take precedence over the global away message.
-  try {
-    const afterHours = await (
-      await import("@/lib/auto-replies/dispatch")
-    ).dispatchAfterHoursAutoReply({
-      workspaceId: input.workspaceId,
-      contactId: contact.id,
-      fromE164: input.to,
-    });
-    if (afterHours.sent && afterHours.replyText) {
-      return {
-        kind: "away",
-        replyText: afterHours.replyText,
-      };
-    }
-  } catch {
-    /* non-fatal */
-  }
+  // Inbox away / after-hours auto-replies must not preempt MCTB Lead Recovery on the same number.
+  const { isMctbCustomerReplyThread } = await import(
+    "@/lib/agents/missed-call-text-back/customer-sms"
+  );
+  const mctbCustomerThread = await isMctbCustomerReplyThread(input.workspaceId, from);
 
-  if (shouldSendAwayReply(runtime)) {
-    const custom =
-      contact.customFields && typeof contact.customFields === "object"
-        ? (contact.customFields as Record<string, unknown>)
-        : {};
-    const today = new Date().toISOString().slice(0, 10);
-    if (custom.awayReplyAt !== today) {
-      await prisma.contact.update({
-        where: { id: contact.id },
-        data: {
-          customFields: { ...custom, awayReplyAt: today },
-        },
+  if (!mctbCustomerThread) {
+    // Away / business-hours auto-reply (once per contact per day).
+    // User-configured after-hours auto replies take precedence over the global away message.
+    try {
+      const afterHours = await (
+        await import("@/lib/auto-replies/dispatch")
+      ).dispatchAfterHoursAutoReply({
+        workspaceId: input.workspaceId,
+        contactId: contact.id,
+        fromE164: input.to,
       });
-      return {
-        kind: "away",
-        replyText: runtime.awayMessage!.trim(),
-      };
+      if (afterHours.sent && afterHours.replyText) {
+        return {
+          kind: "away",
+          replyText: afterHours.replyText,
+        };
+      }
+    } catch {
+      /* non-fatal */
+    }
+
+    if (shouldSendAwayReply(runtime)) {
+      const custom =
+        contact.customFields && typeof contact.customFields === "object"
+          ? (contact.customFields as Record<string, unknown>)
+          : {};
+      const today = new Date().toISOString().slice(0, 10);
+      if (custom.awayReplyAt !== today) {
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: {
+            customFields: { ...custom, awayReplyAt: today },
+          },
+        });
+        return {
+          kind: "away",
+          replyText: runtime.awayMessage!.trim(),
+        };
+      }
     }
   }
 

@@ -13,6 +13,24 @@ import { handleMctbLeadRecoveryInboundSms } from "@/lib/mctb/lead-recovery/conve
 
 const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
 
+/** Active missed-call-text-back thread (opener already sent to this caller). */
+export async function isMctbCustomerReplyThread(
+  workspaceId: string,
+  fromE164: string,
+): Promise<boolean> {
+  const prisma = getPrisma();
+  const recentEvent = await prisma.missedCallEvent.findFirst({
+    where: {
+      workspaceId,
+      callerE164: fromE164,
+      smsSentAt: { not: null },
+    },
+    orderBy: { smsSentAt: "desc" },
+    select: { id: true },
+  });
+  return Boolean(recentEvent);
+}
+
 export type MctbCustomerSmsReplyResult =
   | { handled: false; reason: string }
   | {

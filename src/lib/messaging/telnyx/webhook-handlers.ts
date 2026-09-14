@@ -130,7 +130,16 @@ export async function handleTelnyxInbound(payload: unknown) {
     platformDemoLine && (result.kind === "stop" || result.kind === "start" || result.kind === "help");
 
   let replySent = false;
-  if (result.replyText && targetRegistration && !skipKeywordAutoReply) {
+  let inboundReplyText = result.replyText;
+  if (inboundReplyText && result.kind === "away" && parsed.body?.trim()) {
+    const { isMctbCustomerReplyThread } = await import(
+      "@/lib/agents/missed-call-text-back/customer-sms"
+    );
+    if (await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from)) {
+      inboundReplyText = undefined;
+    }
+  }
+  if (inboundReplyText && targetRegistration && !skipKeywordAutoReply) {
     const replyProfileId =
       targetRegistration.messagingProfileId ||
       (looksLikeTwilioMessagingServiceSid(targetRegistration.messagingServiceSid)
@@ -140,7 +149,7 @@ export async function handleTelnyxInbound(payload: unknown) {
       await telnyxProvider.sendMessage(targetRegistration as any, {
         to: parsed.from,
         from: ctx.phoneE164 || parsed.to,
-        body: result.replyText,
+        body: inboundReplyText,
         messagingProfileId: replyProfileId,
         mediaUrls: result.mediaUrls?.filter(Boolean),
       });
