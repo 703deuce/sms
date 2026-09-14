@@ -158,6 +158,18 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       return processPostCall(callId);
     }
+    case "mctb_process_inbound_sms": {
+      const { processMctbInboundSmsJob } = await import(
+        "@/lib/mctb/messaging/process-inbound-sms-job"
+      );
+      return processMctbInboundSmsJob(payload);
+    }
+    case "mctb_send_customer_sms": {
+      const { executeMctbSendCustomerSmsJob } = await import(
+        "@/lib/mctb/messaging/send-customer-sms-job"
+      );
+      return executeMctbSendCustomerSmsJob(payload);
+    }
     case "john_mctb_send": {
       const { executeMissedCallTextSend } = await import(
         "@/lib/agents/missed-call-text-back/send"

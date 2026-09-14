@@ -139,6 +139,7 @@ export type MctbCustomerSmsReplyResult =
       reply?: string;
       modelInvoked?: boolean;
       modelRequestId?: string;
+      outboundJobId?: string | null;
     };
 
 export async function handleMctbCustomerSmsReply(input: {
@@ -148,6 +149,9 @@ export async function handleMctbCustomerSmsReply(input: {
   body: string;
   conversationId?: string | null;
   providerMessageId?: string | null;
+  /** inline = send in this call (legacy/tests); durable = enqueue mctb_send_customer_sms */
+  outboundDelivery?: "inline" | "durable";
+  processingJobId?: string | null;
 }): Promise<MctbCustomerSmsReplyResult> {
   const fromE164 = normalizeMctbCallerE164(input.fromE164);
   const config = await loadMissedCallTextConfig(input.workspaceId);
@@ -259,6 +263,46 @@ export async function handleMctbCustomerSmsReply(input: {
   }
 
   const idemKey = `mctb-lead-recovery:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
+  const outboundDelivery = input.outboundDelivery ?? "inline";
+
+  if (outboundDelivery === "durable") {
+    const { enqueueMctbCustomerOutboundSmsJob } = await import(
+      "@/lib/mctb/messaging/enqueue-customer-outbound-sms"
+    );
+    const { logMctbInboundProcessingEvent } = await import(
+      "@/lib/mctb/messaging/inbound-processing-trace"
+    );
+    try {
+      const job = await enqueueMctbCustomerOutboundSmsJob({
+        workspaceId: input.workspaceId,
+        conversationId,
+        toE164: fromE164,
+        body: leadRecovery.reply,
+        idempotencyKey: idemKey,
+        providerMessageId: input.providerMessageId,
+        processingJobId: input.processingJobId,
+        action: leadRecovery.action,
+      });
+      await logMctbInboundProcessingEvent({
+        kind: "OUTBOUND_ENQUEUED",
+        workspaceId: input.workspaceId,
+        conversationId,
+        providerMessageId: input.providerMessageId,
+        processingJobId: input.processingJobId,
+        outboundJobId: job.id,
+      });
+      return {
+        handled: true,
+        action: leadRecovery.action,
+        reply: leadRecovery.reply,
+        outboundJobId: job.id,
+      };
+    } catch (err) {
+      console.error("[mctb/customer-sms] lead recovery outbound enqueue failed", err);
+      return { handled: false, reason: "sms_send_failed" };
+    }
+  }
+
   try {
     await sendMctbCustomerOutboundSms({
       workspaceId: input.workspaceId,

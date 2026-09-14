@@ -120,16 +120,29 @@ export async function handleTelnyxInbound(payload: unknown) {
     }));
 
   const result = mctbInboundContext
-    ? await (
-        await import("@/lib/mctb/messaging/record-inbound-sms")
-      ).recordMctbInboundSmsForLeadRecovery({
-        workspaceId: targetWorkspaceId,
-        from: parsed.from,
-        to: parsed.to,
-        body: parsed.body,
-        providerMessageId: parsed.providerMessageId,
-        mediaUrls: parsed.mediaUrls || null,
-      })
+    ? await (async () => {
+        const { acceptMctbInboundSmsIngress } = await import(
+          "@/lib/mctb/messaging/inbound-sms-ingress"
+        );
+        if (!parsed.providerMessageId?.trim()) {
+          throw new Error("telnyx_inbound_missing_provider_message_id");
+        }
+        const accepted = await acceptMctbInboundSmsIngress({
+          workspaceId: targetWorkspaceId,
+          from: parsed.from,
+          to: parsed.to,
+          body: parsed.body,
+          provider: "telnyx",
+          providerMessageId: parsed.providerMessageId,
+          mediaUrls: parsed.mediaUrls || null,
+        });
+        return {
+          kind: parsed.body?.trim() ? ("message" as const) : ("empty" as const),
+          conversationId: accepted.conversationId,
+          mctbProcessingJobId: accepted.processingJobId,
+          mctbDuplicate: accepted.duplicate,
+        };
+      })()
     : await processInboundMessage({
         workspaceId: targetWorkspaceId,
         from: parsed.from,
@@ -179,33 +192,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     }
   }
 
-  if (!replySent && parsed.body?.trim() && mctbInboundContext) {
-    try {
-      const { handleMctbCustomerSmsReply } = await import(
-        "@/lib/agents/missed-call-text-back/customer-sms"
-      );
-      const mctbReply = await handleMctbCustomerSmsReply({
-        workspaceId: targetWorkspaceId,
-        fromE164: parsed.from,
-        toE164: parsed.to,
-        body: parsed.body,
-        conversationId: result.conversationId || null,
-        providerMessageId: parsed.providerMessageId,
-      });
-      if (mctbReply.handled && mctbReply.reply?.trim()) {
-        replySent = true;
-      } else if (!mctbReply.handled && mctbInboundContext) {
-        console.warn("[telnyx/inbound] MCTB Lead Recovery did not reply", {
-          workspaceId: targetWorkspaceId,
-          reason: mctbReply.reason,
-          from: parsed.from,
-          to: parsed.to,
-        });
-      }
-    } catch (err) {
-      console.error("[telnyx/inbound] MCTB Lead Recovery SMS failed", err);
-    }
-  }
+  // MCTB Lead Recovery runs on durable job mctb_process_inbound_sms (webhook does not await LLM/send).
 
   return {
     ok: true as const,
