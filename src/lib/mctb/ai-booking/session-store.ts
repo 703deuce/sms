@@ -35,6 +35,7 @@ export async function recordOfferedSlots(input: {
   workspaceId: string;
   conversationId: string;
   provider: MctbAiBookingSession["provider"];
+  bookingTimezone: string;
   slots: MctbBookingSlot[];
   window?: { startUtc: string; endUtc: string };
   stage?: MctbAiBookingSession["stage"];
@@ -43,6 +44,7 @@ export async function recordOfferedSlots(input: {
     conversationId: input.conversationId,
     workspaceId: input.workspaceId,
     provider: input.provider,
+    bookingTimezone: input.bookingTimezone,
     stage: input.stage || "AWAITING_SLOT_SELECTION",
     offeredSlots: input.slots,
     lastQueriedWindow: input.window,

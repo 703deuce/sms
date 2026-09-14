@@ -10,7 +10,13 @@ export type MctbBookingSlot = {
   slotId: string;
   startUtc: string;
   endUtc: string;
+  /** @deprecated use bookingTimezone — kept for JSON compat */
   timezone: string;
+  /** Canonical IANA timezone for this offer/booking transaction */
+  bookingTimezone?: string;
+  /** Precomputed customer-facing label in bookingTimezone */
+  displayStart?: string;
+  displayEnd?: string;
   label?: string;
 };
 
@@ -123,6 +129,8 @@ export type MctbAiBookingSession = {
   conversationId: string;
   workspaceId: string;
   provider: MctbAiBookingProviderId;
+  /** Canonical booking timezone for this session (must match all offered slots). */
+  bookingTimezone?: string;
   stage?: MctbAiBookingSessionStage;
   offeredSlots: MctbBookingSlot[];
   lastQueriedWindow?: { startUtc: string; endUtc: string };
@@ -162,4 +170,5 @@ export type AiBookingOrchestratorResult =
       reason: string;
       messageHint: string;
     }
-  | { kind: "need_clarification"; messageHint: string };
+  | { kind: "need_clarification"; messageHint: string }
+  | { kind: "timezone_conflict"; messageHint: string; code: "BOOKING_TIMEZONE_CONFLICT" };

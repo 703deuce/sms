@@ -1,6 +1,9 @@
 import type { SchedulingSpecialistResult } from "@/lib/mctb/ai-booking/agents/types";
 import type { OrchestrateAiBookingInput } from "@/lib/mctb/ai-booking/orchestrator";
-import { resolveOfferedSlotIdFromSpecialist } from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
+import {
+  resolveOfferedSlotFromSpecialistDetailed,
+  resolveOfferedSlotIdFromSpecialist,
+} from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
 import { schedulingLocalSemanticsToUtcWindow } from "@/lib/mctb/ai-booking/local-time-semantics";
 import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
@@ -35,6 +38,10 @@ export function mapSpecialistToOrchestratorInput(
     resolveOfferedSlotIdFromSpecialist(specialist, offeredSlots, tz);
 
   if (specialist.action === "SELECT_OFFERED_SLOT" || specialist.action === "CONFIRM_BOOKING") {
+    const detailed = resolveOfferedSlotFromSpecialistDetailed(specialist, offeredSlots);
+    if (detailed.ok === false && detailed.reason === "AMBIGUOUS_SLOT_SELECTION") {
+      return null;
+    }
     const selectedSlotId = resolveSlotId();
     if (options?.sessionHasOfferedSlots && offeredSlots.length > 0 && !selectedSlotId) {
       return null;

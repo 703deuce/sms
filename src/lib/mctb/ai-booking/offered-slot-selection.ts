@@ -1,14 +1,16 @@
 import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 export function formatMctbBookingSlotLabel(slot: MctbBookingSlot): string {
+  if (slot.displayStart?.trim()) return slot.displayStart.trim();
   const d = new Date(slot.startUtc);
+  const tz = slot.bookingTimezone || slot.timezone;
   return d.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: slot.timezone,
+    timeZone: tz,
   });
 }
 

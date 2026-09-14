@@ -11,6 +11,7 @@ function rowToSession(row: {
   offeredSlotsJson: unknown;
   requestedWindowJson: unknown;
   selectedSlotJson: unknown;
+  schedulingTargetJson: unknown;
   stage: string;
   updatedAt: Date;
   expiresAt: Date | null;
@@ -18,10 +19,15 @@ function rowToSession(row: {
   const offered = Array.isArray(row.offeredSlotsJson)
     ? (row.offeredSlotsJson as MctbBookingSlot[])
     : [];
+  const scheduling =
+    row.schedulingTargetJson && typeof row.schedulingTargetJson === "object"
+      ? (row.schedulingTargetJson as { bookingTimezone?: string })
+      : {};
   return {
     conversationId: row.conversationId,
     workspaceId: row.workspaceId,
     provider: (row.provider as MctbAiBookingSession["provider"]) || "microsoft",
+    bookingTimezone: scheduling.bookingTimezone,
     offeredSlots: offered,
     lastQueriedWindow:
       row.requestedWindowJson && typeof row.requestedWindowJson === "object"
@@ -63,6 +69,9 @@ export const prismaMctbAiBookingSessionStore: MctbAiBookingSessionStore = {
         provider: session.provider,
         offeredSlotsJson: session.offeredSlots,
         requestedWindowJson: session.lastQueriedWindow ?? undefined,
+        schedulingTargetJson: session.bookingTimezone
+          ? { bookingTimezone: session.bookingTimezone }
+          : undefined,
         selectedSlotJson: session.pendingSlotId
           ? session.offeredSlots.find((s) => s.slotId === session.pendingSlotId)
           : undefined,
@@ -73,6 +82,9 @@ export const prismaMctbAiBookingSessionStore: MctbAiBookingSessionStore = {
         provider: session.provider,
         offeredSlotsJson: session.offeredSlots,
         requestedWindowJson: session.lastQueriedWindow ?? undefined,
+        schedulingTargetJson: session.bookingTimezone
+          ? { bookingTimezone: session.bookingTimezone }
+          : undefined,
         selectedSlotJson: session.pendingSlotId
           ? session.offeredSlots.find((s) => s.slotId === session.pendingSlotId)
           : undefined,

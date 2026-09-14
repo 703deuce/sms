@@ -7,6 +7,11 @@ import {
 } from "@/lib/mctb/ai-booking/offered-slot-selection";
 import { pickSlotsToOffer } from "@/lib/mctb/ai-booking/slot-presentation";
 import { revalidatePersistedOfferedSlot } from "@/lib/mctb/ai-booking/revalidate-offered-slot";
+import {
+  assertBookingTimezoneCoherent,
+  slotBookingTimezone,
+  stampSlotsWithCanonicalTimezone,
+} from "@/lib/mctb/ai-booking/booking-timezone";
 import { logMctbAiBookingEvent } from "@/lib/mctb/ai-booking/observability";
 import type { CreateBookingResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 import type { AiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/types";
@@ -22,6 +27,7 @@ export type BookValidatedOfferedSlotInput = {
   writeEpoch?: number;
   /** For booking identity audit trail */
   semanticSelectedSlotId?: string | null;
+  bookingTimezone: string;
 };
 
 /**
@@ -35,6 +41,30 @@ export async function bookValidatedOfferedSlot(
 > {
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
   const offered = session?.offeredSlots ?? [];
+  const bookingTimezone = input.bookingTimezone.trim();
+  const tzCheck = assertBookingTimezoneCoherent({
+    bookingTimezone,
+    session,
+    offeredSlots: offered,
+  });
+  if (!tzCheck.ok) {
+    logMctbAiBookingEvent("booking_timezone_conflict", {
+      conversationId: input.conversationId,
+      bookingTimezone,
+      conflicts: tzCheck.conflicts,
+    });
+    return {
+      status: "book_failed",
+      reason: tzCheck.code,
+      orchestratorResult: {
+        kind: "timezone_conflict",
+        code: "BOOKING_TIMEZONE_CONFLICT",
+        messageHint:
+          "I hit a scheduling configuration issue on our side. Please reply with another time or call us.",
+      },
+    };
+  }
+
   const picked = offered.find((s) => s.slotId === input.slotId);
   if (!picked) {
     return {
@@ -72,23 +102,24 @@ export async function bookValidatedOfferedSlot(
   });
   if (!revalidated.ok) {
     const win = session?.lastQueriedWindow;
-    const tz = picked.timezone || "America/New_York";
+    const tz = slotBookingTimezone(picked) || bookingTimezone;
     if (revalidated.reason === "SLOT_NO_LONGER_AVAILABLE" && win) {
       const retry = await findAvailableTimes({
         workspaceId: input.workspaceId,
         conversationId: input.conversationId,
         windowStartUtc: win.startUtc,
         windowEndUtc: win.endUtc,
-        timezone: tz,
+        timezone: bookingTimezone,
         maxResults: 12,
       });
       if (retry?.ok && retry.slots.length) {
-        const fresh = pickSlotsToOffer(retry.slots, 3);
+        const fresh = stampSlotsWithCanonicalTimezone(pickSlotsToOffer(retry.slots, 3), bookingTimezone);
         const { config } = await getBookingContext(input.workspaceId);
         await recordOfferedSlots({
           workspaceId: input.workspaceId,
           conversationId: input.conversationId,
           provider: config.provider,
+          bookingTimezone,
           slots: fresh,
           window: retry.queriedWindow,
         });
@@ -151,7 +182,6 @@ export async function bookValidatedOfferedSlot(
 
   if (isProviderSlotConflictReason(booked.reason)) {
     const win = session?.lastQueriedWindow;
-    const tz = offered[0]?.timezone || "America/New_York";
     const retry =
       win &&
       (await findAvailableTimes({
@@ -159,16 +189,17 @@ export async function bookValidatedOfferedSlot(
         conversationId: input.conversationId,
         windowStartUtc: win.startUtc,
         windowEndUtc: win.endUtc,
-        timezone: tz,
+        timezone: bookingTimezone,
         maxResults: 12,
       }));
     if (retry?.ok && retry.slots.length) {
-      const fresh = pickSlotsToOffer(retry.slots, 3);
+      const fresh = stampSlotsWithCanonicalTimezone(pickSlotsToOffer(retry.slots, 3), bookingTimezone);
       const { config } = await getBookingContext(input.workspaceId);
       await recordOfferedSlots({
         workspaceId: input.workspaceId,
         conversationId: input.conversationId,
         provider: config.provider,
+        bookingTimezone,
         slots: fresh,
         window: retry.queriedWindow,
       });

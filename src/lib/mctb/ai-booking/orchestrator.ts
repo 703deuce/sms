@@ -9,6 +9,11 @@ import {
   pickSlotsToOffer,
 } from "@/lib/mctb/ai-booking/slot-presentation";
 import { bookValidatedOfferedSlot } from "@/lib/mctb/ai-booking/book-offered-slot";
+import {
+  assertBookingTimezoneCoherent,
+  stampSlotsWithCanonicalTimezone,
+} from "@/lib/mctb/ai-booking/booking-timezone";
+import { recordSlotsOfferedAudit } from "@/lib/mctb/ai-booking/booking-audit";
 import { getMctbAiBookingSessionStore, recordOfferedSlots } from "@/lib/mctb/ai-booking/session-store";
 import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
@@ -39,12 +44,22 @@ async function persistCustomerOfferedSlots(
   window: { startUtc: string; endUtc: string },
 ) {
   const { config: bookingCfg } = await getBookingContext(input.workspaceId);
+  const bookingTimezone = input.timezone.trim();
+  const stamped = stampSlotsWithCanonicalTimezone(slots, bookingTimezone);
   await recordOfferedSlots({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
     provider: bookingCfg.provider,
-    slots,
+    bookingTimezone,
+    slots: stamped,
     window,
+  });
+  await recordSlotsOfferedAudit({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    bookingTimezone,
+    slots: stamped,
+    writeEpoch: input.writeEpoch,
   });
 }
 
@@ -71,6 +86,22 @@ export async function orchestrateMctbAiBooking(
   input: OrchestrateAiBookingInput,
 ): Promise<AiBookingOrchestratorResult> {
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
+  const bookingTimezone = input.timezone.trim();
+
+  const tzCheck = assertBookingTimezoneCoherent({
+    bookingTimezone,
+    session,
+    orchestratorTimezone: input.timezone,
+    offeredSlots: session?.offeredSlots,
+  });
+  if (!tzCheck.ok) {
+    return {
+      kind: "timezone_conflict",
+      code: "BOOKING_TIMEZONE_CONFLICT",
+      messageHint:
+        "I hit a scheduling configuration issue on our side. Please reply with another time or call us and we'll book you manually.",
+    };
+  }
 
   const offered = session?.offeredSlots ?? [];
   const selectionSlotId = input.selectedSlotId?.trim() || null;
@@ -98,6 +129,7 @@ export async function orchestrateMctbAiBooking(
       customerEmail: input.customerEmail,
       slotId: chosen.slotId,
       semanticSelectedSlotId: selectionSlotId,
+      bookingTimezone,
       writeEpoch: input.writeEpoch,
     });
     if (booked.status === "booked") {

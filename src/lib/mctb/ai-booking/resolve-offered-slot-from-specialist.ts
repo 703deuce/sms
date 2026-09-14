@@ -1,27 +1,49 @@
 import type { SchedulingSpecialistResult } from "@/lib/mctb/ai-booking/agents/types";
 import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
+export type ResolvedOfferedSlot =
+  | { ok: true; slotId: string }
+  | { ok: false; reason: "AMBIGUOUS_SLOT_SELECTION" | "UNKNOWN_SLOT_ID" };
+
 /**
  * Map scheduling specialist structured output → a slot id from the session offer list only.
- * Customer utterance is never parsed here — only LLM JSON fields (id / 1-based index).
  */
 export function resolveOfferedSlotIdFromSpecialist(
   specialist: SchedulingSpecialistResult,
   offeredSlots: MctbBookingSlot[],
   _timeZone: string,
 ): string | null {
-  if (!offeredSlots.length) return null;
+  const result = resolveOfferedSlotFromSpecialistDetailed(specialist, offeredSlots);
+  return result.ok ? result.slotId : null;
+}
 
-  if (specialist.offered_slot_id) {
-    const id = specialist.offered_slot_id.trim();
-    if (offeredSlots.some((s) => s.slotId === id)) return id;
-    return null;
+export function resolveOfferedSlotFromSpecialistDetailed(
+  specialist: SchedulingSpecialistResult,
+  offeredSlots: MctbBookingSlot[],
+): ResolvedOfferedSlot {
+  if (!offeredSlots.length) return { ok: false, reason: "UNKNOWN_SLOT_ID" };
+
+  const idFromIndex =
+    specialist.offered_slot_index != null &&
+    Number.isFinite(specialist.offered_slot_index) &&
+    specialist.offered_slot_index >= 1 &&
+    specialist.offered_slot_index <= offeredSlots.length
+      ? offeredSlots[specialist.offered_slot_index - 1]?.slotId ?? null
+      : null;
+
+  const rawId = specialist.offered_slot_id?.trim() || null;
+  const idFromField =
+    rawId && offeredSlots.some((s) => s.slotId === rawId) ? rawId : rawId ? null : null;
+
+  if (rawId && !idFromField) {
+    return { ok: false, reason: "UNKNOWN_SLOT_ID" };
   }
 
-  const idx = specialist.offered_slot_index;
-  if (idx != null && Number.isFinite(idx) && idx >= 1 && idx <= offeredSlots.length) {
-    return offeredSlots[idx - 1]?.slotId ?? null;
+  if (idFromField && idFromIndex && idFromField !== idFromIndex) {
+    return { ok: false, reason: "AMBIGUOUS_SLOT_SELECTION" };
   }
 
-  return null;
+  const slotId = idFromField || idFromIndex;
+  if (!slotId) return { ok: false, reason: "UNKNOWN_SLOT_ID" };
+  return { ok: true, slotId };
 }

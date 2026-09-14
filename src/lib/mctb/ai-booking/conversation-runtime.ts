@@ -1,6 +1,9 @@
 /**
  * MCTB inbound SMS — AI Booking production runtime (multi-agent + deterministic orchestrator).
  */
+import { resolveCanonicalBookingTimezone } from "@/lib/mctb/ai-booking/booking-timezone";
+import { recordBookingSelectionAudit } from "@/lib/mctb/ai-booking/booking-audit";
+import { resolveOfferedSlotIdFromSpecialist } from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
 import { loadMctbAiBookingConfig, resolveFallbackBookingUrl } from "@/lib/mctb/ai-booking/config";
 import { orchestrateMctbAiBooking } from "@/lib/mctb/ai-booking/orchestrator";
 import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
@@ -46,7 +49,8 @@ export async function handleMctbAiBookingInboundSms(input: {
   const sessionActive = offeredSlots.length > 0;
   const awaitingSelection = session?.stage === "AWAITING_SLOT_SELECTION" || sessionActive;
 
-  const tz = input.timezone || config.timezone || "America/New_York";
+  /** MCTB SMS transport timezone must not override AI Booking calendar timezone. */
+  const bookingTimezone = await resolveCanonicalBookingTimezone(input.workspaceId);
 
   const route = input.forceSchedulingRoute
     ? {
@@ -106,7 +110,7 @@ export async function handleMctbAiBookingInboundSms(input: {
   );
   const extras = await schedulingSpecialistContextExtras({
     workspaceId: input.workspaceId,
-    timezone: tz,
+    timezone: bookingTimezone,
   });
 
   const orchestrateBase = {
@@ -116,7 +120,7 @@ export async function handleMctbAiBookingInboundSms(input: {
     customerName: input.customerName || "Guest",
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail,
-    timezone: tz,
+    timezone: bookingTimezone,
     writeEpoch: input.writeEpoch,
   };
 
@@ -128,7 +132,7 @@ export async function handleMctbAiBookingInboundSms(input: {
 
   const specialist = await runSchedulingSpecialistAgent({
     message: input.body,
-    timezone: tz,
+    timezone: bookingTimezone,
     nowIso: extras.nowIso,
     offeredSlots: session?.offeredSlots ?? [],
     aiBookingSessionActive: sessionActive,
@@ -146,6 +150,25 @@ export async function handleMctbAiBookingInboundSms(input: {
       action: "ai_booking_clarify",
     };
   }
+
+  const offeredForSelection = session?.offeredSlots ?? [];
+  const resolvedSlotId = resolveOfferedSlotIdFromSpecialist(
+    specialist,
+    offeredForSelection,
+    bookingTimezone,
+  );
+  await recordBookingSelectionAudit({
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: input.contactId,
+    bookingTimezone,
+    specialist,
+    resolvedSlotId,
+    resolvedSlot: resolvedSlotId
+      ? offeredForSelection.find((s) => s.slotId === resolvedSlotId) ?? null
+      : null,
+    writeEpoch: input.writeEpoch,
+  }).catch(() => undefined);
 
   const orchestrateInput = mapSpecialistToOrchestratorInput(specialist, orchestrateBase, {
     sessionHasOfferedSlots: Boolean(session?.offeredSlots?.length),

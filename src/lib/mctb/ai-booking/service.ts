@@ -66,10 +66,17 @@ export async function findAvailableTimes(
   // Session.offeredSlots must only contain slots the customer was shown in SMS (see orchestrator).
   // Never auto-persist full availability queries here — revalidate/retry would corrupt selection.
 
-  if (!result.ok && fallbackUrl) {
+  if (!result.ok) {
+    if (fallbackUrl) return result;
     return result;
   }
-  return result;
+
+  const { stampSlotsWithCanonicalTimezone } = await import("@/lib/mctb/ai-booking/booking-timezone");
+  const bookingTimezone = req.timezone.trim();
+  return {
+    ...result,
+    slots: stampSlotsWithCanonicalTimezone(result.slots, bookingTimezone),
+  };
 }
 
 const certBookingIdempotency = new Map<string, string>();
@@ -145,6 +152,8 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
   const session = await getMctbAiBookingSessionStore().get(req.conversationId);
   const slot =
     session?.offeredSlots.find((s) => s.slotId === req.slotId) ?? null;
+  const bookingTimezone =
+    slot?.bookingTimezone?.trim() || slot?.timezone?.trim() || context.timezone;
   if (!slot) {
     return {
       ok: false,
@@ -163,7 +172,7 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
         providerBookingId: replay,
         startUtc: slot.startUtc,
         endUtc: slot.endUtc,
-        timezone: context.timezone,
+        timezone: bookingTimezone,
         status: "confirmed",
       };
     }
@@ -181,7 +190,7 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
           providerBookingId: existing.providerBookingId,
           startUtc: slot.startUtc,
           endUtc: slot.endUtc,
-          timezone: context.timezone,
+          timezone: bookingTimezone,
           status: "confirmed",
         };
       }
@@ -210,8 +219,9 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
   });
 
   if (result.ok) {
+    const normalized = { ...result, timezone: bookingTimezone };
     if (certE2e) {
-      certBookingIdempotency.set(idempotencyKey, result.providerBookingId);
+      certBookingIdempotency.set(idempotencyKey, normalized.providerBookingId);
     }
     await getMctbAiBookingSessionStore().clear(req.conversationId);
     const { loadLeadRecoveryState, saveLeadRecoveryState } = await import(
@@ -228,6 +238,7 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
       pendingAction: null,
       phase: "COMPLETE",
     });
+    return normalized;
   }
   return result;
 }

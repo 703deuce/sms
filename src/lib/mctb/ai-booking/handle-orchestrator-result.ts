@@ -44,6 +44,18 @@ export async function handleMctbAiBookingOrchestratorResult(input: {
     };
   }
 
+  if (result.kind === "timezone_conflict") {
+    logMctbAiBookingEvent("booking_timezone_conflict", {
+      conversationId,
+      code: result.code,
+    });
+    return {
+      handled: true,
+      reply: finalizeMctbOutboundSms(result.messageHint),
+      action: "ai_booking_timezone_conflict",
+    };
+  }
+
   if (result.kind === "booked") {
     const { loadLeadRecoveryState, saveLeadRecoveryState } = await import(
       "@/lib/mctb/lead-recovery/state-store"
