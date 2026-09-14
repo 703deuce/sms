@@ -125,11 +125,20 @@ export async function resolveInboundConversation(input: {
     }
   }
 
-  const productSource = inferInboundProductSource({
+  let productSource = inferInboundProductSource({
     phoneSettingsJson: phone?.settingsJson,
     campaignId,
     campaignProductSource,
   });
+
+  if (input.fromE164) {
+    const { isMctbCustomerReplyThread } = await import(
+      "@/lib/agents/missed-call-text-back/customer-sms"
+    );
+    if (await isMctbCustomerReplyThread(input.workspaceId, input.fromE164)) {
+      productSource = "mctb";
+    }
+  }
 
   const { conversationId } = await ensureProductConversation({
     workspaceId: input.workspaceId,

@@ -154,6 +154,11 @@ export async function processInboundMessage(input: {
     legalBusinessName?: string | null;
     contactEmail?: string | null;
   } | null;
+  /**
+   * Telnyx MCTB inbound: skip inbox away / after-hours auto-replies and parallel AI schedulers.
+   * Set when the DID is MCTB or the caller is in an active missed-call-text-back thread.
+   */
+  skipInboxAwayAutoReply?: boolean;
 }): Promise<InboundProcessResult> {
   const prisma = getPrisma();
   let from = input.from;
@@ -678,7 +683,19 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
+  const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
+  const skipMctbParallelInboxAutomation =
+    input.skipInboxAwayAutoReply ??
+    (await shouldSkipInboxAwayAutoReply({
+      workspaceId: input.workspaceId,
+      fromE164: from,
+      toE164: input.to,
+    }));
+
   try {
+    if (skipMctbParallelInboxAutomation) {
+      throw new Error("skip_appointment_ai_for_mctb");
+    }
     const appointmentAi = await (
       await import("@/lib/appointments/ai-scheduling/channel-adapters")
     ).tryHandleInboundAppointmentAi({
@@ -702,12 +719,17 @@ export async function processInboundMessage(input: {
         conversationId: conversation.id,
       };
     }
-  } catch {
-    /* non-fatal — fall through to general AI replies */
+  } catch (err) {
+    if (!(err instanceof Error && err.message === "skip_appointment_ai_for_mctb")) {
+      /* non-fatal — fall through to general AI replies */
+    }
   }
 
   // AI conversational replies (scheduled with optional delay).
   try {
+    if (skipMctbParallelInboxAutomation) {
+      throw new Error("skip_inbox_ai_for_mctb");
+    }
     const phone = await prisma.phoneNumber.findFirst({
       where: {
         workspaceId: input.workspaceId,
@@ -726,19 +748,14 @@ export async function processInboundMessage(input: {
       body: body || "",
       inboundMessageId: input.providerMessageId || undefined,
     });
-  } catch {
-    /* non-fatal */
+  } catch (err) {
+    if (!(err instanceof Error && err.message === "skip_inbox_ai_for_mctb")) {
+      /* non-fatal */
+    }
   }
 
   // Inbox away replies are for general SMS inbox — not MCTB (after-hours by design).
-  const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
-  const skipInboxAway = await shouldSkipInboxAwayAutoReply({
-    workspaceId: input.workspaceId,
-    fromE164: from,
-    toE164: input.to,
-  });
-
-  if (!skipInboxAway) {
+  if (!skipMctbParallelInboxAutomation) {
     // Away / business-hours auto-reply (once per contact per day).
     // User-configured after-hours auto replies take precedence over the global away message.
     try {

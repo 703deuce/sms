@@ -106,6 +106,17 @@ export async function handleTelnyxInbound(payload: unknown) {
           where: { workspaceId: targetWorkspaceId },
         });
 
+  const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
+  const { isMctbCustomerReplyThread } = await import(
+    "@/lib/agents/missed-call-text-back/customer-sms"
+  );
+  const mctbInboundContext =
+    (await shouldSkipInboxAwayAutoReply({
+      workspaceId: targetWorkspaceId,
+      fromE164: parsed.from,
+      toE164: parsed.to,
+    })) || (await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from));
+
   const result = await processInboundMessage({
     workspaceId: targetWorkspaceId,
     from: parsed.from,
@@ -114,6 +125,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     providerMessageId: parsed.providerMessageId,
     mediaUrls: parsed.mediaUrls || null,
     registration: targetRegistration,
+    skipInboxAwayAutoReply: mctbInboundContext,
   });
 
   const { isPlatformDemoPhoneRecord } = await import(
@@ -131,17 +143,8 @@ export async function handleTelnyxInbound(payload: unknown) {
 
   let replySent = false;
   let inboundReplyText = result.replyText;
-  if (inboundReplyText && result.kind === "away" && parsed.body?.trim()) {
-    const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
-    if (
-      await shouldSkipInboxAwayAutoReply({
-        workspaceId: targetWorkspaceId,
-        fromE164: parsed.from,
-        toE164: parsed.to,
-      })
-    ) {
-      inboundReplyText = undefined;
-    }
+  if (inboundReplyText && result.kind === "away" && mctbInboundContext) {
+    inboundReplyText = undefined;
   }
   if (inboundReplyText && targetRegistration && !skipKeywordAutoReply) {
     const replyProfileId =
@@ -176,9 +179,18 @@ export async function handleTelnyxInbound(payload: unknown) {
         conversationId: result.conversationId || null,
         providerMessageId: parsed.providerMessageId,
       });
-      if (mctbReply.handled && mctbReply.reply?.trim()) replySent = true;
+      if (mctbReply.handled && mctbReply.reply?.trim()) {
+        replySent = true;
+      } else if (!mctbReply.handled && mctbInboundContext) {
+        console.warn("[telnyx/inbound] MCTB Lead Recovery did not reply", {
+          workspaceId: targetWorkspaceId,
+          reason: mctbReply.reason,
+          from: parsed.from,
+          to: parsed.to,
+        });
+      }
     } catch (err) {
-      console.warn("[telnyx/inbound] MCTB Lead Recovery SMS failed", err);
+      console.error("[telnyx/inbound] MCTB Lead Recovery SMS failed", err);
     }
   }
 

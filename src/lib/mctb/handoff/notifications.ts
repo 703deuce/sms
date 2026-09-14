@@ -10,37 +10,6 @@ function appBaseUrl(): string {
   return process.env.APP_URL?.replace(/\/$/, "") || "";
 }
 
-function isInQuietHours(input: {
-  enabled: boolean;
-  start: string | null;
-  end: string | null;
-  timezone: string;
-  now?: Date;
-}): boolean {
-  if (!input.enabled || !input.start || !input.end) return false;
-  try {
-    const now = input.now || new Date();
-    const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: input.timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = fmt.formatToParts(now);
-    const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
-    const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
-    const current = hour * 60 + minute;
-    const [sh, sm] = input.start.split(":").map(Number);
-    const [eh, em] = input.end.split(":").map(Number);
-    const startM = sh * 60 + sm;
-    const endM = eh * 60 + em;
-    if (startM <= endM) return current >= startM && current < endM;
-    return current >= startM || current < endM;
-  } catch {
-    return false;
-  }
-}
-
 export async function deliverMctbHandoffNotifications(input: {
   workspaceId: string;
   handoffEventId: string;
@@ -66,26 +35,14 @@ export async function deliverMctbHandoffNotifications(input: {
     where: { id: input.workspaceId },
     select: { name: true },
   });
-  const mctbConfig = await prisma.missedCallTextConfig.findUnique({
-    where: { workspaceId: input.workspaceId },
-    select: { timezone: true },
-  });
-  const tz = mctbConfig?.timezone || "America/New_York";
-
   const routing =
     config.routingMatrix[input.eventType] ||
     config.routingMatrix.caller_replied ||
     { channels: { in_app: true }, recipientIds: [] as string[] };
 
-  const inQuiet = isInQuietHours({
-    enabled: config.quietHours.enabled,
-    start: config.quietHours.start,
-    end: config.quietHours.end,
-    timezone: tz,
-  });
-  const suppressNonUrgentSms =
-    inQuiet && !input.urgent && config.quietHours.nonUrgentSmsDelay;
-  const blockAllNonUrgent = inQuiet && !input.urgent && !config.quietHours.emergencyBypass;
+  // Missed-call recovery is inherently off-hours — do not delay or suppress team alerts.
+  const suppressNonUrgentSms = false;
+  const blockAllNonUrgent = false;
 
   const base = appBaseUrl();
   const renderInput: NotificationRenderInput = {

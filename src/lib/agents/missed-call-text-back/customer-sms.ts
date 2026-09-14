@@ -1,6 +1,6 @@
 /**
- * MCTB customer SMS replies — Lead Recovery is the single conversational agent.
- * Scheduling runs inside LR via the AI_BOOK action (not a second SMS agent).
+ * MCTB customer SMS replies (Telnyx) — Lead Recovery is the single conversational agent.
+ * Scheduling runs inside LR via the AI_BOOK action (not a parallel SMS agent).
  */
 
 import { getPrisma } from "@/lib/db";
@@ -26,7 +26,9 @@ async function sendMctbCustomerOutboundSms(input: {
     config: input.config,
     demoMode: false,
   });
-  if (!route.fromE164) return null;
+  if (!route.fromE164) {
+    throw new Error("mctb_no_outbound_sms_route");
+  }
   return sendQuickSms({
     workspaceId: input.workspaceId,
     to: input.toE164,
@@ -59,6 +61,72 @@ export async function isMctbCustomerReplyThread(
   return Boolean(recentEvent);
 }
 
+async function ensureMctbConversationId(input: {
+  workspaceId: string;
+  fromE164: string;
+  toE164: string;
+  missedCallEventId: string;
+  contactId?: string | null;
+  conversationId?: string | null;
+}): Promise<{ conversationId: string; contactId: string | null }> {
+  const prisma = getPrisma();
+  if (input.conversationId) {
+    const existing = await prisma.conversation.findFirst({
+      where: { id: input.conversationId, workspaceId: input.workspaceId },
+      select: { id: true, productSource: true, contactId: true },
+    });
+    if (existing?.productSource === "MCTB") {
+      return {
+        conversationId: existing.id,
+        contactId: input.contactId ?? existing.contactId ?? null,
+      };
+    }
+  }
+
+  let contactId = input.contactId ?? null;
+  if (!contactId) {
+    const existing = await prisma.contact.findFirst({
+      where: { workspaceId: input.workspaceId, phone: input.fromE164 },
+      select: { id: true },
+    });
+    if (existing) {
+      contactId = existing.id;
+    } else {
+      const created = await prisma.contact.create({
+        data: { workspaceId: input.workspaceId, phone: input.fromE164 },
+        select: { id: true },
+      });
+      contactId = created.id;
+    }
+  }
+
+  const conv = await prisma.conversation.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      contactId,
+      productSource: "MCTB",
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  if (conv) {
+    return { conversationId: conv.id, contactId };
+  }
+
+  const created = await prisma.conversation.create({
+    data: {
+      workspaceId: input.workspaceId,
+      contactId,
+      productSource: "MCTB",
+      missedCallEventId: input.missedCallEventId,
+      fromE164: input.toE164,
+      status: "OPEN",
+    },
+    select: { id: true },
+  });
+  return { conversationId: created.id, contactId };
+}
+
 export type MctbCustomerSmsReplyResult =
   | { handled: false; reason: string }
   | {
@@ -81,6 +149,10 @@ export async function handleMctbCustomerSmsReply(input: {
   if (!config.conversationEnabled) {
     return { handled: false, reason: "conversation_disabled" };
   }
+
+  const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
+  const leadRecoveryActive =
+    leadRecoveryConfig.enabled && leadRecoveryConfig.policyHealth !== "DISABLED";
 
   if (STOP_RE.test(input.body.trim())) {
     const prisma = getPrisma();
@@ -115,33 +187,25 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: false, reason: "no_mctb_thread" };
   }
 
-  const contact = await prisma.contact.findFirst({
+  let contact = await prisma.contact.findFirst({
     where: { workspaceId: input.workspaceId, phone: input.fromE164 },
     select: { id: true, firstName: true, lastName: true, email: true },
   });
 
-  let conversationId = input.conversationId;
-  if (!conversationId && contact?.id) {
-    const conv = await prisma.conversation.findFirst({
-      where: { workspaceId: input.workspaceId, contactId: contact.id },
-      orderBy: { updatedAt: "desc" },
-      select: { id: true },
+  const ensured = await ensureMctbConversationId({
+    workspaceId: input.workspaceId,
+    fromE164: input.fromE164,
+    toE164: input.toE164,
+    missedCallEventId: recentEvent.id,
+    contactId: contact?.id,
+    conversationId: input.conversationId,
+  });
+  const conversationId = ensured.conversationId;
+  if (!contact && ensured.contactId) {
+    contact = await prisma.contact.findFirst({
+      where: { id: ensured.contactId },
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
-    conversationId = conv?.id ?? null;
-    if (!conversationId) {
-      const created = await prisma.conversation.create({
-        data: {
-          workspaceId: input.workspaceId,
-          contactId: contact.id,
-          productSource: "MCTB",
-          missedCallEventId: recentEvent.id,
-          fromE164: input.toE164,
-          status: "OPEN",
-        },
-        select: { id: true },
-      });
-      conversationId = created.id;
-    }
   }
 
   const handoff = await processMctbInboundReply({
@@ -149,19 +213,25 @@ export async function handleMctbCustomerSmsReply(input: {
     fromE164: input.fromE164,
     body: input.body,
     conversationId,
+    missedCallEventId: recentEvent.id,
+    providerMessageId: input.providerMessageId,
   });
 
-  if (handoff.handled && handoff.skipAi) {
+  /** Legacy handoff modes must not replace Lead Recovery for customer SMS. */
+  if (handoff.handled && handoff.skipAi && !leadRecoveryActive) {
     if (handoff.automationReply?.trim()) {
-      await sendMctbCustomerOutboundSms({
-        workspaceId: input.workspaceId,
-        config,
-        toE164: input.fromE164,
-        body: handoff.automationReply,
-        idempotencyKey: `mctb-handoff-reply:${handoff.handoffEventId || recentEvent.id}:${input.body.slice(0, 32)}`,
-      }).catch((err) => {
+      try {
+        await sendMctbCustomerOutboundSms({
+          workspaceId: input.workspaceId,
+          config,
+          toE164: input.fromE164,
+          body: handoff.automationReply,
+          idempotencyKey: `mctb-handoff-reply:${handoff.handoffEventId || recentEvent.id}:${input.providerMessageId || input.body.slice(0, 32)}`,
+        });
+      } catch (err) {
         console.warn("[mctb/customer-sms] handoff reply send failed", err);
-      });
+        return { handled: false, reason: "sms_send_failed" };
+      }
     }
     await prisma.missedCallEvent.update({
       where: { id: recentEvent.id },
@@ -174,14 +244,41 @@ export async function handleMctbCustomerSmsReply(input: {
     };
   }
 
-  const customerName =
-    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
+  if (
+    handoff.handled &&
+    handoff.skipAi &&
+    leadRecoveryActive &&
+    handoff.eventType === "urgent_detected" &&
+    handoff.automationReply?.trim()
+  ) {
+    try {
+      await sendMctbCustomerOutboundSms({
+        workspaceId: input.workspaceId,
+        config,
+        toE164: input.fromE164,
+        body: handoff.automationReply,
+        idempotencyKey: `mctb-urgent-handoff:${recentEvent.id}:${input.providerMessageId || "no-pid"}`,
+      });
+      await prisma.missedCallEvent.update({
+        where: { id: recentEvent.id },
+        data: { status: "CUSTOMER_REPLIED" },
+      });
+      return {
+        handled: true,
+        action: handoff.eventType,
+        reply: handoff.automationReply,
+      };
+    } catch (err) {
+      console.warn("[mctb/customer-sms] urgent handoff send failed; continuing LR", err);
+    }
+  }
 
-  const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
-
-  if (!leadRecoveryConfig.enabled || leadRecoveryConfig.policyHealth === "DISABLED") {
+  if (!leadRecoveryActive) {
     return { handled: false, reason: "lead_recovery_not_enabled" };
   }
+
+  const customerName =
+    [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
 
   const leadRecovery = await handleMctbLeadRecoveryInboundSms({
     workspaceId: input.workspaceId,
@@ -204,26 +301,29 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
   }
 
-  const sent = await sendMctbCustomerOutboundSms({
-    workspaceId: input.workspaceId,
-    config,
-    toE164: input.fromE164,
-    body: leadRecovery.reply,
-    idempotencyKey: `mctb-lead-recovery:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
-  }).catch((err) => {
-    console.warn("[mctb/customer-sms] lead recovery reply send failed", err);
-    return null;
-  });
-  if (sent && conversationId) {
-    await prisma.conversationMessage.create({
-      data: {
-        conversationId,
-        direction: "out",
-        body: leadRecovery.reply,
-        userName: "AI",
-      },
-    }).catch(() => undefined);
+  const idemKey = `mctb-lead-recovery:${conversationId}:${input.providerMessageId || input.body.slice(0, 32)}`;
+  try {
+    await sendMctbCustomerOutboundSms({
+      workspaceId: input.workspaceId,
+      config,
+      toE164: input.fromE164,
+      body: leadRecovery.reply,
+      idempotencyKey: idemKey,
+    });
+  } catch (err) {
+    console.error("[mctb/customer-sms] lead recovery SMS send failed", err);
+    return { handled: false, reason: "sms_send_failed" };
   }
+
+  await prisma.conversationMessage.create({
+    data: {
+      conversationId,
+      direction: "outbound",
+      body: leadRecovery.reply,
+      userName: "AI",
+      providerMessageId: null,
+    },
+  }).catch(() => undefined);
 
   await prisma.missedCallEvent.update({
     where: { id: recentEvent.id },

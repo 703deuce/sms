@@ -287,5 +287,13 @@ export async function saveLeadRecoveryConfig(
     where: { id: workspaceId },
     data: { customFieldsConfig },
   });
+
+  if (patch.enabled === true) {
+    const { saveMctbHandoffConfig } = await import("@/lib/mctb/handoff/config");
+    await saveMctbHandoffConfig(workspaceId, { responseMode: "ai_conversation" }).catch(
+      () => undefined,
+    );
+  }
+
   return loadLeadRecoveryConfig(workspaceId);
 }
