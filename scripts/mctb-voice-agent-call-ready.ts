@@ -23,8 +23,9 @@ import { telnyxRequest } from "../src/lib/messaging/telnyx/client";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.VOICE_AGENT_ID || "cmshz2lc25c622c4i58303501";
-const MCTB_PHONE_ID = process.env.MCTB_PHONE_ID || "cmsc3numa1j17084g391t2z5l";
-const MCTB_E164 = process.env.MCTB_E164 || "+18663464256";
+/** 571 test line for ws_1 voice agent; override with MCTB_PHONE_ID / MCTB_E164. */
+const MCTB_PHONE_ID = process.env.MCTB_PHONE_ID || "cmsgtjms84g6l2h0o255w1e3v";
+const MCTB_E164 = process.env.MCTB_E164 || "+15714073615";
 
 function loadWizardFromConfig(config: Record<string, unknown>): AppointmentReceptionistWizardState {
   const advanced = (config.advanced || {}) as Record<string, unknown>;

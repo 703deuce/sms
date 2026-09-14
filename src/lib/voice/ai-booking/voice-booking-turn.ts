@@ -14,6 +14,97 @@ import {
 } from "@/lib/voice/ai-booking/call-context";
 import { logVoiceAiBookingEvent } from "@/lib/voice/ai-booking/observability";
 import { isVoiceCanonicalAiBookingActive } from "@/lib/voice/ai-booking/mode";
+import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
+import type { OrchestrateAiBookingInput } from "@/lib/mctb/ai-booking/orchestrator";
+
+function shouldFastPathGenericAvailability(
+  utterance: string,
+  offeredSlots: MctbBookingSlot[],
+  opts: { offeredSlotId?: string | null; confirmBooking?: boolean },
+): boolean {
+  if (opts.offeredSlotId?.trim() || opts.confirmBooking) return false;
+  if (offeredSlots.length > 0) return false;
+  const t = utterance.toLowerCase().trim();
+  if (!t) return true;
+  if (
+    /\b(mon(day)?|tues(day)?|wed(nesday)?|thu(rs(day)?)?|fri(day)?|sat(urday)?|sun(day)?)\b/.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+  if (/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(t)) return false;
+  if (/\b(tomorrow|today|next week|this week)\b/i.test(t)) return false;
+  return /\b(book|schedule|appointment|scheduling|set up|come out|availability|see someone|visit)\b/i.test(
+    t,
+  );
+}
+
+function voiceSpeakFromOrchestrator(
+  result: AiBookingOrchestratorResult,
+  mappedSelectedSlotId?: string | null,
+) {
+  if (result.kind === "booked") {
+    const label = formatMctbBookingSlotLabel({
+      slotId: mappedSelectedSlotId || "",
+      startUtc: result.booking.startUtc,
+      endUtc: result.booking.endUtc,
+      timezone: result.booking.timezone,
+    });
+    return {
+      ok: true,
+      speak: result.messageHint || `You're booked for ${label}.`,
+      data: {
+        booked: true,
+        provider_booking_id: result.booking.providerBookingId,
+        start_time: result.booking.startUtc,
+      },
+    };
+  }
+
+  if (result.kind === "offer_slots") {
+    const labels = result.slots.map(formatMctbBookingSlotLabel).join(", ");
+    return {
+      ok: true,
+      speak: result.messageHint || `I have ${labels}. Which works best?`,
+      data: {
+        slots: result.slots.map((s, i) => ({
+          index: i + 1,
+          slot_id: s.slotId,
+          label: formatMctbBookingSlotLabel(s),
+        })),
+      },
+    };
+  }
+
+  if (result.kind === "specific_time") {
+    return {
+      ok: true,
+      speak: result.messageHint,
+      data: { specific_time: true, requestedAvailable: result.requestedAvailable },
+    };
+  }
+
+  if (result.kind === "timezone_conflict") {
+    return {
+      ok: false,
+      speak:
+        "I hit a scheduling configuration issue and can't book on this call. I can have someone follow up.",
+      error: "BOOKING_TIMEZONE_CONFLICT",
+    };
+  }
+
+  return {
+    ok: true,
+    speak:
+      result.kind === "need_clarification"
+        ? result.messageHint
+        : result.kind === "fallback_link"
+          ? result.messageHint
+          : "Let me know another time that might work.",
+    data: { result_kind: result.kind },
+  };
+}
 
 export async function executeVoiceAiBookingTurn(input: {
   workspaceId: string;
@@ -55,6 +146,36 @@ export async function executeVoiceAiBookingTurn(input: {
   });
   const session = await getMctbAiBookingSessionStore().get(conversationId);
   const offeredSlots = session?.offeredSlots ?? [];
+
+  if (
+    shouldFastPathGenericAvailability(input.utterance, offeredSlots, {
+      offeredSlotId: input.offeredSlotId,
+      confirmBooking: input.confirmBooking,
+    })
+  ) {
+    const now = new Date();
+    const orchestrateInput: OrchestrateAiBookingInput = {
+      workspaceId: input.workspaceId,
+      conversationId,
+      contactId: caller.contactId,
+      customerName: caller.customerName,
+      customerPhone: caller.customerPhone,
+      customerEmail: caller.customerEmail,
+      timezone: bookingTimezone,
+      windowStartUtc: now.toISOString(),
+      windowEndUtc: new Date(now.getTime() + 48 * 3600_000).toISOString(),
+      specificTimeUtc: null,
+      confirmBooking: false,
+    };
+    logVoiceAiBookingEvent("voice_turn_fast_availability", {
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      conversationId,
+      utterance: input.utterance.slice(0, 120),
+    });
+    const result = await orchestrateMctbAiBooking(orchestrateInput);
+    return voiceSpeakFromOrchestrator(result);
+  }
 
   const { buildMctbSemanticConversationContext, schedulingSpecialistContextExtras } =
     await import("@/lib/mctb/semantic-conversation-context");
@@ -140,64 +261,5 @@ export async function executeVoiceAiBookingTurn(input: {
     writeEpoch,
   });
 
-  if (result.kind === "booked") {
-    const label = formatMctbBookingSlotLabel({
-      slotId: mapped.selectedSlotId || "",
-      startUtc: result.booking.startUtc,
-      endUtc: result.booking.endUtc,
-      timezone: result.booking.timezone,
-    });
-    return {
-      ok: true,
-      speak: result.messageHint || `You're booked for ${label}.`,
-      data: {
-        booked: true,
-        provider_booking_id: result.booking.providerBookingId,
-        start_time: result.booking.startUtc,
-      },
-    };
-  }
-
-  if (result.kind === "offer_slots") {
-    const labels = result.slots.map(formatMctbBookingSlotLabel).join(", ");
-    return {
-      ok: true,
-      speak: result.messageHint || `I have ${labels}. Which works best?`,
-      data: {
-        slots: result.slots.map((s, i) => ({
-          index: i + 1,
-          slot_id: s.slotId,
-          label: formatMctbBookingSlotLabel(s),
-        })),
-      },
-    };
-  }
-
-  if (result.kind === "specific_time") {
-    return {
-      ok: true,
-      speak: result.messageHint,
-      data: { specific_time: true, requestedAvailable: result.requestedAvailable },
-    };
-  }
-
-  if (result.kind === "timezone_conflict") {
-    return {
-      ok: false,
-      speak:
-        "I hit a scheduling configuration issue and can't book on this call. I can have someone follow up.",
-      error: "BOOKING_TIMEZONE_CONFLICT",
-    };
-  }
-
-  return {
-    ok: true,
-    speak:
-      result.kind === "need_clarification"
-        ? result.messageHint
-        : result.kind === "fallback_link"
-          ? result.messageHint
-          : "Let me know another time that might work.",
-    data: { result_kind: result.kind },
-  };
+  return voiceSpeakFromOrchestrator(result, mapped.selectedSlotId);
 }

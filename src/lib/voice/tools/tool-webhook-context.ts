@@ -62,9 +62,32 @@ export async function resolveToolWebhookContext(input: {
       ? String(input.body.called)
       : "";
 
+  if (callControlId) {
+    const quickCall = await prisma.voiceCall.findFirst({
+      where: {
+        telnyxCallControlId: callControlId,
+        workspaceId: input.workspaceId,
+      },
+      select: {
+        telnyxConversationId: true,
+        fromE164: true,
+        toE164: true,
+      },
+    });
+    if (quickCall) {
+      if (!conversationId && quickCall.telnyxConversationId) {
+        conversationId = quickCall.telnyxConversationId;
+      }
+      if (!inboundAni) {
+        inboundAni = normalizeCallerAni(quickCall.fromE164) || "";
+      }
+      if (!calledE164 && quickCall.toE164) calledE164 = quickCall.toE164;
+    }
+  }
+
   const tLeg = Date.now();
   if (callControlId && (!conversationId || !inboundAni)) {
-    const leg = await resolveTelnyxLegContext(callControlId);
+    const leg = await resolveTelnyxLegContext(callControlId, input.workspaceId);
     if (leg) {
       if (!conversationId) conversationId = leg.conversationId;
       if (!inboundAni && leg.callerE164) inboundAni = leg.callerE164;

@@ -14,10 +14,16 @@ export type TelnyxLegContext = {
   callSessionId: string | null;
 };
 
-async function fromDbByControlId(callControlId: string): Promise<TelnyxLegContext | null> {
+async function fromDbByControlId(
+  callControlId: string,
+  workspaceId?: string,
+): Promise<TelnyxLegContext | null> {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findFirst({
-    where: { telnyxCallControlId: callControlId },
+    where: {
+      telnyxCallControlId: callControlId,
+      ...(workspaceId ? { workspaceId } : {}),
+    },
     select: {
       telnyxConversationId: true,
       fromE164: true,
@@ -35,7 +41,10 @@ async function fromDbByControlId(callControlId: string): Promise<TelnyxLegContex
   }
 
   const aiConvs = await prisma.voiceAiConversation.findMany({
-    where: { telnyxConversationId: { not: null } },
+    where: {
+      telnyxConversationId: { not: null },
+      ...(workspaceId ? { workspaceId } : {}),
+    },
     orderBy: { updatedAt: "desc" },
     take: 40,
     select: { telnyxConversationId: true, metadata: true },
@@ -85,10 +94,11 @@ async function fromTelnyxApi(callControlId: string): Promise<TelnyxLegContext | 
 
 export async function resolveTelnyxLegContext(
   callControlId: string,
+  workspaceId?: string,
 ): Promise<TelnyxLegContext | null> {
   const trimmed = callControlId.trim();
   if (!trimmed) return null;
-  const db = await fromDbByControlId(trimmed);
+  const db = await fromDbByControlId(trimmed, workspaceId);
   if (db?.conversationId) return db;
   return fromTelnyxApi(trimmed);
 }

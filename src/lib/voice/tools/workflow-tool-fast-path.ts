@@ -66,14 +66,32 @@ export async function handleWorkflowToolFastPath(input: {
     });
   }
 
-  const ctxOrErr = await resolveToolWebhookContext({
-    request: input.request,
-    body: input.body,
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    toolType: input.toolType,
-    ingressStartedAt,
-  });
+  let ctxOrErr: Awaited<ReturnType<typeof resolveToolWebhookContext>>;
+  try {
+    ctxOrErr = await resolveToolWebhookContext({
+      request: input.request,
+      body: input.body,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      toolType: input.toolType,
+      ingressStartedAt,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[voice/tool-fast-path] context_resolution_error", message);
+    return telnyxJson({
+      ok: false,
+      status: "temporarily_unavailable",
+      result: "tool_context_error",
+      error: message,
+      speak:
+        input.toolType === "voice_ai_booking_turn"
+          ? "I'm having trouble checking the calendar right now. I can take your preferred time and have someone call you back."
+          : "I wasn't able to complete that just now. I can take a message for the team.",
+      fast_path: true,
+      timing_ms: Date.now() - ingressStartedAt,
+    });
+  }
 
   if ("ok" in ctxOrErr && ctxOrErr.ok === false) {
     return telnyxJson({
