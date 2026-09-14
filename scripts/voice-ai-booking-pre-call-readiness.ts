@@ -1,9 +1,13 @@
 #!/usr/bin/env npx tsx
 /**
  * Pre-call checklist for ws_1 voice AI booking on +15714073615.
+ * READ-ONLY for Microsoft OAuth (no token refresh from certification host).
  *
  *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/voice-ai-booking-pre-call-readiness.ts
  */
+process.env.CERTIFICATION_READ_ONLY = "1";
+process.env.TRANSOVO_OAUTH_MUTATION_SOURCE = "certification";
+
 import { getPrisma } from "../src/lib/db";
 import { resolveDeployedCommitSha } from "../src/lib/deploy-commit";
 import { resolveToolWebhookContext } from "../src/lib/voice/tools/tool-webhook-context";
@@ -11,7 +15,8 @@ import { handleWorkflowToolFastPath } from "../src/lib/voice/tools/workflow-tool
 import { evaluateMctbAiBookingReadiness } from "../src/lib/mctb/ai-booking/readiness";
 import { resolveVoiceBookingMode } from "../src/lib/voice/ai-booking/mode";
 import { getMicrosoftCalendarCapabilities } from "../src/lib/microsoft/calendar-capabilities";
-import { getValidAccessToken, hasOAuthTokens, type CalendarConfig } from "../src/lib/voice/calendar/providers";
+import { snapshotMicrosoftConnectionDiagnostics } from "../src/lib/microsoft/connection-diagnostics";
+import type { CalendarConfig } from "../src/lib/voice/calendar/providers";
 import { isMicrosoftOAuthConfigured } from "../src/lib/microsoft/oauth-config";
 import { findAvailableTimes } from "../src/lib/mctb/ai-booking/service";
 import { resolveCanonicalBookingTimezone } from "../src/lib/mctb/ai-booking/booking-timezone";
@@ -94,10 +99,14 @@ async function main() {
 
   line("MICROSOFT CONNECTION", conn?.status === "connected" ? "CONNECTED" : String(conn?.status || "MISSING"));
   line("MICROSOFT OAUTH ON HOST", isMicrosoftOAuthConfigured() ? "CONFIGURED" : "MISSING_ENV");
-  const token = conn
-    ? await getValidAccessToken(conn.id, "microsoft", calCfg).catch(() => null)
+  const snap = conn
+    ? snapshotMicrosoftConnectionDiagnostics({
+        connectionId: conn.id,
+        status: conn.status,
+        config: calCfg,
+      })
     : null;
-  line("VALID ACCESS TOKEN", token ? "PASS" : "FAIL");
+  line("VALID ACCESS TOKEN (no refresh from cert host)", snap?.accessTokenCurrentlyValid ? "PASS" : "UNVERIFIED/EXPIRED");
 
   const caps = await getMicrosoftCalendarCapabilities(WORKSPACE_ID, {
     calendarConnectionId: calId || null,

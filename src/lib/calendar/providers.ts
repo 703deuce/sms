@@ -93,6 +93,9 @@ export type CalendarConfig = {
   lastTokenRefreshAt?: string;
   lastTokenRefreshKind?: string;
   lastTokenRefreshError?: string | null;
+  /** Provenance for refresh diagnostics (production_web, certification, etc.). */
+  lastTokenRefreshSource?: string;
+  lastTokenRefreshBuildSha?: string | null;
 };
 
 export type BusyInterval = { start: Date; end: Date };
@@ -162,13 +165,21 @@ async function persistTokenRefreshDiagnostics(
     kind?: string;
     error?: string | null;
     scope?: string;
+    source?: string;
+    buildSha?: string | null;
   },
 ) {
+  const { oauthTokenMutationAllowed } = await import("@/lib/microsoft/oauth-mutation-policy");
+  if (!oauthTokenMutationAllowed()) {
+    return config;
+  }
   const patch: CalendarConfig = {
     ...config,
     lastTokenRefreshAt: new Date().toISOString(),
     lastTokenRefreshKind: input.kind || (input.ok ? "success" : "unknown"),
     lastTokenRefreshError: input.ok ? null : input.error || "refresh_failed",
+    lastTokenRefreshSource: input.source || "production_web",
+    lastTokenRefreshBuildSha: input.buildSha ?? null,
     ...(input.scope ? { grantedScopes: input.scope } : {}),
   };
   await getPrisma()
@@ -211,9 +222,22 @@ export async function getValidAccessToken(
   connectionId: string,
   provider: string,
   config: CalendarConfig,
-  options?: { forceRefresh?: boolean },
+  options?: {
+    forceRefresh?: boolean;
+    /** When true, never refresh or persist token/diagnostic mutations. */
+    readOnly?: boolean;
+    mutationSource?: import("@/lib/microsoft/oauth-mutation-policy").OAuthMutationSource;
+  },
 ): Promise<string | null> {
-  const forceRefresh = options?.forceRefresh ?? false;
+  const { oauthTokenMutationAllowed, oauthMutationProvenance } = await import(
+    "@/lib/microsoft/oauth-mutation-policy"
+  );
+  const readOnly = !oauthTokenMutationAllowed({
+    readOnly: options?.readOnly,
+    mutationSource: options?.mutationSource,
+  });
+  const forceRefresh = readOnly ? false : (options?.forceRefresh ?? false);
+  const provenance = oauthMutationProvenance();
 
   const resolveTokens = async (activeConfig: CalendarConfig) => {
     const notExpired =
@@ -221,6 +245,9 @@ export async function getValidAccessToken(
       activeConfig.expiresAt &&
       activeConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
     if (activeConfig.accessToken && notExpired) return activeConfig.accessToken ?? null;
+    if (readOnly) {
+      return null;
+    }
     if (!activeConfig.refreshToken) {
       const accessStillValid =
         activeConfig.accessToken &&
@@ -249,6 +276,8 @@ export async function getValidAccessToken(
         ok: false,
         kind: failure?.kind || "unknown",
         error: failure?.error || failure?.errorDescription || "refresh_failed",
+        source: provenance.source,
+        buildSha: provenance.buildSha,
       });
       if (needsReconnect) {
         await markCalendarConnectionNeedsReauth(connectionId);
@@ -275,6 +304,9 @@ export async function getValidAccessToken(
       return patches;
     })();
 
+    if (!oauthTokenMutationAllowed({ mutationSource: options?.mutationSource, readOnly: options?.readOnly })) {
+      return null;
+    }
     const newConfig: CalendarConfig = {
       ...activeConfig,
       accessToken: refreshed.accessToken,
@@ -284,6 +316,8 @@ export async function getValidAccessToken(
       lastTokenRefreshAt: new Date().toISOString(),
       lastTokenRefreshKind: "success",
       lastTokenRefreshError: null,
+      lastTokenRefreshSource: provenance.source,
+      lastTokenRefreshBuildSha: provenance.buildSha,
       ...microsoftTenantPatch,
     };
     await getPrisma().voiceCalendarConnection.update({
@@ -315,7 +349,7 @@ export async function getValidAccessToken(
         freshConfig.expiresAt &&
         freshConfig.expiresAt > Date.now() + TOKEN_EXPIRY_BUFFER_MS;
       if (freshConfig.accessToken && notExpired) {
-        if (row?.status === "needs_reauth") {
+        if (!readOnly && row?.status === "needs_reauth") {
           await markCalendarConnectionConnected(connectionId);
         }
         return freshConfig.accessToken;
@@ -327,6 +361,8 @@ export async function getValidAccessToken(
         ok: false,
         kind: "unknown",
         error: err instanceof Error ? err.message : "refresh_failed",
+        source: provenance.source,
+        buildSha: provenance.buildSha,
       });
       return null;
     }
