@@ -10,6 +10,10 @@ import { loadMissedCallTextConfig } from "./config";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import type { MissedCallTextConfigRecord } from "./types";
 import { handleMctbLeadRecoveryInboundSms } from "@/lib/mctb/lead-recovery/conversation-runtime";
+import {
+  mctbCallerE164Variants,
+  normalizeMctbCallerE164,
+} from "@/lib/mctb/messaging/caller-e164";
 
 const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
 
@@ -49,10 +53,11 @@ export async function isMctbCustomerReplyThread(
   fromE164: string,
 ): Promise<boolean> {
   const prisma = getPrisma();
+  const callerVariants = mctbCallerE164Variants(fromE164);
   const recentEvent = await prisma.missedCallEvent.findFirst({
     where: {
       workspaceId,
-      callerE164: fromE164,
+      callerE164: { in: callerVariants },
       smsSentAt: { not: null },
     },
     orderBy: { smsSentAt: "desc" },
@@ -145,41 +150,44 @@ export async function handleMctbCustomerSmsReply(input: {
   conversationId?: string | null;
   providerMessageId?: string | null;
 }): Promise<MctbCustomerSmsReplyResult> {
+  const fromE164 = normalizeMctbCallerE164(input.fromE164);
   const config = await loadMissedCallTextConfig(input.workspaceId);
-  if (!config.conversationEnabled) {
-    return { handled: false, reason: "conversation_disabled" };
-  }
 
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
   if (!leadRecoveryConfig.enabled || leadRecoveryConfig.policyHealth === "DISABLED") {
     return { handled: false, reason: "lead_recovery_not_enabled" };
   }
 
+  if (!config.conversationEnabled) {
+    console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
+  }
+
   if (STOP_RE.test(input.body.trim())) {
     const prisma = getPrisma();
     await prisma.suppression.upsert({
-      where: { suppressionKey: `${input.workspaceId}:p:${input.fromE164}` },
+      where: { suppressionKey: `${input.workspaceId}:p:${fromE164}` },
       create: {
         workspaceId: input.workspaceId,
-        phone: input.fromE164,
-        suppressionKey: `${input.workspaceId}:p:${input.fromE164}`,
+        phone: fromE164,
+        suppressionKey: `${input.workspaceId}:p:${fromE164}`,
         reason: "sms_stop",
         source: "mctb_sms",
       },
       update: { reason: "sms_stop", source: "mctb_sms" },
     });
     await prisma.contact.updateMany({
-      where: { workspaceId: input.workspaceId, phone: input.fromE164 },
+      where: { workspaceId: input.workspaceId, phone: { in: mctbCallerE164Variants(fromE164) } },
       data: { status: "UNSUBSCRIBED" },
     });
     return { handled: true, action: "opted_out" };
   }
 
   const prisma = getPrisma();
+  const callerVariants = mctbCallerE164Variants(fromE164);
   const recentEvent = await prisma.missedCallEvent.findFirst({
     where: {
       workspaceId: input.workspaceId,
-      callerE164: input.fromE164,
+      callerE164: { in: callerVariants },
       smsSentAt: { not: null },
     },
     orderBy: { smsSentAt: "desc" },
@@ -189,13 +197,13 @@ export async function handleMctbCustomerSmsReply(input: {
   }
 
   let contact = await prisma.contact.findFirst({
-    where: { workspaceId: input.workspaceId, phone: input.fromE164 },
+    where: { workspaceId: input.workspaceId, phone: { in: callerVariants } },
     select: { id: true, firstName: true, lastName: true, email: true },
   });
 
   const ensured = await ensureMctbConversationId({
     workspaceId: input.workspaceId,
-    fromE164: input.fromE164,
+    fromE164,
     toE164: input.toE164,
     missedCallEventId: recentEvent.id,
     contactId: contact?.id,
@@ -219,7 +227,7 @@ export async function handleMctbCustomerSmsReply(input: {
 
   await recordMctbLeadRecoveryInboundSideEffects({
     workspaceId: input.workspaceId,
-    fromE164: input.fromE164,
+    fromE164,
     body: input.body,
     conversationId,
     missedCallEventId: recentEvent.id,
@@ -233,7 +241,7 @@ export async function handleMctbCustomerSmsReply(input: {
     workspaceId: input.workspaceId,
     conversationId,
     contactId: contact?.id,
-    customerPhone: input.fromE164,
+    customerPhone: fromE164,
     customerName,
     customerEmail: contact?.email,
     body: input.body,
@@ -255,7 +263,7 @@ export async function handleMctbCustomerSmsReply(input: {
     await sendMctbCustomerOutboundSms({
       workspaceId: input.workspaceId,
       config,
-      toE164: input.fromE164,
+      toE164: fromE164,
       body: leadRecovery.reply,
       idempotencyKey: idemKey,
     });

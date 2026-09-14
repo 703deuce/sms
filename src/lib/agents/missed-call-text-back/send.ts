@@ -331,6 +331,7 @@ export async function executeMissedCallTextSend(input: {
         fromE164: resolvedSender.e164,
         body: msgRow?.body || body,
         providerMessageId: msgRow?.providerId,
+        missedCallEventId: event.id,
       }).catch(() => undefined);
     }
 

@@ -110,12 +110,14 @@ export async function handleTelnyxInbound(payload: unknown) {
   const { isMctbCustomerReplyThread } = await import(
     "@/lib/agents/missed-call-text-back/customer-sms"
   );
+  const inMctbReplyThread = await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from);
   const mctbInboundContext =
+    inMctbReplyThread ||
     (await shouldSkipInboxAwayAutoReply({
       workspaceId: targetWorkspaceId,
       fromE164: parsed.from,
       toE164: parsed.to,
-    })) || (await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from));
+    }));
 
   const result = mctbInboundContext
     ? await (

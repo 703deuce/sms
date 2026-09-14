@@ -56,8 +56,7 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
 
   const urgent = isUrgentClassification(urgencyResult);
   const callbackRequested = detectCallbackIntent(input.body);
-  const idemSuffix = input.providerMessageId || `${Date.now()}`;
-  const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied:${idemSuffix}`;
+  const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied`;
 
   const { event: callerRepliedEvent, created: callerRepliedCreated } = await recordMctbHandoffEvent({
     workspaceId: input.workspaceId,

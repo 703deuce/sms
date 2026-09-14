@@ -3,36 +3,38 @@
  * auto-replies (mass-texting / conversations settings) must never answer on MCTB DIDs.
  */
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import {
   isMctbSipIngressTargetSync,
   isPhoneMctbSipIngress,
 } from "@/lib/mctb/sip-ingress/sync";
 import { isMctbCustomerReplyThread } from "@/lib/agents/missed-call-text-back/customer-sms";
+import { readPhoneProductRoles } from "@/lib/mass-texting/product-source";
+import { mctbDidE164Variants } from "@/lib/mctb/messaging/caller-e164";
 
 export async function shouldSkipInboxAwayAutoReply(input: {
   workspaceId: string;
   fromE164: string;
   toE164?: string | null;
 }): Promise<boolean> {
-  const to = input.toE164 ? normalizeE164(input.toE164) || input.toE164 : null;
+  const toVariants = input.toE164 ? mctbDidE164Variants(input.toE164) : [];
+  const to = toVariants[0] ?? null;
   if (to && isMctbSipIngressTargetSync(to)) {
     return true;
   }
 
-  if (to) {
+  if (toVariants.length) {
     const prisma = getPrisma();
-    const digits = to.replace(/\D/g, "");
     const phone = await prisma.phoneNumber.findFirst({
       where: {
         workspaceId: input.workspaceId,
         status: "Active",
-        OR: [{ e164: to }, ...(digits ? [{ e164: digits }] : [])],
+        e164: { in: toVariants },
       },
       select: { settingsJson: true },
     });
-    if (phone && isPhoneMctbSipIngress(phone.settingsJson)) {
-      return true;
+    if (phone) {
+      if (isPhoneMctbSipIngress(phone.settingsJson)) return true;
+      if (readPhoneProductRoles(phone.settingsJson).mctb) return true;
     }
   }
 

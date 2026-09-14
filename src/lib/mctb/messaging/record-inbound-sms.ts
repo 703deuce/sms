@@ -3,7 +3,10 @@
  * Does not run mass-texting, inbox AI, away replies, or campaign automations.
  */
 import { getPrisma } from "@/lib/db";
-import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import {
+  mctbCallerE164Variants,
+  normalizeMctbCallerE164,
+} from "@/lib/mctb/messaging/caller-e164";
 import type { InboundProcessResult } from "@/lib/messaging/inbound-process";
 
 function formatInboundMessageBody(body: string, mediaUrls?: string[] | null): string {
@@ -23,12 +26,8 @@ export async function recordMctbInboundSmsForLeadRecovery(input: {
   mediaUrls?: string[] | null;
 }): Promise<InboundProcessResult> {
   const prisma = getPrisma();
-  let from = input.from;
-  try {
-    from = normalizeE164(input.from);
-  } catch {
-    /* keep */
-  }
+  const from = normalizeMctbCallerE164(input.from);
+  const callerVariants = mctbCallerE164Variants(input.from);
   const body = (input.body || "").trim();
 
   if (input.providerMessageId) {
@@ -44,8 +43,8 @@ export async function recordMctbInboundSmsForLeadRecovery(input: {
     }
   }
 
-  let contact = await prisma.contact.findUnique({
-    where: { workspaceId_phone: { workspaceId: input.workspaceId, phone: from } },
+  let contact = await prisma.contact.findFirst({
+    where: { workspaceId: input.workspaceId, phone: { in: callerVariants } },
   });
   if (!contact) {
     contact = await prisma.contact.create({
@@ -58,6 +57,16 @@ export async function recordMctbInboundSmsForLeadRecovery(input: {
     });
   }
 
+  const recentMissed = await prisma.missedCallEvent.findFirst({
+    where: {
+      workspaceId: input.workspaceId,
+      callerE164: { in: callerVariants },
+      smsSentAt: { not: null },
+    },
+    orderBy: { smsSentAt: "desc" },
+    select: { id: true },
+  });
+
   const { resolveInboundConversation } = await import("@/lib/mass-texting/conversation-context");
   const inboundCtx = await resolveInboundConversation({
     workspaceId: input.workspaceId,
@@ -68,7 +77,12 @@ export async function recordMctbInboundSmsForLeadRecovery(input: {
 
   const conversation = await prisma.conversation.update({
     where: { id: inboundCtx.conversationId },
-    data: { unread: true, updatedAt: new Date(), productSource: "MCTB" },
+    data: {
+      unread: true,
+      updatedAt: new Date(),
+      productSource: "MCTB",
+      ...(recentMissed ? { missedCallEventId: recentMissed.id } : {}),
+    },
   });
 
   const displayBody = formatInboundMessageBody(body, input.mediaUrls);
