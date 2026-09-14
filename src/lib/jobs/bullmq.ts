@@ -9,14 +9,24 @@ let sharedConnection: IORedis | null = null;
 const queueCache = new Map<string, Queue>();
 const workerCache = new Map<string, Worker>();
 
-/** Queues consumed by the dedicated SMS dispatch worker (`npm run worker:sms`). */
+/** Campaign / transactional SMS queues on the dedicated dispatch worker. */
 export const SMS_DISPATCH_BULLMQ_QUEUES = [
   "review-campaign",
   "sms-send",
   "email-send",
 ] as const;
 
+/** Interactive MCTB + missed-call opener jobs (same `npm run worker:sms` process). */
+export const MCTB_DISPATCH_BULLMQ_QUEUES = ["mctb", "automations"] as const;
+
+/** All BullMQ queues started by `startSmsDispatchBullmqWorkers()` in production. */
+export const PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES = [
+  ...SMS_DISPATCH_BULLMQ_QUEUES,
+  ...MCTB_DISPATCH_BULLMQ_QUEUES,
+] as const;
+
 export type SmsDispatchBullmqQueue = (typeof SMS_DISPATCH_BULLMQ_QUEUES)[number];
+export type MctbDispatchBullmqQueue = (typeof MCTB_DISPATCH_BULLMQ_QUEUES)[number];
 
 /** Stored on job data so DB outbox can be completed after sanitize. */
 const IDEMPOTENCY_FIELD = "__idempotencyKey";
@@ -32,6 +42,16 @@ type BullmqJobMetrics = {
 };
 
 const smsDispatchMetrics: BullmqJobMetrics = {
+  received: 0,
+  completed: 0,
+  failed: 0,
+  lastReceivedAt: null,
+  lastCompletedAt: null,
+  lastFailedAt: null,
+  lastError: null,
+};
+
+const mctbDispatchMetrics: BullmqJobMetrics = {
   received: 0,
   completed: 0,
   failed: 0,
@@ -149,6 +169,10 @@ function createWorkerProcessor(queueName: string) {
       smsDispatchMetrics.received += 1;
       smsDispatchMetrics.lastReceivedAt = new Date().toISOString();
     }
+    if (MCTB_DISPATCH_BULLMQ_QUEUES.includes(queueName as MctbDispatchBullmqQueue)) {
+      mctbDispatchMetrics.received += 1;
+      mctbDispatchMetrics.lastReceivedAt = new Date().toISOString();
+    }
 
     try {
       if (job.name === "send_campaign_sms" || job.name === "send_campaign_email") {
@@ -175,6 +199,10 @@ function createWorkerProcessor(queueName: string) {
       if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
         smsDispatchMetrics.completed += 1;
         smsDispatchMetrics.lastCompletedAt = new Date().toISOString();
+      }
+      if (MCTB_DISPATCH_BULLMQ_QUEUES.includes(queueName as MctbDispatchBullmqQueue)) {
+        mctbDispatchMetrics.completed += 1;
+        mctbDispatchMetrics.lastCompletedAt = new Date().toISOString();
       }
 
       logBullmq("bullmq_job_completed", {
@@ -218,6 +246,11 @@ function createWorkerProcessor(queueName: string) {
         smsDispatchMetrics.lastFailedAt = new Date().toISOString();
         smsDispatchMetrics.lastError = message;
       }
+      if (MCTB_DISPATCH_BULLMQ_QUEUES.includes(queueName as MctbDispatchBullmqQueue)) {
+        mctbDispatchMetrics.failed += 1;
+        mctbDispatchMetrics.lastFailedAt = new Date().toISOString();
+        mctbDispatchMetrics.lastError = message;
+      }
 
       if (err instanceof JobFailedError) {
         await syncDbJob(idempotencyKey, "failed", message);
@@ -233,13 +266,13 @@ const readyQueues = new Set<string>();
 function markQueueReady(queueName: string) {
   readyQueues.add(queueName);
   if (
-    SMS_DISPATCH_BULLMQ_QUEUES.every((q) => readyQueues.has(q)) &&
+    PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES.every((q) => readyQueues.has(q)) &&
     !smsDispatchWorkersReady
   ) {
     smsDispatchWorkersReady = true;
     smsDispatchWorkersReadyAt = new Date().toISOString();
-    logBullmq("bullmq_sms_dispatch_workers_ready", {
-      queues: [...SMS_DISPATCH_BULLMQ_QUEUES],
+    logBullmq("bullmq_dispatch_workers_ready", {
+      queues: [...PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES],
     });
   }
 }
@@ -288,7 +321,7 @@ function startWorkersForQueues(queues: readonly string[]) {
  */
 export async function startSmsDispatchBullmqWorkers(): Promise<void> {
   await verifyBullmqConnection();
-  startWorkersForQueues(SMS_DISPATCH_BULLMQ_QUEUES);
+  startWorkersForQueues(PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES);
 
   const deadline = Date.now() + Number(process.env.SMS_BULLMQ_READY_TIMEOUT_MS || 15_000);
   while (!smsDispatchWorkersReady && Date.now() < deadline) {
@@ -296,7 +329,7 @@ export async function startSmsDispatchBullmqWorkers(): Promise<void> {
   }
   if (!smsDispatchWorkersReady) {
     throw new Error(
-      "BullMQ SMS dispatch workers did not become ready within timeout — check REDIS_URL",
+      "BullMQ dispatch workers did not become ready within timeout — check REDIS_URL",
     );
   }
 }
@@ -305,9 +338,60 @@ export function getSmsDispatchBullmqStatus() {
   return {
     ready: smsDispatchWorkersReady,
     readyAt: smsDispatchWorkersReadyAt,
-    queues: [...SMS_DISPATCH_BULLMQ_QUEUES],
+    queues: [...PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES],
+    smsQueues: [...SMS_DISPATCH_BULLMQ_QUEUES],
+    mctbQueues: [...MCTB_DISPATCH_BULLMQ_QUEUES],
     metrics: { ...smsDispatchMetrics },
+    mctbMetrics: { ...mctbDispatchMetrics },
   };
+}
+
+export function getMctbDispatchBullmqStatus() {
+  return {
+    ready: smsDispatchWorkersReady,
+    readyAt: smsDispatchWorkersReadyAt,
+    queues: [...MCTB_DISPATCH_BULLMQ_QUEUES],
+    metrics: { ...mctbDispatchMetrics },
+  };
+}
+
+export function useBullmqQueueDriver(): boolean {
+  return process.env.QUEUE_DRIVER === "bullmq" && Boolean(process.env.REDIS_URL?.trim());
+}
+
+/** Wake a durable job_queue row on BullMQ immediately after DB commit (DB remains source of truth). */
+export async function wakeDurableJobQueueRowToBullmq(input: {
+  queueName: string;
+  jobType: string;
+  payload: Record<string, unknown>;
+  idempotencyKey: string;
+  runAfter?: Date;
+}) {
+  if (!useBullmqQueueDriver()) {
+    return { mode: "db" as const, enqueued: false };
+  }
+  const runAfter = input.runAfter ?? new Date();
+  const delay = Math.max(0, runAfter.getTime() - Date.now());
+  try {
+    await enqueueBullmq(input.queueName, input.jobType, input.payload, {
+      jobId: input.idempotencyKey,
+      delay: delay || undefined,
+      wake: delay === 0,
+    });
+    return { mode: "bullmq" as const, enqueued: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      JSON.stringify({
+        event: "bullmq_wake_failed",
+        queueName: input.queueName,
+        jobType: input.jobType,
+        idempotencyKey: input.idempotencyKey,
+        error: message,
+      }),
+    );
+    return { mode: "bullmq" as const, enqueued: false, error: message };
+  }
 }
 
 export function resetSmsDispatchBullmqMetricsForTests() {
@@ -329,9 +413,8 @@ export async function startBullmqWorkers() {
   const queues = [
     "default",
     "maintenance",
-    ...SMS_DISPATCH_BULLMQ_QUEUES,
+    ...PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES,
     "review-import",
-    "automations",
     "voice-calls",
     "integrations",
     "crm-salesforce",
@@ -428,16 +511,37 @@ export async function enqueueBullmq(
 
 /** Push due DB outbox rows into BullMQ (recovers dual-write failures). */
 export async function syncDbOutboxToBullmq(limit = 50) {
+  const { JOB_PRIORITY_INTERACTIVE_MAX } = await import("@/lib/jobs/job-priority");
   const prisma = getPrisma();
   const now = new Date();
-  const due = await prisma.jobQueue.findMany({
+  const interactiveBudget = Math.min(Math.ceil(limit * 0.7), limit);
+  const bulkBudget = Math.max(0, limit - interactiveBudget);
+
+  const interactiveDue = await prisma.jobQueue.findMany({
     where: {
       status: { in: ["pending", "deferred"] },
       runAfter: { lte: now },
+      priority: { lte: JOB_PRIORITY_INTERACTIVE_MAX },
     },
-    orderBy: { runAfter: "asc" },
-    take: limit,
+    orderBy: [{ priority: "asc" }, { runAfter: "asc" }],
+    take: interactiveBudget,
   });
+
+  const interactiveIds = interactiveDue.map((j) => j.id);
+  const bulkDue =
+    bulkBudget > 0
+      ? await prisma.jobQueue.findMany({
+          where: {
+            status: { in: ["pending", "deferred"] },
+            runAfter: { lte: now },
+            ...(interactiveIds.length ? { id: { notIn: interactiveIds } } : {}),
+          },
+          orderBy: [{ priority: "asc" }, { runAfter: "asc" }],
+          take: bulkBudget,
+        })
+      : [];
+
+  const due = [...interactiveDue, ...bulkDue];
 
   let synced = 0;
   let skipped = 0;

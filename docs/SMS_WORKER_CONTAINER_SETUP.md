@@ -11,7 +11,7 @@ Repurpose your existing Coolify **voice worker** application (previously Python/
 | Component | Role |
 |-----------|------|
 | **Web container** | Next.js UI + API. Set `EMBEDDED_JOB_WORKER=0` and `DISABLE_INPROCESS_WORKER=1` so it does **not** drain the job queue. |
-| **SMS worker container** | `npm run worker:sms` — activates due campaigns, fair-enqueues recipient jobs, sends via existing Telnyx/Twilio paths, records heartbeat. |
+| **SMS worker container** | `npm run worker:sms` — activates due campaigns, fair-enqueues recipient jobs, sends via existing Telnyx/Twilio paths, records heartbeat. Also consumes BullMQ queues **`mctb`** and **`automations`** for MCTB Lead Recovery and missed-call openers. |
 | **Postgres** | Scheduled campaigns, recipient messages, job queue, worker heartbeat. Required. |
 | **Redis** | Optional. Only if `QUEUE_DRIVER=bullmq` (default is Postgres-only `db` mode). |
 

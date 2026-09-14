@@ -158,6 +158,18 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       return processPostCall(callId);
     }
+    case "mctb_worker_smoke": {
+      const issuedAt = Date.parse(String(payload.issuedAt || ""));
+      if (!issuedAt || Date.now() - issuedAt > 5 * 60 * 1000) {
+        throw new JobFailedError("mctb_worker_smoke_expired_or_missing_issuedAt");
+      }
+      return {
+        ok: true,
+        smoke: true,
+        at: new Date().toISOString(),
+        issuedAt: new Date(issuedAt).toISOString(),
+      };
+    }
     case "mctb_process_inbound_sms": {
       const { processMctbInboundSmsJob } = await import(
         "@/lib/mctb/messaging/process-inbound-sms-job"

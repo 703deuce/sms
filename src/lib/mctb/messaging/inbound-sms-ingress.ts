@@ -5,6 +5,7 @@ import {
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
 import { logMctbInboundProcessingEvent } from "@/lib/mctb/messaging/inbound-processing-trace";
+import { JOB_PRIORITY_MCTB_INBOUND_SMS } from "@/lib/jobs/job-priority";
 
 export const MCTB_JOB_PROCESS_INBOUND_SMS = "mctb_process_inbound_sms";
 export const MCTB_QUEUE_NAME = "mctb";
@@ -175,7 +176,7 @@ export async function acceptMctbInboundSmsIngress(
           workspaceId: input.workspaceId,
           jobType: MCTB_JOB_PROCESS_INBOUND_SMS,
           queueName: MCTB_QUEUE_NAME,
-          priority: 8,
+          priority: JOB_PRIORITY_MCTB_INBOUND_SMS,
           maxAttempts: 10,
           idempotencyKey,
           payload: jobPayload as Prisma.InputJsonValue,
@@ -222,6 +223,26 @@ export async function acceptMctbInboundSmsIngress(
     duplicate: result.duplicate,
     webhookAckAt,
   });
+
+  if (!result.duplicate && result.processingJobId && providerMessageId) {
+    const { wakeDurableJobQueueRowToBullmq } = await import("@/lib/jobs/bullmq");
+    await wakeDurableJobQueueRowToBullmq({
+      queueName: MCTB_QUEUE_NAME,
+      jobType: MCTB_JOB_PROCESS_INBOUND_SMS,
+      idempotencyKey: inboundJobIdempotencyKey(input.workspaceId, providerMessageId),
+      payload: {
+        workspaceId: input.workspaceId,
+        conversationId: result.conversationId,
+        conversationMessageId: result.conversationMessageId,
+        fromE164: from,
+        toE164: input.to,
+        body,
+        provider: input.provider,
+        providerMessageId,
+        acceptedAt: webhookAckAt,
+      },
+    });
+  }
 
   try {
     const { scheduleJobDrain } = await import("@/lib/jobs/inprocess-worker");

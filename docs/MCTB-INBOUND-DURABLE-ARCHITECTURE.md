@@ -67,4 +67,17 @@ Structured logs and `mctbConversationBookingActivity` rows via `logMctbInboundPr
 
 ## Worker health
 
-If `job_queue` has many stale `pending` rows, verify `DISABLE_INPROCESS_WORKER` is not set unintentionally and that a DB poller or BullMQ consumer is running. Ingress calls `scheduleJobDrain` after commit to nudge the in-process worker when enabled.
+Production (`QUEUE_DRIVER=bullmq`): the **same** `npm run worker:sms` container must run
+`startSmsDispatchBullmqWorkers()`, which consumes:
+
+- `review-campaign`, `sms-send`, `email-send` (campaign dispatch)
+- **`mctb`** (`mctb_process_inbound_sms`, `mctb_send_customer_sms`, smoke)
+- **`automations`** (`john_mctb_send` openers + automation jobs)
+
+Heartbeats: `sms-dispatch` and `mctb-interactive` (same process).
+
+After inbound DB commit, `wakeDurableJobQueueRowToBullmq` pushes the row to BullMQ
+immediately (DB remains source of truth). `syncDbOutboxToBullmq` uses **priority-aware**
+drain (interactive `priority <= 20` first, then bulk).
+
+Smoke: `npx tsx scripts/mctb-worker-production-smoke.ts` (non-destructive `mctb_worker_smoke` job).

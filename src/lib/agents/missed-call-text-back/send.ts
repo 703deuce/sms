@@ -44,6 +44,30 @@ export async function executeMissedCallTextSend(input: {
     traceMctbPipelineSkip("send", "load_event", "event_not_found", input);
     return { ok: false, reason: "event_not_found" };
   }
+
+  const openerMaxAgeMs = Number(process.env.MCTB_OPENER_MAX_AGE_MS || 72 * 60 * 60 * 1000);
+  const eventAgeMs = Date.now() - event.createdAt.getTime();
+  if (
+    !event.smsSentAt &&
+    eventAgeMs > openerMaxAgeMs &&
+    (event.status === "SCHEDULED" || event.status === "PENDING" || event.status === "SENDING")
+  ) {
+    traceMctbPipelineSkip("send", "stale_opener", "stale_opener_expired", {
+      ...input,
+      eventAgeMs,
+      openerMaxAgeMs,
+    });
+    await prisma.missedCallEvent.update({
+      where: { id: event.id },
+      data: {
+        status: "SUPPRESSED",
+        suppressionReason: "STALE_OPENER_EXPIRED",
+        eligible: false,
+      },
+    });
+    return { ok: true, skipped: true, reason: "stale_opener_expired" };
+  }
+
   if (event.smsSentAt || event.status === "SENT") {
     traceMctbPipelineSkip("send", "load_event", "already_sent", {
       ...input,

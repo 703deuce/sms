@@ -15,6 +15,7 @@ import {
 import { processSmsWorkerDueJobs } from "../src/lib/jobs/sms-worker-jobs";
 
 const WORKER_KEY = "sms-dispatch";
+const MCTB_WORKER_KEY = "mctb-interactive";
 const WORKER_ID = process.env.WORKER_ID?.trim() || randomUUID();
 const POLL_MS = Number(process.env.WORKER_POLL_MS || 3_000);
 const HEALTH_PORT = Number(process.env.SMS_WORKER_HEALTH_PORT || 8082);
@@ -130,6 +131,23 @@ async function runCycle() {
       ...metrics,
     };
     await recordWorkerHeartbeat(WORKER_KEY, WORKER_ID, lastMetrics);
+
+    if (jobs.mode === "bullmq" && jobs.bullmq) {
+      const { getMctbDispatchBullmqStatus } = await import("../src/lib/jobs/bullmq");
+      await recordWorkerHeartbeat(MCTB_WORKER_KEY, WORKER_ID, {
+        queueDriver: "bullmq",
+        mctb: getMctbDispatchBullmqStatus(),
+        dispatch: jobs.bullmq,
+      });
+    }
+
+    if (Math.random() < 0.08) {
+      const { reconcileStaleJohnMctbSendJobs } = await import(
+        "../src/lib/mctb/messaging/reconcile-stale-john-mctb-jobs"
+      );
+      void reconcileStaleJohnMctbSendJobs(15).catch(() => undefined);
+    }
+
     lastCycleAt = Date.now();
     lastCycleOk = true;
     lastCycleError = null;
@@ -183,10 +201,12 @@ async function main() {
     JSON.stringify({
       event: "worker_started",
       workerKey: WORKER_KEY,
+      mctbWorkerKey: MCTB_WORKER_KEY,
       workerId: WORKER_ID,
       pollMs: POLL_MS,
       queueDriver: USE_BULLMQ ? "bullmq" : "db",
       bullmq: bullmqBootStatus,
+      mctbQueues: USE_BULLMQ ? bullmqBootStatus?.mctbQueues : undefined,
     }),
   );
 
