@@ -20,6 +20,7 @@ import { validateAndNormalizeCollectedField } from "@/lib/mctb/lead-recovery/fie
 import type { LeadRecoveryInboundResult } from "@/lib/mctb/lead-recovery/types";
 import { emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
 import {
+  invalidatePendingActions,
   markPendingAction,
   registerInboundProviderMessage,
 } from "@/lib/mctb/lead-recovery/conversation-guard";
@@ -27,6 +28,12 @@ import { applyWorkflowInvalidation } from "@/lib/mctb/lead-recovery/workflow-inv
 import { withLeadRecoveryCrossWorkerLock } from "@/lib/mctb/lead-recovery/cross-worker-lock";
 import { buildMctbSemanticConversationContext } from "@/lib/mctb/semantic-conversation-context";
 import type { LeadRecoveryCollectField, StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
+
+function isBookingConfirmedSms(booking: { action?: string; reply?: string | null }): boolean {
+  if (booking.action !== "ai_booking") return false;
+  const text = (booking.reply || "").toLowerCase();
+  return text.includes("you're booked") || text.includes("you are booked");
+}
 
 function applyIntentExtractedFields(
   state: Awaited<ReturnType<typeof loadLeadRecoveryState>>,
@@ -184,6 +191,13 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
         epoch: state.stateVersion ?? 0,
       });
     }
+    if (!(session?.offeredSlots?.length ?? 0) && state.phase === "AWAITING_SLOT_SELECTION") {
+      state = invalidatePendingActions(state);
+      state = markPendingAction(state, {
+        action: "AI_BOOK",
+        epoch: state.stateVersion ?? 0,
+      });
+    }
     const writeEpoch =
       state.pendingAction?.action === "AI_BOOK"
         ? state.pendingAction.epoch
@@ -204,10 +218,13 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
       forceSchedulingRoute: false,
     });
     if (booking.handled) {
+      const confirmed = isBookingConfirmedSms(booking);
       state = {
         ...state,
-        activeSpecialist: "SCHEDULING",
-        phase: "AWAITING_SLOT_SELECTION",
+        activeSpecialist: confirmed ? null : "SCHEDULING",
+        phase: confirmed ? "COMPLETE" : "AWAITING_SLOT_SELECTION",
+        pendingAction: confirmed ? null : state.pendingAction,
+        activeAction: confirmed ? null : state.activeAction,
         lastCustomerMessage: input.body,
         lastBusinessMessage: booking.reply,
       };

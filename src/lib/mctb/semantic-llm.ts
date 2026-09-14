@@ -50,6 +50,10 @@ async function deepSeekChat(input: {
     /\/$/,
     "",
   );
+  const timeoutMs = Math.max(
+    5_000,
+    Number(process.env.MCTB_SEMANTIC_LLM_TIMEOUT_MS || 28_000) || 28_000,
+  );
   const started = Date.now();
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
@@ -57,6 +61,7 @@ async function deepSeekChat(input: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: input.model,
       temperature: input.temperature,
