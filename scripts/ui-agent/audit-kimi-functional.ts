@@ -78,14 +78,18 @@ const CHECKS: Check[] = [
   {
     name: "office-hours-persist",
     run: async (page) => {
-      const patch = await page.evaluate(async () => {
+      const stamp = Date.now();
+      const awayOutside = `Outside hours audit ${stamp}`;
+      const awayInside = `Inside hours audit ${stamp}`;
+      const patch = await page.evaluate(
+        async ({ awayOutside, awayInside }) => {
         const res = await fetch("/api/settings/messaging-runtime", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             awayEnabled: true,
-            awayMessage: "Outside hours audit",
-            awayInsideMessage: "Inside hours audit",
+            awayMessage: awayOutside,
+            awayInsideMessage: awayInside,
             awayAlways: false,
             timezone: "America/Chicago",
             businessHoursJson: {
@@ -101,12 +105,21 @@ const CHECKS: Check[] = [
         });
         const json = await res.json();
         return { ok: res.ok, error: json.error, data: json.data };
-      });
+      },
+        { awayOutside, awayInside },
+      );
       if (!patch.ok) return `PATCH office hours failed: ${patch.error}`;
-      if (patch.data?.awayInsideMessage !== "Inside hours audit") {
+      if (patch.data?.awayInsideMessage !== awayInside) {
         return `awayInsideMessage not persisted (got ${patch.data?.awayInsideMessage})`;
       }
       if (!patch.data?.businessHoursJson?.wed) return "businessHoursJson not persisted";
+      await page.evaluate(async () => {
+        await fetch("/api/settings/messaging-runtime", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ awayEnabled: false, awayMessage: null, awayInsideMessage: null }),
+        });
+      });
       return null;
     },
   },
