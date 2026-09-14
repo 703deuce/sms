@@ -4,7 +4,8 @@ import {
   getBookingContext,
 } from "@/lib/mctb/ai-booking/service";
 import {
-  buildNumberedOfferSms,
+  buildCustomerOfferSms,
+  buildOfferSelectionClarification,
   filterSlotsWithinWindow,
   findSlotAtTime,
   formatMctbBookingSlotLabel,
@@ -82,7 +83,7 @@ export async function orchestrateMctbAiBooking(
     if (!chosen) {
       return {
         kind: "need_clarification",
-        messageHint: buildNumberedOfferSms(offered.length ? offered : []),
+        messageHint: buildOfferSelectionClarification(offered.length ? offered : []),
       };
     }
     const booked = await createBooking({
@@ -190,7 +191,7 @@ export async function orchestrateMctbAiBooking(
 }
 
 function buildOfferMessage(slots: MctbBookingSlot[]): string {
-  return buildNumberedOfferSms(slots);
+  return buildCustomerOfferSms(slots);
 }
 
 function buildAlternativesMessage(requestedUtc: string, alternatives: MctbBookingSlot[]): string {

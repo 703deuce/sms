@@ -15,12 +15,14 @@ import { runSchedulingSpecialistAgent } from "@/lib/mctb/ai-booking/agents/sched
 import { mapSpecialistToOrchestratorInput } from "@/lib/mctb/ai-booking/agents/map-to-orchestrator";
 import { handleMctbAiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/handle-orchestrator-result";
 import {
-  buildNumberedOfferSms,
+  buildOfferSelectionClarification,
   resolveCustomerChoiceAmongOfferedSlots,
 } from "@/lib/mctb/ai-booking/slot-presentation";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
 
-export type { MctbAiBookingInboundResult } from "@/lib/mctb/ai-booking/conversation-runtime-types";
+import type { MctbAiBookingInboundResult } from "@/lib/mctb/ai-booking/conversation-runtime-types";
+
+export type { MctbAiBookingInboundResult };
 
 export async function handleMctbAiBookingInboundSms(input: {
   workspaceId: string;
@@ -34,7 +36,7 @@ export async function handleMctbAiBookingInboundSms(input: {
   writeEpoch?: number;
   /** Set when Lead Recovery policy already armed AI_BOOK — skip redundant router gate. */
   forceSchedulingRoute?: boolean;
-}): Promise<import("@/lib/mctb/ai-booking/conversation-runtime-types").MctbAiBookingInboundResult> {
+}): Promise<MctbAiBookingInboundResult> {
   const config = await loadMctbAiBookingConfig(input.workspaceId);
   if (!config.enabled || config.upgradeRequired) {
     return { handled: false };
@@ -128,7 +130,7 @@ export async function handleMctbAiBookingInboundSms(input: {
     if (!picked) {
       return {
         handled: true,
-        reply: finalizeMctbOutboundSms(buildNumberedOfferSms(session.offeredSlots)),
+        reply: finalizeMctbOutboundSms(buildOfferSelectionClarification(session.offeredSlots)),
         action: "ai_booking_clarify",
       };
     }
