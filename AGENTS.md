@@ -369,6 +369,12 @@ API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow r
 
 ---
 
+## Database migrations (production)
+
+Schema changes ship as Prisma migrations under `prisma/migrations/`. **Every Coolify deploy** runs `scripts/deploy-db-migrations.sh` (`npx prisma migrate deploy`) when `DATABASE_URL` is set. Do not add runtime fallbacks that hide missing tables — apply migrations instead. Manual: `npm run db:deploy`.
+
+---
+
 ## Cursor Cloud — AI Lead Recovery live SMS tests
 
 Cloud agents **cannot** receive real Telnyx SMS or open your Microsoft/Calendly tenant. Live certification is **manual on your phone + production/staging app**.

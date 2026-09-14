@@ -56,19 +56,11 @@ export async function listMctbBookingLinks(workspaceId: string, activeOnly = fal
     }
     return [];
   }
-  try {
-    const rows = await prisma.mctbBookingLink.findMany({
-      where: { workspaceId, ...(activeOnly ? { active: true } : {}) },
-      orderBy: [{ isDefault: "desc" }, { label: "asc" }],
-    });
-    return rows.map(toDto);
-  } catch (err) {
-    const code = (err as { code?: string })?.code;
-    if (code === "PGRST205" || /schema cache/i.test(String((err as Error)?.message))) {
-      return [];
-    }
-    throw err;
-  }
+  const rows = await prisma.mctbBookingLink.findMany({
+    where: { workspaceId, ...(activeOnly ? { active: true } : {}) },
+    orderBy: [{ isDefault: "desc" }, { label: "asc" }],
+  });
+  return rows.map(toDto);
 }
 
 export async function createMctbBookingLink(

@@ -15,5 +15,6 @@ cmds = [
 
 [phases.build]
 cmds = [
+  "bash scripts/deploy-db-migrations.sh",
   "bash scripts/coolify-build-with-heartbeat.sh",
 ]

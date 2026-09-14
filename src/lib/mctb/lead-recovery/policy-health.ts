@@ -59,18 +59,14 @@ export async function computeLeadRecoveryPolicyHealth(
   ]);
 
   const prisma = getPrisma();
-  let linkCount = 0;
-  if (prisma.mctbBookingLink?.count) {
-    try {
-      linkCount = await prisma.mctbBookingLink.count({
-        where: { workspaceId, active: true },
-      });
-    } catch {
-      linkCount = 0;
-    }
-  } else if (process.env.LR_CERT_E2E === "1" && process.env.LR_E2E_BOOKING_URL) {
-    linkCount = 1;
-  }
+  const linkCount =
+    prisma.mctbBookingLink?.count
+      ? await prisma.mctbBookingLink.count({
+          where: { workspaceId, active: true },
+        })
+      : process.env.LR_CERT_E2E === "1" && process.env.LR_E2E_BOOKING_URL
+        ? 1
+        : 0;
 
   let bookingProvider: PolicyHealthStatus = "READY";
   if (policyUsesAiBook(config.intentPolicies.BOOKING_REQUEST)) {
