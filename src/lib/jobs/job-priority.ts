@@ -16,5 +16,8 @@ export const MCTB_JOB_TYPES = new Set([
   "mctb_process_inbound_sms",
   "mctb_send_customer_sms",
   "mctb_durable_operation_process",
+  "mctb_voice_operation_hold_tick",
+  "mctb_voice_operation_deliver",
+  "mctb_voice_operation_expire_check",
   "mctb_worker_smoke",
 ]);

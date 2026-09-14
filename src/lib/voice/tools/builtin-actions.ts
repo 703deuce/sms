@@ -843,43 +843,20 @@ export async function executeBuiltinVoiceAction(input: {
     }
     case "voice_ai_booking_turn": {
       if (!input.callId) throw new Error("callId required");
-      const operationId = String(
-        args.operation_id || args.check_operation_id || args.operationId || "",
-      ).trim();
-      if (operationId) {
-        const { checkVoiceDurableOperation } = await import(
-          "@/lib/mctb/durable-operations/voice-fast-start"
-        );
-        const { voiceBookingResponseFromDurableTurn } = await import(
-          "@/lib/voice/ai-booking/tool-result-contract"
-        );
-        const checked = await checkVoiceDurableOperation({
-          workspaceId: input.workspaceId,
-          operationId,
-        });
-        return voiceBookingResponseFromDurableTurn({
-          operationStatus: checked.status,
-          speak: checked.speak,
-          operationId: checked.operationId,
-          ok: checked.ok,
-          error: checked.error,
-          data: checked.data,
-        });
-      }
       const { getPrisma } = await import("@/lib/db");
       const prisma = getPrisma();
       const call = await prisma.voiceCall.findFirst({
         where: { id: input.callId, workspaceId: input.workspaceId },
-        select: { metadata: true },
+        select: { metadata: true, telnyxConversationId: true },
       });
       const meta = (call?.metadata || {}) as Record<string, unknown>;
       const actionEpochAtEnqueue = Number(
         meta.voiceBookingActionEpoch ?? meta.voiceBookingWriteEpoch ?? 0,
       );
-      const { startVoiceAiBookingDurableOperation } = await import(
-        "@/lib/mctb/durable-operations/voice-fast-start"
+      const { resolveVoiceBookingToolForCall } = await import(
+        "@/lib/voice/ai-booking/resolve-voice-booking-tool"
       );
-      const started = await startVoiceAiBookingDurableOperation({
+      return resolveVoiceBookingToolForCall({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         callId: input.callId,
@@ -892,17 +869,7 @@ export async function executeBuiltinVoiceAction(input: {
             ? String(args.invocation_id)
             : null,
         actionEpochAtEnqueue,
-      });
-      const { voiceBookingResponseFromDurableTurn } = await import(
-        "@/lib/voice/ai-booking/tool-result-contract"
-      );
-      return voiceBookingResponseFromDurableTurn({
-        operationStatus: started.status,
-        speak: started.speak,
-        operationId: started.operationId,
-        ok: started.ok,
-        error: started.error,
-        data: started.data,
+        telnyxConversationId: call?.telnyxConversationId,
       });
     }
     case "check_voice_operation": {

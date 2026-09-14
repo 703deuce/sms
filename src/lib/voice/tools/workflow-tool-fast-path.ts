@@ -191,6 +191,21 @@ export async function handleWorkflowToolFastPath(input: {
       }),
     );
 
+    if (
+      input.toolType === "voice_ai_booking_turn" &&
+      latencyMs > 8_000 &&
+      ctx.callId &&
+      typeof result.operationId === "string"
+    ) {
+      const { markHttpDeliveryTimeoutPreservingOperation } = await import(
+        "@/lib/voice/ai-booking/durable-operation-delivery"
+      );
+      await markHttpDeliveryTimeoutPreservingOperation({
+        callId: ctx.callId,
+        operationId: String(result.operationId),
+      }).catch(() => undefined);
+    }
+
     return telnyxJson({
       ...result,
       ok: opSucceeded,

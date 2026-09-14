@@ -56,6 +56,9 @@ export async function persistVoiceAiBookingOperationAudit(input: {
     payload,
   });
 
+  if (process.env.MCTB_DURABLE_OP_CERT === "1") {
+    return;
+  }
   const prisma = getPrisma();
   if (input.callId) {
     const call = await prisma.voiceCall.findFirst({

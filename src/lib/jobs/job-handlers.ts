@@ -188,6 +188,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeMctbDurableOperationJob(payload);
     }
+    case "mctb_voice_operation_hold_tick": {
+      const { executeVoiceOperationHoldTick } = await import(
+        "@/lib/voice/ai-booking/durable-operation-jobs"
+      );
+      return executeVoiceOperationHoldTick(payload);
+    }
+    case "mctb_voice_operation_deliver": {
+      const { executeVoiceOperationDeliver } = await import(
+        "@/lib/voice/ai-booking/durable-operation-jobs"
+      );
+      return executeVoiceOperationDeliver(payload);
+    }
+    case "mctb_voice_operation_expire_check": {
+      const { executeVoiceOperationExpireCheck } = await import(
+        "@/lib/voice/ai-booking/durable-operation-jobs"
+      );
+      return executeVoiceOperationExpireCheck(payload);
+    }
     case "mctb_send_customer_sms": {
       const { executeMctbSendCustomerSmsJob } = await import(
         "@/lib/mctb/messaging/send-customer-sms-job"

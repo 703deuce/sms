@@ -82,13 +82,27 @@ export async function executeMctbDurableOperationJob(payload: Record<string, unk
     const resultJson = await runProcessor(operation);
     const completed = await store.update(operationId, {
       status: "SUCCEEDED",
-      resultJson,
+      resultJson: {
+        ...resultJson,
+        delivery: { status: "PENDING", operationSucceededAt: new Date().toISOString() },
+      },
       completedAt: new Date(),
       claimLeaseExpiresAt: null,
       failureClass: null,
       failureDetail: null,
       traceJson: appendTraceEvent(operation.traceJson, "SUCCEEDED"),
     });
+    const voiceCallId = operation.voiceCallId || String(operation.inputJson.callId || "");
+    if (voiceCallId && process.env.MCTB_DURABLE_OP_CERT !== "1") {
+      const { enqueueVoiceOperationDeliveryJob } = await import(
+        "@/lib/voice/ai-booking/durable-operation-delivery"
+      );
+      await enqueueVoiceOperationDeliveryJob({
+        workspaceId,
+        callId: voiceCallId,
+        operationId,
+      });
+    }
     return { ok: true, operationId, status: completed.status, result: resultJson };
   } catch (err) {
     const classified = classifyErrorForRetry(err);

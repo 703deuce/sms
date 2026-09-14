@@ -46,7 +46,7 @@ export function formatVoiceAiBookingToolResponse(input: {
   const agentInstruction =
     input.agentInstruction ??
     (input.status === "OPERATION_PENDING"
-      ? "The calendar check is still running. Call voice_ai_booking_turn again with operation_id set to the returned operation_id. Do not apologize or claim failure until status is PROVIDER_TEMPORARY_FAILURE or OPERATION_FAILED."
+      ? "Voice runtime owns this operation. Do not poll tools. Wait for authoritative availability injection or continue natural conversation."
       : input.status === "AVAILABILITY_FOUND"
         ? "Speak the offered times exactly as in speak and slots. Ask which time works. When the caller chooses, call voice_ai_booking_turn with offered_slot_id from slots."
         : null);

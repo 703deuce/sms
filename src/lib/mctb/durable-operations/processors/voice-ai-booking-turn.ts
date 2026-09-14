@@ -63,6 +63,11 @@ export async function processVoiceAiBookingTurnOperation(
   if (certThrow) {
     throw new Error(certThrow);
   }
+  const certDelay = Number(process.env.MCTB_CERT_VOICE_TURN_DELAY_MS || 0);
+  if (certDelay > 0) {
+    await new Promise((r) => setTimeout(r, certDelay));
+  }
+
   const certResult = process.env.MCTB_CERT_VOICE_TURN_RESULT?.trim();
   if (certResult) {
     const parsed = JSON.parse(certResult) as Record<string, unknown>;
