@@ -188,24 +188,8 @@ export async function createBooking(req: CreateBookingRequest): Promise<CreateBo
     }
   }
 
-  const revalidate = await findAvailableTimes({
-    workspaceId: req.workspaceId,
-    conversationId: req.conversationId,
-    windowStartUtc: new Date(new Date(slot.startUtc).getTime() - 30 * 60_000).toISOString(),
-    windowEndUtc: new Date(new Date(slot.startUtc).getTime() + 30 * 60_000).toISOString(),
-    timezone: context.timezone,
-    maxResults: 8,
-  });
-  if (revalidate.ok) {
-    const still = revalidate.slots.some((s) => s.slotId === slot.slotId || s.startUtc === slot.startUtc);
-    if (!still) {
-      return {
-        ok: false,
-        reason: "slot_taken",
-        fallbackRecommended: false,
-      };
-    }
-  }
+  // Slot was chosen from session.offeredSlots (exact SMS offer list). Book that instant — no
+  // second availability query that can false-negative and tell the customer a slot was "taken".
 
   if (!certE2e) {
     const { getPrisma } = await import("@/lib/db");

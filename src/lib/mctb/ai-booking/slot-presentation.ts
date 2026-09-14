@@ -17,24 +17,12 @@ export function filterSlotsWithinWindow(
   });
 }
 
-/** Pick up to `count` slots to offer — spread across the window when possible. */
+/** Next `count` openings from the provider list (chronological — what we show is what we book). */
 export function pickSlotsToOffer(slots: MctbBookingSlot[], count = 3): MctbBookingSlot[] {
-  if (slots.length <= count) return [...slots];
   const sorted = [...slots].sort(
     (a, b) => new Date(a.startUtc).getTime() - new Date(b.startUtc).getTime(),
   );
-  const picks: MctbBookingSlot[] = [];
-  const step = Math.max(1, Math.floor(sorted.length / count));
-  for (let i = 0; i < sorted.length && picks.length < count; i += step) {
-    picks.push(sorted[i]);
-  }
-  if (picks.length < count) {
-    for (const s of sorted) {
-      if (!picks.some((p) => p.slotId === s.slotId)) picks.push(s);
-      if (picks.length >= count) break;
-    }
-  }
-  return picks.slice(0, count);
+  return sorted.slice(0, count);
 }
 
 export function findSlotAtTime(
@@ -108,4 +96,112 @@ export function formatMctbBookingSlotLabel(slot: MctbBookingSlot): string {
     minute: "2-digit",
     timeZone: slot.timezone,
   });
+}
+
+const ORDINAL_INDEX: Record<string, number> = {
+  first: 0,
+  "1st": 0,
+  one: 0,
+  second: 1,
+  "2nd": 1,
+  two: 1,
+  third: 2,
+  "3rd": 2,
+  three: 2,
+};
+
+function slotLocalClock(slot: MctbBookingSlot): {
+  weekdayShort: string;
+  hour12: number;
+  minute: number;
+  dayPeriod: string;
+} {
+  const d = new Date(slot.startUtc);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: slot.timezone,
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const hour = Number(get("hour"));
+  const minute = Number(get("minute"));
+  const dayPeriod = get("dayPeriod").toLowerCase();
+  return {
+    weekdayShort: get("weekday").toLowerCase().slice(0, 3),
+    hour12: hour,
+    minute,
+    dayPeriod,
+  };
+}
+
+function utteranceMentionsWeekday(text: string): string | null {
+  const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  for (const d of days) {
+    if (text.includes(d) || text.includes(`${d}day`)) return d;
+  }
+  return null;
+}
+
+function slotMatchesNaturalLanguage(slot: MctbBookingSlot, utterance: string): boolean {
+  const text = utterance.toLowerCase();
+  const clock = slotLocalClock(slot);
+  const mentionedDay = utteranceMentionsWeekday(text);
+  if (mentionedDay && !clock.weekdayShort.startsWith(mentionedDay)) {
+    return false;
+  }
+
+  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!timeMatch) return false;
+  let hour = Number(timeMatch[1]);
+  const minute = timeMatch[2] ? Number(timeMatch[2]) : 0;
+  const ampm = timeMatch[3]?.toLowerCase();
+  if (ampm === "pm" && hour < 12) hour += 12;
+  if (ampm === "am" && hour === 12) hour = 0;
+  const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+  const period = hour >= 12 ? "pm" : "am";
+  if (clock.hour12 !== hour12 && clock.hour12 !== hour) return false;
+  if (minute !== 0 && clock.minute !== minute) return false;
+  if (ampm && clock.dayPeriod && ampm !== clock.dayPeriod) return false;
+  if (!ampm && clock.minute === 0 && clock.hour12 === hour12) return true;
+  return clock.hour12 === hour12 && clock.minute === minute;
+}
+
+/**
+ * Customer may only book one of the offered slots (SMS list). No hidden slots.
+ */
+export function resolveCustomerChoiceAmongOfferedSlots(
+  offered: MctbBookingSlot[],
+  utterance: string,
+): MctbBookingSlot | null {
+  if (!offered.length) return null;
+
+  const strict = resolveStrictNumericOfferedSlot(offered, utterance);
+  if (strict) return strict;
+
+  const digitInText = utterance.match(/\b([1-3])\b/);
+  if (digitInText) {
+    const idx = Number(digitInText[1]) - 1;
+    if (idx >= 0 && idx < offered.length) return offered[idx];
+  }
+
+  const lower = utterance.toLowerCase();
+  for (const [word, idx] of Object.entries(ORDINAL_INDEX)) {
+    if (new RegExp(`\\b${word}\\b`, "i").test(lower) && idx < offered.length) {
+      return offered[idx];
+    }
+  }
+
+  const matches = offered.filter((s) => slotMatchesNaturalLanguage(s, utterance));
+  if (matches.length === 1) return matches[0];
+  return null;
+}
+
+export function buildNumberedOfferSms(slots: MctbBookingSlot[]): string {
+  const lines = slots.map((s, i) => `${i + 1}) ${formatMctbBookingSlotLabel(s)}`);
+  if (lines.length === 1) {
+    return `We have: ${lines[0]}. Reply 1 to book it.`;
+  }
+  return `We have: ${lines.join(", ")}. Reply 1, 2, or 3 with the number you want.`;
 }

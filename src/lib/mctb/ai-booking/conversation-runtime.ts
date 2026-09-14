@@ -4,13 +4,8 @@
 import { loadMctbAiBookingConfig, resolveFallbackBookingUrl } from "@/lib/mctb/ai-booking/config";
 import { orchestrateMctbAiBooking } from "@/lib/mctb/ai-booking/orchestrator";
 import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
-import {
-  recordMctbAiBookingFallbackActivity,
-  recordMctbBookingConfirmedActivity,
-  formatBookingConfirmedEventText,
-} from "@/lib/mctb/ai-booking/activity";
+import { recordMctbAiBookingFallbackActivity } from "@/lib/mctb/ai-booking/activity";
 import { logMctbAiBookingEvent } from "@/lib/mctb/ai-booking/observability";
-import { getPrisma } from "@/lib/db";
 import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
 import {
   runIntentRouterAgent,
@@ -18,15 +13,14 @@ import {
 } from "@/lib/mctb/ai-booking/agents/router";
 import { runSchedulingSpecialistAgent } from "@/lib/mctb/ai-booking/agents/scheduling-specialist";
 import { mapSpecialistToOrchestratorInput } from "@/lib/mctb/ai-booking/agents/map-to-orchestrator";
-import { phraseAiBookingSmsReply } from "@/lib/mctb/ai-booking/agents/response-phrasing";
+import { handleMctbAiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/handle-orchestrator-result";
+import {
+  buildNumberedOfferSms,
+  resolveCustomerChoiceAmongOfferedSlots,
+} from "@/lib/mctb/ai-booking/slot-presentation";
+import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
 
-export type MctbAiBookingInboundResult =
-  | { handled: false }
-  | {
-      handled: true;
-      reply: string;
-      action: "ai_booking" | "ai_booking_fallback" | "ai_booking_clarify";
-    };
+export type { MctbAiBookingInboundResult } from "@/lib/mctb/ai-booking/conversation-runtime-types";
 
 export async function handleMctbAiBookingInboundSms(input: {
   workspaceId: string;
@@ -40,7 +34,7 @@ export async function handleMctbAiBookingInboundSms(input: {
   writeEpoch?: number;
   /** Set when Lead Recovery policy already armed AI_BOOK — skip redundant router gate. */
   forceSchedulingRoute?: boolean;
-}): Promise<MctbAiBookingInboundResult> {
+}): Promise<import("@/lib/mctb/ai-booking/conversation-runtime-types").MctbAiBookingInboundResult> {
   const config = await loadMctbAiBookingConfig(input.workspaceId);
   if (!config.enabled || config.upgradeRequired) {
     return { handled: false };
@@ -113,14 +107,55 @@ export async function handleMctbAiBookingInboundSms(input: {
   const { buildMctbSemanticConversationContext, schedulingSpecialistContextExtras } = await import(
     "@/lib/mctb/semantic-conversation-context"
   );
-  const [semanticCtx, extras] = await Promise.all([
-    buildMctbSemanticConversationContext({
+  const extras = await schedulingSpecialistContextExtras({
+    workspaceId: input.workspaceId,
+    timezone: tz,
+  });
+
+  const orchestrateBase = {
+    workspaceId: input.workspaceId,
+    conversationId,
+    contactId: input.contactId,
+    customerName: input.customerName || "Guest",
+    customerPhone: input.customerPhone,
+    customerEmail: input.customerEmail,
+    timezone: tz,
+    writeEpoch: input.writeEpoch,
+  };
+
+  if (awaitingSelection && session?.offeredSlots?.length) {
+    const picked = resolveCustomerChoiceAmongOfferedSlots(session.offeredSlots, input.body);
+    if (!picked) {
+      return {
+        handled: true,
+        reply: finalizeMctbOutboundSms(buildNumberedOfferSms(session.offeredSlots)),
+        action: "ai_booking_clarify",
+      };
+    }
+    const win = session.lastQueriedWindow;
+    const defaultEnd = new Date(Date.now() + 48 * 3600_000).toISOString();
+    const bookResult = await orchestrateMctbAiBooking({
+      ...orchestrateBase,
+      windowStartUtc: win?.startUtc ?? extras.nowIso,
+      windowEndUtc: win?.endUtc ?? defaultEnd,
+      selectedSlotId: picked.slotId,
+      confirmBooking: true,
+      specificTimeUtc: null,
+    });
+    return handleMctbAiBookingOrchestratorResult({
       workspaceId: input.workspaceId,
       conversationId,
-      latestCustomerMessage: input.body,
-    }),
-    schedulingSpecialistContextExtras({ workspaceId: input.workspaceId, timezone: tz }),
-  ]);
+      contactId: input.contactId,
+      config,
+      result: bookResult,
+    });
+  }
+
+  const semanticCtx = await buildMctbSemanticConversationContext({
+    workspaceId: input.workspaceId,
+    conversationId,
+    latestCustomerMessage: input.body,
+  });
 
   const specialist = await runSchedulingSpecialistAgent({
     message: input.body,
@@ -143,18 +178,6 @@ export async function handleMctbAiBookingInboundSms(input: {
     };
   }
 
-  const orchestrateBase = {
-    workspaceId: input.workspaceId,
-    conversationId,
-    contactId: input.contactId,
-    customerName: input.customerName || "Guest",
-    customerPhone: input.customerPhone,
-    customerEmail: input.customerEmail,
-    timezone: tz,
-    customerMessage: input.body,
-    writeEpoch: input.writeEpoch,
-  };
-
   const orchestrateInput = mapSpecialistToOrchestratorInput(specialist, orchestrateBase, {
     sessionHasOfferedSlots: Boolean(session?.offeredSlots?.length),
     offeredSlots: session?.offeredSlots ?? [],
@@ -175,142 +198,11 @@ export async function handleMctbAiBookingInboundSms(input: {
 
   const result = await orchestrateMctbAiBooking(orchestrateInput);
 
-  if (result.kind === "fallback_link") {
-    await recordMctbAiBookingFallbackActivity({
-      workspaceId: input.workspaceId,
-      conversationId,
-      contactId: input.contactId,
-      reason: result.reason,
-    });
-    logMctbAiBookingEvent("fallback_used", { conversationId, reason: result.reason });
-    const reply = await phraseAiBookingSmsReply({
-      facts: { fallback: true, url: result.url, reason: result.reason },
-      fallbackText: result.messageHint,
-    });
-    return { handled: true, reply, action: "ai_booking_fallback" };
-  }
-
-  if (result.kind === "need_clarification") {
-    const reply = await phraseAiBookingSmsReply({
-      facts: { clarify: true, hint: result.messageHint },
-      fallbackText: result.messageHint,
-    });
-    return { handled: true, reply, action: "ai_booking_clarify" };
-  }
-
-  if (result.kind === "booked") {
-    const { loadLeadRecoveryState, saveLeadRecoveryState } = await import(
-      "@/lib/mctb/lead-recovery/state-store"
-    );
-    const lrState = await loadLeadRecoveryState({
-      workspaceId: input.workspaceId,
-      conversationId,
-    });
-    const processedKeys = [
-      ...(lrState.processedActionKeys ?? []),
-      `mctb-book:${conversationId}:${result.booking.providerBookingId}`,
-    ].slice(-100);
-    await saveLeadRecoveryState({
-      ...lrState,
-      processedActionKeys: processedKeys,
-      pendingAction: null,
-      phase: "COMPLETE",
-    }).catch(() => undefined);
-
-    logMctbAiBookingEvent("booking_confirmed", {
-      conversationId,
-      providerBookingId: result.booking.providerBookingId,
-    });
-    const title = config.serviceName || "Appointment";
-    await recordMctbBookingConfirmedActivity({
-      workspaceId: input.workspaceId,
-      conversationId,
-      contactId: input.contactId,
-      payload: {
-        provider: result.booking.provider,
-        providerBookingId: result.booking.providerBookingId,
-        title,
-        startUtc: result.booking.startUtc,
-        endUtc: result.booking.endUtc,
-        timezone: result.booking.timezone,
-      },
-    });
-    const prisma = getPrisma();
-    if (!prisma.conversationMessage?.create) {
-      await getMctbAiBookingSessionStore().clear(conversationId);
-      const reply = await phraseAiBookingSmsReply({
-        facts: {
-          booking_confirmed: true,
-          start: result.booking.startUtc,
-          timezone: result.booking.timezone,
-        },
-        fallbackText: result.messageHint,
-      });
-      return { handled: true, reply, action: "ai_booking" };
-    }
-    await prisma.conversationMessage.create({
-      data: {
-        conversationId,
-        direction: "event",
-        body: formatBookingConfirmedEventText({
-          provider: result.booking.provider,
-          providerBookingId: result.booking.providerBookingId,
-          title,
-          startUtc: result.booking.startUtc,
-          endUtc: result.booking.endUtc,
-          timezone: result.booking.timezone,
-        }),
-        userName: "System",
-      },
-    });
-    await getMctbAiBookingSessionStore().clear(conversationId);
-    const reply = await phraseAiBookingSmsReply({
-      facts: {
-        booking_confirmed: true,
-        start: result.booking.startUtc,
-        timezone: result.booking.timezone,
-      },
-      fallbackText: result.messageHint,
-    });
-    return { handled: true, reply, action: "ai_booking" };
-  }
-
-  const slotLabels =
-    result.kind === "offer_slots"
-      ? result.slots.map((s) => s.startUtc)
-      : result.kind === "specific_time"
-        ? result.alternatives.map((s) => s.startUtc)
-        : [];
-
-  logMctbAiBookingEvent("slots_offered", {
+  return handleMctbAiBookingOrchestratorResult({
+    workspaceId: input.workspaceId,
     conversationId,
-    kind: result.kind,
-    count: slotLabels.length,
+    contactId: input.contactId,
+    config,
+    result,
   });
-
-  if (result.kind === "offer_slots") {
-    const { recordOfferedSlots } = await import("@/lib/mctb/ai-booking/session-store");
-    const { config: bookingCfg } = await import("@/lib/mctb/ai-booking/service").then((m) =>
-      m.getBookingContext(input.workspaceId),
-    );
-    await recordOfferedSlots({
-      workspaceId: input.workspaceId,
-      conversationId,
-      provider: bookingCfg.config.provider,
-      slots: result.slots,
-    }).catch(() => undefined);
-  }
-
-  const reply = await phraseAiBookingSmsReply({
-    facts: {
-      kind: result.kind,
-      message_hint: result.messageHint,
-      slots: slotLabels,
-      requested_available:
-        result.kind === "specific_time" ? result.requestedAvailable : undefined,
-    },
-    fallbackText: result.messageHint,
-  });
-
-  return { handled: true, reply, action: "ai_booking" };
 }

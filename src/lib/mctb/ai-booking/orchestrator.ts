@@ -4,6 +4,7 @@ import {
   getBookingContext,
 } from "@/lib/mctb/ai-booking/service";
 import {
+  buildNumberedOfferSms,
   filterSlotsWithinWindow,
   findSlotAtTime,
   formatMctbBookingSlotLabel,
@@ -73,30 +74,15 @@ export async function orchestrateMctbAiBooking(
 ): Promise<AiBookingOrchestratorResult> {
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
 
-  const selectionAttempt =
-    input.confirmBooking ||
-    input.selectedSlotId != null ||
-    (input.specificTimeUtc != null && (session?.offeredSlots?.length ?? 0) > 0);
+  const selectionAttempt = input.confirmBooking && input.selectedSlotId != null;
 
   if (selectionAttempt) {
     const offered = session?.offeredSlots ?? [];
-    const chosen =
-      (input.selectedSlotId
-        ? offered.find((s) => s.slotId === input.selectedSlotId) ?? null
-        : null) ??
-      (input.specificTimeUtc && offered.length
-        ? findSlotAtTime(offered, input.specificTimeUtc)
-        : null);
+    const chosen = offered.find((s) => s.slotId === input.selectedSlotId) ?? null;
     if (!chosen) {
       return {
         kind: "need_clarification",
-        messageHint: "Which of the times I offered works best for you?",
-      };
-    }
-    if (!input.confirmBooking) {
-      return {
-        kind: "need_clarification",
-        messageHint: `Did you want ${formatMctbBookingSlotLabel(chosen)}? Reply to confirm.`,
+        messageHint: buildNumberedOfferSms(offered.length ? offered : []),
       };
     }
     const booked = await createBooking({
@@ -110,25 +96,6 @@ export async function orchestrateMctbAiBooking(
       writeEpoch: input.writeEpoch,
     });
     if (!booked.ok) {
-      if (booked.reason === "slot_taken") {
-        const retry = await findAvailableTimes({
-          workspaceId: input.workspaceId,
-          conversationId: input.conversationId,
-          windowStartUtc: input.windowStartUtc,
-          windowEndUtc: input.windowEndUtc,
-          timezone: input.timezone,
-          maxResults: 12,
-        });
-        if (retry.ok && retry.slots.length) {
-          const offer = pickSlotsToOffer(retry.slots, 3);
-          await persistCustomerOfferedSlots(input, offer, retry.queriedWindow);
-          return {
-            kind: "offer_slots",
-            slots: offer,
-            messageHint: `That time was just taken. I can still do ${offer.map(formatMctbBookingSlotLabel).join(", ")}.`,
-          };
-        }
-      }
       return fallbackResult(input.workspaceId, booked.reason);
     }
     const bookedSlot: MctbBookingSlot = {
@@ -223,12 +190,7 @@ export async function orchestrateMctbAiBooking(
 }
 
 function buildOfferMessage(slots: MctbBookingSlot[]): string {
-  const labels = slots.map(formatMctbBookingSlotLabel);
-  if (labels.length === 1) return `We have an opening at ${labels[0]}. Does that work?`;
-  if (labels.length === 2) {
-    return `We have openings at ${labels[0]} and ${labels[1]}. Do either work?`;
-  }
-  return `We have openings at ${labels[0]}, ${labels[1]}, and ${labels[2]}. Do any of those work?`;
+  return buildNumberedOfferSms(slots);
 }
 
 function buildAlternativesMessage(requestedUtc: string, alternatives: MctbBookingSlot[]): string {
