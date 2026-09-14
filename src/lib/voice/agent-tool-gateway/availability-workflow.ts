@@ -70,6 +70,15 @@ export async function runCheckAvailability(
   normalized: CanonicalAvailabilityInput,
 ) {
   validateAvailabilityInput(normalized);
+
+  const { isVoiceCanonicalAiBookingActive } = await import("@/lib/voice/ai-booking/mode");
+  const { runVoiceCanonicalAvailability } = await import(
+    "@/lib/voice/ai-booking/canonical-tool-bridge"
+  );
+  if (await isVoiceCanonicalAiBookingActive({ workspaceId: ctx.workspaceId, agentId: ctx.agentId })) {
+    return runVoiceCanonicalAvailability(ctx, normalized);
+  }
+
   let legacyArgs = availabilityInputToLegacyArgs(normalized);
   let calParams = buildCalendlyListAvailableTimesParams(legacyArgs, { maxDays: 7 });
   let window = calParams.window;

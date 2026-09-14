@@ -43,6 +43,7 @@ export type CanonicalBookInput = {
   operation_id: string;
   service_name: string;
   start_time: string;
+  offered_slot_id?: string | null;
   timezone: string;
   customer_name?: string;
   customer_phone?: string;

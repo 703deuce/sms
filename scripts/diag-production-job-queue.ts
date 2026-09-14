@@ -65,7 +65,7 @@ async function main() {
     allHeartbeats = await prisma.workerHeartbeat.findMany({
       orderBy: { lastBeatAt: "desc" },
       take: 8,
-      select: { workerKey: true, workerId: true, lastBeatAt: true },
+      select: { workerKey: true, workerId: true, lastBeatAt: true, metricsJson: true },
     });
   } catch (e) {
     heartbeat = { tableError: e instanceof Error ? e.message : String(e) };

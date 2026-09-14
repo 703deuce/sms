@@ -841,6 +841,20 @@ export async function executeBuiltinVoiceAction(input: {
         speak: `Got it — ${factKey.replaceAll("_", " ")}.`,
       };
     }
+    case "voice_ai_booking_turn": {
+      if (!input.callId) throw new Error("callId required");
+      const { executeVoiceAiBookingTurn } = await import(
+        "@/lib/voice/ai-booking/voice-booking-turn"
+      );
+      return executeVoiceAiBookingTurn({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        callId: input.callId,
+        utterance: String(args.utterance || args.user_input || args.caller_message || ""),
+        confirmBooking: args.confirm_booking === true || args.confirm === true,
+        offeredSlotId: args.offered_slot_id ? String(args.offered_slot_id) : null,
+      });
+    }
     case "book_appointment": {
       return executeAgentTool({
         toolType: input.toolType,

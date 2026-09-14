@@ -1,9 +1,10 @@
 /**
- * @deprecated Appointments outbound voice uses Telnyx press-1 reminders only (see appointment-voice-reminders).
- * This bridge is retained for SMS/email AI booking tests only.
+ * @deprecated Use `@/lib/voice/ai-booking/*` and the MCTB canonical orchestrator.
  */
 import "server-only";
 
 export async function processVoiceBookingTranscript(): Promise<never> {
-  throw new Error("Voice AI booking is not supported. Use Telnyx appointment voice reminders.");
+  throw new Error(
+    "Use voice_ai_booking_turn / calendar_availability via canonical AI booking — see docs/VOICE-AI-BOOKING.md",
+  );
 }

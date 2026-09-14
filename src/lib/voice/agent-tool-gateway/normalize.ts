@@ -32,9 +32,16 @@ export function normalizeBookInput(
   const customer_email = pickString(n.email, n.customerEmail, n.customer_email);
   const service_name = pickString(n.serviceName, n.service, n.service_name, "Appointment");
   const timezone = pickString(n.timezone, "America/New_York");
+  const offered_slot_id = pickString(
+    n.offered_slot_id,
+    n.offeredSlotId,
+    n.slot_id,
+    n.slotId,
+  );
   const operation_id = pickString(
     n.operation_id,
     n.operationId,
+    ctx.callId && offered_slot_id ? `${ctx.callId}-book-${offered_slot_id}` : "",
     ctx.callId && start_time ? `${ctx.callId}-book-${start_time}` : "",
     ctx.callId ? `${ctx.callId}-book` : "",
   );
@@ -43,6 +50,7 @@ export function normalizeBookInput(
     operation_id,
     service_name,
     start_time,
+    offered_slot_id: offered_slot_id || null,
     timezone,
     customer_name,
     customer_phone: customer_phone ? normalizeE164(customer_phone) : "",

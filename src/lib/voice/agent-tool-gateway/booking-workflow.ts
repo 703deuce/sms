@@ -19,6 +19,21 @@ export async function executeBookAppointmentWorkflow(
   raw: Record<string, unknown>,
   normalized: CanonicalBookInput,
 ) {
+  const { isVoiceCanonicalAiBookingActive } = await import("@/lib/voice/ai-booking/mode");
+  const { runVoiceCanonicalBook } = await import("@/lib/voice/ai-booking/canonical-tool-bridge");
+  if (await isVoiceCanonicalAiBookingActive({ workspaceId: ctx.workspaceId, agentId: ctx.agentId })) {
+    const offeredSlotId = String(
+      raw.offered_slot_id || raw.offeredSlotId || raw.slot_id || "",
+    ).trim();
+    if (!offeredSlotId && !normalized.start_time) {
+      validateBookInput(normalized);
+    }
+    if (!normalized.operation_id && ctx.callId) {
+      normalized.operation_id = `${ctx.callId}-book-${offeredSlotId || normalized.start_time}`;
+    }
+    return runVoiceCanonicalBook(ctx, raw, normalized);
+  }
+
   validateBookInput(normalized);
   const prisma = getPrisma();
 

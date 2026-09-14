@@ -388,6 +388,18 @@ export const TOOL_CATALOG: CatalogToolDef[] = [
     requiresIntegration: "calendar",
   },
   {
+    key: "voice_ai_booking_turn",
+    name: "Voice AI booking turn",
+    description:
+      "Natural-language scheduling turn — checks real calendar availability, offers canonical slots, and books when the caller confirms. Uses the same booking engine as SMS AI booking.",
+    category: "scheduling",
+    provider: "transovo_builtin",
+    toolType: "voice_ai_booking_turn",
+    access: "write",
+    risk: "high",
+    requiresIntegration: "calendar",
+  },
+  {
     key: "book_appointment",
     name: "Book appointment",
     description: "Book an appointment only after availability is confirmed by the system.",
@@ -812,10 +824,14 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "book_appointment",
     toolType: "book_appointment",
     description:
-      "Book ONLY after calendar_availability returned slots and get_workflow_requirements complete=true. Copy startsAt EXACTLY from slots. Customer data is on the workflow session — do not pass customer fields here.",
+      "Book ONLY after calendar_availability returned slots. Prefer offered_slot_id from slots[].slot_id (canonical AI booking). Legacy startsAt still supported when slot id unavailable.",
     body: {
       type: "object",
       properties: {
+        offered_slot_id: {
+          type: "string",
+          description: "Canonical slot id from calendar_availability.slots[].slot_id",
+        },
         startsAt: {
           type: "string",
           description: "EXACT copy from calendar_availability.slots[].startsAt (UTC ISO)",
@@ -825,7 +841,28 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
         workflow_session_id: { type: "string", description: "Optional session id (defaults to call)" },
         timezone: { type: "string", description: "IANA timezone" },
       },
-      required: ["startsAt", "serviceName"],
+      required: ["serviceName"],
+    },
+  },
+  voice_ai_booking_turn: {
+    name: "voice_ai_booking_turn",
+    toolType: "voice_ai_booking_turn",
+    description:
+      "Pass the caller's scheduling words; runtime checks Microsoft/Calendly availability and books canonical offered slots. Do not parse slot ordinals in tool args — pass utterance only.",
+    body: {
+      type: "object",
+      properties: {
+        utterance: { type: "string", description: "Caller words verbatim" },
+        confirm_booking: {
+          type: "boolean",
+          description: "True only after explicit verbal confirmation to book",
+        },
+        offered_slot_id: {
+          type: "string",
+          description: "Optional canonical slot id when model resolved selection",
+        },
+      },
+      required: ["utterance"],
     },
   },
   hold_appointment_slot: {
