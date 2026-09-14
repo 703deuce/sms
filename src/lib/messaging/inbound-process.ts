@@ -730,13 +730,15 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
-  // Inbox away / after-hours auto-replies must not preempt MCTB Lead Recovery on the same number.
-  const { isMctbCustomerReplyThread } = await import(
-    "@/lib/agents/missed-call-text-back/customer-sms"
-  );
-  const mctbCustomerThread = await isMctbCustomerReplyThread(input.workspaceId, from);
+  // Inbox away replies are for general SMS inbox — not MCTB (after-hours by design).
+  const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
+  const skipInboxAway = await shouldSkipInboxAwayAutoReply({
+    workspaceId: input.workspaceId,
+    fromE164: from,
+    toE164: input.to,
+  });
 
-  if (!mctbCustomerThread) {
+  if (!skipInboxAway) {
     // Away / business-hours auto-reply (once per contact per day).
     // User-configured after-hours auto replies take precedence over the global away message.
     try {

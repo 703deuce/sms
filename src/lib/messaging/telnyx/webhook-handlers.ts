@@ -132,10 +132,14 @@ export async function handleTelnyxInbound(payload: unknown) {
   let replySent = false;
   let inboundReplyText = result.replyText;
   if (inboundReplyText && result.kind === "away" && parsed.body?.trim()) {
-    const { isMctbCustomerReplyThread } = await import(
-      "@/lib/agents/missed-call-text-back/customer-sms"
-    );
-    if (await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from)) {
+    const { shouldSkipInboxAwayAutoReply } = await import("@/lib/mctb/messaging/skip-inbox-away");
+    if (
+      await shouldSkipInboxAwayAutoReply({
+        workspaceId: targetWorkspaceId,
+        fromE164: parsed.from,
+        toE164: parsed.to,
+      })
+    ) {
       inboundReplyText = undefined;
     }
   }
