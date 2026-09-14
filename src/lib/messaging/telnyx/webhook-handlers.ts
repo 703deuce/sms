@@ -117,16 +117,27 @@ export async function handleTelnyxInbound(payload: unknown) {
       toE164: parsed.to,
     })) || (await isMctbCustomerReplyThread(targetWorkspaceId, parsed.from));
 
-  const result = await processInboundMessage({
-    workspaceId: targetWorkspaceId,
-    from: parsed.from,
-    to: parsed.to,
-    body: parsed.body,
-    providerMessageId: parsed.providerMessageId,
-    mediaUrls: parsed.mediaUrls || null,
-    registration: targetRegistration,
-    skipInboxAwayAutoReply: mctbInboundContext,
-  });
+  const result = mctbInboundContext
+    ? await (
+        await import("@/lib/mctb/messaging/record-inbound-sms")
+      ).recordMctbInboundSmsForLeadRecovery({
+        workspaceId: targetWorkspaceId,
+        from: parsed.from,
+        to: parsed.to,
+        body: parsed.body,
+        providerMessageId: parsed.providerMessageId,
+        mediaUrls: parsed.mediaUrls || null,
+      })
+    : await processInboundMessage({
+        workspaceId: targetWorkspaceId,
+        from: parsed.from,
+        to: parsed.to,
+        body: parsed.body,
+        providerMessageId: parsed.providerMessageId,
+        mediaUrls: parsed.mediaUrls || null,
+        registration: targetRegistration,
+        skipInboxAwayAutoReply: false,
+      });
 
   const { isPlatformDemoPhoneRecord } = await import(
     "@/lib/messaging/compliance/phone-number-class"
@@ -146,7 +157,7 @@ export async function handleTelnyxInbound(payload: unknown) {
   if (inboundReplyText && result.kind === "away" && mctbInboundContext) {
     inboundReplyText = undefined;
   }
-  if (inboundReplyText && targetRegistration && !skipKeywordAutoReply) {
+  if (!mctbInboundContext && inboundReplyText && targetRegistration && !skipKeywordAutoReply) {
     const replyProfileId =
       targetRegistration.messagingProfileId ||
       (looksLikeTwilioMessagingServiceSid(targetRegistration.messagingServiceSid)
@@ -166,7 +177,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     }
   }
 
-  if (!replySent && parsed.body?.trim()) {
+  if (!replySent && parsed.body?.trim() && mctbInboundContext) {
     try {
       const { handleMctbCustomerSmsReply } = await import(
         "@/lib/agents/missed-call-text-back/customer-sms"

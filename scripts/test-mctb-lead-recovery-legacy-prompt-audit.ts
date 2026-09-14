@@ -42,5 +42,7 @@ const sms = readFileSync("src/lib/agents/missed-call-text-back/customer-sms.ts",
 assert.ok(sms.includes("handleMctbLeadRecoveryInboundSms"));
 assert.ok(!sms.includes("runJohnCustomerLlmLoop"));
 assert.ok(!sms.includes("handleMctbAiBookingInboundSms"));
+assert.ok(!sms.includes("processMctbInboundReply"));
+assert.ok(sms.includes("recordMctbLeadRecoveryInboundSideEffects"));
 
 console.log("test-mctb-lead-recovery-legacy-prompt-audit: OK");

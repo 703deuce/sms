@@ -1,11 +1,11 @@
 /**
- * MCTB customer SMS replies (Telnyx) — Lead Recovery is the single conversational agent.
- * Scheduling runs inside LR via the AI_BOOK action (not a parallel SMS agent).
+ * MCTB customer SMS replies (Telnyx) — AI Lead Recovery is the only conversational agent.
+ * AI booking runs inside LR via AI_BOOK (no parallel SMS agents or legacy handoff modes).
  */
 
 import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
-import { processMctbInboundReply } from "@/lib/mctb/handoff/process-inbound-reply";
+import { recordMctbLeadRecoveryInboundSideEffects } from "@/lib/mctb/handoff/lead-recovery-inbound-side-effects";
 import { loadMissedCallTextConfig } from "./config";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import type { MissedCallTextConfigRecord } from "./types";
@@ -151,8 +151,9 @@ export async function handleMctbCustomerSmsReply(input: {
   }
 
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
-  const leadRecoveryActive =
-    leadRecoveryConfig.enabled && leadRecoveryConfig.policyHealth !== "DISABLED";
+  if (!leadRecoveryConfig.enabled || leadRecoveryConfig.policyHealth === "DISABLED") {
+    return { handled: false, reason: "lead_recovery_not_enabled" };
+  }
 
   if (STOP_RE.test(input.body.trim())) {
     const prisma = getPrisma();
@@ -208,7 +209,15 @@ export async function handleMctbCustomerSmsReply(input: {
     });
   }
 
-  const handoff = await processMctbInboundReply({
+  const automation = await prisma.mctbConversationAutomationState.findUnique({
+    where: { conversationId },
+    select: { state: true },
+  });
+  if (automation?.state === "human_active" || automation?.state === "resolved") {
+    return { handled: true, action: "human_handling" };
+  }
+
+  await recordMctbLeadRecoveryInboundSideEffects({
     workspaceId: input.workspaceId,
     fromE164: input.fromE164,
     body: input.body,
@@ -216,66 +225,6 @@ export async function handleMctbCustomerSmsReply(input: {
     missedCallEventId: recentEvent.id,
     providerMessageId: input.providerMessageId,
   });
-
-  /** Legacy handoff modes must not replace Lead Recovery for customer SMS. */
-  if (handoff.handled && handoff.skipAi && !leadRecoveryActive) {
-    if (handoff.automationReply?.trim()) {
-      try {
-        await sendMctbCustomerOutboundSms({
-          workspaceId: input.workspaceId,
-          config,
-          toE164: input.fromE164,
-          body: handoff.automationReply,
-          idempotencyKey: `mctb-handoff-reply:${handoff.handoffEventId || recentEvent.id}:${input.providerMessageId || input.body.slice(0, 32)}`,
-        });
-      } catch (err) {
-        console.warn("[mctb/customer-sms] handoff reply send failed", err);
-        return { handled: false, reason: "sms_send_failed" };
-      }
-    }
-    await prisma.missedCallEvent.update({
-      where: { id: recentEvent.id },
-      data: { status: "CUSTOMER_REPLIED" },
-    });
-    return {
-      handled: true,
-      action: handoff.eventType || "handoff",
-      reply: handoff.automationReply,
-    };
-  }
-
-  if (
-    handoff.handled &&
-    handoff.skipAi &&
-    leadRecoveryActive &&
-    handoff.eventType === "urgent_detected" &&
-    handoff.automationReply?.trim()
-  ) {
-    try {
-      await sendMctbCustomerOutboundSms({
-        workspaceId: input.workspaceId,
-        config,
-        toE164: input.fromE164,
-        body: handoff.automationReply,
-        idempotencyKey: `mctb-urgent-handoff:${recentEvent.id}:${input.providerMessageId || "no-pid"}`,
-      });
-      await prisma.missedCallEvent.update({
-        where: { id: recentEvent.id },
-        data: { status: "CUSTOMER_REPLIED" },
-      });
-      return {
-        handled: true,
-        action: handoff.eventType,
-        reply: handoff.automationReply,
-      };
-    } catch (err) {
-      console.warn("[mctb/customer-sms] urgent handoff send failed; continuing LR", err);
-    }
-  }
-
-  if (!leadRecoveryActive) {
-    return { handled: false, reason: "lead_recovery_not_enabled" };
-  }
 
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
@@ -324,11 +273,6 @@ export async function handleMctbCustomerSmsReply(input: {
       providerMessageId: null,
     },
   }).catch(() => undefined);
-
-  await prisma.missedCallEvent.update({
-    where: { id: recentEvent.id },
-    data: { status: "CUSTOMER_REPLIED" },
-  });
 
   return {
     handled: true,

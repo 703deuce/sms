@@ -27,6 +27,10 @@ export type ProcessMctbInboundReplyResult = {
   handoffEventId?: string;
 };
 
+/**
+ * Legacy handoff automation (notify_only, guided_collection, etc.).
+ * Customer SMS on Telnyx does not call this — use {@link recordMctbLeadRecoveryInboundSideEffects}.
+ */
 export async function processMctbInboundReply(input: {
   workspaceId: string;
   fromE164: string;

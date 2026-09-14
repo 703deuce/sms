@@ -59,7 +59,13 @@ export async function POST(req: Request) {
 
   let config = await loadMctbHandoffConfig(workspaceId);
   if (body.config) {
-    config = await saveMctbHandoffConfig(workspaceId, body.config);
+    const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
+    const lr = await loadLeadRecoveryConfig(workspaceId);
+    const patch = { ...body.config };
+    if (lr.enabled && lr.policyHealth !== "DISABLED") {
+      patch.responseMode = "ai_conversation";
+    }
+    config = await saveMctbHandoffConfig(workspaceId, patch);
   }
   let recipients = await loadMctbNotificationRecipients(workspaceId);
   if (body.recipients) {

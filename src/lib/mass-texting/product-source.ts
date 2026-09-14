@@ -26,8 +26,8 @@ export function inferInboundProductSource(input: {
 }): MassTextConversationProductSource {
   if (input.explicit) return input.explicit;
   const roles = readPhoneProductRoles(input.phoneSettingsJson);
-  if (roles.massText && !roles.mctb) return "mass_text";
-  if (roles.mctb && !roles.massText) return "mctb";
+  if (roles.mctb) return "mctb";
+  if (roles.massText) return "mass_text";
   if (input.campaignProductSource === "mass_text") return "mass_text";
   if (input.campaignProductSource === "mctb") return "mctb";
   return "manual";

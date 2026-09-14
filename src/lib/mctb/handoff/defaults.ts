@@ -27,7 +27,7 @@ export const DEFAULT_ROUTING_MATRIX: MctbRoutingMatrix = {
 
 export function defaultHandoffConfig(): MctbHandoffConfigDto {
   return {
-    responseMode: "notify_only",
+    responseMode: "ai_conversation",
     emergencyDetectionEnabled: false,
     emergencyCriteria: null,
     emergencyAction: "notify_only",
