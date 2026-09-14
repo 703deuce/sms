@@ -41,4 +41,4 @@ CREATE INDEX "mctb_durable_operations_conversationId_status_idx" ON "mctb_durabl
 CREATE INDEX "mctb_durable_operations_status_claimLeaseExpiresAt_idx" ON "mctb_durable_operations"("status", "claimLeaseExpiresAt");
 
 -- AddForeignKey
-ALTER TABLE "mctb_durable_operations" ADD CONSTRAINT "mctb_durable_operations_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "mctb_durable_operations" ADD CONSTRAINT "mctb_durable_operations_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
