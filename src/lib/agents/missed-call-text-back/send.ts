@@ -50,7 +50,7 @@ export async function executeMissedCallTextSend(input: {
   if (
     !event.smsSentAt &&
     eventAgeMs > openerMaxAgeMs &&
-    (event.status === "SCHEDULED" || event.status === "PENDING" || event.status === "SENDING")
+    (event.status === "SCHEDULED" || event.status === "SENDING" || event.status === "DETECTED")
   ) {
     traceMctbPipelineSkip("send", "stale_opener", "stale_opener_expired", {
       ...input,
