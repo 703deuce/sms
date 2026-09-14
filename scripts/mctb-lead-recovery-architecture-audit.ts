@@ -45,12 +45,15 @@ for (const file of files) {
   }
 }
 
+const customerSmsSrc = readFileSync(
+  join(process.cwd(), "src/lib/agents/missed-call-text-back/customer-sms.ts"),
+  "utf8",
+);
 const johnReachable =
-  readFileSync(join(process.cwd(), "src/lib/agents/missed-call-text-back/customer-sms.ts"), "utf8").includes(
-    "lead_recovery_enabled_john_blocked",
-  )
-    ? 0
-    : 1;
+  customerSmsSrc.includes("runJohnCustomerLlmLoop") ||
+  customerSmsSrc.includes("handleMctbAiBookingInboundSms")
+    ? 1
+    : 0;
 
 console.log("NATURAL_LANGUAGE_REGEX_SEMANTIC_AUTHORITY (orchestrator confirm) ...", rawConfirm);
 console.log("JOHN_REACHABLE_FROM_LEAD_RECOVERY_ENABLED .................", johnReachable);

@@ -39,7 +39,8 @@ for (const file of paths) {
 assert.equal(violations, 0, "workspace policy must not live in John prompts");
 
 const sms = readFileSync("src/lib/agents/missed-call-text-back/customer-sms.ts", "utf8");
-assert.ok(sms.includes("leadRecoveryConfig.enabled"));
-assert.ok(!sms.includes("PERMANENT_DUPLICATE"));
+assert.ok(sms.includes("handleMctbLeadRecoveryInboundSms"));
+assert.ok(!sms.includes("runJohnCustomerLlmLoop"));
+assert.ok(!sms.includes("handleMctbAiBookingInboundSms"));
 
 console.log("test-mctb-lead-recovery-legacy-prompt-audit: OK");

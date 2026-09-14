@@ -152,10 +152,10 @@ export async function handleTelnyxInbound(payload: unknown) {
 
   if (!replySent && parsed.body?.trim()) {
     try {
-      const { handleJohnCustomerSmsReply } = await import(
+      const { handleMctbCustomerSmsReply } = await import(
         "@/lib/agents/missed-call-text-back/customer-sms"
       );
-      const john = await handleJohnCustomerSmsReply({
+      const mctbReply = await handleMctbCustomerSmsReply({
         workspaceId: targetWorkspaceId,
         fromE164: parsed.from,
         toE164: parsed.to,
@@ -163,9 +163,9 @@ export async function handleTelnyxInbound(payload: unknown) {
         conversationId: result.conversationId || null,
         providerMessageId: parsed.providerMessageId,
       });
-      if (john.handled && john.action === "replied") replySent = true;
+      if (mctbReply.handled && mctbReply.reply?.trim()) replySent = true;
     } catch (err) {
-      console.warn("[telnyx/inbound] John customer SMS failed", err);
+      console.warn("[telnyx/inbound] MCTB Lead Recovery SMS failed", err);
     }
   }
 

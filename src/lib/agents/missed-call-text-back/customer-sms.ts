@@ -1,26 +1,36 @@
 /**
- * Customer-facing John — intelligent SMS replies after MCTB initial message.
- * Full LLM agent with deterministic runtime gateway (john_runtime_turn).
+ * MCTB customer SMS replies — Lead Recovery is the single conversational agent.
+ * Scheduling runs inside LR via the AI_BOOK action (not a second SMS agent).
  */
 
 import { getPrisma } from "@/lib/db";
 import { sendQuickSms } from "@/lib/sms/send-quick";
-import { processMctbInboundReply, emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
+import { processMctbInboundReply } from "@/lib/mctb/handoff/process-inbound-reply";
 import { loadMissedCallTextConfig } from "./config";
-import { appendMctbTrace } from "./trace";
-import { runJohnCustomerLlmLoop } from "./intelligence/customer-llm-loop";
 import { resolveMctbSmsSender } from "./sms-sender";
+import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
+import { handleMctbLeadRecoveryInboundSms } from "@/lib/mctb/lead-recovery/conversation-runtime";
 
 const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
 
-export async function handleJohnCustomerSmsReply(input: {
+export type MctbCustomerSmsReplyResult =
+  | { handled: false; reason: string }
+  | {
+      handled: true;
+      action: string;
+      reply?: string;
+      modelInvoked?: boolean;
+      modelRequestId?: string;
+    };
+
+export async function handleMctbCustomerSmsReply(input: {
   workspaceId: string;
   fromE164: string;
   toE164: string;
   body: string;
   conversationId?: string | null;
   providerMessageId?: string | null;
-}) {
+}): Promise<MctbCustomerSmsReplyResult> {
   const config = await loadMissedCallTextConfig(input.workspaceId);
   if (!config.conversationEnabled) {
     return { handled: false, reason: "conversation_disabled" };
@@ -35,9 +45,9 @@ export async function handleJohnCustomerSmsReply(input: {
         phone: input.fromE164,
         suppressionKey: `${input.workspaceId}:p:${input.fromE164}`,
         reason: "sms_stop",
-        source: "john_mctb",
+        source: "mctb_sms",
       },
-      update: { reason: "sms_stop", source: "john_mctb" },
+      update: { reason: "sms_stop", source: "mctb_sms" },
     });
     await prisma.contact.updateMany({
       where: { workspaceId: input.workspaceId, phone: input.fromE164 },
@@ -88,11 +98,6 @@ export async function handleJohnCustomerSmsReply(input: {
     }
   }
 
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: input.workspaceId },
-    select: { name: true },
-  });
-
   const handoff = await processMctbInboundReply({
     workspaceId: input.workspaceId,
     fromE164: input.fromE164,
@@ -128,12 +133,12 @@ export async function handleJohnCustomerSmsReply(input: {
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
 
-  const { loadLeadRecoveryConfig } = await import("@/lib/mctb/lead-recovery/config");
   const leadRecoveryConfig = await loadLeadRecoveryConfig(input.workspaceId);
 
-  const { handleMctbLeadRecoveryInboundSms } = await import(
-    "@/lib/mctb/lead-recovery/conversation-runtime"
-  );
+  if (!leadRecoveryConfig.enabled || leadRecoveryConfig.policyHealth === "DISABLED") {
+    return { handled: false, reason: "lead_recovery_not_enabled" };
+  }
+
   const leadRecovery = await handleMctbLeadRecoveryInboundSms({
     workspaceId: input.workspaceId,
     conversationId,
@@ -147,190 +152,49 @@ export async function handleJohnCustomerSmsReply(input: {
     providerMessageId: input.providerMessageId,
   });
 
-  if (leadRecovery.handled) {
-    if (leadRecovery.action === "duplicate_inbound_ignored" || !leadRecovery.reply?.trim()) {
-      return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
-    }
-    const sender = await resolveMctbSmsSender({
-      workspaceId: input.workspaceId,
-      config,
-    });
-    if (sender?.e164) {
-      await sendQuickSms({
-        workspaceId: input.workspaceId,
-        to: input.fromE164,
-        body: leadRecovery.reply,
-        from: sender.e164,
-        idempotencyKey: `mctb-lead-recovery:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
-      }).catch(() => undefined);
-      if (conversationId) {
-        await prisma.conversationMessage.create({
-          data: {
-            conversationId,
-            direction: "out",
-            body: leadRecovery.reply,
-            userName: "AI",
-          },
-        });
-      }
-    }
-    await prisma.missedCallEvent.update({
-      where: { id: recentEvent.id },
-      data: { status: "CUSTOMER_REPLIED" },
-    });
-    return {
-      handled: true,
-      action: leadRecovery.action,
-      reply: leadRecovery.reply,
-    };
+  if (!leadRecovery.handled) {
+    return { handled: false, reason: leadRecovery.reason || "lead_recovery_not_handled" };
   }
 
-  const { handleMctbAiBookingInboundSms } = await import("@/lib/mctb/ai-booking/conversation-runtime");
-  const aiBooking = leadRecoveryConfig.enabled
-    ? { handled: false as const }
-    : await handleMctbAiBookingInboundSms({
-    workspaceId: input.workspaceId,
-    conversationId,
-    contactId: contact?.id,
-    customerPhone: input.fromE164,
-    customerName,
-    customerEmail: contact?.email,
-    body: input.body,
-    timezone: config.timezone,
-      });
-
-  if (!leadRecovery.handled && leadRecoveryConfig.enabled) {
-    const safeReply =
-      leadRecoveryConfig.fallbackPolicy.customerMessage ||
-      "Thanks — someone from our team will follow up shortly.";
-    const sender = await resolveMctbSmsSender({
-      workspaceId: input.workspaceId,
-      config,
-    });
-    if (sender?.e164 && safeReply.trim()) {
-      await sendQuickSms({
-        workspaceId: input.workspaceId,
-        to: input.fromE164,
-        body: safeReply,
-        from: sender.e164,
-        idempotencyKey: `mctb-lr-safe-fallback:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
-      }).catch(() => undefined);
-    }
-    await prisma.missedCallEvent.update({
-      where: { id: recentEvent.id },
-      data: { status: "CUSTOMER_REPLIED" },
-    });
-    return {
-      handled: true,
-      action: "lead_recovery_safe_fallback",
-      reply: safeReply,
-    };
+  if (leadRecovery.action === "duplicate_inbound_ignored" || !leadRecovery.reply?.trim()) {
+    return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };
   }
-
-  if (aiBooking.handled) {
-    const sender = await resolveMctbSmsSender({
-      workspaceId: input.workspaceId,
-      config,
-    });
-    if (sender?.e164) {
-      await sendQuickSms({
-        workspaceId: input.workspaceId,
-        to: input.fromE164,
-        body: aiBooking.reply,
-        from: sender.e164,
-        idempotencyKey: `mctb-ai-booking:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
-      }).catch(() => undefined);
-      if (conversationId) {
-        await prisma.conversationMessage.create({
-          data: {
-            conversationId,
-            direction: "out",
-            body: aiBooking.reply,
-            userName: "AI",
-          },
-        });
-      }
-    }
-    await prisma.missedCallEvent.update({
-      where: { id: recentEvent.id },
-      data: { status: "CUSTOMER_REPLIED" },
-    });
-    return {
-      handled: true,
-      action: aiBooking.action,
-      reply: aiBooking.reply,
-    };
-  }
-
-  if (leadRecoveryConfig.enabled) {
-    return { handled: false, reason: "lead_recovery_enabled_john_blocked" };
-  }
-
-  const llmResult = await runJohnCustomerLlmLoop({
-    workspaceId: input.workspaceId,
-    traceId: recentEvent.traceId,
-    missedCallEventId: recentEvent.id,
-    missedAt: recentEvent.detectedAt,
-    conversationId,
-    contactId: contact?.id,
-    customerPhone: input.fromE164,
-    inboundBody: input.body,
-    businessName: workspace?.name,
-    timezone: config.timezone,
-  });
 
   const sender = await resolveMctbSmsSender({
     workspaceId: input.workspaceId,
     config,
   });
-  if (!sender?.e164) {
-    return { handled: false, reason: "no_configured_sms_sender" };
+  if (sender?.e164) {
+    await sendQuickSms({
+      workspaceId: input.workspaceId,
+      to: input.fromE164,
+      body: leadRecovery.reply,
+      from: sender.e164,
+      idempotencyKey: `mctb-lead-recovery:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
+    }).catch(() => undefined);
+    if (conversationId) {
+      await prisma.conversationMessage.create({
+        data: {
+          conversationId,
+          direction: "out",
+          body: leadRecovery.reply,
+          userName: "AI",
+        },
+      });
+    }
   }
-  const fromE164 = sender.e164;
-
-  await sendQuickSms({
-    workspaceId: input.workspaceId,
-    to: input.fromE164,
-    body: llmResult.reply,
-    from: fromE164,
-    idempotencyKey: `john-reply:${recentEvent.id}:${Date.now()}`,
-  }).catch(() => undefined);
 
   await prisma.missedCallEvent.update({
     where: { id: recentEvent.id },
     data: { status: "CUSTOMER_REPLIED" },
   });
 
-  await appendMctbTrace({
-    workspaceId: input.workspaceId,
-    traceId: recentEvent.traceId,
-    missedCallEventId: recentEvent.id,
-    conversationId: input.conversationId || null,
-    kind: "john.response.sent",
-    detail: {
-      inbound: input.body.slice(0, 200),
-      model_invoked: llmResult.modelInvoked,
-      model_request_id: llmResult.modelRequestId,
-      runtime_turn: llmResult.runtimeTurn,
-    },
-  });
-
-  const runtimeTurn = llmResult.runtimeTurn as { action?: string } | undefined;
-  if (runtimeTurn?.action === "ESCALATE_HUMAN") {
-    await emitMctbHumanRequiredHandoff({
-      workspaceId: input.workspaceId,
-      fromE164: input.fromE164,
-      body: input.body,
-      conversationId: input.conversationId,
-      missedCallEventId: recentEvent.id,
-    }).catch(() => undefined);
-  }
-
   return {
     handled: true,
-    action: "replied",
-    reply: llmResult.reply,
-    modelInvoked: llmResult.modelInvoked,
-    modelRequestId: llmResult.modelRequestId,
+    action: leadRecovery.action,
+    reply: leadRecovery.reply,
   };
 }
+
+/** @deprecated Use handleMctbCustomerSmsReply — John is not part of MCTB SMS. */
+export const handleJohnCustomerSmsReply = handleMctbCustomerSmsReply;
