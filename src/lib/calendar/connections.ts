@@ -101,7 +101,29 @@ export async function deleteWorkspaceCalendarConnection(workspaceId: string, con
     data: { calendarId: null },
   });
 
-  return prisma.voiceCalendarConnection.delete({
+  const deleted = await prisma.voiceCalendarConnection.delete({
     where: { id: connectionId },
   });
+
+  if (existing.provider === "microsoft") {
+    try {
+      const { getCanonicalMicrosoftCalendarConnectionId, migrateMctbAiBookingMicrosoftConnectionPointers } =
+        await import("@/lib/mctb/ai-booking/microsoft-connection");
+      const canonical = await getCanonicalMicrosoftCalendarConnectionId(workspaceId);
+      if (canonical) {
+        await migrateMctbAiBookingMicrosoftConnectionPointers({
+          workspaceId,
+          activeConnectionId: canonical,
+          replacedConnectionIds: [connectionId],
+        });
+      }
+    } catch (err) {
+      console.warn(
+        "[mctb/ai-booking] microsoft_delete_pointer_migration_failed",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return deleted;
 }

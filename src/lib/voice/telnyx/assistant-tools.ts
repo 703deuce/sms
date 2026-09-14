@@ -218,6 +218,7 @@ export function buildAssistantTools(input: {
       key === "send_sms" ||
       key === "book_appointment" ||
       key === "calendar_availability" ||
+      key === "voice_ai_booking_turn" ||
       key === "find_appointments" ||
       key === "reschedule_appointment" ||
       key === "continue_workflow" ||

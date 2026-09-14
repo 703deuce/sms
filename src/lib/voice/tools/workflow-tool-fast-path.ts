@@ -147,6 +147,8 @@ export async function handleWorkflowToolFastPath(input: {
 
     const processing =
       result.status === "PROCESSING" ||
+      result.status === "OPERATION_PENDING" ||
+      result.voice_booking_status === "OPERATION_PENDING" ||
       (result.data as Record<string, unknown> | undefined)?.processing === true;
     const opSucceeded = result.ok !== false && !processing;
     const latencyMs = Date.now() - start;

@@ -850,19 +850,21 @@ export async function executeBuiltinVoiceAction(input: {
         const { checkVoiceDurableOperation } = await import(
           "@/lib/mctb/durable-operations/voice-fast-start"
         );
+        const { voiceBookingResponseFromDurableTurn } = await import(
+          "@/lib/voice/ai-booking/tool-result-contract"
+        );
         const checked = await checkVoiceDurableOperation({
           workspaceId: input.workspaceId,
           operationId,
         });
-        return {
-          ok: checked.ok,
-          status: checked.status,
+        return voiceBookingResponseFromDurableTurn({
+          operationStatus: checked.status,
           speak: checked.speak,
-          operation_id: checked.operationId,
           operationId: checked.operationId,
+          ok: checked.ok,
           error: checked.error,
           data: checked.data,
-        };
+        });
       }
       const { getPrisma } = await import("@/lib/db");
       const prisma = getPrisma();
@@ -891,15 +893,17 @@ export async function executeBuiltinVoiceAction(input: {
             : null,
         actionEpochAtEnqueue,
       });
-      return {
-        ok: started.ok,
-        status: started.status,
+      const { voiceBookingResponseFromDurableTurn } = await import(
+        "@/lib/voice/ai-booking/tool-result-contract"
+      );
+      return voiceBookingResponseFromDurableTurn({
+        operationStatus: started.status,
         speak: started.speak,
-        operation_id: started.operationId,
         operationId: started.operationId,
+        ok: started.ok,
         error: started.error,
         data: started.data,
-      };
+      });
     }
     case "check_voice_operation": {
       const operationId = String(
@@ -915,15 +919,17 @@ export async function executeBuiltinVoiceAction(input: {
         workspaceId: input.workspaceId,
         operationId,
       });
-      return {
-        ok: checked.ok,
-        status: checked.status,
+      const { voiceBookingResponseFromDurableTurn } = await import(
+        "@/lib/voice/ai-booking/tool-result-contract"
+      );
+      return voiceBookingResponseFromDurableTurn({
+        operationStatus: checked.status,
         speak: checked.speak,
-        operation_id: checked.operationId,
         operationId: checked.operationId,
+        ok: checked.ok,
         error: checked.error,
         data: checked.data,
-      };
+      });
     }
     case "book_appointment": {
       return executeAgentTool({

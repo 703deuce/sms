@@ -91,6 +91,33 @@ export async function processVoiceAiBookingTurnOperation(
     booked: Boolean((result.data as Record<string, unknown> | undefined)?.booked),
   });
 
+  const data = (result.data || {}) as Record<string, unknown>;
+  const slots = Array.isArray(data.slots) ? (data.slots as Array<Record<string, unknown>>) : [];
+  const { persistVoiceAiBookingOperationAudit } = await import(
+    "@/lib/voice/ai-booking/operation-audit"
+  );
+  const { resolveMctbMicrosoftConnectionId } = await import(
+    "@/lib/mctb/ai-booking/microsoft-connection"
+  );
+  const conversationId = String(input.conversationId || `voice:${callId}`);
+  await persistVoiceAiBookingOperationAudit({
+    workspaceId,
+    conversationId,
+    callId,
+    voiceAgentId: agentId,
+    operationId: operation.id,
+    microsoftConnectionId: await resolveMctbMicrosoftConnectionId(workspaceId),
+    utterance,
+    phase: data.booked ? "VOICE_BOOKING_SUCCEEDED" : "VOICE_TURN_COMPLETED",
+    offeredSlotIds: slots.map((s) => String(s.slot_id || s.slotId || "")).filter(Boolean),
+    spokenSlotLabels: slots.map((s) => String(s.label || "")).filter(Boolean),
+    selectedSlotId: offeredSlotId,
+    providerStartUtc: data.start_time ? String(data.start_time) : null,
+    providerBookingId: data.provider_booking_id ? String(data.provider_booking_id) : null,
+    spokenResult: typeof result.speak === "string" ? result.speak : null,
+    status: result.ok === false ? "FAILED" : "SUCCEEDED",
+  });
+
   return {
     voice: result,
     processedAt: new Date().toISOString(),

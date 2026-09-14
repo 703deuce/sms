@@ -57,6 +57,14 @@ export async function startVoiceAiBookingDurableOperation(input: {
   });
 
   const conversationId = voiceBookingConversationId(input.callId);
+  const { persistVoiceAiBookingOperationAudit } = await import(
+    "@/lib/voice/ai-booking/operation-audit"
+  );
+  const { resolveMctbMicrosoftConnectionId } = await import(
+    "@/lib/mctb/ai-booking/microsoft-connection"
+  );
+  const microsoftConnectionId = await resolveMctbMicrosoftConnectionId(input.workspaceId);
+
   const { operation } = await createOrResolveDurableOperation({
     workspaceId: input.workspaceId,
     conversationId,
@@ -74,6 +82,19 @@ export async function startVoiceAiBookingDurableOperation(input: {
       offeredSlotId: input.offeredSlotId,
       actionEpochAtEnqueue: input.actionEpochAtEnqueue ?? null,
     },
+  });
+
+  await persistVoiceAiBookingOperationAudit({
+    workspaceId: input.workspaceId,
+    conversationId,
+    callId: input.callId,
+    voiceAgentId: input.agentId,
+    operationId: operation.id,
+    microsoftConnectionId,
+    utterance: input.utterance,
+    phase: "VOICE_OPERATION_ACCEPTED",
+    status: "PROCESSING",
+    spokenResult: pickInitialHoldingPhrase(operation.id),
   });
 
   const holding = pickInitialHoldingPhrase(operation.id);

@@ -18,15 +18,18 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
 
   async getBookingContext(workspaceId, config) {
     const prisma = getPrisma();
-    const connId = config.calendarId || config.calendarConnectionId;
+    const { resolveMctbMicrosoftConnectionId } = await import(
+      "@/lib/mctb/ai-booking/microsoft-connection"
+    );
+    const connId = await resolveMctbMicrosoftConnectionId(
+      workspaceId,
+      config.calendarId || config.calendarConnectionId || config.providerConnectionId,
+    );
     const conn = connId
       ? await prisma.voiceCalendarConnection.findFirst({
           where: { id: connId, workspaceId, provider: "microsoft" },
         })
-      : await prisma.voiceCalendarConnection.findFirst({
-          where: { workspaceId, provider: "microsoft", status: "connected" },
-          orderBy: { createdAt: "asc" },
-        });
+      : null;
     const calCfg = (conn?.config || {}) as CalendarConfig;
     const connected = Boolean(conn && conn.status === "connected" && hasOAuthTokens(calCfg));
     const timezone = config.timezone || calCfg.timezone || "America/New_York";

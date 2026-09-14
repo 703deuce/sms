@@ -72,8 +72,15 @@ export async function auditMctbAiBookingProvider(
       "@/lib/microsoft/calendar-capabilities"
     );
     const cfg = await loadMctbAiBookingConfig(workspaceId);
+    const { resolveMctbMicrosoftConnectionId } = await import(
+      "@/lib/mctb/ai-booking/microsoft-connection"
+    );
+    const resolvedConnId = await resolveMctbMicrosoftConnectionId(
+      workspaceId,
+      cfg.calendarId || cfg.providerConnectionId,
+    );
     const caps = await getMicrosoftCalendarCapabilities(workspaceId, {
-      calendarConnectionId: cfg.calendarId,
+      calendarConnectionId: resolvedConnId,
     });
     if (!caps.connected) notes.push("No connected Microsoft calendar with valid OAuth tokens");
     notes.push(...caps.notes);

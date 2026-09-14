@@ -408,7 +408,7 @@ export const SYNC_TOOL_FILLERS: Record<string, string> = {
   record_current_field: "Got it, one moment.",
   get_runtime_context: "One moment.",
   send_resource: "Sure — I'll send that text in just a moment.",
-  voice_ai_booking_turn: "Okay — let me check the calendar for you.",
+  voice_ai_booking_turn: "Absolutely — give me just a moment while I check the calendar.",
 };
 
 /**

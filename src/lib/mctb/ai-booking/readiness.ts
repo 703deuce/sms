@@ -15,6 +15,16 @@ export type MctbAiBookingReadiness = {
 export async function evaluateMctbAiBookingReadiness(
   workspaceId: string,
 ): Promise<MctbAiBookingReadiness> {
+  if (process.env.CERTIFICATION_READ_ONLY !== "1") {
+    try {
+      const { ensureMctbMicrosoftConnectionPointer } = await import(
+        "@/lib/mctb/ai-booking/microsoft-connection"
+      );
+      await ensureMctbMicrosoftConnectionPointer(workspaceId);
+    } catch {
+      // readiness must not fail on heal errors
+    }
+  }
   const config = await loadMctbAiBookingConfig(workspaceId);
   const fallbackUrl = await resolveFallbackBookingUrl(workspaceId, config);
   if (!config.enabled) {

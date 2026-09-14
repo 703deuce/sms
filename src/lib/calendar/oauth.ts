@@ -199,6 +199,33 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
       config: config as object,
     },
   });
+
+  try {
+    const { migrateMctbAiBookingMicrosoftConnectionPointers } = await import(
+      "@/lib/mctb/ai-booking/microsoft-connection"
+    );
+    const migration = await migrateMctbAiBookingMicrosoftConnectionPointers({
+      workspaceId: parsed.workspaceId,
+      activeConnectionId: parsed.connectionId,
+    });
+    if (migration.migrated) {
+      console.info(
+        "[mctb/ai-booking] microsoft_oauth_pointer_migrated",
+        JSON.stringify({
+          workspaceId: parsed.workspaceId,
+          fromId: migration.fromId,
+          toId: migration.toId,
+          reason: migration.reason,
+        }),
+      );
+    }
+  } catch (err) {
+    console.warn(
+      "[mctb/ai-booking] microsoft_oauth_pointer_migration_failed",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   return parsed;
 }
 
