@@ -75,14 +75,33 @@ async function loadOutboundPairingWorkspaceIds(input: {
     orderBy: { createdAt: "desc" },
     select: {
       createdAt: true,
-      conversation: { select: { workspaceId: true } },
+      conversationId: true,
     },
     take: 50,
   });
+  const conversationIds = [
+    ...new Set(
+      convMessages
+        .map((row) => row.conversationId as string | null | undefined)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const conversations =
+    conversationIds.length > 0
+      ? await prisma.conversation.findMany({
+          where: { id: { in: conversationIds }, workspaceId: { in: input.workspaceIds } },
+          select: { id: true, workspaceId: true },
+        })
+      : [];
+  const workspaceByConversationId = new Map(
+    conversations.map((c) => [c.id, c.workspaceId]),
+  );
   for (const row of convMessages) {
+    const workspaceId = workspaceByConversationId.get(row.conversationId as string);
+    if (!workspaceId) continue;
     hits.push({
-      workspaceId: row.conversation.workspaceId,
-      createdAt: row.createdAt,
+      workspaceId,
+      createdAt: row.createdAt as Date,
     });
   }
 
