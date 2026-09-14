@@ -2,7 +2,7 @@ import "server-only";
 
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
-import { loadVoiceAgentRuntimeConfigRecord } from "@/lib/voice/load-agent-config";
+import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 
 export type VoiceBookingMode = "AI_BOOK" | "SEND_BOOKING_LINK" | "COLLECT_ONLY";
@@ -69,8 +69,7 @@ export async function isVoiceCanonicalAiBookingActive(input: {
 async function loadVoiceAdvanced(workspaceId: string, agentId?: string | null) {
   if (!agentId) return {} as Record<string, unknown>;
   try {
-    const rec = await loadVoiceAgentRuntimeConfigRecord(workspaceId, agentId);
-    const cfg = parseVoiceAgentConfig(rec.config);
+    const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agentId);
     return (cfg.advanced || {}) as Record<string, unknown>;
   } catch {
     return {} as Record<string, unknown>;
