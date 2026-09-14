@@ -288,6 +288,19 @@ export async function handleMctbAiBookingInboundSms(input: {
     count: slotLabels.length,
   });
 
+  if (result.kind === "offer_slots") {
+    const { recordOfferedSlots } = await import("@/lib/mctb/ai-booking/session-store");
+    const { config: bookingCfg } = await import("@/lib/mctb/ai-booking/service").then((m) =>
+      m.getBookingContext(input.workspaceId),
+    );
+    await recordOfferedSlots({
+      workspaceId: input.workspaceId,
+      conversationId,
+      provider: bookingCfg.config.provider,
+      slots: result.slots,
+    }).catch(() => undefined);
+  }
+
   const reply = await phraseAiBookingSmsReply({
     facts: {
       kind: result.kind,

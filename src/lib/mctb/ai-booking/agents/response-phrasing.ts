@@ -3,11 +3,23 @@ import { RESPONSE_PHRASING_SYSTEM } from "@/lib/mctb/ai-booking/agents/prompts";
 import { getAiBookingPhrasingModel } from "@/lib/mctb/ai-booking/agents/model-config";
 import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
+import { formatMctbBookingSlotLabel } from "@/lib/mctb/ai-booking/slot-presentation";
+import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 export async function phraseAiBookingSmsReply(input: {
   facts: Record<string, unknown>;
   fallbackText: string;
 }): Promise<string> {
+  if (input.facts.booking_confirmed === true && input.facts.start) {
+    const slot: MctbBookingSlot = {
+      slotId: "confirmed",
+      startUtc: String(input.facts.start),
+      endUtc: String(input.facts.end || input.facts.start),
+      timezone: String(input.facts.timezone || "America/New_York"),
+    };
+    return finalizeMctbOutboundSms(`You're booked for ${formatMctbBookingSlotLabel(slot)}.`);
+  }
+
   if (!getOpenAiApiKey()) return finalizeMctbOutboundSms(input.fallbackText);
 
   const structured = await aiBookingStructuredJson<{ reply?: string }>({

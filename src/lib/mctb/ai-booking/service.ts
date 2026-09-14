@@ -63,19 +63,8 @@ export async function findAvailableTimes(
   const adapter = getMctbAiBookingAdapter(config.provider);
   const result = await adapter.findAvailableTimes(context, config, req);
 
-  if (
-    result.ok &&
-    req.conversationId &&
-    result.slots.length > 0
-  ) {
-    await recordOfferedSlots({
-      workspaceId: req.workspaceId,
-      conversationId: req.conversationId,
-      provider: config.provider,
-      slots: result.slots,
-      window: result.queriedWindow,
-    });
-  }
+  // Session.offeredSlots must only contain slots the customer was shown in SMS (see orchestrator).
+  // Never auto-persist full availability queries here — revalidate/retry would corrupt selection.
 
   if (!result.ok && fallbackUrl) {
     return result;

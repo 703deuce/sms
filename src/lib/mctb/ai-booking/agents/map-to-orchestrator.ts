@@ -85,8 +85,7 @@ export function mapSpecialistToOrchestratorInput(
       specificTimeUtc: win?.specificTimeUtc ?? specialist.requested_start ?? specialist.preferred_time,
       selectedSlotId,
       confirmBooking:
-        specialist.customer_confirms_booking === true ||
-        (Boolean(selectedSlotId) && specialist.customer_rejects_selection !== true),
+        specialist.action === "CONFIRM_BOOKING" || specialist.customer_confirms_booking === true,
     };
   }
 

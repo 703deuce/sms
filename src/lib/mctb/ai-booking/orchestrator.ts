@@ -6,6 +6,7 @@ import {
 import {
   filterSlotsWithinWindow,
   findSlotAtTime,
+  formatMctbBookingSlotLabel,
   nearestSlotAlternatives,
   pickSlotsToOffer,
 } from "@/lib/mctb/ai-booking/slot-presentation";
@@ -32,6 +33,21 @@ export type OrchestrateAiBookingInput = {
   /** Lead Recovery write epoch — required for provider create in production path */
   writeEpoch?: number;
 };
+
+async function persistCustomerOfferedSlots(
+  input: OrchestrateAiBookingInput,
+  slots: MctbBookingSlot[],
+  window: { startUtc: string; endUtc: string },
+) {
+  const { config: bookingCfg } = await getBookingContext(input.workspaceId);
+  await recordOfferedSlots({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    provider: bookingCfg.provider,
+    slots,
+    window,
+  });
+}
 
 async function fallbackResult(
   workspaceId: string,
@@ -80,7 +96,7 @@ export async function orchestrateMctbAiBooking(
     if (!input.confirmBooking) {
       return {
         kind: "need_clarification",
-        messageHint: `Did you want ${formatSlotLabel(chosen)}? Reply to confirm.`,
+        messageHint: `Did you want ${formatMctbBookingSlotLabel(chosen)}? Reply to confirm.`,
       };
     }
     const booked = await createBooking({
@@ -105,19 +121,26 @@ export async function orchestrateMctbAiBooking(
         });
         if (retry.ok && retry.slots.length) {
           const offer = pickSlotsToOffer(retry.slots, 3);
+          await persistCustomerOfferedSlots(input, offer, retry.queriedWindow);
           return {
             kind: "offer_slots",
             slots: offer,
-            messageHint: `That time was just taken. I can still do ${offer.map(formatSlotLabel).join(", ")}.`,
+            messageHint: `That time was just taken. I can still do ${offer.map(formatMctbBookingSlotLabel).join(", ")}.`,
           };
         }
       }
       return fallbackResult(input.workspaceId, booked.reason);
     }
+    const bookedSlot: MctbBookingSlot = {
+      slotId: chosen.slotId,
+      startUtc: booked.startUtc,
+      endUtc: booked.endUtc,
+      timezone: booked.timezone,
+    };
     return {
       kind: "booked",
       booking: booked,
-      messageHint: `You're booked for ${formatSlotLabel(chosen)}.`,
+      messageHint: `You're booked for ${formatMctbBookingSlotLabel(bookedSlot)}.`,
     };
   }
 
@@ -175,7 +198,7 @@ export async function orchestrateMctbAiBooking(
         requestedAvailable: true,
         requestedSlot: match,
         alternatives: [],
-        messageHint: `Yes, ${formatSlotLabel(match)} is available.`,
+        messageHint: `Yes, ${formatMctbBookingSlotLabel(match)} is available.`,
       };
     }
     const alternatives = nearestSlotAlternatives(slots, input.specificTimeUtc, 3);
@@ -188,13 +211,9 @@ export async function orchestrateMctbAiBooking(
   }
 
   const offer = pickSlotsToOffer(slots, 3);
-  const { config: bookingCfg } = await getBookingContext(input.workspaceId);
-  await recordOfferedSlots({
-    workspaceId: input.workspaceId,
-    conversationId: input.conversationId,
-    provider: bookingCfg.provider,
-    slots: offer,
-    window: { startUtc: input.windowStartUtc, endUtc: input.windowEndUtc },
+  await persistCustomerOfferedSlots(input, offer, {
+    startUtc: input.windowStartUtc,
+    endUtc: input.windowEndUtc,
   });
   return {
     kind: "offer_slots",
@@ -203,20 +222,8 @@ export async function orchestrateMctbAiBooking(
   };
 }
 
-function formatSlotLabel(slot: MctbBookingSlot): string {
-  const d = new Date(slot.startUtc);
-  return d.toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: slot.timezone,
-  });
-}
-
 function buildOfferMessage(slots: MctbBookingSlot[]): string {
-  const labels = slots.map(formatSlotLabel);
+  const labels = slots.map(formatMctbBookingSlotLabel);
   if (labels.length === 1) return `We have an opening at ${labels[0]}. Does that work?`;
   if (labels.length === 2) {
     return `We have openings at ${labels[0]} and ${labels[1]}. Do either work?`;
@@ -230,6 +237,6 @@ function buildAlternativesMessage(requestedUtc: string, alternatives: MctbBookin
     hour: "numeric",
     minute: "2-digit",
   });
-  const alts = alternatives.map(formatSlotLabel).join(", ");
+  const alts = alternatives.map(formatMctbBookingSlotLabel).join(", ");
   return `${timeLabel} isn't available. The closest openings are ${alts}.`;
 }

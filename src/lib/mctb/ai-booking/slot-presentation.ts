@@ -97,3 +97,15 @@ export function resolveOfferedSlotChoice(
 ): MctbBookingSlot | null {
   return resolveStrictNumericOfferedSlot(offered, utterance);
 }
+
+export function formatMctbBookingSlotLabel(slot: MctbBookingSlot): string {
+  const d = new Date(slot.startUtc);
+  return d.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: slot.timezone,
+  });
+}
