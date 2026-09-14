@@ -5,9 +5,9 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
+import { resolveOfferedSlotIdFromSpecialist } from "../src/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
 import {
   pickSlotsToOffer,
-  resolveOfferedSlotChoice,
   findSlotAtTime,
   nearestSlotAlternatives,
 } from "../src/lib/mctb/ai-booking/slot-presentation";
@@ -65,7 +65,14 @@ assert.equal(offer.length, 3);
 assert.equal(findSlotAtTime(slots, "2026-09-19T17:00:00.000Z")?.slotId, "b");
 const alts = nearestSlotAlternatives(slots, "2026-09-19T16:00:00.000Z", 2);
 assert.equal(alts.length, 2);
-assert.equal(resolveOfferedSlotChoice(slots, "third")?.slotId, "c");
+assert.equal(
+  resolveOfferedSlotIdFromSpecialist(
+    { action: "SELECT_OFFERED_SLOT", timezone: "UTC", offered_slot_index: 3 },
+    slots,
+    "UTC",
+  ),
+  "c",
+);
 assert.ok(slotIdFor("2026-01-01T15:00:00.000Z", "2026-01-01T15:30:00.000Z", "calendly").startsWith("slot_"));
 
 const matrix = readFileSync("docs/MCTB-AI-BOOKING-PROVIDER-MATRIX.md", "utf8");

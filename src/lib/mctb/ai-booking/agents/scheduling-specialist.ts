@@ -146,12 +146,19 @@ export async function runSchedulingSpecialistAgent(input: {
       model: mctbSemanticModelId(),
     });
 
-  let parsed = await invoke();
+  const selectionSessionActive =
+    input.aiBookingSessionActive && (input.offeredSlots?.length ?? 0) > 0;
+
+  let parsed = selectionSessionActive
+    ? await invoke(
+        "Active offered_slots in structured_state. Interpret latest_message as slot selection only unless customer clearly rejects all offers or asks for a different day. Return SELECT_OFFERED_SLOT or CONFIRM_BOOKING with offered_slot_index (1-based) and/or offered_slot_id from structured_state.offered_slots. Set customer_confirms_booking true when they affirm (works, yes, perfect, book it).",
+      )
+    : await invoke();
   let normalized = parsed ? normalizeSpecialist(parsed, input.timezone) : null;
   let result = normalized ?? modelUnavailableResult(input.timezone);
 
   if (
-    input.aiBookingSessionActive &&
+    selectionSessionActive &&
     result.action !== "SELECT_OFFERED_SLOT" &&
     result.action !== "CONFIRM_BOOKING" &&
     (result.action === "ASK_CLARIFICATION" || result.action === "CHECK_AVAILABILITY")

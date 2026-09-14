@@ -1,6 +1,6 @@
 /** TEST ONLY — removed from production scheduling path. */
 import { interpretSchedulingUtterance } from "@/lib/mctb/ai-booking/scheduling-interpreter";
-import { resolveOfferedSlotChoice } from "@/lib/mctb/ai-booking/slot-presentation";
+import { resolveOfferedSlotIdFromSpecialist } from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
 import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 import type { SchedulingSpecialistResult } from "@/lib/mctb/ai-booking/agents/types";
 
@@ -18,7 +18,19 @@ export function deterministicSchedulingSpecialist(input: {
     now: input.now,
   });
   if (interp.intent === "SELECT_OFFERED_SLOT" || interp.intent === "CONFIRM_BOOKING") {
-    const slot = resolveOfferedSlotChoice(input.offeredSlots, input.message);
+    const specialist: SchedulingSpecialistResult = {
+      action: interp.confirmBooking ? "CONFIRM_BOOKING" : "SELECT_OFFERED_SLOT",
+      timezone: input.timezone,
+      offered_slot_index: interp.offeredSlotIndex ?? null,
+      requested_local_date: interp.requestedLocalDate ?? null,
+      requested_local_time: interp.requestedLocalTime ?? null,
+    };
+    const slotId = resolveOfferedSlotIdFromSpecialist(
+      specialist,
+      input.offeredSlots,
+      input.timezone,
+    );
+    const slot = slotId ? input.offeredSlots.find((s) => s.slotId === slotId) : null;
     return {
       action: interp.confirmBooking ? "CONFIRM_BOOKING" : "SELECT_OFFERED_SLOT",
       offered_slot_id: slot?.slotId ?? null,

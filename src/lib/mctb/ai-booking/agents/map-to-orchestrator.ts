@@ -1,9 +1,8 @@
 import type { SchedulingSpecialistResult } from "@/lib/mctb/ai-booking/agents/types";
 import type { OrchestrateAiBookingInput } from "@/lib/mctb/ai-booking/orchestrator";
-import {
-  resolveOfferedSlotIdByLocalWallTime,
-  schedulingLocalSemanticsToUtcWindow,
-} from "@/lib/mctb/ai-booking/local-time-semantics";
+import { resolveOfferedSlotIdFromSpecialist } from "@/lib/mctb/ai-booking/resolve-offered-slot-from-specialist";
+import { schedulingLocalSemanticsToUtcWindow } from "@/lib/mctb/ai-booking/local-time-semantics";
+import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 export function mapSpecialistToOrchestratorInput(
   specialist: SchedulingSpecialistResult,
@@ -13,7 +12,7 @@ export function mapSpecialistToOrchestratorInput(
   > & { customerMessage: string },
   options?: {
     sessionHasOfferedSlots?: boolean;
-    offeredSlots?: { slotId: string }[];
+    offeredSlots?: MctbBookingSlot[];
     referenceUtcIso?: string;
   },
 ): OrchestrateAiBookingInput | null {
@@ -30,26 +29,16 @@ export function mapSpecialistToOrchestratorInput(
   });
 
   const offeredSlots = options?.offeredSlots ?? [];
+  const tz = specialist.timezone || base.timezone;
 
-  const resolveSlotId = (): string | null => {
-    if (specialist.offered_slot_id) return specialist.offered_slot_id;
-    const idx = specialist.offered_slot_index;
-    if (idx != null && idx >= 1 && idx <= offeredSlots.length) {
-      return offeredSlots[idx - 1]?.slotId ?? null;
-    }
-    if (specialist.requested_local_date && specialist.requested_local_time && offeredSlots.length) {
-      return resolveOfferedSlotIdByLocalWallTime({
-        offeredSlots,
-        localDate: specialist.requested_local_date,
-        localTime: specialist.requested_local_time,
-        timeZone: specialist.timezone || base.timezone,
-      });
-    }
-    return null;
-  };
+  const resolveSlotId = (): string | null =>
+    resolveOfferedSlotIdFromSpecialist(specialist, offeredSlots, tz);
 
   if (specialist.action === "SELECT_OFFERED_SLOT" || specialist.action === "CONFIRM_BOOKING") {
     const selectedSlotId = resolveSlotId();
+    if (options?.sessionHasOfferedSlots && offeredSlots.length > 0 && !selectedSlotId) {
+      return null;
+    }
     const confirmBooking =
       specialist.action === "CONFIRM_BOOKING" || specialist.customer_confirms_booking === true;
     return {

@@ -1,8 +1,4 @@
-import {
-  findAvailableTimes,
-  createBooking,
-  getBookingContext,
-} from "@/lib/mctb/ai-booking/service";
+import { findAvailableTimes, getBookingContext } from "@/lib/mctb/ai-booking/service";
 import {
   buildCustomerOfferSms,
   buildOfferSelectionClarification,
@@ -12,6 +8,7 @@ import {
   nearestSlotAlternatives,
   pickSlotsToOffer,
 } from "@/lib/mctb/ai-booking/slot-presentation";
+import { bookValidatedOfferedSlot } from "@/lib/mctb/ai-booking/book-offered-slot";
 import { getMctbAiBookingSessionStore, recordOfferedSlots } from "@/lib/mctb/ai-booking/session-store";
 import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
@@ -75,41 +72,47 @@ export async function orchestrateMctbAiBooking(
 ): Promise<AiBookingOrchestratorResult> {
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
 
-  const selectionAttempt = input.confirmBooking && input.selectedSlotId != null;
+  const offered = session?.offeredSlots ?? [];
+  const selectionSlotId = input.selectedSlotId?.trim() || null;
 
-  if (selectionAttempt) {
-    const offered = session?.offeredSlots ?? [];
-    const chosen = offered.find((s) => s.slotId === input.selectedSlotId) ?? null;
+  if (offered.length > 0 && selectionSlotId) {
+    const chosen = offered.find((s) => s.slotId === selectionSlotId) ?? null;
     if (!chosen) {
       return {
         kind: "need_clarification",
-        messageHint: buildOfferSelectionClarification(offered.length ? offered : []),
+        messageHint: buildOfferSelectionClarification(offered),
       };
     }
-    const booked = await createBooking({
+    if (!input.confirmBooking) {
+      return {
+        kind: "need_clarification",
+        messageHint: `Just to confirm — ${formatMctbBookingSlotLabel(chosen)} works for you?`,
+      };
+    }
+    const booked = await bookValidatedOfferedSlot({
       workspaceId: input.workspaceId,
       conversationId: input.conversationId,
       contactId: input.contactId,
-      slotId: chosen.slotId,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
       customerEmail: input.customerEmail,
+      slotId: chosen.slotId,
       writeEpoch: input.writeEpoch,
     });
-    if (!booked.ok) {
-      return fallbackResult(input.workspaceId, booked.reason);
+    if (booked.status === "booked") {
+      const bookedSlot: MctbBookingSlot = {
+        slotId: chosen.slotId,
+        startUtc: booked.result.startUtc,
+        endUtc: booked.result.endUtc,
+        timezone: booked.result.timezone,
+      };
+      return {
+        kind: "booked",
+        booking: booked.result,
+        messageHint: booked.messageHint || `You're booked for ${formatMctbBookingSlotLabel(bookedSlot)}.`,
+      };
     }
-    const bookedSlot: MctbBookingSlot = {
-      slotId: chosen.slotId,
-      startUtc: booked.startUtc,
-      endUtc: booked.endUtc,
-      timezone: booked.timezone,
-    };
-    return {
-      kind: "booked",
-      booking: booked,
-      messageHint: `You're booked for ${formatMctbBookingSlotLabel(bookedSlot)}.`,
-    };
+    return booked.orchestratorResult;
   }
 
   let availability = await findAvailableTimes({

@@ -56,13 +56,8 @@ export function nearestSlotAlternatives(
 }
 
 export {
-  resolveCustomerChoiceAmongOfferedSlots,
   buildCustomerOfferSms,
   buildOfferSelectionClarification,
   formatMctbBookingSlotLabel,
-  resolveOfferedListOrdinalIndex,
 } from "@/lib/mctb/ai-booking/offered-slot-selection";
-
-/** @deprecated use resolveCustomerChoiceAmongOfferedSlots */
-export { resolveCustomerChoiceAmongOfferedSlots as resolveOfferedSlotChoice } from "@/lib/mctb/ai-booking/offered-slot-selection";
 

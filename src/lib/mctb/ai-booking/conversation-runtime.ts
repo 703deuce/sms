@@ -14,9 +14,6 @@ import {
 import { runSchedulingSpecialistAgent } from "@/lib/mctb/ai-booking/agents/scheduling-specialist";
 import { mapSpecialistToOrchestratorInput } from "@/lib/mctb/ai-booking/agents/map-to-orchestrator";
 import { handleMctbAiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/handle-orchestrator-result";
-import { tryBookFromOfferedSlots } from "@/lib/mctb/ai-booking/book-offered-slot";
-import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
-
 import type { MctbAiBookingInboundResult } from "@/lib/mctb/ai-booking/conversation-runtime-types";
 
 export type { MctbAiBookingInboundResult };
@@ -122,49 +119,6 @@ export async function handleMctbAiBookingInboundSms(input: {
     timezone: tz,
     writeEpoch: input.writeEpoch,
   };
-
-  if (offeredSlots.length > 0) {
-    const direct = await tryBookFromOfferedSlots({
-      workspaceId: input.workspaceId,
-      conversationId,
-      contactId: input.contactId,
-      customerName: orchestrateBase.customerName,
-      customerPhone: input.customerPhone,
-      customerEmail: input.customerEmail,
-      utterance: input.body,
-      writeEpoch: input.writeEpoch,
-    });
-    if (direct.status === "needs_clarification") {
-      return {
-        handled: true,
-        reply: finalizeMctbOutboundSms(direct.messageHint),
-        action: "ai_booking_clarify",
-      };
-    }
-    if (direct.status === "booked") {
-      return handleMctbAiBookingOrchestratorResult({
-        workspaceId: input.workspaceId,
-        conversationId,
-        contactId: input.contactId,
-        config,
-        result: {
-          kind: "booked",
-          booking: direct.result,
-          messageHint: direct.messageHint,
-        },
-      });
-    }
-    if (direct.status === "book_failed") {
-      return handleMctbAiBookingOrchestratorResult({
-        workspaceId: input.workspaceId,
-        conversationId,
-        contactId: input.contactId,
-        config,
-        result: direct.orchestratorResult,
-      });
-    }
-    /* no_offered_slots or customer asked for new search — fall through to availability */
-  }
 
   const semanticCtx = await buildMctbSemanticConversationContext({
     workspaceId: input.workspaceId,
