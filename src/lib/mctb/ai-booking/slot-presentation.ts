@@ -60,6 +60,7 @@ export {
   buildCustomerOfferSms,
   buildOfferSelectionClarification,
   formatMctbBookingSlotLabel,
+  resolveOfferedListOrdinalIndex,
 } from "@/lib/mctb/ai-booking/offered-slot-selection";
 
 /** @deprecated use resolveCustomerChoiceAmongOfferedSlots */

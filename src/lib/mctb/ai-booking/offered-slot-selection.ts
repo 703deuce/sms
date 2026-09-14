@@ -174,6 +174,19 @@ export function buildCustomerOfferSms(slots: MctbBookingSlot[]): string {
   return `We have openings at ${labels[0]}, ${labels[1]}, and ${labels[2]}. Do any of those work?`;
 }
 
+export function isProviderSlotConflictReason(reason: string): boolean {
+  const r = reason.toLowerCase();
+  return (
+    r.includes("conflict") ||
+    r.includes("not available") ||
+    r.includes("unavailable") ||
+    r.includes("busy") ||
+    r.includes("double") ||
+    r.includes("slot_taken") ||
+    r.includes("already booked")
+  );
+}
+
 export function buildOfferSelectionClarification(slots: MctbBookingSlot[]): string {
   const labels = slots.map(formatMctbBookingSlotLabel);
   if (labels.length === 1) {
