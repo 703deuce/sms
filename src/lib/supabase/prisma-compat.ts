@@ -296,6 +296,7 @@ const MODEL_TO_TABLE: Record<string, string> = {
   mctbHandoffConfig: "mctb_handoff_configs",
   mctbBookingLink: "mctb_booking_links",
   mctbAiBookingSession: "mctb_ai_booking_sessions",
+  mctbDurableOperation: "mctb_durable_operations",
   mctbConversationBookingActivity: "mctb_conversation_booking_activities",
   mctbNotificationRecipient: "mctb_notification_recipients",
   mctbConversationAutomationState: "mctb_conversation_automation_states",

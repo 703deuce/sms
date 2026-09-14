@@ -59,6 +59,39 @@ export async function processVoiceAiBookingTurnOperation(
 
   await appendOperationTrace(operation.id, "PROCESSING", { callId, utteranceLen: utterance.length });
 
+  const workerCert = (
+    await import("../worker-cert-synthetic")
+  ).resolveWorkerCertSynthetic(input, operation.idempotencyKey);
+  if (workerCert) {
+    await appendOperationTrace(operation.id, "WORKER_CERT_PROVIDER_EXEC", {
+      delayMs: workerCert.delayMs,
+      tag: workerCert.providerExecutionTag,
+    });
+    if (workerCert.failOnce && operation.attemptCount <= 1) {
+      throw new Error("WORKER_CERT_TRANSIENT_PROVIDER_FAILURE");
+    }
+    if (workerCert.delayMs > 0) {
+      await new Promise((r) => setTimeout(r, workerCert.delayMs));
+    }
+    return {
+      voice: {
+        ok: true,
+        speak: "I have 1:00, 2:00, or 3:00 available for certification.",
+        data: {
+          slots: [
+            { slot_id: "cert_s1", label: "1:00 PM" },
+            { slot_id: "cert_s2", label: "2:00 PM" },
+            { slot_id: "cert_s3", label: "3:00 PM" },
+          ],
+          worker_cert: true,
+          delayMs: workerCert.delayMs,
+        },
+      },
+      processedAt: new Date().toISOString(),
+      workerCert: { providerExecutionTag: workerCert.providerExecutionTag },
+    };
+  }
+
   const certThrow = process.env.MCTB_CERT_VOICE_TURN_THROW?.trim();
   if (certThrow) {
     throw new Error(certThrow);

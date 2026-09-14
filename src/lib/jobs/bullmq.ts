@@ -19,10 +19,14 @@ export const SMS_DISPATCH_BULLMQ_QUEUES = [
 /** Interactive MCTB + missed-call opener jobs (same `npm run worker:sms` process). */
 export const MCTB_DISPATCH_BULLMQ_QUEUES = ["mctb", "automations"] as const;
 
+/** Voice durable operations + Telnyx async jobs (same dispatch worker as MCTB in production). */
+export const VOICE_DISPATCH_BULLMQ_QUEUES = ["voice-calls"] as const;
+
 /** All BullMQ queues started by `startSmsDispatchBullmqWorkers()` in production. */
 export const PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES = [
   ...SMS_DISPATCH_BULLMQ_QUEUES,
   ...MCTB_DISPATCH_BULLMQ_QUEUES,
+  ...VOICE_DISPATCH_BULLMQ_QUEUES,
 ] as const;
 
 export type SmsDispatchBullmqQueue = (typeof SMS_DISPATCH_BULLMQ_QUEUES)[number];
@@ -52,6 +56,16 @@ const smsDispatchMetrics: BullmqJobMetrics = {
 };
 
 const mctbDispatchMetrics: BullmqJobMetrics = {
+  received: 0,
+  completed: 0,
+  failed: 0,
+  lastReceivedAt: null,
+  lastCompletedAt: null,
+  lastFailedAt: null,
+  lastError: null,
+};
+
+const voiceDispatchMetrics: BullmqJobMetrics = {
   received: 0,
   completed: 0,
   failed: 0,
@@ -173,6 +187,10 @@ function createWorkerProcessor(queueName: string) {
       mctbDispatchMetrics.received += 1;
       mctbDispatchMetrics.lastReceivedAt = new Date().toISOString();
     }
+    if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
+      voiceDispatchMetrics.received += 1;
+      voiceDispatchMetrics.lastReceivedAt = new Date().toISOString();
+    }
 
     try {
       if (job.name === "send_campaign_sms" || job.name === "send_campaign_email") {
@@ -203,6 +221,10 @@ function createWorkerProcessor(queueName: string) {
       if (MCTB_DISPATCH_BULLMQ_QUEUES.includes(queueName as MctbDispatchBullmqQueue)) {
         mctbDispatchMetrics.completed += 1;
         mctbDispatchMetrics.lastCompletedAt = new Date().toISOString();
+      }
+      if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
+        voiceDispatchMetrics.completed += 1;
+        voiceDispatchMetrics.lastCompletedAt = new Date().toISOString();
       }
 
       logBullmq("bullmq_job_completed", {
@@ -250,6 +272,11 @@ function createWorkerProcessor(queueName: string) {
         mctbDispatchMetrics.failed += 1;
         mctbDispatchMetrics.lastFailedAt = new Date().toISOString();
         mctbDispatchMetrics.lastError = message;
+      }
+      if (VOICE_DISPATCH_BULLMQ_QUEUES.includes(queueName as (typeof VOICE_DISPATCH_BULLMQ_QUEUES)[number])) {
+        voiceDispatchMetrics.failed += 1;
+        voiceDispatchMetrics.lastFailedAt = new Date().toISOString();
+        voiceDispatchMetrics.lastError = message;
       }
 
       if (err instanceof JobFailedError) {
@@ -349,8 +376,10 @@ export function getSmsDispatchBullmqStatus() {
     queues: [...PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES],
     smsQueues: [...SMS_DISPATCH_BULLMQ_QUEUES],
     mctbQueues: [...MCTB_DISPATCH_BULLMQ_QUEUES],
+    voiceQueues: [...VOICE_DISPATCH_BULLMQ_QUEUES],
     metrics: { ...smsDispatchMetrics },
     mctbMetrics: { ...mctbDispatchMetrics },
+    voiceMetrics: { ...voiceDispatchMetrics },
   };
 }
 
@@ -410,6 +439,20 @@ export function resetSmsDispatchBullmqMetricsForTests() {
   smsDispatchMetrics.lastCompletedAt = null;
   smsDispatchMetrics.lastFailedAt = null;
   smsDispatchMetrics.lastError = null;
+  mctbDispatchMetrics.received = 0;
+  mctbDispatchMetrics.completed = 0;
+  mctbDispatchMetrics.failed = 0;
+  mctbDispatchMetrics.lastReceivedAt = null;
+  mctbDispatchMetrics.lastCompletedAt = null;
+  mctbDispatchMetrics.lastFailedAt = null;
+  mctbDispatchMetrics.lastError = null;
+  voiceDispatchMetrics.received = 0;
+  voiceDispatchMetrics.completed = 0;
+  voiceDispatchMetrics.failed = 0;
+  voiceDispatchMetrics.lastReceivedAt = null;
+  voiceDispatchMetrics.lastCompletedAt = null;
+  voiceDispatchMetrics.lastFailedAt = null;
+  voiceDispatchMetrics.lastError = null;
   smsDispatchWorkersReady = false;
   smsDispatchWorkersReadyAt = null;
   readyQueues.clear();
@@ -423,7 +466,6 @@ export async function startBullmqWorkers() {
     "maintenance",
     ...PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES,
     "review-import",
-    "voice-calls",
     "integrations",
     "crm-salesforce",
     "crm-zoho",
