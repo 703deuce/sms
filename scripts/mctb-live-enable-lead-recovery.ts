@@ -12,23 +12,18 @@ import { listMctbAiBookingSchedulingTargets } from "@/lib/mctb/ai-booking/provid
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 
+const BOOKING_PROVIDERS = ["microsoft", "calendly"] as const;
+
 async function pickConnectedProvider(workspaceId: string) {
   const prisma = getPrisma();
-  const connections = await prisma.integrationConnection.findMany({
-    where: {
-      workspaceId,
-      status: "connected",
-      provider: { in: ["microsoft", "calendly", "zoho"] },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-  const row = connections[0];
-  if (!row) return null;
-  const provider =
-    row.provider === "calendly" || row.provider === "zoho" || row.provider === "microsoft"
-      ? row.provider
-      : "microsoft";
-  return { provider, providerConnectionId: row.id };
+  for (const provider of BOOKING_PROVIDERS) {
+    const row = await prisma.integrationConnection.findFirst({
+      where: { workspaceId, provider, status: "connected" },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (row) return { provider, providerConnectionId: row.id };
+  }
+  return null;
 }
 
 async function main() {
@@ -55,7 +50,17 @@ async function main() {
     }
     await saveMctbAiBookingConfig(WORKSPACE_ID, patch);
   } else {
-    await saveMctbAiBookingConfig(WORKSPACE_ID, { enabled: true });
+    await saveMctbAiBookingConfig(WORKSPACE_ID, {
+      enabled: true,
+      provider: "microsoft",
+      providerConnectionId: null,
+      calendarId: null,
+      eventTypeId: null,
+      eventTypeUri: null,
+    });
+    console.warn(
+      `[${WORKSPACE_ID}] No connected Microsoft/Calendly — AI_BOOK will use safe fallback until calendar is connected in MCTB → AI Booking.`,
+    );
   }
 
   await saveLeadRecoveryConfig(WORKSPACE_ID, {
@@ -136,11 +141,7 @@ async function main() {
   );
 }
 
-main()
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await getPrisma().$disconnect();
-  });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
