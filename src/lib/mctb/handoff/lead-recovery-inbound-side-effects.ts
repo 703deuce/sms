@@ -10,9 +10,10 @@ import {
 import { recordMctbHandoffEvent, persistUrgencyAssessment } from "./events";
 import { deliverMctbHandoffNotifications } from "./notifications";
 import { buildSnapshotFactsFromCaptured } from "./snapshot";
-import { assessMctbUrgency, isUrgentClassification } from "./urgency";
-import { detectCallbackIntent } from "./guided-collection";
+import { assessMctbUrgencyFromStructuredIntent, isUrgentClassification } from "./urgency";
+import { callbackRequestedFromStructuredIntent } from "./guided-collection";
 import { loadMctbHandoffConfig } from "./config";
+import type { StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
 
 export async function recordMctbLeadRecoveryInboundSideEffects(input: {
   workspaceId: string;
@@ -21,6 +22,7 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
   conversationId: string;
   missedCallEventId: string;
   providerMessageId?: string | null;
+  structuredIntent?: StructuredLeadIntent | null;
 }): Promise<void> {
   const prisma = getPrisma();
   const config = await loadMctbHandoffConfig(input.workspaceId);
@@ -39,7 +41,9 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
   customerMessages.push(input.body);
   captured._customer_messages = customerMessages;
 
-  const urgencyResult = assessMctbUrgency({ customerText: input.body, config });
+  const urgencyResult = input.structuredIntent
+    ? assessMctbUrgencyFromStructuredIntent({ intent: input.structuredIntent, config })
+    : null;
   let urgencyRow = null;
   if (urgencyResult) {
     urgencyRow = await persistUrgencyAssessment({
@@ -55,7 +59,9 @@ export async function recordMctbLeadRecoveryInboundSideEffects(input: {
   }
 
   const urgent = isUrgentClassification(urgencyResult);
-  const callbackRequested = detectCallbackIntent(input.body);
+  const callbackRequested = input.structuredIntent
+    ? callbackRequestedFromStructuredIntent(input.structuredIntent)
+    : false;
   const callerRepliedKey = `mctb-handoff:${input.conversationId}:caller_replied`;
 
   const { event: callerRepliedEvent, created: callerRepliedCreated } = await recordMctbHandoffEvent({

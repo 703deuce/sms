@@ -1,5 +1,4 @@
 import type { LeadRecoveryCollectField } from "@/lib/mctb/lead-recovery/types";
-
 const FIELD_PROMPTS: Record<LeadRecoveryCollectField, string> = {
   NAME: "What's your name?",
   EMAIL: "What's the best email for you?",
@@ -18,35 +17,48 @@ export function promptForCollectField(field: LeadRecoveryCollectField): string {
   return FIELD_PROMPTS[field] || "Could you share a bit more detail?";
 }
 
-export function tryExtractFieldFromMessage(
+const EMAIL_SYNTAX_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Deterministic validation/normalization only — values must come from the intent LLM. */
+export function validateAndNormalizeCollectedField(
   field: LeadRecoveryCollectField,
-  message: string,
+  raw: string,
 ): string | null {
-  const text = message.trim();
+  const text = raw.trim();
   if (!text) return null;
-  if (field === "EMAIL" && /\S+@\S+\.\S+/.test(text)) {
-    return text.match(/\S+@\S+\.\S+/)?.[0] ?? null;
+
+  if (field === "EMAIL") {
+    const candidate = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)?.[0] ?? text;
+    return EMAIL_SYNTAX_RE.test(candidate) ? candidate : null;
   }
-  if (field === "PHONE" && /\+?\d[\d\s().-]{7,}/.test(text)) {
-    return text.replace(/\s+/g, " ").trim();
+
+  if (field === "PHONE") {
+    const digits = text.replace(/\D/g, "");
+    if (digits.length < 10) return null;
+    return text.replace(/\s+/g, " ").trim().slice(0, 32);
   }
+
   if (field === "URGENCY") {
-    if (/\b(urgent|emergency|asap|right now)\b/i.test(text)) return "EMERGENCY";
-    if (/\b(not urgent|whenever|no rush)\b/i.test(text)) return "NORMAL";
+    const u = text.toUpperCase();
+    if (u === "EMERGENCY" || u === "HIGH" || u === "NORMAL" || u === "LOW") return u;
+    return null;
   }
-  if (field === "ADDRESS" && /\d+\s+\w+/.test(text) && text.length > 8) {
-    return text;
+
+  if (field === "ADDRESS") {
+    return text.slice(0, 500);
   }
-  if (field === "APPOINTMENT_PREFERENCE" || field === "CALLBACK_TIME") {
-    if (text.length >= 2) return text;
-  }
+
   if (
+    field === "APPOINTMENT_PREFERENCE" ||
+    field === "CALLBACK_TIME" ||
     field === "REASON" ||
     field === "ISSUE_DESCRIPTION" ||
     field === "NAME" ||
-    field === "SERVICE_CATEGORY"
+    field === "SERVICE_CATEGORY" ||
+    field === "CALLBACK_NUMBER"
   ) {
-    if (text.length >= 2) return text;
+    return text.length >= 2 ? text.slice(0, 500) : null;
   }
-  return null;
+
+  return text.slice(0, 500);
 }

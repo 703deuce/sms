@@ -4,11 +4,16 @@
 import type { StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
 
 /** Whole-message carrier keywords only — not "Stop." / "Stop looking" / contextual stop. */
-const CARRIER_STOP_RE = /^(stop|unsubscribe|end|quit)$/i;
+const CARRIER_STOP_RE = /^(stop|unsubscribe|end|quit|cancel)$/i;
 const HELP_RE = /^help$/i;
 
 export function isBareCarrierStopMessage(message: string): boolean {
   return CARRIER_STOP_RE.test(message.trim());
+}
+
+/** Narrow carrier opt-out protocol (compliance). Not conversational "don't cancel it". */
+export function isCarrierProtocolOptOutMessage(message: string): boolean {
+  return isBareCarrierStopMessage(message);
 }
 function protocolIntent(partial: Partial<StructuredLeadIntent>): StructuredLeadIntent {
   return {

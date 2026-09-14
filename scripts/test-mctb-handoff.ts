@@ -7,7 +7,7 @@ import { defaultHandoffConfig } from "../src/lib/mctb/handoff/defaults";
 import {
   guidedCollectionComplete,
   nextGuidedField,
-  detectCallbackIntent,
+  callbackRequestedFromStructuredIntent,
 } from "../src/lib/mctb/handoff/guided-collection";
 import { assessMctbUrgency, isUrgentClassification } from "../src/lib/mctb/handoff/urgency";
 import { renderMctbTeamSms } from "../src/lib/mctb/handoff/templates";
@@ -58,8 +58,32 @@ function testGuidedCollectionRequired() {
 }
 
 function testCallbackIntent() {
-  assert.equal(detectCallbackIntent("Please call me back after 4"), true);
-  assert.equal(detectCallbackIntent("Just a quote thanks"), false);
+  assert.equal(
+    callbackRequestedFromStructuredIntent({
+      primary_intent: "CALLBACK_REQUEST",
+      secondary_intents: [],
+      callback_requested: true,
+      lead_type: "UNKNOWN",
+      urgency: "NORMAL",
+      service_category: null,
+      reason_for_contact: null,
+      location: { raw: null, resolved: null },
+      requested_time: null,
+      booking_requested: false,
+      booking_disposition: "NONE",
+      payment_intent: false,
+      complaint: false,
+      human_requested: false,
+      human_required: false,
+      needs_clarification: false,
+      extracted_entities: {},
+      semantic_missing_information: [],
+      language: "en",
+      confidence: 0.9,
+      missing_required_fields: [],
+    }),
+    true,
+  );
 }
 
 function testSmsTemplateNoFabrication() {

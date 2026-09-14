@@ -14,8 +14,7 @@ import {
   mctbCallerE164Variants,
   normalizeMctbCallerE164,
 } from "@/lib/mctb/messaging/caller-e164";
-
-const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
+import { isCarrierProtocolOptOutMessage } from "@/lib/mctb/lead-recovery/protocol-intent";
 
 async function sendMctbCustomerOutboundSms(input: {
   workspaceId: string;
@@ -162,7 +161,7 @@ export async function handleMctbCustomerSmsReply(input: {
     console.warn("[mctb/customer-sms] conversationEnabled=false but Lead Recovery is on — replying anyway");
   }
 
-  if (STOP_RE.test(input.body.trim())) {
+  if (isCarrierProtocolOptOutMessage(input.body)) {
     const prisma = getPrisma();
     await prisma.suppression.upsert({
       where: { suppressionKey: `${input.workspaceId}:p:${fromE164}` },
@@ -225,15 +224,6 @@ export async function handleMctbCustomerSmsReply(input: {
     return { handled: true, action: "human_handling" };
   }
 
-  await recordMctbLeadRecoveryInboundSideEffects({
-    workspaceId: input.workspaceId,
-    fromE164,
-    body: input.body,
-    conversationId,
-    missedCallEventId: recentEvent.id,
-    providerMessageId: input.providerMessageId,
-  });
-
   const customerName =
     [contact?.firstName, contact?.lastName].filter(Boolean).join(" ").trim() || undefined;
 
@@ -253,6 +243,16 @@ export async function handleMctbCustomerSmsReply(input: {
   if (!leadRecovery.handled) {
     return { handled: false, reason: leadRecovery.reason || "lead_recovery_not_handled" };
   }
+
+  await recordMctbLeadRecoveryInboundSideEffects({
+    workspaceId: input.workspaceId,
+    fromE164,
+    body: input.body,
+    conversationId,
+    missedCallEventId: recentEvent.id,
+    providerMessageId: input.providerMessageId,
+    structuredIntent: leadRecovery.intent ?? null,
+  });
 
   if (leadRecovery.action === "duplicate_inbound_ignored" || !leadRecovery.reply?.trim()) {
     return { handled: true, action: leadRecovery.action, reply: leadRecovery.reply };

@@ -1,4 +1,5 @@
 import type { MctbHandoffConfigDto, MctbLeadFieldConfig } from "./types";
+import type { StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
 
 const FIELD_PROMPTS: Record<string, string> = {
   caller_name: "What's your name?",
@@ -64,6 +65,17 @@ export function extractFieldFromReply(
   return trimmed.slice(0, 500);
 }
 
-export function detectCallbackIntent(text: string): boolean {
-  return /\b(call me|callback|call back|phone me|ring me)\b/i.test(text);
+/** Lead Recovery production path — callback from structured intent, not SMS phrase matching. */
+export function callbackRequestedFromStructuredIntent(intent: StructuredLeadIntent): boolean {
+  if (intent.callback_requested) return true;
+  if (intent.primary_intent === "CALLBACK_REQUEST") return true;
+  return intent.secondary_intents.includes("CALLBACK_REQUEST");
+}
+
+/**
+ * @deprecated Not used on Lead Recovery Telnyx SMS path. Legacy handoff returns false —
+ * use {@link callbackRequestedFromStructuredIntent} with intent agent output.
+ */
+export function detectCallbackIntent(_text: string): boolean {
+  return false;
 }

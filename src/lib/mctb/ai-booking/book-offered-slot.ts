@@ -6,6 +6,8 @@ import {
   isProviderSlotConflictReason,
 } from "@/lib/mctb/ai-booking/offered-slot-selection";
 import { pickSlotsToOffer } from "@/lib/mctb/ai-booking/slot-presentation";
+import { revalidatePersistedOfferedSlot } from "@/lib/mctb/ai-booking/revalidate-offered-slot";
+import { logMctbAiBookingEvent } from "@/lib/mctb/ai-booking/observability";
 import type { CreateBookingResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 import type { AiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/types";
 
@@ -18,6 +20,8 @@ export type BookValidatedOfferedSlotInput = {
   customerEmail?: string | null;
   slotId: string;
   writeEpoch?: number;
+  /** For booking identity audit trail */
+  semanticSelectedSlotId?: string | null;
 };
 
 /**
@@ -43,6 +47,80 @@ export async function bookValidatedOfferedSlot(
     };
   }
 
+  const runtimeSelectedSlotId = picked.slotId;
+  const semanticSelectedSlotId = input.semanticSelectedSlotId?.trim() || runtimeSelectedSlotId;
+  if (semanticSelectedSlotId !== runtimeSelectedSlotId) {
+    logMctbAiBookingEvent("booking_slot_identity_mismatch", {
+      conversationId: input.conversationId,
+      semantic_selected_slot_id: semanticSelectedSlotId,
+      runtime_selected_slot_id: runtimeSelectedSlotId,
+    });
+    return {
+      status: "book_failed",
+      reason: "CLARIFICATION_REQUIRED",
+      orchestratorResult: {
+        kind: "need_clarification",
+        messageHint: buildOfferSelectionClarification(offered),
+      },
+    };
+  }
+
+  const revalidated = await revalidatePersistedOfferedSlot({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    slot: picked,
+  });
+  if (!revalidated.ok) {
+    const win = session?.lastQueriedWindow;
+    const tz = picked.timezone || "America/New_York";
+    if (revalidated.reason === "SLOT_NO_LONGER_AVAILABLE" && win) {
+      const retry = await findAvailableTimes({
+        workspaceId: input.workspaceId,
+        conversationId: input.conversationId,
+        windowStartUtc: win.startUtc,
+        windowEndUtc: win.endUtc,
+        timezone: tz,
+        maxResults: 12,
+      });
+      if (retry?.ok && retry.slots.length) {
+        const fresh = pickSlotsToOffer(retry.slots, 3);
+        const { config } = await getBookingContext(input.workspaceId);
+        await recordOfferedSlots({
+          workspaceId: input.workspaceId,
+          conversationId: input.conversationId,
+          provider: config.provider,
+          slots: fresh,
+          window: retry.queriedWindow,
+        });
+        return {
+          status: "book_failed",
+          reason: "SLOT_NO_LONGER_AVAILABLE",
+          orchestratorResult: {
+            kind: "offer_slots",
+            slots: fresh,
+            messageHint: `That time is no longer available. Here are openings that still work: ${fresh.map((s) => formatMctbBookingSlotLabel(s)).join(", ")}.`,
+          },
+        };
+      }
+    }
+    return {
+      status: "book_failed",
+      reason: revalidated.reason,
+      orchestratorResult: {
+        kind: "need_clarification",
+        messageHint: `That time is no longer available. ${buildOfferSelectionClarification(offered)}`,
+      },
+    };
+  }
+
+  logMctbAiBookingEvent("booking_slot_identity", {
+    conversationId: input.conversationId,
+    semantic_selected_slot_id: semanticSelectedSlotId,
+    runtime_selected_slot_id: runtimeSelectedSlotId,
+    provider_requested_slot_id: picked.slotId,
+    provider_requested_start_utc: picked.startUtc,
+  });
+
   const booked = await createBooking({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
@@ -55,6 +133,13 @@ export async function bookValidatedOfferedSlot(
   });
 
   if (booked.ok) {
+    logMctbAiBookingEvent("booking_slot_identity_confirmed", {
+      conversationId: input.conversationId,
+      semantic_selected_slot_id: semanticSelectedSlotId,
+      runtime_selected_slot_id: runtimeSelectedSlotId,
+      provider_created_start_utc: booked.startUtc,
+      provider_booking_id: booked.providerBookingId,
+    });
     const messageHint = `You're booked for ${formatMctbBookingSlotLabel({
       slotId: picked.slotId,
       startUtc: booked.startUtc,

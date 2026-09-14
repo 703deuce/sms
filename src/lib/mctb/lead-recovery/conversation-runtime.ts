@@ -16,7 +16,7 @@ import {
   mergeIntentIntoState,
   saveLeadRecoveryState,
 } from "@/lib/mctb/lead-recovery/state-store";
-import { tryExtractFieldFromMessage } from "@/lib/mctb/lead-recovery/field-collection";
+import { validateAndNormalizeCollectedField } from "@/lib/mctb/lead-recovery/field-collection";
 import type { LeadRecoveryInboundResult } from "@/lib/mctb/lead-recovery/types";
 import { emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
 import {
@@ -34,8 +34,10 @@ function applyIntentExtractedFields(
 ) {
   let next = state;
   for (const [k, v] of Object.entries(intent.extracted_entities)) {
-    if (v?.trim()) {
-      next = applyCollectedField(next, k as LeadRecoveryCollectField, v.trim());
+    if (!v?.trim()) continue;
+    const normalized = validateAndNormalizeCollectedField(k as LeadRecoveryCollectField, v);
+    if (normalized) {
+      next = applyCollectedField(next, k as LeadRecoveryCollectField, normalized);
     }
   }
   return next;
@@ -108,14 +110,6 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     state = { ...state, phase: "AWAITING_SLOT_SELECTION", activeSpecialist: "SCHEDULING" };
   }
 
-  if (state.phase === "COLLECT" && state.missingFields.length > 0) {
-    const field = state.missingFields[0];
-    const extracted = tryExtractFieldFromMessage(field, input.body);
-    if (extracted) {
-      state = applyCollectedField(state, field, extracted);
-    }
-  }
-
   const semanticCtx = await buildMctbSemanticConversationContext({
     workspaceId: input.workspaceId,
     conversationId,
@@ -179,6 +173,7 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
 
     state = applyWorkflowInvalidation(state, workflowIntent);
     state = mergeIntentIntoState(state, workflowIntent);
+    state = applyIntentExtractedFields(state, workflowIntent);
     if (
       awaitingSlot &&
       (session?.offeredSlots?.length ?? 0) > 0 &&

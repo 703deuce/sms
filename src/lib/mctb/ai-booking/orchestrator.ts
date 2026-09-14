@@ -97,6 +97,7 @@ export async function orchestrateMctbAiBooking(
       customerPhone: input.customerPhone,
       customerEmail: input.customerEmail,
       slotId: chosen.slotId,
+      semanticSelectedSlotId: selectionSlotId,
       writeEpoch: input.writeEpoch,
     });
     if (booked.status === "booked") {
