@@ -239,7 +239,12 @@ export async function getValidAccessToken(
 
     if (!refreshed || refreshed.ok === false) {
       const failure = refreshed && !refreshed.ok ? refreshed.result : null;
-      const needsReconnect = failure?.needsReconnect ?? true;
+      const needsReconnect =
+        failure?.needsReconnect ??
+        (failure?.kind === "invalid_grant" ||
+          failure?.kind === "interaction_required" ||
+          failure?.kind === "consent_required" ||
+          failure?.kind === "invalid_client");
       const nextConfig = await persistTokenRefreshDiagnostics(connectionId, activeConfig, {
         ok: false,
         kind: failure?.kind || "unknown",

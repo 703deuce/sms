@@ -3,8 +3,6 @@ import "server-only";
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
-
 export type VoiceBookingMode = "AI_BOOK" | "SEND_BOOKING_LINK" | "COLLECT_ONLY";
 
 export async function resolveVoiceBookingMode(input: {

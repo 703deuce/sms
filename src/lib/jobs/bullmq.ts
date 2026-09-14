@@ -278,12 +278,19 @@ function markQueueReady(queueName: string) {
 }
 
 function attachWorkerLifecycleLogs(worker: Worker, queueName: string) {
-  worker.on("ready", () => {
+  const onReady = () => {
     logBullmq("bullmq_worker_ready", { queueName });
-    if (SMS_DISPATCH_BULLMQ_QUEUES.includes(queueName as SmsDispatchBullmqQueue)) {
+    if (
+      (PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES as readonly string[]).includes(queueName)
+    ) {
       markQueueReady(queueName);
     }
-  });
+  };
+  worker.on("ready", onReady);
+  // BullMQ may emit `ready` before the listener is attached on fast reconnects.
+  if (worker.isRunning()) {
+    onReady();
+  }
   worker.on("error", (err) => {
     logBullmq("bullmq_worker_error", {
       queueName,
@@ -328,8 +335,9 @@ export async function startSmsDispatchBullmqWorkers(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   if (!smsDispatchWorkersReady) {
+    const missing = PRODUCTION_DISPATCH_WORKER_BULLMQ_QUEUES.filter((q) => !readyQueues.has(q));
     throw new Error(
-      "BullMQ dispatch workers did not become ready within timeout — check REDIS_URL",
+      `BullMQ dispatch workers did not become ready within timeout — missing ready: ${missing.join(", ") || "unknown"} (ready: ${[...readyQueues].join(", ")})`,
     );
   }
 }

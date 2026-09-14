@@ -164,11 +164,18 @@ export async function completeMicrosoftOAuth(code: string, state: string) {
   const mailboxTimezone = await fetchMicrosoftMailboxTimezone(tokens.access_token).catch(() => undefined);
   const label = profile.displayName || profile.email || "Microsoft Outlook";
 
+  const refreshToken = tokens.refresh_token || priorConfig.refreshToken;
+  if (firstConnect && !refreshToken) {
+    throw new Error(
+      "Microsoft did not return a refresh token. Ensure offline_access is granted and the redirect URI is registered as Web (not SPA) in Entra.",
+    );
+  }
+
   const config: CalendarConfig = {
     ...priorConfig,
     provider: "microsoft",
     accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token || priorConfig.refreshToken,
+    refreshToken,
     expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
     grantedScopes: tokens.scope || priorConfig.grantedScopes,
     email: profile.email || priorConfig.email,

@@ -190,6 +190,7 @@ async function main() {
       );
       await startSmsDispatchBullmqWorkers();
       bullmqBootStatus = getSmsDispatchBullmqStatus();
+      console.log(JSON.stringify({ event: "worker_boot_success", reason: "bullmq", bullmq: bullmqBootStatus }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(JSON.stringify({ event: "worker_boot_failed", reason: "bullmq", error: message }));
