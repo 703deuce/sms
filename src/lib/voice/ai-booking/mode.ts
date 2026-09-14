@@ -12,17 +12,25 @@ export async function resolveVoiceBookingMode(input: {
   agentId?: string | null;
 }): Promise<VoiceBookingMode> {
   const advanced = await loadVoiceAdvanced(input.workspaceId, input.agentId);
+  const config = await loadMctbAiBookingConfig(input.workspaceId);
+  const workspaceCanAiBook =
+    config.enabled &&
+    config.entitled &&
+    !config.upgradeRequired &&
+    (await evaluateMctbAiBookingReadiness(input.workspaceId)).ready;
+
+  if (advanced.voiceCanonicalAiBooking === true && workspaceCanAiBook) {
+    return "AI_BOOK";
+  }
+
   const explicit = String(advanced.voiceBookingMode || advanced.bookingMode || "").trim();
-  if (explicit === "AI_BOOK" || explicit === "SEND_BOOKING_LINK" || explicit === "COLLECT_ONLY") {
+  if (explicit === "AI_BOOK") return "AI_BOOK";
+  if (explicit === "SEND_BOOKING_LINK" || explicit === "COLLECT_ONLY") {
     return explicit;
   }
   if (advanced.forceBookingLinkOnly === true) return "SEND_BOOKING_LINK";
 
-  const config = await loadMctbAiBookingConfig(input.workspaceId);
-  if (config.enabled && config.entitled && !config.upgradeRequired) {
-    const readiness = await evaluateMctbAiBookingReadiness(input.workspaceId);
-    if (readiness.ready) return "AI_BOOK";
-  }
+  if (workspaceCanAiBook) return "AI_BOOK";
   return "SEND_BOOKING_LINK";
 }
 

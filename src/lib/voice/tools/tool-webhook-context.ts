@@ -46,6 +46,7 @@ export async function resolveToolWebhookContext(input: {
   toolType: string;
   ingressStartedAt: number;
 }): Promise<ToolWebhookContext | ToolWebhookContextError> {
+  const prisma = getPrisma();
   const t0 = Date.now();
   const callControlId =
     input.request.headers.get("x-telnyx-call-control-id")?.trim() ||
@@ -146,7 +147,6 @@ export async function resolveToolWebhookContext(input: {
   }
 
   if (callId && !inboundAni) {
-    const prisma = getPrisma();
     const call = await prisma.voiceCall.findFirst({
       where: { id: callId, workspaceId: input.workspaceId },
       select: { fromE164: true },
@@ -166,7 +166,12 @@ export async function resolveToolWebhookContext(input: {
     };
   }
 
-  if (!inboundAni || inboundAni === "unknown") {
+  const bookingTurn =
+    input.toolType === "voice_ai_booking_turn" ||
+    input.toolType === "calendar_availability" ||
+    input.toolType === "book_appointment";
+
+  if ((!inboundAni || inboundAni === "unknown") && !bookingTurn) {
     return {
       ok: false,
       status: "invalid_input",
@@ -174,6 +179,10 @@ export async function resolveToolWebhookContext(input: {
       speak: "I don't have a good number to text. Can I take a message instead?",
       timingMs: Date.now() - input.ingressStartedAt,
     };
+  }
+
+  if (bookingTurn && (!inboundAni || inboundAni === "unknown")) {
+    inboundAni = normalizeCallerAni(inboundAni) || "unknown";
   }
 
   return {

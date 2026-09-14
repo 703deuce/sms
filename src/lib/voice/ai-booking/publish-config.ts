@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import { isVoiceCanonicalAiBookingActive } from "@/lib/voice/ai-booking/mode";
+import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
+import { evaluateMctbAiBookingReadiness } from "@/lib/mctb/ai-booking/readiness";
 import {
   CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS,
   isVoiceCanonicalAiBookingPublishMode,
@@ -18,7 +19,10 @@ export async function enrichVoiceAgentConfigForCanonicalAiBooking(
   agentId: string,
   config: VoiceAgentConfig,
 ): Promise<VoiceAgentConfig> {
-  const active = await isVoiceCanonicalAiBookingActive({ workspaceId, agentId });
+  const mctb = await loadMctbAiBookingConfig(workspaceId);
+  const readiness = await evaluateMctbAiBookingReadiness(workspaceId);
+  const active =
+    mctb.enabled && mctb.entitled && !mctb.upgradeRequired && readiness.ready;
   if (!active) return config;
 
   const tools = new Set(config.enabledBuiltinTools || []);
@@ -28,6 +32,7 @@ export async function enrichVoiceAgentConfigForCanonicalAiBooking(
 
   const advanced = { ...(config.advanced || {}) } as Record<string, unknown>;
   advanced.voiceCanonicalAiBooking = true;
+  advanced.voiceBookingMode = "AI_BOOK";
 
   return {
     ...config,
