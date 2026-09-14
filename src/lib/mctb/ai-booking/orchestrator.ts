@@ -10,7 +10,6 @@ import {
   pickSlotsToOffer,
 } from "@/lib/mctb/ai-booking/slot-presentation";
 import { getMctbAiBookingSessionStore, recordOfferedSlots } from "@/lib/mctb/ai-booking/session-store";
-import { getBookingContext } from "@/lib/mctb/ai-booking/service";
 import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 export type OrchestrateAiBookingInput = {
