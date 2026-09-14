@@ -96,6 +96,14 @@ async function main() {
 
   let draftConfig = buildWizardAgentConfig(wizard);
   draftConfig = applyAmyMinimumSideEffectConfig(draftConfig);
+  draftConfig = {
+    ...draftConfig,
+    advanced: {
+      ...(draftConfig.advanced || {}),
+      voiceCanonicalAiBooking: true,
+      voiceBookingMode: "AI_BOOK",
+    },
+  };
 
   if (!phone.providerNumberId) {
     throw new Error(`Phone ${phone.e164} missing providerNumberId — cannot route Telnyx`);

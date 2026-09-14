@@ -13,32 +13,9 @@ import {
   nextVoiceBookingWriteEpoch,
 } from "@/lib/voice/ai-booking/call-context";
 import { logVoiceAiBookingEvent } from "@/lib/voice/ai-booking/observability";
-import { isVoiceCanonicalAiBookingActive } from "@/lib/voice/ai-booking/mode";
-import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
-import type { OrchestrateAiBookingInput } from "@/lib/mctb/ai-booking/orchestrator";
-
-function shouldFastPathGenericAvailability(
-  utterance: string,
-  offeredSlots: MctbBookingSlot[],
-  opts: { offeredSlotId?: string | null; confirmBooking?: boolean },
-): boolean {
-  if (opts.offeredSlotId?.trim() || opts.confirmBooking) return false;
-  if (offeredSlots.length > 0) return false;
-  const t = utterance.toLowerCase().trim();
-  if (!t) return true;
-  if (
-    /\b(mon(day)?|tues(day)?|wed(nesday)?|thu(rs(day)?)?|fri(day)?|sat(urday)?|sun(day)?)\b/.test(
-      t,
-    )
-  ) {
-    return false;
-  }
-  if (/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(t)) return false;
-  if (/\b(tomorrow|today|next week|this week)\b/i.test(t)) return false;
-  return /\b(book|schedule|appointment|scheduling|set up|come out|availability|see someone|visit)\b/i.test(
-    t,
-  );
-}
+import type { AiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/types";
+import { loadWorkflowFieldSession } from "@/lib/voice/field-runtime/session";
+import { resolveVoiceBookingMode } from "@/lib/voice/ai-booking/mode";
 
 function voiceSpeakFromOrchestrator(
   result: AiBookingOrchestratorResult,
@@ -114,27 +91,34 @@ export async function executeVoiceAiBookingTurn(input: {
   confirmBooking?: boolean;
   offeredSlotId?: string | null;
 }) {
-  const active = await isVoiceCanonicalAiBookingActive({
+  const mode = await resolveVoiceBookingMode({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
   });
-  if (!active) {
+  if (mode !== "AI_BOOK") {
     return {
       ok: false,
       speak:
         "I can text you our booking link to schedule, if you'd like — just say you'd like the link by text.",
       error: "voice_ai_booking_not_active",
+      data: { resolvedMode: mode },
     };
   }
 
   const readiness = await evaluateMctbAiBookingReadiness(input.workspaceId);
   if (!readiness.ready) {
+    const blocker = readiness.reason || "not_ready";
+    logVoiceAiBookingEvent("voice_turn_not_ready", {
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      reason: blocker,
+    });
     return {
-      ok: true,
-      speak: readiness.fallbackUrl
-        ? "I'm having trouble checking the calendar right now. I can text you our booking link instead — is that okay?"
-        : "I'm having trouble checking the calendar right now. I can take your preferred time and have someone call you back.",
-      data: { fallback: true, fallbackUrl: readiness.fallbackUrl },
+      ok: false,
+      speak:
+        "I'm not able to check live calendar availability on this call right now. I can take your preferred time and have someone call you back to confirm.",
+      error: `ai_booking_not_ready:${blocker}`,
+      data: { readiness, resolvedMode: "AI_BOOK", bookingLinkFallbackUsed: false },
     };
   }
 
@@ -146,36 +130,7 @@ export async function executeVoiceAiBookingTurn(input: {
   });
   const session = await getMctbAiBookingSessionStore().get(conversationId);
   const offeredSlots = session?.offeredSlots ?? [];
-
-  if (
-    shouldFastPathGenericAvailability(input.utterance, offeredSlots, {
-      offeredSlotId: input.offeredSlotId,
-      confirmBooking: input.confirmBooking,
-    })
-  ) {
-    const now = new Date();
-    const orchestrateInput: OrchestrateAiBookingInput = {
-      workspaceId: input.workspaceId,
-      conversationId,
-      contactId: caller.contactId,
-      customerName: caller.customerName,
-      customerPhone: caller.customerPhone,
-      customerEmail: caller.customerEmail,
-      timezone: bookingTimezone,
-      windowStartUtc: now.toISOString(),
-      windowEndUtc: new Date(now.getTime() + 48 * 3600_000).toISOString(),
-      specificTimeUtc: null,
-      confirmBooking: false,
-    };
-    logVoiceAiBookingEvent("voice_turn_fast_availability", {
-      workspaceId: input.workspaceId,
-      callId: input.callId,
-      conversationId,
-      utterance: input.utterance.slice(0, 120),
-    });
-    const result = await orchestrateMctbAiBooking(orchestrateInput);
-    return voiceSpeakFromOrchestrator(result);
-  }
+  const voiceWorkflow = await loadWorkflowFieldSession(input.callId);
 
   const { buildMctbSemanticConversationContext, schedulingSpecialistContextExtras } =
     await import("@/lib/mctb/semantic-conversation-context");
@@ -199,6 +154,7 @@ export async function executeVoiceAiBookingTurn(input: {
     session,
     bookingAuthorized: true,
     semanticContext,
+    voiceWorkflow,
     bookingConfig: extras.bookingConfig,
   });
 

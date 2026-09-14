@@ -21,9 +21,8 @@ export async function enrichVoiceAgentConfigForCanonicalAiBooking(
 ): Promise<VoiceAgentConfig> {
   const mctb = await loadMctbAiBookingConfig(workspaceId);
   const readiness = await evaluateMctbAiBookingReadiness(workspaceId);
-  const active =
-    mctb.enabled && mctb.entitled && !mctb.upgradeRequired && readiness.ready;
-  if (!active) return config;
+  const productEnabled = mctb.enabled && mctb.entitled && !mctb.upgradeRequired;
+  if (!productEnabled) return config;
 
   const tools = new Set(config.enabledBuiltinTools || []);
   for (const key of CANONICAL_AI_BOOKING_PUBLISHED_TOOL_KEYS) {
@@ -33,6 +32,10 @@ export async function enrichVoiceAgentConfigForCanonicalAiBooking(
   const advanced = { ...(config.advanced || {}) } as Record<string, unknown>;
   advanced.voiceCanonicalAiBooking = true;
   advanced.voiceBookingMode = "AI_BOOK";
+  advanced.voiceAiBookingReadinessAtPublish = readiness.ready;
+  if (!readiness.ready) {
+    advanced.voiceAiBookingReadinessBlocker = readiness.reason || "not_ready";
+  }
 
   return {
     ...config,

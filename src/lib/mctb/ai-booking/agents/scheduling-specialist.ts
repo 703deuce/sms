@@ -123,9 +123,35 @@ export async function runSchedulingSpecialistAgent(input: {
   session?: MctbAiBookingSession | null;
   bookingConfig?: MctbAiBookingWorkspaceConfig | null;
   semanticContext?: MctbSemanticConversationContext | null;
+  voiceWorkflow?: import("@/lib/voice/field-runtime/types").WorkflowFieldSession | null;
   /** Lead Recovery already authorized AI_BOOK — prefer CHECK_AVAILABILITY over over-clarifying. */
   bookingAuthorized?: boolean;
 }): Promise<SchedulingSpecialistResult> {
+  const { buildStateBasedInitialAvailabilitySpecialist } = await import(
+    "@/lib/voice/ai-booking/state-based-scheduling"
+  );
+  const stateBased = buildStateBasedInitialAvailabilitySpecialist({
+    timezone: input.timezone,
+    nowIso: input.nowIso,
+    semanticContext: input.semanticContext,
+    voiceWorkflow: input.voiceWorkflow,
+    session: input.session,
+    offeredSlots: input.offeredSlots,
+  });
+  if (stateBased) {
+    logMctbAiBookingEvent("scheduler_action", {
+      action: stateBased.action,
+      needs_clarification: stateBased.needs_clarification,
+      provider: "state_based",
+    });
+    return applySchedulingReferenceDates(
+      stateBased,
+      input.nowIso,
+      input.timezone,
+      input.bookingAuthorized === true,
+    );
+  }
+
   const userPayload = buildSchedulingSpecialistUserPayload({
     message: input.message,
     timezone: input.timezone,

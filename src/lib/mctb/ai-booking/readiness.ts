@@ -1,6 +1,8 @@
 import { loadMctbAiBookingConfig, resolveFallbackBookingUrl } from "@/lib/mctb/ai-booking/config";
 import { auditMctbAiBookingProvider } from "@/lib/mctb/ai-booking/capabilities";
 import { getBookingContext } from "@/lib/mctb/ai-booking/service";
+import { getPrisma } from "@/lib/db";
+import { hasOAuthTokens, type CalendarConfig } from "@/lib/voice/calendar/providers";
 
 export type MctbAiBookingReadiness = {
   ready: boolean;
@@ -38,9 +40,32 @@ export async function evaluateMctbAiBookingReadiness(
     };
   }
   if (!caps.aiBookingSupported) {
+    let reason = "provider_unsupported";
+    if (config.provider === "microsoft") {
+      const { isMicrosoftOAuthConfigured } = await import("@/lib/microsoft/oauth-config");
+      if (!isMicrosoftOAuthConfigured()) {
+        reason = "microsoft_oauth_client_not_configured_on_host";
+      } else {
+        const connId = config.calendarId || config.providerConnectionId;
+        const conn = connId
+          ? await getPrisma().voiceCalendarConnection.findFirst({
+              where: { id: connId, workspaceId, provider: "microsoft" },
+              select: { status: true, config: true },
+            })
+          : null;
+        const calCfg = (conn?.config || {}) as CalendarConfig;
+        if (conn?.status === "needs_reauth") {
+          reason = "microsoft_needs_reconnect";
+        } else if (hasOAuthTokens(calCfg) && calCfg.lastTokenRefreshError) {
+          reason = `microsoft_token_refresh_failed:${calCfg.lastTokenRefreshError}`;
+        } else if (hasOAuthTokens(calCfg)) {
+          reason = "microsoft_valid_access_token_unavailable";
+        }
+      }
+    }
     return {
       ready: false,
-      reason: "provider_unsupported",
+      reason,
       fallbackUrl,
       providerConnected: true,
       schedulingTargetSelected,

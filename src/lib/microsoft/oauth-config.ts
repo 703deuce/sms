@@ -51,6 +51,10 @@ export function getMicrosoftTokenUrl(): string {
   return `https://login.microsoftonline.com/${encodeURIComponent(getMicrosoftTenantId())}/oauth2/v2.0/token`;
 }
 
+export function isMicrosoftOAuthConfigured(): boolean {
+  return Boolean(getMicrosoftClientId() && getMicrosoftClientSecret());
+}
+
 export function assertMicrosoftOAuthConfigured() {
   const clientId = getMicrosoftClientId();
   const clientSecret = getMicrosoftClientSecret();
