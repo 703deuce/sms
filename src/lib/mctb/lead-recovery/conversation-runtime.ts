@@ -29,12 +29,6 @@ import { withLeadRecoveryCrossWorkerLock } from "@/lib/mctb/lead-recovery/cross-
 import { buildMctbSemanticConversationContext } from "@/lib/mctb/semantic-conversation-context";
 import type { LeadRecoveryCollectField, StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
 
-function isBookingConfirmedSms(booking: { action?: string; reply?: string | null }): boolean {
-  if (booking.action !== "ai_booking") return false;
-  const text = (booking.reply || "").toLowerCase();
-  return text.includes("you're booked") || text.includes("you are booked");
-}
-
 function applyIntentExtractedFields(
   state: Awaited<ReturnType<typeof loadLeadRecoveryState>>,
   intent: StructuredLeadIntent,
@@ -218,7 +212,7 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
       forceSchedulingRoute: false,
     });
     if (booking.handled) {
-      const confirmed = isBookingConfirmedSms(booking);
+      const confirmed = booking.bookingCompleted === true;
       state = {
         ...state,
         activeSpecialist: confirmed ? null : "SCHEDULING",

@@ -118,7 +118,7 @@ export async function handleMctbAiBookingOrchestratorResult(input: {
       },
       fallbackText: result.messageHint,
     });
-    return { handled: true, reply, action: "ai_booking" };
+    return { handled: true, reply, action: "ai_booking", bookingCompleted: true };
   }
 
   if (result.kind === "offer_slots") {

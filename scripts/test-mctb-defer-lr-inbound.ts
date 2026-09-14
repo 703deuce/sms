@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const handlers = readFileSync("src/lib/messaging/telnyx/webhook-handlers.ts", "utf8");
-assert.ok(handlers.includes("deferMctbLeadRecoveryInboundReply"));
-assert.ok(handlers.includes("mctbLeadRecoveryDeferred"));
-assert.ok(handlers.includes("deferMctbLeadRecoveryInboundReply(async () =>"));
+assert.ok(handlers.includes("await handleMctbCustomerSmsReply"));
+assert.ok(!handlers.includes("deferMctbLeadRecoveryInboundReply"));
 
-const defer = readFileSync("src/lib/mctb/messaging/defer-lead-recovery-inbound-reply.ts", "utf8");
-assert.ok(defer.includes("after("));
+const lock = readFileSync("src/lib/mctb/lead-recovery/cross-worker-lock.ts", "utf8");
+assert.ok(!lock.includes("pg_advisory_xact_lock"));
+assert.ok(lock.includes("withLeadRecoveryConversationLock"));
 
-console.log("test-mctb-defer-lr-inbound: ok");
+console.log("test-mctb-lr-inbound-webhook-path: ok");
