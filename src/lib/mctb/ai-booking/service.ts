@@ -9,7 +9,7 @@ import {
 } from "@/lib/mctb/ai-booking/config";
 import { getBookingProviders, auditMctbAiBookingProvider } from "@/lib/mctb/ai-booking/capabilities";
 import { getMctbAiBookingAdapter } from "@/lib/mctb/ai-booking/providers/registry";
-import { getMctbAiBookingSessionStore, recordOfferedSlots } from "@/lib/mctb/ai-booking/session-store";
+import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
 import type {
   CreateBookingRequest,
   CreateBookingResult,
