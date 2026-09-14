@@ -179,8 +179,13 @@ export async function handleTelnyxInbound(payload: unknown) {
     }
   }
 
+  let mctbLeadRecoveryDeferred = false;
   if (!replySent && parsed.body?.trim() && mctbInboundContext) {
-    try {
+    const { deferMctbLeadRecoveryInboundReply } = await import(
+      "@/lib/mctb/messaging/defer-lead-recovery-inbound-reply"
+    );
+    mctbLeadRecoveryDeferred = true;
+    deferMctbLeadRecoveryInboundReply(async () => {
       const { handleMctbCustomerSmsReply } = await import(
         "@/lib/agents/missed-call-text-back/customer-sms"
       );
@@ -193,8 +198,9 @@ export async function handleTelnyxInbound(payload: unknown) {
         providerMessageId: parsed.providerMessageId,
       });
       if (mctbReply.handled && mctbReply.reply?.trim()) {
-        replySent = true;
-      } else if (!mctbReply.handled && mctbInboundContext) {
+        return;
+      }
+      if (!mctbReply.handled) {
         console.warn("[telnyx/inbound] MCTB Lead Recovery did not reply", {
           workspaceId: targetWorkspaceId,
           reason: mctbReply.reason,
@@ -202,9 +208,7 @@ export async function handleTelnyxInbound(payload: unknown) {
           to: parsed.to,
         });
       }
-    } catch (err) {
-      console.error("[telnyx/inbound] MCTB Lead Recovery SMS failed", err);
-    }
+    });
   }
 
   return {
@@ -212,6 +216,7 @@ export async function handleTelnyxInbound(payload: unknown) {
     kind: result.kind,
     reply: result.replyText || null,
     replySent,
+    mctbLeadRecoveryDeferred,
   };
 }
 
