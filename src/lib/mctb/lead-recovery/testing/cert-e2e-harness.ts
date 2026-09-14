@@ -4,6 +4,8 @@ import { analyzeSmsBody } from "@/lib/sms/segment-encoding";
 import { sendQuickSms } from "@/lib/sms/send-quick";
 import { getRecordingSmsOutbox } from "@/lib/voice/testing/headless/recording-sms";
 import { resetLeadRecoveryE2eRecording } from "@/lib/mctb/lead-recovery/testing/recording/e2e-mode";
+import { recordCertE2eOutboundSms } from "@/lib/mctb/lead-recovery/testing/cert-sms-metrics";
+import { certResultsTraceEnabled, recordCertTurnTrace } from "@/lib/mctb/lead-recovery/testing/cert-results-trace";
 
 export const LR_E2E_WORKSPACE_ID = process.env.LR_CERT_E2E_WORKSPACE || "lr_cert_e2e";
 const BOOKING_URL = "https://book.example.test/acme-schedule";
@@ -39,6 +41,9 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
       "EXISTING_CUSTOMER_ISSUE",
       "BUSINESS_HOURS",
       "UNKNOWN",
+      "LANGUAGE_PREFERENCE",
+      "PRICING_QUESTION",
+      "BUSINESS_FAQ",
     ],
     paymentPolicy: {
       textToPayEnabled: true,
@@ -50,7 +55,24 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
       BOOKING_REQUEST: {
         enabled: true,
         collect: [],
-        actions: ["SEND_BOOKING_LINK"],
+        actions: ["AI_BOOK"],
+      },
+      PAYMENT_STATUS_QUESTION: {
+        enabled: true,
+        collect: [],
+        actions: ["CHECK_PAYMENT_STATUS"],
+      },
+      PRICING_QUESTION: {
+        enabled: true,
+        collect: [],
+        actions: ["CUSTOMER_MESSAGE"],
+        customerMessage: "We'll share pricing options shortly.",
+      },
+      BUSINESS_FAQ: {
+        enabled: true,
+        collect: [],
+        actions: ["CUSTOMER_MESSAGE"],
+        customerMessage: "Good question — our team can explain options.",
       },
       PAYMENT_REQUEST: {
         enabled: true,
@@ -80,6 +102,7 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
       "ESCALATE_HUMAN",
       "SUPPRESS_CONTACT",
       "END_AUTOMATION",
+      "CHECK_PAYMENT_STATUS",
     ],
     policyHealth: "READY",
   };
@@ -97,6 +120,8 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
             enabled: true,
             provider: "microsoft",
             entitled: true,
+            serviceName: "Cert HVAC Service",
+            calendarId: "cert-calendar-e2e",
           },
         },
       },
@@ -109,6 +134,8 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
             enabled: true,
             provider: "microsoft",
             entitled: true,
+            serviceName: "Cert HVAC Service",
+            calendarId: "cert-calendar-e2e",
           },
         },
       },
@@ -116,6 +143,46 @@ export async function ensureLeadRecoveryE2eWorkspace(): Promise<void> {
   });
 
   process.env.LR_E2E_BOOKING_URL = BOOKING_URL;
+  process.env.LR_CERT_E2E_NOW = "2026-09-13T12:00:00.000Z";
+}
+
+/** Restore booking-link-only policy for legacy booking-link E2E scenarios. */
+export async function configureE2eBookingLinkPolicy(): Promise<void> {
+  const prisma = getPrisma();
+  const ws = await prisma.workspace.findUnique({
+    where: { id: LR_E2E_WORKSPACE_ID },
+    select: { customFieldsConfig: true },
+  });
+  const root = (ws?.customFieldsConfig || {}) as Record<string, unknown>;
+  const mctb = (root.mctb || {}) as Record<string, unknown>;
+  const lr = (mctb.leadRecovery || {}) as Record<string, unknown>;
+  const intentPolicies = (lr.intentPolicies || {}) as Record<string, unknown>;
+  await prisma.workspace.update({
+    where: { id: LR_E2E_WORKSPACE_ID },
+    data: {
+      customFieldsConfig: {
+        ...root,
+        mctb: {
+          ...mctb,
+          leadRecovery: {
+            ...lr,
+            intentPolicies: {
+              ...intentPolicies,
+              BOOKING_REQUEST: {
+                enabled: true,
+                collect: [],
+                actions: ["SEND_BOOKING_LINK"],
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function configureE2eAiBookingPolicy(): Promise<void> {
+  await ensureLeadRecoveryE2eWorkspace();
 }
 
 export async function createE2eConversation(customerPhone = "+15555550100"): Promise<{
@@ -190,7 +257,10 @@ export async function runLeadRecoveryCustomerTurn(input: {
   }
 
   const smsBody = outboundSms || "";
-  return {
+  if (smsBody.trim()) {
+    recordCertE2eOutboundSms(smsBody);
+  }
+  const trace: E2eTurnTrace = {
     customerInput: input.body,
     lrHandled: lr.handled,
     lrAction: lr.handled ? lr.action : undefined,
@@ -199,6 +269,10 @@ export async function runLeadRecoveryCustomerTurn(input: {
     smsAnalysis: smsBody ? analyzeSmsBody(smsBody) : null,
     providerMessageId: input.providerMessageId,
   };
+  if (certResultsTraceEnabled()) {
+    recordCertTurnTrace(trace);
+  }
+  return trace;
 }
 
 export function resetE2eRecordingState() {

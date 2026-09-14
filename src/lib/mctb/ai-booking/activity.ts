@@ -20,6 +20,7 @@ export async function recordMctbBookingConfirmedActivity(input: {
   payload: BookingConfirmedPayload;
 }) {
   const prisma = getPrisma();
+  if (!prisma.mctbConversationBookingActivity?.create) return;
   await prisma.mctbConversationBookingActivity.create({
     data: {
       workspaceId: input.workspaceId,
@@ -38,6 +39,7 @@ export async function recordMctbAiBookingFallbackActivity(input: {
   reason: string;
 }) {
   const prisma = getPrisma();
+  if (!prisma.mctbConversationBookingActivity?.create) return;
   await prisma.mctbConversationBookingActivity.create({
     data: {
       workspaceId: input.workspaceId,

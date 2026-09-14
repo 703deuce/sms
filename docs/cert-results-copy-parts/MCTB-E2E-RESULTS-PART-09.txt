@@ -1,34 +1,79 @@
-MCTB E2E RESULTS — PART 09 (scenarios 65-67 of 67)
+MCTB E2E RESULTS — PART 09 (scenarios 33-36 of 67)
 
-SCENARIO 65: ctx-second-slot
-GROUP: CONVERSATION_CONTEXT
+SCENARIO 33: avail-then-reject-slots
+GROUP: AI_BOOKING
 RESULT: PASS
 ==============================================================================
 
-(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+TURN 1
+  Customer message: "Anything tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "None of those work."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gkmgy1p185i313a2k3r1f
+    - find_slots conv=cmu0gkmgy1p185i313a2k3r1f
+
+==============================================================================
+
+SCENARIO 34: payment-status-paid
+GROUP: PAYMENT_STATUS
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "Yes - your payment went through."
+  Outbound SMS capture: "Yes - your payment went through."
+  SMS economics: segments=1 encoding=GSM7 chars=32
 
   Booking provider calls: (none recorded)
 
 ==============================================================================
 
-SCENARIO 66: ctx-do-not-cancel
-GROUP: CONVERSATION_CONTEXT
+SCENARIO 35: payment-status-open
+GROUP: PAYMENT_STATUS
 RESULT: PASS
 ==============================================================================
 
-(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "Your payment is still pending."
+  Outbound SMS capture: "Your payment is still pending."
+  SMS economics: segments=1 encoding=GSM7 chars=30
 
   Booking provider calls: (none recorded)
 
 ==============================================================================
 
-SCENARIO 67: ctx-long-thread-corrections
-GROUP: CONVERSATION_CONTEXT
+SCENARIO 36: payment-status-failed
+GROUP: PAYMENT_STATUS
 RESULT: PASS
 ==============================================================================
 
-(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+TURN 1
+  Customer message: "Did my payment go through?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: payment_status_answer
+  Business SMS reply: "That payment did not go through."
+  Outbound SMS capture: "That payment did not go through."
+  SMS economics: segments=1 encoding=GSM7 chars=32
 
   Booking provider calls: (none recorded)
 
-END OF REPORT
+==============================================================================

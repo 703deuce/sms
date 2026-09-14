@@ -1,0 +1,83 @@
+================================================================================
+MCTB — WHAT CONTEXT EACH SEMANTIC LLM ACTUALLY RECEIVES (audit)
+================================================================================
+Last updated: after scheduling context enrichment pass.
+
+Legend:  YES = passed in user JSON today   PARTIAL = incomplete   NO = not passed
+
+--------------------------------------------------------------------------------
+1) LEAD RECOVERY INTENT AGENT
+--------------------------------------------------------------------------------
+Call site: lead-recovery/conversation-runtime.ts → runLeadRecoveryIntentAgent()
+
+| Field                         | Status   | Notes |
+|-------------------------------|----------|-------|
+| Current customer message      | YES      | `message` |
+| LR session phase              | YES      | `session_phase` (IDLE, COLLECT, AWAITING_SLOT_SELECTION, …) |
+| Full conversation thread      | YES      | `conversation[]` — inbox DB + state.conversationThread; cap 30 msgs / 12k chars |
+| Prior customer message only   | REMOVED  | Replaced by full thread |
+| Booking session active flag   | PARTIAL  | Only on active-booking workflow branch |
+| Offered slot ids/labels       | PARTIAL  | Only on active-booking workflow branch |
+| Collected fields (name, etc.) | NO       | Not in payload — model cannot see confirmed ADDRESS/REASON |
+| Pending action (pay/book)     | NO       | Not in payload — workflow_updates help only on current turn |
+| Last structured intent        | NO       | Not passed (only used internally when awaitingSlot + lastIntent shortcut) |
+| Business / policy constraints | NO       | Intentional — semantics only, policy is downstream |
+| Conversation transcript       | NO       | No recent_window |
+
+Pre-LLM: exact STOP/HELP/wrong-number protocol only (not in LLM user JSON).
+
+--------------------------------------------------------------------------------
+2) AI BOOKING INTENT ROUTER (standalone booking entry / non-LR path)
+--------------------------------------------------------------------------------
+Call site: ai-booking/conversation-runtime.ts → runIntentRouterAgent()
+
+| Field                         | Status   | Notes |
+|-------------------------------|----------|-------|
+| Current customer message      | YES      | `latest_message` |
+| recent_window (4 msgs)        | PARTIAL  | Supported in API but caller does NOT pass recentMessages today → always [] |
+| ai_booking_session_active     | YES      | Derived from persisted offeredSlots |
+| session_stage                 | YES      | From booking session store |
+| Offered slots detail          | NO       | Router only gets boolean session active |
+| LR collected fields           | NO       | |
+
+Skipped entirely when Lead Recovery uses forceSchedulingRoute (normal MCTB booking path).
+
+Non-LLM shortcut: AWAITING_SLOT_SELECTION → SCHEDULING/BOOK_SLOT without LLM call.
+
+--------------------------------------------------------------------------------
+3) SCHEDULING SPECIALIST (primary booking semantics)
+--------------------------------------------------------------------------------
+Call site: ai-booking/conversation-runtime.ts → runSchedulingSpecialistAgent()
+
+BEFORE enrichment (historical gap):
+  latest_message, timezone, current_time_utc, booking_already_authorized,
+  offered_slots[], session_stage, ai_booking_session_active
+
+AFTER enrichment (see scheduling-specialist.ts + conversation-runtime.ts):
+| Field                         | Status   | Notes |
+|-------------------------------|----------|-------|
+| Current customer message      | YES      | `latest_message` |
+| Prior customer message        | YES      | From LR state.lastCustomerMessage when available |
+| Prior business message        | PARTIAL  | `prior_business_message` from LR state when set |
+| Booking stage                 | YES      | `session_stage` + `booking_stage` alias |
+| Offered slots (indexed list)  | YES      | slot_id, start/end UTC, label, `index` 1-based |
+| Last availability query window| YES      | `last_queried_window` from session store |
+| Pending slot id               | YES      | `pending_slot_id` from session |
+| Collected customer fields     | YES      | `collected_fields` from LR state (NAME, ADDRESS, …) |
+| Business constraints          | YES      | service_name, duration_minutes, provider, timezone |
+| booking_already_authorized    | YES      | LR armed AI_BOOK on first turn |
+| ai_booking_session_active     | YES      | |
+| Full SMS transcript           | NO       | By design — only immediate prior turns |
+| Raw policy / payment rules    | NO       | By design — orchestrator + policy only |
+
+Runtime still owns: provider queries, slot validity, write epoch, create_booking.
+
+--------------------------------------------------------------------------------
+RECOMMENDED NEXT (not all implemented)
+--------------------------------------------------------------------------------
+- LR intent: add `collected_fields`, `pending_action`, `last_primary_intent` to user JSON.
+- LR state: set `lastBusinessMessage` on every outbound LR/booking reply for better follow-ups.
+- Router: pass `recentMessages` from conversation store when standalone booking is used.
+- Optional: single `conversation_context` builder shared by all three agents for consistency.
+
+================================================================================

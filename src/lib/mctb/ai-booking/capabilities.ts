@@ -16,6 +16,15 @@ export async function auditMctbAiBookingProvider(
   provider: MctbAiBookingProviderId,
 ): Promise<MctbProviderCapabilityFlags> {
   const notes: string[] = [];
+  if (process.env.LR_CERT_E2E === "1" && provider === "microsoft") {
+    return {
+      readCalendar: true,
+      checkAvailability: true,
+      createBooking: true,
+      aiBookingSupported: true,
+      notes: ["LR_CERT_E2E recording adapter"],
+    };
+  }
 
   if (provider === "zoho") {
     const conn = await getConnection(workspaceId, "zoho");

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { simulateLeadRecoveryPolicy } from "../src/lib/mctb/lead-recovery/policy-engine";
-import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/intent-agent";
+import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/testing/legacy-keyword-intent-classifier";
 import type {
   IntentPolicyShape,
   LeadRecoveryWorkspaceConfig,

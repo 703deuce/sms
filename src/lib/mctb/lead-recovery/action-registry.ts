@@ -27,7 +27,8 @@ export const ACTION_REGISTRY: Record<LeadRecoveryActionId, ActionRegistryEntry> 
     requiredFields: [],
     providerDependency: "calendar",
     requiresEntitlement: "ai_booking",
-    description: "Scheduling specialist + deterministic booking orchestrator",
+    description:
+      "AI scheduling workflow (provider availability READ; CREATE_BOOKING only after orchestrator confirmation)",
   },
   CREATE_CALLBACK_REQUEST: {
     id: "CREATE_CALLBACK_REQUEST",

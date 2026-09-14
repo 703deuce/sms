@@ -6,6 +6,7 @@ import type {
   FindAvailableTimesResult,
   MctbBookingContext,
   BookingStatusResult,
+  MctbBookingSlot,
 } from "@/lib/mctb/ai-booking/types";
 import type { MctbAiBookingWorkspaceConfig } from "@/lib/mctb/ai-booking/config";
 import { isLeadRecoveryE2eMode } from "@/lib/mctb/lead-recovery/testing/recording/e2e-mode";
@@ -17,7 +18,8 @@ export type RecordingBookingBehavior =
   | "disconnected"
   | "timeout"
   | "temporary_failure"
-  | "permanent_failure";
+  | "permanent_failure"
+  | "create_timeout";
 
 export type RecordedBookingCall = {
   kind: "find_slots" | "create_booking" | "status";
@@ -29,35 +31,56 @@ export type RecordedBookingCall = {
 const ledger: RecordedBookingCall[] = [];
 let behavior: RecordingBookingBehavior = "success";
 let findDelayMs = 0;
+let createDelayMs = 0;
+let findCallCount = 0;
+let customSlots: MctbBookingSlot[] | null = null;
+let revalidateOmitSlotId: string | null = null;
+let createFailSlotIds = new Set<string>();
 
-const DEFAULT_SLOTS = [
+export const CERT_DEFAULT_SLOTS: MctbBookingSlot[] = [
   {
-    slotId: "cert-slot-1",
+    slotId: "cert-slot-10am",
     startUtc: "2026-09-14T14:00:00.000Z",
     endUtc: "2026-09-14T15:00:00.000Z",
     timezone: "America/New_York",
     label: "Tomorrow 10 AM",
   },
   {
-    slotId: "cert-slot-2",
+    slotId: "cert-slot-1pm",
     startUtc: "2026-09-14T17:00:00.000Z",
     endUtc: "2026-09-14T18:00:00.000Z",
     timezone: "America/New_York",
     label: "Tomorrow 1 PM",
   },
   {
-    slotId: "cert-slot-3",
-    startUtc: "2026-09-14T19:30:00.000Z",
-    endUtc: "2026-09-14T20:30:00.000Z",
+    slotId: "cert-slot-3pm",
+    startUtc: "2026-09-14T19:00:00.000Z",
+    endUtc: "2026-09-14T20:00:00.000Z",
     timezone: "America/New_York",
-    label: "Tomorrow 3:30 PM",
+    label: "Tomorrow 3 PM",
+  },
+  {
+    slotId: "cert-slot-430pm",
+    startUtc: "2026-09-14T20:30:00.000Z",
+    endUtc: "2026-09-14T21:30:00.000Z",
+    timezone: "America/New_York",
+    label: "Tomorrow 4:30 PM",
   },
 ];
+
+function activeSlots(): MctbBookingSlot[] {
+  return customSlots ? [...customSlots] : [...CERT_DEFAULT_SLOTS];
+}
 
 export function resetRecordingBookingLedger() {
   ledger.length = 0;
   behavior = "success";
   findDelayMs = 0;
+  createDelayMs = 0;
+  findCallCount = 0;
+  customSlots = null;
+  revalidateOmitSlotId = null;
+  createFailSlotIds = new Set();
 }
 
 export function getRecordingBookingLedger(): readonly RecordedBookingCall[] {
@@ -70,6 +93,22 @@ export function setRecordingBookingBehavior(b: RecordingBookingBehavior) {
 
 export function setRecordingBookingFindDelay(ms: number) {
   findDelayMs = ms;
+}
+
+export function setRecordingBookingCreateDelay(ms: number) {
+  createDelayMs = ms;
+}
+
+export function setRecordingBookingSlots(slots: MctbBookingSlot[]) {
+  customSlots = slots;
+}
+
+export function setRecordingBookingRevalidateOmitsSlot(slotId: string | null) {
+  revalidateOmitSlotId = slotId;
+}
+
+export function setRecordingBookingCreateFailsForSlots(slotIds: string[]) {
+  createFailSlotIds = new Set(slotIds);
 }
 
 export function isRecordingBookingMode(): boolean {
@@ -102,6 +141,7 @@ export const recordingAiBookingAdapter: MctbAiBookingProviderAdapter = {
     req: FindAvailableTimesRequest,
   ): Promise<FindAvailableTimesResult> {
     if (findDelayMs > 0) await new Promise((r) => setTimeout(r, findDelayMs));
+    findCallCount += 1;
     ledger.push({
       kind: "find_slots",
       conversationId: req.conversationId,
@@ -119,21 +159,37 @@ export const recordingAiBookingAdapter: MctbAiBookingProviderAdapter = {
     if (behavior === "temporary_failure" || behavior === "permanent_failure") {
       return { ok: false, reason: "Provider error", fallbackRecommended: true };
     }
+    let slots = activeSlots();
+    const wStart = new Date(req.windowStartUtc).getTime();
+    const wEnd = new Date(req.windowEndUtc).getTime();
+    if (!Number.isNaN(wStart) && !Number.isNaN(wEnd)) {
+      slots = slots.filter((s) => {
+        const t = new Date(s.startUtc).getTime();
+        return t >= wStart && t <= wEnd;
+      });
+    }
+    if (findCallCount > 1 && revalidateOmitSlotId) {
+      slots = slots.filter((s) => s.slotId !== revalidateOmitSlotId);
+    }
     return {
       ok: true,
       provider: "microsoft",
-      slots: DEFAULT_SLOTS,
+      slots,
       queriedWindow: { startUtc: req.windowStartUtc, endUtc: req.windowEndUtc },
     };
   },
   async createBooking(_ctx, _config, req: CreateBookingRequest, resolvedSlot): Promise<CreateBookingResult> {
+    if (createDelayMs > 0) await new Promise((r) => setTimeout(r, createDelayMs));
     ledger.push({
       kind: "create_booking",
       conversationId: req.conversationId,
       slotId: resolvedSlot.slotId,
       timestamp: new Date().toISOString(),
     });
-    if (behavior === "slot_taken") {
+    if (behavior === "create_timeout") {
+      return { ok: false, reason: "Provider timeout", fallbackRecommended: true };
+    }
+    if (behavior === "slot_taken" || createFailSlotIds.has(resolvedSlot.slotId)) {
       return { ok: false, reason: "Slot no longer available", fallbackRecommended: true };
     }
     if (behavior === "permanent_failure") {
@@ -145,7 +201,7 @@ export const recordingAiBookingAdapter: MctbAiBookingProviderAdapter = {
     return {
       ok: true,
       provider: "microsoft",
-      providerBookingId: `cert-booking-${ledger.length}`,
+      providerBookingId: `cert-booking-${ledger.filter((l) => l.kind === "create_booking").length}`,
       startUtc: resolvedSlot.startUtc,
       endUtc: resolvedSlot.endUtc,
     };

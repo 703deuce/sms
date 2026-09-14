@@ -268,7 +268,11 @@ export async function executeMissedCallTextSend(input: {
       idempotencyKey: `mctb-recovery:${event.id}`,
       destinationUrl: tracked.destinationUrl || undefined,
       demoBypass: demoMode,
-      senderRoute: { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 },
+      senderRoute: {
+        sendWorkspaceId: route.sendWorkspaceId,
+        fromE164: route.fromE164,
+        phoneNumberId: route.phoneNumberId,
+      },
     });
 
     const messageId =

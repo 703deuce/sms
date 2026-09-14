@@ -10,6 +10,7 @@ import { evaluateLeadRecoveryPolicyMulti, markIntentCompleted } from "@/lib/mctb
 import { recordLeadRecoveryDomainEvent, actionToDomainEvent } from "@/lib/mctb/lead-recovery/domain-events";
 import { executeLeadRecoveryActions } from "@/lib/mctb/lead-recovery/action-runtime";
 import {
+  appendConversationTurn,
   applyCollectedField,
   loadLeadRecoveryState,
   mergeIntentIntoState,
@@ -19,12 +20,26 @@ import { tryExtractFieldFromMessage } from "@/lib/mctb/lead-recovery/field-colle
 import type { LeadRecoveryInboundResult } from "@/lib/mctb/lead-recovery/types";
 import { emitMctbHumanRequiredHandoff } from "@/lib/mctb/handoff/process-inbound-reply";
 import {
-  invalidatePendingActions,
   markPendingAction,
   registerInboundProviderMessage,
-  shouldInvalidatePendingActions,
-  withLeadRecoveryConversationLock,
 } from "@/lib/mctb/lead-recovery/conversation-guard";
+import { applyWorkflowInvalidation } from "@/lib/mctb/lead-recovery/workflow-invalidation";
+import { withLeadRecoveryCrossWorkerLock } from "@/lib/mctb/lead-recovery/cross-worker-lock";
+import { buildMctbSemanticConversationContext } from "@/lib/mctb/semantic-conversation-context";
+import type { LeadRecoveryCollectField, StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
+
+function applyIntentExtractedFields(
+  state: Awaited<ReturnType<typeof loadLeadRecoveryState>>,
+  intent: StructuredLeadIntent,
+) {
+  let next = state;
+  for (const [k, v] of Object.entries(intent.extracted_entities)) {
+    if (v?.trim()) {
+      next = applyCollectedField(next, k as LeadRecoveryCollectField, v.trim());
+    }
+  }
+  return next;
+}
 
 export async function handleMctbLeadRecoveryInboundSms(input: {
   workspaceId: string;
@@ -48,7 +63,7 @@ export async function handleMctbLeadRecoveryInboundSms(input: {
 
   const conversationId = input.conversationId;
 
-  return withLeadRecoveryConversationLock(conversationId, async () =>
+  return withLeadRecoveryCrossWorkerLock(conversationId, async () =>
     handleMctbLeadRecoveryInboundSmsLocked({ ...input, conversationId, config }),
   );
 }
@@ -82,7 +97,14 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     return { handled: true, reply: "", action: "duplicate_inbound_ignored" };
   }
 
-  if (awaitingSlot) {
+  state = appendConversationTurn(state, { role: "customer", text: input.body });
+
+  const bookingWorkflowActive =
+    awaitingSlot ||
+    state.phase === "AWAITING_SLOT_SELECTION" ||
+    state.activeSpecialist === "SCHEDULING";
+
+  if (bookingWorkflowActive) {
     state = { ...state, phase: "AWAITING_SLOT_SELECTION", activeSpecialist: "SCHEDULING" };
   }
 
@@ -94,17 +116,131 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     }
   }
 
-  const intent =
-    awaitingSlot
-      ? state.lastIntent ||
-        (await runLeadRecoveryIntentAgent({
-          message: input.body,
-          sessionPhase: state.phase,
-        }))
-      : await runLeadRecoveryIntentAgent({
-          message: input.body,
-          sessionPhase: state.phase,
+  const semanticCtx = await buildMctbSemanticConversationContext({
+    workspaceId: input.workspaceId,
+    conversationId,
+    latestCustomerMessage: input.body,
+  });
+
+  if (bookingWorkflowActive) {
+    const workflowIntent = await runLeadRecoveryIntentAgent({
+      message: input.body,
+      conversationContext: semanticCtx,
+    });
+
+    if (
+      workflowIntent.primary_intent === "OPT_OUT" ||
+      workflowIntent.primary_intent === "WRONG_NUMBER"
+    ) {
+      state = mergeIntentIntoState(state, workflowIntent);
+      const policy = evaluateLeadRecoveryPolicy({
+        workspace: config,
+        intent: workflowIntent,
+        collectedData: state.collectedFields,
+        conversationState: state,
+      });
+      const runtime = await executeLeadRecoveryActions({
+        workspaceId: input.workspaceId,
+        conversationId,
+        contactId: input.contactId,
+        customerPhone: input.customerPhone,
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        body: input.body,
+        timezone: input.timezone,
+        config,
+        intent: workflowIntent,
+        policy,
+        collectedFields: state.collectedFields,
+      });
+      if (runtime.suppressContact) {
+        const prisma = getPrisma();
+        await prisma.suppression.upsert({
+          where: { suppressionKey: `${input.workspaceId}:p:${input.customerPhone}` },
+          create: {
+            workspaceId: input.workspaceId,
+            phone: input.customerPhone,
+            suppressionKey: `${input.workspaceId}:p:${input.customerPhone}`,
+            reason: "sms_stop",
+            source: "lead_recovery",
+          },
+          update: { reason: "sms_stop", source: "lead_recovery" },
         });
+      }
+      await saveLeadRecoveryState({ ...state, phase: "COMPLETE", lastCustomerMessage: input.body });
+      return {
+        handled: true,
+        reply: runtime.reply,
+        action: runtime.action,
+        policy,
+        intent: workflowIntent,
+      };
+    }
+
+    state = applyWorkflowInvalidation(state, workflowIntent);
+    state = mergeIntentIntoState(state, workflowIntent);
+    if (
+      awaitingSlot &&
+      (session?.offeredSlots?.length ?? 0) > 0 &&
+      state.pendingAction?.action !== "AI_BOOK"
+    ) {
+      state = markPendingAction(state, {
+        action: "AI_BOOK",
+        epoch: state.stateVersion ?? 0,
+      });
+    }
+    const writeEpoch =
+      state.pendingAction?.action === "AI_BOOK"
+        ? state.pendingAction.epoch
+        : state.stateVersion ?? 0;
+    const { handleMctbAiBookingInboundSms } = await import(
+      "@/lib/mctb/ai-booking/conversation-runtime"
+    );
+    const booking = await handleMctbAiBookingInboundSms({
+      workspaceId: input.workspaceId,
+      conversationId,
+      contactId: input.contactId,
+      customerPhone: input.customerPhone,
+      customerName: input.customerName,
+      customerEmail: input.customerEmail,
+      body: input.body,
+      timezone: input.timezone,
+      writeEpoch,
+      forceSchedulingRoute: false,
+    });
+    if (booking.handled) {
+      state = {
+        ...state,
+        activeSpecialist: "SCHEDULING",
+        phase: "AWAITING_SLOT_SELECTION",
+        lastCustomerMessage: input.body,
+        lastBusinessMessage: booking.reply,
+      };
+      if (booking.reply?.trim()) {
+        state = appendConversationTurn(state, { role: "business", text: booking.reply });
+      }
+      await saveLeadRecoveryState(state);
+      return {
+        handled: true,
+        reply: booking.reply,
+        action: booking.action,
+        intent: workflowIntent,
+      };
+    }
+    state = { ...state, lastCustomerMessage: input.body };
+    await saveLeadRecoveryState(state);
+    return {
+      handled: true,
+      reply: booking.reply || config.fallbackPolicy.customerMessage || "What time works best?",
+      action: booking.action || "ai_booking_clarify",
+      intent: workflowIntent,
+    };
+  }
+
+  const intent = await runLeadRecoveryIntentAgent({
+    message: input.body,
+    conversationContext: semanticCtx,
+  });
 
   if (intent.primary_intent === "OPT_OUT" || intent.primary_intent === "WRONG_NUMBER") {
     state = mergeIntentIntoState(state, intent);
@@ -152,11 +288,10 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     };
   }
 
-  if (shouldInvalidatePendingActions({ intent, body: input.body })) {
-    state = invalidatePendingActions(state);
-  }
+  state = applyWorkflowInvalidation(state, intent);
 
   state = mergeIntentIntoState(state, intent);
+  state = applyIntentExtractedFields(state, intent);
   if (intent.confidence < 0.45) {
     state = { ...state, clarificationAttempts: state.clarificationAttempts + 1 };
   }
@@ -257,6 +392,8 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
       customerEmail: input.customerEmail,
       body: input.body,
       timezone: input.timezone,
+      writeEpoch,
+      forceSchedulingRoute: true,
     });
     if (booking.handled) {
       await saveLeadRecoveryState({
@@ -269,6 +406,13 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
         ...state,
         intentPlan: markIntentCompleted(state.intentPlan, "BOOKING_REQUEST"),
       };
+      state = {
+        ...state,
+        lastCustomerMessage: input.body,
+        lastBusinessMessage: combinedReply,
+      };
+      state = appendConversationTurn(state, { role: "business", text: combinedReply });
+      await saveLeadRecoveryState(state);
       return {
         handled: true,
         reply: combinedReply,
@@ -292,9 +436,30 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
   if (
     intent.primary_intent === "UNKNOWN" &&
     intent.confidence < 0.4 &&
-    state.clarificationAttempts > 1
+    state.clarificationAttempts > 2 &&
+    policy.phase !== "CLARIFY" &&
+    !intent.booking_requested &&
+    !intent.requested_time
   ) {
-    return { handled: false, reason: "defer_to_john" };
+    const safeReply =
+      config.fallbackPolicy.customerMessage ||
+      "Thanks — someone from our team will follow up shortly.";
+    state = { ...state, phase: "COMPLETE", lastCustomerMessage: input.body };
+    await saveLeadRecoveryState(state);
+    await emitMctbHumanRequiredHandoff({
+      workspaceId: input.workspaceId,
+      fromE164: input.customerPhone,
+      body: input.body,
+      conversationId,
+      missedCallEventId: input.missedCallEventId,
+    }).catch(() => undefined);
+    return {
+      handled: true,
+      reply: safeReply,
+      action: "lead_recovery_safe_fallback",
+      policy,
+      intent,
+    };
   }
 
   const domainKind = actionToDomainEvent(runtime.action);
@@ -316,9 +481,16 @@ async function handleMctbLeadRecoveryInboundSmsLocked(input: {
     };
   }
 
-  await saveLeadRecoveryState(state);
-
   const finalReply = replyPrefix ? `${replyPrefix}${runtime.reply}` : runtime.reply;
+  state = {
+    ...state,
+    lastCustomerMessage: input.body,
+    lastBusinessMessage: finalReply.trim() ? finalReply : state.lastBusinessMessage,
+  };
+  if (finalReply.trim()) {
+    state = appendConversationTurn(state, { role: "business", text: finalReply });
+  }
+  await saveLeadRecoveryState(state);
 
   return {
     handled: true,

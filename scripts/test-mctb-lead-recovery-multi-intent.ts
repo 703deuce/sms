@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import assert from "node:assert/strict";
-import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/intent-agent";
+import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/testing/legacy-keyword-intent-classifier";
 import { evaluateLeadRecoveryPolicyMulti } from "../src/lib/mctb/lead-recovery/intent-plan";
 import type { LeadRecoveryWorkspaceConfig } from "../src/lib/mctb/lead-recovery/types";
 

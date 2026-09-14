@@ -1,5 +1,8 @@
-import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
-import { extractJsonFromLlm } from "@/lib/ai/llm";
+import {
+  mctbSemanticModelId,
+  mctbSemanticStructuredJson,
+  resolveMctbSemanticLlmProvider,
+} from "@/lib/mctb/semantic-llm";
 
 export async function aiBookingStructuredJson<T>(input: {
   system: string;
@@ -8,20 +11,15 @@ export async function aiBookingStructuredJson<T>(input: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<T | null> {
-  if (!getOpenAiApiKey()) return null;
-  try {
-    const raw = await openAiChatCompletion(input.system, input.user, {
-      model: input.model,
-      temperature: input.temperature ?? 0.1,
-      maxTokens: input.maxTokens ?? 400,
-    });
-    if (!raw) return null;
-    try {
-      return extractJsonFromLlm(raw) as T;
-    } catch {
-      return null;
-    }
-  } catch {
-    return null;
-  }
+  const provider = resolveMctbSemanticLlmProvider();
+  const model =
+    provider === "deepseek" ? mctbSemanticModelId() : input.model || mctbSemanticModelId();
+  const result = await mctbSemanticStructuredJson<T>({
+    system: input.system,
+    user: input.user,
+    model,
+    temperature: input.temperature,
+    maxTokens: input.maxTokens,
+  });
+  return result?.data ?? null;
 }

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import {
   invalidatePendingActions,
   registerInboundProviderMessage,
-  shouldInvalidatePendingActions,
   withLeadRecoveryConversationLock,
 } from "@/lib/mctb/lead-recovery/conversation-guard";
+import { applyWorkflowInvalidation } from "@/lib/mctb/lead-recovery/workflow-invalidation";
 
 const state = {
   conversationId: "c1",
@@ -31,6 +31,7 @@ const state = {
   stateVersion: 0,
   pendingActionEpoch: 0,
   processedInboundIds: [],
+  pendingAction: { action: "AI_BOOK" as const, epoch: 1 },
   updatedAt: new Date().toISOString(),
 };
 
@@ -38,29 +39,29 @@ const first = registerInboundProviderMessage(state, "sid-1");
 const dup = registerInboundProviderMessage(first.state, "sid-1");
 assert.equal(dup.duplicate, true);
 
-assert.ok(
-  shouldInvalidatePendingActions({
-    intent: {
-      primary_intent: "BOOKING_REQUEST",
-      secondary_intents: [],
-      lead_type: "NEW",
-      urgency: "NORMAL",
-      service_category: null,
-      reason_for_contact: null,
-      location: { raw: null, resolved: null },
-      requested_time: null,
-      booking_requested: true,
-      callback_requested: false,
-      payment_intent: false,
-      complaint: false,
-      human_required: false,
-      language: "en",
-      confidence: 0.9,
-      missing_required_fields: [],
-    },
-    body: "never mind",
-  }),
+const afterSemanticCancel = applyWorkflowInvalidation(
+  { ...state, pendingAction: { action: "AI_BOOK", epoch: 1 } },
+  {
+    primary_intent: "BOOKING_REQUEST",
+    secondary_intents: [],
+    lead_type: "NEW",
+    urgency: "NORMAL",
+    service_category: null,
+    reason_for_contact: null,
+    location: { raw: null, resolved: null },
+    requested_time: null,
+    booking_requested: true,
+    callback_requested: false,
+    payment_intent: false,
+    complaint: false,
+    human_required: false,
+    language: "en",
+    confidence: 0.9,
+    missing_required_fields: [],
+    workflow_updates: [{ target: "ALL_PENDING", instruction: "CANCEL" }],
+  },
 );
+assert.equal(afterSemanticCancel.pendingAction, null);
 
 async function main() {
   let order = "";

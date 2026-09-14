@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { defaultGuardFields } from "@/lib/mctb/lead-recovery/conversation-guard";
+import { mergeConversationTurn, type MctbConversationTurn } from "@/lib/mctb/conversation-thread";
 import type {
   LeadRecoveryCollectField,
   LeadRecoveryConversationState,
@@ -75,12 +76,29 @@ export async function loadLeadRecoveryState(input: {
   return defaultState(input);
 }
 
-export async function saveLeadRecoveryState(state: LeadRecoveryConversationState): Promise<void> {
+export class LeadRecoveryStateVersionConflictError extends Error {
+  readonly code = "STATE_VERSION_CONFLICT" as const;
+  constructor(
+    readonly expectedVersion: number,
+    readonly actualVersion: number,
+  ) {
+    super(`Lead recovery state version conflict: expected ${expectedVersion}, got ${actualVersion}`);
+    this.name = "LeadRecoveryStateVersionConflictError";
+  }
+}
+
+export async function saveLeadRecoveryState(
+  state: LeadRecoveryConversationState,
+  options?: { expectedVersion?: number },
+): Promise<void> {
   if (useE2eInMemoryState()) {
-    e2eInMemoryState.set(
-      e2eStateKey(state.workspaceId, state.conversationId),
-      { ...state, updatedAt: new Date().toISOString() },
-    );
+    const key = e2eStateKey(state.workspaceId, state.conversationId);
+    const existing = e2eInMemoryState.get(key);
+    const actual = existing?.stateVersion ?? 0;
+    if (options?.expectedVersion !== undefined && options.expectedVersion !== actual) {
+      throw new LeadRecoveryStateVersionConflictError(options.expectedVersion, actual);
+    }
+    e2eInMemoryState.set(key, { ...state, updatedAt: new Date().toISOString() });
     return;
   }
   const prisma = getPrisma();
@@ -89,6 +107,11 @@ export async function saveLeadRecoveryState(state: LeadRecoveryConversationState
     select: { id: true, capturedFieldsJson: true, workspaceId: true },
   });
   const captured = (existing?.capturedFieldsJson || {}) as Record<string, unknown>;
+  const prior = captured[STATE_KEY] as LeadRecoveryConversationState | undefined;
+  const actualVersion = prior?.stateVersion ?? 0;
+  if (options?.expectedVersion !== undefined && options.expectedVersion !== actualVersion) {
+    throw new LeadRecoveryStateVersionConflictError(options.expectedVersion, actualVersion);
+  }
   const next = {
     ...captured,
     [STATE_KEY]: { ...state, updatedAt: new Date().toISOString() },
@@ -132,6 +155,14 @@ export function mergeIntentIntoState(
         : {}),
     },
   };
+}
+
+export function appendConversationTurn(
+  state: LeadRecoveryConversationState,
+  turn: MctbConversationTurn,
+): LeadRecoveryConversationState {
+  const thread = mergeConversationTurn(state.conversationThread ?? [], turn);
+  return { ...state, conversationThread: thread };
 }
 
 export function applyCollectedField(

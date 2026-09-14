@@ -1,0 +1,34 @@
+MCTB E2E RESULTS — PART 17 (scenarios 65-67 of 67)
+
+SCENARIO 65: ctx-second-slot
+GROUP: CONVERSATION_CONTEXT
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 66: ctx-do-not-cancel
+GROUP: CONVERSATION_CONTEXT
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 67: ctx-long-thread-corrections
+GROUP: CONVERSATION_CONTEXT
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+END OF REPORT

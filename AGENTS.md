@@ -366,3 +366,18 @@ Not “API tests pass.” Done when the **full user journey** in `MASS_TEXTING_G
 | Media | `/messaging/media` | `kimi-media-connected.tsx` |
 
 API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow review — they skip connected-shell state bugs.
+
+---
+
+## Cursor Cloud — AI Lead Recovery live SMS tests
+
+Cloud agents **cannot** receive real Telnyx SMS or open your Microsoft/Calendly tenant. Live certification is **manual on your phone + production/staging app**.
+
+1. Follow **`docs/MCTB-AI-LEAD-RECOVERY-LIVE-MANUAL-TEST-RUNBOOK.md`** — five tests, **one at a time**, in order.
+2. After each test, on a machine with DB access run:
+   `WORKSPACE_ID=... CUSTOMER_PHONE=+1... npx tsx scripts/mctb-lead-recovery-live-inspect.ts`
+3. Do **not** enable `LR_CERT_E2E` / `HEADLESS_PROVIDER_MODE=recording` on the live SMS server.
+4. Synthetic suites (when needed):  
+   `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/mctb-lead-recovery-e2e-cert.ts`  
+   (adversarial / stress V2 scripts use the same `NODE_OPTIONS` preload.)
+5. Paste **failures only** (checklist FAIL rows + log excerpts) into chat for fixes; do not rely on VM artifact links for primary delivery.

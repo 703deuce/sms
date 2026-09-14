@@ -1,35 +1,7 @@
-MCTB E2E RESULTS — PART 06 (scenarios 41-48 of 67)
+MCTB E2E RESULTS — PART 06 (scenarios 21-24 of 67)
 
-SCENARIO 41: payment-disconnected
-GROUP: PAYMENT_FAILURE
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "Send payment link"
-  LR handled: true
-  Runtime / tool path: Lead Recovery action: payment_failed
-  Business SMS reply: "Couldn't start payment - our team will follow up."
-  Outbound SMS capture: "Couldn't start payment - our team will follow up."
-  SMS economics: segments=1 encoding=GSM7 chars=49
-
-  Booking provider calls: (none recorded)
-
-==============================================================================
-
-SCENARIO 42: cross-worker-cas-conflict
-GROUP: CROSS_WORKER
-RESULT: PASS
-==============================================================================
-
-(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
-
-  Booking provider calls: (none recorded)
-
-==============================================================================
-
-SCENARIO 43: cross-worker-stale-booking-write
-GROUP: CROSS_WORKER
+SCENARIO 21: booking-change-mind-10x
+GROUP: AI_BOOKING
 RESULT: PASS
 ==============================================================================
 
@@ -42,110 +14,348 @@ TURN 1
   SMS economics: segments=1 encoding=GSM7 chars=112
 
 TURN 2
-  Customer message: "Never mind"
+  Customer message: "3 PM"
   LR handled: true
   Runtime / tool path: AI scheduling clarification (no provider write)
-  Business SMS reply: "Just to confirm — would you like to cancel this booking request, or keep looking at the offered times (10 AM, 1 PM, or 3 PM tomorrow)?"
-  Outbound SMS capture: "Just to confirm — would you like to cancel this booking request, or keep looking at the offered times (10 AM, 1 PM, or 3 PM tomorrow)?"
-  SMS economics: segments=2 encoding=UCS2 chars=134
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
 
-  Booking provider (recording) calls:
-    - find_slots conv=cmu0gle566f484a1g472c0l50
-
-==============================================================================
-
-SCENARIO 44: human-request
-GROUP: CONVERSATION
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "Can I talk to a person?"
+TURN 3
+  Customer message: "Actually never mind."
   LR handled: true
-  Runtime / tool path: CUSTOMER_MESSAGE template
-  Business SMS reply: "Got it - we'll call you back soon."
-  Outbound SMS capture: "Got it - we'll call you back soon."
-  SMS economics: segments=1 encoding=GSM7 chars=34
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or pick a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or pick a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=94
 
-  Booking provider calls: (none recorded)
-  Handoff / owner notification calls:
-    - {"workspaceId":"lr_cert_e2e","eventType":"callback_requested","handoffEventId":"e2e-handoff-lr:cmu0globh5k262u2k3q562y30:callback_requested:Can I talk to a person?","timestamp":"2026-09-13T23:42:47.562Z"}
-
-==============================================================================
-
-SCENARIO 45: who-is-this
-GROUP: CONVERSATION
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "Who is this?"
-  LR handled: true
-  Runtime / tool path: Lead Recovery action: collect_NAME
-  Business SMS reply: "What's your name?"
-  Outbound SMS capture: "What's your name?"
-  SMS economics: segments=1 encoding=GSM7 chars=17
-
-  Booking provider calls: (none recorded)
-
-==============================================================================
-
-SCENARIO 46: accidental-call
-GROUP: CONVERSATION
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "Sorry, pocket dial."
-  LR handled: true
-  Runtime / tool path: CUSTOMER_MESSAGE template
-  Business SMS reply: "Sorry about that - we won't message you again."
-  Outbound SMS capture: "Sorry about that - we won't message you again."
-  SMS economics: segments=1 encoding=GSM7 chars=46
-
-  Booking provider calls: (none recorded)
-
-==============================================================================
-
-SCENARIO 47: long-tail-messy
-GROUP: CONVERSATION
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "yeah"
-  LR handled: true
-  Runtime / tool path: Lead Recovery action: collect_REASON
-  Business SMS reply: "What can we help you with today?"
-  Outbound SMS capture: "What can we help you with today?"
-  SMS economics: segments=1 encoding=GSM7 chars=32
-
-TURN 2
-  Customer message: "tomorrow"
-  LR handled: true
-  Runtime / tool path: CUSTOMER_MESSAGE template
-  Business SMS reply: "Sure - what were you calling about?"
-  Outbound SMS capture: "Sure - what were you calling about?"
-  SMS economics: segments=1 encoding=GSM7 chars=35
-
-  Booking provider calls: (none recorded)
-
-==============================================================================
-
-SCENARIO 48: negation-no-pay-want-book
-GROUP: SEMANTIC_NEGATION
-RESULT: PASS
-==============================================================================
-
-TURN 1
-  Customer message: "I don't want to make a payment. I just want to book."
+TURN 4
+  Customer message: "Can somebody come tomorrow?"
   LR handled: true
   Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
   Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
   Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
   SMS economics: segments=1 encoding=GSM7 chars=112
 
+TURN 5
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 6
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request, or pick a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request, or pick a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=85
+
+TURN 7
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 8
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 9
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request, or pick a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request, or pick a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=85
+
+TURN 10
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 11
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 12
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=106
+
+TURN 13
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 14
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 15
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request, or pick a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request, or pick a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=85
+
+TURN 16
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 17
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 18
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=106
+
+TURN 19
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 20
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 21
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or pick a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or pick a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=94
+
+TURN 22
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 23
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 24
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=106
+
+TURN 25
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 26
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 27
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=106
+
+TURN 28
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 29
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 30
+  Customer message: "Actually never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  Outbound SMS capture: "No problem — would you like to cancel this booking request entirely, or keep looking for a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=106
+
   Booking provider (recording) calls:
-    - find_slots conv=cmu0glxoq4l5u585l4r415y5f
+    - find_slots conv=cmu0ghrec4u6s5i4t382m064i
+
+==============================================================================
+
+SCENARIO 22: booking-correction
+GROUP: AI_BOOKING
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Anything tomorrow after 2?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 3:00 PM and Mon, Sep 14, 4:30 PM. Do either work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 3:00 PM and Mon, Sep 14, 4:30 PM. Do either work?"
+  SMS economics: segments=1 encoding=GSM7 chars=82
+
+TURN 2
+  Customer message: "3 PM"
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  Outbound SMS capture: "Did you want Mon, Sep 14, 3:00 PM? Reply to confirm."
+  SMS economics: segments=1 encoding=GSM7 chars=52
+
+TURN 3
+  Customer message: "Sorry, 4:30 works"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "You're booked for Mon, Sep 14, 4:30 PM."
+  Outbound SMS capture: "You're booked for Mon, Sep 14, 4:30 PM."
+  SMS economics: segments=1 encoding=GSM7 chars=39
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gi59z4j6q2y316r0b0v1r
+    - find_slots conv=cmu0gi59z4j6q2y316r0b0v1r
+    - create_booking slotId=cert-slot-430pm conv=cmu0gi59z4j6q2y316r0b0v1r
+
+==============================================================================
+
+SCENARIO 23: booking-duplicate-confirm
+GROUP: AI_BOOKING
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "3 PM works"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "You're booked for Mon, Sep 14, 3:00 PM."
+  Outbound SMS capture: "You're booked for Mon, Sep 14, 3:00 PM."
+  SMS economics: segments=1 encoding=GSM7 chars=39
+  Provider message id: booking-dup-confirm-1
+
+TURN 3
+  Customer message: "3 PM works"
+  LR handled: true
+  Runtime / tool path: Duplicate inbound ignored (idempotency)
+  Business SMS reply: ""
+  Outbound SMS capture: ""
+  SMS economics: segments=n/a
+  Provider message id: booking-dup-confirm-1
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gijds5j5o072o0o333b0b
+    - find_slots conv=cmu0gijds5j5o072o0o333b0b
+    - create_booking slotId=cert-slot-3pm conv=cmu0gijds5j5o072o0o333b0b
+
+==============================================================================
+
+SCENARIO 24: booking-cancel-after-success
+GROUP: AI_BOOKING
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "3 PM works"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "You're booked for Mon, Sep 14, 3:00 PM."
+  Outbound SMS capture: "You're booked for Mon, Sep 14, 3:00 PM."
+  SMS economics: segments=1 encoding=GSM7 chars=39
+
+TURN 3
+  Customer message: "Never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Just to confirm — would you like to cancel the Mon, Sep 14, 3:00 PM booking, or change it to a different time?"
+  Outbound SMS capture: "Just to confirm — would you like to cancel the Mon, Sep 14, 3:00 PM booking, or change it to a different time?"
+  SMS economics: segments=2 encoding=UCS2 chars=110
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gitx60b431q2361475h3h
+    - find_slots conv=cmu0gitx60b431q2361475h3h
+    - create_booking slotId=cert-slot-3pm conv=cmu0gitx60b431q2361475h3h
 
 ==============================================================================

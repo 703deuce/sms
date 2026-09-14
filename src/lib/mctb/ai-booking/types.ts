@@ -76,6 +76,8 @@ export type CreateBookingRequest = {
   customerName: string;
   customerPhone?: string | null;
   customerEmail?: string | null;
+  /** Lead Recovery epoch captured when booking was armed — final provider-write gate. */
+  writeEpoch?: number;
 };
 
 export type CreateBookingResult =

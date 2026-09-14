@@ -5,7 +5,7 @@ import {
   deterministicIntentRouter,
   shouldRouteToScheduling,
 } from "../src/lib/mctb/ai-booking/agents/router";
-import { deterministicSchedulingSpecialist } from "../src/lib/mctb/ai-booking/agents/scheduling-specialist";
+import { deterministicSchedulingSpecialist } from "../src/lib/mctb/ai-booking/testing/deterministic-scheduling-fixture";
 import { mapSpecialistToOrchestratorInput } from "../src/lib/mctb/ai-booking/agents/map-to-orchestrator";
 import { ROUTER_CONFIDENCE_THRESHOLD } from "../src/lib/mctb/ai-booking/agents/types";
 

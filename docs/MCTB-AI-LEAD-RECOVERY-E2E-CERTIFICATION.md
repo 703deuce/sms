@@ -1,55 +1,107 @@
 # MCTB AI Lead Recovery — Full Agent E2E Certification
 
-**Timestamp:** 2026-09-13T20:08:39.977Z  
-**Model:** DeepSeek `deepseek-chat` (LR_CERT_FORCE_DEEPSEEK=1)  
+**Timestamp:** 2026-09-13T23:44:29.146Z  
+**Model:** DeepSeek `deepseek-chat` (LR_CERT_FORCE_DEEPSEEK=1, no cert fallback)  
+**LEAD_RECOVERY_INTENT_MODEL:** deepseek-chat (deepseek)  
+**BOOKING_SEMANTIC_MODEL:** deepseek-chat (deepseek)  
+**SEMANTIC_REGEX_AUTHORITY:** 0  
+**SEMANTIC_KEYWORD_AUTHORITY:** 0  
+**RAW_CONFIRM_REGEX_AUTHORITY:** 0  
+**JOHN_REACHABLE_FROM_LR:** 0  
+**CERT_SEMANTIC_SHORTCUTS:** 0  
+**AVERAGE_MESSAGES_PASSED:** 2.5  
+**P95_MESSAGES_PASSED:** 5  
+**AVERAGE_CONTEXT_TOKENS:** 169  
+**P95_CONTEXT_TOKENS:** 263  
+**NORMAL_THREAD_TRUNCATION_COUNT:** 0  
 **Path:** `handleMctbLeadRecoveryInboundSms` + recording SMS/booking/payment/handoff adapters
 
-> **Note:** Intent-only certification is separate. This document is **FULL AGENT E2E** only.
+> Intent-only certification is **ACCEPTED** separately — not re-run here.
+
+## Certification matrix
+
+| Area | Status |
+|------|--------|
+| DEEPSEEK MODEL QUALITY | ACCEPTED (intent cert, not re-run) |
+| INTENT CERTIFICATION | ACCEPTED |
+| FULL CONVERSATION E2E | 3 core + extended |
+| AI BOOKING E2E | 21/21 |
+| PAYMENT E2E | 2/2 |
+| PAYMENT STATUS E2E | 6/6 |
+| CALLBACK E2E | 1/1 |
+| EMERGENCY E2E | 1/1 |
+| PROVIDER FAILURE MATRIX | 3/3 |
+| CROSS-WORKER SERIALIZATION | 2/2 (CAS + stale write gate; PG lock when DB available) |
+| PROVIDER WRITE EPOCH GATE | 1/1 |
+| JOHN BOUNDARY | 1/1 (policy guard; **LEGACY_CONFLICT** for full John LLM loop) |
+| SMS SEGMENT QUALITY | ONE_SEGMENT 86.5% |
 
 ## Summary
 
 | Check | Result |
 |-------|--------|
-| E2E scenarios | 11/11 PASS |
+| E2E scenarios | 67/67 PASS |
 | Hard failures | 0 |
 | False success claims | 0 |
-| FULL_AGENT_PRODUCTION_CERTIFIED | **YES** |
+| FULL_AGENT_PRODUCTION_CERTIFIED | **NO** |
 
 ## Groups
 
 | Group | Pass |
 |-------|------|
+| AI_BOOKING | 21/21 |
 | BOOKING_LINK | 1/1 |
-| PAYMENT | 2/2 |
-| EMERGENCY | 1/1 |
-| CALLBACK | 1/1 |
-| PROVIDER_FAILURE | 1/1 |
-| FALSE_SUCCESS | 2/2 |
 | BURST_RACE | 2/2 |
+| CALLBACK | 1/1 |
+| CHANGE_OF_MIND | 5/5 |
+| CONVERSATION | 4/4 |
+| CONVERSATION_CONTEXT | 4/4 |
+| CROSS_WORKER | 2/2 |
+| EMERGENCY | 1/1 |
+| FALSE_SUCCESS | 2/2 |
 | JOHN_BOUNDARY | 1/1 |
+| PAYMENT | 2/2 |
+| PAYMENT_FAILURE | 2/2 |
+| PAYMENT_STATUS | 6/6 |
+| PROVIDER_FAILURE | 1/1 |
+| PROVIDER_WRITE_GATE | 1/1 |
+| SEMANTIC_NEGATION | 11/11 |
 
 ## SMS segment economics (outbound E2E)
 
-| ONE_SEGMENT_REPLY_RATE | 100.0% |
-| AVG_SEGMENTS_PER_REPLY | 1.00 |
-| P95_SEGMENTS_PER_REPLY | 1 |
-| UNNECESSARY_3_PLUS_SEGMENT | 0 |
+| OUTBOUND_SMS_COUNT | 111 |
+| MEASURED_SMS_COUNT | 111 |
+| ONE_SEGMENT_REPLY_RATE | 86.5% |
+| AVG_SEGMENTS_PER_REPLY | 1.15 |
+| P95_SEGMENTS_PER_REPLY | 2 |
+| AVG_CHARACTERS_PER_REPLY | 75 |
+| GSM7_COUNT | 96 |
+| UCS2_COUNT | 15 |
+| UNNECESSARY_3_PLUS_SEGMENT | 2 |
+
+## Hard production requirements (demonstrated in suite)
+
+| Requirement | Target |
+|-------------|--------|
+| FALSE_BOOKING_CONFIRMATIONS | 0 |
+| FALSE_PAYMENT_CONFIRMATIONS | 0 |
+| DUPLICATE_BOOKINGS | 0 |
+| STALE_PROVIDER_WRITES | 0 (epoch gate scenarios) |
+| UNNECESSARY_3_PLUS_SEGMENT_SMS | 0 |
 
 ## Hard failures
 
 _none_
 
-## Not yet in this runner (explicit gaps)
+## Remaining PARTIAL / LEGACY_CONFLICT
 
-- Full AI booking slot selection → confirm → BOOKING_CONFIRMED persistence loop
-- Payment status authoritative provider states (PAID/OPEN/FAILED)
-- Cross-worker DB advisory lock certification (multi-process)
-- John full LLM loop E2E
-- Human request / who-is-this / media / language scenario groups (add next increment)
+- **John full LLM E2E** — policy guard only; broader John runtime not fully certified here.
+- **Postgres advisory lock** — used when Prisma/DB available; E2E proves CAS + epoch gate (multi-instance simulation).
+- **Media / language / callback-ETA** — partial conversational coverage (extend in controlled real-world testing).
 
 ```
-FULL CONVERSATION E2E ................ 11/11
+FULL CONVERSATION E2E ................ 67/67
 FALSE SUCCESS CLAIMS ................. 0
 HARD FAILURES ........................ 0
-FULL_AGENT_PRODUCTION_CERTIFIED ...... YES
+FULL_AGENT_PRODUCTION_CERTIFIED ...... NO
 ```

@@ -3,7 +3,7 @@
  * Fails visibly — no OpenAI fallback.
  */
 
-import { extractJsonFromLlm } from "@/lib/ai/llm";
+import { mctbSemanticModelId, mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
 import { recordCertLlmUsage } from "@/lib/mctb/lead-recovery/testing/cert-metrics";
 
 let loggedOpenAiWarning = false;
@@ -86,48 +86,20 @@ export async function deepSeekStructuredJson<T>(input: {
   maxTokens?: number;
 }): Promise<CertLlmResult<T>> {
   const cfg = resolveDeepSeekCertConfig();
-  const apiKey = process.env.DEEPSEEK_API_KEY!.trim();
-  const started = Date.now();
-  const res = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: cfg.model,
-      temperature: input.temperature ?? 0.1,
-      max_tokens: input.maxTokens ?? 500,
-      messages: [
-        { role: "system", content: input.system },
-        { role: "user", content: input.user },
-      ],
-    }),
+  const hit = await mctbSemanticStructuredJson<T>({
+    system: input.system,
+    user: input.user,
+    model: cfg.model || mctbSemanticModelId(),
+    temperature: input.temperature,
+    maxTokens: input.maxTokens,
   });
-  const latencyMs = Date.now() - started;
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`LR_CERT: DeepSeek ${res.status}: ${text.slice(0, 400)}`);
-  }
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
-  const raw = json.choices?.[0]?.message?.content?.trim() || "";
-  if (!raw) throw new Error("LR_CERT: DeepSeek returned empty content");
-  const parsed = extractJsonFromLlm(raw) as T;
-  const usage = {
-    inputTokens: json.usage?.prompt_tokens,
-    outputTokens: json.usage?.completion_tokens,
-  };
-  recordCertLlmUsage(usage);
+  if (!hit) throw new Error("LR_CERT: DeepSeek semantic LLM unavailable");
+  recordCertLlmUsage({});
   return {
-    data: parsed,
+    data: hit.data,
     provider: "deepseek",
-    model: cfg.model,
-    latencyMs,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    raw,
+    model: hit.model,
+    latencyMs: hit.latencyMs,
+    raw: hit.raw,
   };
 }

@@ -36,10 +36,22 @@ export type SchedulingSpecialistResult = {
   requested_start?: string | null;
   preferred_time?: string | null;
   offered_slot_id?: string | null;
+  /** 1-based index into persisted offered_slots when slot id omitted */
+  offered_slot_index?: number | null;
   timezone: string;
   needs_clarification: boolean;
   question_type?: string | null;
   clarification_text?: string | null;
+  /** Semantic confirmation — orchestrator must not parse raw SMS for yes/works. */
+  customer_confirms_booking?: boolean;
+  customer_rejects_selection?: boolean;
+  is_correction?: boolean;
+  /** Semantic local date (YYYY-MM-DD) — runtime converts to UTC windows. */
+  requested_local_date?: string | null;
+  requested_local_time?: string | null;
+  time_relation?: "AT" | "AFTER" | "BEFORE" | "AROUND" | null;
+  daypart?: "MORNING" | "AFTERNOON" | "EVENING" | null;
+  time_specificity?: "EXACT" | "DAYPART" | "DATE_ONLY" | null;
 };
 
 export const ROUTER_CONFIDENCE_THRESHOLD = 0.72;

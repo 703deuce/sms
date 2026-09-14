@@ -28,7 +28,7 @@ export type QuickSendSmsInput = {
    * Route outbound through another workspace's provider registration (e.g. platform Telnyx A2P).
    * Message rows still belong to workspaceId. Does not skip credits/trial unless demoBypass.
    */
-  senderRoute?: { sendWorkspaceId: string; fromE164: string };
+  senderRoute?: { sendWorkspaceId: string; fromE164: string; phoneNumberId?: string };
 };
 
 export async function sendQuickSms(input: QuickSendSmsInput) {
@@ -130,12 +130,20 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
   const reg = await getRegistrationByWorkspace(input.workspaceId);
   let sendWorkspaceId = input.workspaceId;
   let activeReg = reg;
+  let sendFromAuthorizedPhone = false;
 
   if (input.senderRoute) {
     const routeReg = await getRegistrationByWorkspace(input.senderRoute.sendWorkspaceId);
     if (routeReg) {
       sendWorkspaceId = input.senderRoute.sendWorkspaceId;
       activeReg = routeReg;
+    }
+    if (input.senderRoute.phoneNumberId) {
+      const { isPhoneAuthorizedForOutboundSms } = await import(
+        "@/lib/mctb/messaging/outbound-sms-route"
+      );
+      const phoneAuth = await isPhoneAuthorizedForOutboundSms(input.senderRoute.phoneNumberId);
+      sendFromAuthorizedPhone = phoneAuth.allowed;
     }
   } else if (input.demoBypass) {
     const { resolvePlatformDemoOwnerWorkspaceId } = await import(
@@ -151,13 +159,17 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
     }
   }
 
-  if (!input.demoBypass && !input.senderRoute && !isMessagingReady(reg)) {
+  if (!input.demoBypass && !sendFromAuthorizedPhone && !input.senderRoute && !isMessagingReady(reg)) {
     throw new Error(
       "SMS is blocked until messaging registration is ready (Brand APPROVED, A2P VERIFIED, number attached).",
     );
   }
 
-  if (input.senderRoute && !isMessagingSendAuthorized(activeReg)) {
+  if (
+    input.senderRoute &&
+    !sendFromAuthorizedPhone &&
+    !isMessagingSendAuthorized(activeReg)
+  ) {
     throw new Error("Outbound SMS sender is not messaging-ready for its provider regime.");
   }
 
@@ -246,7 +258,10 @@ export async function sendQuickSms(input: QuickSendSmsInput) {
       to,
       finalBody,
       input.mediaUrls,
-      poolFrom || input.from || preferredFrom,
+      poolFrom || input.from || input.senderRoute?.fromE164 || preferredFrom,
+      input.senderRoute?.phoneNumberId
+        ? { authorizedPhoneNumberId: input.senderRoute.phoneNumberId }
+        : undefined,
     );
     providerAccepted = true;
     providerSid = result.sid;

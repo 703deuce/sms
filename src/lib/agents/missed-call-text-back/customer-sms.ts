@@ -199,6 +199,34 @@ export async function handleJohnCustomerSmsReply(input: {
     timezone: config.timezone,
       });
 
+  if (!leadRecovery.handled && leadRecoveryConfig.enabled) {
+    const safeReply =
+      leadRecoveryConfig.fallbackPolicy.customerMessage ||
+      "Thanks — someone from our team will follow up shortly.";
+    const sender = await resolveMctbSmsSender({
+      workspaceId: input.workspaceId,
+      config,
+    });
+    if (sender?.e164 && safeReply.trim()) {
+      await sendQuickSms({
+        workspaceId: input.workspaceId,
+        to: input.fromE164,
+        body: safeReply,
+        from: sender.e164,
+        idempotencyKey: `mctb-lr-safe-fallback:${conversationId || recentEvent.id}:${input.body.slice(0, 24)}`,
+      }).catch(() => undefined);
+    }
+    await prisma.missedCallEvent.update({
+      where: { id: recentEvent.id },
+      data: { status: "CUSTOMER_REPLIED" },
+    });
+    return {
+      handled: true,
+      action: "lead_recovery_safe_fallback",
+      reply: safeReply,
+    };
+  }
+
   if (aiBooking.handled) {
     const sender = await resolveMctbSmsSender({
       workspaceId: input.workspaceId,
@@ -232,6 +260,10 @@ export async function handleJohnCustomerSmsReply(input: {
       action: aiBooking.action,
       reply: aiBooking.reply,
     };
+  }
+
+  if (leadRecoveryConfig.enabled) {
+    return { handled: false, reason: "lead_recovery_enabled_john_blocked" };
   }
 
   const llmResult = await runJohnCustomerLlmLoop({

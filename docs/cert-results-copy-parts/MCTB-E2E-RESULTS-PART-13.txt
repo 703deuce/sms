@@ -1,0 +1,73 @@
+MCTB E2E RESULTS — PART 13 (scenarios 49-52 of 67)
+
+SCENARIO 49: negation-no-book-want-price
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Don't book anything. Just send me the price."
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "We'll share pricing options shortly."
+  Outbound SMS capture: "We'll share pricing options shortly."
+  SMS economics: segments=1 encoding=GSM7 chars=36
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 50: negation-paid-need-schedule
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "I already paid. I need to schedule."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gm4sy083x2z5h084x0u1h
+
+==============================================================================
+
+SCENARIO 51: negation-pay-when-here-not-deposit
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow? I can pay when they get here."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gm9d50m5h2h656x0g3t0f
+
+==============================================================================
+
+SCENARIO 52: negation-no-appointment-callback
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "I don't want an appointment. Have someone call me."
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "Got it - we'll call you back soon."
+  Outbound SMS capture: "Got it - we'll call you back soon."
+  SMS economics: segments=1 encoding=GSM7 chars=34
+
+  Booking provider calls: (none recorded)
+  Handoff / owner notification calls:
+    - {"workspaceId":"lr_cert_e2e","eventType":"callback_requested","handoffEventId":"e2e-handoff-lr:cmu0gmdhq054y3s6l1u5w2k5n:callback_requested:I don't want an appointm","timestamp":"2026-09-13T23:43:20.378Z"}
+
+==============================================================================

@@ -13,10 +13,14 @@ import { clearRecordingSmsOutbox } from "@/lib/voice/testing/headless/recording-
 import { resetRecordingPaymentLedger } from "@/lib/mctb/lead-recovery/testing/recording/recording-payment";
 import { resetRecordingBookingLedger } from "@/lib/mctb/lead-recovery/testing/recording/recording-booking";
 import { resetRecordingHandoffLedger } from "@/lib/mctb/lead-recovery/testing/recording/recording-handoff";
+import { resetCertPaymentStatus } from "@/lib/mctb/lead-recovery/payment-status";
+import { resetCertBookingIdempotency } from "@/lib/mctb/ai-booking/service";
 
 export function resetLeadRecoveryE2eRecording(): void {
   clearRecordingSmsOutbox();
   resetRecordingPaymentLedger();
   resetRecordingBookingLedger();
   resetRecordingHandoffLedger();
+  resetCertBookingIdempotency();
+  resetCertPaymentStatus();
 }

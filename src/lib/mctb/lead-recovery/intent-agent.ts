@@ -1,24 +1,34 @@
-import { aiBookingStructuredJson } from "@/lib/mctb/ai-booking/agents/json-llm";
-import { getAiBookingRouterModel } from "@/lib/mctb/ai-booking/agents/model-config";
+import { mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
+import {
+  isBareCarrierStopMessage,
+  protocolLeadRecoveryIntent,
+} from "@/lib/mctb/lead-recovery/protocol-intent";
+import { LEAD_RECOVERY_INTENT_AGENT_SYSTEM } from "@/lib/mctb/lead-recovery/intent-agent-prompt";
 import type {
   LeadRecoveryCollectField,
   LeadRecoveryIntent,
   LeadRecoveryUrgency,
+  LeadRecoveryWorkflowTarget,
+  LeadRecoveryWorkflowUpdate,
   StructuredLeadIntent,
 } from "@/lib/mctb/lead-recovery/types";
 import { LEAD_RECOVERY_INTENTS } from "@/lib/mctb/lead-recovery/types";
-
-const STOP_RE = /^(stop|unsubscribe|cancel|end|quit)\b/i;
-const WRONG_NUMBER_RE = /\b(wrong number|wrong person|not me|don't know you)\b/i;
-
-const INTENT_AGENT_SYSTEM = `You classify customer SMS for a business lead-recovery product.
-Return JSON only. Identify what the customer wants — NOT what the business should do.
-Intents (use exact strings): ${LEAD_RECOVERY_INTENTS.join(", ")}.
-Keys: primary_intent, secondary_intents (array), lead_type (NEW|EXISTING|UNKNOWN), urgency (LOW|NORMAL|HIGH|EMERGENCY),
-service_category (string|null), reason_for_contact (string|null), location ({raw, resolved}), requested_time (string|null),
-booking_requested (boolean), callback_requested (boolean), payment_intent (boolean), complaint (boolean),
-human_required (boolean), language (string), confidence (0-1), missing_required_fields (array of field ids).
-Do not invent business policy. Multiple intents allowed when clearly present.`;
+import {
+  defaultBookingDispositionForIntent,
+  parseBookingDisposition,
+} from "@/lib/mctb/lead-recovery/booking-semantics";
+import {
+  buildMctbSemanticConversationContext,
+  leadRecoveryIntentUserPayload,
+  type MctbSemanticConversationContext,
+} from "@/lib/mctb/semantic-conversation-context";
+import {
+  INTENT_CONSISTENCY_REPAIR_HINT,
+  parseStopScope,
+  reconcileIntentWithStructuredState,
+  reconcileStructuredIntentConsistency,
+  validateStructuredIntentConsistency,
+} from "@/lib/mctb/lead-recovery/intent-semantic-consistency";
 
 function emptyIntent(partial: Partial<StructuredLeadIntent>): StructuredLeadIntent {
   return {
@@ -31,19 +41,74 @@ function emptyIntent(partial: Partial<StructuredLeadIntent>): StructuredLeadInte
     location: { raw: null, resolved: null },
     requested_time: null,
     booking_requested: false,
+    booking_disposition: "NONE",
     callback_requested: false,
     payment_intent: false,
     complaint: false,
+    human_requested: false,
     human_required: false,
+    needs_clarification: false,
+    extracted_entities: {},
+    semantic_missing_information: [],
     language: "en",
     confidence: 0.5,
     missing_required_fields: [],
+    workflow_updates: [],
+    stop_scope: null,
     ...partial,
   };
 }
 
 function isIntent(v: string): v is LeadRecoveryIntent {
   return (LEAD_RECOVERY_INTENTS as readonly string[]).includes(v);
+}
+
+const WORKFLOW_TARGETS = new Set<LeadRecoveryWorkflowTarget>([
+  "PENDING_PAYMENT",
+  "PENDING_BOOKING",
+  "PENDING_CALLBACK",
+  "ALL_PENDING",
+]);
+
+const COLLECT_FIELDS = new Set<LeadRecoveryCollectField>([
+  "NAME",
+  "EMAIL",
+  "PHONE",
+  "ADDRESS",
+  "REASON",
+  "SERVICE_CATEGORY",
+  "ISSUE_DESCRIPTION",
+  "URGENCY",
+  "CALLBACK_NUMBER",
+  "CALLBACK_TIME",
+  "APPOINTMENT_PREFERENCE",
+]);
+
+function parseWorkflowUpdates(raw: unknown): LeadRecoveryWorkflowUpdate[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LeadRecoveryWorkflowUpdate[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const target = String((row as { target?: string }).target || "");
+    const instruction = String((row as { instruction?: string }).instruction || "");
+    if (!WORKFLOW_TARGETS.has(target as LeadRecoveryWorkflowTarget)) continue;
+    if (instruction !== "CANCEL" && instruction !== "KEEP") continue;
+    out.push({
+      target: target as LeadRecoveryWorkflowTarget,
+      instruction: instruction as "CANCEL" | "KEEP",
+    });
+  }
+  return out;
+}
+
+function parseExtractedEntities(raw: unknown): Partial<Record<LeadRecoveryCollectField, string>> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Partial<Record<LeadRecoveryCollectField, string>> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!COLLECT_FIELDS.has(k as LeadRecoveryCollectField)) continue;
+    if (typeof v === "string" && v.trim()) out[k as LeadRecoveryCollectField] = v.trim();
+  }
+  return out;
 }
 
 export function normalizeStructuredIntent(raw: Record<string, unknown>): StructuredLeadIntent | null {
@@ -62,8 +127,16 @@ export function normalizeStructuredIntent(raw: Record<string, unknown>): Structu
       ? (urgencyRaw as LeadRecoveryUrgency)
       : "NORMAL";
   const loc = raw.location && typeof raw.location === "object" ? (raw.location as Record<string, unknown>) : {};
-  const missing = Array.isArray(raw.missing_required_fields)
-    ? (raw.missing_required_fields as LeadRecoveryCollectField[])
+  const humanRequested =
+    raw.human_requested === true || (raw.human_required === true && raw.human_requested !== false);
+
+  const extracted = parseExtractedEntities(raw.extracted_entities);
+  if (typeof loc.raw === "string" && loc.raw.trim() && !extracted.ADDRESS) {
+    extracted.ADDRESS = loc.raw.trim();
+  }
+
+  const semanticMissing = Array.isArray(raw.semantic_missing_information)
+    ? raw.semantic_missing_information.map((x) => String(x)).filter(Boolean)
     : [];
 
   return emptyIntent({
@@ -80,173 +153,132 @@ export function normalizeStructuredIntent(raw: Record<string, unknown>): Structu
     },
     requested_time: typeof raw.requested_time === "string" ? raw.requested_time : null,
     booking_requested: raw.booking_requested === true,
+    booking_disposition: parseBookingDisposition(
+      raw.booking_disposition ??
+        (raw.booking_requested === true ? "REQUEST_BOOKING" : defaultBookingDispositionForIntent(primary)),
+    ),
     callback_requested: raw.callback_requested === true,
     payment_intent: raw.payment_intent === true,
     complaint: raw.complaint === true,
-    human_required: raw.human_required === true,
+    human_requested: humanRequested,
+    human_required: false,
+    needs_clarification: raw.needs_clarification === true,
+    extracted_entities: extracted,
+    semantic_missing_information: semanticMissing,
     language: typeof raw.language === "string" ? raw.language : "en",
     confidence: Math.max(0, Math.min(1, confidence)),
-    missing_required_fields: missing,
+    missing_required_fields: [],
+    workflow_updates: parseWorkflowUpdates(raw.workflow_updates),
+    stop_scope: parseStopScope(raw.stop_scope),
   });
 }
 
-/** Deterministic intent classification — no provider calls, no business policy. */
-export function deterministicLeadRecoveryIntent(input: {
-  message: string;
-  sessionPhase?: string | null;
-}): StructuredLeadIntent {
-  const text = input.message.trim();
-  const lower = text.toLowerCase();
+function finalizeStructuredIntent(intent: StructuredLeadIntent): StructuredLeadIntent {
+  const issues = validateStructuredIntentConsistency(intent);
+  if (!issues.length) return intent;
+  const reconciled = reconcileStructuredIntentConsistency(intent);
+  const after = validateStructuredIntentConsistency(reconciled);
+  if (!after.length) return reconciled;
+  return {
+    ...reconciled,
+    needs_clarification: true,
+    primary_intent: "UNKNOWN",
+    confidence: Math.min(reconciled.confidence, 0.4),
+  };
+}
 
-  if (STOP_RE.test(text)) {
-    return emptyIntent({ primary_intent: "OPT_OUT", confidence: 1 });
-  }
-  if (WRONG_NUMBER_RE.test(lower)) {
-    return emptyIntent({ primary_intent: "WRONG_NUMBER", confidence: 0.95 });
-  }
+function llmUnavailableIntent(): StructuredLeadIntent {
+  return emptyIntent({ primary_intent: "UNKNOWN", confidence: 0.15, needs_clarification: true });
+}
 
-  if (input.sessionPhase === "AWAITING_SLOT_SELECTION" && /\d|first|second|third|works|yes/i.test(text)) {
-    return emptyIntent({
-      primary_intent: "SPECIFIC_TIME_REQUEST",
-      booking_requested: true,
-      confidence: 0.98,
-    });
+function shouldDeferBareStopToSemantics(ctx: MctbSemanticConversationContext | null): boolean {
+  if (!ctx) return false;
+  const st = ctx.structured_state;
+  if (st.pending_action) return true;
+  if (
+    st.active_workflow === "BOOKING" ||
+    st.active_workflow === "PAYMENT" ||
+    st.active_workflow === "CALLBACK" ||
+    st.active_workflow === "MIXED"
+  ) {
+    return true;
   }
-
-  const secondary: LeadRecoveryIntent[] = [];
-  let primary: LeadRecoveryIntent = "UNKNOWN";
-  let urgency: LeadRecoveryUrgency = "NORMAL";
-  let confidence = 0.85;
-
-  if (/\b(pouring|flooding|gas leak|no heat|sparks|emergency|urgent|asap)\b/i.test(text)) {
-    primary = "EMERGENCY_OR_URGENT";
-    urgency = "EMERGENCY";
-    confidence = 0.92;
-  }
-  if (/\b(leak|broken|repair|install|not working|service)\b/i.test(text) && primary === "UNKNOWN") {
-    primary = "SERVICE_REQUEST";
-  }
-  if (/\b(call me|callback|call back|phone me)\b/i.test(text)) {
-    if (primary === "UNKNOWN") primary = "CALLBACK_REQUEST";
-    else secondary.push("CALLBACK_REQUEST");
-  }
-  if (/\b(serve|service area|come to|do you come)\b/i.test(text) && /\b(stafford|zip|area)\b/i.test(text)) {
-    if (primary === "UNKNOWN") primary = "SERVICE_AREA_CHECK";
-    else secondary.push("SERVICE_AREA_CHECK");
-  }
-  if (/\b(reschedule|move my appointment|move tomorrow)\b/i.test(text)) {
-    primary = "RESCHEDULE_REQUEST";
-  } else if (/\b(book|schedule|appointment|come out|tomorrow|available)\b/i.test(text)) {
-    if (primary === "UNKNOWN") primary = "BOOKING_REQUEST";
-    else secondary.push("BOOKING_REQUEST");
-  }
-  if (/\b(how much|price|cost|quote)\b/i.test(text)) {
-    if (primary === "UNKNOWN") primary = "PRICING_QUESTION";
-    else secondary.push("PRICING_QUESTION");
-  }
-  if (/\b(estimate|bid)\b/i.test(text)) {
-    secondary.push("ESTIMATE_REQUEST");
-    if (primary === "UNKNOWN") primary = "ESTIMATE_REQUEST";
-  }
-  if (/\b(stafford|zip|area|serve|come to)\b/i.test(text)) {
-    secondary.push("SERVICE_AREA_CHECK");
-  }
-  if (/\b(open|hours|tonight|closed)\b/i.test(text)) {
-    secondary.push("BUSINESS_HOURS");
-  }
-  if (/\b(yesterday|last time|existing|warranty|billing)\b/i.test(text)) {
-    primary = "EXISTING_CUSTOMER_ISSUE";
-    confidence = 0.88;
-  }
-  if (/\b(cancel)\b/i.test(text)) {
-    primary = "CANCEL_REQUEST";
-  }
-  if (/\b(pay|deposit|invoice)\b/i.test(text)) {
-    primary = "PAYMENT_REQUEST";
-  }
-  if (/\b(payment go through|paid|charge)\b/i.test(text)) {
-    primary = "PAYMENT_STATUS_QUESTION";
-  }
-  if (/\b(broke something|terrible|unhappy|complaint)\b/i.test(text)) {
-    primary = "COMPLAINT";
-    confidence = 0.9;
-  }
-  if (/\b(vendor|recruit|hiring|seo services)\b/i.test(text)) {
-    primary = "SPAM_VENDOR_RECRUITING";
-  }
-  if (/\b(spanish|español|habla)\b/i.test(text)) {
-    secondary.push("LANGUAGE_PREFERENCE");
-  }
-  if (primary === "UNKNOWN" && /\b(calling about|was calling)\b/i.test(text)) {
-    primary = "SERVICE_REQUEST";
-    confidence = 0.75;
-  }
-  if (primary === "UNKNOWN" && text.length > 2) {
-    confidence = 0.35;
-  }
-
-  const booking_requested =
-    primary === "BOOKING_REQUEST" ||
-    primary === "SPECIFIC_TIME_REQUEST" ||
-    secondary.includes("BOOKING_REQUEST");
-  const callback_requested = primary === "CALLBACK_REQUEST" || secondary.includes("CALLBACK_REQUEST");
-  const payment_intent = primary === "PAYMENT_REQUEST";
-  const complaint = primary === "COMPLAINT";
-
-  return emptyIntent({
-    primary_intent: primary,
-    secondary_intents: secondary.filter((s) => s !== primary),
-    urgency,
-    reason_for_contact: text.slice(0, 500),
-    booking_requested,
-    callback_requested,
-    payment_intent,
-    complaint,
-    confidence,
-  });
+  return ctx.conversation.some((t) => t.role === "business");
 }
 
 export async function runLeadRecoveryIntentAgent(input: {
   message: string;
+  workspaceId?: string;
+  conversationId?: string;
+  conversationContext?: MctbSemanticConversationContext | null;
+  /** @deprecated use conversationContext */
   sessionPhase?: string | null;
+  priorCustomerMessage?: string | null;
+  bookingSessionActive?: boolean;
+  offeredSlots?: Array<{ slot_id: string; label?: string | null }>;
 }): Promise<StructuredLeadIntent> {
-  const deterministic = deterministicLeadRecoveryIntent(input);
-  const certAlwaysLlm = process.env.LR_CERT_ALWAYS_LLM === "1";
-  const certDeepSeek = process.env.LR_CERT_FORCE_DEEPSEEK === "1";
-
-  if (
-    !certAlwaysLlm &&
-    (deterministic.confidence >= 0.9 || deterministic.primary_intent === "OPT_OUT")
-  ) {
-    return deterministic;
-  }
-
-  if (certDeepSeek) {
-    const { deepSeekStructuredJson } = await import(
-      "@/lib/mctb/lead-recovery/testing/cert-model"
-    );
-    const llm = await deepSeekStructuredJson<Record<string, unknown>>({
-      system: INTENT_AGENT_SYSTEM,
-      user: JSON.stringify({ message: input.message, session_phase: input.sessionPhase }),
-      temperature: 0.1,
-      maxTokens: 500,
+  let userPayload: Record<string, unknown>;
+  let semanticCtx: MctbSemanticConversationContext | null = input.conversationContext ?? null;
+  if (!semanticCtx && input.workspaceId && input.conversationId) {
+    semanticCtx = await buildMctbSemanticConversationContext({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      latestCustomerMessage: input.message,
     });
-    // usage recorded in cert-metrics via deepSeekStructuredJson
-    const normalized = normalizeStructuredIntent(llm.data);
-    if (!normalized) return deterministic;
-    return normalized;
   }
 
-  const llm = await aiBookingStructuredJson<Record<string, unknown>>({
-    system: INTENT_AGENT_SYSTEM,
-    user: JSON.stringify({ message: input.message, session_phase: input.sessionPhase }),
-    model: getAiBookingRouterModel(),
-    temperature: 0.1,
-    maxTokens: 500,
-  });
-  if (!llm) return deterministic;
-  const normalized = normalizeStructuredIntent(llm);
-  if (!normalized) return deterministic;
-  if (!certAlwaysLlm && normalized.confidence < deterministic.confidence) return deterministic;
-  return normalized;
+  const deferStop =
+    isBareCarrierStopMessage(input.message) && shouldDeferBareStopToSemantics(semanticCtx);
+  const protocol = deferStop ? null : protocolLeadRecoveryIntent({ message: input.message });
+  if (protocol) {
+    return finalizeStructuredIntent(
+      reconcileIntentWithStructuredState(protocol, semanticCtx?.structured_state),
+    );
+  }
+
+  if (input.conversationContext) {
+    userPayload = leadRecoveryIntentUserPayload(input.conversationContext);
+  } else if (semanticCtx) {
+    userPayload = leadRecoveryIntentUserPayload(semanticCtx);
+  } else {
+    userPayload = {
+      message: input.message,
+      conversation_context: {
+        session_phase: input.sessionPhase,
+        prior_customer_message: input.priorCustomerMessage || null,
+        booking_session_active: input.bookingSessionActive === true,
+        offered_slots: input.offeredSlots || null,
+      },
+    };
+  }
+
+  const invoke = async (repairHint?: string) =>
+    mctbSemanticStructuredJson<Record<string, unknown>>({
+      system: repairHint
+        ? `${LEAD_RECOVERY_INTENT_AGENT_SYSTEM}\n\n${repairHint}`
+        : LEAD_RECOVERY_INTENT_AGENT_SYSTEM,
+      user: JSON.stringify(userPayload),
+      temperature: 0.1,
+      maxTokens: 800,
+    });
+
+  let llm = await invoke();
+  if (!llm) return llmUnavailableIntent();
+  let normalized = normalizeStructuredIntent(llm.data);
+  if (!normalized) return llmUnavailableIntent();
+
+  if (validateStructuredIntentConsistency(normalized).length > 0) {
+    llm = await invoke(INTENT_CONSISTENCY_REPAIR_HINT);
+    if (llm) {
+      const repaired = normalizeStructuredIntent(llm.data);
+      if (repaired) normalized = repaired;
+    }
+  }
+
+  normalized = reconcileIntentWithStructuredState(
+    normalized,
+    semanticCtx?.structured_state,
+  );
+
+  return finalizeStructuredIntent(normalized);
 }

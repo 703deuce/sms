@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/intent-agent";
+import { deterministicLeadRecoveryIntent } from "../src/lib/mctb/lead-recovery/testing/legacy-keyword-intent-classifier";
 
 const cases: Array<{ msg: string; primary: string; secondary?: string[] }> = [
   { msg: "I was calling about my AC.", primary: "SERVICE_REQUEST" },

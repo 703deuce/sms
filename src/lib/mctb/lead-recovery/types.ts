@@ -83,6 +83,36 @@ export type LeadRecoveryPricingMode =
   | "COLLECT_AND_NOTIFY"
   | "ALWAYS_HANDOFF";
 
+export type LeadRecoveryWorkflowTarget =
+  | "PENDING_PAYMENT"
+  | "PENDING_BOOKING"
+  | "PENDING_CALLBACK"
+  | "ALL_PENDING";
+
+export type LeadRecoveryWorkflowUpdate = {
+  target: LeadRecoveryWorkflowTarget;
+  instruction: "CANCEL" | "KEEP";
+};
+
+/** Typed scheduling/booking semantics from the intent agent — policy consumes this, not raw SMS. */
+/** Scope of "stop" / halt semantics — not global opt-out unless GLOBAL_MESSAGING. */
+export type LeadRecoveryStopScope =
+  | "GLOBAL_MESSAGING"
+  | "CURRENT_WORKFLOW"
+  | "BOOKING"
+  | "PAYMENT"
+  | "CALLBACK"
+  | "UNKNOWN";
+
+export type LeadRecoveryBookingDisposition =
+  | "NONE"
+  | "CHECK_AVAILABILITY"
+  | "REQUEST_BOOKING"
+  | "SELECT_SLOT"
+  | "CONFIRM_BOOKING"
+  | "MODIFY_REQUEST"
+  | "CANCEL_REQUEST";
+
 export type StructuredLeadIntent = {
   primary_intent: LeadRecoveryIntent;
   secondary_intents: LeadRecoveryIntent[];
@@ -93,13 +123,25 @@ export type StructuredLeadIntent = {
   location: { raw: string | null; resolved: string | null };
   requested_time: string | null;
   booking_requested: boolean;
+  booking_disposition: LeadRecoveryBookingDisposition;
   callback_requested: boolean;
   payment_intent: boolean;
   complaint: boolean;
+  /** Customer asked for a person/manager — policy decides escalation. */
+  human_requested: boolean;
+  /** @deprecated Runtime/policy only — derived from human_requested + workspace rules. */
   human_required: boolean;
+  needs_clarification: boolean;
+  extracted_entities: Partial<Record<LeadRecoveryCollectField, string>>;
+  semantic_missing_information: string[];
   language: string;
   confidence: number;
+  /** @deprecated Runtime/policy computes required fields — do not treat LLM output as authority. */
   missing_required_fields: LeadRecoveryCollectField[];
+  /** Semantic withdrawal/retention of in-flight workflows — runtime applies invalidation. */
+  workflow_updates?: LeadRecoveryWorkflowUpdate[];
+  /** When customer says stop/halt — what they want stopped (context-dependent). */
+  stop_scope?: LeadRecoveryStopScope | null;
 };
 
 export type IntentPolicyShape = {
@@ -236,8 +278,16 @@ export type LeadRecoveryConversationState = {
   pendingAction?: LeadRecoveryPendingAction | null;
   /** Telnyx/Twilio inbound message IDs already processed for this conversation. */
   processedInboundIds?: string[];
+  /** Idempotency keys for completed consequential provider mutations. */
+  processedActionKeys?: string[];
   phase: "IDLE" | "COLLECT" | "EXECUTE" | "AWAITING_SLOT_SELECTION" | "COMPLETE";
   clarificationAttempts: number;
+  /** Previous inbound SMS in this LR thread — passed to intent LLM for short follow-ups. */
+  lastCustomerMessage?: string | null;
+  /** Last outbound SMS text LR/booking sent — scheduling context for follow-ups. */
+  lastBusinessMessage?: string | null;
+  /** Full MCTB SMS thread (customer + business) when inbox DB is unavailable (E2E / edge). */
+  conversationThread?: Array<{ role: "customer" | "business"; text: string }>;
   lastIntent: StructuredLeadIntent | null;
   intentPlan: IntentExecutionPlanState;
   paymentAmountRequired?: boolean;

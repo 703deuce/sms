@@ -9,7 +9,7 @@ const rest = introEnd > 0 ? text.slice(introEnd) : text;
 const scenarioBlocks = rest.split(/(?=^SCENARIO \d+:)/m).filter((b) => b.startsWith("SCENARIO"));
 const outDir = join(process.cwd(), "docs/cert-results-copy-parts");
 mkdirSync(outDir, { recursive: true });
-const perPart = 8;
+const perPart = 4;
 let partIndex = 0;
 for (let i = 0; i < scenarioBlocks.length; i += perPart) {
   partIndex++;

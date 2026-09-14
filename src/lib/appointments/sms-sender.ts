@@ -54,6 +54,10 @@ export async function sendAppointmentSms(
   return sendQuickSms({
     ...input,
     from: route.fromE164,
-    senderRoute: { sendWorkspaceId: route.sendWorkspaceId, fromE164: route.fromE164 },
+    senderRoute: {
+      sendWorkspaceId: route.sendWorkspaceId,
+      fromE164: route.fromE164,
+      phoneNumberId: route.phoneNumberId,
+    },
   });
 }

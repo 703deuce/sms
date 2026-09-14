@@ -1,0 +1,6 @@
+MCTB AI LEAD RECOVERY — ADVERSARIAL CERT (FAILURES ONLY)
+Run: 2026-09-14T02:35:15.542Z (single pass)
+Cases executed: 60
+FAILED: 0
+
+(No failures — adversarial batch passed all executed cases.)

@@ -27,6 +27,16 @@ async function main() {
   const e2eReport = formatE2eCertReport(result, timestamp);
   const e2ePath = join(process.cwd(), "docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION.md");
   writeFileSync(e2ePath, e2eReport, "utf8");
+  const copyPath = join(process.cwd(), "docs/MCTB-AI-LEAD-RECOVERY-E2E-CERTIFICATION-FULL-COPY.txt");
+  writeFileSync(
+    copyPath,
+    e2eReport
+      .replace(/^# /gm, "")
+      .replace(/\*\*/g, "")
+      .replace(/\|/g, " ")
+      .replace(/`/g, ""),
+    "utf8",
+  );
 
   const intentPath = join(process.cwd(), "docs/MCTB-AI-LEAD-RECOVERY-DEEPSEEK-CERTIFICATION.md");
   if (existsSync(intentPath)) {
@@ -47,7 +57,7 @@ async function main() {
 
   console.log(e2eReport);
   console.log(`\nWrote ${e2ePath}`);
-  if (result.hardFailures.length) process.exit(1);
+  if (result.hardFailures.length || !result.fullAgentProductionCertified) process.exit(1);
 }
 
 main().catch((err) => {

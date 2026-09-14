@@ -1,0 +1,75 @@
+MCTB E2E RESULTS — PART 15 (scenarios 57-60 of 67)
+
+SCENARIO 57: wrong-number-not-service
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 58: wrong-number-schedule-question
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 59: com-never-mind-pending-booking
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "Never mind."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Just to confirm — would you like to cancel this booking request, or keep looking at the available times (10 AM, 1 PM, or 3 PM tomorrow)?"
+  Outbound SMS capture: "Just to confirm — would you like to cancel this booking request, or keep looking at the available times (10 AM, 1 PM, or 3 PM tomorrow)?"
+  SMS economics: segments=3 encoding=UCS2 chars=136
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gmoe2635i2k1116292l1e
+
+==============================================================================
+
+SCENARIO 60: com-dont-cancel-keep-booking
+GROUP: CHANGE_OF_MIND
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Can somebody come tomorrow?"
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+TURN 2
+  Customer message: "Don't cancel it."
+  LR handled: true
+  Runtime / tool path: AI scheduling clarification (no provider write)
+  Business SMS reply: "Just to confirm — would you like to book one of the available times (10:00 AM, 1:00 PM, or 3:00 PM tomorrow), or did you mean something else by \"Don't cancel it\"?"
+  Outbound SMS capture: "Just to confirm — would you like to book one of the available times (10:00 AM, 1:00 PM, or 3:00 PM tomorrow), or did you mean something else by \"Don't cancel it\"?"
+  SMS economics: segments=3 encoding=UCS2 chars=162
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0gmy4c20051o2u4n633l4q
+
+==============================================================================

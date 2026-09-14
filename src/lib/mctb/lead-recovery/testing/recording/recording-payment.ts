@@ -46,12 +46,6 @@ function publicToken(): string {
 /** Recording path for createAndSendPaymentRequest — real DB row, no Stripe. */
 export async function recordingCreateAndSendPaymentRequest(input: PaymentRequestCreateInput) {
   if (behavior === "stripe_fail" || behavior === "disconnected" || behavior === "timeout") {
-    ledger.push({
-      kind: "create",
-      idempotencyKey: input.idempotencyKey,
-      amountMinor: input.amountMinor,
-      timestamp: new Date().toISOString(),
-    });
     throw new Error(`LR_E2E: payment ${behavior}`);
   }
 

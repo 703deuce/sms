@@ -9,6 +9,7 @@ import type {
 import { pickPrimaryIntentForPolicy } from "@/lib/mctb/lead-recovery/policy-precedence";
 import { isActionPermitted } from "@/lib/mctb/lead-recovery/action-registry";
 import type { LeadRecoveryIntent } from "@/lib/mctb/lead-recovery/types";
+import { intentPermitsAiBook } from "@/lib/mctb/lead-recovery/booking-semantics";
 
 const EMERGENCY_IMMEDIATE_ACTIONS = new Set([
   "SEND_OWNER_SMS",
@@ -133,7 +134,7 @@ export function evaluateLeadRecoveryPolicyForIntent(input: {
     .filter((b) => b.blockedBy.length > 0);
 
   const escalation =
-    input.intent.human_required ||
+    input.intent.human_requested ||
     (input.intent.complaint && input.workspace.handoffTriggers.complaint) ||
     (input.intent.urgency === "EMERGENCY" && input.workspace.handoffTriggers.emergency) ||
     (input.intent.confidence < 0.45 && input.workspace.handoffTriggers.uncertain) ||
@@ -220,6 +221,7 @@ export function evaluateLeadRecoveryPolicyForIntent(input: {
 
   const execActions = permittedActions
     .filter((a) => a !== "COLLECT_FIELD")
+    .filter((a) => (a === "AI_BOOK" ? intentPermitsAiBook(input.intent) : true))
     .map((action) => ({
       action,
       config:

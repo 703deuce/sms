@@ -4,12 +4,13 @@ import {
   getBookingContext,
 } from "@/lib/mctb/ai-booking/service";
 import {
+  filterSlotsWithinWindow,
   findSlotAtTime,
   nearestSlotAlternatives,
   pickSlotsToOffer,
-  resolveOfferedSlotChoice,
 } from "@/lib/mctb/ai-booking/slot-presentation";
-import { getMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store";
+import { getMctbAiBookingSessionStore, recordOfferedSlots } from "@/lib/mctb/ai-booking/session-store";
+import { getBookingContext } from "@/lib/mctb/ai-booking/service";
 import type { AiBookingOrchestratorResult, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 export type OrchestrateAiBookingInput = {
@@ -25,12 +26,12 @@ export type OrchestrateAiBookingInput = {
   timezone: string;
   /** Specific instant to verify, e.g. customer asked for 2:00 PM */
   specificTimeUtc?: string | null;
-  /** Customer reply when choosing among offered slots */
-  choiceUtterance?: string | null;
   /** When specialist resolved a concrete offered slot id */
   selectedSlotId?: string | null;
   /** When true, attempt createBooking for resolved slot */
   confirmBooking?: boolean;
+  /** Lead Recovery write epoch — required for provider create in production path */
+  writeEpoch?: number;
 };
 
 async function fallbackResult(
@@ -57,26 +58,30 @@ export async function orchestrateMctbAiBooking(
 ): Promise<AiBookingOrchestratorResult> {
   const session = await getMctbAiBookingSessionStore().get(input.conversationId);
 
-  if (input.confirmBooking || input.choiceUtterance) {
+  const selectionAttempt =
+    input.confirmBooking ||
+    input.selectedSlotId != null ||
+    (input.specificTimeUtc != null && (session?.offeredSlots?.length ?? 0) > 0);
+
+  if (selectionAttempt) {
     const offered = session?.offeredSlots ?? [];
     const chosen =
       (input.selectedSlotId
         ? offered.find((s) => s.slotId === input.selectedSlotId) ?? null
         : null) ??
-      (input.choiceUtterance
-        ? resolveOfferedSlotChoice(offered, input.choiceUtterance)
-        : null) ??
-      (input.specificTimeUtc ? findSlotAtTime(offered, input.specificTimeUtc) : null);
+      (input.specificTimeUtc && offered.length
+        ? findSlotAtTime(offered, input.specificTimeUtc)
+        : null);
     if (!chosen) {
       return {
         kind: "need_clarification",
         messageHint: "Which of the times I offered works best for you?",
       };
     }
-    if (!input.confirmBooking && !input.choiceUtterance?.match(/\d|first|second|third|am|pm/i)) {
+    if (!input.confirmBooking) {
       return {
         kind: "need_clarification",
-        messageHint: `Did you want ${formatSlotLabel(chosen)}? Reply yes to confirm.`,
+        messageHint: `Did you want ${formatSlotLabel(chosen)}? Reply to confirm.`,
       };
     }
     const booked = await createBooking({
@@ -87,6 +92,7 @@ export async function orchestrateMctbAiBooking(
       customerName: input.customerName,
       customerPhone: input.customerPhone,
       customerEmail: input.customerEmail,
+      writeEpoch: input.writeEpoch,
     });
     if (!booked.ok) {
       if (booked.reason === "slot_taken") {
@@ -116,7 +122,7 @@ export async function orchestrateMctbAiBooking(
     };
   }
 
-  const availability = await findAvailableTimes({
+  let availability = await findAvailableTimes({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
     windowStartUtc: input.windowStartUtc,
@@ -130,7 +136,34 @@ export async function orchestrateMctbAiBooking(
     return fallbackResult(input.workspaceId, availability.reason);
   }
 
-  const slots = availability.slots;
+  let inWindow = filterSlotsWithinWindow(
+    availability.slots,
+    input.windowStartUtc,
+    input.windowEndUtc,
+  );
+  let slots = inWindow.length ? inWindow : availability.slots;
+
+  if (!slots.length) {
+    const startMs = Date.parse(input.windowStartUtc);
+    const endMs = Date.parse(input.windowEndUtc);
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+      const widenedEnd = new Date(endMs + 12 * 3600_000).toISOString();
+      availability = await findAvailableTimes({
+        workspaceId: input.workspaceId,
+        conversationId: input.conversationId,
+        windowStartUtc: input.windowStartUtc,
+        windowEndUtc: widenedEnd,
+        timezone: input.timezone,
+        preferredStartUtc: input.specificTimeUtc,
+        maxResults: 24,
+      });
+      if (availability.ok) {
+        inWindow = filterSlotsWithinWindow(availability.slots, input.windowStartUtc, widenedEnd);
+        slots = inWindow.length ? inWindow : availability.slots;
+      }
+    }
+  }
+
   if (!slots.length) {
     return fallbackResult(input.workspaceId, "No openings in that window");
   }
@@ -156,6 +189,14 @@ export async function orchestrateMctbAiBooking(
   }
 
   const offer = pickSlotsToOffer(slots, 3);
+  const { config: bookingCfg } = await getBookingContext(input.workspaceId);
+  await recordOfferedSlots({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    provider: bookingCfg.provider,
+    slots: offer,
+    window: { startUtc: input.windowStartUtc, endUtc: input.windowEndUtc },
+  });
   return {
     kind: "offer_slots",
     slots: offer,

@@ -41,6 +41,11 @@ export function defaultIntentPolicies(bookingMode: "AI_BOOK" | "SEND_BOOKING_LIN
       collect: ["APPOINTMENT_PREFERENCE"],
       actions: [...bookingActions],
     },
+    AVAILABILITY_QUESTION: {
+      enabled: true,
+      collect: [],
+      actions: [...bookingActions],
+    },
     SPECIFIC_TIME_REQUEST: {
       enabled: true,
       collect: ["APPOINTMENT_PREFERENCE"],

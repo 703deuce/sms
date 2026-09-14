@@ -5,7 +5,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { evaluateLeadRecoveryPolicy } from "@/lib/mctb/lead-recovery/policy-engine";
-import { deterministicLeadRecoveryIntent, runLeadRecoveryIntentAgent } from "@/lib/mctb/lead-recovery/intent-agent";
+import { runLeadRecoveryIntentAgent } from "@/lib/mctb/lead-recovery/intent-agent";
+import { deterministicLeadRecoveryIntent } from "@/lib/mctb/lead-recovery/testing/legacy-keyword-intent-classifier";
 import { isKnownAction } from "@/lib/mctb/lead-recovery/action-registry";
 import {
   CRITICAL_REPEAT_IDS,
@@ -21,9 +22,9 @@ import {
   invalidatePendingActions,
   mergeBurstFragments,
   registerInboundProviderMessage,
-  shouldInvalidatePendingActions,
   withLeadRecoveryConversationLock,
 } from "@/lib/mctb/lead-recovery/conversation-guard";
+import { applyWorkflowInvalidation } from "@/lib/mctb/lead-recovery/workflow-invalidation";
 import { resetCertMetrics, snapshotCertMetrics } from "@/lib/mctb/lead-recovery/testing/cert-metrics";
 import { runSmsSegmentCertification } from "@/lib/mctb/lead-recovery/testing/cert-sms";
 import type {
@@ -292,18 +293,21 @@ async function runConcurrencyRuntimeCert(): Promise<{ errors: string[] }> {
     location: { raw: null, resolved: null },
     requested_time: null,
     booking_requested: true,
+    booking_disposition: "REQUEST_BOOKING" as const,
     callback_requested: false,
     payment_intent: false,
     complaint: false,
+    human_requested: false,
     human_required: false,
+    needs_clarification: false,
+    extracted_entities: {},
+    semantic_missing_information: [],
     language: "en",
     confidence: 0.9,
     missing_required_fields: [],
+    workflow_updates: [{ target: "ALL_PENDING", instruction: "CANCEL" }],
   };
-  if (!shouldInvalidatePendingActions({ intent: cancelIntent, body: "Never mind." })) {
-    errors.push("concurrency-stale-action: cancel phrase not detected");
-  }
-  const afterCancel = invalidatePendingActions(baseState);
+  const afterCancel = applyWorkflowInvalidation(baseState, cancelIntent);
   if (afterCancel.pendingAction) {
     errors.push("concurrency-stale-action: pendingAction not cleared");
   }
@@ -599,7 +603,7 @@ export function formatCertReport(input: {
 | Soft failures | ${m.softFailures.length} |
 | Unrequested action attempts (blocked by runtime) | ${m.unrequestedActionAttempts} |
 | INTENT_CERT_ONLY (not full E2E) | **${input.ready ? "PASS" : "FAIL"}** |
-| FULL_AGENT_PRODUCTION_CERTIFIED | **Run \`mctb-lead-recovery-e2e-cert.ts\`** |
+| FULL_AGENT_PRODUCTION_CERTIFIED | **Separate — \`scripts/mctb-lead-recovery-e2e-cert.ts\`** |
 
 ## Scoring
 

@@ -49,6 +49,12 @@ export type MctbOutboundSmsRoute = {
   trafficMode: MctbPlatformTrafficMode | "CUSTOMER_PRODUCTION";
 };
 
+/**
+ * MCTB/recovery often sends from a workspace-owned local DID (e.g. 571 A2P) while
+ * messagingRegistration still points at another number (e.g. toll-free). When the
+ * routed phone is provider-approved, outbound send must not be blocked by workspace-level
+ * campaign status on a different E.164.
+ */
 export async function isPhoneAuthorizedForOutboundSms(phoneNumberId: string): Promise<{
   allowed: boolean;
   regime: MessagingComplianceRegime | null;

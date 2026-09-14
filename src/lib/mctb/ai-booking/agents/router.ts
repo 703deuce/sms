@@ -24,7 +24,10 @@ function normalizeRouter(raw: Record<string, unknown>): IntentRouterResult | nul
   };
 }
 
-/** Deterministic router when LLM unavailable (no provider calls). */
+/**
+ * TEST / LLM-unavailable stub only — not semantic authority in production.
+ * Production uses structured LLM router output; fallback is UNKNOWN.
+ */
 export function deterministicIntentRouter(input: {
   message: string;
   aiBookingSessionActive: boolean;
@@ -65,6 +68,8 @@ export function deterministicIntentRouter(input: {
 
 export async function runIntentRouterAgent(input: {
   message: string;
+  conversation?: Array<{ role: "customer" | "business"; text: string }>;
+  /** @deprecated use conversation */
   recentMessages?: Array<{ role: "customer" | "business"; text: string }>;
   aiBookingSessionActive: boolean;
   sessionStage?: string | null;
@@ -83,9 +88,11 @@ export async function runIntentRouterAgent(input: {
     return shortcut;
   }
 
+  const conversation =
+    input.conversation?.length ? input.conversation : (input.recentMessages || []);
   const userPayload = JSON.stringify({
     latest_message: input.message,
-    recent_window: (input.recentMessages || []).slice(-4),
+    conversation,
     ai_booking_session_active: input.aiBookingSessionActive,
     session_stage: input.sessionStage || null,
   });
@@ -99,10 +106,12 @@ export async function runIntentRouterAgent(input: {
   const normalized = parsed ? normalizeRouter(parsed) : null;
   const result =
     normalized ||
-    deterministicIntentRouter({
-      message: input.message,
-      aiBookingSessionActive: input.aiBookingSessionActive,
-    });
+    ({
+      intent: "UNKNOWN" as IntentRouterIntent,
+      confidence: 0.2,
+      subintent: null,
+      needs_clarification: true,
+    } satisfies IntentRouterResult);
 
   logMctbAiBookingEvent("router_intent", {
     intent: result.intent,

@@ -1,0 +1,78 @@
+MCTB E2E RESULTS — PART 12 (scenarios 45-48 of 67)
+
+SCENARIO 45: who-is-this
+GROUP: CONVERSATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Who is this?"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: collect_NAME
+  Business SMS reply: "What's your name?"
+  Outbound SMS capture: "What's your name?"
+  SMS economics: segments=1 encoding=GSM7 chars=17
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 46: accidental-call
+GROUP: CONVERSATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Sorry, pocket dial."
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "Sorry about that - we won't message you again."
+  Outbound SMS capture: "Sorry about that - we won't message you again."
+  SMS economics: segments=1 encoding=GSM7 chars=46
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 47: long-tail-messy
+GROUP: CONVERSATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "yeah"
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: collect_REASON
+  Business SMS reply: "What can we help you with today?"
+  Outbound SMS capture: "What can we help you with today?"
+  SMS economics: segments=1 encoding=GSM7 chars=32
+
+TURN 2
+  Customer message: "tomorrow"
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "Sure - what were you calling about?"
+  Outbound SMS capture: "Sure - what were you calling about?"
+  SMS economics: segments=1 encoding=GSM7 chars=35
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 48: negation-no-pay-want-book
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "I don't want to make a payment. I just want to book."
+  LR handled: true
+  Runtime / tool path: AI scheduling workflow (scheduling specialist + booking orchestrator; may READ calendar or WRITE booking)
+  Business SMS reply: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  Outbound SMS capture: "We have openings at Mon, Sep 14, 10:00 AM, Mon, Sep 14, 1:00 PM, and Mon, Sep 14, 3:00 PM. Do any of those work?"
+  SMS economics: segments=1 encoding=GSM7 chars=112
+
+  Booking provider (recording) calls:
+    - find_slots conv=cmu0glxoq4l5u585l4r415y5f
+
+==============================================================================

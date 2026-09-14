@@ -3,9 +3,6 @@
  */
 import type { LeadRecoveryConversationState, StructuredLeadIntent } from "@/lib/mctb/lead-recovery/types";
 
-const CANCEL_RE =
-  /\b(never\s*mind|nevermind|don't|do\s*not|cancel\s+that|forget\s+it|actually\s+no)\b/i;
-
 const locks = new Map<string, Promise<void>>();
 
 export function defaultGuardFields(): Pick<
@@ -67,18 +64,6 @@ export function bumpStateVersion(state: LeadRecoveryConversationState): LeadReco
     stateVersion: (state.stateVersion ?? 0) + 1,
     updatedAt: new Date().toISOString(),
   };
-}
-
-export function shouldInvalidatePendingActions(input: {
-  intent: StructuredLeadIntent;
-  body: string;
-}): boolean {
-  if (input.intent.primary_intent === "OPT_OUT" || input.intent.primary_intent === "WRONG_NUMBER") {
-    return true;
-  }
-  if (CANCEL_RE.test(input.body)) return true;
-  if (/\bdon'?t\s+send\b/i.test(input.body)) return true;
-  return false;
 }
 
 export function invalidatePendingActions(

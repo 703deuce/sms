@@ -1,0 +1,14 @@
+================================================================================
+AI LEAD RECOVERY — SEMANTIC ROUTING AUDIT
+================================================================================
+Doc: docs/MCTB-AI-LEAD-RECOVERY-SEMANTIC-ROUTING-AUDIT.md
+
+SEMANTIC_ROUTING_REGEX_COUNT (production intent authority) ... 0
+TEST_ONLY_SEMANTIC_SHORTCUT_COUNT ......................... 1 (legacy keyword classifier fixture)
+LEGACY_SEMANTIC_REGEX_COUNT ............................... 2 (John boundary + scheduling NL fallback)
+
+Negation regression (DeepSeek intent path) ................ 8/8
+Failures:
+  _none_
+
+================================================================================

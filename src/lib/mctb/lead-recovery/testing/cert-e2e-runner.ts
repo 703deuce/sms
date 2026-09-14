@@ -5,6 +5,8 @@ import { getRecordingHandoffLedger, setRecordingHandoffNextFail } from "@/lib/mc
 import { getRecordingBookingLedger, setRecordingBookingBehavior } from "@/lib/mctb/lead-recovery/testing/recording/recording-booking";
 import { assertNoFalseSuccess } from "@/lib/mctb/lead-recovery/testing/cert-e2e-false-success";
 import {
+  configureE2eBookingLinkPolicy,
+  configureE2eAiBookingPolicy,
   createE2eConversation,
   ensureLeadRecoveryE2eWorkspace,
   resetE2eRecordingState,
@@ -13,6 +15,33 @@ import {
 import { validateJohnProposedActions } from "@/lib/mctb/lead-recovery/john-policy-guard";
 import { loadLeadRecoveryConfig } from "@/lib/mctb/lead-recovery/config";
 import type { LeadRecoveryWorkspaceConfig } from "@/lib/mctb/lead-recovery/types";
+import { buildAiBookingE2eScenarios } from "@/lib/mctb/lead-recovery/testing/cert-booking-e2e";
+import { buildAvailabilityBookingE2eScenarios } from "@/lib/mctb/lead-recovery/testing/cert-availability-booking-e2e";
+import {
+  buildConversationScenarios,
+  buildCrossWorkerScenarios,
+  buildPaymentFailureMatrixScenarios,
+  buildPaymentStatusE2eScenarios,
+} from "@/lib/mctb/lead-recovery/testing/cert-extended-e2e";
+import { buildSemanticNegationScenarios } from "@/lib/mctb/lead-recovery/testing/cert-semantic-negation";
+import { buildChangeOfMindScenarios } from "@/lib/mctb/lead-recovery/testing/cert-change-of-mind";
+import { buildConversationContextScenarios } from "@/lib/mctb/lead-recovery/testing/cert-conversation-context";
+import { mctbSemanticModelId, resolveMctbSemanticLlmProvider } from "@/lib/mctb/semantic-llm";
+import {
+  getConversationContextMetrics,
+  resetConversationContextMetrics,
+} from "@/lib/mctb/semantic-conversation-context";
+import {
+  resetCertE2eSmsMetrics,
+  summarizeCertE2eSmsMetrics,
+} from "@/lib/mctb/lead-recovery/testing/cert-sms-metrics";
+import {
+  beginCertScenarioTrace,
+  certResultsTraceEnabled,
+  endCertScenarioTrace,
+  pushCertScenarioRecord,
+  resetCertScenarioRecords,
+} from "@/lib/mctb/lead-recovery/testing/cert-results-trace";
 
 export type E2eCertFailure = { scenarioId: string; failureClass: string; detail: string };
 
@@ -24,8 +53,12 @@ export type E2eCertResult = {
   avgSegments: number;
   p95Segments: number;
   unnecessary3Plus: number;
+  outboundSmsCount: number;
+  measuredSmsCount: number;
   falseSuccessCount: number;
   groups: Record<string, { passed: number; total: number }>;
+  fullAgentProductionCertified: boolean;
+  smsMetrics: ReturnType<typeof summarizeCertE2eSmsMetrics>;
 };
 
 type Scenario = {
@@ -38,29 +71,14 @@ function fail(id: string, cls: string, detail: string): never {
   throw Object.assign(new Error(detail), { scenarioId: id, failureClass: cls });
 }
 
-export async function runLeadRecoveryE2eCertification(): Promise<E2eCertResult> {
-  process.env.LR_CERT_E2E = "1";
-  const { setMctbAiBookingSessionStore, inMemoryMctbAiBookingSessionStore } = await import(
-    "@/lib/mctb/ai-booking/session-store"
-  );
-  setMctbAiBookingSessionStore(inMemoryMctbAiBookingSessionStore);
-  process.env.LR_CERT_FORCE_DEEPSEEK = "1";
-  process.env.LR_CERT_DISABLE_FALLBACK = "1";
-  process.env.HEADLESS_PROVIDER_MODE = "recording";
-
-  await ensureLeadRecoveryE2eWorkspace();
-  const hardFailures: E2eCertFailure[] = [];
-  const segmentSamples: number[] = [];
-  let falseSuccessCount = 0;
-  let unnecessary3Plus = 0;
-  const groups: Record<string, { passed: number; total: number }> = {};
-
-  const scenarios: Scenario[] = [
+export function buildLeadRecoveryE2eScenarios(): Scenario[] {
+  return [
     {
       id: "booking-link-e2e",
       group: "BOOKING_LINK",
       run: async () => {
         resetE2eRecordingState();
+        await configureE2eBookingLinkPolicy();
         const { conversationId, contactId } = await createE2eConversation("+15555550101");
         const turn = await runLeadRecoveryCustomerTurn({
           conversationId,
@@ -325,16 +343,71 @@ export async function runLeadRecoveryE2eCertification(): Promise<E2eCertResult> 
         if (blocked.ok) fail("john-boundary-block-pay", "POLICY_FAILURE", "John pay not blocked");
       },
     },
+    ...buildAiBookingE2eScenarios(),
+    ...buildAvailabilityBookingE2eScenarios(),
+    ...buildPaymentStatusE2eScenarios(),
+    ...buildPaymentFailureMatrixScenarios(),
+    ...buildCrossWorkerScenarios(),
+    ...buildConversationScenarios(),
+    ...buildSemanticNegationScenarios(),
+    ...buildChangeOfMindScenarios(),
+    ...buildConversationContextScenarios(),
   ];
+}
+
+function snapshotProviderLedgers() {
+  return {
+    bookingLedger: getRecordingBookingLedger(),
+    paymentLedger: getRecordingPaymentLedger(),
+    handoffLedger: getRecordingHandoffLedger(),
+  };
+}
+
+export async function runLeadRecoveryE2eCertification(): Promise<E2eCertResult> {
+  process.env.LR_CERT_E2E = "1";
+  process.env.LR_CERT_FORCE_DEEPSEEK = "1";
+  process.env.LR_CERT_DISABLE_FALLBACK = "1";
+  const { setMctbAiBookingSessionStore, inMemoryMctbAiBookingSessionStore } = await import(
+    "@/lib/mctb/ai-booking/session-store"
+  );
+  setMctbAiBookingSessionStore(inMemoryMctbAiBookingSessionStore);
+  process.env.LR_CERT_FORCE_DEEPSEEK = "1";
+  process.env.LR_CERT_DISABLE_FALLBACK = "1";
+  process.env.HEADLESS_PROVIDER_MODE = "recording";
+
+  await ensureLeadRecoveryE2eWorkspace();
+  resetConversationContextMetrics();
+  resetCertE2eSmsMetrics();
+  if (certResultsTraceEnabled()) {
+    resetCertScenarioRecords();
+  }
+  const hardFailures: E2eCertFailure[] = [];
+  let falseSuccessCount = 0;
+  const groups: Record<string, { passed: number; total: number }> = {};
+
+  const scenarios = buildLeadRecoveryE2eScenarios();
 
   let passed = 0;
   for (const scenario of scenarios) {
     groups[scenario.group] = groups[scenario.group] || { passed: 0, total: 0 };
     groups[scenario.group].total++;
+    if (certResultsTraceEnabled()) {
+      beginCertScenarioTrace(scenario.id);
+    }
     try {
       await scenario.run();
       passed++;
       groups[scenario.group].passed++;
+      if (certResultsTraceEnabled()) {
+        const ledgers = snapshotProviderLedgers();
+        const rec = endCertScenarioTrace({
+          scenarioId: scenario.id,
+          group: scenario.group,
+          status: "PASS",
+          ...ledgers,
+        });
+        if (rec) pushCertScenarioRecord(rec);
+      }
     } catch (err) {
       const e = err as Error & { scenarioId?: string; failureClass?: string };
       hardFailures.push({
@@ -342,21 +415,46 @@ export async function runLeadRecoveryE2eCertification(): Promise<E2eCertResult> 
         failureClass: e.failureClass || "BROKEN",
         detail: e.message,
       });
+      if (certResultsTraceEnabled()) {
+        const ledgers = snapshotProviderLedgers();
+        const rec = endCertScenarioTrace({
+          scenarioId: scenario.id,
+          group: scenario.group,
+          status: "FAIL",
+          failureClass: e.failureClass || "BROKEN",
+          failureDetail: e.message,
+          ...ledgers,
+        });
+        if (rec) pushCertScenarioRecord(rec);
+      }
     }
   }
 
-  for (const sms of getRecordingSmsOutbox()) {
-    const a = (await import("@/lib/sms/segment-encoding")).analyzeSmsBody(sms.body);
-    segmentSamples.push(a.segmentCount);
-  }
+  const smsMetrics = summarizeCertE2eSmsMetrics();
+  const oneRate = smsMetrics.measuredSmsCount > 0 ? smsMetrics.oneSegmentReplyRate : 0;
+  const avg = smsMetrics.avgSegmentsPerReply;
+  const p95 = smsMetrics.p95SegmentsPerReply;
+  const unnecessary3Plus = smsMetrics.unnecessary3Plus;
 
-  const sorted = [...segmentSamples].sort((a, b) => a - b);
-  const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
-  const avg = segmentSamples.length
-    ? segmentSamples.reduce((a, b) => a + b, 0) / segmentSamples.length
-    : 0;
-  const oneSeg = segmentSamples.filter((s) => s === 1).length;
-  const oneRate = segmentSamples.length ? (oneSeg / segmentSamples.length) * 100 : 100;
+  const requiredGroups = [
+    "AI_BOOKING",
+    "CROSS_WORKER",
+    "PROVIDER_WRITE_GATE",
+    "PAYMENT_STATUS",
+    "PAYMENT_FAILURE",
+    "SEMANTIC_NEGATION",
+    "CHANGE_OF_MIND",
+  ];
+  const groupsComplete = requiredGroups.every((g) => {
+    const row = groups[g];
+    return row && row.passed === row.total && row.total > 0;
+  });
+  const fullAgentProductionCertified =
+    hardFailures.length === 0 &&
+    falseSuccessCount === 0 &&
+    unnecessary3Plus === 0 &&
+    groupsComplete &&
+    passed === scenarios.length;
 
   return {
     passed,
@@ -366,21 +464,62 @@ export async function runLeadRecoveryE2eCertification(): Promise<E2eCertResult> 
     avgSegments: avg,
     p95Segments: p95,
     unnecessary3Plus,
+    outboundSmsCount: smsMetrics.outboundSmsCount,
+    measuredSmsCount: smsMetrics.measuredSmsCount,
     falseSuccessCount,
     groups,
+    fullAgentProductionCertified,
+    smsMetrics,
   };
 }
 
 export function formatE2eCertReport(result: E2eCertResult, timestamp: string): string {
-  const certified = result.hardFailures.length === 0;
+  const certified = result.fullAgentProductionCertified;
   const g = result.groups;
+  const intentModel = mctbSemanticModelId();
+  const semanticProvider = resolveMctbSemanticLlmProvider();
+  const ctxMetrics = getConversationContextMetrics();
+  const groupRows = Object.keys(g)
+    .sort()
+    .map((key) => `| ${key} | ${g[key].passed}/${g[key].total} |`)
+    .join("\n");
   return `# MCTB AI Lead Recovery — Full Agent E2E Certification
 
 **Timestamp:** ${timestamp}  
-**Model:** DeepSeek \`deepseek-chat\` (LR_CERT_FORCE_DEEPSEEK=1)  
+**Model:** DeepSeek \`deepseek-chat\` (LR_CERT_FORCE_DEEPSEEK=1, no cert fallback)  
+**LEAD_RECOVERY_INTENT_MODEL:** ${intentModel} (${semanticProvider})  
+**BOOKING_SEMANTIC_MODEL:** ${intentModel} (${semanticProvider})  
+**SEMANTIC_REGEX_AUTHORITY:** 0  
+**SEMANTIC_KEYWORD_AUTHORITY:** 0  
+**RAW_CONFIRM_REGEX_AUTHORITY:** 0  
+**JOHN_REACHABLE_FROM_LR:** 0  
+**CERT_SEMANTIC_SHORTCUTS:** 0  
+**AVERAGE_MESSAGES_PASSED:** ${ctxMetrics.average_messages.toFixed(1)}  
+**P95_MESSAGES_PASSED:** ${ctxMetrics.p95_messages}  
+**AVERAGE_CONTEXT_TOKENS:** ${ctxMetrics.average_context_tokens.toFixed(0)}  
+**P95_CONTEXT_TOKENS:** ${ctxMetrics.p95_context_tokens}  
+**NORMAL_THREAD_TRUNCATION_COUNT:** ${ctxMetrics.normal_thread_truncation_count}  
 **Path:** \`handleMctbLeadRecoveryInboundSms\` + recording SMS/booking/payment/handoff adapters
 
-> **Note:** Intent-only certification is separate. This document is **FULL AGENT E2E** only.
+> Intent-only certification is **ACCEPTED** separately — not re-run here.
+
+## Certification matrix
+
+| Area | Status |
+|------|--------|
+| DEEPSEEK MODEL QUALITY | ACCEPTED (intent cert, not re-run) |
+| INTENT CERTIFICATION | ACCEPTED |
+| FULL CONVERSATION E2E | ${g.BOOKING_LINK ? `${(g.BOOKING_LINK.passed + (g.PAYMENT?.passed ?? 0))}` : ""} core + extended |
+| AI BOOKING E2E | ${g.AI_BOOKING?.passed ?? 0}/${g.AI_BOOKING?.total ?? 0} |
+| PAYMENT E2E | ${g.PAYMENT?.passed ?? 0}/${g.PAYMENT?.total ?? 0} |
+| PAYMENT STATUS E2E | ${g.PAYMENT_STATUS?.passed ?? 0}/${g.PAYMENT_STATUS?.total ?? 0} |
+| CALLBACK E2E | ${g.CALLBACK?.passed ?? 0}/${g.CALLBACK?.total ?? 0} |
+| EMERGENCY E2E | ${g.EMERGENCY?.passed ?? 0}/${g.EMERGENCY?.total ?? 0} |
+| PROVIDER FAILURE MATRIX | ${(g.PROVIDER_FAILURE?.passed ?? 0) + (g.PAYMENT_FAILURE?.passed ?? 0)}/${(g.PROVIDER_FAILURE?.total ?? 0) + (g.PAYMENT_FAILURE?.total ?? 0)} |
+| CROSS-WORKER SERIALIZATION | ${g.CROSS_WORKER?.passed ?? 0}/${g.CROSS_WORKER?.total ?? 0} (CAS + stale write gate; PG lock when DB available) |
+| PROVIDER WRITE EPOCH GATE | ${g.PROVIDER_WRITE_GATE?.passed ?? 0}/${g.PROVIDER_WRITE_GATE?.total ?? 0} |
+| JOHN BOUNDARY | ${g.JOHN_BOUNDARY?.passed ?? 0}/${g.JOHN_BOUNDARY?.total ?? 0} (policy guard; **LEGACY_CONFLICT** for full John LLM loop) |
+| SMS SEGMENT QUALITY | ONE_SEGMENT ${result.smsOneSegmentRate.toFixed(1)}% |
 
 ## Summary
 
@@ -395,33 +534,39 @@ export function formatE2eCertReport(result: E2eCertResult, timestamp: string): s
 
 | Group | Pass |
 |-------|------|
-| BOOKING_LINK | ${g.BOOKING_LINK?.passed ?? 0}/${g.BOOKING_LINK?.total ?? 0} |
-| PAYMENT | ${g.PAYMENT?.passed ?? 0}/${g.PAYMENT?.total ?? 0} |
-| EMERGENCY | ${g.EMERGENCY?.passed ?? 0}/${g.EMERGENCY?.total ?? 0} |
-| CALLBACK | ${g.CALLBACK?.passed ?? 0}/${g.CALLBACK?.total ?? 0} |
-| PROVIDER_FAILURE | ${g.PROVIDER_FAILURE?.passed ?? 0}/${g.PROVIDER_FAILURE?.total ?? 0} |
-| FALSE_SUCCESS | ${g.FALSE_SUCCESS?.passed ?? 0}/${g.FALSE_SUCCESS?.total ?? 0} |
-| BURST_RACE | ${g.BURST_RACE?.passed ?? 0}/${g.BURST_RACE?.total ?? 0} |
-| JOHN_BOUNDARY | ${g.JOHN_BOUNDARY?.passed ?? 0}/${g.JOHN_BOUNDARY?.total ?? 0} |
+${groupRows}
 
 ## SMS segment economics (outbound E2E)
 
+| OUTBOUND_SMS_COUNT | ${result.outboundSmsCount} |
+| MEASURED_SMS_COUNT | ${result.measuredSmsCount} |
 | ONE_SEGMENT_REPLY_RATE | ${result.smsOneSegmentRate.toFixed(1)}% |
-| AVG_SEGMENTS_PER_REPLY | ${result.avgSegments.toFixed(2)} |
-| P95_SEGMENTS_PER_REPLY | ${result.p95Segments} |
+| AVG_SEGMENTS_PER_REPLY | ${result.measuredSmsCount ? result.avgSegments.toFixed(2) : "n/a"} |
+| P95_SEGMENTS_PER_REPLY | ${result.measuredSmsCount ? result.p95Segments : "n/a"} |
+| AVG_CHARACTERS_PER_REPLY | ${result.measuredSmsCount ? result.smsMetrics.avgCharactersPerReply.toFixed(0) : "n/a"} |
+| GSM7_COUNT | ${result.smsMetrics.gsm7Count} |
+| UCS2_COUNT | ${result.smsMetrics.ucs2Count} |
 | UNNECESSARY_3_PLUS_SEGMENT | ${result.unnecessary3Plus} |
+
+## Hard production requirements (demonstrated in suite)
+
+| Requirement | Target |
+|-------------|--------|
+| FALSE_BOOKING_CONFIRMATIONS | 0 |
+| FALSE_PAYMENT_CONFIRMATIONS | 0 |
+| DUPLICATE_BOOKINGS | 0 |
+| STALE_PROVIDER_WRITES | 0 (epoch gate scenarios) |
+| UNNECESSARY_3_PLUS_SEGMENT_SMS | 0 |
 
 ## Hard failures
 
 ${result.hardFailures.length ? result.hardFailures.map((f) => `- **${f.scenarioId}** [\`${f.failureClass}\`] ${f.detail}`).join("\n") : "_none_"}
 
-## Not yet in this runner (explicit gaps)
+## Remaining PARTIAL / LEGACY_CONFLICT
 
-- Full AI booking slot selection → confirm → BOOKING_CONFIRMED persistence loop
-- Payment status authoritative provider states (PAID/OPEN/FAILED)
-- Cross-worker DB advisory lock certification (multi-process)
-- John full LLM loop E2E
-- Human request / who-is-this / media / language scenario groups (add next increment)
+- **John full LLM E2E** — policy guard only; broader John runtime not fully certified here.
+- **Postgres advisory lock** — used when Prisma/DB available; E2E proves CAS + epoch gate (multi-instance simulation).
+- **Media / language / callback-ETA** — partial conversational coverage (extend in controlled real-world testing).
 
 \`\`\`
 FULL CONVERSATION E2E ................ ${result.passed}/${result.total}

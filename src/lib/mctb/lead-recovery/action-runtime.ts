@@ -13,7 +13,8 @@ import type {
 import { isKnownAction } from "@/lib/mctb/lead-recovery/action-registry";
 import { promptForCollectField } from "@/lib/mctb/lead-recovery/field-collection";
 import { finalizeMctbOutboundSms } from "@/lib/mctb/sms-channel";
-import { authorizeProviderWrite } from "@/lib/mctb/lead-recovery/provider-write-gate";
+import { preflightConsequentialAction } from "@/lib/mctb/lead-recovery/provider-write-gate";
+import { intentPermitsAiBook } from "@/lib/mctb/lead-recovery/booking-semantics";
 
 export type ActionRuntimeContext = {
   workspaceId: string;
@@ -136,12 +137,30 @@ export async function executeLeadRecoveryActions(
         break;
       }
       case "AI_BOOK": {
+        if (!intentPermitsAiBook(ctx.intent)) {
+          action = "ai_book_blocked_by_semantics";
+          break;
+        }
         delegateAiBooking = true;
         action = "ai_book_delegate";
         if (!reply) reply = "Checking availability — one moment.";
         break;
       }
       case "CREATE_CALLBACK_REQUEST": {
+        if (ctx.writeEpoch !== undefined) {
+          const pre = await preflightConsequentialAction({
+            workspaceId: ctx.workspaceId,
+            conversationId: ctx.conversationId,
+            mutation: "CALLBACK_REQUEST",
+            writeEpoch: ctx.writeEpoch,
+            idempotencyKey: `lr-callback:${ctx.conversationId}:${ctx.body.slice(0, 24)}`,
+          });
+          if (!pre.ok) {
+            reply = pre.customerMessage;
+            action = "callback_stale_blocked";
+            break;
+          }
+        }
         await notifyBusiness(ctx, "callback_requested");
         if (!reply) reply = "Got it — we'll call you back soon.";
         action = "callback_requested";
@@ -184,14 +203,15 @@ export async function executeLeadRecoveryActions(
           break;
         }
         if (ctx.writeEpoch !== undefined) {
-          const auth = await authorizeProviderWrite({
+          const pre = await preflightConsequentialAction({
             workspaceId: ctx.workspaceId,
             conversationId: ctx.conversationId,
-            action: "SEND_TEXT_TO_PAY",
+            mutation: "CREATE_PAYMENT_REQUEST",
             writeEpoch: ctx.writeEpoch,
+            idempotencyKey: `lr-t2p:${ctx.conversationId}:${ctx.intent.primary_intent}`,
           });
-          if (!auth.ok) {
-            reply = auth.customerMessage;
+          if (!pre.ok) {
+            reply = pre.customerMessage;
             action = "payment_stale_blocked";
             break;
           }
@@ -234,6 +254,31 @@ export async function executeLeadRecoveryActions(
       case "END_AUTOMATION": {
         endAutomation = true;
         action = "end_automation";
+        break;
+      }
+      case "CHECK_PAYMENT_STATUS": {
+        const { lookupLeadRecoveryPaymentStatus } = await import(
+          "@/lib/mctb/lead-recovery/payment-status"
+        );
+        const status = await lookupLeadRecoveryPaymentStatus({
+          workspaceId: ctx.workspaceId,
+          conversationId: ctx.conversationId,
+          customerPhone: ctx.customerPhone,
+        });
+        if (status.state === "PAID") {
+          reply = status.customerMessage || "Yes — your payment went through.";
+        } else if (status.state === "OPEN") {
+          reply = status.customerMessage || "Your payment is still open — use the link we texted.";
+        } else if (status.state === "FAILED") {
+          reply = status.customerMessage || "That payment didn't go through. We can resend a link.";
+        } else if (status.state === "EXPIRED") {
+          reply = status.customerMessage || "That payment link expired. We can send a new one.";
+        } else if (status.state === "PROVIDER_UNAVAILABLE") {
+          reply = "I can't check payment status right now. Our team can confirm.";
+        } else {
+          reply = "I don't have a confirmed payment status yet. Our team can check.";
+        }
+        action = "payment_status_answer";
         break;
       }
       case "ANSWER_APPROVED_INFORMATION": {

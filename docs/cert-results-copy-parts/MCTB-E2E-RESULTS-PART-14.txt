@@ -1,0 +1,63 @@
+MCTB E2E RESULTS — PART 14 (scenarios 53-56 of 67)
+
+SCENARIO 53: negation-payment-method-faq
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "Do you take payments over the phone?"
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "Good question - our team can explain options."
+  Outbound SMS capture: "Good question - our team can explain options."
+  SMS economics: segments=1 encoding=GSM7 chars=45
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 54: negation-pricing-not-payment-request
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "How much would I have to pay?"
+  LR handled: true
+  Runtime / tool path: CUSTOMER_MESSAGE template
+  Business SMS reply: "We'll share pricing options shortly."
+  Outbound SMS capture: "We'll share pricing options shortly."
+  SMS economics: segments=1 encoding=GSM7 chars=36
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 55: negation-failed-payment-not-new-link
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+TURN 1
+  Customer message: "My appointment payment failed."
+  LR handled: true
+  Runtime / tool path: Lead Recovery action: lead_recovery
+  Business SMS reply: "Thanks - we'll be in touch shortly."
+  Outbound SMS capture: "Thanks - we'll be in touch shortly."
+  SMS economics: segments=1 encoding=GSM7 chars=35
+
+  Booking provider calls: (none recorded)
+
+==============================================================================
+
+SCENARIO 56: wrong-number-exact
+GROUP: SEMANTIC_NEGATION
+RESULT: PASS
+==============================================================================
+
+(No inbound SMS turns — scenario tests policy guard, intent-only agent, or direct API.)
+
+  Booking provider calls: (none recorded)
+
+==============================================================================

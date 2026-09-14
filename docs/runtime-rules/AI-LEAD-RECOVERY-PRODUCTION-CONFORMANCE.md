@@ -77,7 +77,7 @@
 | 37 | Multi-message burst / ordering | YES | `conversation-guard.ts` `mergeBurstFragments` + lock | `PARTIAL` | No cross-worker inbox queue | DB-ordered inbox + debounce | `mctb-lead-recovery-deepseek-cert.ts` |
 | 38 | Inbound webhook dedupe | YES | `registerInboundProviderMessage` on LR ingress | `PARTIAL` | Outbound keys still body-sliced | Extend dedupe to all ingress paths | cert concurrency suite |
 | 39 | Out-of-order delivery events | YES | Delivery trace separate | `PARTIAL` | LR state not delivery-aware | Document boundaries | — |
-| 40 | Conversation locking | YES | `withLeadRecoveryConversationLock` | `PARTIAL` | Single-process only | DB advisory lock | cert lock serial test |
+| 40 | Conversation locking | YES | `withLeadRecoveryCrossWorkerLock` | `PARTIAL` | PG advisory when DB available; E2E CAS | multi-instance CAS cert | cert cross-worker |
 | 41 | Stale model result / state version | YES | `stateVersion`, `pendingActionEpoch` | `PARTIAL` | Provider writes lack epoch gate | Preflight book/pay/SMS vs epoch | stale action test |
 | 42 | Change of mind | YES | `shouldInvalidatePendingActions` | `PARTIAL` | No durable pending action queue | Wire epoch to action-runtime | cert stale test |
 | 43 | Corrections (latest wins) | YES | New message overwrites via merge | `PARTIAL` | No explicit correction trace | Field-level `confirmedAt` | — |

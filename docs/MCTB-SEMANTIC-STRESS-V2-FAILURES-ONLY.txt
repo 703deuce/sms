@@ -1,0 +1,10 @@
+SEMANTIC STRESS TEST V2 — FAILURES ONLY
+Suite passes: 2
+Total model runs (last pass): 106
+Unique failure patterns: 1
+
+--- v2-3-ctx1 (pass 1) V2-3-CONTEXT ---
+Customer: Stop.
+Expected: stop search not global opt-out
+Actual: {"primary":"OPT_OUT","booking_disposition":"NONE","needs_clarification":false}
+Wrong: CONTEXT_SCOPE_FAILURE

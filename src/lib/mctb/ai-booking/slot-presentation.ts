@@ -2,6 +2,21 @@ import type { MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 
 const SLOT_MATCH_TOLERANCE_MS = 90_000;
 
+/** Keep only slots whose start falls within [windowStartUtc, windowEndUtc] (inclusive). */
+export function filterSlotsWithinWindow(
+  slots: MctbBookingSlot[],
+  windowStartUtc: string,
+  windowEndUtc: string,
+): MctbBookingSlot[] {
+  const start = new Date(windowStartUtc).getTime();
+  const end = new Date(windowEndUtc).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return [...slots];
+  return slots.filter((s) => {
+    const t = new Date(s.startUtc).getTime();
+    return t >= start && t <= end;
+  });
+}
+
 /** Pick up to `count` slots to offer — spread across the window when possible. */
 export function pickSlotsToOffer(slots: MctbBookingSlot[], count = 3): MctbBookingSlot[] {
   if (slots.length <= count) return [...slots];
@@ -52,43 +67,33 @@ export function nearestSlotAlternatives(
     .slice(0, count);
 }
 
-/** Resolve customer choice against last-offered slots only (stateful). */
+/**
+ * Strict syntactic selection only: single digit index or canonical slot id.
+ * Natural language ("second one", "afternoon") must come from scheduling LLM → offered_slot_id.
+ */
+export function resolveStrictNumericOfferedSlot(
+  offered: MctbBookingSlot[],
+  utterance: string,
+): MctbBookingSlot | null {
+  const text = utterance.trim();
+  if (!text || !offered.length) return null;
+
+  const digit = text.match(/^\s*([1-9])\s*$/);
+  if (digit) {
+    const idx = Number(digit[1]) - 1;
+    if (idx >= 0 && idx < offered.length) return offered[idx];
+  }
+
+  for (const slot of offered) {
+    if (text === slot.slotId) return slot;
+  }
+  return null;
+}
+
+/** @deprecated use resolveStrictNumericOfferedSlot + LLM offered_slot_id */
 export function resolveOfferedSlotChoice(
   offered: MctbBookingSlot[],
   utterance: string,
 ): MctbBookingSlot | null {
-  const text = utterance.trim().toLowerCase();
-  if (!text || !offered.length) return null;
-
-  const timeMatch = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
-  if (timeMatch) {
-    let hour = Number(timeMatch[1]);
-    const minute = timeMatch[2] ? Number(timeMatch[2]) : 0;
-    const ampm = timeMatch[3];
-    if (ampm === "pm" && hour < 12) hour += 12;
-    if (ampm === "am" && hour === 12) hour = 0;
-    for (const slot of offered) {
-      const d = new Date(slot.startUtc);
-      if (d.getUTCHours() === hour && d.getUTCMinutes() === minute) return slot;
-      const localH = d.getHours();
-      const localM = d.getMinutes();
-      if (localH === hour && localM === minute) return slot;
-    }
-  }
-
-  if (/\b(first|1st|earliest)\b/.test(text)) return offered[0];
-  if (/\b(last|latest|third|3rd)\b/.test(text) && offered.length >= 3) return offered[2];
-  if (/\b(second|2nd|middle)\b/.test(text) && offered.length >= 2) return offered[1];
-  if (/\bafternoon\b/.test(text)) {
-    const afternoon = offered.filter((s) => {
-      const h = new Date(s.startUtc).getHours();
-      return h >= 12 && h < 17;
-    });
-    if (afternoon.length === 1) return afternoon[0];
-  }
-
-  for (const slot of offered) {
-    if (text.includes(slot.slotId)) return slot;
-  }
-  return null;
+  return resolveStrictNumericOfferedSlot(offered, utterance);
 }
