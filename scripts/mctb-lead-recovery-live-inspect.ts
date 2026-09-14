@@ -109,9 +109,31 @@ async function main() {
   });
 
   const bookingConfirmed = activities.filter((a) => a.kind === "BOOKING_CONFIRMED");
-  const createHints = activities.filter((a) =>
-    /BOOKING|create|confirm/i.test(a.kind),
-  );
+  const contactId = conv.contactId;
+
+  const voiceAppointments = contactId
+    ? await prisma.voiceAppointment.findMany({
+        where: {
+          workspaceId: WORKSPACE_ID,
+          contactId,
+          status: { not: "cancelled" },
+        },
+        orderBy: { startsAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          startsAt: true,
+          endsAt: true,
+          timezone: true,
+          status: true,
+          serviceName: true,
+          externalId: true,
+          metadata: true,
+        },
+      })
+    : [];
+
+  const slotsOffered = activities.filter((a) => a.kind === "BOOKING_SLOTS_OFFERED");
 
   console.log("\n=== LIVE MCTB INSPECT ===\n");
   console.log("workspaceId:", WORKSPACE_ID);
@@ -151,6 +173,31 @@ async function main() {
     console.log(`${a.createdAt.toISOString()} ${a.kind}`, JSON.stringify(a.payloadJson));
   }
 
+  console.log("\n--- Voice appointments (contact, non-cancelled) ---");
+  if (!voiceAppointments.length) {
+    console.log("(none — if SMS said booked, check phone match / contactId on appointment)");
+  } else {
+    for (const appt of voiceAppointments) {
+      const meta = (appt.metadata || {}) as Record<string, unknown>;
+      console.log({
+        id: appt.id,
+        startsAt: appt.startsAt.toISOString(),
+        endsAt: appt.endsAt.toISOString(),
+        timezone: appt.timezone,
+        serviceName: appt.serviceName,
+        externalId: appt.externalId,
+        providerEventId: meta.providerEventId ?? null,
+        source: meta.source ?? null,
+      });
+    }
+  }
+
+  if (slotsOffered.length) {
+    console.log("\n--- Last BOOKING_SLOTS_OFFERED audit ---");
+    const last = slotsOffered.at(-1);
+    console.log(last?.createdAt.toISOString(), JSON.stringify(last?.payloadJson));
+  }
+
   console.log("\n--- Checklist hints (automated — confirm in provider UI) ---");
   const inbound = conv.messages.filter((m) => !m.direction.toLowerCase().includes("out"));
   const outbound = conv.messages.filter((m) => m.direction.toLowerCase().includes("out"));
@@ -160,10 +207,14 @@ async function main() {
     "Inbound customer SMS received": inbound.length > 0 ? "LIKELY PASS" : "FAIL",
     "BOOKING_CONFIRMED persisted":
       bookingConfirmed.length === 1 ? "LIKELY PASS" : bookingConfirmed.length > 1 ? "FAIL (multiple)" : "CHECK",
+    "VoiceAppointment rows for contact":
+      voiceAppointments.length === 0
+        ? "NONE"
+        : `${voiceAppointments.length} row(s) — see list above`,
     "Exactly one booking created":
       bookingSession?.providerBookingId
         ? "CHECK provider — one id: " + bookingSession.providerBookingId
-        : "CHECK — no providerBookingId on session yet",
+        : "CHECK — no providerBookingId on session yet (cleared after book is normal)",
     "Provider booking actually created": bookingSession?.providerBookingId ? "LIKELY PASS" : "PENDING",
     "Final SMS segment count": lastOut ? String(smsSegments(lastOut.body)) : "n/a",
   };

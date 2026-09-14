@@ -6,6 +6,7 @@ import {
   parseDaysAhead,
 } from "@/lib/solutions/appointment-receptionist/notice-utils";
 import { fieldSatisfied, normalizeBookingToolArgs } from "./booking-args";
+import { listWorkspaceAppointmentBusyIntervals } from "@/lib/voice/calendar/appointment-busy";
 import {
   computeFreeSlots,
   getGoogleBusy,
@@ -493,11 +494,18 @@ export async function getAvailability(
                     ),
                   )
                 ).flat();
+          const appointmentBusy = await listWorkspaceAppointmentBusyIntervals(
+            workspaceId,
+            timeMin,
+            timeMax,
+            bufferMinutes,
+          );
+          const blockingBusy = busy.concat(appointmentBusy);
           const hours = parseBookingHours(svcCfg.bookingHours || undefined);
           // Anchor free-slot generation on the requested window start (not "now"),
           // so "next Monday 8am" does not scan only tonight.
           const raw = computeFreeSlots(
-            busy,
+            blockingBusy,
             durationMinutes,
             scanDays,
             timeMin,

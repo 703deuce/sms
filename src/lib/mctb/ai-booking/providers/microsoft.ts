@@ -35,12 +35,14 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
       where: { workspaceId, name: serviceName },
     });
     const durationMinutes = service?.durationMinutes || 30;
+    const bufferMinutes = service?.bufferMinutes ?? 0;
     return {
       provider: "microsoft",
       connected,
       healthy: connected,
       timezone,
       durationMinutes,
+      bufferMinutes,
       serviceName,
       calendarId: conn?.id ?? null,
       fallbackBookingLinkId: config.fallbackBookingLinkId,
@@ -121,12 +123,20 @@ export const microsoftAiBookingAdapter: MctbAiBookingProviderAdapter = {
         throw new Error("Microsoft booking did not return appointment id");
       }
       const inviteSent = preflight.inviteAttendee && Boolean(req.customerEmail?.trim());
+      const resultStart = (result as { startsAt?: Date }).startsAt;
+      const durationMs = (ctx.durationMinutes || 60) * 60_000;
+      const bookedStart =
+        resultStart instanceof Date ? resultStart.toISOString() : resolvedSlot.startUtc;
+      const bookedEnd =
+        resultStart instanceof Date
+          ? new Date(resultStart.getTime() + durationMs).toISOString()
+          : resolvedSlot.endUtc;
       return {
         ok: true,
         provider: "microsoft",
         providerBookingId: appointmentId || resolvedSlot.slotId,
-        startUtc: resolvedSlot.startUtc,
-        endUtc: resolvedSlot.endUtc,
+        startUtc: bookedStart,
+        endUtc: bookedEnd,
         timezone: ctx.timezone,
         status: "confirmed",
         inviteSent,

@@ -72,10 +72,17 @@ export async function findAvailableTimes(
   }
 
   const { stampSlotsWithCanonicalTimezone } = await import("@/lib/mctb/ai-booking/booking-timezone");
+  const { filterSlotsByVoiceAppointments } = await import(
+    "@/lib/mctb/ai-booking/filter-slots-by-voice-appointments"
+  );
   const bookingTimezone = req.timezone.trim();
+  const stamped = stampSlotsWithCanonicalTimezone(result.slots, bookingTimezone);
+  const filtered = await filterSlotsByVoiceAppointments(req.workspaceId, stamped, {
+    bufferMinutes: context.bufferMinutes ?? 0,
+  });
   return {
     ...result,
-    slots: stampSlotsWithCanonicalTimezone(result.slots, bookingTimezone),
+    slots: filtered,
   };
 }
 
