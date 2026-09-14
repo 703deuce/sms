@@ -15,5 +15,6 @@ export const JOB_PRIORITY_INTERACTIVE_MAX = 20;
 export const MCTB_JOB_TYPES = new Set([
   "mctb_process_inbound_sms",
   "mctb_send_customer_sms",
+  "mctb_durable_operation_process",
   "mctb_worker_smoke",
 ]);

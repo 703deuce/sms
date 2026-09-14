@@ -145,7 +145,10 @@ export async function handleWorkflowToolFastPath(input: {
       },
     })) as Record<string, unknown>;
 
-    const opSucceeded = result.ok !== false;
+    const processing =
+      result.status === "PROCESSING" ||
+      (result.data as Record<string, unknown> | undefined)?.processing === true;
+    const opSucceeded = result.ok !== false && !processing;
     const latencyMs = Date.now() - start;
     if (execution) {
       await prisma.voiceToolExecution
@@ -165,9 +168,11 @@ export async function handleWorkflowToolFastPath(input: {
     const speak =
       typeof result.speak === "string"
         ? result.speak
-        : opSucceeded
-          ? "Done."
-          : "I wasn't able to complete that just now.";
+        : processing
+          ? "Absolutely. Give me just a moment while I check that for you."
+          : opSucceeded
+            ? "Done."
+            : "I wasn't able to complete that just now.";
 
     console.info(
       "[voice/tool-fast-path]",

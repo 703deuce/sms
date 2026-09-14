@@ -473,6 +473,7 @@ model Workspace {
   mctbHandoffConfig MctbHandoffConfig?
   mctbBookingLinks MctbBookingLink[]
   mctbAiBookingSessions MctbAiBookingSession[]
+  mctbDurableOperations MctbDurableOperation[]
   mctbConversationBookingActivities MctbConversationBookingActivity[]
   mctbNotificationRecipients MctbNotificationRecipient[]
   mctbConversationAutomationStates MctbConversationAutomationState[]
@@ -5852,6 +5853,38 @@ model MctbAiBookingSession {
   @@unique([conversationId])
   @@index([workspaceId, updatedAt])
   @@map("mctb_ai_booking_sessions")
+}
+
+/// Canonical durable long-running MCTB / voice operations (timeout-safe, idempotent).
+model MctbDurableOperation {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  conversationId     String?
+  voiceCallId        String?
+  operationType      String
+  stateVersion       Int?
+  idempotencyKey     String    @unique
+  status             String    @default("PENDING")
+  attemptCount       Int       @default(0)
+  claimedAt          DateTime?
+  claimLeaseExpiresAt DateTime?
+  lastAttemptAt      DateTime?
+  nextAttemptAt      DateTime?
+  completedAt        DateTime?
+  inputJson          Json      @default("{}")
+  resultJson         Json?
+  failureClass       String?
+  failureDetail      String?
+  traceJson          Json      @default("[]")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, nextAttemptAt])
+  @@index([voiceCallId, status])
+  @@index([conversationId, status])
+  @@index([status, claimLeaseExpiresAt])
+  @@map("mctb_durable_operations")
 }
 
 /// Structured booking timeline events for MCTB conversations (not Transovo appointments).

@@ -114,6 +114,7 @@ export const CALLER_AMY_INTERNAL_ONLY_TOOLS = new Set([
   "create_task",
   "end_call",
   "confirm_booking",
+  "check_voice_operation",
 ]);
 
 /** Retired from model surface when conversationWorkflowMode is on. */

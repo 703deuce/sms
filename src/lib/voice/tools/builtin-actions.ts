@@ -843,17 +843,87 @@ export async function executeBuiltinVoiceAction(input: {
     }
     case "voice_ai_booking_turn": {
       if (!input.callId) throw new Error("callId required");
-      const { executeVoiceAiBookingTurn } = await import(
-        "@/lib/voice/ai-booking/voice-booking-turn"
+      const operationId = String(
+        args.operation_id || args.check_operation_id || args.operationId || "",
+      ).trim();
+      if (operationId) {
+        const { checkVoiceDurableOperation } = await import(
+          "@/lib/mctb/durable-operations/voice-fast-start"
+        );
+        const checked = await checkVoiceDurableOperation({
+          workspaceId: input.workspaceId,
+          operationId,
+        });
+        return {
+          ok: checked.ok,
+          status: checked.status,
+          speak: checked.speak,
+          operation_id: checked.operationId,
+          operationId: checked.operationId,
+          error: checked.error,
+          data: checked.data,
+        };
+      }
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      const call = await prisma.voiceCall.findFirst({
+        where: { id: input.callId, workspaceId: input.workspaceId },
+        select: { metadata: true },
+      });
+      const meta = (call?.metadata || {}) as Record<string, unknown>;
+      const actionEpochAtEnqueue = Number(
+        meta.voiceBookingActionEpoch ?? meta.voiceBookingWriteEpoch ?? 0,
       );
-      return executeVoiceAiBookingTurn({
+      const { startVoiceAiBookingDurableOperation } = await import(
+        "@/lib/mctb/durable-operations/voice-fast-start"
+      );
+      const started = await startVoiceAiBookingDurableOperation({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         callId: input.callId,
         utterance: String(args.utterance || args.user_input || args.caller_message || ""),
         confirmBooking: args.confirm_booking === true || args.confirm === true,
         offeredSlotId: args.offered_slot_id ? String(args.offered_slot_id) : null,
+        externalInvocationId: args.tool_invocation_id
+          ? String(args.tool_invocation_id)
+          : args.invocation_id
+            ? String(args.invocation_id)
+            : null,
+        actionEpochAtEnqueue,
       });
+      return {
+        ok: started.ok,
+        status: started.status,
+        speak: started.speak,
+        operation_id: started.operationId,
+        operationId: started.operationId,
+        error: started.error,
+        data: started.data,
+      };
+    }
+    case "check_voice_operation": {
+      const operationId = String(
+        args.operation_id || args.operationId || args.check_operation_id || "",
+      ).trim();
+      if (!operationId) {
+        return { ok: false, error: "operation_id required", speak: "I need a moment — say that again?" };
+      }
+      const { checkVoiceDurableOperation } = await import(
+        "@/lib/mctb/durable-operations/voice-fast-start"
+      );
+      const checked = await checkVoiceDurableOperation({
+        workspaceId: input.workspaceId,
+        operationId,
+      });
+      return {
+        ok: checked.ok,
+        status: checked.status,
+        speak: checked.speak,
+        operation_id: checked.operationId,
+        operationId: checked.operationId,
+        error: checked.error,
+        data: checked.data,
+      };
     }
     case "book_appointment": {
       return executeAgentTool({

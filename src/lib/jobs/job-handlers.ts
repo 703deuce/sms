@@ -182,6 +182,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeVoiceMctbBookingCreateJob(payload);
     }
+    case "mctb_durable_operation_process": {
+      const { executeMctbDurableOperationJob } = await import(
+        "@/lib/mctb/durable-operations/worker"
+      );
+      return executeMctbDurableOperationJob(payload);
+    }
     case "mctb_send_customer_sms": {
       const { executeMctbSendCustomerSmsJob } = await import(
         "@/lib/mctb/messaging/send-customer-sms-job"

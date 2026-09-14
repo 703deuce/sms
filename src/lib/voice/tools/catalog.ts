@@ -862,8 +862,26 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
           type: "string",
           description: "Optional canonical slot id when model resolved selection",
         },
+        operation_id: {
+          type: "string",
+          description:
+            "When set, check durable operation status instead of starting new work (async voice booking).",
+        },
       },
       required: ["utterance"],
+    },
+  },
+  check_voice_operation: {
+    name: "check_voice_operation",
+    toolType: "check_voice_operation",
+    description:
+      "Poll status of a durable voice operation (availability/booking). Speak holding lines while PROCESSING; only claim success when status is SUCCEEDED.",
+    body: {
+      type: "object",
+      properties: {
+        operation_id: { type: "string", description: "operation_id from voice_ai_booking_turn" },
+      },
+      required: ["operation_id"],
     },
   },
   hold_appointment_slot: {
