@@ -18,7 +18,7 @@ async function resolveV2ToolId(): Promise<string | null> {
   return tools.find((t) => t.display_name === VOICE_V2_TELNYX_TOOL_NAME)?.id || null;
 }
 
-async function main() {
+export async function restoreAmyTelnyxWorkflowWithV2() {
   const prisma = getPrisma();
   const agent = await prisma.voiceAgent.findFirst({
     where: { id: AGENT_ID, workspaceId: WORKSPACE_ID },
@@ -45,7 +45,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+restoreAmyTelnyxWorkflowWithV2().catch((err) => {
   console.error(err);
   process.exit(1);
 });
