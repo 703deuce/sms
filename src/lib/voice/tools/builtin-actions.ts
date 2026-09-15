@@ -856,18 +856,15 @@ export async function executeBuiltinVoiceAction(input: {
       const { resolveVoiceBookingToolForCall } = await import(
         "@/lib/voice/ai-booking/resolve-voice-booking-tool"
       );
-      const { resolveCanonicalBookingTimezone } = await import(
-        "@/lib/mctb/ai-booking/booking-timezone"
+      const { resolveVoiceNativePayloadOnHttpIngress } = await import(
+        "@/lib/voice/ai-booking/voice-booking-http-ingress"
       );
-      const { resolveVoiceBookingToolArgs } = await import(
-        "@/lib/voice/ai-booking/voice-legacy-args-bridge"
-      );
-      const bookingTimezone = await resolveCanonicalBookingTimezone(input.workspaceId);
-      const voiceNative = resolveVoiceBookingToolArgs(
-        args as Record<string, unknown>,
-        bookingTimezone,
-        new Date().toISOString(),
-      );
+      const voiceNative = resolveVoiceNativePayloadOnHttpIngress(args as Record<string, unknown>);
+      const rawMarks = args._ingress_marks as Record<string, unknown> | undefined;
+      const ingressMarks =
+        rawMarks && typeof rawMarks.requestReceivedAt === "number"
+          ? (rawMarks as import("@/lib/voice/ai-booking/voice-booking-http-ingress").VoiceBookingIngressMarks)
+          : undefined;
       return resolveVoiceBookingToolForCall({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
@@ -883,6 +880,7 @@ export async function executeBuiltinVoiceAction(input: {
             : null,
         actionEpochAtEnqueue,
         telnyxConversationId: call?.telnyxConversationId,
+        ingressMarks,
       });
     }
     case "check_voice_operation": {

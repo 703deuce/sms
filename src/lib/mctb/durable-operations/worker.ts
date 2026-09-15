@@ -62,7 +62,14 @@ export async function executeMctbDurableOperationJob(payload: Record<string, unk
     throw new Error("mctb_durable_operation_payload_incomplete");
   }
 
+  const claimStarted = Date.now();
   const claim = await claimMctbDurableOperation(operationId);
+  const workerClaimMs = Date.now() - claimStarted;
+  const enqueuedAtIso = payload.enqueuedAt ? String(payload.enqueuedAt) : null;
+  const queueClaimMs =
+    enqueuedAtIso && claim.claimed
+      ? Math.max(0, claimStarted - Date.parse(enqueuedAtIso))
+      : null;
   if (!claim.claimed) {
     if (claim.reason === "already_terminal") {
       return { ok: true, skipped: true, status: claim.operation.status };
@@ -78,19 +85,38 @@ export async function executeMctbDurableOperationJob(payload: Record<string, unk
   });
   operation = (await store.findById(operationId))!;
 
+  let endVoiceOrchestratorTiming: (id: string) => unknown = () => null;
+  let summarizeVoiceOrchestratorTiming: (r: unknown) => Record<string, unknown> = () => ({});
+
+  if (claim.claimed) {
+    const timing = await import("@/lib/voice/ai-booking/voice-orchestrator-timing");
+    timing.beginVoiceOrchestratorTiming(operationId);
+    timing.recordVoiceTimingField("workerClaimMs", workerClaimMs);
+    if (queueClaimMs != null) timing.recordVoiceTimingField("queueClaimMs", queueClaimMs);
+    endVoiceOrchestratorTiming = timing.endVoiceOrchestratorTiming;
+    summarizeVoiceOrchestratorTiming = timing.summarizeVoiceOrchestratorTiming;
+  }
+
   try {
     const resultJson = await runProcessor(operation);
+    const timingReport = claim.claimed ? endVoiceOrchestratorTiming(operationId) : null;
+    const latencyBreakdown = summarizeVoiceOrchestratorTiming(timingReport);
     const completed = await store.update(operationId, {
       status: "SUCCEEDED",
       resultJson: {
         ...resultJson,
-        delivery: { status: "PENDING", operationSucceededAt: new Date().toISOString() },
+        voiceLatency: latencyBreakdown,
+        delivery: {
+          status: "PENDING",
+          operationSucceededAt: new Date().toISOString(),
+          providerCompleteAt: new Date().toISOString(),
+        },
       },
       completedAt: new Date(),
       claimLeaseExpiresAt: null,
       failureClass: null,
       failureDetail: null,
-      traceJson: appendTraceEvent(operation.traceJson, "SUCCEEDED"),
+      traceJson: appendTraceEvent(operation.traceJson, "SUCCEEDED", latencyBreakdown),
     });
     const voiceCallId = operation.voiceCallId || String(operation.inputJson.callId || "");
     if (voiceCallId && process.env.MCTB_DURABLE_OP_CERT !== "1") {
@@ -105,6 +131,7 @@ export async function executeMctbDurableOperationJob(payload: Record<string, unk
     }
     return { ok: true, operationId, status: completed.status, result: resultJson };
   } catch (err) {
+    if (claim.claimed) endVoiceOrchestratorTiming(operationId);
     const classified = classifyErrorForRetry(err);
     const terminal = !classified.retryable || operation.attemptCount >= MCTB_DURABLE_OPERATION_MAX_ATTEMPTS;
     const status = terminal ? "FAILED_TERMINAL" : "FAILED_RETRYABLE";

@@ -15,6 +15,7 @@ import type { AiBookingOrchestratorResult } from "@/lib/mctb/ai-booking/types";
 import { resolveVoiceBookingMode } from "@/lib/voice/ai-booking/mode";
 import { mapVoiceNativeActionToOrchestrator } from "@/lib/voice/ai-booking/map-voice-native-to-orchestrator";
 import type { VoiceNativeBookingPayload } from "@/lib/voice/ai-booking/voice-native-booking-types";
+import { recordVoiceTimingField } from "@/lib/voice/ai-booking/voice-orchestrator-timing";
 
 export type VoiceNativeBookingLatency = {
   ingressMs: number;
@@ -118,7 +119,9 @@ export async function executeVoiceNativeBookingAction(input: {
     };
   }
 
+  const readinessStarted = Date.now();
   const readiness = await evaluateMctbAiBookingReadiness(input.workspaceId);
+  recordVoiceTimingField("microsoftReadinessMs", Date.now() - readinessStarted);
   if (!readiness.ready) {
     const blocker = readiness.reason || "not_ready";
     logVoiceAiBookingEvent("voice_native_not_ready", {
@@ -139,10 +142,12 @@ export async function executeVoiceNativeBookingAction(input: {
   const ingressMs = Date.now() - started;
   const conversationId = voiceBookingConversationId(input.callId);
   const bookingTimezone = await resolveCanonicalBookingTimezone(input.workspaceId);
+  const contextStarted = Date.now();
   const caller = await loadVoiceCallBookingContext({
     workspaceId: input.workspaceId,
     callId: input.callId,
   });
+  recordVoiceTimingField("bookingContextLoadMs", Date.now() - contextStarted);
   const sessionStore = getMctbAiBookingSessionStore();
   const session = await sessionStore.get(conversationId);
   const referenceUtcIso = new Date().toISOString();
@@ -223,6 +228,7 @@ export async function executeVoiceNativeBookingAction(input: {
     writeEpoch,
   });
   const orchestratorMs = Date.now() - orchStart;
+  recordVoiceTimingField("orchestratorTotalMs", orchestratorMs);
 
   const refreshed = await sessionStore.get(conversationId);
   const offerSetId = refreshed?.offerSetId ?? session?.offerSetId ?? null;

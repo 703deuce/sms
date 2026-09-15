@@ -32,11 +32,36 @@ export async function processVoiceAiBookingTurnOperation(
   const utterance = String(input.utterance || "");
   const confirmBooking = input.confirmBooking === true;
   const offeredSlotId = input.offeredSlotId ? String(input.offeredSlotId) : null;
-  const voiceNativeRaw = input.voiceNative;
-  const voiceNative =
+  let voiceNativeRaw = input.voiceNative;
+  let voiceNative =
     voiceNativeRaw && typeof voiceNativeRaw === "object"
       ? (voiceNativeRaw as Record<string, unknown>)
       : null;
+  if (
+    voiceNative &&
+    voiceNative.legacy_utterance_deferred === true &&
+    !voiceNative.requested_date
+  ) {
+    const { resolveCanonicalBookingTimezone } = await import(
+      "@/lib/mctb/ai-booking/booking-timezone"
+    );
+    const { resolveVoiceBookingToolArgs } = await import(
+      "@/lib/voice/ai-booking/voice-legacy-args-bridge"
+    );
+    const bookingTimezone = await resolveCanonicalBookingTimezone(workspaceId);
+    const bridged = resolveVoiceBookingToolArgs(
+      {
+        utterance: utterance || String(voiceNative.action || ""),
+        tool_invocation_id: voiceNative.tool_invocation_id,
+      },
+      bookingTimezone,
+      new Date().toISOString(),
+    );
+    if (bridged) {
+      voiceNative = bridged as unknown as Record<string, unknown>;
+      voiceNativeRaw = voiceNative;
+    }
+  }
   const expectedActionEpoch =
     input.actionEpochAtEnqueue != null ? Number(input.actionEpochAtEnqueue) : null;
 

@@ -75,6 +75,23 @@ export function formatVoiceAiBookingToolResponse(input: {
   };
 }
 
+export function voiceBookingResponseFromDurableOperation(operation: {
+  id: string;
+  status: string;
+  resultJson?: Record<string, unknown> | null;
+}): Record<string, unknown> {
+  const resultJson = (operation.resultJson || {}) as Record<string, unknown>;
+  const voice = (resultJson.voice || resultJson) as Record<string, unknown>;
+  return voiceBookingResponseFromDurableTurn({
+    operationStatus: operation.status,
+    speak: String(voice.speak || ""),
+    operationId: operation.id,
+    ok: voice.ok !== false,
+    error: voice.error ? String(voice.error) : undefined,
+    data: resultJson,
+  });
+}
+
 export function voiceBookingResponseFromDurableTurn(input: {
   operationStatus: string;
   speak: string;
@@ -102,7 +119,7 @@ export function voiceBookingResponseFromDurableTurn(input: {
   if (input.operationStatus === "SUCCEEDED") {
     const voice = (input.data?.voice || input.data) as Record<string, unknown> | undefined;
     const inner = (voice || {}) as Record<string, unknown>;
-    const innerData = (inner.data || {}) as Record<string, unknown>;
+    const innerData = (inner.data || inner) as Record<string, unknown>;
     if (innerData.booked) {
       return formatVoiceAiBookingToolResponse({
         status: "BOOKING_CONFIRMED",
@@ -114,7 +131,9 @@ export function voiceBookingResponseFromDurableTurn(input: {
     }
     const rawSlots = Array.isArray(innerData.slots)
       ? (innerData.slots as Array<Record<string, unknown>>)
-      : [];
+      : Array.isArray(inner.slots)
+        ? (inner.slots as Array<Record<string, unknown>>)
+        : [];
     if (rawSlots.length) {
       const slots: VoiceBookingSlotPayload[] = rawSlots.map((s, i) => ({
         slot_id: String(s.slot_id || s.slotId || ""),

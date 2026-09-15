@@ -42,7 +42,7 @@ export async function createOrResolveDurableOperation(input: {
   const store = getMctbDurableOperationStore();
   const existing = await store.findByIdempotencyKey(input.idempotencyKey);
   if (existing) {
-    return { operation: existing, created: false };
+    return { operation: existing, created: false, enqueuedAt: null };
   }
   const operation = await store.create({
     workspaceId: input.workspaceId,
@@ -61,9 +61,10 @@ export async function createOrResolveDurableOperation(input: {
     voiceCallId: input.voiceCallId,
     conversationId: input.conversationId,
   });
+  const enqueuedAt = new Date().toISOString();
   await enqueueMctbDurableOperationJob({
     workspaceId: input.workspaceId,
     operationId: operation.id,
   });
-  return { operation, created: true };
+  return { operation, created: true, enqueuedAt };
 }

@@ -17,6 +17,11 @@ import {
   formatVoiceAiBookingToolResponse,
 } from "@/lib/voice/ai-booking/tool-result-contract";
 import type { VoiceNativeBookingPayload } from "@/lib/voice/ai-booking/voice-native-booking-types";
+import type { VoiceBookingIngressMarks } from "@/lib/voice/ai-booking/voice-booking-http-ingress";
+import {
+  ingressTimingSummary,
+  logVoiceBookingIngressTiming,
+} from "@/lib/voice/ai-booking/voice-booking-http-ingress";
 
 /**
  * Runtime-owned voice booking tool resolution.
@@ -34,6 +39,7 @@ export async function resolveVoiceBookingToolForCall(input: {
   actionEpochAtEnqueue?: number | null;
   telnyxConversationId?: string | null;
   toolExecutionId?: string | null;
+  ingressMarks?: VoiceBookingIngressMarks;
 }): Promise<Record<string, unknown>> {
   const active = await getActiveVoiceOperationForCall(input.callId);
 
@@ -95,23 +101,24 @@ export async function resolveVoiceBookingToolForCall(input: {
     voiceNative: input.voiceNative,
     externalInvocationId: input.externalInvocationId,
     actionEpochAtEnqueue: input.actionEpochAtEnqueue,
+    ingressMarks: input.ingressMarks,
   });
 
   if (started.operationId) {
-    await registerVoiceDurableOperationRuntime({
+    void registerVoiceDurableOperationRuntime({
       callId: input.callId,
       operationId: started.operationId,
       workspaceId: input.workspaceId,
       telnyxConversationId: input.telnyxConversationId,
       toolExecutionId: input.toolExecutionId,
-    });
-    await markVoiceOperationHttpAck({
+    }).catch(() => undefined);
+    void markVoiceOperationHttpAck({
       callId: input.callId,
       operationId: started.operationId,
-    });
+    }).catch(() => undefined);
   }
 
-  return voiceBookingResponseFromDurableTurn({
+  const response = voiceBookingResponseFromDurableTurn({
     operationStatus: started.status,
     speak: started.speak,
     operationId: started.operationId,
@@ -122,4 +129,18 @@ export async function resolveVoiceBookingToolForCall(input: {
       runtime_owned: true,
     },
   });
+
+  if (input.ingressMarks) {
+    input.ingressMarks.httpResponseAt = Date.now();
+    logVoiceBookingIngressTiming(input.ingressMarks, {
+      operationId: started.operationId,
+      callId: input.callId,
+    });
+    return {
+      ...response,
+      ingress_timing: ingressTimingSummary(input.ingressMarks),
+    };
+  }
+
+  return response;
 }

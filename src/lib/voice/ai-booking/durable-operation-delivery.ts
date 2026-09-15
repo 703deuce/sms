@@ -10,23 +10,13 @@ import {
   saveVoiceDurableOpRuntime,
   type VoiceDurableOpRuntimeState,
 } from "@/lib/voice/ai-booking/durable-operation-runtime";
-import { voiceBookingResponseFromDurableTurn } from "@/lib/voice/ai-booking/tool-result-contract";
+import { voiceBookingResponseFromDurableOperation } from "@/lib/voice/ai-booking/tool-result-contract";
 import { terminalFailureSpeak } from "@/lib/mctb/durable-operations/holding";
 
 export async function buildAuthoritativeToolPayload(
   operation: MctbDurableOperationRecord,
 ): Promise<Record<string, unknown>> {
-  const voice = (operation.resultJson?.voice || operation.resultJson) as Record<string, unknown>;
-  const inner = (voice || {}) as Record<string, unknown>;
-  const data = (inner.data || {}) as Record<string, unknown>;
-  return voiceBookingResponseFromDurableTurn({
-    operationStatus: operation.status,
-    speak: String(inner.speak || ""),
-    operationId: operation.id,
-    ok: inner.ok !== false,
-    error: inner.error ? String(inner.error) : undefined,
-    data,
-  });
+  return voiceBookingResponseFromDurableOperation(operation);
 }
 
 export async function injectVoiceOperationResultToTelnyx(input: {
@@ -45,7 +35,11 @@ export async function injectVoiceOperationResultToTelnyx(input: {
     return { delivered: false, reason: "no_conversation_or_telnyx" };
   }
 
+  const deliveryClaimedAt = Date.now();
   const payload = await buildAuthoritativeToolPayload(input.operation);
+  const deliveryEnqueuedAt = (
+    input.operation.resultJson?.delivery as Record<string, unknown> | undefined
+  )?.operationSucceededAt;
   const toolJson = JSON.stringify({
     ...payload,
     runtime_injected: true,
@@ -53,10 +47,12 @@ export async function injectVoiceOperationResultToTelnyx(input: {
     voice_result_consumed: true,
   }).slice(0, 4000);
 
+  const telnyxDeliverySentAt = Date.now();
   await addConversationMessage(conversationId, {
     role: "tool",
     content: toolJson,
   });
+  const telnyxDeliveryAcceptedAt = Date.now();
 
   const status = payload.voice_booking_status;
   if (status === "AVAILABILITY_FOUND" || status === "BOOKING_CONFIRMED") {
@@ -72,9 +68,22 @@ export async function injectVoiceOperationResultToTelnyx(input: {
     }).catch(() => undefined);
   }
 
+  const deliveryQueueMs =
+    deliveryEnqueuedAt != null
+      ? Math.max(0, deliveryClaimedAt - Date.parse(String(deliveryEnqueuedAt)))
+      : null;
+  const deliveryHttpMs = telnyxDeliveryAcceptedAt - telnyxDeliverySentAt;
+
   await appendOperationTrace(input.operation.id, "VOICE_RESULT_CONSUMED", {
     conversationId,
     voice_booking_status: status,
+    ok: payload.ok,
+    PROVIDER_COMPLETE_AT: deliveryEnqueuedAt,
+    DELIVERY_CLAIMED_AT: new Date(deliveryClaimedAt).toISOString(),
+    TELNYX_DELIVERY_SENT_AT: new Date(telnyxDeliverySentAt).toISOString(),
+    TELNYX_DELIVERY_ACCEPTED_AT: new Date(telnyxDeliveryAcceptedAt).toISOString(),
+    DELIVERY_QUEUE_MS: deliveryQueueMs,
+    DELIVERY_HTTP_MS: deliveryHttpMs,
   });
 
   const runtime = await loadVoiceDurableOpRuntime(input.callId);

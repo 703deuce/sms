@@ -106,6 +106,14 @@ export async function handleWorkflowToolFastPath(input: {
 
   const ctx = ctxOrErr as import("@/lib/voice/tools/tool-webhook-context").ToolWebhookContext;
   const start = Date.now();
+  const ingressMarks =
+    input.toolType === "voice_ai_booking_turn"
+      ? {
+          requestReceivedAt: ingressStartedAt,
+          authCompleteAt: ingressStartedAt,
+          callContextResolvedAt: Date.now(),
+        }
+      : undefined;
 
   const execution = await prisma.voiceToolExecution
     .create({
@@ -135,6 +143,7 @@ export async function handleWorkflowToolFastPath(input: {
       toolType: input.toolType,
       input: {
         ...input.body,
+        ...(ingressMarks ? { _ingress_marks: ingressMarks } : {}),
         call_control_id: ctx.callControlId || input.body.call_control_id,
         conversation_id: ctx.conversationId || input.body.conversation_id,
         telnyx_conversation_id: ctx.conversationId,
@@ -208,14 +217,20 @@ export async function handleWorkflowToolFastPath(input: {
       }).catch(() => undefined);
     }
 
+    const ingressMarks =
+      input.toolType === "voice_ai_booking_turn"
+        ? ((result.ingress_timing as Record<string, unknown> | undefined) ?? undefined)
+        : undefined;
+
     return telnyxJson({
       ...result,
-      ok: opSucceeded,
+      ok: opSucceeded || pendingOk,
       speak,
       fast_path: true,
       latency_ms: latencyMs,
       executionId: execution?.id,
       callId: ctx.callId,
+      ...(ingressMarks ? { ingress_timing: ingressMarks } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

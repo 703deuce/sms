@@ -376,10 +376,22 @@ export async function microsoftGraphFetch(
   input: string | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  const tokenStarted = Date.now();
   let token = await getValidAccessToken(connectionId, "microsoft", config);
+  const tokenValidationMs = Date.now() - tokenStarted;
+  try {
+    const { recordVoiceTimingField, recordVoiceGraphRequest, getActiveVoiceOrchestratorTiming } =
+      await import("@/lib/voice/ai-booking/voice-orchestrator-timing");
+    if (getActiveVoiceOrchestratorTiming()) {
+      recordVoiceTimingField("tokenValidationMs", tokenValidationMs);
+    }
+  } catch {
+    // voice timing is optional
+  }
   if (!token) throw new Error("Microsoft access token unavailable");
 
   const url = typeof input === "string" ? input : input.toString();
+  const graphOp = url.replace(/^https?:\/\/[^/]+/i, "").split("?")[0] || "graph";
   const withAuth = (accessToken: string) =>
     fetch(url, {
       ...init,
@@ -389,16 +401,58 @@ export async function microsoftGraphFetch(
       },
     });
 
+  const graphStarted = Date.now();
   let res = await withAuth(token);
+  const firstGraphMs = Date.now() - graphStarted;
+  try {
+    const { recordVoiceGraphRequest, getActiveVoiceOrchestratorTiming } = await import(
+      "@/lib/voice/ai-booking/voice-orchestrator-timing"
+    );
+    if (getActiveVoiceOrchestratorTiming()) {
+      recordVoiceGraphRequest({
+        operation: graphOp,
+        httpMs: firstGraphMs,
+        status: res.status,
+      });
+    }
+  } catch {
+    // optional
+  }
   if (res.status !== 401) return res;
 
+  const refreshStarted = Date.now();
   token = await getValidAccessToken(connectionId, "microsoft", config, { forceRefresh: true });
+  try {
+    const { recordVoiceTimingField, getActiveVoiceOrchestratorTiming } = await import(
+      "@/lib/voice/ai-booking/voice-orchestrator-timing"
+    );
+    if (getActiveVoiceOrchestratorTiming()) {
+      recordVoiceTimingField("tokenRefreshMs", Date.now() - refreshStarted);
+    }
+  } catch {
+    // optional
+  }
   if (!token) {
     await markCalendarConnectionNeedsReauth(connectionId);
     throw new Error("Microsoft calendar re-authentication required");
   }
 
+  const retryGraphStarted = Date.now();
   res = await withAuth(token);
+  try {
+    const { recordVoiceGraphRequest, getActiveVoiceOrchestratorTiming } = await import(
+      "@/lib/voice/ai-booking/voice-orchestrator-timing"
+    );
+    if (getActiveVoiceOrchestratorTiming()) {
+      recordVoiceGraphRequest({
+        operation: `${graphOp}:retry_after_refresh`,
+        httpMs: Date.now() - retryGraphStarted,
+        status: res.status,
+      });
+    }
+  } catch {
+    // optional
+  }
   if (res.status === 401) {
     await markCalendarConnectionNeedsReauth(connectionId);
     throw new Error("Microsoft calendars 401");

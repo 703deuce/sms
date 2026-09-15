@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getMctbDurableOperationStore } from "./store";
+import { getMctbDurableOperationStore, appendOperationTrace } from "./store";
 import { buildVoiceOperationIdempotencyKey, createOrResolveDurableOperation } from "./create";
 import { resolveVoiceOperationResponse } from "./resolve-status";
 import { pickInitialHoldingPhrase } from "./holding";
@@ -8,6 +8,7 @@ import type { VoiceOperationVoiceResult } from "./types";
 import { voiceBookingConversationId } from "@/lib/voice/ai-booking/constants";
 import type { VoiceNativeBookingPayload } from "@/lib/voice/ai-booking/voice-native-booking-types";
 import { voiceNativeActionDigest } from "@/lib/voice/ai-booking/voice-native-booking-types";
+import type { VoiceBookingIngressMarks } from "@/lib/voice/ai-booking/voice-booking-http-ingress";
 
 export async function startVoiceAiBookingDurableOperation(input: {
   workspaceId: string;
@@ -19,6 +20,7 @@ export async function startVoiceAiBookingDurableOperation(input: {
   externalInvocationId?: string | null;
   actionEpochAtEnqueue?: number | null;
   voiceNative?: VoiceNativeBookingPayload | null;
+  ingressMarks?: VoiceBookingIngressMarks;
 }): Promise<VoiceOperationVoiceResult> {
   const { resolveVoiceBookingMode } = await import("@/lib/voice/ai-booking/mode");
   const mode = await resolveVoiceBookingMode({
@@ -54,7 +56,8 @@ export async function startVoiceAiBookingDurableOperation(input: {
   const { persistVoiceAiBookingOperationAudit } = await import(
     "@/lib/voice/ai-booking/operation-audit"
   );
-  const { operation } = await createOrResolveDurableOperation({
+  const durableCreateStarted = Date.now();
+  const { operation, created, enqueuedAt } = await createOrResolveDurableOperation({
     workspaceId: input.workspaceId,
     conversationId,
     voiceCallId: input.callId,
@@ -74,7 +77,7 @@ export async function startVoiceAiBookingDurableOperation(input: {
     },
   });
 
-  await persistVoiceAiBookingOperationAudit({
+  void persistVoiceAiBookingOperationAudit({
     workspaceId: input.workspaceId,
     conversationId,
     callId: input.callId,
@@ -85,7 +88,21 @@ export async function startVoiceAiBookingDurableOperation(input: {
     phase: "VOICE_OPERATION_ACCEPTED",
     status: "PROCESSING",
     spokenResult: pickInitialHoldingPhrase(operation.id),
-  });
+  }).catch(() => undefined);
+
+  if (input.ingressMarks) {
+    input.ingressMarks.durableOpCreatedAt = durableCreateStarted;
+    input.ingressMarks.enqueuedAt = enqueuedAt
+      ? Date.parse(enqueuedAt)
+      : Date.now();
+  }
+
+  if (created) {
+    await appendOperationTrace(operation.id, "HTTP_DURABLE_ENQUEUED", {
+      enqueuedAt: enqueuedAt || new Date().toISOString(),
+      durableCreateMs: Date.now() - durableCreateStarted,
+    });
+  }
 
   const holding = pickInitialHoldingPhrase(operation.id);
   const resolved = resolveVoiceOperationResponse(operation);
