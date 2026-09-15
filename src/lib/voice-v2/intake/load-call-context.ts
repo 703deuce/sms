@@ -117,20 +117,22 @@ export async function ensureVoiceV2CallContext(input: {
     intakeSaveCount: 0,
   };
 
-  await createVoiceV2CallContext({
-    payload,
-    identity: {
-      sessionKey: canonical,
-      callId: input.callId?.trim() || canonical,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      telnyxCallControlId: cc || undefined,
-      telnyxConversationId: conv || undefined,
+  await createVoiceV2CallContext(
+    {
+      payload,
+      identity: {
+        sessionKey: canonical,
+        callId: input.callId?.trim() || canonical,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        telnyxCallControlId: cc || undefined,
+        telnyxConversationId: conv || undefined,
+      },
+      enrollment,
     },
-    enrollment,
-  });
+    { l2Persist: "background" },
+  );
 
-  setVoiceV2CallContext(payload);
   input.trace?.mark("SESSION_CREATE_END", { ms: Date.now() - createStart });
   return payload;
 }

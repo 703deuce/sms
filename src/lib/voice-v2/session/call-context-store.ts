@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION, VOICE_V2_CALL_CONTEXT_TTL_SEC } from "./types";
 import { voiceV2ContextMetric } from "./observability";
+import { assertVoiceV2SharedSessionBackendAllowed } from "./store-config";
 import { syncLegacyFromRecord, buildRecordFromLegacy, projectOfferFromLegacy } from "./legacy-bridge";
 import type { VoiceV2CallContext } from "../intake/types";
 import type { VoiceV2ContextIdentity, VoiceV2EnrollmentSnapshot } from "./types";
@@ -361,17 +362,13 @@ let storeMode: "redis" | "memory" | null = null;
 
 export function getVoiceV2CallContextStore(): VoiceV2CallContextStore {
   if (storeSingleton) return storeSingleton;
+  assertVoiceV2SharedSessionBackendAllowed();
   if (process.env.REDIS_URL) {
     storeSingleton = new RedisVoiceV2CallContextStore();
     storeMode = "redis";
   } else {
     storeSingleton = new InMemoryVoiceV2CallContextStore();
     storeMode = "memory";
-    if (process.env.NODE_ENV === "production") {
-      console.warn(
-        "[voice-v2/context] REDIS_URL unset — in-memory L2 (NOT safe for horizontal scale)",
-      );
-    }
   }
   return storeSingleton;
 }
@@ -382,9 +379,16 @@ export function getVoiceV2CallContextStoreMode(): "redis" | "memory" {
 }
 
 export function resetVoiceV2CallContextStoreForTests(store?: VoiceV2CallContextStore): void {
+  process.env.VOICE_V2_ALLOW_MEMORY_L2 = "1";
   storeSingleton = store ?? new InMemoryVoiceV2CallContextStore();
   storeMode = "memory";
   l1.clear();
+}
+
+/** Test helper — force store re-resolution (e.g. production fail-closed). */
+export function resetVoiceV2CallContextStoreSingleton(): void {
+  storeSingleton = null;
+  storeMode = null;
 }
 
 /** Simulate another replica — shared L2, empty local L1. */
@@ -454,11 +458,34 @@ export async function loadVoiceV2CallContext(lookupKey: string): Promise<VoiceV2
   return record ? syncLegacyFromRecord(record) : null;
 }
 
-export async function createVoiceV2CallContext(input: {
-  payload: VoiceV2CallContext;
-  identity: VoiceV2ContextIdentity;
-  enrollment: VoiceV2EnrollmentSnapshot;
-}): Promise<VoiceV2CallContextRecord> {
+export type CreateVoiceV2CallContextOptions = {
+  /** await L2 create (tests); background = L1 first, no caller-path block (ensure hot path) */
+  l2Persist?: "await" | "background";
+};
+
+async function persistNewRecordToL2(
+  store: VoiceV2CallContextStore,
+  record: VoiceV2CallContextRecord,
+  identity: VoiceV2ContextIdentity,
+): Promise<VoiceV2CallContextRecord> {
+  const created = await store.createRecord(record);
+  await store.registerAliases({
+    canonical: identity.sessionKey,
+    callControlId: identity.telnyxCallControlId,
+    conversationId: identity.telnyxConversationId,
+    callId: identity.callId,
+  });
+  return created;
+}
+
+export async function createVoiceV2CallContext(
+  input: {
+    payload: VoiceV2CallContext;
+    identity: VoiceV2ContextIdentity;
+    enrollment: VoiceV2EnrollmentSnapshot;
+  },
+  options?: CreateVoiceV2CallContextOptions,
+): Promise<VoiceV2CallContextRecord> {
   const store = getVoiceV2CallContextStore();
   const record = buildRecordFromLegacy({
     payload: { ...input.payload, sessionKey: input.identity.sessionKey },
@@ -466,13 +493,18 @@ export async function createVoiceV2CallContext(input: {
     enrollment: input.enrollment,
     stateVersion: 0,
   });
-  const created = await store.createRecord(record);
-  await store.registerAliases({
-    canonical: input.identity.sessionKey,
-    callControlId: input.identity.telnyxCallControlId,
-    conversationId: input.identity.telnyxConversationId,
-    callId: input.identity.callId,
-  });
+  hydrateL1(record);
+  const mode = options?.l2Persist ?? "await";
+  if (mode === "background") {
+    void persistNewRecordToL2(store, record, input.identity).catch((err) => {
+      console.warn(
+        "[voice-v2/context-l2-create]",
+        err instanceof Error ? err.message : err,
+      );
+    });
+    return record;
+  }
+  const created = await persistNewRecordToL2(store, record, input.identity);
   hydrateL1(created);
   return created;
 }

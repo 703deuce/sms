@@ -10,11 +10,17 @@ import {
   patchVoiceV2CallContext,
   markVoiceV2CallContextEnded,
   resetVoiceV2CallContextStoreForTests,
+  resetVoiceV2CallContextStoreSingleton,
   clearVoiceV2CallContextL1ForTests,
   getVoiceV2CallContextL1,
+  getVoiceV2CallContextStore,
   DISTRIBUTED_TOKEN_LOCK_PRIMITIVE,
   tryRecoverVoiceV2CallContext,
 } from "../src/lib/voice-v2/session/call-context-store";
+import {
+  VoiceV2SharedSessionUnavailableError,
+  isVoiceV2ProductionMemoryL2Blocked,
+} from "../src/lib/voice-v2/session/store-config";
 import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
 import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
 import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION } from "../src/lib/voice-v2/session/types";
@@ -217,6 +223,28 @@ async function main() {
     DISTRIBUTED_TOKEN_LOCK_PRIMITIVE.includes("acquireLock"),
     DISTRIBUTED_TOKEN_LOCK_PRIMITIVE,
   );
+
+  const prevNode = process.env.NODE_ENV;
+  const prevRedis = process.env.REDIS_URL;
+  const prevAllow = process.env.VOICE_V2_ALLOW_MEMORY_L2;
+  process.env.NODE_ENV = "production";
+  delete process.env.REDIS_URL;
+  delete process.env.VOICE_V2_ALLOW_MEMORY_L2;
+  resetVoiceV2CallContextStoreSingleton();
+  let prodBlocked = false;
+  try {
+    getVoiceV2CallContextStore();
+  } catch (e) {
+    prodBlocked =
+      e instanceof VoiceV2SharedSessionUnavailableError ||
+      isVoiceV2ProductionMemoryL2Blocked();
+  }
+  process.env.NODE_ENV = prevNode;
+  if (prevRedis) process.env.REDIS_URL = prevRedis;
+  else delete process.env.REDIS_URL;
+  if (prevAllow) process.env.VOICE_V2_ALLOW_MEMORY_L2 = prevAllow;
+  resetVoiceV2CallContextStoreForTests(new InMemoryVoiceV2CallContextStore());
+  assert("PRODUCTION_L2_MISSING_FAILS_CLOSED", prodBlocked);
 
   const failed = rows.filter((r) => !r.pass);
   console.log(JSON.stringify({ phase: "2A", rows, DISTRIBUTED_TOKEN_LOCK_PRIMITIVE }, null, 2));
