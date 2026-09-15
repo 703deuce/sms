@@ -386,6 +386,11 @@ export async function processPostCall(callId: string) {
     // CRM push is optional
   }
 
+  const { processVoiceV2PostCallIntake } = await import("@/lib/voice-v2/intake/post-call-hook");
+  await processVoiceV2PostCallIntake(call.id).catch((err) => {
+    console.warn("[post-call] voice v2 intake reconcile failed", call.id, err);
+  });
+
   return { ok: true, callId, missed: isMissed };
 }
 

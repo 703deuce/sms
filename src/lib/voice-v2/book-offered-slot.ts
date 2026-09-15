@@ -56,6 +56,7 @@ function slotOverlapsBusy(
 export async function executeVoiceV2BookOfferedSlot(
   raw: Record<string, unknown>,
   workspaceId: string,
+  options?: { agentId?: string | null },
 ): Promise<
   | {
       status: "BOOKING_CONFIRMED";
@@ -68,8 +69,9 @@ export async function executeVoiceV2BookOfferedSlot(
       graph: { GRAPH_REQUEST_COUNT: number; GRAPH_REQUESTS: VoiceV2GraphSpan[] };
     }
   | {
-      status: "SLOT_UNAVAILABLE" | "INVALID_OFFER" | "ERROR";
+      status: "SLOT_UNAVAILABLE" | "INVALID_OFFER" | "ERROR" | "MISSING_REQUIRED_FIELDS";
       error: string;
+      missing_fields?: string[];
       timing: VoiceV2BookTimingMarks;
       timing_ms: VoiceV2BookTimingMs;
     }
@@ -273,9 +275,44 @@ export async function executeVoiceV2BookOfferedSlot(
     };
   }
 
+  const agentId = options?.agentId?.trim() || String(raw.agent_id || "").trim() || "";
+  if (agentId) {
+    const { evaluateBookingIntakeGate } = await import("./intake/booking-gate");
+    const gate = await evaluateBookingIntakeGate({
+      workspaceId,
+      agentId,
+      callControlId: callId,
+      conversationId: String(raw.conversation_id || raw.telnyx_conversation_id || ""),
+      fromE164: String(raw.from || raw.caller || ""),
+    });
+    if (!gate.allowed) {
+      timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
+      marks.RESPONSE_SENT = isoMark();
+      return {
+        status: "MISSING_REQUIRED_FIELDS",
+        error: "missing_required_intake_fields",
+        missing_fields: gate.missing_fields,
+        timing: marks,
+        timing_ms: timingMs,
+      };
+    }
+  }
+
   const appointmentId = createId();
   const spokenLabel = slot.spoken_label || slot.label;
   const spokenConfirmation = `You're booked for ${spokenLabel}.`;
+
+  let intakeNotes = "";
+  if (callId) {
+    const { resolveSessionKey } = await import("./intake/load-call-context");
+    const { getVoiceV2CallContext } = await import("./intake/session-store");
+    const { formatIntakeEventNotes } = await import("./intake/format-event-notes");
+    const sk = resolveSessionKey({ callControlId: callId, conversationId: null });
+    const ctx = sk ? getVoiceV2CallContext(sk) : null;
+    if (ctx) {
+      intakeNotes = formatIntakeEventNotes(ctx.intakeSchema, ctx.intakeState);
+    }
+  }
 
   marks.GRAPH_CREATE_START = isoMark();
   const graphCreateStart = Date.now();
@@ -285,7 +322,12 @@ export async function executeVoiceV2BookOfferedSlot(
       token,
       {
         summary: `${offer.serviceName} — Voice booking`,
-        description: `Voice Booking V2 offer_set=${offerSetId} slot=${selectedSlotId}`,
+        description: [
+          intakeNotes || null,
+          `Voice Booking V2 offer_set=${offerSetId} slot=${selectedSlotId}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
         start: startUtc,
         end: endUtc,
         timezone: offer.timezone,

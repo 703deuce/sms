@@ -33,6 +33,7 @@ function mergeAdvanced(
     callerFields: patch.callerFields ?? base.callerFields,
     intents: patch.intents ?? base.intents,
     decisionRules: patch.decisionRules ?? base.decisionRules,
+    voiceV2Intake: patch.voiceV2Intake ?? base.voiceV2Intake,
   };
 }
 
@@ -60,9 +61,13 @@ export function advancedFromDraftConfig(
   const cfg = draftConfig as VoiceAgentConfig | null | undefined;
   const advanced = asRecord(cfg?.advanced);
 
+  const topLevelIntake = advanced.voiceV2Intake as ReceptionistAdvancedSettings["voiceV2Intake"];
   const stored = advanced[RECEPTIONIST_ADVANCED_KEY] as Partial<ReceptionistAdvancedSettings> | undefined;
   if (stored) {
-    const merged = mergeAdvanced(base, stored);
+    const merged = mergeAdvanced(base, {
+      ...stored,
+      voiceV2Intake: stored.voiceV2Intake ?? topLevelIntake,
+    });
     if (capabilities.length) {
       merged.actionPermissions = actionPermissionsFromCapabilities(
         capabilities,
@@ -87,6 +92,9 @@ export function advancedFromDraftConfig(
 
   if (capabilities.length) {
     base.actionPermissions = actionPermissionsFromCapabilities(capabilities, base.actionPermissions);
+  }
+  if (topLevelIntake) {
+    base.voiceV2Intake = topLevelIntake;
   }
   return base;
 }

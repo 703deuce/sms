@@ -28,8 +28,9 @@ export async function POST(request: Request) {
     null;
 
   const result = await executeVoiceV2BookOfferedSlot(
-    { ...body, call_id: callId },
+    { ...body, call_id: callId, agent_id: agentId },
     workspaceId,
+    { agentId },
   );
   const payload = formatVoiceV2BookTelnyxResponse(result);
 

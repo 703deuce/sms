@@ -16,6 +16,21 @@ export function formatVoiceV2BookTelnyxResponse(result: BookResult): Record<stri
       graph: result.graph,
     };
   }
+  if (result.status === "MISSING_REQUIRED_FIELDS") {
+    const missing = result.missing_fields || [];
+    return {
+      ok: false,
+      status: "MISSING_REQUIRED_FIELDS",
+      voice_v2_status: "MISSING_REQUIRED_FIELDS",
+      missing_fields: missing,
+      speak:
+        missing.length === 1
+          ? `I still need your ${missing[0]} before I can book that time.`
+          : "I still need a bit more information before I can book that time.",
+      error: result.error,
+      timing_ms: result.timing_ms,
+    };
+  }
   if (result.status === "SLOT_UNAVAILABLE") {
     return {
       ok: false,

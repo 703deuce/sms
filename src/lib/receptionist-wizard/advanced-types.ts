@@ -1,3 +1,5 @@
+import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-v2/intake/wizard-config";
+
 /** Advanced receptionist settings — optional tuning beyond the main wizard steps. */
 
 export type ResponseLength = "concise" | "balanced" | "detailed";
@@ -98,6 +100,8 @@ export type ReceptionistAdvancedSettings = {
     messageEmail?: string;
     messageSms?: string;
   };
+  /** Voice V2 booking intake (Step 1) — persisted to agent advanced.voiceV2Intake */
+  voiceV2Intake?: VoiceV2IntakeWizardConfig;
 };
 
 export const RECEPTIONIST_ADVANCED_KEY = "receptionistAdvanced";

@@ -45,7 +45,20 @@ These paths implement the known-good caller-visible path:
 - `src/lib/microsoft/graph-datetime-timezone.ts` (timezone serialization)
 - `src/lib/microsoft/graph-helpers.ts` (event insert using adapter)
 
-Telnyx: shared tools `transovo-voice-v2-find-availability`, `transovo-voice-v2-book-offered-slot` — schema and webhook URLs per `scripts/publish-voice-v2-telnyx-tool.ts` / `scripts/enable-amy-voice-v2-pstn-test-mode.ts`.
+Telnyx: shared tools `transovo-voice-v2-find-availability`, `transovo-voice-v2-book-offered-slot`, `transovo-voice-v2-save-intake-fields` — schema and webhook URLs per `scripts/publish-voice-v2-telnyx-tool.ts` / `scripts/enable-amy-voice-v2-pstn-test-mode.ts`.
+
+## Step 1 additive extensions (allowed without re-baselining FIND)
+
+These are **thin** intake layers; FIND path must remain unchanged.
+
+| Area | File | Change |
+|------|------|--------|
+| Pre-book gate | `book-offered-slot.ts` | After slot revalidation, before `insertMicrosoftEvent`: `evaluateBookingIntakeGate` → `MISSING_REQUIRED_FIELDS` (0 Graph creates) |
+| Event notes | `book-offered-slot.ts` | Optional `formatIntakeEventNotes` in event `description` only |
+| Book Telnyx copy | `telnyx-book-response.ts` | `MISSING_REQUIRED_FIELDS` speakable response |
+| Intake tool | `src/lib/voice-v2/intake/*`, `save-intake-fields/route.ts` | In-memory save + deferred persist — **not** on FIND |
+
+Certify Step 1 headless: `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-step1-intake-headless.ts`
 
 ## Regression rubric (every V2 change)
 

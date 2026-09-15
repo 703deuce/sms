@@ -9,10 +9,13 @@ import { getAppBaseUrl } from "../src/lib/messaging/telnyx/config";
 import {
   VOICE_V2_TELNYX_TOOL_NAME,
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_FIND_AVAILABILITY_BODY,
   VOICE_V2_BOOK_OFFERED_SLOT_BODY,
+  VOICE_V2_SAVE_INTAKE_BODY,
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
   VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+  VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
@@ -102,6 +105,15 @@ async function main() {
     description:
       "Voice Booking V2: book using offer_set_id + selected_slot_id from the prior availability response.",
   });
+  const v2SaveIntakeId = await ensureSharedWebhookTool({
+    displayName: VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/save-intake-fields",
+    bodyParameters: VOICE_V2_SAVE_INTAKE_BODY,
+    timeoutMs: 5000,
+    description:
+      "Save caller-provided intake fields immediately (name, email, phone, address, service_reason). Batch multiple fields in one call when supplied together.",
+  });
   const { syncConversationWorkflowToTelnyx } = await import("../src/lib/voice/telnyx/workflow-sync");
   const { loadVoiceAgentRuntimeConfig } = await import("../src/lib/voice/load-agent-config");
   const { parseVoiceAgentConfig } = await import("../src/lib/voice/types");
@@ -117,14 +129,14 @@ async function main() {
     config,
   });
   if (!synced.ok) throw new Error(synced.error || "workflow_sync_failed");
-  const toolIds = [...new Set([...(synced.toolIds || []), v2FindId, v2BookId])];
+  const toolIds = [...new Set([...(synced.toolIds || []), v2FindId, v2BookId, v2SaveIntakeId])];
 
   await ai.updateAssistant(agent.telnyxAssistantId, {
     tool_ids: toolIds,
     tools: [],
   });
 
-  console.log("Attached V2 shared tool_ids:", v2FindId, v2BookId);
+  console.log("Attached V2 shared tool_ids:", v2FindId, v2BookId, v2SaveIntakeId);
   console.log("tool_ids:", toolIds.join(", "));
   console.log("Re-run: npx tsx scripts/read-live-telnyx-voice-v2-tool-schema.ts");
 }

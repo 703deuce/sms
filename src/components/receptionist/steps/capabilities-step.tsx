@@ -27,6 +27,8 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 import { AgentTemplateSelect } from "@/components/receptionist/agent-template-select";
+import { VoiceV2IntakeWizardSection } from "@/components/receptionist/voice-v2-intake-section";
+import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-v2/intake/wizard-config";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
   CapabilityCardCompact,
@@ -284,6 +286,14 @@ export function CapabilitiesStep({
                 showCalendar={true}
                 showCrm={false}
                 onCalendarConnectedChange={setCalendarConnected}
+              />
+            </div>
+            <div className="mt-5">
+              <VoiceV2IntakeWizardSection
+                value={advanced.voiceV2Intake}
+                onChange={(voiceV2Intake: VoiceV2IntakeWizardConfig) =>
+                  patchAdvanced({ voiceV2Intake })
+                }
               />
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">

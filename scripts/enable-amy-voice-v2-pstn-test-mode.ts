@@ -8,6 +8,7 @@ import * as ai from "../src/lib/voice/telnyx/ai-client";
 import {
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
   VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+  VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 import { restoreAmyTelnyxWorkflowWithV2 } from "./restore-amy-telnyx-tools-with-v2";
 
@@ -15,7 +16,10 @@ const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
 
 const V2_PSTN_INSTRUCTION_APPEND = [
-  "VOICE BOOKING V2 PSTN TEST (find + book):",
+  "VOICE BOOKING V2 PSTN TEST (intake + find + book):",
+  "Keep the full live conversation in mind. Never ask for information the caller already provided.",
+  `When the caller supplies configured intake fields, call ${VOICE_V2_SAVE_INTAKE_TOOL_TYPE} immediately — batch multiple fields in one call when given together.`,
+  "Before asking for an intake field, check prior conversation and saved intake state; recover via save instead of re-asking.",
   "When the caller wants to schedule, call voice_v2_find_availability with structured requested_date and time_window.",
   "Speak slot labels from the tool response. Remember offer_set_id and each slot_id.",
   "When the caller picks a time, map their choice to the canonical selected_slot_id from that offer only.",
@@ -54,21 +58,24 @@ async function main() {
   const tools = (listed as { data?: Array<{ id: string; display_name?: string }> }).data || [];
   const v2FindId = tools.find((t) => t.display_name === "transovo-voice-v2-find-availability")?.id;
   const v2BookId = tools.find((t) => t.display_name === "transovo-voice-v2-book-offered-slot")?.id;
+  const v2SaveId = tools.find((t) => t.display_name === "transovo-voice-v2-save-intake-fields")?.id;
   const legacyId = tools.find((t) => t.display_name === "transovo-voice-ai-booking-turn")?.id;
   if (!v2FindId) throw new Error("v2 find shared tool missing — run publish-voice-v2-telnyx-tool.ts");
   if (!v2BookId) throw new Error("v2 book shared tool missing — run publish-voice-v2-telnyx-tool.ts");
+  if (!v2SaveId) throw new Error("v2 save-intake shared tool missing — run publish-voice-v2-telnyx-tool.ts");
 
   const toolIds = (Array.isArray(data.tool_ids) ? (data.tool_ids as string[]) : []).filter(
     (id) => id !== legacyId,
   );
   if (!toolIds.includes(v2FindId)) toolIds.push(v2FindId);
   if (!toolIds.includes(v2BookId)) toolIds.push(v2BookId);
+  if (!toolIds.includes(v2SaveId)) toolIds.push(v2SaveId);
 
   const flow = data.conversation_flow as Record<string, unknown> | undefined;
   if (flow && Array.isArray(flow.nodes)) {
     for (const node of flow.nodes as Array<Record<string, unknown>>) {
       if (node.id === "n_live_booking") {
-        node.shared_tool_ids = [v2FindId, v2BookId];
+        node.shared_tool_ids = [v2SaveId, v2FindId, v2BookId];
         node.instructions = LIVE_BOOKING_V2_INSTRUCTIONS;
       }
     }
@@ -87,7 +94,8 @@ async function main() {
     instructions,
   });
 
-  console.log("Amy PSTN V2 test mode enabled (find + book).");
+  console.log("Amy PSTN V2 test mode enabled (intake + find + book).");
+  console.log("v2 save-intake tool_id:", v2SaveId);
   console.log("v2 find tool_id:", v2FindId);
   console.log("v2 book tool_id:", v2BookId);
   console.log("legacy booking detached:", legacyId ? `removed ${legacyId}` : "n/a");

@@ -10,6 +10,7 @@ import * as ai from "../src/lib/voice/telnyx/ai-client";
 import {
   VOICE_V2_TELNYX_TOOL_NAME,
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
@@ -20,7 +21,8 @@ async function resolveV2ToolIds(): Promise<string[]> {
   const tools = (listed as { data?: Array<{ id: string; display_name?: string }> }).data || [];
   const findId = tools.find((t) => t.display_name === VOICE_V2_TELNYX_TOOL_NAME)?.id;
   const bookId = tools.find((t) => t.display_name === VOICE_V2_BOOK_TELNYX_TOOL_NAME)?.id;
-  return [findId, bookId].filter(Boolean) as string[];
+  const saveId = tools.find((t) => t.display_name === VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME)?.id;
+  return [findId, bookId, saveId].filter(Boolean) as string[];
 }
 
 export async function restoreAmyTelnyxWorkflowWithV2() {
