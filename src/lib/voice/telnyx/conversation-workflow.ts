@@ -83,7 +83,10 @@ const V2_PSTN_GENERAL_APPEND = [
 const LIVE_BOOKING_V2_INSTRUCTIONS = [
   "Live Voice V2 booking on this call.",
   "Save intake with voice_v2_save_intake_fields when the caller provides configured fields.",
-  "Call voice_v2_find_availability with requested_date and time_window.",
+  "After every save, obey voice_v2_next_stage and booking_continue_required from the tool JSON — runtime authority, not your guess.",
+  "When booking_continue_required is true: NEVER close with callback, follow-up only, or message-taking; continue live booking.",
+  "When voice_v2_next_stage is COLLECT_SCHEDULING_PREFERENCE: ask what day works (natural wording); do not call FIND without a date.",
+  "When voice_v2_next_stage is FIND_AVAILABILITY: call voice_v2_find_availability with requested_date and time_window.",
   "When they pick a slot, call voice_v2_book_offered_slot with offer_set_id and selected_slot_id only.",
   "Only confirm booked after BOOKING_CONFIRMED. Never call voice_ai_booking_turn.",
 ].join(" ");

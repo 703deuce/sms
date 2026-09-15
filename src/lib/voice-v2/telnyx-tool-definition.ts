@@ -16,7 +16,11 @@ export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
         "Caller-provided intake values keyed by field name (name, email, phone, address, service_reason).",
       properties: {
         name: { type: "string" },
-        email: { type: "string" },
+        email: {
+          type: "string",
+          description:
+            "Email as user@domain.tld. Convert spoken forms (at, dot, spaced letters) before saving.",
+        },
         phone: { type: "string" },
         address: { type: "string" },
         service_reason: { type: "string" },
@@ -25,6 +29,24 @@ export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
     tool_invocation_id: {
       type: "string",
       description: "Unique id for this tool call",
+    },
+    booking_intent_active: {
+      type: "boolean",
+      description:
+        "Set true when the caller is trying to schedule/book on this call (sticky for the session).",
+    },
+    workflow_signal: {
+      type: "string",
+      description:
+        "Structured workflow only: prefer_callback when caller wants a callback; cancel_booking when they abandon scheduling.",
+      enum: ["prefer_callback", "cancel_booking"],
+    },
+    scheduling_preference: {
+      type: "object",
+      description: "Optional date preference before FIND (YYYY-MM-DD).",
+      properties: {
+        requested_date: { type: "string", description: "YYYY-MM-DD" },
+      },
     },
   },
   required: ["fields"],

@@ -26,7 +26,7 @@ export function buildVoiceV2LiveIntakeInstructions(schema: VoiceV2IntakeSchema):
     "Do not ask for disabled fields. Do not re-ask fields already known in session state or already stated by the caller.",
     "If the caller volunteers a disabled field, acknowledge naturally if appropriate and continue — never treat it as an error, never retry saving it, never switch to callback/message mode because of it.",
     "FIELD_NOT_ENABLED from the save tool means continue booking — not failure, not callback.",
-    "Once all REQUIRED_BEFORE_BOOKING fields are known (missingBeforeBooking empty), proceed immediately to voice_v2_find_availability.",
+    "Once missingBeforeBooking is empty, follow voice_v2_next_stage from the save tool result (COLLECT_SCHEDULING_PREFERENCE vs FIND_AVAILABILITY). Never callback-close when booking_continue_required is true.",
     "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND/BOOK.",
     "For email: before voice_v2_save_intake_fields, normalize speech to user@domain.tld (convert 'at'→@, 'dot'→., remove spaces). Never send raw spoken filler like 'my email is'.",
   ];

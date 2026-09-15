@@ -32,6 +32,12 @@ export async function POST(request: Request) {
     workspaceId,
     { agentId },
   );
+
+  if (result.status === "BOOKING_CONFIRMED" && callId) {
+    const { patchWorkflowAfterBookConfirmed } = await import("@/lib/voice-v2/booking-workflow-hooks");
+    await patchWorkflowAfterBookConfirmed({ callControlId: callId }).catch(() => undefined);
+  }
+
   const payload = formatVoiceV2BookTelnyxResponse(result);
 
   console.info(

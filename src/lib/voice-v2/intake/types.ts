@@ -48,6 +48,8 @@ export interface AskedFieldMemory {
   lastAskedAt: string;
 }
 
+import type { VoiceV2BookingWorkflow } from "../booking-workflow";
+
 export interface VoiceV2CallContext {
   sessionKey: string;
   workspaceId: string;
@@ -58,6 +60,7 @@ export interface VoiceV2CallContext {
   askedFields: Partial<Record<IntakeFieldKey, AskedFieldMemory>>;
   currentOfferSet?: { offerSetId: string; slotIds: string[] };
   bookingState?: { selectedSlotId?: string; status?: string };
+  bookingWorkflow?: VoiceV2BookingWorkflow;
   compiledAt: string;
 }
 

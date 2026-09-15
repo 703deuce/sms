@@ -44,6 +44,19 @@ export async function POST(request: Request) {
     { voiceCallId: callId },
   );
 
+  if (result.status === "AVAILABILITY_FOUND" && callId) {
+    const { patchWorkflowAfterFind } = await import("@/lib/voice-v2/booking-workflow-hooks");
+    const requestedDate = String(body.requested_date ?? body.requestedDate ?? "");
+    await patchWorkflowAfterFind({
+      workspaceId,
+      agentId,
+      callControlId: callId,
+      requestedDate,
+      offerSetId: result.offer_set_id,
+      slotIds: result.slots.map((s) => s.slot_id),
+    }).catch(() => undefined);
+  }
+
   const payload = formatVoiceV2TelnyxToolResponse(result);
   const httpResponseAtMs = Date.now();
   const { buildVoiceV2PstnTrace } = await import("@/lib/voice-v2/pstn-trace");

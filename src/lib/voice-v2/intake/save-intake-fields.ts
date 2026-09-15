@@ -6,6 +6,11 @@ import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
 import { getIntakeReadiness } from "./readiness";
+import { transitionAfterIntakeSave } from "../booking-workflow";
+import {
+  loadVoiceV2PstnLiveBookingFlag,
+  workflowPayloadForContext,
+} from "../booking-workflow-hooks";
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -20,6 +25,7 @@ export type SaveIntakeResult =
       ignored_fields?: IntakeFieldKey[];
       invalid_fields?: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
+      workflow?: Record<string, unknown>;
       timing_ms: SaveIntakeTimingMs;
     }
   | {
@@ -33,9 +39,36 @@ export type SaveIntakeResult =
       ignored_fields: IntakeFieldKey[];
       saved_fields: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
+      workflow?: Record<string, unknown>;
       timing_ms: SaveIntakeTimingMs;
     }
   | { status: "SESSION_UNAVAILABLE"; timing_ms: SaveIntakeTimingMs };
+
+async function attachBookingWorkflow(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+  raw: Record<string, unknown>,
+  savedKeys: IntakeFieldKey[],
+  workspaceId: string,
+  agentId: string,
+): Promise<{
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>;
+  workflow: Record<string, unknown>;
+}> {
+  const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
+  const voiceV2PstnLiveBooking = await loadVoiceV2PstnLiveBookingFlag(workspaceId, agentId);
+  const nextCtx = transitionAfterIntakeSave({
+    ctx,
+    raw,
+    savedKeys,
+    readiness,
+    voiceV2PstnLiveBooking,
+  });
+  setVoiceV2CallContext(nextCtx);
+  return {
+    ctx: nextCtx,
+    workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking),
+  };
+}
 
 function nextStatus(
   key: IntakeFieldKey,
@@ -143,11 +176,13 @@ export async function executeVoiceV2SaveIntakeFields(
       validation.invalidFields.length === 0 && validation.disabledFields.length > 0;
     if (onlyDisabled) {
       const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
+      const wf = await attachBookingWorkflow(ctx, raw, [], workspaceId, agentId);
       return {
         status: "FIELD_NOT_ENABLED",
         ignored_fields: validation.disabledFields,
         saved_fields: [],
         readiness,
+        workflow: wf.workflow,
         timing_ms: {
           VALIDATION_MS: validationMs,
           STATE_UPDATE_MS: 0,
@@ -168,12 +203,20 @@ export async function executeVoiceV2SaveIntakeFields(
         updatedAt: new Date().toISOString(),
       });
       const readiness = getIntakeReadiness(partial.ctx.intakeSchema, partial.ctx.intakeState);
+      const wf = await attachBookingWorkflow(
+        partial.ctx,
+        raw,
+        partial.saved,
+        workspaceId,
+        agentId,
+      );
       return {
         status: "INTAKE_SAVED",
         saved: partial.saved,
         ignored_fields: validation.disabledFields.length ? validation.disabledFields : undefined,
         invalid_fields: validation.invalidFields.length ? validation.invalidFields : undefined,
         readiness,
+        workflow: wf.workflow,
         timing_ms: {
           VALIDATION_MS: validationMs,
           STATE_UPDATE_MS: partial.stateUpdateMs,
@@ -206,12 +249,14 @@ export async function executeVoiceV2SaveIntakeFields(
 
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const ignoredFields = validation.disabledFields;
+  const wf = await attachBookingWorkflow(ctx, raw, committed.saved, workspaceId, agentId);
 
   return {
     status: "INTAKE_SAVED",
     saved: committed.saved,
     ignored_fields: ignoredFields.length ? ignoredFields : undefined,
     readiness,
+    workflow: wf.workflow,
     timing_ms: {
       VALIDATION_MS: validationMs,
       STATE_UPDATE_MS: committed.stateUpdateMs,

@@ -1,5 +1,25 @@
 import type { SaveIntakeResult } from "./save-intake-fields";
 import type { IntakeFieldKey } from "./types";
+import type { VoiceV2NextStage } from "../booking-workflow";
+
+function mergeWorkflowFields(
+  base: Record<string, unknown>,
+  workflow?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!workflow) return base;
+  return { ...base, ...workflow };
+}
+
+function speakForWorkflowStage(stage: VoiceV2NextStage | undefined, bookingContinue: boolean): string | null {
+  if (!bookingContinue) return null;
+  if (stage === "COLLECT_SCHEDULING_PREFERENCE") {
+    return "Saved. Ask what day works for the appointment — do not close with callback or follow-up.";
+  }
+  if (stage === "FIND_AVAILABILITY") {
+    return "Saved. Call voice_v2_find_availability now — do not offer callback.";
+  }
+  return "Saved. Continue live booking — do not close with callback or follow-up.";
+}
 
 export function saveIntakePublicFields(result: SaveIntakeResult): Record<string, unknown> {
   const readiness =
@@ -26,39 +46,58 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
         speak = "Saved what I could. Could you repeat the part I didn't catch?";
       }
     }
-    return {
-      ok: true,
-      status: "INTAKE_SAVED",
-      voice_v2_status: "INTAKE_SAVED",
-      saved_fields: result.saved,
-      saved: result.saved,
-      ignored_fields: ignored,
-      invalid_fields: invalid.length ? invalid : undefined,
-      missingBeforeBooking,
-      readiness: result.readiness,
-      continue: missingBeforeBooking.length === 0 || invalid.length === 0,
-      timing_ms: result.timing_ms,
-      speak,
-    };
+    const wf = result.workflow;
+    const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
+    const bookingContinue = wf?.booking_continue_required === true;
+    const wfSpeak = speakForWorkflowStage(stage, bookingContinue);
+    if (wfSpeak && !invalid.length) speak = wfSpeak;
+
+    return mergeWorkflowFields(
+      {
+        ok: true,
+        status: "INTAKE_SAVED",
+        voice_v2_status: "INTAKE_SAVED",
+        saved_fields: result.saved,
+        saved: result.saved,
+        ignored_fields: ignored,
+        invalid_fields: invalid.length ? invalid : undefined,
+        missingBeforeBooking,
+        readiness: result.readiness,
+        continue: bookingContinue || missingBeforeBooking.length === 0 || invalid.length === 0,
+        timing_ms: result.timing_ms,
+        speak,
+      },
+      wf,
+    );
   }
 
   if (result.status === "FIELD_NOT_ENABLED") {
-    return {
-      ok: true,
-      status: "FIELD_NOT_ENABLED",
-      voice_v2_status: "FIELD_NOT_ENABLED",
-      ignored_fields: result.ignored_fields,
-      saved_fields: result.saved_fields,
-      disabled_fields: result.ignored_fields,
-      missingBeforeBooking,
-      readiness: result.readiness,
-      continue: true,
-      timing_ms: result.timing_ms,
-      speak:
-        missingBeforeBooking.length === 0
-          ? "That detail is not collected on this line. Continue with find availability."
-          : "That field is not collected on this line. Continue with the remaining required details only.",
-    };
+    const wf = result.workflow;
+    const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
+    const bookingContinue = wf?.booking_continue_required === true;
+    let speak =
+      missingBeforeBooking.length === 0
+        ? "That detail is not collected on this line. Continue with find availability."
+        : "That field is not collected on this line. Continue with the remaining required details only.";
+    const wfSpeak = speakForWorkflowStage(stage, bookingContinue);
+    if (wfSpeak && missingBeforeBooking.length === 0) speak = wfSpeak;
+
+    return mergeWorkflowFields(
+      {
+        ok: true,
+        status: "FIELD_NOT_ENABLED",
+        voice_v2_status: "FIELD_NOT_ENABLED",
+        ignored_fields: result.ignored_fields,
+        saved_fields: result.saved_fields,
+        disabled_fields: result.ignored_fields,
+        missingBeforeBooking,
+        readiness: result.readiness,
+        continue: true,
+        timing_ms: result.timing_ms,
+        speak,
+      },
+      wf,
+    );
   }
 
   if (result.status === "INTAKE_VALIDATION_ERROR") {
