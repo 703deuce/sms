@@ -75,9 +75,10 @@ async function main() {
   }
 
   const priorInstructions = String(data.instructions || "");
-  const instructions = priorInstructions.includes("VOICE BOOKING V2 PSTN TEST")
-    ? priorInstructions
-    : `${priorInstructions}\n\n${V2_PSTN_INSTRUCTION_APPEND}`.trim();
+  const withoutOldV2Block = priorInstructions
+    .replace(/\n*VOICE BOOKING V2 PSTN TEST[\s\S]*$/m, "")
+    .trim();
+  const instructions = `${withoutOldV2Block}\n\n${V2_PSTN_INSTRUCTION_APPEND}`.trim();
 
   await ai.updateAssistant(agent.telnyxAssistantId, {
     tool_ids: toolIds,

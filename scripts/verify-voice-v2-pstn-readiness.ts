@@ -107,10 +107,14 @@ async function main() {
     instructionsText.includes("voice_v2_find_availability") ||
     instructionsText.includes(VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE) ||
     instructionsText.includes(VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE);
-  const flow = agent?.telnyxAssistantId
-    ? ((await ai.getAssistant(agent.telnyxAssistantId)) as { data?: Record<string, unknown> }).data
-        ?.conversation_flow
-    : null;
+  let flow: unknown = null;
+  if (agent?.telnyxAssistantId) {
+    const flowRemote = await ai.getAssistant(agent.telnyxAssistantId);
+    const flowData =
+      (flowRemote as { data?: Record<string, unknown> }).data ||
+      (flowRemote as Record<string, unknown>);
+    flow = flowData.conversation_flow;
+  }
   const flowStr = JSON.stringify(flow || "");
   const flowMentionsV2 =
     flowStr.includes("voice_v2_find_availability") ||
@@ -136,11 +140,20 @@ async function main() {
       : "legacy booking tool not in tool_ids",
   });
 
-  const bookToolAttached = v2Book?.id ? toolIds.includes(v2Book.id) : false;
+  const flowNodes = (flow as { nodes?: Array<Record<string, unknown>> } | null)?.nodes || [];
+  const liveBooking = flowNodes.find((n) => n.id === "n_live_booking");
+  const liveToolIds = Array.isArray(liveBooking?.shared_tool_ids)
+    ? (liveBooking!.shared_tool_ids as string[])
+    : [];
+  const bookToolAttached =
+    v2Book?.id != null &&
+    (toolIds.includes(v2Book.id) || liveToolIds.includes(v2Book.id));
   checks.push({
     name: "5b_v2_book_tool_attached",
     pass: bookToolAttached,
-    detail: bookToolAttached ? `book tool_id ${v2Book?.id}` : "attach v2 book tool to assistant",
+    detail: bookToolAttached
+      ? `book tool_id ${v2Book?.id} (assistant or n_live_booking)`
+      : "attach v2 book tool to assistant or n_live_booking",
   });
 
   const expectedWebhook = `${EXPECTED_APP_URL}/api/telnyx/voice-v2/find-availability`;
