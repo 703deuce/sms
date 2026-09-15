@@ -418,6 +418,12 @@ export async function microsoftGraphFetch(
   } catch {
     // optional
   }
+  try {
+    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-v2/graph-instrumentation");
+    emitVoiceV2GraphSpan({ operation: graphOp, httpMs: firstGraphMs, status: res.status });
+  } catch {
+    // optional
+  }
   if (res.status !== 401) return res;
 
   const refreshStarted = Date.now();
@@ -450,6 +456,16 @@ export async function microsoftGraphFetch(
         status: res.status,
       });
     }
+  } catch {
+    // optional
+  }
+  try {
+    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-v2/graph-instrumentation");
+    emitVoiceV2GraphSpan({
+      operation: `${graphOp}:retry_after_refresh`,
+      httpMs: Date.now() - retryGraphStarted,
+      status: res.status,
+    });
   } catch {
     // optional
   }
