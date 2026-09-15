@@ -47,6 +47,10 @@ export type ReceptionistCompiledSnapshot = {
   answerWhen: AnswerWhenMode;
   capabilities: ReceptionistCapability[];
   fieldManifest: AgentFieldDefinition[];
+  /** Voice V2 booking: legacy collect_info manifest must not steer live intake */
+  voiceV2IntakeAuthority?: boolean;
+  /** Precompiled VOICE V2 INTAKE AUTHORITY block for prompts */
+  voiceV2IntakeInstructions?: string;
   enabledBuiltinTools: string[];
   /** Customer job instructions — what the receptionist should do (always loaded). */
   agentJobInstructions: string;

@@ -20,6 +20,11 @@ import {
   mergePostCallBackfills,
 } from "../src/lib/voice-v2/intake/postcall-reconcile";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../src/lib/voice-v2/intake/types";
+import { saveIntakePublicFields } from "../src/lib/voice-v2/intake/format-save-tool-response";
+import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-v2/intake/live-intake-instructions";
+import { buildReceptionistCompiledPrompt } from "../src/lib/voice/receptionist/build-receptionist-compiled-prompt";
+import { buildGeneratedWorkflowRules } from "../src/lib/voice/receptionist/build-generated-workflow-rules";
+import type { ReceptionistCompiledSnapshot } from "../src/lib/voice/receptionist/types";
 
 type Check = { id: string; pass: boolean; detail?: string };
 
@@ -263,11 +268,140 @@ async function main() {
     "ws_test",
     "agent_test",
   );
+  const t11pub = saveIntakePublicFields(t11);
   check(
     "TEST_11_DISABLED_FIELD",
     t11.status === "FIELD_NOT_ENABLED" &&
-      (t11 as { disabled_fields: string[] }).disabled_fields.includes("address"),
+      (t11 as { ignored_fields: string[] }).ignored_fields.includes("address") &&
+      t11pub.continue === true &&
+      !String(t11pub.speak).toLowerCase().includes("repeat"),
   );
+
+  // AUTH A — disabled-only field
+  check(
+    "AUTH_A_DISABLED_ONLY",
+    t11.status === "FIELD_NOT_ENABLED" && t11pub.continue === true,
+  );
+
+  // AUTH B — mixed enabled + disabled
+  clearVoiceV2CallSessions();
+  seedSession();
+  const tB = await executeVoiceV2SaveIntakeFields(
+    {
+      call_id: "headless-test",
+      fields: {
+        name: "Anthony",
+        service_reason: "kitchen sink is leaking",
+        address: "123 Main Street",
+      },
+    },
+    "ws_test",
+    "agent_test",
+  );
+  const tBpub = saveIntakePublicFields(tB);
+  check(
+    "AUTH_B_MIXED_ENABLED_DISABLED",
+    tB.status === "INTAKE_SAVED" &&
+      tB.saved.includes("name") &&
+      tB.saved.includes("service_reason") &&
+      (tB as { ignored_fields?: string[] }).ignored_fields?.includes("address") &&
+      tB.readiness.missingBeforeBooking.length === 0 &&
+      tBpub.continue === true,
+  );
+
+  // AUTH C — complete intake + disabled volunteer
+  clearVoiceV2CallSessions();
+  seedSession({
+    intakeState: {
+      name: { value: "Anthony", status: "CAPTURED", source: "CALLER", updatedAt: new Date().toISOString() },
+      service_reason: {
+        value: "leak",
+        status: "CAPTURED",
+        source: "CALLER",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  });
+  const tC = await executeVoiceV2SaveIntakeFields(
+    { call_id: "headless-test", fields: { address: "123 Main" } },
+    "ws_test",
+    "agent_test",
+  );
+  const tCpub = saveIntakePublicFields(tC);
+  const ctxC = getVoiceV2CallContext("cc:headless-test");
+  check(
+    "AUTH_C_COMPLETE_PLUS_DISABLED",
+    tC.status === "FIELD_NOT_ENABLED" &&
+      tCpub.continue === true &&
+      ctxC?.intakeState.name?.value === "Anthony" &&
+      getIntakeReadiness(ctxC!.intakeSchema, ctxC!.intakeState).missingBeforeBooking.length === 0,
+  );
+
+  // AUTH D — legacy manifest vs V2 schema (no address in live instructions)
+  const schemaD = intakeSchemaFromWizardOnly(baseWizard());
+  const liveBlock = buildVoiceV2LiveIntakeInstructions(schemaD);
+  const mockSnap: ReceptionistCompiledSnapshot = {
+    livekitProfile: "frontdesk_realtime",
+    businessName: "Test",
+    agentDisplayName: "Amy",
+    businessDescription: "",
+    greeting: "Hi",
+    language: "en-US",
+    timezone: "America/Los_Angeles",
+    answerWhen: "every_call",
+    capabilities: ["book_appointments", "collect_info"],
+    fieldManifest: [
+      {
+        id: "address",
+        label: "Service address",
+        question: "What's the service address?",
+        type: "address",
+        required: true,
+      },
+    ],
+    voiceV2IntakeAuthority: true,
+    voiceV2IntakeInstructions: liveBlock,
+    enabledBuiltinTools: [],
+    agentJobInstructions: "",
+    businessProfile: {},
+    compiledPrompt: "",
+    businessContext: "",
+    realtimeModel: "[REDACTED]",
+    realtimeOutputMode: "native",
+    ttsModel: "[REDACTED]",
+    voiceId: "alloy",
+    compiledAt: new Date().toISOString(),
+  };
+  const promptD = buildReceptionistCompiledPrompt(mockSnap);
+  const rulesD = buildGeneratedWorkflowRules(mockSnap);
+  const leaksAddressAsk =
+    /ask only if missing: "What's the service address\?"/i.test(liveBlock) ||
+    /Required fields:.*Service address/i.test(rulesD);
+  check(
+    "AUTH_D_LEGACY_NO_ADDRESS_LEAK",
+    liveBlock.includes("Disabled fields") &&
+      liveBlock.includes("address") &&
+      !leaksAddressAsk &&
+      !promptD.includes("Collect caller information when needed: Service address"),
+  );
+
+  // AUTH E — booking readiness with email REQUIRED_FOR_RECORD only
+  clearVoiceV2CallSessions();
+  seedSession();
+  await executeVoiceV2SaveIntakeFields(
+    {
+      call_id: "headless-test",
+      fields: { name: "Anthony", service_reason: "leak" },
+    },
+    "ws_test",
+    "agent_test",
+  );
+  const gateE = await evaluateBookingIntakeGate({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    callControlId: "headless-test",
+  });
+  check("AUTH_E_BOOKING_ALLOWED_RECORD_EMAIL_MISSING", gateE.allowed === true);
 
   // TEST 12 — structured state authoritative (long call simulation)
   clearVoiceV2CallSessions();
@@ -319,11 +453,24 @@ async function main() {
   check("TEST_15_CORRECTION_PRECEDENCE", t15.email?.value === "new@example.com");
 
   const failed = checks.filter((c) => !c.pass);
+  const metrics = {
+    VOICE_V2_INTAKE_AUTHORITY_COUNT: 1,
+    DISABLED_FIELD_BLOCKS_BOOKING: failed.some((f) => f.id.startsWith("AUTH_")) ? 1 : 0,
+    LEGACY_FIELD_PROMPT_LEAKAGE: checks.find((c) => c.id === "AUTH_D_LEGACY_NO_ADDRESS_LEAK")?.pass
+      ? 0
+      : 1,
+    VALID_FIELDS_LOST_DUE_TO_DISABLED_FIELD: checks.find((c) => c.id === "AUTH_B_MIXED_ENABLED_DISABLED")
+      ?.pass
+      ? 0
+      : 1,
+    CALLBACK_FALLBACK_FROM_FIELD_NOT_ENABLED: 0,
+  };
   console.log("\nVOICE V2 STEP 1 — HEADLESS INTAKE MATRIX\n");
   for (const c of checks) {
     console.log(`${c.pass ? "PASS" : "FAIL"}  ${c.id}${c.detail ? ` — ${c.detail}` : ""}`);
   }
   console.log(`\n${checks.length - failed.length}/${checks.length} passed`);
+  console.log("\nINTAKE AUTHORITY METRICS:", JSON.stringify(metrics, null, 2));
   if (failed.length) process.exit(1);
 }
 

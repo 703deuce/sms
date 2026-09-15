@@ -13,35 +13,11 @@ import {
 import { restoreAmyTelnyxWorkflowWithV2 } from "./restore-amy-telnyx-tools-with-v2";
 import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
-import { INTAKE_FIELD_DEFAULTS } from "../src/lib/voice-v2/intake/defaults";
-import { INTAKE_FIELD_KEYS, type IntakeFieldKey } from "../src/lib/voice-v2/intake/wizard-config";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-v2/intake/live-intake-instructions";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
-
-function enabledIntakeKeysFromConfig(config: ReturnType<typeof parseVoiceAgentConfig>): IntakeFieldKey[] {
-  const advanced = (config?.advanced || {}) as Record<string, unknown>;
-  const wizard = advanced.voiceV2Intake as { fields?: Record<string, { enabled?: boolean }> } | undefined;
-  const enabled: IntakeFieldKey[] = [];
-  for (const key of INTAKE_FIELD_KEYS) {
-    const def = INTAKE_FIELD_DEFAULTS[key];
-    const row = wizard?.fields?.[key];
-    if (row?.enabled ?? def.enabled) enabled.push(key);
-  }
-  return enabled;
-}
-
-function buildIntakePolicyBlock(enabledKeys: IntakeFieldKey[]): string {
-  const enabled = new Set(enabledKeys);
-  const enabledList = enabledKeys.join(", ") || "(none)";
-  const disabledList = INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k)).join(", ") || "(none)";
-  return [
-    `ENABLED intake fields only: ${enabledList}.`,
-    `Do NOT ask for or call save for disabled fields: ${disabledList}.`,
-    "If save returns FIELD_NOT_ENABLED, acknowledge briefly and continue — do not say you cannot save; do not take a message instead of booking.",
-    "When save readiness shows missingBeforeBooking empty, proceed immediately to voice_v2_find_availability (do not collect optional/disabled fields first).",
-  ].join(" ");
-}
 
 const V2_PSTN_INSTRUCTION_APPEND_BASE = [
   "VOICE BOOKING V2 PSTN TEST (intake + find + book):",
@@ -102,7 +78,7 @@ async function main() {
   const flow = data.conversation_flow as Record<string, unknown> | undefined;
   const runtime = await loadVoiceAgentRuntimeConfig(WORKSPACE_ID, AGENT_ID);
   const config = parseVoiceAgentConfig(runtime || agent.draftConfig);
-  const intakePolicy = buildIntakePolicyBlock(enabledIntakeKeysFromConfig(config));
+  const intakePolicy = buildVoiceV2LiveIntakeInstructions(compileVoiceV2IntakeSchema(config));
 
   if (flow && Array.isArray(flow.nodes)) {
     for (const node of flow.nodes as Array<Record<string, unknown>>) {

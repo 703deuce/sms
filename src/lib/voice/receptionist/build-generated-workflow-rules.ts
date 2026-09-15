@@ -17,7 +17,11 @@ export function buildGeneratedWorkflowRules(
 ): string {
   const lines: string[] = ["GENERATED WORKFLOW RULES"];
 
-  if (snapshot.capabilities.includes("collect_info") && snapshot.fieldManifest.length > 0) {
+  if (
+    snapshot.capabilities.includes("collect_info") &&
+    snapshot.fieldManifest.length > 0 &&
+    !snapshot.voiceV2IntakeAuthority
+  ) {
     const required = snapshot.fieldManifest.filter((f) => f.required).map((f) => f.label);
     const optional = snapshot.fieldManifest.filter((f) => !f.required).map((f) => f.label);
     lines.push("Information collection:");
@@ -94,7 +98,15 @@ export function buildGeneratedWorkflowRules(
     if (booking?.minimumNoticeHours) {
       lines.push(`- Do not book within ${booking.minimumNoticeHours} hours of the current time.`);
     }
-    lines.push("- Collect all required booking fields before scheduling.");
+    if (snapshot.voiceV2IntakeAuthority) {
+      lines.push(
+        "- Voice V2 intake: use voice_v2_save_intake_fields and missingBeforeBooking from tool results — not legacy field manifest.",
+        "- When missingBeforeBooking is empty, call voice_v2_find_availability immediately.",
+        "- FIELD_NOT_ENABLED is informational — continue scheduling; never take a message instead.",
+      );
+    } else {
+      lines.push("- Collect all required booking fields before scheduling.");
+    }
     if (runtime === "python") {
       lines.push(
         "- Call start_booking to run intake for required fields, then check_availability.",

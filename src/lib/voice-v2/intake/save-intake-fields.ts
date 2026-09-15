@@ -17,6 +17,7 @@ export type SaveIntakeResult =
   | {
       status: "INTAKE_SAVED";
       saved: IntakeFieldKey[];
+      ignored_fields?: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
       timing_ms: SaveIntakeTimingMs;
     }
@@ -28,7 +29,8 @@ export type SaveIntakeResult =
     }
   | {
       status: "FIELD_NOT_ENABLED";
-      disabled_fields: IntakeFieldKey[];
+      ignored_fields: IntakeFieldKey[];
+      saved_fields: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
       timing_ms: SaveIntakeTimingMs;
     }
@@ -103,7 +105,8 @@ export async function executeVoiceV2SaveIntakeFields(
       const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
       return {
         status: "FIELD_NOT_ENABLED",
-        disabled_fields: validation.disabledFields,
+        ignored_fields: validation.disabledFields,
+        saved_fields: [],
         readiness,
         timing_ms: {
           VALIDATION_MS: validationMs,
@@ -162,10 +165,12 @@ export async function executeVoiceV2SaveIntakeFields(
   });
 
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
+  const ignoredFields = validation.disabledFields;
 
   return {
     status: "INTAKE_SAVED",
     saved,
+    ignored_fields: ignoredFields.length ? ignoredFields : undefined,
     readiness,
     timing_ms: {
       VALIDATION_MS: validationMs,

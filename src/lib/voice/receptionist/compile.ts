@@ -20,6 +20,11 @@ import { resolveReceptionistElevenLabsTuning } from "@/lib/voice/elevenlabs/rece
 import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import { buildReceptionistCompiledPrompt } from "./build-receptionist-compiled-prompt";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
+import { compileVoiceV2IntakeSchema } from "@/lib/voice-v2/intake/compile-schema";
+import {
+  buildVoiceV2LiveIntakeInstructions,
+  useVoiceV2IntakeAuthority,
+} from "@/lib/voice-v2/intake/live-intake-instructions";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -216,6 +221,18 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   const realtimeModel =
     modelRaw === "gpt-realtime-2.1" ? ("gpt-realtime-2.1" as const) : ("gpt-realtime-2.1-mini" as const);
 
+  const voiceV2IntakeAuthority = useVoiceV2IntakeAuthority([...caps]);
+  const voiceV2IntakeSchema = voiceV2IntakeAuthority
+    ? compileVoiceV2IntakeSchema({
+        advanced: {
+          voiceV2Intake: advanced?.voiceV2Intake,
+        },
+      } as VoiceAgentConfig)
+    : null;
+  const voiceV2IntakeInstructions = voiceV2IntakeSchema
+    ? buildVoiceV2LiveIntakeInstructions(voiceV2IntakeSchema)
+    : undefined;
+
   const partialSnapshot = {
     livekitProfile: "frontdesk_realtime" as const,
     businessName: input.businessName.trim(),
@@ -227,6 +244,8 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     answerWhen: input.answerTiming,
     capabilities: [...caps],
     fieldManifest,
+    voiceV2IntakeAuthority,
+    voiceV2IntakeInstructions,
     enabledBuiltinTools,
     agentJobInstructions,
     agentPersonalityNotes,

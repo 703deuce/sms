@@ -51,12 +51,17 @@ function synthesizeJobInstructions(snapshot: ReceptionistCompiledSnapshot): stri
     "Answer incoming calls.",
     "Determine why the caller is calling and help them appropriately.",
   ];
-  if (snapshot.capabilities.includes("collect_info")) {
+  if (snapshot.capabilities.includes("collect_info") && !snapshot.voiceV2IntakeAuthority) {
     const fields = snapshot.fieldManifest.map((f) => f.label).join(", ");
     bullets.push(
       fields
         ? `Collect caller information when needed: ${fields}.`
         : "Collect required caller information when needed.",
+    );
+  }
+  if (snapshot.voiceV2IntakeAuthority && snapshot.voiceV2IntakeInstructions) {
+    bullets.push(
+      "For appointment booking intake, follow VOICE V2 INTAKE AUTHORITY only — not legacy collect-info chips.",
     );
   }
   if (snapshot.capabilities.includes("take_messages")) {
@@ -179,7 +184,9 @@ function buildCallConfigurationSection(snapshot: ReceptionistCompiledSnapshot): 
   lines.push(`Transfer: ${snapshot.capabilities.includes("transfer_calls") ? "yes" : "no"}`);
   lines.push(`SMS: ${snapshot.capabilities.includes("send_text") ? "yes" : "no"}`);
 
-  if (snapshot.fieldManifest.length > 0) {
+  if (snapshot.voiceV2IntakeInstructions) {
+    lines.push(snapshot.voiceV2IntakeInstructions);
+  } else if (snapshot.fieldManifest.length > 0) {
     lines.push("Required information:");
     for (const field of snapshot.fieldManifest) {
       lines.push(`- ${field.label}${field.required ? " (required)" : ""}`);

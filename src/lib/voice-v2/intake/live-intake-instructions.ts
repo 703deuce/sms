@@ -1,0 +1,64 @@
+import type { IntakeFieldKey, VoiceV2IntakeSchema } from "./types";
+import { INTAKE_FIELD_KEYS } from "./wizard-config";
+
+/** True when Voice V2 intake is the sole live field authority (Step 1 booking). */
+export function useVoiceV2IntakeAuthority(capabilities: string[]): boolean {
+  return capabilities.includes("book_appointments");
+}
+
+const REQ_LABEL: Record<string, string> = {
+  OPTIONAL: "optional",
+  REQUIRED_FOR_RECORD: "required for record (do not block booking)",
+  REQUIRED_BEFORE_BOOKING: "required before booking",
+};
+
+/**
+ * Compiled into receptionist prompt + Telnyx PSTN append — single source for what Amy may ask.
+ */
+export function buildVoiceV2LiveIntakeInstructions(schema: VoiceV2IntakeSchema): string {
+  const enabled = new Set(schema.fields.map((f) => f.key));
+  const disabled = INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k));
+
+  const lines: string[] = [
+    "VOICE V2 INTAKE AUTHORITY (sole source for live booking intake):",
+    "Use voice_v2_save_intake_fields when the caller supplies configured values.",
+    "Use the Voice V2 intake schema as the only source of truth for what information to actively request.",
+    "Do not ask for disabled fields. Do not re-ask fields already known in session state or already stated by the caller.",
+    "If the caller volunteers a disabled field, acknowledge naturally if appropriate and continue — never treat it as an error, never retry saving it, never switch to callback/message mode because of it.",
+    "FIELD_NOT_ENABLED from the save tool means continue booking — not failure, not callback.",
+    "Once all REQUIRED_BEFORE_BOOKING fields are known (missingBeforeBooking empty), proceed immediately to voice_v2_find_availability.",
+    "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND/BOOK.",
+  ];
+
+  if (schema.fields.length) {
+    lines.push("Enabled fields:");
+    for (const f of schema.fields) {
+      lines.push(
+        `- ${f.key}: ${REQ_LABEL[f.requirementLevel] || f.requirementLevel}; ask only if missing: "${f.questionText}"`,
+      );
+    }
+  } else {
+    lines.push("Enabled fields: (none configured — use defaults at runtime compile).");
+  }
+
+  if (disabled.length) {
+    lines.push(`Disabled fields (never ask, never save): ${disabled.join(", ")}.`);
+  }
+
+  return lines.join("\n");
+}
+
+export function legacyFieldManifestLeaksDisabledIntake(
+  schema: VoiceV2IntakeSchema,
+  legacyManifest: Array<{ id: string; label: string; enabled?: boolean }>,
+): string[] {
+  const enabled = new Set(schema.fields.map((f) => f.key));
+  const leaks: string[] = [];
+  for (const row of legacyManifest) {
+    const key = row.id as IntakeFieldKey;
+    if (INTAKE_FIELD_KEYS.includes(key) && !enabled.has(key)) {
+      leaks.push(row.label || key);
+    }
+  }
+  return leaks;
+}

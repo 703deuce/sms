@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { INTAKE_FIELD_DEFAULTS } from "./defaults";
 import {

@@ -19,10 +19,11 @@ async function main() {
     {
       call_id: CALL_CONTROL_ID,
       fields: {
-        name: "Anthony Johnson",
-        service_reason: "kitchen leak",
-        phone: process.env.RECOVERY_CALLER_PHONE || "+15555550100",
-        address: "123 Main Street, Oakland, California",
+        name: process.env.RECOVERY_INTAKE_NAME || "Anthony Johnson",
+        service_reason: process.env.RECOVERY_INTAKE_SERVICE || "kitchen leak",
+        ...(process.env.RECOVERY_INTAKE_PHONE
+          ? { phone: process.env.RECOVERY_INTAKE_PHONE }
+          : {}),
       },
     },
     WORKSPACE_ID,
