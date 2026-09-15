@@ -12,6 +12,20 @@ export function formatVoiceV2SaveIntakeTelnyxResponse(result: SaveIntakeResult):
       speak: result.saved.length ? "Saved." : "No changes.",
     };
   }
+  if (result.status === "FIELD_NOT_ENABLED") {
+    const ready = result.readiness.missingBeforeBooking.length === 0;
+    return {
+      ok: true,
+      status: "FIELD_NOT_ENABLED",
+      voice_v2_status: "FIELD_NOT_ENABLED",
+      disabled_fields: result.disabled_fields,
+      readiness: result.readiness,
+      timing_ms: result.timing_ms,
+      speak: ready
+        ? "That detail is not collected on this line. Continue scheduling with find availability."
+        : "That field is not collected on this line. Continue with the remaining required details only.",
+    };
+  }
   if (result.status === "INTAKE_VALIDATION_ERROR") {
     return {
       ok: false,

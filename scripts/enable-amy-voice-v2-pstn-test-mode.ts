@@ -11,11 +11,39 @@ import {
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 import { restoreAmyTelnyxWorkflowWithV2 } from "./restore-amy-telnyx-tools-with-v2";
+import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config";
+import { parseVoiceAgentConfig } from "../src/lib/voice/types";
+import { INTAKE_FIELD_DEFAULTS } from "../src/lib/voice-v2/intake/defaults";
+import { INTAKE_FIELD_KEYS, type IntakeFieldKey } from "../src/lib/voice-v2/intake/wizard-config";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
 
-const V2_PSTN_INSTRUCTION_APPEND = [
+function enabledIntakeKeysFromConfig(config: ReturnType<typeof parseVoiceAgentConfig>): IntakeFieldKey[] {
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  const wizard = advanced.voiceV2Intake as { fields?: Record<string, { enabled?: boolean }> } | undefined;
+  const enabled: IntakeFieldKey[] = [];
+  for (const key of INTAKE_FIELD_KEYS) {
+    const def = INTAKE_FIELD_DEFAULTS[key];
+    const row = wizard?.fields?.[key];
+    if (row?.enabled ?? def.enabled) enabled.push(key);
+  }
+  return enabled;
+}
+
+function buildIntakePolicyBlock(enabledKeys: IntakeFieldKey[]): string {
+  const enabled = new Set(enabledKeys);
+  const enabledList = enabledKeys.join(", ") || "(none)";
+  const disabledList = INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k)).join(", ") || "(none)";
+  return [
+    `ENABLED intake fields only: ${enabledList}.`,
+    `Do NOT ask for or call save for disabled fields: ${disabledList}.`,
+    "If save returns FIELD_NOT_ENABLED, acknowledge briefly and continue — do not say you cannot save; do not take a message instead of booking.",
+    "When save readiness shows missingBeforeBooking empty, proceed immediately to voice_v2_find_availability (do not collect optional/disabled fields first).",
+  ].join(" ");
+}
+
+const V2_PSTN_INSTRUCTION_APPEND_BASE = [
   "VOICE BOOKING V2 PSTN TEST (intake + find + book):",
   "Keep the full live conversation in mind. Never ask for information the caller already provided.",
   `When the caller supplies configured intake fields, call ${VOICE_V2_SAVE_INTAKE_TOOL_TYPE} immediately — batch multiple fields in one call when given together.`,
@@ -26,7 +54,7 @@ const V2_PSTN_INSTRUCTION_APPEND = [
   `Then call ${VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE} with offer_set_id and selected_slot_id only.`,
   "Do NOT send the caller's raw words to the book tool. Do NOT call voice_ai_booking_turn.",
   "Only say the appointment is booked after BOOKING_CONFIRMED; speak spoken_confirmation from the tool.",
-].join(" ");
+];
 
 const LIVE_BOOKING_V2_INSTRUCTIONS = [
   "The caller wants to book on the live calendar.",
@@ -72,14 +100,19 @@ async function main() {
   if (!toolIds.includes(v2SaveId)) toolIds.push(v2SaveId);
 
   const flow = data.conversation_flow as Record<string, unknown> | undefined;
+  const runtime = await loadVoiceAgentRuntimeConfig(WORKSPACE_ID, AGENT_ID);
+  const config = parseVoiceAgentConfig(runtime || agent.draftConfig);
+  const intakePolicy = buildIntakePolicyBlock(enabledIntakeKeysFromConfig(config));
+
   if (flow && Array.isArray(flow.nodes)) {
     for (const node of flow.nodes as Array<Record<string, unknown>>) {
       if (node.id === "n_live_booking") {
         node.shared_tool_ids = [v2SaveId, v2FindId, v2BookId];
-        node.instructions = LIVE_BOOKING_V2_INSTRUCTIONS;
+        node.instructions = `${LIVE_BOOKING_V2_INSTRUCTIONS} ${intakePolicy}`;
       }
     }
   }
+  const V2_PSTN_INSTRUCTION_APPEND = [...V2_PSTN_INSTRUCTION_APPEND_BASE, intakePolicy].join(" ");
 
   const priorInstructions = String(data.instructions || "");
   const withoutOldV2Block = priorInstructions

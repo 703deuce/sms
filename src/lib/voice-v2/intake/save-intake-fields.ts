@@ -26,6 +26,12 @@ export type SaveIntakeResult =
       disabled_fields: IntakeFieldKey[];
       timing_ms: SaveIntakeTimingMs;
     }
+  | {
+      status: "FIELD_NOT_ENABLED";
+      disabled_fields: IntakeFieldKey[];
+      readiness: ReturnType<typeof getIntakeReadiness>;
+      timing_ms: SaveIntakeTimingMs;
+    }
   | { status: "SESSION_UNAVAILABLE"; timing_ms: SaveIntakeTimingMs };
 
 function nextStatus(
@@ -91,6 +97,21 @@ export async function executeVoiceV2SaveIntakeFields(
   const validationMs = Date.now() - vStart;
 
   if (!validation.ok) {
+    const onlyDisabled =
+      validation.invalidFields.length === 0 && validation.disabledFields.length > 0;
+    if (onlyDisabled) {
+      const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
+      return {
+        status: "FIELD_NOT_ENABLED",
+        disabled_fields: validation.disabledFields,
+        readiness,
+        timing_ms: {
+          VALIDATION_MS: validationMs,
+          STATE_UPDATE_MS: 0,
+          TOTAL_MS: Date.now() - t0,
+        },
+      };
+    }
     return {
       status: "INTAKE_VALIDATION_ERROR",
       invalid_fields: validation.invalidFields,

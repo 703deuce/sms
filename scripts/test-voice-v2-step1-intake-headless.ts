@@ -255,12 +255,18 @@ async function main() {
   const t10ms = t10.status === "INTAKE_SAVED" ? t10.timing_ms.TOTAL_MS : 9999;
   check("TEST_10_IN_MEMORY_FAST", t10.status === "INTAKE_SAVED" && t10ms < 500, `ms=${t10ms}`);
 
-  // TEST 11 — disabled field
-  const schema11 = intakeSchemaFromWizardOnly(baseWizard());
-  const v11 = validateIntakeFieldPayload(schema11, { address: "123 Main" });
+  // TEST 11 — disabled field (API returns FIELD_NOT_ENABLED, not validation)
+  clearVoiceV2CallSessions();
+  seedSession();
+  const t11 = await executeVoiceV2SaveIntakeFields(
+    { call_id: "headless-test", fields: { address: "123 Main" } },
+    "ws_test",
+    "agent_test",
+  );
   check(
     "TEST_11_DISABLED_FIELD",
-    !v11.ok && v11.ok === false && v11.disabledFields.includes("address"),
+    t11.status === "FIELD_NOT_ENABLED" &&
+      (t11 as { disabled_fields: string[] }).disabled_fields.includes("address"),
   );
 
   // TEST 12 — structured state authoritative (long call simulation)
