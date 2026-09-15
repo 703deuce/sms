@@ -5,8 +5,14 @@ import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { normalizeCallerAni } from "@/lib/voice/call-identity";
 import { compileVoiceV2IntakeSchema } from "./compile-schema";
-import { setVoiceV2CallContext, getVoiceV2CallContext } from "./session-store";
-import type { IntakeFieldStatus, VoiceV2CallContext, VoiceV2IntakeState } from "./types";
+import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
+import type { VoiceV2IntakeState } from "./types";
+import {
+  createVoiceV2CallContext,
+  loadVoiceV2CallContext,
+  resolveVoiceV2SessionKey,
+} from "../session/call-context-store";
+import { buildVoiceV2EnrollmentSnapshot } from "../session/enrollment";
 
 export function resolveSessionKey(input: {
   callControlId?: string | null;
@@ -40,22 +46,37 @@ export type EnsureCallContextTrace = {
   session_create_ms: number;
 };
 
-/** PRELOAD_ONCE_PER_CALL — lazy on first intake/book use, then memoized. */
+/** Lazy on first intake/book use — L1 → L2 → create with enrollment snapshot. */
 export async function ensureVoiceV2CallContext(input: {
   workspaceId: string;
   agentId: string;
   callControlId?: string | null;
   conversationId?: string | null;
   fromE164?: string | null;
+  callId?: string | null;
   trace?: import("./save-intake-trace").SaveIntakeTrace;
-}): Promise<VoiceV2CallContext | null> {
+}): Promise<import("./types").VoiceV2CallContext | null> {
   const sessionKey = resolveSessionKey(input);
-  if (!sessionKey) return null;
+  if (!sessionKey && !input.callId) return null;
 
   input.trace?.mark("CALL_CONTEXT_LOOKUP_START");
-  const existing = getVoiceV2CallContext(sessionKey);
-  input.trace?.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: Boolean(existing) });
-  if (existing) return existing;
+  const canonical =
+    (await resolveVoiceV2SessionKey({
+      callControlId: input.callControlId,
+      conversationId: input.conversationId,
+      callId: input.callId,
+    })) || sessionKey;
+  if (!canonical) return null;
+
+  const l1 = getVoiceV2CallContext(canonical) || (sessionKey ? getVoiceV2CallContext(sessionKey) : null);
+  input.trace?.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: Boolean(l1) });
+  if (l1) return l1;
+
+  const fromStore = await loadVoiceV2CallContext(canonical);
+  if (fromStore) {
+    input.trace?.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: true, source: "l2" });
+    return fromStore;
+  }
 
   input.trace?.mark("CONFIG_LOAD_START");
   const cfgStart = Date.now();
@@ -74,9 +95,18 @@ export async function ensureVoiceV2CallContext(input: {
   input.trace?.mark("BOOKING_CFG_LOAD_END", { ms: Date.now() - bookStart });
   const timezone = bookingCfg.timezone?.trim() || "America/New_York";
 
+  const enrollment = await buildVoiceV2EnrollmentSnapshot({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    callId: input.callId,
+  });
+
   input.trace?.mark("SESSION_CREATE_START");
-  const ctx: VoiceV2CallContext = {
-    sessionKey,
+  const createStart = Date.now();
+  const cc = input.callControlId?.trim();
+  const conv = input.conversationId?.trim();
+  const payload: import("./types").VoiceV2CallContext = {
+    sessionKey: canonical,
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     businessTimezone: timezone,
@@ -86,7 +116,21 @@ export async function ensureVoiceV2CallContext(input: {
     compiledAt: new Date().toISOString(),
     intakeSaveCount: 0,
   };
-  setVoiceV2CallContext(ctx);
-  input.trace?.mark("SESSION_CREATE_END");
-  return ctx;
+
+  await createVoiceV2CallContext({
+    payload,
+    identity: {
+      sessionKey: canonical,
+      callId: input.callId?.trim() || canonical,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      telnyxCallControlId: cc || undefined,
+      telnyxConversationId: conv || undefined,
+    },
+    enrollment,
+  });
+
+  setVoiceV2CallContext(payload);
+  input.trace?.mark("SESSION_CREATE_END", { ms: Date.now() - createStart });
+  return payload;
 }

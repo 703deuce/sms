@@ -1,31 +1,28 @@
 import "server-only";
 
 import type { VoiceV2CallContext } from "./types";
+import {
+  getVoiceV2CallContextL1,
+  persistVoiceV2CallContextPayload,
+  resetVoiceV2CallContextStoreForTests,
+  updateVoiceV2CallContextL1Payload,
+  loadVoiceV2CallContextRecord,
+} from "../session/call-context-store";
+import type { VoiceV2CallContextRecord } from "../session/types";
 
-const TTL_MS = 2 * 60 * 60_000;
-const sessions = new Map<string, { ctx: VoiceV2CallContext; expiresAt: number }>();
-
-function prune(): void {
-  const now = Date.now();
-  for (const [k, v] of sessions) {
-    if (v.expiresAt <= now) sessions.delete(k);
-  }
-}
-
+/** Sync read — L1 on this process only (hot path). */
 export function getVoiceV2CallContext(sessionKey: string): VoiceV2CallContext | null {
-  prune();
-  const row = sessions.get(sessionKey);
-  if (!row) return null;
-  if (row.expiresAt <= Date.now()) {
-    sessions.delete(sessionKey);
-    return null;
-  }
-  return row.ctx;
+  return getVoiceV2CallContextL1(sessionKey);
 }
 
+/** Updates L1 immediately; mirrors to L2 when a record exists (Class B, async). */
 export function setVoiceV2CallContext(ctx: VoiceV2CallContext): void {
-  prune();
-  sessions.set(ctx.sessionKey, { ctx, expiresAt: Date.now() + TTL_MS });
+  updateVoiceV2CallContextL1Payload(ctx);
+  void persistVoiceV2CallContextPayload(ctx, "B").catch((err) => {
+    if (process.env.VOICE_V2_CONTEXT_METRICS === "1") {
+      console.warn("[voice-v2/context-persist]", err instanceof Error ? err.message : err);
+    }
+  });
 }
 
 export function patchVoiceV2CallContext(
@@ -41,5 +38,12 @@ export function patchVoiceV2CallContext(
 
 /** Test-only */
 export function clearVoiceV2CallSessions(): void {
-  sessions.clear();
+  resetVoiceV2CallContextStoreForTests();
+}
+
+/** Test / admin — hydrate L1 from L2 */
+export async function hydrateVoiceV2CallContextFromL2(
+  sessionKey: string,
+): Promise<VoiceV2CallContextRecord | null> {
+  return loadVoiceV2CallContextRecord(sessionKey);
 }
