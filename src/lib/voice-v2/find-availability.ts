@@ -25,6 +25,7 @@ import {
   endVoiceV2GraphCollection,
   type VoiceV2GraphSpan,
 } from "./graph-instrumentation";
+import { persistVoiceV2OfferSet } from "./offer-set-store";
 
 function isoMark(): string {
   return new Date().toISOString();
@@ -68,6 +69,7 @@ function emptyTimingMs(): VoiceV2TimingMs {
 export async function executeVoiceV2FindAvailability(
   raw: Record<string, unknown>,
   resolvedWorkspaceId: string,
+  options?: { voiceCallId?: string | null },
 ): Promise<VoiceV2FindAvailabilityResult> {
   const t0 = Date.now();
   const marks: VoiceV2TimingMarks = { REQUEST_RECEIVED: isoMark() };
@@ -190,12 +192,16 @@ export async function executeVoiceV2FindAvailability(
       })
       .slice(0, maxSlots);
 
-    const slots: VoiceV2Slot[] = filtered.map((s) => ({
-      slot_id: slotIdFor(s.startsAt, s.endsAt, "microsoft"),
-      label: formatSlotLabel(s.startsAt, timezone),
-      start_utc: s.startsAt,
-      end_utc: s.endsAt,
-    }));
+    const slots: VoiceV2Slot[] = filtered.map((s) => {
+      const spoken = formatSlotLabel(s.startsAt, timezone);
+      return {
+        slot_id: slotIdFor(s.startsAt, s.endsAt, "microsoft"),
+        label: spoken,
+        spoken_label: spoken,
+        start_utc: s.startsAt,
+        end_utc: s.endsAt,
+      };
+    });
     marks.AVAILABILITY_COMPUTE_COMPLETE = isoMark();
     timingMs.AVAILABILITY_COMPUTE_MS = Date.now() - computeStart;
 
@@ -220,8 +226,21 @@ export async function executeVoiceV2FindAvailability(
       };
     }
 
+    const callId =
+      options?.voiceCallId ||
+      (raw.call_id || raw.callId ? String(raw.call_id || raw.callId) : null);
+    const persisted = await persistVoiceV2OfferSet({
+      workspaceId: input.workspaceId,
+      voiceCallId: callId,
+      slots,
+      serviceName,
+      timezone,
+      connectionId: conn.id,
+    });
+
     return {
       status: "AVAILABILITY_FOUND",
+      offer_set_id: persisted.offerSetId,
       slots,
       timing: marks,
       timing_ms: timingMs,

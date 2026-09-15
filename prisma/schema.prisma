@@ -318,6 +318,8 @@ model Workspace {
   voiceConversationInsights VoiceConversationInsight[]
   voiceToolExecutions VoiceToolExecution[]
   voiceAppointments VoiceAppointment[]
+  voiceV2OfferSets VoiceV2OfferSet[]
+  voiceV2BookingIdempotencies VoiceV2BookingIdempotency[]
   appointmentSlotHolds AppointmentSlotHold[]
   appointmentAiMutationRecords AppointmentAiMutationRecord[]
   appointmentWorkflows AppointmentWorkflow[]
@@ -2856,6 +2858,41 @@ model VoiceAppointment {
   @@unique([workspaceId, externalId])
   @@index([workspaceId, startsAt])
   @@map("voice_appointments")
+}
+
+/// Voice Booking V2 — canonical offered slots retained between FIND and BOOK.
+model VoiceV2OfferSet {
+  id           String   @id
+  workspaceId  String
+  voiceCallId  String?
+  slotsJson    Json
+  serviceName  String
+  timezone     String
+  connectionId String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, expiresAt])
+  @@index([voiceCallId])
+  @@map("voice_v2_offer_sets")
+}
+
+/// Voice Booking V2 — idempotent book by tool_invocation_id (no durable ops framework).
+model VoiceV2BookingIdempotency {
+  id                 String   @id @default(cuid())
+  idempotencyKey     String   @unique
+  workspaceId        String
+  offerSetId         String
+  slotId             String
+  microsoftEventId   String?
+  voiceAppointmentId String?
+  resultJson         Json?
+  createdAt          DateTime @default(now())
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("voice_v2_booking_idempotency")
 }
 
 /** Soft hold on a calendar slot while the caller confirms booking details. */

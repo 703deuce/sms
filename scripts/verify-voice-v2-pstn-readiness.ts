@@ -8,7 +8,9 @@ import * as ai from "../src/lib/voice/telnyx/ai-client";
 import { getAppBaseUrl } from "../src/lib/messaging/telnyx/config";
 import {
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
+  VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
   VOICE_V2_TELNYX_TOOL_NAME,
+  VOICE_V2_BOOK_TELNYX_TOOL_NAME,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
@@ -18,14 +20,14 @@ const EXPECTED_APP_URL = (process.env.EXPECTED_APP_URL || process.env.APP_URL ||
 
 type Check = { name: string; pass: boolean; detail: string };
 
-async function resolveV2SharedTool(): Promise<{
+async function resolveV2SharedTool(displayName: string): Promise<{
   id: string;
   webhookUrl: string;
   props: Record<string, unknown>;
 } | null> {
   const listed = await ai.listSharedTools().catch(() => ({ data: [] }));
   const tools = (listed as { data?: Array<{ id: string; display_name?: string }> }).data || [];
-  const row = tools.find((t) => t.display_name === VOICE_V2_TELNYX_TOOL_NAME);
+  const row = tools.find((t) => t.display_name === displayName);
   if (!row?.id) return null;
   const shared = await ai.getSharedTool(row.id);
   const data = (shared as { data?: Record<string, unknown> }).data || shared;
@@ -51,11 +53,17 @@ async function main() {
     select: { telnyxAssistantId: true, name: true },
   });
 
-  const v2 = await resolveV2SharedTool();
+  const v2 = await resolveV2SharedTool(VOICE_V2_TELNYX_TOOL_NAME);
+  const v2Book = await resolveV2SharedTool(VOICE_V2_BOOK_TELNYX_TOOL_NAME);
   checks.push({
     name: "1_voice_v2_find_availability_exists",
     pass: Boolean(v2?.id),
     detail: v2?.id || "missing shared tool",
+  });
+  checks.push({
+    name: "1b_voice_v2_book_offered_slot_exists",
+    pass: Boolean(v2Book?.id),
+    detail: v2Book?.id || "missing book shared tool — run publish-voice-v2-telnyx-tool.ts",
   });
 
   const hasDate = Boolean(v2?.props.requested_date);
@@ -70,6 +78,15 @@ async function main() {
     name: "3_no_utterance_semantic_field",
     pass: !hasUtterance,
     detail: hasUtterance ? "utterance still in schema" : "no utterance field",
+  });
+
+  const hasOfferSet = Boolean(v2Book?.props.offer_set_id);
+  const hasSlotId = Boolean(v2Book?.props.selected_slot_id);
+  const bookHasUtterance = Boolean(v2Book?.props.utterance);
+  checks.push({
+    name: "3b_book_structured_schema",
+    pass: hasOfferSet && hasSlotId && !bookHasUtterance,
+    detail: `offer_set_id=${hasOfferSet} selected_slot_id=${hasSlotId} utterance=${bookHasUtterance}`,
   });
 
   let instructionsText = "";
@@ -88,13 +105,16 @@ async function main() {
 
   const mentionsV2 =
     instructionsText.includes("voice_v2_find_availability") ||
-    instructionsText.includes(VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE);
+    instructionsText.includes(VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE) ||
+    instructionsText.includes(VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE);
   const flow = agent?.telnyxAssistantId
     ? ((await ai.getAssistant(agent.telnyxAssistantId)) as { data?: Record<string, unknown> }).data
         ?.conversation_flow
     : null;
   const flowStr = JSON.stringify(flow || "");
-  const flowMentionsV2 = flowStr.includes("voice_v2_find_availability");
+  const flowMentionsV2 =
+    flowStr.includes("voice_v2_find_availability") ||
+    flowStr.includes("voice_v2_book_offered_slot");
 
   checks.push({
     name: "4_amy_instructions_use_v2",
@@ -114,6 +134,13 @@ async function main() {
     detail: legacyAttached
       ? `legacy tool_id still attached: ${legacyBookingToolId}`
       : "legacy booking tool not in tool_ids",
+  });
+
+  const bookToolAttached = v2Book?.id ? toolIds.includes(v2Book.id) : false;
+  checks.push({
+    name: "5b_v2_book_tool_attached",
+    pass: bookToolAttached,
+    detail: bookToolAttached ? `book tool_id ${v2Book?.id}` : "attach v2 book tool to assistant",
   });
 
   const expectedWebhook = `${EXPECTED_APP_URL}/api/telnyx/voice-v2/find-availability`;
@@ -144,20 +171,51 @@ async function main() {
       });
       deployOk = res.status !== 404;
       checks.push({
-        name: "7_production_v2_route_deployed",
+        name: "7_production_v2_find_route_deployed",
         pass: deployOk,
-        detail: `HTTP ${res.status} (404 means redeploy web with commit >= 5938499d)`,
+        detail: `HTTP ${res.status} (404 means redeploy web)`,
       });
     } catch (err) {
       checks.push({
-        name: "7_production_v2_route_deployed",
+        name: "7_production_v2_find_route_deployed",
+        pass: false,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    try {
+      const resBook = await fetch(`${EXPECTED_APP_URL}/api/telnyx/voice-v2/book-offered-slot`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-transovo-workspace-id": WORKSPACE_ID,
+          "x-transovo-tool-type": VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+        },
+        body: JSON.stringify({
+          offer_set_id: "v2offer_probe",
+          selected_slot_id: "probe",
+        }),
+      });
+      checks.push({
+        name: "7b_production_v2_book_route_deployed",
+        pass: resBook.status !== 404,
+        detail: `HTTP ${resBook.status} (404 means redeploy web with book route)`,
+      });
+    } catch (err) {
+      checks.push({
+        name: "7b_production_v2_book_route_deployed",
         pass: false,
         detail: err instanceof Error ? err.message : String(err),
       });
     }
   } else {
     checks.push({
-      name: "7_production_v2_route_deployed",
+      name: "7_production_v2_find_route_deployed",
+      pass: false,
+      detail: "set EXPECTED_APP_URL or APP_URL",
+    });
+    checks.push({
+      name: "7b_production_v2_book_route_deployed",
       pass: false,
       detail: "set EXPECTED_APP_URL or APP_URL",
     });

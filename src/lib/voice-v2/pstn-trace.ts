@@ -70,6 +70,7 @@ export function buildVoiceV2PstnTrace(input: {
     v2_response_summary: {
       status: input.responsePayload.status,
       ok: input.responsePayload.ok,
+      offer_set_id: input.responsePayload.offer_set_id,
       slot_count: Array.isArray(input.responsePayload.slots)
         ? (input.responsePayload.slots as unknown[]).length
         : 0,

@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       call_id: callId,
     },
     workspaceId,
+    { voiceCallId: callId },
   );
 
   const payload = formatVoiceV2TelnyxToolResponse(result);

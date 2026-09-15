@@ -9,6 +9,7 @@ export function formatVoiceV2TelnyxToolResponse(
       ok: true,
       status: "AVAILABILITY_FOUND",
       voice_v2_status: "AVAILABILITY_FOUND",
+      offer_set_id: result.offer_set_id,
       speak: `I have ${labels}. Which works best for you?`,
       slots: result.slots,
       timing_ms: result.timing_ms,

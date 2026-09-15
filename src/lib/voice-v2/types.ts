@@ -16,6 +16,8 @@ export type VoiceV2FindAvailabilityInput = {
 export type VoiceV2Slot = {
   slot_id: string;
   label: string;
+  /** Spoken to caller; may match label */
+  spoken_label?: string;
   start_utc: string;
   end_utc: string;
 };
@@ -47,6 +49,7 @@ export type VoiceV2TimingMs = {
 export type VoiceV2FindAvailabilityResult =
   | {
       status: "AVAILABILITY_FOUND";
+      offer_set_id: string;
       slots: VoiceV2Slot[];
       timing: VoiceV2TimingMarks;
       timing_ms: VoiceV2TimingMs;
