@@ -61,6 +61,8 @@ export interface VoiceV2CallContext {
   currentOfferSet?: { offerSetId: string; slotIds: string[] };
   bookingState?: { selectedSlotId?: string; status?: string };
   bookingWorkflow?: VoiceV2BookingWorkflow;
+  /** Observability: intake saves this call (in-memory). */
+  intakeSaveCount?: number;
   compiledAt: string;
 }
 

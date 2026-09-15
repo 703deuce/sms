@@ -11,6 +11,7 @@ import {
   loadVoiceV2PstnLiveBookingFlag,
   workflowPayloadForContext,
 } from "../booking-workflow-hooks";
+import { SaveIntakeTrace } from "./save-intake-trace";
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -26,6 +27,7 @@ export type SaveIntakeResult =
       invalid_fields?: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
       workflow?: Record<string, unknown>;
+      observability?: { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number };
       timing_ms: SaveIntakeTimingMs;
     }
   | {
@@ -40,6 +42,7 @@ export type SaveIntakeResult =
       saved_fields: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
       workflow?: Record<string, unknown>;
+      observability?: { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number };
       timing_ms: SaveIntakeTimingMs;
     }
   | { status: "SESSION_UNAVAILABLE"; timing_ms: SaveIntakeTimingMs };
@@ -50,10 +53,12 @@ async function attachBookingWorkflow(
   savedKeys: IntakeFieldKey[],
   workspaceId: string,
   agentId: string,
+  trace?: SaveIntakeTrace,
 ): Promise<{
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>;
   workflow: Record<string, unknown>;
 }> {
+  trace?.mark("WORKFLOW_TRANSITION_START");
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const voiceV2PstnLiveBooking = await loadVoiceV2PstnLiveBookingFlag(workspaceId, agentId);
   const nextCtx = transitionAfterIntakeSave({
@@ -64,10 +69,24 @@ async function attachBookingWorkflow(
     voiceV2PstnLiveBooking,
   });
   setVoiceV2CallContext(nextCtx);
+  trace?.mark("WORKFLOW_TRANSITION_END");
   return {
     ctx: nextCtx,
     workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking),
   };
+}
+
+function finalizeObservability(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+  trace: SaveIntakeTrace,
+): { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number } {
+  const saveSequence = (ctx.intakeSaveCount ?? 0) + 1;
+  const next = { ...ctx, intakeSaveCount: saveSequence };
+  setVoiceV2CallContext(next);
+  trace.mark("RESPONSE_SERIALIZED", { save_sequence: saveSequence });
+  const json = trace.toJSON();
+  json.save_sequence_hint = saveSequence;
+  return { trace: json, save_sequence: saveSequence };
 }
 
 function nextStatus(
@@ -91,6 +110,7 @@ function commitNormalizedFields(
   stateUpdateMs: number;
 } {
   const uStart = Date.now();
+  // STATE_UPDATE traced by caller via validationMs path
   const saved: IntakeFieldKey[] = [];
   const now = new Date().toISOString();
   const nextState = { ...ctx.intakeState };
@@ -124,7 +144,10 @@ export async function executeVoiceV2SaveIntakeFields(
   raw: Record<string, unknown>,
   workspaceId: string,
   agentId: string,
+  observability?: { trace?: SaveIntakeTrace },
 ): Promise<SaveIntakeResult> {
+  const trace = observability?.trace ?? new SaveIntakeTrace();
+  trace.mark("REQUEST_RECEIVED");
   const t0 = Date.now();
   const emptyTiming = (): SaveIntakeTimingMs => ({
     VALIDATION_MS: 0,
@@ -143,15 +166,20 @@ export async function executeVoiceV2SaveIntakeFields(
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
   }
 
-  let ctx =
-    getVoiceV2CallContext(sessionKey) ||
-    (await ensureVoiceV2CallContext({
+  let ctx = getVoiceV2CallContext(sessionKey);
+  if (ctx) {
+    trace.mark("CALL_CONTEXT_LOOKUP_START");
+    trace.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: true });
+  } else {
+    ctx = await ensureVoiceV2CallContext({
       workspaceId,
       agentId,
       callControlId,
       conversationId,
       fromE164,
-    }));
+      trace,
+    });
+  }
 
   if (!ctx) {
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
@@ -167,22 +195,25 @@ export async function executeVoiceV2SaveIntakeFields(
     };
   }
 
+  trace.mark("VALIDATION_START");
   const vStart = Date.now();
   const validation = validateIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
   const validationMs = Date.now() - vStart;
+  trace.mark("VALIDATION_END", { ms: validationMs });
 
   if (!validation.ok) {
     const onlyDisabled =
       validation.invalidFields.length === 0 && validation.disabledFields.length > 0;
     if (onlyDisabled) {
       const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-      const wf = await attachBookingWorkflow(ctx, raw, [], workspaceId, agentId);
+      const wf = await attachBookingWorkflow(ctx, raw, [], workspaceId, agentId, trace);
       return {
         status: "FIELD_NOT_ENABLED",
         ignored_fields: validation.disabledFields,
         saved_fields: [],
         readiness,
         workflow: wf.workflow,
+        observability: finalizeObservability(wf.ctx, trace),
         timing_ms: {
           VALIDATION_MS: validationMs,
           STATE_UPDATE_MS: 0,
@@ -209,6 +240,7 @@ export async function executeVoiceV2SaveIntakeFields(
         partial.saved,
         workspaceId,
         agentId,
+        trace,
       );
       return {
         status: "INTAKE_SAVED",
@@ -217,6 +249,7 @@ export async function executeVoiceV2SaveIntakeFields(
         invalid_fields: validation.invalidFields.length ? validation.invalidFields : undefined,
         readiness,
         workflow: wf.workflow,
+        observability: finalizeObservability(wf.ctx, trace),
         timing_ms: {
           VALIDATION_MS: validationMs,
           STATE_UPDATE_MS: partial.stateUpdateMs,
@@ -249,7 +282,7 @@ export async function executeVoiceV2SaveIntakeFields(
 
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const ignoredFields = validation.disabledFields;
-  const wf = await attachBookingWorkflow(ctx, raw, committed.saved, workspaceId, agentId);
+  const wf = await attachBookingWorkflow(ctx, raw, committed.saved, workspaceId, agentId, trace);
 
   return {
     status: "INTAKE_SAVED",
@@ -257,6 +290,7 @@ export async function executeVoiceV2SaveIntakeFields(
     ignored_fields: ignoredFields.length ? ignoredFields : undefined,
     readiness,
     workflow: wf.workflow,
+    observability: finalizeObservability(wf.ctx, trace),
     timing_ms: {
       VALIDATION_MS: validationMs,
       STATE_UPDATE_MS: committed.stateUpdateMs,
