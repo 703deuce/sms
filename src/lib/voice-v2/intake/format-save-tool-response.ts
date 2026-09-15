@@ -9,7 +9,23 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
   const missingBeforeBooking = readiness?.missingBeforeBooking ?? [];
 
   if (result.status === "INTAKE_SAVED") {
-    const ignored = (result as { ignored_fields?: IntakeFieldKey[] }).ignored_fields || [];
+    const ignored = result.ignored_fields || [];
+    const invalid = result.invalid_fields || [];
+    let speak = result.saved.length
+      ? ignored.length
+        ? "Saved. Some details are not collected on this line; continue scheduling."
+        : "Saved."
+      : "No changes.";
+    if (invalid.length) {
+      if (invalid.includes("email")) {
+        speak =
+          missingBeforeBooking.length === 0
+            ? "Got the other details. I still need your email — say it like name at domain dot com, or spell the part before the at sign."
+            : "Saved what I could. For email, say it like name at gmail dot com so I can save it.";
+      } else {
+        speak = "Saved what I could. Could you repeat the part I didn't catch?";
+      }
+    }
     return {
       ok: true,
       status: "INTAKE_SAVED",
@@ -17,15 +33,12 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
       saved_fields: result.saved,
       saved: result.saved,
       ignored_fields: ignored,
+      invalid_fields: invalid.length ? invalid : undefined,
       missingBeforeBooking,
       readiness: result.readiness,
-      continue: true,
+      continue: missingBeforeBooking.length === 0 || invalid.length === 0,
       timing_ms: result.timing_ms,
-      speak: result.saved.length
-        ? ignored.length
-          ? "Saved. Some details are not collected on this line; continue scheduling."
-          : "Saved."
-        : "No changes.",
+      speak,
     };
   }
 
@@ -57,7 +70,9 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
       disabled_fields: result.disabled_fields,
       continue: false,
       timing_ms: result.timing_ms,
-      speak: "I didn't catch that correctly. Could you repeat it?",
+      speak: result.invalid_fields.includes("email")
+        ? "I didn't get the email in a format I can save. Try name at domain dot com — for example, alex at company dot com."
+        : "I didn't catch that correctly. Could you repeat it?",
     };
   }
 

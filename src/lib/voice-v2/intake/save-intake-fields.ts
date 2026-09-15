@@ -18,6 +18,7 @@ export type SaveIntakeResult =
       status: "INTAKE_SAVED";
       saved: IntakeFieldKey[];
       ignored_fields?: IntakeFieldKey[];
+      invalid_fields?: IntakeFieldKey[];
       readiness: ReturnType<typeof getIntakeReadiness>;
       timing_ms: SaveIntakeTimingMs;
     }
@@ -45,6 +46,45 @@ function nextStatus(
   if (previous === "PREFILLED") return "CAPTURED";
   if (previous === "CONFIRMED") return "CAPTURED";
   return "CAPTURED";
+}
+
+function commitNormalizedFields(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+  normalized: Partial<Record<IntakeFieldKey, string>>,
+  timing: { validationMs: number; t0: number },
+): {
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>;
+  saved: IntakeFieldKey[];
+  stateUpdateMs: number;
+} {
+  const uStart = Date.now();
+  const saved: IntakeFieldKey[] = [];
+  const now = new Date().toISOString();
+  const nextState = { ...ctx.intakeState };
+
+  for (const [key, value] of Object.entries(normalized)) {
+    const k = key as IntakeFieldKey;
+    const prev = nextState[k];
+    const unchanged = prev?.value === value;
+    if (unchanged && prev?.status !== "MISSING") continue;
+
+    const isCorrection =
+      Boolean(prev?.value?.trim()) &&
+      prev!.value.trim() !== value!.trim() &&
+      prev!.status !== "PREFILLED" &&
+      prev!.status !== "MISSING";
+    nextState[k] = {
+      value: value!,
+      status: nextStatus(k, prev?.status, isCorrection),
+      source: "CALLER",
+      updatedAt: now,
+    };
+    saved.push(k);
+  }
+
+  const updated = { ...ctx, intakeState: nextState };
+  setVoiceV2CallContext(updated);
+  return { ctx: updated, saved, stateUpdateMs: Date.now() - uStart };
 }
 
 export async function executeVoiceV2SaveIntakeFields(
@@ -115,6 +155,32 @@ export async function executeVoiceV2SaveIntakeFields(
         },
       };
     }
+    const partial = commitNormalizedFields(ctx, validation.normalized, {
+      validationMs,
+      t0,
+    });
+    if (partial.saved.length > 0) {
+      void scheduleIntakePersistence({
+        workspaceId,
+        sessionKey,
+        callControlId: callControlId || null,
+        snapshot: partial.ctx.intakeState,
+        updatedAt: new Date().toISOString(),
+      });
+      const readiness = getIntakeReadiness(partial.ctx.intakeSchema, partial.ctx.intakeState);
+      return {
+        status: "INTAKE_SAVED",
+        saved: partial.saved,
+        ignored_fields: validation.disabledFields.length ? validation.disabledFields : undefined,
+        invalid_fields: validation.invalidFields.length ? validation.invalidFields : undefined,
+        readiness,
+        timing_ms: {
+          VALIDATION_MS: validationMs,
+          STATE_UPDATE_MS: partial.stateUpdateMs,
+          TOTAL_MS: Date.now() - t0,
+        },
+      };
+    }
     return {
       status: "INTAKE_VALIDATION_ERROR",
       invalid_fields: validation.invalidFields,
@@ -127,41 +193,15 @@ export async function executeVoiceV2SaveIntakeFields(
     };
   }
 
-  const uStart = Date.now();
-  const saved: IntakeFieldKey[] = [];
-  const now = new Date().toISOString();
-  const nextState = { ...ctx.intakeState };
-
-  for (const [key, value] of Object.entries(validation.normalized)) {
-    const k = key as IntakeFieldKey;
-    const prev = nextState[k];
-    const unchanged = prev?.value === value;
-    if (unchanged && prev?.status !== "MISSING") continue;
-
-    const isCorrection =
-      Boolean(prev?.value?.trim()) &&
-      prev!.value.trim() !== value.trim() &&
-      prev!.status !== "PREFILLED" &&
-      prev!.status !== "MISSING";
-    nextState[k] = {
-      value: value!,
-      status: nextStatus(k, prev?.status, isCorrection),
-      source: "CALLER",
-      updatedAt: now,
-    };
-    saved.push(k);
-  }
-
-  ctx = { ...ctx, intakeState: nextState };
-  setVoiceV2CallContext(ctx);
-  const stateUpdateMs = Date.now() - uStart;
+  const committed = commitNormalizedFields(ctx, validation.normalized, { validationMs, t0 });
+  ctx = committed.ctx;
 
   void scheduleIntakePersistence({
     workspaceId,
     sessionKey,
     callControlId: callControlId || null,
     snapshot: ctx.intakeState,
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
   });
 
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
@@ -169,12 +209,12 @@ export async function executeVoiceV2SaveIntakeFields(
 
   return {
     status: "INTAKE_SAVED",
-    saved,
+    saved: committed.saved,
     ignored_fields: ignoredFields.length ? ignoredFields : undefined,
     readiness,
     timing_ms: {
       VALIDATION_MS: validationMs,
-      STATE_UPDATE_MS: stateUpdateMs,
+      STATE_UPDATE_MS: committed.stateUpdateMs,
       TOTAL_MS: Date.now() - t0,
     },
   };

@@ -2,16 +2,21 @@ import "server-only";
 
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { INTAKE_FIELD_KEYS, type IntakeFieldKey, type VoiceV2IntakeSchema } from "./types";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { normalizeVoiceIntakeEmail } from "./normalize-email";
 
 export type FieldValidationResult =
   | {
       ok: true;
       normalized: Partial<Record<IntakeFieldKey, string>>;
       disabledFields: IntakeFieldKey[];
+      invalidFields: IntakeFieldKey[];
     }
-  | { ok: false; invalidFields: IntakeFieldKey[]; disabledFields: IntakeFieldKey[] };
+  | {
+      ok: false;
+      normalized: Partial<Record<IntakeFieldKey, string>>;
+      invalidFields: IntakeFieldKey[];
+      disabledFields: IntakeFieldKey[];
+    };
 
 export function validateIntakeFieldPayload(
   schema: VoiceV2IntakeSchema,
@@ -40,10 +45,12 @@ export function validateIntakeFieldPayload(
       case "service_reason":
         normalized[k] = str;
         break;
-      case "email":
-        if (!EMAIL_RE.test(str)) invalidFields.push(k);
-        else normalized[k] = str;
+      case "email": {
+        const email = normalizeVoiceIntakeEmail(str) ?? (str.includes("@") ? str.trim().toLowerCase() : null);
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) invalidFields.push(k);
+        else normalized[k] = email;
         break;
+      }
       case "phone":
         try {
           normalized[k] = normalizeE164(str);
@@ -57,10 +64,10 @@ export function validateIntakeFieldPayload(
   }
 
   if (invalidFields.length) {
-    return { ok: false, invalidFields, disabledFields };
+    return { ok: false, normalized, invalidFields, disabledFields };
   }
   if (Object.keys(normalized).length === 0 && disabledFields.length > 0) {
-    return { ok: false, invalidFields, disabledFields };
+    return { ok: false, normalized, invalidFields, disabledFields };
   }
-  return { ok: true, normalized, disabledFields };
+  return { ok: true, normalized, disabledFields, invalidFields: [] };
 }

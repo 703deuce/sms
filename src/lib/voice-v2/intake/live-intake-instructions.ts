@@ -28,6 +28,7 @@ export function buildVoiceV2LiveIntakeInstructions(schema: VoiceV2IntakeSchema):
     "FIELD_NOT_ENABLED from the save tool means continue booking — not failure, not callback.",
     "Once all REQUIRED_BEFORE_BOOKING fields are known (missingBeforeBooking empty), proceed immediately to voice_v2_find_availability.",
     "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND/BOOK.",
+    "For email: before voice_v2_save_intake_fields, normalize speech to user@domain.tld (convert 'at'→@, 'dot'→., remove spaces). Never send raw spoken filler like 'my email is'.",
   ];
 
   if (schema.fields.length) {
