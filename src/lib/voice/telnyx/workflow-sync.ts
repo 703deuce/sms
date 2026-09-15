@@ -8,6 +8,11 @@ import { buildAmyConversationWorkflow } from "./conversation-workflow";
 import { ensureTransovoSharedWorkflowTools } from "./shared-tools";
 import { getAgentRagBucketIds } from "../knowledge-processor";
 import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
+import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  mergeVoiceV2ToolIds,
+  resolveVoiceV2SharedToolIds,
+} from "./voice-v2-shared-tools";
 
 export async function syncConversationWorkflowToTelnyx(input: {
   assistantId: string;
@@ -31,12 +36,18 @@ export async function syncConversationWorkflowToTelnyx(input: {
   const retrievalId = null;
 
   const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(input.config);
+  const v2PstnLiveBooking = isVoiceV2PstnLiveBookingMode(input.config);
+  const v2Shared = v2PstnLiveBooking ? await resolveVoiceV2SharedToolIds() : null;
 
   const conversation_flow = buildAmyConversationWorkflow(
     {
       sendResource: shared.sendResourceId,
       searchDetails: shared.searchDetailsId,
-      voiceAiBooking: canonicalBooking ? shared.voiceAiBookingId : null,
+      voiceAiBooking:
+        canonicalBooking && !v2PstnLiveBooking ? shared.voiceAiBookingId : null,
+      voiceV2Find: v2Shared?.findId ?? null,
+      voiceV2Book: v2Shared?.bookId ?? null,
+      voiceV2SaveIntake: v2Shared?.saveIntakeId ?? null,
       hangup: shared.hangupId,
       transfer: shared.transferId,
       retrieval: retrievalId,
@@ -44,13 +55,16 @@ export async function syncConversationWorkflowToTelnyx(input: {
     input.config,
   );
 
-  const tool_ids = [
+  let tool_ids = [
     shared.sendResourceId,
     shared.searchDetailsId,
-    ...(canonicalBooking ? [shared.voiceAiBookingId] : []),
+    ...(canonicalBooking && !v2PstnLiveBooking ? [shared.voiceAiBookingId] : []),
     shared.hangupId,
     shared.transferId,
   ].filter(Boolean) as string[];
+  if (v2Shared) {
+    tool_ids = mergeVoiceV2ToolIds(tool_ids, v2Shared);
+  }
 
   try {
     await ai.updateAssistant(input.assistantId, {

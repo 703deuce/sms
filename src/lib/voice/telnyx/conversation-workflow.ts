@@ -5,6 +5,7 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { isAfterHoursVoiceProfile } from "@/lib/voice/runtime/voice-profile";
 import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
+import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
 import {
   expressionEdgeCondition,
   exprVarEqualsBool,
@@ -26,6 +27,9 @@ export type WorkflowSharedToolIds = {
   sendResource?: string | null;
   searchDetails?: string | null;
   voiceAiBooking?: string | null;
+  voiceV2Find?: string | null;
+  voiceV2Book?: string | null;
+  voiceV2SaveIntake?: string | null;
   hangup?: string | null;
   transfer?: string | null;
   retrieval?: string | null;
@@ -68,6 +72,21 @@ const LIVE_BOOKING_INSTRUCTIONS = [
   "If the tool suggests fallback, offer a booking link by text only with consent.",
 ].join(" ");
 
+const V2_PSTN_GENERAL_APPEND = [
+  "For scheduling: you CAN book on the live Microsoft calendar on this call.",
+  "When the caller wants an appointment, move to Live Booking immediately.",
+  "Use voice_v2_save_intake_fields for caller details, then voice_v2_find_availability, then voice_v2_book_offered_slot.",
+  "Do not say live booking is unavailable on this call. Do not default to callback unless a tool truly fails.",
+].join(" ");
+
+const LIVE_BOOKING_V2_INSTRUCTIONS = [
+  "Live Voice V2 booking on this call.",
+  "Save intake with voice_v2_save_intake_fields when the caller provides configured fields.",
+  "Call voice_v2_find_availability with requested_date and time_window.",
+  "When they pick a slot, call voice_v2_book_offered_slot with offer_set_id and selected_slot_id only.",
+  "Only confirm booked after BOOKING_CONFIRMED. Never call voice_ai_booking_turn.",
+].join(" ");
+
 const DETAILED_LOOKUP_INSTRUCTIONS = [
   "The caller needs detailed or long-tail business/product information not covered in the base prompt.",
   "Use search_business_details with their question.",
@@ -105,11 +124,18 @@ export function buildAmyConversationWorkflow(
   const wizard = wizardFromConfig(config);
   const afterHours = wizard ? isAfterHoursVoiceProfile(wizard) : false;
   const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(config);
-  const generalInstructions = canonicalBooking
-    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${CANONICAL_BOOKING_GENERAL_APPEND}`
-    : afterHours
-      ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${AFTER_HOURS_GENERAL_APPEND}`
-      : "Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs.";
+  const v2PstnLiveBooking = isVoiceV2PstnLiveBookingMode(config);
+  const v2LiveToolsReady = Boolean(
+    toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake,
+  );
+  const liveBookingPath = v2PstnLiveBooking && v2LiveToolsReady;
+  const generalInstructions = liveBookingPath
+    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${V2_PSTN_GENERAL_APPEND}`
+    : canonicalBooking
+      ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${CANONICAL_BOOKING_GENERAL_APPEND}`
+      : afterHours
+        ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${AFTER_HOURS_GENERAL_APPEND}`
+        : "Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs.";
   const actionInstructions = afterHours ? AFTER_HOURS_ACTION_INSTRUCTIONS : ACTION_INSTRUCTIONS;
   const actionEdgeLlm = afterHours
     ? "The caller clearly agreed to receive a text message with a booking, quote, financing, or directions link (yes to SMS)."
@@ -138,20 +164,37 @@ export function buildAmyConversationWorkflow(
       tools_mode: "replace",
       position: { x: 360, y: 40 },
     },
-    ...(canonicalBooking && toolIds.voiceAiBooking
+    ...(liveBookingPath
       ? [
           {
             id: WORKFLOW_NODE_IDS.LIVE_BOOKING,
             name: "Live Booking",
             type: "prompt",
             instructions_mode: "append",
-            instructions: LIVE_BOOKING_INSTRUCTIONS,
-            shared_tool_ids: [toolIds.voiceAiBooking],
+            instructions: LIVE_BOOKING_V2_INSTRUCTIONS,
+            shared_tool_ids: [
+              toolIds.voiceV2SaveIntake,
+              toolIds.voiceV2Find,
+              toolIds.voiceV2Book,
+            ].filter(Boolean),
             tools_mode: "replace",
             position: { x: 360, y: 120 },
           },
         ]
-      : []),
+      : canonicalBooking && toolIds.voiceAiBooking
+        ? [
+            {
+              id: WORKFLOW_NODE_IDS.LIVE_BOOKING,
+              name: "Live Booking",
+              type: "prompt",
+              instructions_mode: "append",
+              instructions: LIVE_BOOKING_INSTRUCTIONS,
+              shared_tool_ids: [toolIds.voiceAiBooking],
+              tools_mode: "replace",
+              position: { x: 360, y: 120 },
+            },
+          ]
+        : []),
     {
       id: WORKFLOW_NODE_IDS.DETAILED_LOOKUP,
       name: "Detailed Lookup",
@@ -198,7 +241,7 @@ export function buildAmyConversationWorkflow(
   ];
 
   const edges: Record<string, unknown>[] = [
-    ...(canonicalBooking && toolIds.voiceAiBooking
+    ...((liveBookingPath || (canonicalBooking && toolIds.voiceAiBooking))
       ? [
           {
             id: "e_general_live_booking",
@@ -322,6 +365,13 @@ export function workflowNodeExpectedTools(
     case WORKFLOW_NODE_IDS.ACTION:
       return toolIds.sendResource ? ["send_resource"] : [];
     case WORKFLOW_NODE_IDS.LIVE_BOOKING:
+      if (toolIds.voiceV2Find && toolIds.voiceV2Book) {
+        return [
+          ...(toolIds.voiceV2SaveIntake ? ["voice_v2_save_intake_fields"] : []),
+          "voice_v2_find_availability",
+          "voice_v2_book_offered_slot",
+        ];
+      }
       return toolIds.voiceAiBooking ? ["voice_ai_booking_turn"] : [];
     case WORKFLOW_NODE_IDS.DETAILED_LOOKUP:
       return [
