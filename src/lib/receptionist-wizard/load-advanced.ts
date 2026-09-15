@@ -34,6 +34,7 @@ function mergeAdvanced(
     intents: patch.intents ?? base.intents,
     decisionRules: patch.decisionRules ?? base.decisionRules,
     voiceV2Intake: patch.voiceV2Intake ?? base.voiceV2Intake,
+    voiceV2PstnLiveBooking: patch.voiceV2PstnLiveBooking ?? base.voiceV2PstnLiveBooking,
   };
 }
 

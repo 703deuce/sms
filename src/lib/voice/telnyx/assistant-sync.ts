@@ -539,6 +539,24 @@ export async function syncTelnyxAssistant(
           workflowNodes: workflowResult.workflowNodes,
         };
       }
+      const { isVoiceV2PstnLiveBookingMode } = await import("@/lib/voice-v2/pstn-workflow-mode");
+      if (
+        isVoiceV2PstnLiveBookingMode(config) ||
+        workflowResult.capabilityMismatch
+      ) {
+        return {
+          ok: false as const,
+          label: "conversation_workflow",
+          remoteToolCount: 0,
+          remoteTypes: [],
+          hasTransfer: false,
+          hasWebhook: false,
+          error:
+            workflowResult.capabilityMismatch ||
+            workflowResult.error ||
+            "voice_v2_workflow_sync_failed",
+        };
+      }
       console.warn(
         "[assistant-sync] conversation workflow push failed — falling back to inline tools",
         workflowResult.error,

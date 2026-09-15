@@ -350,6 +350,10 @@ export function applyCompiledToVoiceConfig(
     },
     advanced: {
       ...(mergedAdvanced as object),
+      voiceV2PstnLiveBooking: snapshot.capabilities.includes("book_appointments")
+        ? mergedAdvanced?.voiceV2PstnLiveBooking !== false
+        : mergedAdvanced?.voiceV2PstnLiveBooking === true,
+      conversationWorkflowMode: mergedAdvanced?.conversationWorkflowMode ?? true,
       livekitProfile: snapshot.livekitProfile,
       realtimeModel: snapshot.realtimeModel,
       realtimeOutputMode: snapshot.realtimeOutputMode,

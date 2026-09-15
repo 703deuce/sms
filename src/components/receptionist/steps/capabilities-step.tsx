@@ -288,7 +288,21 @@ export function CapabilitiesStep({
                 onCalendarConnectedChange={setCalendarConnected}
               />
             </div>
-            <div className="mt-5">
+            <div className="mt-5 space-y-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={advanced.voiceV2PstnLiveBooking !== false}
+                  onChange={(e) =>
+                    patchAdvanced({ voiceV2PstnLiveBooking: e.target.checked })
+                  }
+                />
+                Live Voice V2 booking on calls (save intake + find + book on calendar)
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Independent of after-hours greeting. When enabled, every publish syncs V2 tools to
+                Telnyx. Callback is fallback only.
+              </p>
               <VoiceV2IntakeWizardSection
                 value={advanced.voiceV2Intake}
                 onChange={(voiceV2Intake: VoiceV2IntakeWizardConfig) =>

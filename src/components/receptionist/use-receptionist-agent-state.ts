@@ -140,6 +140,7 @@ export function useReceptionistAgentState(agentId: string) {
         fallbackPolicy: nextAdvanced.fallbackPolicy,
         notifications: nextAdvanced.notifications,
         voiceV2Intake: nextAdvanced.voiceV2Intake,
+        voiceV2PstnLiveBooking: nextAdvanced.voiceV2PstnLiveBooking,
         receptionistWizard: {
           agentName: next.agentName,
           businessName: next.businessName,

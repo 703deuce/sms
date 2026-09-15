@@ -48,6 +48,22 @@ async function main() {
   });
   if (!agent?.telnyxAssistantId) throw new Error("assistant missing");
 
+  const draft = parseVoiceAgentConfig(agent.draftConfig) || {};
+  const advanced = {
+    ...((draft.advanced || {}) as Record<string, unknown>),
+    conversationWorkflowMode: true,
+    voiceV2PstnLiveBooking: true,
+  };
+  await prisma.voiceAgent.update({
+    where: { id: agent.id },
+    data: {
+      draftConfig: {
+        ...draft,
+        advanced,
+      } as object,
+    },
+  });
+
   await restoreAmyTelnyxWorkflowWithV2();
 
   const remote = await ai.getAssistant(agent.telnyxAssistantId);

@@ -74,9 +74,10 @@ const LIVE_BOOKING_INSTRUCTIONS = [
 
 const V2_PSTN_GENERAL_APPEND = [
   "For scheduling: you CAN book on the live Microsoft calendar on this call.",
-  "When the caller wants an appointment, move to Live Booking immediately.",
+  "When the caller wants an appointment, move to Live Booking immediately — never say you do not have live booking on this call.",
   "Use voice_v2_save_intake_fields for caller details, then voice_v2_find_availability, then voice_v2_book_offered_slot.",
-  "Do not say live booking is unavailable on this call. Do not default to callback unless a tool truly fails.",
+  "After-hours affects greeting and escalation only; it does not disable live V2 booking when this capability is enabled.",
+  "Callback or text link is fallback only after a tool failure or if the caller declines live scheduling.",
 ].join(" ");
 
 const LIVE_BOOKING_V2_INSTRUCTIONS = [

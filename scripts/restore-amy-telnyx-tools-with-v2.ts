@@ -22,6 +22,17 @@ export async function restoreAmyTelnyxWorkflowWithV2() {
 
   const runtime = await loadVoiceAgentRuntimeConfig(WORKSPACE_ID, AGENT_ID);
   const config = parseVoiceAgentConfig(runtime || agent.draftConfig);
+  const draftAdv = (parseVoiceAgentConfig(agent.draftConfig).advanced || {}) as Record<
+    string,
+    unknown
+  >;
+  if (draftAdv.voiceV2PstnLiveBooking === true) {
+    config.advanced = {
+      ...((config.advanced || {}) as Record<string, unknown>),
+      voiceV2PstnLiveBooking: true,
+      conversationWorkflowMode: true,
+    };
+  }
   const synced = await syncConversationWorkflowToTelnyx({
     assistantId: agent.telnyxAssistantId,
     workspaceId: WORKSPACE_ID,

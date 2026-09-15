@@ -102,6 +102,8 @@ export type ReceptionistAdvancedSettings = {
   };
   /** Voice V2 booking intake (Step 1) — persisted to agent advanced.voiceV2Intake */
   voiceV2Intake?: VoiceV2IntakeWizardConfig;
+  /** Authoritative: live V2 save/find/book on Telnyx workflow (independent of after-hours greeting). */
+  voiceV2PstnLiveBooking?: boolean;
 };
 
 export const RECEPTIONIST_ADVANCED_KEY = "receptionistAdvanced";

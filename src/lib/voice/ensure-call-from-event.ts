@@ -350,6 +350,22 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
       runtimeProvider: "telnyx",
     });
     if (fp) voiceConfigFingerprint = fp as unknown as Record<string, unknown>;
+    const ver = await prisma.voiceAgentVersion.findFirst({
+      where: { id: agentVersionId, workspaceId },
+      select: { config: true },
+    });
+    if (ver?.config) {
+      const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
+      const { buildVoiceV2CallCapabilitySnapshot } = await import(
+        "@/lib/voice-v2/workflow-capability"
+      );
+      voiceConfigFingerprint = {
+        ...(voiceConfigFingerprint || {}),
+        voiceV2Capability: buildVoiceV2CallCapabilitySnapshot(
+          parseVoiceAgentConfig(ver.config),
+        ),
+      };
+    }
   }
   if (fromE164 && fromE164 !== "unknown") {
     const {
