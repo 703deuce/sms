@@ -181,6 +181,18 @@ PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transpo
 
 **Known TeXML-direct failure mode:** Telnyx may invoke `get_runtime_context` before a `VoiceCall` row exists (only hangup status_callback created the call). Fix: `ensureVoiceCallForToolWebhook` on `/api/telnyx/voice/tools` + early TeXML lifecycle — see PR #102.
 
+## Voice Booking V2 — known-good baseline (locked)
+
+**Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
+
+Do **not** modify FIND/BOOK, Microsoft datetime adapter, offer-set logic, Telnyx V2 tool schema, or booking confirmation behavior without re-certifying PSTN find+book.
+
+**Regression:** FIND ~1–3s · Amy receives slots · one Graph 201 · correct TZ · Amy confirms after provider success · `voice_ai_booking_turn` = 0.
+
+**Linkage/CRM/audit:** observer **after** BOOK success only — never on the FIND/BOOK critical path (Step 0.5 sync linkage is reverted and must not return).
+
+Certify: `npx tsx scripts/certify-voice-v2-known-good-baseline.ts`
+
 ## Caller Amy pre-production suite (run before deploy)
 
 ```bash
