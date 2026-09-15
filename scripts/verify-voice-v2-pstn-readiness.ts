@@ -29,11 +29,16 @@ async function resolveV2SharedTool(): Promise<{
   if (!row?.id) return null;
   const shared = await ai.getSharedTool(row.id);
   const data = (shared as { data?: Record<string, unknown> }).data || shared;
-  const webhook = (data as Record<string, unknown>).webhook as Record<string, unknown>;
-  const params = (webhook?.body_parameters || {}) as Record<string, unknown>;
+  const record = data as Record<string, unknown>;
+  const toolDef = (record.tool_definition || record.webhook || record) as Record<string, unknown>;
+  const params = (toolDef?.body_parameters || record.body_parameters || {}) as Record<
+    string,
+    unknown
+  >;
+  const url = String(toolDef?.url || record.url || "");
   return {
     id: row.id,
-    webhookUrl: String(webhook?.url || ""),
+    webhookUrl: url,
     props: (params.properties || {}) as Record<string, unknown>,
   };
 }
