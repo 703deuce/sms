@@ -1,5 +1,12 @@
 import "server-only";
 
+export {
+  formatInstantAsGraphLocalWallDateTime,
+  isUtcTimeZoneId,
+  resolveMicrosoftGraphTimeZoneId,
+  toMicrosoftDateTimeTimeZone,
+} from "./graph-datetime-timezone";
+
 /** Microsoft Graph v1.0 base URL. */
 export const MICROSOFT_GRAPH_V1 = "https://graph.microsoft.com/v1.0";
 
@@ -57,18 +64,6 @@ export function outlookEventSubscriptionExpiration(fromMs = Date.now()): string 
   const bufferMinutes = 15;
   const lifetimeMs = (OUTLOOK_EVENT_SUBSCRIPTION_MAX_MINUTES - bufferMinutes) * 60_000;
   return new Date(fromMs + lifetimeMs).toISOString();
-}
-
-/**
- * Format a point in time for Graph dateTimeTimeZone (no offset suffix; timeZone is separate).
- * @see https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone
- */
-export function toMicrosoftDateTimeTimeZone(
-  date: Date,
-  timeZone = "UTC",
-): { dateTime: string; timeZone: string } {
-  const dateTime = date.toISOString().replace(/\.\d{3}Z$/, "");
-  return { dateTime, timeZone };
 }
 
 /** Parse Graph dateTime values returned with Prefer: outlook.timezone="UTC". */
