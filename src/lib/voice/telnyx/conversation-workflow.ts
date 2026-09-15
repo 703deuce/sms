@@ -62,7 +62,7 @@ const CANONICAL_BOOKING_GENERAL_APPEND = [
 
 const LIVE_BOOKING_INSTRUCTIONS = [
   "The caller wants to schedule, check availability, or confirm an appointment time on the live calendar.",
-  "Call voice_ai_booking_turn once with utterance = their latest words (verbatim).",
+  "Call voice_ai_booking_turn with structured action fields (FIND_AVAILABILITY, BOOK_OFFERED_SLOT, etc.) — you interpret the caller; do not pass raw utterance for semantics.",
   "Use confirm_booking true only after they clearly agree to a specific offered time.",
   "Speak naturally from the tool response — never invent times or claim booked without tool success.",
   "If the tool suggests fallback, offer a booking link by text only with consent.",

@@ -856,6 +856,10 @@ export async function executeBuiltinVoiceAction(input: {
       const { resolveVoiceBookingToolForCall } = await import(
         "@/lib/voice/ai-booking/resolve-voice-booking-tool"
       );
+      const { parseVoiceNativeBookingPayload } = await import(
+        "@/lib/voice/ai-booking/voice-native-booking-types"
+      );
+      const nativeParsed = parseVoiceNativeBookingPayload(args as Record<string, unknown>);
       return resolveVoiceBookingToolForCall({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
@@ -863,6 +867,7 @@ export async function executeBuiltinVoiceAction(input: {
         utterance: String(args.utterance || args.user_input || args.caller_message || ""),
         confirmBooking: args.confirm_booking === true || args.confirm === true,
         offeredSlotId: args.offered_slot_id ? String(args.offered_slot_id) : null,
+        voiceNative: nativeParsed.ok ? nativeParsed.payload : null,
         externalInvocationId: args.tool_invocation_id
           ? String(args.tool_invocation_id)
           : args.invocation_id

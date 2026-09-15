@@ -32,6 +32,11 @@ export async function processVoiceAiBookingTurnOperation(
   const utterance = String(input.utterance || "");
   const confirmBooking = input.confirmBooking === true;
   const offeredSlotId = input.offeredSlotId ? String(input.offeredSlotId) : null;
+  const voiceNativeRaw = input.voiceNative;
+  const voiceNative =
+    voiceNativeRaw && typeof voiceNativeRaw === "object"
+      ? (voiceNativeRaw as Record<string, unknown>)
+      : null;
   const expectedActionEpoch =
     input.actionEpochAtEnqueue != null ? Number(input.actionEpochAtEnqueue) : null;
 
@@ -39,7 +44,12 @@ export async function processVoiceAiBookingTurnOperation(
     throw new Error("voice_ai_booking_turn_missing_callId");
   }
 
-  if (confirmBooking || offeredSlotId) {
+  const bookingWrite =
+    confirmBooking ||
+    offeredSlotId ||
+    voiceNative?.action === "BOOK_OFFERED_SLOT" ||
+    voiceNative?.action === "SELECT_OFFERED_SLOT";
+  if (bookingWrite) {
     const gate = await assertVoiceBookingWriteNotStale({
       voiceCallId: callId,
       expectedActionEpoch,
@@ -111,6 +121,10 @@ export async function processVoiceAiBookingTurnOperation(
   }
 
   const { executeVoiceAiBookingTurn } = await import("@/lib/voice/ai-booking/voice-booking-turn");
+  const { parseVoiceNativeBookingPayload } = await import(
+    "@/lib/voice/ai-booking/voice-native-booking-types"
+  );
+  const parsedNative = voiceNative ? parseVoiceNativeBookingPayload(voiceNative) : null;
   const result = await withTimeout(
     executeVoiceAiBookingTurn({
       workspaceId,
@@ -119,9 +133,11 @@ export async function processVoiceAiBookingTurnOperation(
       utterance,
       confirmBooking,
       offeredSlotId,
+      voiceNative: parsedNative?.ok ? parsedNative.payload : null,
+      actionEpochAtEnqueue: expectedActionEpoch,
     }),
     MCTB_DURABLE_DEEPSEEK_ATTEMPT_TIMEOUT_MS,
-    "deepseek_voice_booking_turn",
+    "voice_native_booking_turn",
   );
 
   await appendOperationTrace(operation.id, "CUSTOMER_RESULT_DELIVERED", {

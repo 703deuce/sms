@@ -1,3 +1,4 @@
+import { createId } from "@/lib/supabase/id";
 import type { MctbAiBookingSession, MctbBookingSlot } from "@/lib/mctb/ai-booking/types";
 import { prismaMctbAiBookingSessionStore } from "@/lib/mctb/ai-booking/session-store-prisma";
 
@@ -40,10 +41,12 @@ export async function recordOfferedSlots(input: {
   window?: { startUtc: string; endUtc: string };
   stage?: MctbAiBookingSession["stage"];
 }) {
+  const offerSetId = `offer_${createId()}`;
   const session: MctbAiBookingSession = {
     conversationId: input.conversationId,
     workspaceId: input.workspaceId,
     provider: input.provider,
+    offerSetId,
     bookingTimezone: input.bookingTimezone,
     stage: input.stage || "AWAITING_SLOT_SELECTION",
     offeredSlots: input.slots,

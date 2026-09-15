@@ -12,9 +12,13 @@ export function buildVoiceOperationIdempotencyKey(input: {
   offeredSlotId?: string | null;
   confirmBooking?: boolean;
   externalInvocationId?: string | null;
+  voiceActionDigest?: string | null;
 }): string {
   if (input.externalInvocationId?.trim()) {
     return `voice-op:${input.voiceCallId}:${input.externalInvocationId.trim()}`;
+  }
+  if (input.voiceActionDigest?.trim()) {
+    return `voice-op:${input.voiceCallId}:${input.voiceActionDigest.trim()}`;
   }
   const payload = [
     input.operationType,

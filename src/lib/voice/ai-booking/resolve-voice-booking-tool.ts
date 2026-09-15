@@ -16,6 +16,7 @@ import {
   voiceBookingResponseFromDurableTurn,
   formatVoiceAiBookingToolResponse,
 } from "@/lib/voice/ai-booking/tool-result-contract";
+import type { VoiceNativeBookingPayload } from "@/lib/voice/ai-booking/voice-native-booking-types";
 
 /**
  * Runtime-owned voice booking tool resolution.
@@ -25,9 +26,10 @@ export async function resolveVoiceBookingToolForCall(input: {
   workspaceId: string;
   agentId?: string | null;
   callId: string;
-  utterance: string;
+  utterance?: string;
   confirmBooking?: boolean;
   offeredSlotId?: string | null;
+  voiceNative?: VoiceNativeBookingPayload | null;
   externalInvocationId?: string | null;
   actionEpochAtEnqueue?: number | null;
   telnyxConversationId?: string | null;
@@ -50,6 +52,20 @@ export async function resolveVoiceBookingToolForCall(input: {
         data: (delivered.operation.resultJson || {}) as Record<string, unknown>,
       });
     }
+  }
+
+  if (
+    !input.voiceNative &&
+    !(input.utterance?.trim()) &&
+    process.env.VOICE_LEGACY_UTTERANCE_BOOKING !== "1"
+  ) {
+    return formatVoiceAiBookingToolResponse({
+      status: "NEEDS_CLARIFICATION",
+      speak: "I need a structured booking action to check the calendar.",
+      ok: false,
+      error: "voice_native_structured_action_required",
+      data: { needs_structured_action: true },
+    });
   }
 
   if (active && isOperationInFlight(active.status)) {
@@ -80,6 +96,7 @@ export async function resolveVoiceBookingToolForCall(input: {
     utterance: input.utterance,
     confirmBooking: input.confirmBooking,
     offeredSlotId: input.offeredSlotId,
+    voiceNative: input.voiceNative,
     externalInvocationId: input.externalInvocationId,
     actionEpochAtEnqueue: input.actionEpochAtEnqueue,
   });

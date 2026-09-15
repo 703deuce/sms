@@ -129,6 +129,8 @@ export type MctbAiBookingSession = {
   conversationId: string;
   workspaceId: string;
   provider: MctbAiBookingProviderId;
+  /** Voice/text offer set handle — slot ids are valid only within this set. */
+  offerSetId?: string | null;
   /** Canonical booking timezone for this session (must match all offered slots). */
   bookingTimezone?: string;
   stage?: MctbAiBookingSessionStage;

@@ -21,12 +21,13 @@ function rowToSession(row: {
     : [];
   const scheduling =
     row.schedulingTargetJson && typeof row.schedulingTargetJson === "object"
-      ? (row.schedulingTargetJson as { bookingTimezone?: string })
+      ? (row.schedulingTargetJson as { bookingTimezone?: string; offerSetId?: string })
       : {};
   return {
     conversationId: row.conversationId,
     workspaceId: row.workspaceId,
     provider: (row.provider as MctbAiBookingSession["provider"]) || "microsoft",
+    offerSetId: scheduling.offerSetId ?? null,
     bookingTimezone: scheduling.bookingTimezone,
     offeredSlots: offered,
     lastQueriedWindow:
@@ -69,9 +70,10 @@ export const prismaMctbAiBookingSessionStore: MctbAiBookingSessionStore = {
         provider: session.provider,
         offeredSlotsJson: session.offeredSlots,
         requestedWindowJson: session.lastQueriedWindow ?? undefined,
-        schedulingTargetJson: session.bookingTimezone
-          ? { bookingTimezone: session.bookingTimezone }
-          : undefined,
+        schedulingTargetJson: {
+          ...(session.bookingTimezone ? { bookingTimezone: session.bookingTimezone } : {}),
+          ...(session.offerSetId ? { offerSetId: session.offerSetId } : {}),
+        },
         selectedSlotJson: session.pendingSlotId
           ? session.offeredSlots.find((s) => s.slotId === session.pendingSlotId)
           : undefined,
@@ -82,9 +84,10 @@ export const prismaMctbAiBookingSessionStore: MctbAiBookingSessionStore = {
         provider: session.provider,
         offeredSlotsJson: session.offeredSlots,
         requestedWindowJson: session.lastQueriedWindow ?? undefined,
-        schedulingTargetJson: session.bookingTimezone
-          ? { bookingTimezone: session.bookingTimezone }
-          : undefined,
+        schedulingTargetJson: {
+          ...(session.bookingTimezone ? { bookingTimezone: session.bookingTimezone } : {}),
+          ...(session.offerSetId ? { offerSetId: session.offerSetId } : {}),
+        },
         selectedSlotJson: session.pendingSlotId
           ? session.offeredSlots.find((s) => s.slotId === session.pendingSlotId)
           : undefined,

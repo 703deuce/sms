@@ -849,26 +849,38 @@ export const BUILTIN_WEBHOOK_BODIES: Record<
     name: "voice_ai_booking_turn",
     toolType: "voice_ai_booking_turn",
     description:
-      "Pass the caller's scheduling words; runtime checks Microsoft/Calendly availability and books canonical offered slots. Do not parse slot ordinals in tool args — pass utterance only.",
+      "Voice-native structured booking. YOU interpret the caller; send typed actions only. Runtime validates and calls Microsoft/Calendly. Never send raw utterance for semantics.",
     body: {
       type: "object",
       properties: {
-        utterance: { type: "string", description: "Caller words verbatim" },
-        confirm_booking: {
-          type: "boolean",
-          description: "True only after explicit verbal confirmation to book",
-        },
-        offered_slot_id: {
+        action: {
           type: "string",
-          description: "Optional canonical slot id when model resolved selection",
+          enum: [
+            "FIND_AVAILABILITY",
+            "SELECT_OFFERED_SLOT",
+            "BOOK_OFFERED_SLOT",
+            "CHANGE_AVAILABILITY_REQUEST",
+            "CANCEL_BOOKING_FLOW",
+          ],
         },
-        operation_id: {
+        requested_date: { type: "string", description: "Business-local YYYY-MM-DD" },
+        specific_local_time: { type: "string", description: "Business-local HH:mm (24h)" },
+        time_window_start: { type: "string" },
+        time_window_end: { type: "string" },
+        daypart: { type: "string", enum: ["MORNING", "AFTERNOON", "EVENING"] },
+        time_relation: { type: "string", enum: ["AT", "AFTER", "BEFORE", "AROUND"] },
+        offer_set_id: {
           type: "string",
-          description:
-            "When set, check durable operation status instead of starting new work (async voice booking).",
+          description: "From AVAILABILITY_FOUND — required when selecting/booking offered slots",
         },
+        selected_slot_id: {
+          type: "string",
+          description: "Canonical slot_id from the active offer set only",
+        },
+        confirm_booking: { type: "boolean" },
+        tool_invocation_id: { type: "string", description: "Unique id for idempotent retries" },
       },
-      required: ["utterance"],
+      required: ["action"],
     },
   },
   check_voice_operation: {

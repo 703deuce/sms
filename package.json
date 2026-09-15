@@ -102,6 +102,7 @@
     "test:voice-durable-operation-certification": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-durable-operation-certification.ts",
     "test:voice-durable-worker-readiness": "tsx scripts/test-voice-durable-worker-readiness.ts",
     "test:voice-durable-deployed-worker-certification": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-durable-deployed-worker-certification.ts",
+    "test:voice-native-ai-booking-certification": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-native-ai-booking-certification.ts",
     "test:mctb-pipeline-trace": "tsx scripts/test-mctb-pipeline-trace.ts",
     "test:video-pipeline-trace": "tsx scripts/test-video-pipeline-trace.ts",
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",

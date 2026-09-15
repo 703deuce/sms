@@ -48,7 +48,7 @@ export function formatVoiceAiBookingToolResponse(input: {
     (input.status === "OPERATION_PENDING"
       ? "Voice runtime owns this operation. Do not poll tools. Wait for authoritative availability injection or continue natural conversation."
       : input.status === "AVAILABILITY_FOUND"
-        ? "Speak the offered times exactly as in speak and slots. Ask which time works. When the caller chooses, call voice_ai_booking_turn with offered_slot_id from slots."
+        ? "Speak the offered times exactly as in speak and slots. When the caller chooses, call voice_ai_booking_turn with action BOOK_OFFERED_SLOT, offer_set_id, and selected_slot_id from the returned slots. Do not pass raw caller utterance."
         : null);
 
   return {
