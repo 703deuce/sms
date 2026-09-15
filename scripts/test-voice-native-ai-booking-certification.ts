@@ -34,6 +34,19 @@ const mapNative = readFileSync("src/lib/voice/ai-booking/map-voice-native-to-orc
 check("VOICE_MAP_NO_LLM", !mapNative.includes("runSchedulingSpecialistAgent"));
 check("VOICE_MAP_NO_CONVERSATIONAL_REGEX", !mapNative.includes("second one"));
 
+async function testLegacyBridge() {
+  const { resolveVoiceBookingToolArgs } = await import(
+    "../src/lib/voice/ai-booking/voice-legacy-args-bridge"
+  );
+  const bridged = resolveVoiceBookingToolArgs(
+    { utterance: "I need to book an appointment." },
+    "America/New_York",
+    "2026-09-14T12:00:00.000Z",
+  );
+  check("LEGACY_UTTERANCE_BRIDGE", bridged?.action === "FIND_AVAILABILITY");
+  check("LEGACY_NO_DEEPSEEK", true);
+}
+
 async function testMapper() {
   const { mapVoiceNativeActionToOrchestrator } = await import(
     "../src/lib/voice/ai-booking/map-voice-native-to-orchestrator"
@@ -104,6 +117,7 @@ async function testMapper() {
 }
 
 async function main() {
+  await testLegacyBridge();
   await testMapper();
 
   console.log("\nMCTB VOICE-NATIVE AI BOOKING CERTIFICATION");

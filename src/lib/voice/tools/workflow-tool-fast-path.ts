@@ -151,15 +151,17 @@ export async function handleWorkflowToolFastPath(input: {
       result.voice_booking_status === "OPERATION_PENDING" ||
       (result.data as Record<string, unknown> | undefined)?.processing === true;
     const opSucceeded = result.ok !== false && !processing;
+    const pendingOk = processing && result.ok !== false;
     const latencyMs = Date.now() - start;
     if (execution) {
       await prisma.voiceToolExecution
         .update({
           where: { id: execution.id },
           data: {
-            status: opSucceeded ? "completed" : "failed",
+            status: opSucceeded || pendingOk ? "completed" : "failed",
             output: result as object,
-            errorMessage: opSucceeded ? null : String(result.error || result.result || "failed"),
+            errorMessage:
+              opSucceeded || pendingOk ? null : String(result.error || result.result || "failed"),
             latencyMs,
             completedAt: new Date(),
           },

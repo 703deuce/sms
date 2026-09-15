@@ -37,18 +37,7 @@ export async function startVoiceAiBookingDurableOperation(input: {
     };
   }
 
-  const { evaluateMctbAiBookingReadiness } = await import("@/lib/mctb/ai-booking/readiness");
-  const readiness = await evaluateMctbAiBookingReadiness(input.workspaceId);
-  if (!readiness.ready) {
-    return {
-      ok: false,
-      status: "FAILED_TERMINAL",
-      operationId: "",
-      speak:
-        "I'm not able to check live calendar availability on this call right now. I can take your preferred time and have someone call you back to confirm.",
-      error: `ai_booking_not_ready:${readiness.reason || "not_ready"}`,
-    };
-  }
+  // Readiness + Microsoft checks run in the worker — HTTP must ACK quickly for Telnyx.
 
   const idempotencyKey = buildVoiceOperationIdempotencyKey({
     voiceCallId: input.callId,
@@ -65,11 +54,6 @@ export async function startVoiceAiBookingDurableOperation(input: {
   const { persistVoiceAiBookingOperationAudit } = await import(
     "@/lib/voice/ai-booking/operation-audit"
   );
-  const { resolveMctbMicrosoftConnectionId } = await import(
-    "@/lib/mctb/ai-booking/microsoft-connection"
-  );
-  const microsoftConnectionId = await resolveMctbMicrosoftConnectionId(input.workspaceId);
-
   const { operation } = await createOrResolveDurableOperation({
     workspaceId: input.workspaceId,
     conversationId,
@@ -96,7 +80,7 @@ export async function startVoiceAiBookingDurableOperation(input: {
     callId: input.callId,
     voiceAgentId: input.agentId,
     operationId: operation.id,
-    microsoftConnectionId,
+    microsoftConnectionId: null,
     utterance: input.utterance || input.voiceNative?.action || "",
     phase: "VOICE_OPERATION_ACCEPTED",
     status: "PROCESSING",

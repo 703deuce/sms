@@ -856,10 +856,18 @@ export async function executeBuiltinVoiceAction(input: {
       const { resolveVoiceBookingToolForCall } = await import(
         "@/lib/voice/ai-booking/resolve-voice-booking-tool"
       );
-      const { parseVoiceNativeBookingPayload } = await import(
-        "@/lib/voice/ai-booking/voice-native-booking-types"
+      const { resolveCanonicalBookingTimezone } = await import(
+        "@/lib/mctb/ai-booking/booking-timezone"
       );
-      const nativeParsed = parseVoiceNativeBookingPayload(args as Record<string, unknown>);
+      const { resolveVoiceBookingToolArgs } = await import(
+        "@/lib/voice/ai-booking/voice-legacy-args-bridge"
+      );
+      const bookingTimezone = await resolveCanonicalBookingTimezone(input.workspaceId);
+      const voiceNative = resolveVoiceBookingToolArgs(
+        args as Record<string, unknown>,
+        bookingTimezone,
+        new Date().toISOString(),
+      );
       return resolveVoiceBookingToolForCall({
         workspaceId: input.workspaceId,
         agentId: input.agentId,
@@ -867,7 +875,7 @@ export async function executeBuiltinVoiceAction(input: {
         utterance: String(args.utterance || args.user_input || args.caller_message || ""),
         confirmBooking: args.confirm_booking === true || args.confirm === true,
         offeredSlotId: args.offered_slot_id ? String(args.offered_slot_id) : null,
-        voiceNative: nativeParsed.ok ? nativeParsed.payload : null,
+        voiceNative,
         externalInvocationId: args.tool_invocation_id
           ? String(args.tool_invocation_id)
           : args.invocation_id

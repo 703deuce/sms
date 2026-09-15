@@ -7,7 +7,7 @@ Voice uses the **same** MCTB AI Booking orchestrator as SMS Lead Recovery.
 | Layer | SMS | Voice |
 |-------|-----|-------|
 | Conversation | SMS thread | `voice:{callId}` session id |
-| Semantic | DeepSeek scheduling specialist | `voice_ai_booking_turn` or Telnyx tools |
+| Semantic | **Voice:** Telnyx model structured `voice_ai_booking_turn` actions. **SMS:** DeepSeek scheduling specialist (unchanged). | `voice_ai_booking_turn` (voice) / MCTB text runtime |
 | Booking | `orchestrateMctbAiBooking` | **same** |
 | Provider | Microsoft / Calendly adapters | **same** |
 | Timezone | `resolveCanonicalBookingTimezone` | **same** |

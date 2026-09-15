@@ -54,14 +54,10 @@ export async function resolveVoiceBookingToolForCall(input: {
     }
   }
 
-  if (
-    !input.voiceNative &&
-    !(input.utterance?.trim()) &&
-    process.env.VOICE_LEGACY_UTTERANCE_BOOKING !== "1"
-  ) {
+  if (!input.voiceNative) {
     return formatVoiceAiBookingToolResponse({
       status: "NEEDS_CLARIFICATION",
-      speak: "I need a structured booking action to check the calendar.",
+      speak: "I need a booking action to check the calendar. One moment.",
       ok: false,
       error: "voice_native_structured_action_required",
       data: { needs_structured_action: true },

@@ -140,6 +140,26 @@ export function voiceBookingResponseFromDurableTurn(input: {
         data: innerData as Record<string, unknown>,
       });
     }
+    if (inner.error === "voice_native_structured_action_required") {
+      return formatVoiceAiBookingToolResponse({
+        status: "NEEDS_CLARIFICATION",
+        speak: String(inner.speak || input.speak),
+        ok: false,
+        operationId: input.operationId,
+        error: String(inner.error),
+        data: innerData as Record<string, unknown>,
+      });
+    }
+    if (input.error === "voice_native_structured_action_required") {
+      return formatVoiceAiBookingToolResponse({
+        status: "NEEDS_CLARIFICATION",
+        speak: input.speak,
+        ok: false,
+        operationId: input.operationId,
+        error: input.error,
+        data: input.data,
+      });
+    }
   }
 
   if (input.error?.includes("not_ready") || input.error?.includes("disconnected")) {
