@@ -11,6 +11,8 @@ import {
   VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
   VOICE_V2_TELNYX_TOOL_NAME,
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
+  VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
@@ -55,6 +57,7 @@ async function main() {
 
   const v2 = await resolveV2SharedTool(VOICE_V2_TELNYX_TOOL_NAME);
   const v2Book = await resolveV2SharedTool(VOICE_V2_BOOK_TELNYX_TOOL_NAME);
+  const v2Save = await resolveV2SharedTool(VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME);
   checks.push({
     name: "1_voice_v2_find_availability_exists",
     pass: Boolean(v2?.id),
@@ -64,6 +67,11 @@ async function main() {
     name: "1b_voice_v2_book_offered_slot_exists",
     pass: Boolean(v2Book?.id),
     detail: v2Book?.id || "missing book shared tool — run publish-voice-v2-telnyx-tool.ts",
+  });
+  checks.push({
+    name: "1c_voice_v2_save_intake_fields_exists",
+    pass: Boolean(v2Save?.id),
+    detail: v2Save?.id || "missing save-intake tool — run publish-voice-v2-telnyx-tool.ts",
   });
 
   const hasDate = Boolean(v2?.props.requested_date);
@@ -154,6 +162,21 @@ async function main() {
     detail: bookToolAttached
       ? `book tool_id ${v2Book?.id} (assistant or n_live_booking)`
       : "attach v2 book tool to assistant or n_live_booking",
+  });
+  const saveToolAttached =
+    v2Save?.id != null &&
+    (toolIds.includes(v2Save.id) || liveToolIds.includes(v2Save.id));
+  const mentionsSave =
+    instructionsText.includes(VOICE_V2_SAVE_INTAKE_TOOL_TYPE) ||
+    flowStr.includes(VOICE_V2_SAVE_INTAKE_TOOL_TYPE);
+  checks.push({
+    name: "5c_v2_save_intake_tool_attached",
+    pass: saveToolAttached && mentionsSave,
+    detail: saveToolAttached
+      ? mentionsSave
+        ? `save tool_id ${v2Save?.id}`
+        : "run enable-amy-voice-v2-pstn-test-mode.ts for intake instructions"
+      : "attach v2 save-intake tool",
   });
 
   const expectedWebhook = `${EXPECTED_APP_URL}/api/telnyx/voice-v2/find-availability`;

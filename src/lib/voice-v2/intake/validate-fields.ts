@@ -6,7 +6,11 @@ import { INTAKE_FIELD_KEYS, type IntakeFieldKey, type VoiceV2IntakeSchema } from
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type FieldValidationResult =
-  | { ok: true; normalized: Partial<Record<IntakeFieldKey, string>> }
+  | {
+      ok: true;
+      normalized: Partial<Record<IntakeFieldKey, string>>;
+      disabledFields: IntakeFieldKey[];
+    }
   | { ok: false; invalidFields: IntakeFieldKey[]; disabledFields: IntakeFieldKey[] };
 
 export function validateIntakeFieldPayload(
@@ -22,7 +26,7 @@ export function validateIntakeFieldPayload(
     const k = key as IntakeFieldKey;
     if (!INTAKE_FIELD_KEYS.includes(k)) continue;
     if (!enabled.has(k)) {
-      disabledFields.push(k);
+      if (String(value ?? "").trim()) disabledFields.push(k);
       continue;
     }
     const str = String(value ?? "").trim();
@@ -52,8 +56,11 @@ export function validateIntakeFieldPayload(
     }
   }
 
-  if (invalidFields.length || disabledFields.length) {
+  if (invalidFields.length) {
     return { ok: false, invalidFields, disabledFields };
   }
-  return { ok: true, normalized };
+  if (Object.keys(normalized).length === 0 && disabledFields.length > 0) {
+    return { ok: false, invalidFields, disabledFields };
+  }
+  return { ok: true, normalized, disabledFields };
 }
