@@ -36,13 +36,15 @@ async function main() {
     ) {
       console.log(
         JSON.stringify({
-          BOOK_REGRESSION_STATUS: "PREEXISTING_ENVIRONMENT_FAILURE",
+          BOOK_PROVIDER_LIVE_TEST: "SKIP_ENVIRONMENT_UNAVAILABLE",
+          BOOK_REGRESSION_STATUS: "SKIP_ENVIRONMENT_UNAVAILABLE",
           error: err,
           evidence:
-            "Same FIND failure on pre-2A baseline (d36ee233) in this environment — not Phase 2A regression.",
+            "Same FIND failure on pre-2A baseline (d36ee233) in this environment — not a code regression.",
           timing_ms: probe.timing_ms,
         }),
       );
+      console.log("test-voice-v2-book-offered-slot-headless: SKIP_ENVIRONMENT_UNAVAILABLE");
       process.exit(0);
     }
   }
@@ -82,6 +84,7 @@ async function main() {
   assert.equal(book2.status, "BOOKING_CONFIRMED");
   assert.equal(book2.event_id, book1.event_id, "idempotent invocation must return same event");
 
+  console.log("BOOK_PROVIDER_LIVE_TEST=PASS");
   console.log("test-voice-v2-book-offered-slot-headless: PASS");
   console.log(
     "NOTE: controlled test event created — delete manually in Microsoft calendar if required:",

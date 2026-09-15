@@ -513,6 +513,16 @@ async function startAiOnInboundCall(input: {
         publishedVersionId: agent.publishedVersionId,
       });
 
+      const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
+      scheduleVoiceV2CallWarmup({
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        callId: input.callId,
+        callControlId: input.telnyxCallControlId,
+        fromE164: callRow?.fromE164,
+        agentConfig: cfg,
+      });
+
       await prisma.voiceCall.update({
         where: { id: input.callId },
         data: {
