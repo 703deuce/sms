@@ -7,23 +7,11 @@ import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config"
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { syncConversationWorkflowToTelnyx } from "../src/lib/voice/telnyx/workflow-sync";
 import * as ai from "../src/lib/voice/telnyx/ai-client";
-import {
-  VOICE_V2_TELNYX_TOOL_NAME,
-  VOICE_V2_BOOK_TELNYX_TOOL_NAME,
-  VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+import { mergeVoiceV2ToolIds, resolveVoiceV2SharedToolIds } from "../src/lib/voice/telnyx/voice-v2-shared-tools";
+import { isVoiceV2PstnLiveBookingMode } from "../src/lib/voice-v2/pstn-workflow-mode";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
-
-async function resolveV2ToolIds(): Promise<string[]> {
-  const listed = await ai.listSharedTools().catch(() => ({ data: [] }));
-  const tools = (listed as { data?: Array<{ id: string; display_name?: string }> }).data || [];
-  const findId = tools.find((t) => t.display_name === VOICE_V2_TELNYX_TOOL_NAME)?.id;
-  const bookId = tools.find((t) => t.display_name === VOICE_V2_BOOK_TELNYX_TOOL_NAME)?.id;
-  const saveId = tools.find((t) => t.display_name === VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME)?.id;
-  return [findId, bookId, saveId].filter(Boolean) as string[];
-}
 
 export async function restoreAmyTelnyxWorkflowWithV2() {
   const prisma = getPrisma();
@@ -42,11 +30,13 @@ export async function restoreAmyTelnyxWorkflowWithV2() {
   });
   if (!synced.ok) throw new Error(synced.error || "workflow_sync_failed");
 
-  const v2Ids = await resolveV2ToolIds();
-  if (v2Ids.length) {
-    const toolIds = [...new Set([...(synced.toolIds || []), ...v2Ids])];
+  const v2 = await resolveVoiceV2SharedToolIds();
+  const v2Pstn = isVoiceV2PstnLiveBookingMode(config);
+  if (v2.findId && v2.bookId && v2.saveIntakeId) {
+    const toolIds = mergeVoiceV2ToolIds(synced.toolIds || [], v2);
     await ai.updateAssistant(agent.telnyxAssistantId, { tool_ids: toolIds, tools: [] });
     console.log("Merged tool_ids:", toolIds.join(", "));
+    if (v2Pstn) console.log("voiceV2PstnLiveBooking workflow active on n_live_booking");
   } else {
     console.log("V2 shared tools not found — workflow tools only:", synced.toolIds?.join(", "));
   }
