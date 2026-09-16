@@ -2,9 +2,13 @@ import "server-only";
 
 import { mctbSemanticStructuredJson } from "@/lib/mctb/semantic-llm";
 import type { VoiceV2IntakeSchema, VoiceV2IntakeState } from "../intake/types";
-import { extractPostCallFieldCandidates } from "./field-extraction";
+import {
+  buildDynamicExtractionSchema,
+  extractionSchemaFieldKeys,
+} from "./extraction-schema";
 import type { VoiceV2MultichannelTranscript, VoiceV2PostCallFieldCandidate } from "./types";
 import {
+  completeExtractionRowsForSchema,
   normalizeStructuredExtractionPayload,
   type OrderedTranscriptTurn,
   structuredRowsToPostCallCandidates,
@@ -38,16 +42,6 @@ export function buildOrderedTranscriptTurns(
   return turns;
 }
 
-function schemaDescriptor(schema: VoiceV2IntakeSchema) {
-  return schema.fields.map((f) => ({
-    fieldKey: f.key,
-    label: f.label,
-    valueType: f.valueType,
-    requirementLevel: f.requirementLevel,
-    questionText: f.questionText,
-  }));
-}
-
 function liveValuesForPrompt(intakeState: VoiceV2IntakeState, schema: VoiceV2IntakeSchema) {
   const out: Record<string, string> = {};
   for (const f of schema.fields) {
@@ -59,27 +53,29 @@ function liveValuesForPrompt(intakeState: VoiceV2IntakeState, schema: VoiceV2Int
 
 export function buildStructuredExtractionSystemPrompt(): string {
   return `You are a post-call structured field extractor for a voice agent platform.
-You receive the FULL call transcript (caller + agent turns) and a pinned field schema.
-Return STRICT JSON only — no markdown.
+You receive the FULL independent Deepgram transcript (caller + agent/Amy turns) and a PINNED field schema.
+Return STRICT JSON only — no markdown, no prose summary.
 
-For EVERY enabled field in the schema, output one row in "fields":
-- fieldKey (string, exact key from schema)
+You are NOT a conversational agent. You do not speak, call tools, book, transfer, or send SMS.
+Your ONLY job: extract caller-provided values for the configured fields from the transcript.
+
+For EVERY field in extractionSchema, output exactly one row in "fields":
+- fieldKey (exact key from schema)
 - status: FOUND | NOT_FOUND | AMBIGUOUS
-- candidateValue: string when FOUND, else null
+- value: string when FOUND, else null
 - confidence: 0.0-1.0 when FOUND or AMBIGUOUS
-- evidenceSpeaker: "caller" | "agent" (caller speech is primary evidence for caller facts)
-- evidenceSpan: short quote from transcript supporting the value
-- isExplicitCorrection: true when caller clearly corrects an earlier value (e.g. "Actually it's Patrice")
+- evidence: array of { speaker: "CALLER"|"AGENT", text, startMs?, endMs? } — caller speech is primary proof
+- isExplicitCorrection: true when caller clearly corrects an earlier value
 
 Rules:
-- Use conversational context (e.g. agent asks "mother's name?" → caller answer maps to mother_s_name).
-- Do NOT invent values not supported by transcript.
-- Custom fields (dinosaury, purple_monkey_count, etc.) use the same rules as built-ins.
-- If two conflicting values and unclear which is final → AMBIGUOUS.
-- If never mentioned → NOT_FOUND.
+- Use full conversational context (agent question → bare caller answer maps to the field).
+- Agent statements provide context only; do NOT treat agent paraphrase as caller proof unless caller confirms.
+- Do NOT invent values. NOT_FOUND if never established. AMBIGUOUS if conflicting/unclear.
+- Latest explicit caller correction wins when detectable.
+- Normalize phone/email when transcript clearly supports it; enum must match allowedValues or AMBIGUOUS/NOT_FOUND.
 
 Output shape:
-{"fields":[{"fieldKey":"...","status":"FOUND","candidateValue":"...","confidence":0.9,"evidenceSpeaker":"caller","evidenceSpan":"...","isExplicitCorrection":false}]}`;
+{"fields":[{"fieldKey":"...","status":"FOUND","value":"...","confidence":0.9,"evidence":[{"speaker":"CALLER","text":"..."}],"isExplicitCorrection":false}]}`;
 }
 
 export function buildStructuredExtractionUserPayload(input: {
@@ -89,15 +85,18 @@ export function buildStructuredExtractionUserPayload(input: {
   primaryOutcome?: string;
 }): string {
   const turns = buildOrderedTranscriptTurns(input.transcript);
+  const extractionSchema = buildDynamicExtractionSchema(input.schema);
   return JSON.stringify(
     {
       primaryOutcome: input.primaryOutcome || "NONE",
-      pinnedSchemaRevision: input.schema.fields.length,
-      fields: schemaDescriptor(input.schema),
-      liveCallContextValues: liveValuesForPrompt(input.intakeState, input.schema),
-      orderedTranscript: turns,
-      callerChannelText: input.transcript.callerText,
-      agentChannelText: input.transcript.agentText,
+      extractionSchema,
+      liveCallContextValuesForComparisonOnly: liveValuesForPrompt(input.intakeState, input.schema),
+      orderedTranscript: turns.map((t) => ({
+        speaker: t.speaker === "caller" ? "CALLER" : "AGENT",
+        text: t.text,
+        startMs: t.startMs ?? null,
+        endMs: t.endMs ?? null,
+      })),
     },
     null,
     2,
@@ -109,8 +108,12 @@ export function parseStructuredExtractionJson(
   raw: unknown,
   schema: VoiceV2IntakeSchema,
 ): StructuredPostCallExtractionResult | null {
-  const enabled = new Set(schema.fields.map((f) => f.key));
-  return normalizeStructuredExtractionPayload(raw, enabled);
+  const enabled = new Set(extractionSchemaFieldKeys(schema));
+  const parsed = normalizeStructuredExtractionPayload(raw, enabled, schema);
+  if (!parsed) return null;
+  return {
+    fields: completeExtractionRowsForSchema(schema, parsed.fields),
+  };
 }
 
 export async function runStructuredPostCallFieldExtraction(input: {
@@ -126,79 +129,52 @@ export async function runStructuredPostCallFieldExtraction(input: {
     user,
     temperature: 0.05,
     maxTokens: 4000,
+    model: process.env.VOICE_V2_POST_CALL_EXTRACTION_MODEL?.trim() || undefined,
   });
   if (!hit?.data) return null;
-  const enabled = new Set(input.schema.fields.map((f) => f.key));
-  const parsed = normalizeStructuredExtractionPayload(hit.data, enabled);
+  const enabled = new Set(extractionSchemaFieldKeys(input.schema));
+  const parsed = normalizeStructuredExtractionPayload(hit.data, enabled, input.schema);
   if (!parsed) return null;
-  return { ...parsed, model: hit.model, provider: hit.provider };
+  return {
+    fields: completeExtractionRowsForSchema(input.schema, parsed.fields),
+    model: hit.model,
+    provider: hit.provider,
+  };
 }
 
-function mergeCandidates(
-  ruleBased: VoiceV2PostCallFieldCandidate[],
-  structured: VoiceV2PostCallFieldCandidate[],
-): VoiceV2PostCallFieldCandidate[] {
-  const byKey = new Map<string, VoiceV2PostCallFieldCandidate>();
-  for (const r of ruleBased) byKey.set(r.fieldKey, r);
-  for (const s of structured) {
-    const prev = byKey.get(s.fieldKey);
-    if (!prev) {
-      byKey.set(s.fieldKey, s);
-      continue;
-    }
-    if (s.verdict === "AMBIGUOUS") {
-      byKey.set(s.fieldKey, { ...s, confidence: s.confidence ?? 0.4 });
-      continue;
-    }
-    if (s.verdict === "FOUND") {
-      const sConf = s.confidence ?? 0.75;
-      const pConf = prev.confidence ?? 0.5;
-      if (s.isExplicitCorrection || sConf >= pConf) {
-        byKey.set(s.fieldKey, s);
-      }
-      continue;
-    }
-    if (prev.verdict !== "FOUND" && s.verdict === "NOT_FOUND") {
-      byKey.set(s.fieldKey, s);
-    }
-  }
-  return [...byKey.values()];
-}
+export type PostCallLlmExtractionOutcome = {
+  candidates: VoiceV2PostCallFieldCandidate[];
+  extraction: StructuredPostCallExtractionResult | null;
+  source: "llm" | "llm+fixture";
+  extractionFailed: boolean;
+};
 
 /**
- * Rule-based extraction + optional structured LLM pass (merged).
- * LLM is NOT a conversational agent — single JSON extraction task.
+ * LLM-only post-call field extraction (schema-dynamic per pinned call).
+ * No regex/rule primary extraction — deterministic reconciliation is separate.
  */
 export async function extractPostCallFieldCandidatesWithAi(input: {
   pinnedSchema: VoiceV2IntakeSchema;
   transcript: VoiceV2MultichannelTranscript;
   intakeState?: VoiceV2IntakeState;
   primaryOutcome?: string;
-  /** Headless/tests: skip network LLM */
-  skipLlm?: boolean;
-  /** Headless/tests: inject structured JSON result */
+  /** Headless/tests: inject structured JSON result (simulates LLM) */
   structuredOverride?: StructuredPostCallExtractionResult | null;
-}): Promise<{
-  candidates: VoiceV2PostCallFieldCandidate[];
-  extraction: StructuredPostCallExtractionResult | null;
-  source: "rules" | "rules+llm" | "rules+fixture";
-}> {
-  const ruleBased = extractPostCallFieldCandidates({
-    pinnedSchema: input.pinnedSchema,
-    transcript: input.transcript,
-  });
-
+}): Promise<PostCallLlmExtractionOutcome> {
   if (input.structuredOverride) {
-    const structured = structuredRowsToPostCallCandidates(input.structuredOverride.fields);
-    return {
-      candidates: mergeCandidates(ruleBased, structured),
-      extraction: input.structuredOverride,
-      source: "rules+fixture",
+    const complete = {
+      ...input.structuredOverride,
+      fields: completeExtractionRowsForSchema(
+        input.pinnedSchema,
+        input.structuredOverride.fields,
+      ),
     };
-  }
-
-  if (input.skipLlm || process.env.VOICE_V2_POST_CALL_SKIP_LLM === "1") {
-    return { candidates: ruleBased, extraction: null, source: "rules" };
+    return {
+      candidates: structuredRowsToPostCallCandidates(complete.fields),
+      extraction: complete,
+      source: "llm+fixture",
+      extractionFailed: false,
+    };
   }
 
   const structured = await runStructuredPostCallFieldExtraction({
@@ -209,13 +185,18 @@ export async function extractPostCallFieldCandidatesWithAi(input: {
   });
 
   if (!structured?.fields.length) {
-    return { candidates: ruleBased, extraction: structured, source: "rules" };
+    return {
+      candidates: [],
+      extraction: null,
+      source: "llm",
+      extractionFailed: true,
+    };
   }
 
-  const fromLlm = structuredRowsToPostCallCandidates(structured.fields);
   return {
-    candidates: mergeCandidates(ruleBased, fromLlm),
+    candidates: structuredRowsToPostCallCandidates(structured.fields),
     extraction: structured,
-    source: "rules+llm",
+    source: "llm",
+    extractionFailed: false,
   };
 }

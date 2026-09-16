@@ -54,12 +54,22 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
     primaryOutcome,
   };
 
-  const { candidates, extraction, source } = await extractPostCallFieldCandidatesWithAi({
-    pinnedSchema: pinned.intakeSchema,
-    transcript: input.transcript,
-    intakeState: pinned.intakeState,
-    primaryOutcome,
-  });
+  const { candidates, extraction, source, extractionFailed } =
+    await extractPostCallFieldCandidatesWithAi({
+      pinnedSchema: pinned.intakeSchema,
+      transcript: input.transcript,
+      intakeState: pinned.intakeState,
+      primaryOutcome,
+    });
+
+  if (extractionFailed) {
+    await patchReconcileMeta(input.callId, {
+      status: "EXTRACTION_FAILED",
+      reason: "llm_extraction_unavailable",
+      extractionSource: source,
+    });
+    return { ok: false, reason: "extraction_failed" };
+  }
 
   const locked = providerLockedFieldsFromOutcome(primaryOutcome, pinned.intakeSchema);
 

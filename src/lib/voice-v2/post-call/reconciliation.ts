@@ -1,6 +1,5 @@
 import { getIntakeReadiness } from "../intake/readiness";
 import type { IntakeFieldKey, VoiceV2IntakeState } from "../intake/types";
-import { extractPostCallFieldCandidates } from "./field-extraction";
 import type {
   VoiceV2MultichannelTranscript,
   VoiceV2PinnedIntakeSnapshot,
@@ -21,12 +20,7 @@ export function reconcileVoiceV2PostCallRecord(input: {
   candidates?: VoiceV2PostCallFieldCandidate[];
 }): VoiceV2PostCallReconcileOutput {
   const locked = new Set(input.providerLockedFields || []);
-  const candidates =
-    input.candidates ??
-    extractPostCallFieldCandidates({
-      pinnedSchema: input.pinned.intakeSchema,
-      transcript: input.transcript,
-    });
+  const candidates = input.candidates ?? [];
 
   const reconciledIntake: VoiceV2IntakeState = { ...input.pinned.intakeState };
   const fields: VoiceV2PostCallReconcileFieldResult[] = [];
