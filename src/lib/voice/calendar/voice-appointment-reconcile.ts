@@ -1,9 +1,9 @@
 import { getPrisma } from "@/lib/db";
 import type { BusyInterval } from "@/lib/voice/calendar/providers";
 
-/** How long an awaiting_confirmation row may block slots without a provider event id. */
-export const VOICE_APPOINTMENT_AWAITING_HOLD_MS = Number(
-  process.env.VOICE_APPOINTMENT_AWAITING_HOLD_MS || 30 * 60 * 1000,
+/** Default TTL when runtime creates an explicit hold without a custom expiry. */
+export const VOICE_APPOINTMENT_DEFAULT_HOLD_MS = Number(
+  process.env.VOICE_APPOINTMENT_DEFAULT_HOLD_MS || 15 * 60 * 1000,
 );
 
 export type VoiceAppointmentAvailabilityClass =
@@ -14,6 +14,17 @@ export type VoiceAppointmentAvailabilityClass =
   | "ORPHANED_LOCAL_ROW"
   | "TIMEZONE_MISMATCH"
   | "NON_BLOCKING";
+
+/** Metadata written by booking runtime when intentionally holding a slot during in-flight book. */
+export const BOOKING_HOLD_FLAG = "booking_hold";
+export const BOOKING_HOLD_EXPIRES_AT = "booking_hold_expires_at";
+export const BOOKING_HOLD_REASON = "booking_hold_reason";
+
+const ALLOWED_BOOKING_HOLD_REASONS = new Set([
+  "voice_v2_book_in_progress",
+  "mctb_book_in_progress",
+  "voice_book_in_progress",
+]);
 
 export type VoiceAppointmentRowForReconcile = {
   id: string;
@@ -37,8 +48,51 @@ export function voiceAppointmentMetadata(
 }
 
 /**
+ * Explicit temporary hold — age alone is never sufficient.
+ * Requires runtime flag + future expiry + known hold reason.
+ */
+export function readExplicitBookingHold(
+  meta: Record<string, unknown>,
+  nowMs = Date.now(),
+): { active: boolean; expiresAtMs: number | null } {
+  if (meta[BOOKING_HOLD_FLAG] !== true && meta.availability_hold !== true) {
+    return { active: false, expiresAtMs: null };
+  }
+  const reason = String(meta[BOOKING_HOLD_REASON] || "").trim();
+  if (!ALLOWED_BOOKING_HOLD_REASONS.has(reason)) {
+    return { active: false, expiresAtMs: null };
+  }
+  const expRaw = meta[BOOKING_HOLD_EXPIRES_AT] ?? meta.hold_expires_at;
+  let expiresAtMs: number | null = null;
+  if (typeof expRaw === "string") {
+    expiresAtMs = Date.parse(expRaw);
+  } else if (typeof expRaw === "number" && Number.isFinite(expRaw)) {
+    expiresAtMs = expRaw;
+  }
+  if (expiresAtMs == null || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+    return { active: false, expiresAtMs };
+  }
+  return { active: true, expiresAtMs };
+}
+
+export function buildBookingHoldMetadata(input: {
+  reason: "voice_v2_book_in_progress" | "mctb_book_in_progress" | "voice_book_in_progress";
+  expiresAt: Date;
+  offerSetId?: string;
+  slotId?: string;
+}): Record<string, unknown> {
+  return {
+    [BOOKING_HOLD_FLAG]: true,
+    [BOOKING_HOLD_REASON]: input.reason,
+    [BOOKING_HOLD_EXPIRES_AT]: input.expiresAt.toISOString(),
+    ...(input.offerSetId ? { offer_set_id: input.offerSetId } : {}),
+    ...(input.slotId ? { slot_id: input.slotId } : {}),
+  };
+}
+
+/**
  * Whether this ledger row should block availability (FIND + BOOK revalidation).
- * Uses UTC instants on startsAt/endsAt — callers must not compare raw wall strings.
+ * Overlap decisions use startsAt/endsAt UTC instants only.
  */
 export function classifyVoiceAppointmentForAvailability(
   row: VoiceAppointmentRowForReconcile,
@@ -52,30 +106,25 @@ export function classifyVoiceAppointmentForAvailability(
   const meta = voiceAppointmentMetadata(row.metadata);
   const externalId = String(row.externalId || "").trim();
   const source = String(meta.source || "").trim().toLowerCase();
-  const ageMs = nowMs - row.createdAt.getTime();
   const hasEnds = row.endsAt && Number.isFinite(row.endsAt.getTime());
 
   if (externalId) {
-    if (status === "confirmed" || status === "scheduled") {
-      return "PROVIDER_CONFIRMED";
-    }
-    // Provider id present but not confirmed — still treat as commitment until reconciled
     return "PROVIDER_CONFIRMED";
   }
 
   if (status === "confirmed") {
-    // Legacy/local confirmed without Graph id — do not permanently poison availability
     if (meta.voice_v2 === true) {
       return "FAILED_PROVIDER_WRITE";
     }
-    if (source === "public_booking") {
+    if (source === "public_booking" || meta.cert === true) {
       return "ORPHANED_LOCAL_ROW";
     }
     return "ORPHANED_LOCAL_ROW";
   }
 
   if (status === "awaiting_confirmation") {
-    if (ageMs <= VOICE_APPOINTMENT_AWAITING_HOLD_MS) {
+    const hold = readExplicitBookingHold(meta, nowMs);
+    if (hold.active) {
       return "VALID_TEMP_HOLD";
     }
     if (source === "public_booking" || meta.cert === true) {
@@ -114,9 +163,9 @@ function rowToBusyInterval(
 }
 
 /**
- * Local ledger intervals that should merge with Microsoft Graph busy for availability.
+ * Canonical local busy intervals for availability (FIND + BOOK use the same classifier).
  */
-export async function listAuthoritativeVoiceAppointmentBusyIntervals(
+export async function listReconciledVoiceAppointmentBusyIntervals(
   workspaceId: string,
   rangeStart: Date,
   rangeEnd: Date,
@@ -154,7 +203,23 @@ export async function listAuthoritativeVoiceAppointmentBusyIntervals(
   return out;
 }
 
-export async function findAuthoritativeVoiceAppointmentConflict(
+/** @deprecated Use listReconciledVoiceAppointmentBusyIntervals */
+export const listAuthoritativeVoiceAppointmentBusyIntervals =
+  listReconciledVoiceAppointmentBusyIntervals;
+
+/**
+ * Single merge used by Microsoft-backed FIND: provider busy + reconciled local ledger.
+ */
+export function mergeProviderBusyWithReconciledLedger(
+  providerBusy: BusyInterval[],
+  ledgerBusy: BusyInterval[],
+): BusyInterval[] {
+  if (!ledgerBusy.length) return providerBusy;
+  if (!providerBusy.length) return ledgerBusy;
+  return providerBusy.concat(ledgerBusy);
+}
+
+export async function findReconciledVoiceAppointmentConflict(
   workspaceId: string,
   startUtc: Date,
   endUtc: Date,
@@ -188,3 +253,7 @@ export async function findAuthoritativeVoiceAppointmentConflict(
   }
   return null;
 }
+
+/** @deprecated Use findReconciledVoiceAppointmentConflict */
+export const findAuthoritativeVoiceAppointmentConflict =
+  findReconciledVoiceAppointmentConflict;

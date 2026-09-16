@@ -257,18 +257,17 @@ export async function executeVoiceV2FindAvailability(
       typeof svcCfg.bookingHours === "string" ? svcCfg.bookingHours : undefined,
     );
 
-    const { listAuthoritativeVoiceAppointmentBusyIntervals } = await import(
-      "@/lib/voice/calendar/voice-appointment-reconcile"
-    );
-    const ledgerBusy = await listAuthoritativeVoiceAppointmentBusyIntervals(
+    const {
+      listReconciledVoiceAppointmentBusyIntervals,
+      mergeProviderBusyWithReconciledLedger,
+    } = await import("@/lib/voice/calendar/voice-appointment-reconcile");
+    const ledgerBusy = await listReconciledVoiceAppointmentBusyIntervals(
       input.workspaceId,
       windowStartUtc,
       windowEndUtc,
       bufferMinutes,
     );
-    if (ledgerBusy.length) {
-      busy = busy.concat(ledgerBusy);
-    }
+    busy = mergeProviderBusyWithReconciledLedger(busy, ledgerBusy);
 
     const rawSlots = computeFreeSlots(
       busy,

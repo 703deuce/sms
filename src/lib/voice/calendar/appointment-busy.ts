@@ -1,5 +1,5 @@
 import type { BusyInterval } from "@/lib/voice/calendar/providers";
-import { listAuthoritativeVoiceAppointmentBusyIntervals } from "@/lib/voice/calendar/voice-appointment-reconcile";
+import { listReconciledVoiceAppointmentBusyIntervals } from "@/lib/voice/calendar/voice-appointment-reconcile";
 
 /**
  * Transovo ledger busy merged into provider availability.
@@ -11,7 +11,7 @@ export async function listWorkspaceAppointmentBusyIntervals(
   rangeEnd: Date,
   bufferMinutes = 0,
 ): Promise<BusyInterval[]> {
-  return listAuthoritativeVoiceAppointmentBusyIntervals(
+  return listReconciledVoiceAppointmentBusyIntervals(
     workspaceId,
     rangeStart,
     rangeEnd,

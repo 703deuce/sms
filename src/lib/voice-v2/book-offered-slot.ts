@@ -12,6 +12,7 @@ import {
   type CalendarConfig,
 } from "@/lib/voice/calendar/providers";
 import { loadVoiceV2OfferSet } from "./offer-set-store";
+import { resolveMicrosoftGraphTimeZoneId } from "@/lib/microsoft/graph-datetime-timezone";
 import {
   beginVoiceV2GraphCollection,
   endVoiceV2GraphCollection,
@@ -313,10 +314,10 @@ export async function executeVoiceV2BookOfferedSlot(
   timingMs.REVALIDATION_MS = Date.now() - revalStart;
   marks.SLOT_REVALIDATION_END = isoMark();
 
-  const { findAuthoritativeVoiceAppointmentConflict } = await import(
+  const { findReconciledVoiceAppointmentConflict } = await import(
     "@/lib/voice/calendar/voice-appointment-reconcile"
   );
-  const localConflict = await findAuthoritativeVoiceAppointmentConflict(
+  const localConflict = await findReconciledVoiceAppointmentConflict(
     workspaceId,
     startUtc,
     endUtc,
@@ -419,6 +420,7 @@ export async function executeVoiceV2BookOfferedSlot(
     resolvedCallId = call?.id ?? null;
   }
 
+  const businessTimezone = offer.timezone.trim();
   await prisma.voiceAppointment.create({
     data: {
       id: appointmentId,
@@ -427,7 +429,7 @@ export async function executeVoiceV2BookOfferedSlot(
       serviceName: offer.serviceName,
       startsAt: startUtc,
       endsAt: endUtc,
-      timezone: offer.timezone,
+      timezone: businessTimezone,
       status: "confirmed",
       externalId: eventId,
       metadata: {
@@ -435,6 +437,14 @@ export async function executeVoiceV2BookOfferedSlot(
         offer_set_id: offerSetId,
         slot_id: selectedSlotId,
         idempotency_key: idempotencyKey,
+        start_utc: slot.start_utc,
+        end_utc: slot.end_utc,
+        business_timezone: businessTimezone,
+        provider: "microsoft",
+        provider_connection_id: conn.id,
+        provider_event_id: eventId,
+        provider_mailbox: config.email ?? null,
+        graph_timezone: resolveMicrosoftGraphTimeZoneId(businessTimezone),
       },
     },
   });

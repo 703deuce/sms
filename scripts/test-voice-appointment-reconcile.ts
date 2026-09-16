@@ -1,7 +1,12 @@
 #!/usr/bin/env npx tsx
 import assert from "node:assert/strict";
 import {
+  BOOKING_HOLD_EXPIRES_AT,
+  BOOKING_HOLD_FLAG,
+  BOOKING_HOLD_REASON,
+  buildBookingHoldMetadata,
   classifyVoiceAppointmentForAvailability,
+  readExplicitBookingHold,
   voiceAppointmentBlocksAvailability,
 } from "../src/lib/voice/calendar/voice-appointment-reconcile";
 
@@ -42,7 +47,7 @@ const staleCert = classifyVoiceAppointmentForAvailability(
 assert.equal(staleCert, "ORPHANED_LOCAL_ROW");
 assert.equal(voiceAppointmentBlocksAvailability(staleCert), false);
 
-const freshHold = classifyVoiceAppointmentForAvailability(
+const youngAwaitingNoHold = classifyVoiceAppointmentForAvailability(
   {
     id: "a3",
     workspaceId: "ws_1",
@@ -56,7 +61,52 @@ const freshHold = classifyVoiceAppointmentForAvailability(
   },
   now,
 );
-assert.equal(freshHold, "VALID_TEMP_HOLD");
-assert.equal(voiceAppointmentBlocksAvailability(freshHold), true);
+assert.equal(youngAwaitingNoHold, "STALE_UNCONFIRMED");
+assert.equal(voiceAppointmentBlocksAvailability(youngAwaitingNoHold), false);
+
+const holdMeta = buildBookingHoldMetadata({
+  reason: "voice_v2_book_in_progress",
+  expiresAt: new Date(now + 10 * 60 * 1000),
+  offerSetId: "v2offer_test",
+  slotId: "slot_test",
+});
+assert.equal(readExplicitBookingHold(holdMeta, now).active, true);
+
+const explicitHold = classifyVoiceAppointmentForAvailability(
+  {
+    id: "a4",
+    workspaceId: "ws_1",
+    status: "awaiting_confirmation",
+    startsAt: new Date("2026-09-17T18:00:00.000Z"),
+    endsAt: new Date("2026-09-17T19:00:00.000Z"),
+    timezone: "America/Los_Angeles",
+    externalId: null,
+    createdAt: new Date("2026-09-16T22:59:00.000Z"),
+    metadata: holdMeta,
+  },
+  now,
+);
+assert.equal(explicitHold, "VALID_TEMP_HOLD");
+assert.equal(voiceAppointmentBlocksAvailability(explicitHold), true);
+
+const expiredHold = classifyVoiceAppointmentForAvailability(
+  {
+    id: "a5",
+    workspaceId: "ws_1",
+    status: "awaiting_confirmation",
+    startsAt: new Date("2026-09-17T18:00:00.000Z"),
+    endsAt: new Date("2026-09-17T19:00:00.000Z"),
+    timezone: "America/Los_Angeles",
+    externalId: null,
+    createdAt: new Date("2026-09-16T22:00:00.000Z"),
+    metadata: {
+      [BOOKING_HOLD_FLAG]: true,
+      [BOOKING_HOLD_REASON]: "voice_v2_book_in_progress",
+      [BOOKING_HOLD_EXPIRES_AT]: new Date(now - 1000).toISOString(),
+    },
+  },
+  now,
+);
+assert.equal(expiredHold, "STALE_UNCONFIRMED");
 
 console.log("test-voice-appointment-reconcile: ok");
