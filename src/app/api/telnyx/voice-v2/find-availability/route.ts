@@ -37,6 +37,20 @@ export async function POST(request: Request) {
     null;
   const trustedPrismaCallId = resolveTrustedTransovoVoiceCallId({ headers: request.headers, body });
 
+  if (agentId && (callId || trustedPrismaCallId)) {
+    const { ensureVoiceV2CallContext } = await import("@/lib/voice-v2/intake/load-call-context");
+    await ensureVoiceV2CallContext({
+      workspaceId,
+      agentId,
+      callControlId: callId,
+      trustedPrismaCallId,
+      conversationId:
+        typeof body.conversation_id === "string"
+          ? body.conversation_id
+          : request.headers.get("x-telnyx-conversation-id"),
+    }).catch(() => undefined);
+  }
+
   const result = await executeVoiceV2FindAvailability(
     {
       ...body,
