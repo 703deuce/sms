@@ -15,8 +15,7 @@ export type VoiceV2PrimaryOutcome =
   | "NONE";
 
 function transferSucceeded(ctx: VoiceV2CallContext): boolean {
-  const status = ctx.afterHours?.transfer?.status;
-  return status === "SUCCEEDED" || status === "INITIATING";
+  return ctx.afterHours?.transfer?.status === "SUCCEEDED";
 }
 
 export function resolveVoiceV2PrimaryOutcome(ctx: VoiceV2CallContext): VoiceV2PrimaryOutcome {

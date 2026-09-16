@@ -15,7 +15,10 @@ import {
   setVoiceV2CallContext,
 } from "../src/lib/voice-v2/intake/session-store";
 import type { VoiceV2CallContext, VoiceV2IntakeWizardConfig } from "../src/lib/voice-v2/intake/types";
-import type { VoiceV2PrimaryOutcome } from "../src/lib/voice-v2/primary-outcome";
+import {
+  resolveVoiceV2PrimaryOutcome,
+  type VoiceV2PrimaryOutcome,
+} from "../src/lib/voice-v2/primary-outcome";
 
 function check(name: string, ok: boolean, detail = "") {
   console.log(ok ? `PASS ${name}` : `FAIL ${name} ${detail}`);
@@ -136,7 +139,7 @@ async function main() {
   );
 
   // C — other successful primary outcomes + missing record field
-  await expectFinalizedWithMissingRecord("C_TRANSFERRED", "TRANSFERRED", {
+  await expectFinalizedWithMissingRecord("C_TRANSFERRED_SUCCEEDED", "TRANSFERRED", {
     afterHours: {
       transfer: {
         status: "SUCCEEDED",
@@ -145,6 +148,31 @@ async function main() {
       },
     },
   });
+
+  clearVoiceV2CallSessions();
+  seedSession(recordWizard, {
+    afterHours: {
+      transfer: {
+        status: "INITIATING",
+        transferGeneration: 1,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  });
+  const initiatingCtx = getVoiceV2CallContext("cc:headless-test")!;
+  check(
+    "C_TRANSFER_INITIATING_NOT_PRIMARY",
+    resolveVoiceV2PrimaryOutcome(initiatingCtx) !== "TRANSFERRED",
+  );
+  const finInitiating = await executeVoiceV2FinalizeCallerRequest({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    callControlId: "headless-test",
+  });
+  check(
+    "C_TRANSFER_INITIATING_FINALIZE_NOT_TRANSFERRED",
+    !(finInitiating.status === "FINALIZED" && finInitiating.primary_outcome === "TRANSFERRED"),
+  );
 
   await expectFinalizedWithMissingRecord("C_CALLBACK_REQUESTED", "CALLBACK_REQUESTED", {
     afterHours: {
