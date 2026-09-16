@@ -5,6 +5,7 @@ import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { resolveMctbMicrosoftConnectionId } from "@/lib/mctb/ai-booking/microsoft-connection";
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 import { buildVoiceV2CallContextPayload } from "./session/context-build";
+import { voiceV2CapabilitiesFromPayload } from "./session/capability-pin";
 import {
   createVoiceV2CallContext,
   getVoiceV2CallContextL1,
@@ -179,15 +180,11 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
           telnyxConversationId: input.conversationId || undefined,
         },
         enrollment: built.enrollment,
-        capabilities: {
+        capabilities: voiceV2CapabilitiesFromPayload(built.payload, {
           bookingEnabled: built.payload.capabilities?.bookingEnabled ?? bookingEnabled,
-          intakeEnabled: built.payload.capabilities?.intakeEnabled ?? true,
-          voiceV2PstnLiveBooking: built.payload.capabilities?.voiceV2PstnLiveBooking ?? bookingEnabled,
-          bookingStrategy: built.payload.capabilities?.bookingStrategy,
-          knowledgeBaseEnabled: built.payload.capabilities?.knowledgeBaseEnabled,
-          knowledgeBaseRevision: built.payload.capabilities?.knowledgeBaseRevision,
-          knowledgeBaseIds: built.payload.capabilities?.knowledgeBaseIds,
-        },
+          voiceV2PstnLiveBooking:
+            built.payload.capabilities?.voiceV2PstnLiveBooking ?? bookingEnabled,
+        }),
       },
       { l2Persist: "await" },
     );

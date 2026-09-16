@@ -654,9 +654,7 @@ Maintain this matrix in this document. Status values:
 | REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |
 | SEND_BOOKING_LINK | HEADLESS_CERTIFIED | `bookingStrategy=SEND_LINK` + pinned `bookingLink`; **PSTN pending** |
 | CALENDLY_BOOKING | HEADLESS_CERTIFIED | PSTN pending paid Calendly account |
-| RESCHEDULE | NOT_STARTED | |
-| CANCEL | NOT_STARTED | |
-| SMS_DURING_CALL | NOT_STARTED | |
+| SMS_DURING_CALL | NOT_STARTED | Booking-link SMS only when `SEND_LINK`; no general caller SMS |
 | TRANSFER | NOT_STARTED | |
 | WARM_TRANSFER | NOT_STARTED | |
 | WATERFALL_TRANSFER | NOT_STARTED | |

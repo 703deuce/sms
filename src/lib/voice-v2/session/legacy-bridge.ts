@@ -12,6 +12,10 @@ import {
   mergeWorkflowIntoContext,
   workflowFromContext,
 } from "../booking-workflow";
+import {
+  mergePayloadCapabilitiesFromRecord,
+  voiceV2CapabilitiesFromPayload,
+} from "./capability-pin";
 
 export function projectOfferFromLegacy(ctx: VoiceV2CallContext): VoiceV2CallContextRecord["booking"] {
   const timezone = ctx.businessTimezone;
@@ -50,16 +54,7 @@ export function buildRecordFromLegacy(input: {
       updatedAt: now,
     },
     capabilities:
-      input.capabilities ??
-      ({
-        bookingEnabled: input.payload.capabilities?.bookingEnabled ?? true,
-        intakeEnabled: input.payload.capabilities?.intakeEnabled ?? true,
-        voiceV2PstnLiveBooking: input.payload.capabilities?.voiceV2PstnLiveBooking,
-        bookingStrategy: input.payload.capabilities?.bookingStrategy,
-        knowledgeBaseEnabled: input.payload.capabilities?.knowledgeBaseEnabled,
-        knowledgeBaseRevision: input.payload.capabilities?.knowledgeBaseRevision,
-        knowledgeBaseIds: input.payload.capabilities?.knowledgeBaseIds,
-      } satisfies VoiceV2ContextCapabilities),
+      input.capabilities ?? voiceV2CapabilitiesFromPayload(input.payload),
     bookingPreference: input.payload.bookingWorkflow?.requestedDate
       ? {
           requestedDate: input.payload.bookingWorkflow.requestedDate,
@@ -106,19 +101,6 @@ export function syncLegacyFromRecord(record: VoiceV2CallContextRecord): VoiceV2C
   payload.workspaceId = record.identity.workspaceId;
   payload.agentId = record.identity.agentId;
   if (record.booking.timezone) payload.businessTimezone = record.booking.timezone;
-  payload.capabilities = {
-    ...payload.capabilities,
-    voiceV2PstnLiveBooking: record.capabilities.voiceV2PstnLiveBooking,
-    bookingEnabled: record.capabilities.bookingEnabled,
-    intakeEnabled: record.capabilities.intakeEnabled,
-    bookingStrategy:
-      record.capabilities.bookingStrategy ?? payload.capabilities?.bookingStrategy,
-    knowledgeBaseEnabled:
-      record.capabilities.knowledgeBaseEnabled ?? payload.capabilities?.knowledgeBaseEnabled,
-    knowledgeBaseRevision:
-      record.capabilities.knowledgeBaseRevision ?? payload.capabilities?.knowledgeBaseRevision,
-    knowledgeBaseIds:
-      record.capabilities.knowledgeBaseIds ?? payload.capabilities?.knowledgeBaseIds,
-  };
+  mergePayloadCapabilitiesFromRecord(payload, record.capabilities);
   return payload;
 }
