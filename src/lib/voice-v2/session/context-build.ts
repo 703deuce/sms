@@ -8,6 +8,7 @@ import { resolveVoiceV2BookingStrategy } from "../booking-strategy";
 import { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } from "../pstn-workflow-mode";
 import { resolveVoiceV2KnowledgeConfig } from "../knowledge-config";
 import { resolveVoiceV2QualificationConfig } from "../qualification-config";
+import { resolveAfterHoursHandlingFromAgentAdvanced } from "../after-hours-handling-config";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -54,6 +55,9 @@ export async function buildVoiceV2CallContextPayload(input: {
   const liveBooking = isVoiceV2PstnLiveBookingMode(config);
   const knowledge = resolveVoiceV2KnowledgeConfig(config);
   const qualification = resolveVoiceV2QualificationConfig(config);
+  const afterHoursHandling =
+    resolveAfterHoursHandlingFromAgentAdvanced(config.advanced as Record<string, unknown>) ||
+    undefined;
   const payload: VoiceV2CallContext = {
     sessionKey: input.canonicalSessionKey,
     workspaceId: input.workspaceId,
@@ -82,6 +86,9 @@ export async function buildVoiceV2CallContextPayload(input: {
       qualificationNotQualifiedFallback: qualification.notQualifiedFallback,
       qualificationNeedsReviewFallback: qualification.needsReviewFallback,
       qualificationFieldKeys: qualification.qualificationFieldKeys,
+      afterHoursHandling,
+      transferToolAvailable: afterHoursHandling?.transferEnabled === true,
+      callbackToolAvailable: afterHoursHandling?.callbackRequestsEnabled === true,
     },
   };
   return { payload, enrollment, bookingTimezone: timezone };

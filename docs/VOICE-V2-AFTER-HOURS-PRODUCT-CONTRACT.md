@@ -655,25 +655,25 @@ Maintain this matrix in this document. Status values:
 | SEND_BOOKING_LINK | HEADLESS_CERTIFIED | `bookingStrategy=SEND_LINK` + pinned `bookingLink`; **PSTN pending** |
 | CALENDLY_BOOKING | HEADLESS_CERTIFIED | PSTN pending paid Calendly account |
 | SMS_DURING_CALL | NOT_STARTED | Booking-link SMS only when `SEND_LINK`; no general caller SMS |
-| TRANSFER | NOT_STARTED | |
-| WARM_TRANSFER | NOT_STARTED | |
-| WATERFALL_TRANSFER | NOT_STARTED | |
-| URGENCY_ESCALATION | NOT_STARTED | |
+| TRANSFER | HEADLESS_CERTIFIED | `voice_v2_transfer_call`; trusted destinations; BASIC via Call Control; **PSTN pending** |
+| WARM_TRANSFER | IMPLEMENTED | Briefing + DTMF accept path; Telnyx warm leg **PSTN pending** |
+| WATERFALL_TRANSFER | HEADLESS_CERTIFIED | Sequential plan; mock/provider tests; **PSTN pending** |
+| URGENCY_ESCALATION | HEADLESS_CERTIFIED | Deterministic rules on intake fields; **PSTN pending** |
 | BUSINESS_HOURS_RULES | IMPLEMENTED | Wizard/advanced — verify/certify |
-| SPAM_FILTERING | NOT_STARTED | |
+| SPAM_FILTERING | HEADLESS_CERTIFIED | Conservative vendor/sales classification; **PSTN pending** |
 | MULTILINGUAL | NOT_STARTED | |
 | CALL_SUMMARY | IMPLEMENTED | Partial — verify |
 | STRUCTURED_OUTCOME | IMPLEMENTED | Partial — verify |
 | TRANSCRIPT | IMPLEMENTED | Verify retention UX |
 | RECORDING | IMPLEMENTED | Verify compliance path |
 | CALL_INBOX_HISTORY | IMPLEMENTED | Partial — verify |
-| BUSINESS_NOTIFICATIONS_EMAIL | NOT_STARTED | Verify if partial exists |
+| BUSINESS_NOTIFICATIONS_EMAIL | IMPLEMENTED | Async; idempotent keys; callback/urgent copy |
 | BUSINESS_NOTIFICATIONS_SMS | NOT_STARTED | Verify if partial exists |
 | WEBHOOK | IMPLEMENTED | Verify existing integrations |
 | CRM_SYNC | NOT_STARTED | Later / integration-specific |
-| CALLBACK_PREFERENCE | NOT_STARTED | Generic intake when configured |
-| EXISTING_VS_NEW_CUSTOMER | NOT_STARTED | |
-| FALLBACK_BEHAVIOR | IMPLEMENTED | Partial — verify wizard policy |
+| CALLBACK_PREFERENCE | HEADLESS_CERTIFIED | `voice_v2_create_callback_request`; not appointment time; **PSTN pending** |
+| EXISTING_VS_NEW_CUSTOMER | IMPLEMENTED | `customer_status` generic field + `distinguishNewExisting` |
+| FALLBACK_BEHAVIOR | HEADLESS_CERTIFIED | Unified fallback resolver + wizard `transferFallback` |
 
 ---
 

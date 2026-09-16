@@ -67,12 +67,15 @@ export async function deliverVoiceV2BusinessRequestNotifications(
   const pref = input.schedulingSummary?.trim() || "";
   const isAppointment = input.outcome === "APPOINTMENT_REQUESTED";
   const isBookingLink = input.outcome === "BOOKING_LINK_SENT";
+  const isCallback = input.outcome === "CALLBACK_REQUESTED";
 
   const subject = isBookingLink
     ? `Booking link sent — ${name}`
-    : isAppointment
-      ? `New appointment request from ${name}`
-      : `New message from ${name}`;
+    : isCallback
+      ? `Callback requested — ${name}`
+      : isAppointment
+        ? `New appointment request from ${name}`
+        : `New message from ${name}`;
 
   const statusLine = isBookingLink
     ? "Booking link sent to caller — NOT an appointment booking"

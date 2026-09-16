@@ -106,11 +106,18 @@ export async function syncConversationWorkflowToTelnyx(input: {
 
   let v2Shared = null as Awaited<ReturnType<typeof ensureVoiceV2SharedToolsForAgent>> | null;
   if (v2OneAmy) {
+    const afterHours = (
+      input.config?.advanced as Record<string, unknown> | undefined
+    )?.voiceV2AfterHoursHandling as
+      | import("@/lib/voice-v2/after-hours-handling-types").VoiceV2PublishedAfterHoursHandlingConfig
+      | undefined;
     v2Shared = await ensureVoiceV2SharedToolsForAgent({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       bookingStrategy,
       knowledgeBaseEnabled: isVoiceV2KnowledgeSearchEnabled(input.config),
+      transferEnabled: afterHours?.transferEnabled === true,
+      callbackRequestsEnabled: afterHours?.callbackRequestsEnabled === true,
     });
     const sendLinkMode = bookingStrategy === "SEND_LINK";
     if (!v2Shared.saveIntakeId) {

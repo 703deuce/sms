@@ -91,9 +91,13 @@ export interface VoiceV2CallContext {
     qualificationNotQualifiedFallback?: VoiceV2QualificationFallbackAction;
     qualificationNeedsReviewFallback?: VoiceV2QualificationFallbackAction;
     qualificationFieldKeys?: string[];
+    afterHoursHandling?: import("../after-hours-handling-types").VoiceV2PublishedAfterHoursHandlingConfig;
+    transferToolAvailable?: boolean;
+    callbackToolAvailable?: boolean;
   };
   qualification?: VoiceV2QualificationState;
   appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;
+  afterHours?: import("../after-hours-handling-types").VoiceV2AfterHoursRuntimeState;
 }
 
 export interface IntakeReadinessResult {

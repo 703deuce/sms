@@ -26,6 +26,7 @@ import {
   intakeFieldsHaveValues,
 } from "./scheduling-preference";
 import { applyQualificationToContext } from "../qualification-evaluator";
+import { applyAfterHoursEvaluations } from "../after-hours-orchestrator";
 import type { VoiceV2PublishedQualificationConfig } from "../qualification-types";
 
 function qualificationConfigFromContext(
@@ -122,6 +123,9 @@ async function attachBookingWorkflow(
     nextCtx,
     qualificationConfigFromContext(nextCtx),
   );
+  if (nextCtx.capabilities?.afterHoursHandling) {
+    nextCtx = applyAfterHoursEvaluations(nextCtx, nextCtx.capabilities.afterHoursHandling);
+  }
   setVoiceV2CallContext(nextCtx);
   trace?.mark("WORKFLOW_TRANSITION_END");
   return {

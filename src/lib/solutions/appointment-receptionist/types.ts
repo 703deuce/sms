@@ -219,6 +219,33 @@ export type AppointmentReceptionistWizardState = {
   warmTransfer: boolean;
   /** Run answering-machine detection on transfer legs. */
   detectVoicemailOnTransfer: boolean;
+  /** Voice V2 PSTN human transfer (Call Handling). */
+  voiceV2HumanTransferEnabled?: boolean | null;
+  allowCallerRequestedTransfer?: boolean | null;
+  transferRouting?: "single" | "waterfall" | null;
+  defaultTransferPlanId?: string | null;
+  transferDestinations?: Array<{
+    id: string;
+    label: string;
+    phoneE164: string;
+    enabled?: boolean;
+  }>;
+  transferPlanSteps?: Array<{
+    order?: number;
+    destinationId: string;
+    transferMode?: "BASIC" | "WARM";
+    timeoutSeconds?: number;
+  }>;
+  urgencyEnabled?: boolean | null;
+  urgencyRules?: import("@/lib/voice-v2/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
+  callbackRequestsEnabled?: boolean | null;
+  callbackUseAniByDefault?: boolean | null;
+  callbackAskPreferredTime?: boolean | null;
+  callbackConfirmNumber?: boolean | null;
+  salesSolicitationEnabled?: boolean | null;
+  salesSolicitationAction?:
+    | import("@/lib/voice-v2/after-hours-handling-types").VoiceV2SalesSolicitationAction
+    | null;
 
   agentName: string;
   businessName: string;

@@ -127,19 +127,7 @@ export function CallHandlingStep({
           </div>
           ) : null}
 
-          {presentation === "mctb" ? (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="text-sm font-semibold">Human transfer</h3>
-              <InfoCallout>
-                Human phone transfer is not part of the Voice V2 (One-Amy) PSTN runtime yet (see{" "}
-                <code className="text-xs">docs/VOICE-V2-HARDENING-REPORT.md</code>). This wizard
-                surface does not expose transfer destination or triggers so PSTN tests are not
-                misread as transfer-ready. Values may still persist from legacy flows and can sync
-                to the Telnyx workflow HUMAN node — that path is legacy, not certified V2 transfer.
-              </InfoCallout>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-xl border border-border bg-card p-4">
               <h3 className="text-sm font-semibold">Human transfer</h3>
               <p className="mt-1 text-xs text-muted-foreground">Transfer triggers</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -216,8 +204,78 @@ export function CallHandlingStep({
                   </span>
                 </label>
               </div>
-            </div>
-          )}
+            {presentation === "mctb" ? (
+              <div className="mt-4 space-y-3 border-t border-border pt-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.voiceV2HumanTransferEnabled === true}
+                    onChange={(e) =>
+                      patch({ voiceV2HumanTransferEnabled: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">Enable Voice V2 human transfer</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Uses trusted destinations on the One-Amy PSTN path (not legacy workflow handoff).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.allowCallerRequestedTransfer !== false}
+                    onChange={(e) =>
+                      patch({ allowCallerRequestedTransfer: e.target.checked })
+                    }
+                  />
+                  <span className="font-medium">Allow caller-requested human</span>
+                </label>
+                <Label>Routing</Label>
+                <select
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                  value={state.transferRouting || "single"}
+                  onChange={(e) =>
+                    patch({
+                      transferRouting: e.target.value as "single" | "waterfall",
+                    })
+                  }
+                >
+                  <option value="single">Single destination</option>
+                  <option value="waterfall">Waterfall (sequential)</option>
+                </select>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.urgencyEnabled === true}
+                    onChange={(e) => patch({ urgencyEnabled: e.target.checked })}
+                  />
+                  <span className="font-medium">Urgent-call handling</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.callbackRequestsEnabled !== false}
+                    onChange={(e) => patch({ callbackRequestsEnabled: e.target.checked })}
+                  />
+                  <span className="font-medium">Callback requests</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.salesSolicitationEnabled === true}
+                    onChange={(e) => patch({ salesSolicitationEnabled: e.target.checked })}
+                  />
+                  <span className="font-medium">Sales / solicitation handling</span>
+                </label>
+              </div>
+            ) : null}
+          </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold">Fallbacks</h3>

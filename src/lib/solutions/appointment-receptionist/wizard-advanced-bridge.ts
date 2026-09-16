@@ -14,6 +14,10 @@ import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy
 import { calendlyConfigFromWizard } from "@/lib/voice-v2/calendly-booking-config";
 import { knowledgeConfigFromWizard } from "@/lib/voice-v2/knowledge-config";
 import { qualificationConfigFromWizard } from "@/lib/voice-v2/qualification-config";
+import {
+  afterHoursHandlingFromWizard,
+  validateAfterHoursHandlingConfig,
+} from "@/lib/voice-v2/after-hours-handling-config";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
@@ -126,6 +130,11 @@ export function mergeAppointmentWizardAdvanced(
     ? knowledge.knowledgeBaseIds
     : draftKbIds;
   const qualification = qualificationConfigFromWizard(state);
+  const voiceV2AfterHoursHandling = afterHoursHandlingFromWizard(state);
+  const afterHoursValidation = validateAfterHoursHandlingConfig(voiceV2AfterHoursHandling);
+  if (afterHoursValidation.length) {
+    throw new Error(`voice_v2_after_hours_invalid:${afterHoursValidation.join(",")}`);
+  }
   const linkRaw = String(state.bookingLinkUrl || "").trim();
   const linkValidated = linkRaw ? validateBookingLinkUrl(linkRaw) : null;
   const bookingLink =
@@ -144,6 +153,7 @@ export function mergeAppointmentWizardAdvanced(
     ...(voiceV2Calendly ? { voiceV2Calendly } : {}),
     knowledge,
     qualification,
+    voiceV2AfterHoursHandling,
     ...(knowledgeBaseIds.length ? { knowledgeBaseIds } : {}),
     ...(bookingLink ? { bookingLink, bookingLinkLabel } : {}),
     voiceV2Intake,

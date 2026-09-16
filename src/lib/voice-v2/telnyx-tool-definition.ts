@@ -22,6 +22,35 @@ export const VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME =
 export const VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE = "voice_v2_search_knowledge";
 export const VOICE_V2_SEARCH_KNOWLEDGE_TELNYX_TOOL_NAME =
   "transovo-voice-v2-search-knowledge";
+export const VOICE_V2_TRANSFER_CALL_TOOL_TYPE = "voice_v2_transfer_call";
+export const VOICE_V2_TRANSFER_CALL_TELNYX_TOOL_NAME = "transovo-voice-v2-transfer-call";
+export const VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE = "voice_v2_create_callback_request";
+export const VOICE_V2_CREATE_CALLBACK_REQUEST_TELNYX_TOOL_NAME =
+  "transovo-voice-v2-create-callback-request";
+
+export const VOICE_V2_TRANSFER_CALL_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    tool_invocation_id: { type: "string" },
+    transfer_plan_id: { type: "string" },
+    caller_requested_human: { type: "boolean" },
+    call_id: { type: "string" },
+    conversation_id: { type: "string" },
+  },
+  required: ["tool_invocation_id"],
+});
+
+export const VOICE_V2_CREATE_CALLBACK_REQUEST_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    tool_invocation_id: { type: "string" },
+    callback_number: { type: "string" },
+    callback_preference: { type: "string" },
+    call_id: { type: "string" },
+    conversation_id: { type: "string" },
+  },
+  required: ["tool_invocation_id"],
+});
 
 export const VOICE_V2_SEND_BOOKING_LINK_BODY = strictWebhookBodyParameters({
   type: "object",

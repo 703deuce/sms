@@ -115,7 +115,10 @@ export type VoiceV2StructuredOutcome =
   | "APPOINTMENT_REQUESTED"
   | "BOOKING_LINK_SENT"
   | "BOOKING_LINK_SEND_FAILED"
-  | "BOOKED";
+  | "BOOKED"
+  | "CALLBACK_REQUESTED"
+  | "TRANSFERRED"
+  | "FILTERED";
 
 export function structuredOutcomeForStrategy(
   strategy: VoiceV2BookingStrategy,

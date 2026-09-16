@@ -29,6 +29,12 @@ import {
   VOICE_V2_SEARCH_KNOWLEDGE_BODY,
   VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE,
   VOICE_V2_SEARCH_KNOWLEDGE_TELNYX_TOOL_NAME,
+  VOICE_V2_TRANSFER_CALL_TOOL_TYPE,
+  VOICE_V2_TRANSFER_CALL_TELNYX_TOOL_NAME,
+  VOICE_V2_TRANSFER_CALL_BODY,
+  VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE,
+  VOICE_V2_CREATE_CALLBACK_REQUEST_TELNYX_TOOL_NAME,
+  VOICE_V2_CREATE_CALLBACK_REQUEST_BODY,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { VoiceV2BookingStrategy } from "@/lib/voice-v2/booking-strategy";
 import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
@@ -100,6 +106,8 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
   agentId: string;
   bookingStrategy?: VoiceV2BookingStrategy;
   knowledgeBaseEnabled?: boolean;
+  transferEnabled?: boolean;
+  callbackRequestsEnabled?: boolean;
 }): Promise<VoiceV2SharedToolIds> {
   const strategy = input.bookingStrategy ?? "MICROSOFT_365";
   const liveFindBook = voiceV2StrategyAllowsFindBook(strategy);
@@ -146,6 +154,36 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
             "Accept caller message or appointment request for business follow-up (not live booking).",
         });
 
+  const transferCallId =
+    input.transferEnabled === true
+      ? await ensureSharedWebhookTool({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          displayName: VOICE_V2_TRANSFER_CALL_TELNYX_TOOL_NAME,
+          toolType: VOICE_V2_TRANSFER_CALL_TOOL_TYPE,
+          urlPath: "/api/telnyx/voice-v2/transfer-call",
+          bodyParameters: VOICE_V2_TRANSFER_CALL_BODY,
+          timeoutMs: 25000,
+          description:
+            "Connect caller to a configured human destination or transfer plan. Never pass arbitrary phone numbers.",
+        })
+      : null;
+
+  const createCallbackId =
+    input.callbackRequestsEnabled === true
+      ? await ensureSharedWebhookTool({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          displayName: VOICE_V2_CREATE_CALLBACK_REQUEST_TELNYX_TOOL_NAME,
+          toolType: VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE,
+          urlPath: "/api/telnyx/voice-v2/create-callback-request",
+          bodyParameters: VOICE_V2_CREATE_CALLBACK_REQUEST_BODY,
+          timeoutMs: 8000,
+          description:
+            "Record a callback request using caller context. Callback time is not an appointment.",
+        })
+      : null;
+
   const searchKnowledgeId = knowledgeEnabled
     ? await ensureSharedWebhookTool({
         workspaceId: input.workspaceId,
@@ -171,6 +209,8 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
       finalizeRequestId,
       sendBookingLinkId,
       searchKnowledgeId,
+      transferCallId,
+      createCallbackId,
     };
   }
 
@@ -234,5 +274,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     finalizeRequestId,
     sendBookingLinkId,
     searchKnowledgeId,
+    transferCallId,
+    createCallbackId,
   };
 }
