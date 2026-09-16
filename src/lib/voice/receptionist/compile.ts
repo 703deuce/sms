@@ -28,6 +28,7 @@ import {
 import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
 import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-v2/knowledge-config";
 import { buildVoiceV2QualificationLayerBInstructions } from "@/lib/voice-v2/qualification-config";
+import { buildVoiceV2AfterHoursLayerBInstructions } from "@/lib/voice-v2/after-hours-handling-prompt";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -246,6 +247,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     buildVoiceV2QualificationLayerBInstructions({
       advanced: input.advanced,
     } as VoiceAgentConfig) || undefined;
+  const voiceV2AfterHoursInstructions =
+    buildVoiceV2AfterHoursLayerBInstructions({
+      advanced: input.advanced,
+    } as VoiceAgentConfig) || undefined;
 
   const partialSnapshot = {
     livekitProfile: "frontdesk_realtime" as const,
@@ -263,6 +268,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     voiceV2OneAmy,
     voiceV2KnowledgeInstructions,
     voiceV2QualificationInstructions,
+    voiceV2AfterHoursInstructions,
     enabledBuiltinTools,
     agentJobInstructions,
     agentPersonalityNotes,

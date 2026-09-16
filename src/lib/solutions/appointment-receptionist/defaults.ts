@@ -424,7 +424,7 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     language: "English",
     speaksFirst: "ai",
     openingGreeting:
-      "Thank you for calling {{businessName}}. This is {{agentName}}. How may I help you today?",
+      "Thanks for calling {{businessName}}. This is {{agentName}}. How can I help?",
     conversationBehaviors: {
       keepBrief: true,
       oneQuestionAtATime: true,

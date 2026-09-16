@@ -165,7 +165,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
           bodyParameters: VOICE_V2_TRANSFER_CALL_BODY,
           timeoutMs: 25000,
           description:
-            "Connect caller to a configured human destination or transfer plan. Never pass arbitrary phone numbers.",
+            "Use when the caller asks for a person or when configured urgency/human rules require it. Connect to the configured transfer plan only — set caller_requested_human true when the caller asked for a human. Never pass arbitrary phone numbers. If this tool is unavailable, use callback or message instead of continuing AI persuasion.",
         })
       : null;
 

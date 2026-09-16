@@ -55,6 +55,7 @@ export type ReceptionistCompiledSnapshot = {
   voiceV2OneAmy?: boolean;
   /** Layer B: when large KB search is enabled for this agent */
   voiceV2KnowledgeInstructions?: string;
+  voiceV2AfterHoursInstructions?: string;
   voiceV2QualificationInstructions?: string;
   enabledBuiltinTools: string[];
   /** Customer job instructions — what the receptionist should do (always loaded). */

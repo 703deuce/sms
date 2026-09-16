@@ -26,7 +26,7 @@ export { buildBusinessKnowledgePromptSection };
 const KNOWLEDGE_FALLBACK_PHRASE =
   "Answer hours, services, pricing ranges, policies, and FAQs directly from the Business knowledge section below — do not call any tool for those topics. " +
   "Use the document retrieval tool only when the caller asks about material from an uploaded PDF or document that is not covered below. " +
-  "If the answer is not in the Business knowledge section and no uploaded document applies, say you do not have that information and offer to take a message or connect someone who can help. Never invent business facts.";
+  "If the answer is not in the Business knowledge section and no uploaded document applies, say you do not have that information and use the configured fallback — never invent pricing, policy, technical advice, or promises.";
 
 const DEFAULT_RECORDING_DISCLOSURE =
   "This call may be recorded for quality and training purposes.";
@@ -394,7 +394,7 @@ export function buildWizardAgentConfig(
         ? `If the caller asks for a person, use escalate_human with target_name "${transferName}". Never invent a phone number.`
         : "Offer to take a structured message if the caller asks for a person and no transfer destination is configured.",
       uncertainty:
-        "If unsure, ask a clarifying question or take a structured message with take_structured_message.",
+        "If business knowledge, enabled tools, or confirmed intake do not establish the answer, do not invent pricing, policy, technical advice, availability, or promises. Say you do not have that information and use the configured fallback (message, callback, transfer, or booking link).",
       protectedGreeting: true,
     },
     voiceLanguage: {

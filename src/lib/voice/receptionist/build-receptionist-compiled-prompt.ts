@@ -194,6 +194,9 @@ function buildCallConfigurationSection(snapshot: ReceptionistCompiledSnapshot): 
   if (snapshot.voiceV2QualificationInstructions?.trim()) {
     lines.push(snapshot.voiceV2QualificationInstructions.trim());
   }
+  if (snapshot.voiceV2AfterHoursInstructions?.trim()) {
+    lines.push(snapshot.voiceV2AfterHoursInstructions.trim());
+  }
   if (!snapshot.voiceV2IntakeInstructions && snapshot.fieldManifest.length > 0) {
     lines.push("Required information:");
     for (const field of snapshot.fieldManifest) {
