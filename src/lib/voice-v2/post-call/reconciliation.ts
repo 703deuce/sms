@@ -4,6 +4,7 @@ import { extractPostCallFieldCandidates } from "./field-extraction";
 import type {
   VoiceV2MultichannelTranscript,
   VoiceV2PinnedIntakeSnapshot,
+  VoiceV2PostCallFieldCandidate,
   VoiceV2PostCallReconcileFieldResult,
   VoiceV2PostCallReconcileOutput,
 } from "./types";
@@ -17,12 +18,15 @@ export function reconcileVoiceV2PostCallRecord(input: {
   pinned: VoiceV2PinnedIntakeSnapshot;
   transcript: VoiceV2MultichannelTranscript;
   providerLockedFields?: IntakeFieldKey[];
+  candidates?: VoiceV2PostCallFieldCandidate[];
 }): VoiceV2PostCallReconcileOutput {
   const locked = new Set(input.providerLockedFields || []);
-  const candidates = extractPostCallFieldCandidates({
-    pinnedSchema: input.pinned.intakeSchema,
-    transcript: input.transcript,
-  });
+  const candidates =
+    input.candidates ??
+    extractPostCallFieldCandidates({
+      pinnedSchema: input.pinned.intakeSchema,
+      transcript: input.transcript,
+    });
 
   const reconciledIntake: VoiceV2IntakeState = { ...input.pinned.intakeState };
   const fields: VoiceV2PostCallReconcileFieldResult[] = [];
@@ -33,6 +37,17 @@ export function reconcileVoiceV2PostCallRecord(input: {
     if (locked.has(cand.fieldKey)) continue;
     const live = reconciledIntake[cand.fieldKey]?.value?.trim();
     const post = cand.candidateValue?.trim();
+
+    if (cand.verdict === "AMBIGUOUS") {
+      needsReview = true;
+      fields.push({
+        fieldKey: cand.fieldKey,
+        liveValue: live,
+        reconciledValue: live,
+        verdict: "REVIEW",
+      });
+      continue;
+    }
 
     if (!live && !post) {
       fields.push({ fieldKey: cand.fieldKey, verdict: "MISSING" });
@@ -64,7 +79,8 @@ export function reconcileVoiceV2PostCallRecord(input: {
       continue;
     }
     if (live && post && !normalizeCompare(live, post)) {
-      if (cand.confidence && cand.confidence >= 0.85) {
+      const threshold = cand.isExplicitCorrection ? 0.75 : 0.85;
+      if (cand.confidence && cand.confidence >= threshold) {
         fields.push({
           fieldKey: cand.fieldKey,
           liveValue: live,

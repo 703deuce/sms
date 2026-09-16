@@ -27,7 +27,7 @@
 ## D. Reconciliation
 
 - **Pinned schema:** loaded from L2 `CallContext.payload` at reconcile time.
-- **Extraction:** `extractPostCallFieldCandidates` — schema-driven, caller channel primary (`src/lib/voice-v2/post-call/field-extraction.ts`).
+- **Extraction:** `extractPostCallFieldCandidatesWithAi` — rules + one async structured JSON LLM pass over ordered transcript (`structured-extraction.ts`); rules-only fallback when LLM unavailable.
 - **Verdicts:** `MATCH` | `CORRECT` | `REVIEW` | `MISSING` (`reconcileVoiceV2PostCallRecord`).
 - **Provenance:** `metadata.voiceV2PostCallReconciliation`, `voiceV2ReconciledIntake`, live values preserved in reconciliation field rows.
 - **Action safety:** reconciliation does not call booking/cancel/reschedule/transfer/SMS APIs.
@@ -35,8 +35,9 @@
 
 ## E. Summary
 
-- Post-call summary generation should consume reconciled intake (existing `voice_post_call` insight path can read `metadata.voiceV2ReconciledIntake` on next pass).
-- `record_complete` / `missing_for_record` recomputed after reconciliation in job metadata.
+- **Canonical order:** recording → Deepgram → persist transcript → structured extraction → reconciliation → recompute record completeness → **final summary** (`final-summary.ts`).
+- `persistFinalSummaryAfterReconciliation` updates `VoiceConversationInsight.summary` and `metadata.voiceV2FinalSummaryAuthority=RECONCILED`.
+- Hangup-time `processPostCall` insight is provisional; reconciled summary replaces it after the post-call job.
 
 ## F. Regression scripts
 

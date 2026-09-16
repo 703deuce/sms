@@ -2,8 +2,24 @@ import "server-only";
 
 import { getPrisma } from "@/lib/db";
 import { loadVoiceV2CallContextRecord } from "../session/call-context-store";
+import { resolveVoiceV2PrimaryOutcome } from "../primary-outcome";
+import {
+  buildReconciledCallSummaryText,
+  persistFinalSummaryAfterReconciliation,
+} from "./final-summary";
 import { reconcileVoiceV2PostCallRecord } from "./reconciliation";
+import { extractPostCallFieldCandidatesWithAi } from "./structured-extraction";
 import type { VoiceV2MultichannelTranscript, VoiceV2PinnedIntakeSnapshot } from "./types";
+
+function providerLockedFieldsFromOutcome(
+  primaryOutcome?: string,
+  schema?: import("../intake/types").VoiceV2IntakeSchema,
+): string[] {
+  if (primaryOutcome === "BOOKED" && schema) {
+    return schema.fields.map((f) => f.key);
+  }
+  return [];
+}
 
 export async function runVoiceV2PostCallReconciliationJob(input: {
   workspaceId: string;
@@ -13,7 +29,7 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
   const prisma = getPrisma();
   const call = await prisma.voiceCall.findFirst({
     where: { id: input.callId, workspaceId: input.workspaceId },
-    select: { metadata: true, telnyxCallControlId: true },
+    select: { metadata: true, telnyxCallControlId: true, appointmentBooked: true },
   });
   if (!call) return { ok: false, reason: "call_not_found" };
 
@@ -25,21 +41,54 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
     return { ok: false, reason: "no_call_context" };
   }
 
+  const meta = (call.metadata || {}) as Record<string, unknown>;
+  const primaryOutcome =
+    (meta.voiceV2PrimaryOutcome as string) ||
+    (payload ? resolveVoiceV2PrimaryOutcome(payload) : "NONE");
+
   const pinned: VoiceV2PinnedIntakeSnapshot = {
     intakeSchema: payload.intakeSchema,
     intakeState: payload.intakeState,
     intakeSchemaRevision: payload.capabilities?.intakeSchemaRevision,
     callerAniE164: payload.callerAniE164,
-    primaryOutcome: (call.metadata as Record<string, unknown>)?.voiceV2PrimaryOutcome as string,
+    primaryOutcome,
   };
+
+  const { candidates, extraction, source } = await extractPostCallFieldCandidatesWithAi({
+    pinnedSchema: pinned.intakeSchema,
+    transcript: input.transcript,
+    intakeState: pinned.intakeState,
+    primaryOutcome,
+  });
+
+  const locked = providerLockedFieldsFromOutcome(primaryOutcome, pinned.intakeSchema);
 
   const reconciled = reconcileVoiceV2PostCallRecord({
     pinned,
     transcript: input.transcript,
-    providerLockedFields: [],
+    providerLockedFields: locked as import("../intake/types").IntakeFieldKey[],
+    candidates,
   });
 
-  const prevMeta = (call.metadata || {}) as Record<string, unknown>;
+  const summary = buildReconciledCallSummaryText({
+    intakeSchema: pinned.intakeSchema,
+    reconciledIntake: reconciled.reconciledIntake,
+    primaryOutcome,
+    transcript: input.transcript,
+  });
+
+  await persistFinalSummaryAfterReconciliation({
+    workspaceId: input.workspaceId,
+    callId: input.callId,
+    summary,
+    reconciledIntake: reconciled.reconciledIntake,
+    intakeSchema: pinned.intakeSchema,
+    recordComplete: reconciled.recordComplete,
+    missingForRecord: reconciled.missingForRecord,
+    needsReview: reconciled.needsReview,
+  });
+
+  const prevMeta = meta;
   await prisma.voiceCall.update({
     where: { id: input.callId },
     data: {
@@ -52,6 +101,14 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
           missingForRecord: reconciled.missingForRecord,
           needsReview: reconciled.needsReview,
           fields: reconciled.fields,
+          extractionSource: source,
+          structuredExtraction: extraction
+            ? {
+                provider: extraction.provider,
+                model: extraction.model,
+                fieldCount: extraction.fields.length,
+              }
+            : null,
         },
         voiceV2ReconciledIntake: reconciled.reconciledIntake,
         voiceV2RecordComplete: reconciled.recordComplete,
@@ -60,7 +117,7 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
     },
   });
 
-  return { ok: true, recordComplete: reconciled.recordComplete };
+  return { ok: true, recordComplete: reconciled.recordComplete, summary };
 }
 
 async function patchReconcileMeta(callId: string, patch: Record<string, unknown>) {

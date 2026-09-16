@@ -17,6 +17,7 @@ export type VoiceV2PostCallFieldCandidate = {
   confidence?: number;
   source: "POST_CALL_TRANSCRIPT";
   channel?: "caller" | "agent" | "mixed";
+  isExplicitCorrection?: boolean;
 };
 
 export type VoiceV2PostCallReconcileFieldResult = {
