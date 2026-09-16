@@ -42,6 +42,8 @@ export type VoiceV2ContextCapabilities = {
   bookingEnabled: boolean;
   intakeEnabled: boolean;
   transferEnabled?: boolean;
+  /** Pinned at enrollment/warmup — do not reload agent config per tool. */
+  voiceV2PstnLiveBooking?: boolean;
 };
 
 export type VoiceV2BookingPreference = {

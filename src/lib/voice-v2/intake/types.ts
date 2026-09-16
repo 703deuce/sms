@@ -64,6 +64,12 @@ export interface VoiceV2CallContext {
   /** Observability: intake saves this call (in-memory). */
   intakeSaveCount?: number;
   compiledAt: string;
+  /** Pinned capabilities from enrollment / L2 record (warm tool path). */
+  capabilities?: {
+    voiceV2PstnLiveBooking?: boolean;
+    bookingEnabled?: boolean;
+    intakeEnabled?: boolean;
+  };
 }
 
 export interface IntakeReadinessResult {

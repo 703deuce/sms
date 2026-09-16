@@ -77,7 +77,10 @@ export async function resolveCallDynamicVariables(input: {
   set("caller_phone", input.fromE164);
   set("called_phone", input.toE164);
   set("call_direction", input.direction);
-  if (input.callId) set("call_id", input.callId);
+  if (input.callId) {
+    set("call_id", input.callId);
+    set("transovo_voice_call_id", input.callId);
+  }
 
   // Contact
   if (input.contactId) {

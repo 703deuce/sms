@@ -8,10 +8,16 @@ import { scheduleIntakePersistence } from "./persist-deferred";
 import { getIntakeReadiness } from "./readiness";
 import { transitionAfterIntakeSave } from "../booking-workflow";
 import {
-  loadVoiceV2PstnLiveBookingFlag,
+  resolveVoiceV2PstnLiveBookingForContext,
   workflowPayloadForContext,
 } from "../booking-workflow-hooks";
 import { SaveIntakeTrace } from "./save-intake-trace";
+import {
+  getIntakeIdempotentResult,
+  storeIntakeIdempotentResult,
+} from "./intake-idempotency";
+import type { VoiceV2ContextLookupTrace } from "../session/context-lookup-trace";
+import { isTrustedPrismaVoiceCallId } from "./resolve-trusted-call-id";
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -57,10 +63,12 @@ async function attachBookingWorkflow(
 ): Promise<{
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>;
   workflow: Record<string, unknown>;
+  pstnFlagReloaded: boolean;
 }> {
   trace?.mark("WORKFLOW_TRANSITION_START");
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-  const voiceV2PstnLiveBooking = await loadVoiceV2PstnLiveBookingFlag(workspaceId, agentId);
+  const { flag: voiceV2PstnLiveBooking, reloaded: pstnFlagReloaded } =
+    await resolveVoiceV2PstnLiveBookingForContext(ctx, workspaceId, agentId);
   const nextCtx = transitionAfterIntakeSave({
     ctx,
     raw,
@@ -73,6 +81,7 @@ async function attachBookingWorkflow(
   return {
     ctx: nextCtx,
     workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking),
+    pstnFlagReloaded,
   };
 }
 
@@ -144,7 +153,11 @@ export async function executeVoiceV2SaveIntakeFields(
   raw: Record<string, unknown>,
   workspaceId: string,
   agentId: string,
-  observability?: { trace?: SaveIntakeTrace },
+  observability?: {
+    trace?: SaveIntakeTrace;
+    trustedPrismaCallId?: string | null;
+    lookupTrace?: VoiceV2ContextLookupTrace;
+  },
 ): Promise<SaveIntakeResult> {
   const trace = observability?.trace ?? new SaveIntakeTrace();
   trace.mark("REQUEST_RECEIVED");
@@ -160,16 +173,34 @@ export async function executeVoiceV2SaveIntakeFields(
     raw.conversation_id || raw.telnyx_conversation_id || raw.telnyxConversationId || "",
   ).trim();
   const fromE164 = String(raw.from || raw.caller || raw.from_e164 || "").trim();
+  const trustedPrismaCallId = observability?.trustedPrismaCallId?.trim() || "";
 
   const sessionKey = resolveSessionKey({ callControlId, conversationId });
-  if (!sessionKey) {
+  const canonicalHint =
+    trustedPrismaCallId && isTrustedPrismaVoiceCallId(trustedPrismaCallId)
+      ? `call:${trustedPrismaCallId}`
+      : null;
+
+  const toolInvocationId = String(
+    raw.tool_invocation_id || raw.toolInvocationId || "",
+  ).trim();
+
+  if (canonicalHint && toolInvocationId) {
+    const cached = await getIntakeIdempotentResult(canonicalHint, toolInvocationId);
+    if (cached) return cached;
+  }
+
+  if (!sessionKey && !canonicalHint) {
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
   }
 
-  let ctx = getVoiceV2CallContext(sessionKey);
+  let ctx =
+    (canonicalHint ? getVoiceV2CallContext(canonicalHint) : null) ||
+    (sessionKey ? getVoiceV2CallContext(sessionKey) : null);
+
   if (ctx) {
     trace.mark("CALL_CONTEXT_LOOKUP_START");
-    trace.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: true });
+    trace.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: true, source: "l1_direct" });
   } else {
     ctx = await ensureVoiceV2CallContext({
       workspaceId,
@@ -177,12 +208,26 @@ export async function executeVoiceV2SaveIntakeFields(
       callControlId,
       conversationId,
       fromE164,
+      trustedPrismaCallId,
       trace,
+      lookupTrace: observability?.lookupTrace,
     });
   }
 
   if (!ctx) {
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
+  }
+
+  const canonicalSessionKey = ctx.sessionKey;
+
+  async function finishWithIdempotency(result: SaveIntakeResult): Promise<SaveIntakeResult> {
+    if (
+      toolInvocationId &&
+      (result.status === "INTAKE_SAVED" || result.status === "FIELD_NOT_ENABLED")
+    ) {
+      await storeIntakeIdempotentResult(canonicalSessionKey, toolInvocationId, result);
+    }
+    return result;
   }
 
   const fieldsRaw = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
@@ -207,7 +252,7 @@ export async function executeVoiceV2SaveIntakeFields(
     if (onlyDisabled) {
       const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
       const wf = await attachBookingWorkflow(ctx, raw, [], workspaceId, agentId, trace);
-      return {
+      return finishWithIdempotency({
         status: "FIELD_NOT_ENABLED",
         ignored_fields: validation.disabledFields,
         saved_fields: [],
@@ -219,7 +264,7 @@ export async function executeVoiceV2SaveIntakeFields(
           STATE_UPDATE_MS: 0,
           TOTAL_MS: Date.now() - t0,
         },
-      };
+      });
     }
     const partial = commitNormalizedFields(ctx, validation.normalized, {
       validationMs,
@@ -228,7 +273,7 @@ export async function executeVoiceV2SaveIntakeFields(
     if (partial.saved.length > 0) {
       void scheduleIntakePersistence({
         workspaceId,
-        sessionKey,
+        sessionKey: canonicalSessionKey,
         callControlId: callControlId || null,
         snapshot: partial.ctx.intakeState,
         updatedAt: new Date().toISOString(),
@@ -242,7 +287,7 @@ export async function executeVoiceV2SaveIntakeFields(
         agentId,
         trace,
       );
-      return {
+      return finishWithIdempotency({
         status: "INTAKE_SAVED",
         saved: partial.saved,
         ignored_fields: validation.disabledFields.length ? validation.disabledFields : undefined,
@@ -255,7 +300,7 @@ export async function executeVoiceV2SaveIntakeFields(
           STATE_UPDATE_MS: partial.stateUpdateMs,
           TOTAL_MS: Date.now() - t0,
         },
-      };
+      });
     }
     return {
       status: "INTAKE_VALIDATION_ERROR",
@@ -274,7 +319,7 @@ export async function executeVoiceV2SaveIntakeFields(
 
   void scheduleIntakePersistence({
     workspaceId,
-    sessionKey,
+    sessionKey: canonicalSessionKey,
     callControlId: callControlId || null,
     snapshot: ctx.intakeState,
     updatedAt: new Date().toISOString(),
@@ -284,7 +329,7 @@ export async function executeVoiceV2SaveIntakeFields(
   const ignoredFields = validation.disabledFields;
   const wf = await attachBookingWorkflow(ctx, raw, committed.saved, workspaceId, agentId, trace);
 
-  return {
+  return finishWithIdempotency({
     status: "INTAKE_SAVED",
     saved: committed.saved,
     ignored_fields: ignoredFields.length ? ignoredFields : undefined,
@@ -296,5 +341,5 @@ export async function executeVoiceV2SaveIntakeFields(
       STATE_UPDATE_MS: committed.stateUpdateMs,
       TOTAL_MS: Date.now() - t0,
     },
-  };
+  });
 }

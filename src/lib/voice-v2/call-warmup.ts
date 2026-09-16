@@ -14,6 +14,7 @@ import {
 } from "./session/call-context-store";
 import { warmMicrosoftTokenIfNeeded } from "./session/token-readiness";
 import type { VoiceV2CallContext } from "./intake/types";
+import { getVoiceV2InstanceId } from "./runtime/instance-id";
 
 export type VoiceV2WarmupInput = {
   workspaceId: string;
@@ -121,6 +122,7 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
       : null;
 
   deferWarmupEvent(input, "voice_v2.warmup_started", {
+    instance_id: getVoiceV2InstanceId(),
     at: warmupActualStartedAt,
     WARMUP_ACTUAL_STARTED_AT: warmupActualStartedAt,
     ASSISTANT_START_RETURNED_AT: input.assistantStartReturnedAt ?? null,
@@ -177,6 +179,11 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
           telnyxConversationId: input.conversationId || undefined,
         },
         enrollment: built.enrollment,
+        capabilities: {
+          bookingEnabled: true,
+          intakeEnabled: true,
+          voiceV2PstnLiveBooking: bookingEnabled,
+        },
       },
       { l2Persist: "await" },
     );
@@ -208,6 +215,7 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
 
   const l2ReadyAt = Date.now();
   deferWarmupEvent(input, "voice_v2.warmup_l2_ready", {
+    instance_id: getVoiceV2InstanceId(),
     at: l2ReadyAt,
     WARMUP_L2_READY_AT: l2ReadyAt,
     WARMUP_DURATION_MS: l2ReadyAt - warmupActualStartedAt,
@@ -242,6 +250,7 @@ export function scheduleVoiceV2CallWarmup(input: VoiceV2WarmupInput): void {
   const warmupScheduledAt = input.warmupScheduledAt ?? Date.now();
   const withTiming: VoiceV2WarmupInput = { ...input, warmupScheduledAt };
   deferWarmupEvent(withTiming, "voice_v2.warmup_scheduled", {
+    instance_id: getVoiceV2InstanceId(),
     at: warmupScheduledAt,
     WARMUP_SCHEDULED_AT: warmupScheduledAt,
     ASSISTANT_START_RETURNED_AT: withTiming.assistantStartReturnedAt ?? null,

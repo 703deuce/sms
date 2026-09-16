@@ -75,5 +75,10 @@ export function syncLegacyFromRecord(record: VoiceV2CallContextRecord): VoiceV2C
   payload.workspaceId = record.identity.workspaceId;
   payload.agentId = record.identity.agentId;
   if (record.booking.timezone) payload.businessTimezone = record.booking.timezone;
+  payload.capabilities = {
+    voiceV2PstnLiveBooking: record.capabilities.voiceV2PstnLiveBooking,
+    bookingEnabled: record.capabilities.bookingEnabled,
+    intakeEnabled: record.capabilities.intakeEnabled,
+  };
   return payload;
 }

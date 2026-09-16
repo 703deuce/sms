@@ -9,6 +9,7 @@ import type {
 import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION, VOICE_V2_CALL_CONTEXT_TTL_SEC } from "./types";
 import { voiceV2ContextMetric } from "./observability";
 import { assertVoiceV2SharedSessionBackendAllowed } from "./store-config";
+import { getVoiceV2SharedRedis } from "./redis-client";
 import { syncLegacyFromRecord, buildRecordFromLegacy, projectOfferFromLegacy } from "./legacy-bridge";
 import type { VoiceV2CallContext } from "../intake/types";
 import type { VoiceV2ContextIdentity, VoiceV2EnrollmentSnapshot } from "./types";
@@ -194,16 +195,10 @@ export class InMemoryVoiceV2CallContextStore implements VoiceV2CallContextStore 
 }
 
 class RedisVoiceV2CallContextStore implements VoiceV2CallContextStore {
-  private client: import("ioredis").default | null = null;
-
   private async redis(): Promise<import("ioredis").default> {
-    if (this.client) return this.client;
-    const IORedis = (await import("ioredis")).default;
-    const url = process.env.REDIS_URL;
-    if (!url) throw new Error("REDIS_URL required");
-    this.client = new IORedis(url, { maxRetriesPerRequest: 2, lazyConnect: true });
-    await this.client.connect().catch(() => undefined);
-    return this.client;
+    const client = await getVoiceV2SharedRedis();
+    if (!client) throw new Error("REDIS_URL required");
+    return client;
   }
 
   private async acquireLock(canonical: string): Promise<() => Promise<void>> {
@@ -371,13 +366,10 @@ export function registerVoiceV2SessionTerminated(canonicalKey: string): void {
 
 async function persistTerminatedTombstone(canonicalKey: string): Promise<void> {
   if (process.env.VOICE_V2_ALLOW_MEMORY_L2 === "1") return;
-  if (!process.env.REDIS_URL?.trim()) return;
   try {
-    const IORedis = (await import("ioredis")).default;
-    const r = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
-    await r.connect().catch(() => undefined);
+    const r = await getVoiceV2SharedRedis();
+    if (!r) return;
     await r.set(tombstoneRedisKey(canonicalKey), "1", "EX", VOICE_V2_CALL_CONTEXT_TTL_SEC);
-    await r.quit().catch(() => undefined);
   } catch {
     // non-blocking
   }
@@ -386,17 +378,96 @@ async function persistTerminatedTombstone(canonicalKey: string): Promise<void> {
 export async function isVoiceV2SessionTerminated(canonicalKey: string): Promise<boolean> {
   if (terminatedSessionKeys.has(canonicalKey)) return true;
   if (process.env.VOICE_V2_ALLOW_MEMORY_L2 === "1") return false;
-  if (!process.env.REDIS_URL?.trim()) return false;
   try {
-    const IORedis = (await import("ioredis")).default;
-    const r = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
-    await r.connect().catch(() => undefined);
+    const r = await getVoiceV2SharedRedis();
+    if (!r) return false;
     const hit = await r.get(tombstoneRedisKey(canonicalKey));
-    await r.quit().catch(() => undefined);
     return hit === "1";
   } catch {
     return false;
   }
+}
+
+export type VoiceV2L2ContextBundle = {
+  terminated: boolean;
+  record: VoiceV2CallContextRecord | null;
+  tombstoneMs: number;
+  contextGetMs: number;
+  deserializeMs: number;
+};
+
+/** One round trip for tombstone + context when canonical is known. */
+export async function fetchVoiceV2L2ContextBundle(
+  canonicalKey: string,
+): Promise<VoiceV2L2ContextBundle> {
+  if (terminatedSessionKeys.has(canonicalKey)) {
+    return {
+      terminated: true,
+      record: null,
+      tombstoneMs: 0,
+      contextGetMs: 0,
+      deserializeMs: 0,
+    };
+  }
+  const store = getVoiceV2CallContextStore();
+  if (getVoiceV2CallContextStoreMode() === "memory" || process.env.VOICE_V2_ALLOW_MEMORY_L2 === "1") {
+    const t0 = Date.now();
+    const record = await store.getRecord(canonicalKey);
+    return {
+      terminated: false,
+      record,
+      tombstoneMs: 0,
+      contextGetMs: Date.now() - t0,
+      deserializeMs: 0,
+    };
+  }
+  const r = await getVoiceV2SharedRedis();
+  if (!r) {
+    const t0 = Date.now();
+    const record = await store.getRecord(canonicalKey);
+    return {
+      terminated: false,
+      record,
+      tombstoneMs: 0,
+      contextGetMs: Date.now() - t0,
+      deserializeMs: 0,
+    };
+  }
+  const tGet = Date.now();
+  const [tombRaw, ctxRaw] = await r.mget(
+    tombstoneRedisKey(canonicalKey),
+    ctxKey(canonicalKey),
+  );
+  const contextGetMs = Date.now() - tGet;
+  if (tombRaw === "1") {
+    terminatedSessionKeys.add(canonicalKey);
+    return {
+      terminated: true,
+      record: null,
+      tombstoneMs: contextGetMs,
+      contextGetMs: 0,
+      deserializeMs: 0,
+    };
+  }
+  if (!ctxRaw) {
+    return {
+      terminated: false,
+      record: null,
+      tombstoneMs: contextGetMs,
+      contextGetMs: 0,
+      deserializeMs: 0,
+    };
+  }
+  const d0 = Date.now();
+  const record = JSON.parse(ctxRaw) as VoiceV2CallContextRecord;
+  const deserializeMs = Date.now() - d0;
+  return {
+    terminated: false,
+    record,
+    tombstoneMs: contextGetMs,
+    contextGetMs: 0,
+    deserializeMs,
+  };
 }
 
 export function clearVoiceV2SessionTerminatedForTests(): void {
@@ -451,9 +522,18 @@ export async function resolveVoiceV2SessionKey(input: {
   return getVoiceV2CallContextStore().resolveCanonicalSessionKey(input);
 }
 
+export function hydrateL1FromRecord(record: VoiceV2CallContextRecord): VoiceV2CallContext {
+  return hydrateL1(record);
+}
+
 function hydrateL1(record: VoiceV2CallContextRecord): VoiceV2CallContext {
   const payload = syncLegacyFromRecord(record);
-  l1.set(record.identity.sessionKey, { record });
+  const entry = { record };
+  l1.set(record.identity.sessionKey, entry);
+  const cc = record.identity.telnyxCallControlId?.trim();
+  if (cc) l1.set(`cc:${cc}`, entry);
+  const conv = record.identity.telnyxConversationId?.trim();
+  if (conv) l1.set(`conv:${conv}`, entry);
   return payload;
 }
 
@@ -530,6 +610,7 @@ export async function createVoiceV2CallContext(
     payload: VoiceV2CallContext;
     identity: VoiceV2ContextIdentity;
     enrollment: VoiceV2EnrollmentSnapshot;
+    capabilities?: import("./types").VoiceV2ContextCapabilities;
   },
   options?: CreateVoiceV2CallContextOptions,
 ): Promise<VoiceV2CallContextRecord> {
@@ -545,6 +626,7 @@ export async function createVoiceV2CallContext(
     payload: { ...input.payload, sessionKey: input.identity.sessionKey },
     identity: input.identity,
     enrollment: input.enrollment,
+    capabilities: input.capabilities,
     stateVersion: 0,
   });
   hydrateL1(record);

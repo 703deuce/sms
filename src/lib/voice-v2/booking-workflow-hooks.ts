@@ -24,6 +24,19 @@ export async function loadVoiceV2PstnLiveBookingFlag(
   return isVoiceV2PstnLiveBookingMode(config);
 }
 
+/** Warm tool path — use pinned capability; recovery may load config once. */
+export async function resolveVoiceV2PstnLiveBookingForContext(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+  workspaceId: string,
+  agentId: string,
+): Promise<{ flag: boolean; reloaded: boolean }> {
+  if (ctx.capabilities?.voiceV2PstnLiveBooking !== undefined) {
+    return { flag: Boolean(ctx.capabilities.voiceV2PstnLiveBooking), reloaded: false };
+  }
+  const flag = await loadVoiceV2PstnLiveBookingFlag(workspaceId, agentId);
+  return { flag, reloaded: true };
+}
+
 export function workflowPayloadForContext(
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
   voiceV2PstnLiveBooking: boolean,

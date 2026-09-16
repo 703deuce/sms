@@ -14,6 +14,7 @@ import {
   getVoiceV2CallContextStoreMode,
   getVoiceV2CallContextL1,
   clearVoiceV2CallContextL1ForTests,
+  isVoiceV2SessionTerminated,
 } from "../src/lib/voice-v2/session/call-context-store";
 import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
 import {
@@ -120,6 +121,13 @@ async function main() {
     agentConfig: V2_CFG,
   });
 
+  const tombstoneSamples: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t0 = performance.now();
+    await isVoiceV2SessionTerminated(`call:${warmCallId}`);
+    tombstoneSamples.push(performance.now() - t0);
+  }
+
   const normalWarmedSamples: number[] = [];
   for (let i = 0; i < 5; i++) {
     const t0 = performance.now();
@@ -127,7 +135,7 @@ async function main() {
       workspaceId: "ws_test",
       agentId: "agent_test",
       callControlId: warmCc,
-      callId: warmCallId,
+      trustedPrismaCallId: warmCallId,
     });
     normalWarmedSamples.push(performance.now() - t0);
     if (!ctx || !getVoiceV2CallContextL1(ctx.sessionKey)) {
@@ -144,7 +152,7 @@ async function main() {
       workspaceId: "ws_test",
       agentId: "agent_test",
       callControlId: warmCc,
-      callId: warmCallId,
+      trustedPrismaCallId: warmCallId,
     });
     l1MissRecoverySamples.push(performance.now() - t0);
   }
@@ -168,6 +176,12 @@ async function main() {
         NORMAL_WARMED_FIRST_TOOL_CONTEXT_P95_MS: normalWarmed.p95,
         L1_MISS_RECOVERY_CONTEXT_P50_MS: l1MissRecovery.p50,
         L1_MISS_RECOVERY_CONTEXT_P95_MS: l1MissRecovery.p95,
+        TOMBSTONE_CHECK_P50_MS: summarize(tombstoneSamples).p50,
+        TOMBSTONE_CHECK_P95_MS: summarize(tombstoneSamples).p95,
+        SAME_REPLICA_CONTEXT_P50_MS: normalWarmed.p50,
+        SAME_REPLICA_CONTEXT_P95_MS: normalWarmed.p95,
+        CROSS_REPLICA_CONTEXT_P50_MS: l1MissRecovery.p50,
+        CROSS_REPLICA_CONTEXT_P95_MS: l1MissRecovery.p95,
       },
       null,
       2,

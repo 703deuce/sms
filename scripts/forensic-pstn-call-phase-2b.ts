@@ -66,6 +66,39 @@ async function main() {
   }
 
   const messages = await loadMessages(convId);
+  const transcriptionEvents = call
+    ? await prisma.voiceCallEvent.findMany({
+        where: { callId: call.id, eventType: "call.transcription" },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const pstnTranscriptLines = transcriptionEvents
+    .map((e) => {
+      const td = (e.payload as Payload)?.transcription_data as Payload | undefined;
+      const text = td?.transcript;
+      if (!text) return null;
+      return {
+        at: e.createdAt.toISOString(),
+        track: td?.transcription_track,
+        text: String(text),
+      };
+    })
+    .filter(Boolean);
+
+  const intakeAudits = call
+    ? await prisma.auditLog.findMany({
+        where: {
+          workspaceId: call.workspaceId,
+          event: "voice_v2.intake_save_trace",
+          createdAt: {
+            gte: call.startedAt || new Date(0),
+            lte: call.endedAt || new Date(),
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
   const events = call
     ? await prisma.voiceCallEvent.findMany({
         where: { callId: call.id },
@@ -220,6 +253,15 @@ async function main() {
           type: e.eventType,
           payload: e.payload,
         })),
+        PSTN_TIME_AUTHORITY: {
+          rule:
+            "Prefer call.transcription + tool/audit ingress over Telnyx Messages API created_at when they conflict.",
+          transcription_timeline: pstnTranscriptLines,
+          intake_save_audits: intakeAudits.map((a) => ({
+            at: a.createdAt.toISOString(),
+            detail: a.detail?.slice(0, 400),
+          })),
+        },
         TURN_TIMELINE: turns,
         TRANSCRIPT_RAW: messages.map((m) => ({
           at: m.created_at,
