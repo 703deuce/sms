@@ -1,9 +1,7 @@
 /**
  * Voice V2 — full 8-page wizard customer-path UI certification (production).
  * UI clicks only for mutations; GET APIs for backend verification after save.
- * No PSTN.
- *
- *   BASE_URL=$BASE_URL AGENT_ID=$AGENT_ID node scripts/voice-v2-wizard-ui-cert.mjs
+ * No PSTN. Requires BASE_URL and AGENT_ID env vars.
  */
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -294,7 +292,7 @@ async function main() {
   if (!nameOk) fail("Purpose agent name not persisted after UI save");
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await waitReady(page);
+  await waitWizardHydrated(page);
   const nameAfterRefresh = await page.locator("#solution-name").first().inputValue();
   row({
     page: "Purpose",
@@ -402,7 +400,7 @@ async function main() {
     if (await editBtn.count()) {
       await editBtn.click();
     }
-    const labelInput = page.getByDisplayValue(CUSTOM_FIELD_LABEL).first();
+    const labelInput = page.locator(`input[value="${CUSTOM_FIELD_LABEL}"]`).first();
     if (await labelInput.count()) {
       await labelInput.fill("Parent/guardian name");
       await clickSaveDraft(page);
