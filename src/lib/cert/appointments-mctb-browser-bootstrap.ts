@@ -9,6 +9,7 @@ import { grantProductEntitlement } from "@/lib/products/entitlements";
 import { grantWorkspaceProductFeature } from "@/lib/products/feature-entitlements";
 import { saveNotetakerConfig } from "@/lib/meeting-assistant/settings";
 import { saveMissedCallTextBack } from "@/lib/solutions/missed-call-text-back/save";
+import { findActiveE164Owner } from "@/lib/phone/e164-workspace-uniqueness";
 
 import {
   CERT_APPOINTMENT_TYPE_NAME,
@@ -101,6 +102,13 @@ export async function bootstrapAppointmentsMctbBrowserCertWorkspace(
       maximumBookingDaysAhead: 30,
     },
   });
+
+  const e164Conflict = await findActiveE164Owner(CERT_FORWARD_E164, { exceptWorkspaceId: workspaceId });
+  if (e164Conflict) {
+    throw new Error(
+      `Cert bootstrap cannot claim ${CERT_FORWARD_E164}; owned by workspace ${e164Conflict.workspaceId}`,
+    );
+  }
 
   let phone = await prisma.phoneNumber.findFirst({
     where: { workspaceId, e164: CERT_FORWARD_E164 },

@@ -8,6 +8,7 @@ import {
   type NumberPaymentConfirmResult,
 } from "@/lib/payments/number-payment-provider";
 import { emitMarketplaceAlert } from "@/lib/ops/marketplace-alerts";
+import { assertE164AssignableToWorkspace } from "@/lib/phone/e164-workspace-uniqueness";
 import { normalizeTelnyxError, type NormalizedTelnyxError } from "./telnyx-errors";
 
 export type CompletePremiumPurchaseInput = {
@@ -155,6 +156,8 @@ export async function finalizeNumberOwnership(input: {
     reservationId: input.reservationId,
     paymentId: input.paymentId,
   });
+
+  await assertE164AssignableToWorkspace(input.workspaceId, e164);
 
   const phoneRow = await prisma.phoneNumber.upsert({
     where: { workspaceId_e164: { workspaceId: input.workspaceId, e164 } },
