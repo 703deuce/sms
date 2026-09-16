@@ -197,6 +197,16 @@ async function main() {
       callerText: "Actually her name is Patrice.",
       agentText: "",
     },
+    candidates: [
+      {
+        fieldKey: "mother_s_name",
+        verdict: "FOUND",
+        candidateValue: "Patrice",
+        confidence: 0.93,
+        isExplicitCorrection: true,
+        source: "POST_CALL_LLM_EXTRACTION",
+      },
+    ],
   });
   check(
     "K_FLAGSHIP_RECONCILE",
