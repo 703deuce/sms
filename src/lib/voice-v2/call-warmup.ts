@@ -180,9 +180,10 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
         },
         enrollment: built.enrollment,
         capabilities: {
-          bookingEnabled: true,
-          intakeEnabled: true,
-          voiceV2PstnLiveBooking: bookingEnabled,
+          bookingEnabled: built.payload.capabilities?.bookingEnabled ?? bookingEnabled,
+          intakeEnabled: built.payload.capabilities?.intakeEnabled ?? true,
+          voiceV2PstnLiveBooking: built.payload.capabilities?.voiceV2PstnLiveBooking ?? bookingEnabled,
+          bookingStrategy: built.payload.capabilities?.bookingStrategy,
         },
       },
       { l2Persist: "await" },

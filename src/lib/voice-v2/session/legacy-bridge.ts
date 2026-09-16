@@ -49,10 +49,14 @@ export function buildRecordFromLegacy(input: {
       createdAt: input.payload.compiledAt || now,
       updatedAt: now,
     },
-    capabilities: input.capabilities ?? {
-      bookingEnabled: true,
-      intakeEnabled: true,
-    },
+    capabilities:
+      input.capabilities ??
+      ({
+        bookingEnabled: input.payload.capabilities?.bookingEnabled ?? true,
+        intakeEnabled: input.payload.capabilities?.intakeEnabled ?? true,
+        voiceV2PstnLiveBooking: input.payload.capabilities?.voiceV2PstnLiveBooking,
+        bookingStrategy: input.payload.capabilities?.bookingStrategy,
+      } satisfies VoiceV2ContextCapabilities),
     bookingPreference: input.payload.bookingWorkflow?.requestedDate
       ? {
           requestedDate: input.payload.bookingWorkflow.requestedDate,
@@ -100,9 +104,12 @@ export function syncLegacyFromRecord(record: VoiceV2CallContextRecord): VoiceV2C
   payload.agentId = record.identity.agentId;
   if (record.booking.timezone) payload.businessTimezone = record.booking.timezone;
   payload.capabilities = {
+    ...payload.capabilities,
     voiceV2PstnLiveBooking: record.capabilities.voiceV2PstnLiveBooking,
     bookingEnabled: record.capabilities.bookingEnabled,
     intakeEnabled: record.capabilities.intakeEnabled,
+    bookingStrategy:
+      record.capabilities.bookingStrategy ?? payload.capabilities?.bookingStrategy,
   };
   return payload;
 }

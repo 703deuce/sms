@@ -59,14 +59,19 @@ export function workflowPayloadForContext(
   const hasOffer =
     Boolean(ctx.currentOfferSet?.offerSetId) && (ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
   const workflow = workflowFromContext(ctx);
+  const strategy =
+    bookingStrategy ??
+    ctx.capabilities?.bookingStrategy ??
+    (voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
   workflow.nextStage = deriveVoiceV2NextStage({
     workflow,
     readiness,
     hasActiveOfferSet: hasOffer,
+    bookingStrategy: strategy,
   });
   return buildWorkflowToolPayload({
     voiceV2PstnLiveBooking,
-    bookingStrategy: bookingStrategy ?? ctx.capabilities?.bookingStrategy,
+    bookingStrategy: strategy,
     workflow,
     readiness,
     hasActiveOfferSet: hasOffer,

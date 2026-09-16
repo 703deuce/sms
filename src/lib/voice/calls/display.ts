@@ -3,6 +3,7 @@ import type { MockCallOutcome } from "./mock-data";
 export type CallOutcomeBadge =
   | "New Lead"
   | "Message Taken"
+  | "Appointment Requested"
   | "Appointment Booked"
   | "Transferred"
   | "FAQ"
@@ -117,7 +118,10 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (call.appointmentBooked) return "Appointment Booked";
   const outcome = String(call.outcome || "").toLowerCase();
   if (outcome.includes("spam")) return "Spam";
-  if (outcome.includes("appointment") || outcome.includes("booked")) {
+  if (outcome.includes("appointment_requested") || outcome.includes("appointment request")) {
+    return "Appointment Requested";
+  }
+  if (outcome.includes("booked") || outcome.includes("appointment_booked")) {
     return "Appointment Booked";
   }
   if (
@@ -151,6 +155,7 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "New Lead": "bg-violet-50 text-violet-700 ring-violet-200",
   "Lead Captured": "bg-violet-50 text-violet-700 ring-violet-200",
   "Message Taken": "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  "Appointment Requested": "bg-sky-50 text-sky-800 ring-sky-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
   Transferred: "bg-violet-50 text-violet-700 ring-violet-200",
   FAQ: "bg-slate-100 text-slate-700 ring-slate-200",

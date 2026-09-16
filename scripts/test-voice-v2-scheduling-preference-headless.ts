@@ -42,6 +42,10 @@ function seed(): VoiceV2CallContext {
     },
     askedFields: {},
     compiledAt: new Date().toISOString(),
+    capabilities: {
+      bookingStrategy: "MICROSOFT_365",
+      voiceV2PstnLiveBooking: true,
+    },
   };
   setVoiceV2CallContext(ctx);
   return ctx;

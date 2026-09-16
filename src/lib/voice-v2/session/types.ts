@@ -44,6 +44,8 @@ export type VoiceV2ContextCapabilities = {
   transferEnabled?: boolean;
   /** Pinned at enrollment/warmup — do not reload agent config per tool. */
   voiceV2PstnLiveBooking?: boolean;
+  /** Wizard-published mode — pinned for entire call. */
+  bookingStrategy?: import("../booking-strategy").VoiceV2BookingStrategy;
 };
 
 export type VoiceV2BookingPreference = {

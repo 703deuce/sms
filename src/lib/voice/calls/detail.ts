@@ -96,12 +96,23 @@ export function buildActionItems(input: {
   const messageTool = input.toolExecutions?.find((t) =>
     String(t.toolType || "").includes("message"),
   );
+  const outcomeLc = String(input.call.outcome || "").toLowerCase();
+  const appointmentRequested = outcomeLc.includes("appointment_requested");
   const messageTaken =
-    Boolean(sm.reason) ||
-    String(input.call.outcome || "").includes("message") ||
-    Boolean(messageTool);
+    !appointmentRequested &&
+    (Boolean(sm.reason) ||
+      outcomeLc.includes("message_taken") ||
+      outcomeLc.includes("message") ||
+      Boolean(messageTool));
 
-  if (messageTaken) {
+  if (appointmentRequested) {
+    items.push({
+      id: "appointment-request",
+      label: "Appointment requested",
+      status: "done",
+      detail: "Waiting for business confirmation",
+    });
+  } else if (messageTaken) {
     items.push({
       id: "message",
       label: "Message taken",
@@ -125,7 +136,14 @@ export function buildActionItems(input: {
   const bookingTool = input.toolExecutions?.find((t) =>
     String(t.toolType || "").includes("book"),
   );
-  if (input.call.appointmentBooked || bookingTool) {
+  if (appointmentRequested) {
+    items.push({
+      id: "booking",
+      label: "No live booking — request only",
+      status: "skipped",
+      detail: "Business will confirm with caller",
+    });
+  } else if (input.call.appointmentBooked || bookingTool) {
     items.push({
       id: "booking",
       label: "Appointment booked",

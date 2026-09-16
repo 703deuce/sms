@@ -19,6 +19,7 @@ import {
 import { verifyVoiceV2WorkflowReadBack } from "../src/lib/voice-v2/workflow-capability";
 import {
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
@@ -36,6 +37,7 @@ function v2Config(): VoiceAgentConfig {
     enabledBuiltinTools: [],
     advanced: {
       appointmentReceptionistWizard: wizard,
+      bookingStrategy: "MICROSOFT_365",
       voiceV2PstnLiveBooking: true,
       conversationWorkflowMode: true,
     },
@@ -51,7 +53,12 @@ const flow = buildDesiredTelnyxWorkflowPayload({
     hangupId: "st_hangup",
     transferId: "st_transfer",
   },
-  v2Shared: { findId: "v2_find", bookId: "v2_book", saveIntakeId: "v2_save" },
+  v2Shared: {
+    findId: "v2_find",
+    bookId: "v2_book",
+    saveIntakeId: "v2_save",
+    finalizeRequestId: "v2_finalize",
+  },
   config: cfg,
 }).conversation_flow;
 
@@ -69,15 +76,16 @@ pass(
 pass(
   "V2_TOOLS_ON_GENERAL",
   JSON.stringify(general?.shared_tool_ids?.sort()) ===
-    JSON.stringify(["v2_save", "v2_find", "v2_book"].sort()),
+    JSON.stringify(["v2_save", "v2_find", "v2_book", "v2_finalize"].sort()),
 );
 
 const toolsOnGeneral = workflowNodeExpectedTools(WORKFLOW_NODE_IDS.GENERAL, {
   voiceV2Find: "v2_find",
   voiceV2Book: "v2_book",
   voiceV2SaveIntake: "v2_save",
+  voiceV2FinalizeRequest: "v2_finalize",
 });
-pass("SECOND_CONVERSATIONAL_AGENT", !liveBooking && toolsOnGeneral.length === 3);
+pass("SECOND_CONVERSATIONAL_AGENT", !liveBooking && toolsOnGeneral.length === 4);
 
 pass("BOOKING_INTENT_DETECT", isBookingIntentOnlyServiceReason("I need to book an appointment"));
 pass("BOOKING_INTENT_DETECT_2", isBookingIntentOnlyServiceReason("book an appointment"));
@@ -119,10 +127,10 @@ pass("FAKE_BOOKING_INTAKE_SAVES", isBookingIntentOnlyServiceReason("book an appo
 const readBack = verifyVoiceV2WorkflowReadBack({
   expectedVoiceV2Booking: true,
   readBack: {
-    tool_ids: ["v2_find", "v2_book", "v2_save"],
+    tool_ids: ["v2_find", "v2_book", "v2_save", "v2_finalize"],
     generalNode: {
       id: WORKFLOW_NODE_IDS.GENERAL,
-      shared_tool_ids: ["v2_save", "v2_find", "v2_book"],
+      shared_tool_ids: ["v2_save", "v2_find", "v2_book", "v2_finalize"],
       instructions: String(general?.instructions || ""),
     },
     liveBookingNode: null,
@@ -130,6 +138,7 @@ const readBack = verifyVoiceV2WorkflowReadBack({
       ["v2_find", VOICE_V2_TELNYX_TOOL_NAME],
       ["v2_book", VOICE_V2_BOOK_TELNYX_TOOL_NAME],
       ["v2_save", VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME],
+      ["v2_finalize", VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME],
     ]),
   },
 });
