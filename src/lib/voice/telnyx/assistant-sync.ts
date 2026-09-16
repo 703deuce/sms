@@ -324,8 +324,14 @@ export async function syncTelnyxAssistant(
     agentType: agent.agentType,
   });
 
+  const { getReceptionistCompiledFromAdvanced } = await import("@/lib/voice/receptionist/runtime");
+  const receptionistCompiled = getReceptionistCompiledFromAdvanced(
+    config.advanced as Record<string, unknown> | undefined,
+  );
+  const compiledPromptBody = receptionistCompiled?.compiledPrompt?.trim() || "";
+
   const instructions = [
-    config.instructions?.raw ||
+    compiledPromptBody || config.instructions?.raw ||
       [
         config.instructions?.system,
         config.instructions?.role,

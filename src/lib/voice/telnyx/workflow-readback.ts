@@ -12,8 +12,20 @@ export async function readTelnyxWorkflowState(assistantId: string): Promise<Teln
   const remote = await ai.getAssistant(assistantId);
   const data = ((remote as { data?: Record<string, unknown> }).data ||
     remote) as Record<string, unknown>;
-  const tool_ids = Array.isArray(data.tool_ids) ? (data.tool_ids as string[]) : [];
+  let tool_ids = Array.isArray(data.tool_ids) ? (data.tool_ids as string[]) : [];
   const flow = data.conversation_flow as { nodes?: Array<Record<string, unknown>> } | undefined;
+  if (!tool_ids.length && flow?.nodes?.length) {
+    const fromNodes = new Set<string>();
+    for (const node of flow.nodes) {
+      const shared = node.shared_tool_ids;
+      if (Array.isArray(shared)) {
+        for (const id of shared) {
+          if (typeof id === "string" && id) fromNodes.add(id);
+        }
+      }
+    }
+    tool_ids = [...fromNodes];
+  }
   const generalNode = flow?.nodes?.find((n) => n.id === "n_general") || null;
   const liveBookingNode = flow?.nodes?.find((n) => n.id === "n_live_booking") || null;
 

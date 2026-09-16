@@ -320,6 +320,7 @@ export function applyCompiledToVoiceConfig(
     },
     instructions: {
       ...base.instructions,
+      raw: snapshot.compiledPrompt,
       role: `AI receptionist for ${snapshot.businessName}`,
       system: snapshot.businessDescription,
       goals,
