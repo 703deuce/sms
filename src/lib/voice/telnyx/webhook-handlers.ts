@@ -652,6 +652,45 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
+  // Voice V2 warm-transfer consult leg (no parent VoiceCall row on this leg).
+  if (warmState.kind === "voice_v2_warm_transfer_consult") {
+    const {
+      handleVoiceV2WarmTransferConsultAnswered,
+      handleVoiceV2WarmTransferGather,
+      handleVoiceV2WarmTransferAmd,
+    } = await import("@/lib/voice-v2/transfer/warm-transfer-runtime");
+
+    const consultControlId = String(eventPayload.call_control_id || "");
+    if (eventType === "call.answered") {
+      await handleVoiceV2WarmTransferConsultAnswered({
+        consultControlId,
+        clientStateRaw: clientStateRaw,
+      }).catch((err) => console.warn("[voice/webhook] v2 warm consult answered", err));
+    }
+    if (eventType === "call.gather.ended" || eventType === "call.dtmf.received") {
+      const digit = String(eventPayload.digits || eventPayload.digit || "").trim();
+      await handleVoiceV2WarmTransferGather({
+        eventType,
+        consultControlId,
+        digits: digit,
+        clientStateRaw: clientStateRaw,
+      }).catch((err) => console.warn("[voice/webhook] v2 warm gather", err));
+    }
+    if (eventType.includes("machine") && eventType.includes("detection")) {
+      const amd = String(eventPayload.result || eventPayload.machine_detection_result || "");
+      await handleVoiceV2WarmTransferAmd({
+        consultControlId,
+        amdResult: amd,
+        clientStateRaw: clientStateRaw,
+      }).catch((err) => console.warn("[voice/webhook] v2 warm amd", err));
+    }
+    await prisma.providerWebhookEvent.update({
+      where: { providerEventId: input.providerEventId },
+      data: { status: "processed", processedAt: new Date() },
+    });
+    return { ok: true, kind: "voice_v2_warm_transfer_consult" };
+  }
+
   // Direct outbound diagnostic dial (no VoiceCall row) — answer, speak, hang up.
   if (warmState.kind === "outbound_voice_probe") {
     const { handleOutboundVoiceProbeEvent } = await import(
@@ -795,6 +834,16 @@ export async function processVoiceWebhookEvent(input: {
     }
   }
 
+  if (!isSecondaryVoiceLeg && eventType === "call.hangup") {
+    const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
+    if (controlId) {
+      const { handleVoiceV2WarmTransferCallerHangup } = await import(
+        "@/lib/voice-v2/transfer/warm-transfer-runtime"
+      );
+      await handleVoiceV2WarmTransferCallerHangup(controlId).catch(() => undefined);
+    }
+  }
+
   if (!isSecondaryVoiceLeg && eventType.includes("machine") && eventType.includes("detection")) {
     patch.voicemailDetected = true;
     patch.outcome = "voicemail";
@@ -823,13 +872,27 @@ export async function processVoiceWebhookEvent(input: {
 
   // Call Control human transfer completed — destination answered / bridged.
   if (!isSecondaryVoiceLeg && eventType === "call.bridged") {
-    const { completeTransfersOnBridge } = await import("../transfers");
-    await completeTransfersOnBridge({
-      workspaceId,
-      callId: call.id,
-    }).catch((err) =>
-      console.warn("[voice/webhook] completeTransfersOnBridge failed", err),
+    const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
+    const { getWarmTransferSessionByCallerControlId } = await import(
+      "@/lib/voice-v2/transfer/warm-transfer-store"
     );
+    const { markVoiceV2WarmBridgeSucceeded } = await import(
+      "@/lib/voice-v2/transfer/warm-transfer-runtime"
+    );
+    const v2Warm = controlId ? await getWarmTransferSessionByCallerControlId(controlId) : null;
+    if (v2Warm && !v2Warm.bridgeCompleted) {
+      await markVoiceV2WarmBridgeSucceeded(v2Warm.id).catch((err) =>
+        console.warn("[voice/webhook] v2 warm bridge success", err),
+      );
+    } else {
+      const { completeTransfersOnBridge } = await import("../transfers");
+      await completeTransfersOnBridge({
+        workspaceId,
+        callId: call.id,
+      }).catch((err) =>
+        console.warn("[voice/webhook] completeTransfersOnBridge failed", err),
+      );
+    }
   }
 
   // Outbound (or inbound that never claimed): start assistant once on answered.

@@ -13,6 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { InfoCallout, RadioRow, SidePanel, StatusPill } from "../ui";
+import { UrgencyRulesEditor } from "../urgency-rules-editor";
 
 const LEGACY_BOOKING_FLOW_STEPS = [
   "Understand request",
@@ -253,8 +254,16 @@ export function CallHandlingStep({
                     checked={state.urgencyEnabled === true}
                     onChange={(e) => patch({ urgencyEnabled: e.target.checked })}
                   />
-                  <span className="font-medium">Urgent-call handling</span>
+                  <span>
+                    <span className="font-medium">Urgent-call handling</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Escalate when collected fields match your urgency rules.
+                    </span>
+                  </span>
                 </label>
+                {state.urgencyEnabled ? (
+                  <UrgencyRulesEditor state={state} patch={patch} />
+                ) : null}
                 <label className="flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"

@@ -8,6 +8,7 @@ import { applyWizardPreset, createDefaultWizardState } from "../src/lib/solution
 import {
   afterHoursHandlingFromWizard,
   validateAfterHoursHandlingConfig,
+  validateAfterHoursHandlingWizard,
 } from "../src/lib/voice-v2/after-hours-handling-config";
 import { evaluateUrgencyForContext } from "../src/lib/voice-v2/urgency-evaluator";
 import { executeVoiceV2TransferPlan, rejectArbitraryTransferDestination } from "../src/lib/voice-v2/transfer/transfer-executor";
@@ -24,7 +25,12 @@ import {
   blocksCustomerBookingForClassification,
 } from "../src/lib/voice-v2/spam-handling";
 import { buildWarmTransferBriefing } from "../src/lib/voice-v2/transfer/warm-briefing";
-import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
+import {
+  driveMockVoiceV2WarmTransfer,
+  startVoiceV2WarmTransfer,
+} from "../src/lib/voice-v2/transfer/warm-transfer-runtime";
+import { clearWarmTransferStoreForTests } from "../src/lib/voice-v2/transfer/warm-transfer-store";
+import { clearVoiceV2CallSessions, getVoiceV2CallContext, setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
 import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
 import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
 import { mergeAppointmentWizardAdvanced } from "../src/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
@@ -91,12 +97,28 @@ function wizardWithTransfer() {
   w.callbackRequestsEnabled = true;
   w.salesSolicitationEnabled = true;
   w.salesSolicitationAction = "TAKE_MESSAGE";
+  w.collectFields = [
+    ...w.collectFields,
+    {
+      id: "active_flooding",
+      label: "Active flooding",
+      required: false,
+      enabled: true,
+    },
+    {
+      id: "water_shutoff_success",
+      label: "Water shutoff successful",
+      required: false,
+      enabled: true,
+    },
+  ];
   return w;
 }
 
 async function main() {
   clearVoiceV2CallSessions();
   clearMockTransferBehaviors();
+  clearWarmTransferStoreForTests();
   const wizard = wizardWithTransfer();
   const config = afterHoursHandlingFromWizard(wizard);
   assert.equal(validateAfterHoursHandlingConfig(config).length, 0);
@@ -105,6 +127,46 @@ async function main() {
 
   const advanced = mergeAppointmentWizardAdvanced(wizard, {});
   assert.ok(advanced.voiceV2AfterHoursHandling);
+  assert.equal(validateAfterHoursHandlingWizard(wizard).length, 0);
+
+  // Urgency wizard compile + custom field
+  const wCustom = wizardWithTransfer();
+  wCustom.collectFields = [
+    ...wCustom.collectFields,
+    {
+      id: "active_water_flow",
+      label: "Active water flow",
+      required: false,
+      enabled: true,
+    },
+  ];
+  wCustom.urgencyRules = [
+    {
+      id: "u_custom",
+      fieldKey: "active_water_flow",
+      operator: "EQUALS",
+      value: "yes",
+      severity: "URGENT",
+      action: "TRANSFER",
+      transferPlanId: "default_transfer_plan",
+    },
+  ];
+  const customCfg = afterHoursHandlingFromWizard(wCustom);
+  assert.equal(customCfg.urgencyRules[0]?.fieldKey, "active_water_flow");
+  assert.equal(validateAfterHoursHandlingWizard(wCustom).length, 0);
+
+  const wInvalid = { ...wizardWithTransfer(), urgencyEnabled: true, urgencyRules: [
+    {
+      id: "bad",
+      fieldKey: "deleted_field",
+      operator: "EQUALS",
+      value: "x",
+      severity: "URGENT",
+      action: "TRANSFER",
+      transferPlanId: "default_transfer_plan",
+    },
+  ] };
+  assert.ok(validateAfterHoursHandlingWizard(wInvalid).some((e) => e.includes("unknown_field")));
 
   // Urgency
   let ctx = seedCtx({
@@ -159,6 +221,119 @@ async function main() {
     callerRequested: true,
   });
   assert.equal(wf.ok, true);
+
+  // Warm transfer mock: Press-1 + bridge boundary
+  setMockTransferBehavior("warm1", ["INITIATING"]);
+  const warmCtx = seedCtx({ capabilities: { afterHoursHandling: config } });
+  const warmStart = await executeVoiceV2TransferPlan({
+    ctx: warmCtx,
+    config: {
+      ...config,
+      transferPlans: [
+        {
+          ...config.transferPlans[0]!,
+          steps: [{ order: 1, destinationId: "d1", transferMode: "WARM", timeoutSeconds: 20 }],
+        },
+      ],
+    },
+    provider,
+    callControlId: "after-hours-test",
+    invocationId: "warm1",
+  });
+  assert.equal(warmStart.status, "INITIATING");
+  const warmOnly = await startVoiceV2WarmTransfer({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    sessionKey: "cc:after-hours-test",
+    invocationId: "warm_direct",
+    planId: "default_transfer_plan",
+    transferGeneration: 9,
+    stepOrder: 1,
+    destinationId: "d1",
+    destinationE164: "+15551111111",
+    callerCallControlId: "after-hours-test",
+    briefingText: buildWarmTransferBriefing(warmCtx, "On-call"),
+    timeoutSeconds: 25,
+    mockConsultControlId: "mock_consult_direct",
+  });
+  assert.equal(warmOnly.result, "INITIATING");
+  await driveMockVoiceV2WarmTransfer(warmOnly.sessionId, "consult_answered");
+  const press1 = await driveMockVoiceV2WarmTransfer(warmOnly.sessionId, "press_1");
+  assert.equal(press1, "SUCCESS");
+  const afterBridge = getVoiceV2CallContext("cc:after-hours-test");
+  assert.equal(afterBridge?.afterHours?.transfer?.status, "SUCCEEDED");
+
+  // Voicemail / no press-1 → fail
+  const vm = await startVoiceV2WarmTransfer({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    sessionKey: "cc:after-hours-test",
+    invocationId: "warm_vm",
+    planId: "default_transfer_plan",
+    transferGeneration: 10,
+    stepOrder: 1,
+    destinationId: "d1",
+    destinationE164: "+15551111111",
+    callerCallControlId: "after-hours-test",
+    briefingText: "Press 1",
+    timeoutSeconds: 25,
+    mockConsultControlId: "mock_consult_vm",
+  });
+  const vmResult = await driveMockVoiceV2WarmTransfer(vm.sessionId, "voicemail");
+  assert.equal(vmResult, "NO_ANSWER");
+
+  // Late press-1 after new generation ignored (stale)
+  const stale = await startVoiceV2WarmTransfer({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    sessionKey: "cc:after-hours-test",
+    invocationId: "warm_stale",
+    planId: "default_transfer_plan",
+    transferGeneration: 11,
+    stepOrder: 1,
+    destinationId: "d1",
+    destinationE164: "+15551111111",
+    callerCallControlId: "after-hours-test",
+    briefingText: "Press 1",
+    timeoutSeconds: 25,
+    mockConsultControlId: "mock_consult_stale",
+  });
+  await driveMockVoiceV2WarmTransfer(stale.sessionId, "consult_answered");
+  const newer = await startVoiceV2WarmTransfer({
+    workspaceId: "ws_test",
+    agentId: "agent_test",
+    sessionKey: "cc:after-hours-test",
+    invocationId: "warm_stale2",
+    planId: "default_transfer_plan",
+    transferGeneration: 12,
+    stepOrder: 2,
+    destinationId: "d2",
+    destinationE164: "+15552222222",
+    callerCallControlId: "after-hours-test",
+    briefingText: "Press 1",
+    timeoutSeconds: 25,
+    mockConsultControlId: "mock_consult_stale2",
+  });
+  assert.equal(newer.result, "INITIATING");
+  const ctxBeforeLate = getVoiceV2CallContext("cc:after-hours-test")!;
+  setVoiceV2CallContext({
+    ...ctxBeforeLate,
+    afterHours: {
+      ...ctxBeforeLate.afterHours,
+      transfer: {
+        status: "INITIATING",
+        transferGeneration: 12,
+        planId: "default_transfer_plan",
+        currentStepOrder: 2,
+        invocationId: "warm_stale2",
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  });
+  await driveMockVoiceV2WarmTransfer(stale.sessionId, "press_1");
+  const afterLate = getVoiceV2CallContext("cc:after-hours-test");
+  assert.equal(afterLate?.afterHours?.transfer?.transferGeneration, 12);
+  assert.notEqual(afterLate?.afterHours?.transfer?.status, "SUCCEEDED");
 
   // Callback + idempotency
   const cbCtx = seedCtx({ capabilities: { afterHoursHandling: config } });

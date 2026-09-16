@@ -1,4 +1,8 @@
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  wizardCollectFieldIdToCallerRowId,
+} from "@/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
+import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
 import type {
   VoiceV2FallbackAction,
   VoiceV2PublishedAfterHoursHandlingConfig,
@@ -151,6 +155,59 @@ export function afterHoursHandlingFromWizard(
     salesSolicitationAction: state.salesSolicitationAction || "TAKE_MESSAGE",
     classificationFieldKey: "caller_classification",
   };
+}
+
+function enabledWizardFieldKeys(state: AppointmentReceptionistWizardState): Set<string> {
+  return new Set(
+    (state.collectFields || [])
+      .filter((f) => f.enabled !== false)
+      .map((f) => callerFieldIdToIntakeKey(wizardCollectFieldIdToCallerRowId(f.id))),
+  );
+}
+
+const VALUE_OPTIONAL_OPERATORS = new Set(["EXISTS", "NOT_EXISTS"]);
+
+export function validateAfterHoursHandlingWizard(
+  state: AppointmentReceptionistWizardState,
+): string[] {
+  const config = afterHoursHandlingFromWizard(state);
+  const errors = validateAfterHoursHandlingConfig(config);
+  if (!state.urgencyEnabled) return errors;
+
+  const fields = enabledWizardFieldKeys(state);
+  const planIds = new Set(config.transferPlans.map((p) => p.id));
+
+  for (const rule of state.urgencyRules || []) {
+    if (!rule.fieldKey?.trim()) {
+      errors.push(`urgency_rule_missing_field:${rule.id}`);
+      continue;
+    }
+    if (!fields.has(rule.fieldKey)) {
+      errors.push(`urgency_rule_unknown_field:${rule.id}:${rule.fieldKey}`);
+    }
+    if (!VALUE_OPTIONAL_OPERATORS.has(rule.operator) && !String(rule.value || "").trim()) {
+      errors.push(`urgency_rule_missing_value:${rule.id}`);
+    }
+    if (rule.action === "TRANSFER") {
+      const pid = rule.transferPlanId || config.defaultTransferPlanId;
+      if (!pid || !planIds.has(pid)) {
+        errors.push(`urgency_transfer_missing_plan:${rule.id}`);
+      }
+    }
+    const supportedActions = new Set([
+      "TRANSFER",
+      "CALLBACK",
+      "TAKE_MESSAGE",
+      "REQUEST_ONLY",
+      "SEND_LINK",
+      "CONTINUE",
+      "END_POLITELY",
+    ]);
+    if (!supportedActions.has(rule.action)) {
+      errors.push(`urgency_unsupported_action:${rule.id}`);
+    }
+  }
+  return errors;
 }
 
 export function validateAfterHoursHandlingConfig(

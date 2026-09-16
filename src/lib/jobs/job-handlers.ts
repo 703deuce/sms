@@ -682,6 +682,14 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
         transferId: String(payload.transferId || ""),
       });
     }
+    case "voice_v2_warm_transfer_timeout": {
+      const { handleVoiceV2WarmTransferTimeoutJob } = await import(
+        "@/lib/voice-v2/transfer/warm-transfer-runtime"
+      );
+      return handleVoiceV2WarmTransferTimeoutJob({
+        warmSessionId: String(payload.warmSessionId || ""),
+      });
+    }
     case "voice_cold_transfer_timeout": {
       const { handleColdTransferTimeoutJob } = await import("@/lib/voice/transfers");
       return handleColdTransferTimeoutJob({

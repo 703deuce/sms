@@ -101,6 +101,7 @@ export type VoiceV2UrgencyState = {
 };
 
 export type VoiceV2TransferAttemptResult =
+  | "INITIATING"
   | "SUCCESS"
   | "NO_ANSWER"
   | "BUSY"

@@ -13,6 +13,10 @@ export type VoiceV2TransferProviderRequest = {
   transferGeneration: number;
   stepOrder: number;
   invocationId: string;
+  sessionKey: string;
+  planId: string;
+  destinationId: string;
+  timeoutSeconds: number;
 };
 
 export type VoiceV2TransferProviderResponse = {

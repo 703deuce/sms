@@ -70,11 +70,16 @@ export async function executeVoiceV2TransferCall(input: TransferCallInput) {
     },
   });
 
+  const initiating = result.ok && result.status === "INITIATING";
   return {
     ok: result.ok,
-    status: result.ok ? "TRANSFERRED" : result.status,
+    status: initiating ? "TRANSFER_INITIATING" : result.ok ? "TRANSFERRED" : result.status,
     speak: result.speak,
-    voice_v2_status: result.ok ? "TRANSFERRED" : "TRANSFER_FAILED",
+    voice_v2_status: initiating
+      ? "TRANSFER_INITIATING"
+      : result.ok
+        ? "TRANSFERRED"
+        : "TRANSFER_FAILED",
     transfer: result.transfer,
   };
 }

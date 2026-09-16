@@ -16,12 +16,22 @@ export type ExecuteTransferInput = {
   planId?: string;
   invocationId: string;
   callerRequested?: boolean;
+  /** When set, only attempt steps with order greater than this (waterfall continuation). */
+  afterFailedStepOrder?: number;
+  /** When continuing waterfall, reuse this generation instead of incrementing. */
+  fixedTransferGeneration?: number;
 };
 
 export type ExecuteTransferResult =
   | {
       ok: true;
       status: "TRANSFERRED";
+      speak: string;
+      transfer: VoiceV2TransferSessionState;
+    }
+  | {
+      ok: true;
+      status: "INITIATING";
       speak: string;
       transfer: VoiceV2TransferSessionState;
     }
@@ -33,6 +43,12 @@ export type ExecuteTransferResult =
       lastResult: string;
     };
 
+export type ExecuteTransferFromStepInput = ExecuteTransferInput & {
+  afterFailedStepOrder: number;
+  lastResult: string;
+  transferGeneration: number;
+};
+
 function resolvePlan(config: VoiceV2PublishedAfterHoursHandlingConfig, planId?: string) {
   const id = planId || config.defaultTransferPlanId;
   return config.transferPlans.find((p) => p.id === id && p.enabled) || config.transferPlans[0];
@@ -43,6 +59,35 @@ function destinationForStep(
   destinationId: string,
 ) {
   return config.transferDestinations.find((d) => d.id === destinationId && d.enabled);
+}
+
+export async function executeVoiceV2TransferPlanFromStep(
+  input: ExecuteTransferFromStepInput,
+): Promise<ExecuteTransferResult> {
+  const plan = resolvePlan(input.config, input.planId);
+  const remaining = [...(plan?.steps || [])].filter((s) => s.order > input.afterFailedStepOrder);
+  if (!remaining.length) {
+    return {
+      ok: false,
+      status: "TRANSFER_FAILED",
+      speak: "I could not reach anyone on the transfer list.",
+      transfer: {
+        status: "FAILED",
+        transferGeneration: input.transferGeneration,
+        planId: input.planId,
+        lastResult: input.lastResult as import("../after-hours-handling-types").VoiceV2TransferAttemptResult,
+        invocationId: input.invocationId,
+        updatedAt: new Date().toISOString(),
+      },
+      lastResult: input.lastResult,
+    };
+  }
+
+  return executeVoiceV2TransferPlan({
+    ...input,
+    afterFailedStepOrder: input.afterFailedStepOrder,
+    fixedTransferGeneration: input.transferGeneration,
+  });
 }
 
 export async function executeVoiceV2TransferPlan(
@@ -93,7 +138,9 @@ export async function executeVoiceV2TransferPlan(
     };
   }
 
-  const generation = (input.ctx.afterHours?.transfer?.transferGeneration ?? 0) + 1;
+  const generation =
+    input.fixedTransferGeneration ??
+    (input.ctx.afterHours?.transfer?.transferGeneration ?? 0) + 1;
   const existingInvocation = input.ctx.afterHours?.transfer?.invocationId;
   if (existingInvocation === input.invocationId && input.ctx.afterHours?.transfer?.status === "SUCCEEDED") {
     return {
@@ -105,6 +152,12 @@ export async function executeVoiceV2TransferPlan(
   }
 
   for (const step of [...plan.steps].sort((a, b) => a.order - b.order)) {
+    if (
+      input.afterFailedStepOrder != null &&
+      step.order <= input.afterFailedStepOrder
+    ) {
+      continue;
+    }
     const dest = destinationForStep(input.config, step.destinationId);
     if (!dest) continue;
 
@@ -123,10 +176,19 @@ export async function executeVoiceV2TransferPlan(
       transferGeneration: generation,
       stepOrder: step.order,
       invocationId: input.invocationId,
+      sessionKey: input.ctx.sessionKey,
+      planId: plan.id,
+      destinationId: dest.id,
+      timeoutSeconds: step.timeoutSeconds ?? 25,
     });
 
     const transfer: VoiceV2TransferSessionState = {
-      status: res.result === "SUCCESS" ? "SUCCEEDED" : "FAILED",
+      status:
+        res.result === "SUCCESS"
+          ? "SUCCEEDED"
+          : res.result === "INITIATING"
+            ? "INITIATING"
+            : "FAILED",
       transferGeneration: generation,
       planId: plan.id,
       currentStepOrder: step.order,
@@ -135,6 +197,15 @@ export async function executeVoiceV2TransferPlan(
       invocationId: input.invocationId,
       updatedAt: new Date().toISOString(),
     };
+
+    if (res.result === "INITIATING") {
+      return {
+        ok: true,
+        status: "INITIATING",
+        speak: "Please hold while I reach someone who can help.",
+        transfer,
+      };
+    }
 
     if (res.result === "SUCCESS") {
       return {

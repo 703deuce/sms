@@ -16,7 +16,7 @@ import { knowledgeConfigFromWizard } from "@/lib/voice-v2/knowledge-config";
 import { qualificationConfigFromWizard } from "@/lib/voice-v2/qualification-config";
 import {
   afterHoursHandlingFromWizard,
-  validateAfterHoursHandlingConfig,
+  validateAfterHoursHandlingWizard,
 } from "@/lib/voice-v2/after-hours-handling-config";
 import type { AppointmentReceptionistWizardState } from "./types";
 
@@ -131,7 +131,7 @@ export function mergeAppointmentWizardAdvanced(
     : draftKbIds;
   const qualification = qualificationConfigFromWizard(state);
   const voiceV2AfterHoursHandling = afterHoursHandlingFromWizard(state);
-  const afterHoursValidation = validateAfterHoursHandlingConfig(voiceV2AfterHoursHandling);
+  const afterHoursValidation = validateAfterHoursHandlingWizard(state);
   if (afterHoursValidation.length) {
     throw new Error(`voice_v2_after_hours_invalid:${afterHoursValidation.join(",")}`);
   }
