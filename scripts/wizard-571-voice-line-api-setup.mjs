@@ -9,6 +9,7 @@ const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
 const PHONE_E164 = (process.env.PHONE_E164 || "").trim();
 const EMAIL = (process.env.OWNER_EMAIL || "alex@harborhome.co").trim().toLowerCase();
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
+const VERIFY_ONLY = process.env.VERIFY_ONLY === "1" || process.env.READ_ONLY === "1";
 
 function last4(e164) {
   const d = String(e164 || "").replace(/\D/g, "");
@@ -67,43 +68,45 @@ async function main() {
     process.exit(1);
   }
 
-  const setupGet = await api(
-    cookie,
-    `/api/solutions/appointment-receptionist?agentId=${AGENT_ID}`,
-  );
-  const state = setupGet.json?.data?.state || {};
-  const nextState = {
-    ...state,
-    agentId: AGENT_ID,
-    phoneNumberId: phone.id,
-    phoneNumberE164: phone.number || phone.e164 || PHONE_E164,
-    numberSource: "transovo",
-  };
-
-  const save = await api(cookie, "/api/solutions/appointment-receptionist", {
-    method: "POST",
-    body: {
-      action: "save_draft",
-      state: nextState,
-      wizardStepId: "phone",
-    },
-  });
-  if (!save.res.ok) {
-    console.error(JSON.stringify({ step: "save_draft", status: save.res.status, body: save.json }));
-    process.exit(1);
-  }
-
-  const patch = await api(cookie, "/api/mctb/inbound-handling", {
-    method: "PATCH",
-    body: {
-      mode: "VOICE_AGENT",
+  if (!VERIFY_ONLY) {
+    const setupGet = await api(
+      cookie,
+      `/api/solutions/appointment-receptionist?agentId=${AGENT_ID}`,
+    );
+    const state = setupGet.json?.data?.state || {};
+    const nextState = {
+      ...state,
+      agentId: AGENT_ID,
       phoneNumberId: phone.id,
-      voiceAgentId: AGENT_ID,
-    },
-  });
-  if (!patch.res.ok) {
-    console.error(JSON.stringify({ step: "inbound-handling", status: patch.res.status, body: patch.json }));
-    process.exit(1);
+      phoneNumberE164: phone.number || phone.e164 || PHONE_E164,
+      numberSource: "transovo",
+    };
+
+    const save = await api(cookie, "/api/solutions/appointment-receptionist", {
+      method: "POST",
+      body: {
+        action: "save_draft",
+        state: nextState,
+        wizardStepId: "phone",
+      },
+    });
+    if (!save.res.ok) {
+      console.error(JSON.stringify({ step: "save_draft", status: save.res.status, body: save.json }));
+      process.exit(1);
+    }
+
+    const patch = await api(cookie, "/api/mctb/inbound-handling", {
+      method: "PATCH",
+      body: {
+        mode: "VOICE_AGENT",
+        phoneNumberId: phone.id,
+        voiceAgentId: AGENT_ID,
+      },
+    });
+    if (!patch.res.ok) {
+      console.error(JSON.stringify({ step: "inbound-handling", status: patch.res.status, body: patch.json }));
+      process.exit(1);
+    }
   }
 
   const agent = await api(cookie, `/api/voice/agents/${AGENT_ID}`);
@@ -126,11 +129,16 @@ async function main() {
     agentStatus: a?.rawStatus || a?.status,
     telnyxAssistantId: a?.telnyxAssistantId ? "set" : "missing",
     publishedVersionId: a?.publishedVersionId,
-    telephonyPath: patch.json?.data?.telephonyPath,
+    telephonyPath: line?.telephonyPath || inbound.json?.data?.telephonyPath,
+    verifyOnly: VERIFY_ONLY,
+    liveKitIngress: line?.liveKitIngress === true || line?.routingOwner === "livekit",
+    mctbTexmlLocked: line?.inboundHandlingMode === "MCTB",
     ok:
       line?.inboundHandlingMode === "VOICE_AGENT" &&
       line?.voiceAgentId === AGENT_ID &&
-      Boolean(a?.telnyxAssistantId),
+      Boolean(a?.telnyxAssistantId) &&
+      Boolean(line?.voiceTexmlAppId) &&
+      line?.inboundHandlingMode !== "MCTB",
   };
 
   console.log(JSON.stringify(report, null, 2));
