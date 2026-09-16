@@ -13,6 +13,7 @@ import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
 import { calendlyConfigFromWizard } from "@/lib/voice-v2/calendly-booking-config";
 import { knowledgeConfigFromWizard } from "@/lib/voice-v2/knowledge-config";
+import { qualificationConfigFromWizard } from "@/lib/voice-v2/qualification-config";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
@@ -47,6 +48,7 @@ export function wizardCollectFieldsToCallerRows(
       askWhen: askWhenForField(rowId, Boolean(f.required)),
       confirm: rowId === "phone" || rowId === "email",
       enabled: f.enabled !== false,
+      useForQualification: f.useForQualification === true,
     };
   });
 }
@@ -123,6 +125,7 @@ export function mergeAppointmentWizardAdvanced(
   const knowledgeBaseIds = knowledge.knowledgeBaseIds.length
     ? knowledge.knowledgeBaseIds
     : draftKbIds;
+  const qualification = qualificationConfigFromWizard(state);
   const linkRaw = String(state.bookingLinkUrl || "").trim();
   const linkValidated = linkRaw ? validateBookingLinkUrl(linkRaw) : null;
   const bookingLink =
@@ -140,6 +143,7 @@ export function mergeAppointmentWizardAdvanced(
     voiceV2PstnLiveBooking,
     ...(voiceV2Calendly ? { voiceV2Calendly } : {}),
     knowledge,
+    qualification,
     ...(knowledgeBaseIds.length ? { knowledgeBaseIds } : {}),
     ...(bookingLink ? { bookingLink, bookingLinkLabel } : {}),
     voiceV2Intake,

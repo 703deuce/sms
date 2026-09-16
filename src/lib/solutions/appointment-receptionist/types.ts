@@ -188,7 +188,28 @@ export type AppointmentReceptionistWizardState = {
     label: string;
     required: boolean;
     enabled: boolean;
+    /** When true, field participates in deterministic lead qualification rules. */
+    useForQualification?: boolean;
   }>;
+  /** Lead qualification / caller triage (composable with any bookingStrategy). */
+  qualificationEnabled?: boolean | null;
+  qualificationRequiredBeforePrimaryAction?: boolean | null;
+  qualificationRevision?: string | null;
+  qualificationSupportedZipCodes?: string[];
+  qualificationRulesMatchMode?: "ALL" | "ANY" | null;
+  qualificationNotQualifiedFallback?:
+    | "TAKE_MESSAGE"
+    | "REQUEST_APPOINTMENT"
+    | "SEND_BOOKING_LINK"
+    | "CONTINUE_PRIMARY_MODE"
+    | null;
+  qualificationNeedsReviewFallback?:
+    | "TAKE_MESSAGE"
+    | "REQUEST_APPOINTMENT"
+    | "SEND_BOOKING_LINK"
+    | "CONTINUE_PRIMARY_MODE"
+    | null;
+  qualificationRules?: import("@/lib/voice-v2/qualification-types").VoiceV2QualificationRuleRow[];
   transferTriggers: string[];
   transferDestinationName: string;
   transferDestinationPhone: string;

@@ -7,6 +7,7 @@ import { normalizeCallerAni } from "@/lib/voice/call-identity";
 import { resolveVoiceV2BookingStrategy } from "../booking-strategy";
 import { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } from "../pstn-workflow-mode";
 import { resolveVoiceV2KnowledgeConfig } from "../knowledge-config";
+import { resolveVoiceV2QualificationConfig } from "../qualification-config";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -52,6 +53,7 @@ export async function buildVoiceV2CallContextPayload(input: {
   const oneAmy = isVoiceV2PstnOneAmyMode(config);
   const liveBooking = isVoiceV2PstnLiveBookingMode(config);
   const knowledge = resolveVoiceV2KnowledgeConfig(config);
+  const qualification = resolveVoiceV2QualificationConfig(config);
   const payload: VoiceV2CallContext = {
     sessionKey: input.canonicalSessionKey,
     workspaceId: input.workspaceId,
@@ -70,6 +72,16 @@ export async function buildVoiceV2CallContextPayload(input: {
       knowledgeBaseEnabled: knowledge.knowledgeBaseEnabled,
       knowledgeBaseRevision: knowledge.knowledgeBaseRevision,
       knowledgeBaseIds: knowledge.knowledgeBaseIds,
+      qualificationEnabled: qualification.qualificationEnabled,
+      qualificationRequiredBeforePrimaryAction:
+        qualification.qualificationRequiredBeforePrimaryAction,
+      qualificationRevision: qualification.qualificationRevision,
+      qualificationRules: qualification.rules,
+      qualificationRulesMatchMode: qualification.rulesMatchMode,
+      qualificationSupportedZipCodes: qualification.supportedZipCodes,
+      qualificationNotQualifiedFallback: qualification.notQualifiedFallback,
+      qualificationNeedsReviewFallback: qualification.needsReviewFallback,
+      qualificationFieldKeys: qualification.qualificationFieldKeys,
     },
   };
   return { payload, enrollment, bookingTimezone: timezone };

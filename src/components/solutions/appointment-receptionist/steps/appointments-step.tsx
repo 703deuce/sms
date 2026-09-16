@@ -640,6 +640,156 @@ export function AppointmentsStep({
               </div>
             </div>
 
+            <div className="mt-6 rounded-xl border border-border bg-card p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border"
+                  checked={state.qualificationEnabled === true}
+                  onChange={(e) =>
+                    patch({
+                      qualificationEnabled: e.target.checked,
+                      capabilities: e.target.checked
+                        ? [...new Set([...state.capabilities, "qualify_callers"])]
+                        : state.capabilities.filter((c) => c !== "qualify_callers"),
+                    })
+                  }
+                />
+                <span className="min-w-0">
+                  <span className="text-sm font-medium">Enable caller qualification</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Use collected fields and simple rules to decide fit before booking,
+                    sending a link, or taking a message. Works with any booking mode.
+                  </span>
+                </span>
+              </label>
+              {state.qualificationEnabled ? (
+                <div className="mt-4 space-y-3 border-t border-border pt-4">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={state.qualificationRequiredBeforePrimaryAction === true}
+                      onChange={(e) =>
+                        patch({ qualificationRequiredBeforePrimaryAction: e.target.checked })
+                      }
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    Require qualification before live booking or sending a booking link
+                  </label>
+                  <div>
+                    <Label className="text-xs">Supported ZIP codes (comma-separated)</Label>
+                    <Input
+                      className="mt-1"
+                      value={(state.qualificationSupportedZipCodes || []).join(", ")}
+                      onChange={(e) =>
+                        patch({
+                          qualificationSupportedZipCodes: e.target.value
+                            .split(/[,;\s]+/)
+                            .map((z) => z.trim())
+                            .filter(Boolean),
+                        })
+                      }
+                      placeholder="22191, 22192, 22193"
+                    />
+                  </div>
+                  {(state.qualificationRules || []).map((rule, ri) => (
+                    <div
+                      key={rule.id}
+                      className="grid gap-2 rounded-lg border border-border p-3 text-xs sm:grid-cols-2"
+                    >
+                      <Input
+                        value={rule.fieldKey}
+                        onChange={(e) => {
+                          const next = [...(state.qualificationRules || [])];
+                          next[ri] = { ...rule, fieldKey: e.target.value };
+                          patch({ qualificationRules: next });
+                        }}
+                        placeholder="Field key (e.g. zip_code)"
+                      />
+                      <select
+                        className="h-9 rounded-lg border border-border bg-card px-2"
+                        value={rule.operator}
+                        onChange={(e) => {
+                          const next = [...(state.qualificationRules || [])];
+                          next[ri] = {
+                            ...rule,
+                            operator: e.target.value as typeof rule.operator,
+                          };
+                          patch({ qualificationRules: next });
+                        }}
+                      >
+                        <option value="IN">is one of</option>
+                        <option value="NOT_IN">is not one of</option>
+                        <option value="EQUALS">equals</option>
+                        <option value="GREATER_THAN_OR_EQUAL">≥</option>
+                        <option value="LESS_THAN_OR_EQUAL">≤</option>
+                      </select>
+                      <Input
+                        className="sm:col-span-2"
+                        value={rule.value}
+                        onChange={(e) => {
+                          const next = [...(state.qualificationRules || [])];
+                          next[ri] = { ...rule, value: e.target.value };
+                          patch({ qualificationRules: next });
+                        }}
+                        placeholder="Values (comma-separated if needed)"
+                      />
+                      <select
+                        className="h-9 rounded-lg border border-border bg-card px-2"
+                        value={rule.resultStatus}
+                        onChange={(e) => {
+                          const next = [...(state.qualificationRules || [])];
+                          next[ri] = {
+                            ...rule,
+                            resultStatus: e.target.value as typeof rule.resultStatus,
+                          };
+                          patch({ qualificationRules: next });
+                        }}
+                      >
+                        <option value="QUALIFIED">If match → Qualified</option>
+                        <option value="NOT_QUALIFIED">If match → Not qualified</option>
+                        <option value="NEEDS_REVIEW">If match → Needs review</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-rose-600"
+                        onClick={() =>
+                          patch({
+                            qualificationRules: (state.qualificationRules || []).filter(
+                              (_, i) => i !== ri,
+                            ),
+                          })
+                        }
+                      >
+                        Remove rule
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+                    onClick={() =>
+                      patch({
+                        qualificationRules: [
+                          ...(state.qualificationRules || []),
+                          {
+                            id: `rule_${Date.now()}`,
+                            fieldKey: "zip_code",
+                            operator: "IN",
+                            value: "",
+                            resultStatus: "QUALIFIED",
+                            reasonCode: "RULE_MATCH",
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    Add rule
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -685,6 +835,24 @@ export function AppointmentsStep({
                         />
                         Required
                       </label>
+                      {state.qualificationEnabled ? (
+                        <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={field.useForQualification === true}
+                            onChange={() => {
+                              const next = state.collectFields.map((f, i) =>
+                                i === index
+                                  ? { ...f, useForQualification: !f.useForQualification }
+                                  : f,
+                              );
+                              patch({ collectFields: next });
+                            }}
+                            className="h-3.5 w-3.5 rounded border-border"
+                          />
+                          Qualification
+                        </label>
+                      ) : null}
                       {!["full_name", "phone", "service"].includes(field.id) ? (
                         <button
                           type="button"

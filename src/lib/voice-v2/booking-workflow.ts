@@ -5,6 +5,10 @@
 
 import type { VoiceV2BookingStrategy } from "./booking-strategy";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
+import {
+  applyQualificationStageOverride,
+  qualificationWorkflowExtras,
+} from "./qualification-workflow";
 
 export type VoiceV2NextStage =
   | "COLLECT_REQUIRED_INTAKE"
@@ -252,15 +256,19 @@ export function buildWorkflowToolPayload(input: {
   workflow: VoiceV2BookingWorkflow;
   readiness: IntakeReadinessResult;
   hasActiveOfferSet?: boolean;
+  ctx?: VoiceV2CallContext;
 }): Record<string, unknown> {
   const strategy =
     input.bookingStrategy ?? (input.voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
-  const nextStage = deriveVoiceV2NextStage({
+  let nextStage = deriveVoiceV2NextStage({
     workflow: input.workflow,
     readiness: input.readiness,
     hasActiveOfferSet: input.hasActiveOfferSet ?? false,
     bookingStrategy: strategy,
   });
+  if (input.ctx) {
+    nextStage = applyQualificationStageOverride(nextStage, input.ctx, strategy);
+  }
   const workflow = { ...input.workflow, nextStage };
   const booking_continue_required = evaluateBookingContinueRequired({
     voiceV2PstnLiveBooking: input.voiceV2PstnLiveBooking,
@@ -283,6 +291,10 @@ export function buildWorkflowToolPayload(input: {
   if (booking_continue_required) {
     payload.forbidden_actions = [...VOICE_V2_FORBIDDEN_WHEN_BOOKING_CONTINUE];
     payload.continue = true;
+  }
+
+  if (input.ctx) {
+    Object.assign(payload, qualificationWorkflowExtras(input.ctx));
   }
 
   return payload;

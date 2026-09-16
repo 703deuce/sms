@@ -645,7 +645,12 @@ Maintain this matrix in this document. Status values:
 | KNOWLEDGE_TENANT_ISOLATION | IMPLEMENTED | `resolveAgentKnowledgeBaseIds` workspace + published ID allow-list; **automated tenant test pending** |
 | KNOWLEDGE_WIZARD_TOGGLE | HEADLESS_CERTIFIED | `knowledgeBaseEnabled` on information step; publish drives Telnyx tool eligibility |
 | MESSAGE_ONLY | IMPLEMENTED | Wizard `bookingStrategy=NONE` + finalize tool; **PSTN pending** |
-| LEAD_QUALIFICATION | NOT_STARTED | Reuse generic intake when built |
+| LEAD_QUALIFICATION | HEADLESS_CERTIFIED | Composable `qualificationEnabled`; deterministic rules + intake fields; **PSTN pending** |
+| QUALIFICATION_RULES | HEADLESS_CERTIFIED | Local evaluator; operators IN/NOT_IN/EQUALS/GTE/LTE/EXISTS/CONTAINS |
+| QUALIFICATION_WIZARD_TOGGLE | HEADLESS_CERTIFIED | Appointments step; publish pins per call |
+| QUALIFICATION_CUSTOM_FIELDS | HEADLESS_CERTIFIED | `collectFields.useForQualification` → intake keys |
+| QUALIFICATION_GATE | HEADLESS_CERTIFIED | Blocks FIND/BOOK/send-link when required + not qualified |
+| QUALIFICATION_REASON | IMPLEMENTED | `qualificationStatus` + reason metadata on workflow payload |
 | REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |
 | SEND_BOOKING_LINK | HEADLESS_CERTIFIED | `bookingStrategy=SEND_LINK` + pinned `bookingLink`; **PSTN pending** |
 | CALENDLY_BOOKING | HEADLESS_CERTIFIED | PSTN pending paid Calendly account |

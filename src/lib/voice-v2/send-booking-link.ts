@@ -181,6 +181,25 @@ export async function executeVoiceV2SendBookingLink(input: {
     return result;
   }
 
+  const qualGate = await (
+    await import("./qualification-gate")
+  ).evaluateQualificationPrimaryActionGate({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    ctx,
+  });
+  if (!qualGate.allowed) {
+    const result: SendBookingLinkResult = {
+      status: "NOT_ALLOWED",
+      speak: qualGate.speak,
+      voice_v2_status: "BOOKING_LINK_NOT_ALLOWED",
+    };
+    if (toolInvocationId) {
+      await storeSendBookingLinkIdempotentResult(canonicalSessionKey, toolInvocationId, result);
+    }
+    return result;
+  }
+
   const prisma = getPrisma();
   const callId = input.voiceCallId?.trim() || null;
   let metadata: Record<string, unknown> = {};
