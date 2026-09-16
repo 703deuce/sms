@@ -189,6 +189,7 @@ export const LEGACY_CASCADE_PROFILE: LatencyProfileDefinition = {
 function buildFluxCascadeFields(input: {
   eotThreshold: number;
   eagerEotThreshold: number;
+  eotTimeoutMs?: number;
 }): LatencyProfileProviderFields {
   return {
     transcription: {
@@ -199,7 +200,7 @@ function buildFluxCascadeFields(input: {
       settings: {
         eot_threshold: input.eotThreshold,
         eager_eot_threshold: input.eagerEotThreshold,
-        eot_timeout_ms: 5000,
+        eot_timeout_ms: input.eotTimeoutMs ?? 3000,
       },
     },
     voiceLanguage: {
@@ -246,12 +247,13 @@ function buildFluxCascadeFields(input: {
 export const FLUX_B_BALANCED_PROFILE: LatencyProfileDefinition = {
   id: "flux_b_balanced",
   versionLabel: "B",
-  label: "B-Balanced — Flux 0.80/0.40 + Haiku + Ultra",
+  label: "B-Balanced — Flux 0.70/0.40 + Haiku + Ultra",
   description:
-    "Recommended production candidate. Deepgram Flux EOT 0.80/0.40/5000, Haiku, Ultra, fixed greeting. No punctuation/number waits.",
+    "Recommended production candidate. Deepgram Flux EOT 0.70/0.40/3000, Haiku, Ultra, fixed greeting. Eager EOT for speculative LLM; audio on confirmed turn.",
   fields: buildFluxCascadeFields({
-    eotThreshold: 0.8,
+    eotThreshold: 0.7,
     eagerEotThreshold: 0.4,
+    eotTimeoutMs: 3000,
   }),
 };
 
@@ -275,6 +277,7 @@ export const FLUX_B_FAST_PROFILE: LatencyProfileDefinition = {
   fields: buildFluxCascadeFields({
     eotThreshold: 0.75,
     eagerEotThreshold: 0.35,
+    eotTimeoutMs: 5000,
   }),
 };
 
@@ -290,6 +293,7 @@ export const FLUX_B_PATIENT_PROFILE: LatencyProfileDefinition = {
   fields: buildFluxCascadeFields({
     eotThreshold: 0.85,
     eagerEotThreshold: 0.45,
+    eotTimeoutMs: 5000,
   }),
 };
 
@@ -767,7 +771,7 @@ export function buildFluxTranscriptionSettings(
   const explicit = config.transcription?.settings || {};
   const settings: Record<string, unknown> = {
     eot_threshold:
-      typeof explicit.eot_threshold === "number" ? explicit.eot_threshold : 0.8,
+      typeof explicit.eot_threshold === "number" ? explicit.eot_threshold : 0.7,
     eager_eot_threshold:
       typeof explicit.eager_eot_threshold === "number"
         ? explicit.eager_eot_threshold
@@ -775,7 +779,7 @@ export function buildFluxTranscriptionSettings(
     eot_timeout_ms:
       typeof explicit.eot_timeout_ms === "number"
         ? explicit.eot_timeout_ms
-        : 5000,
+        : 3000,
   };
   if (typeof explicit.keyterm === "string" && explicit.keyterm.trim()) {
     settings.keyterm = explicit.keyterm.trim();

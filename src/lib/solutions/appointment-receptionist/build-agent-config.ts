@@ -16,6 +16,10 @@ import { applyAmyMinimumSideEffectConfig } from "@/lib/voice/telnyx/amy-minimum-
 import { buildDefaultOutboundSmsMessaging } from "@/lib/voice/sms/voice-outbound-sms-config";
 import { mergeAppointmentWizardAdvanced } from "./wizard-advanced-bridge";
 import { recompileReceptionistFromDraft } from "@/lib/voice/receptionist/recompile";
+import {
+  elevenLabsVoiceLanguagePublishFields,
+  resolveVoiceV2WizardVoiceForPublish,
+} from "./voice-v2-wizard-elevenlabs-catalog";
 
 export { buildBusinessKnowledgePromptSection };
 
@@ -395,10 +399,10 @@ export function buildWizardAgentConfig(
     },
     voiceLanguage: {
       ...base.voiceLanguage,
-      voiceId: state.voiceId,
-      fallbackVoiceId: "Telnyx.NaturalHD.astra",
-      voiceProvider: "telnyx",
-      speed: state.speakingSpeed,
+      ...elevenLabsVoiceLanguagePublishFields(
+        resolveVoiceV2WizardVoiceForPublish(state.voiceId),
+      ),
+      speed: state.speakingSpeed ?? base.voiceLanguage?.speed,
       responsiveness: responsivenessLevel,
       interruptionHandling: interruptionLevel,
       silenceTimeoutMs,

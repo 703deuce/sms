@@ -2,7 +2,7 @@ import "server-only";
 
 import { performance } from "node:perf_hooks";
 
-import { getVoiceV2CallContext } from "./session-store";
+import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import {
   createVoiceV2CallContext,
   fetchVoiceV2L2ContextBundle,
@@ -12,6 +12,7 @@ import {
   loadVoiceV2CallContext,
   resolveVoiceV2SessionKey,
 } from "../session/call-context-store";
+import { applyCallerAniToIntakeState, resolveCallerAniForSession } from "./caller-phone";
 import { buildVoiceV2CallContextPayload } from "../session/context-build";
 import { joinVoiceV2CallWarmup } from "../call-warmup";
 import {
@@ -119,6 +120,17 @@ export async function ensureVoiceV2CallContext(input: {
       lookup.CONTEXT_TOTAL_MS = performance.now() - t0;
       input.trace?.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: false, source: "terminated" });
       return null;
+    }
+    const ani =
+      input.fromE164?.trim() ||
+      (await resolveCallerAniForSession({
+        workspaceId: input.workspaceId,
+        fromE164: input.fromE164,
+        trustedPrismaCallId: trusted || input.callId,
+      }));
+    if (ani) {
+      ctx = applyCallerAniToIntakeState(ctx, ani);
+      setVoiceV2CallContext(ctx);
     }
     lookup.CONTEXT_SOURCE = trusted ? "l1_direct" : "l1_after_alias";
     lookup.CONTEXT_TOTAL_MS = performance.now() - t0;

@@ -66,9 +66,9 @@ assert.equal(
 section("Version B Flux: EOT only + wait_seconds — NO 1s no-punct plan");
 assert.equal(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.transcription.sttModel, "deepgram/flux");
 assert.deepEqual(FLUX_EAGER_LOW_LATENCY_PROFILE.fields.transcription.settings, {
-  eot_threshold: 0.8,
+  eot_threshold: 0.7,
   eager_eot_threshold: 0.4,
-  eot_timeout_ms: 5000,
+  eot_timeout_ms: 3000,
 });
 assert.equal(
   FLUX_EAGER_LOW_LATENCY_PROFILE.fields.startSpeakingPlan?.fluxOmitTranscriptionEndpointingPlan,
@@ -96,9 +96,9 @@ section("B_FAST / B_BALANCED / B_PATIENT EOT pairs");
     eot_timeout_ms: 5000,
   });
   assert.deepEqual(FLUX_B_BALANCED_PROFILE.fields.transcription.settings, {
-    eot_threshold: 0.8,
+    eot_threshold: 0.7,
     eager_eot_threshold: 0.4,
-    eot_timeout_ms: 5000,
+    eot_timeout_ms: 3000,
   });
   assert.deepEqual(FLUX_B_PATIENT_PROFILE.fields.transcription.settings, {
     eot_threshold: 0.85,
@@ -164,7 +164,7 @@ section("Apply B: Flux settings + wait-only plan");
 
   const applied = applyLatencyProfileToConfig(base, "flux_eager_low_latency");
   assert.equal(applied.transcription?.sttModel, "deepgram/flux");
-  assert.equal(applied.transcription?.settings?.eot_timeout_ms, 5000);
+  assert.equal(applied.transcription?.settings?.eot_timeout_ms, 3000);
   assert.equal(applied.voiceLanguage?.endpointingMs, undefined);
   assert.equal(applied.model?.modelId, FAST_LLM_MODEL_ID);
   assert.equal(shouldSkipDynamicVariablesWebhook(applied), true);
@@ -177,6 +177,7 @@ section("Apply B: Flux settings + wait-only plan");
   const fluxSettings = buildFluxTranscriptionSettings(applied);
   assert.ok(fluxSettings);
   assert.equal(fluxSettings!.eager_eot_threshold, 0.4);
+  assert.equal(fluxSettings!.eot_threshold, 0.7);
 
   const rolled = rollbackLatencyProfileConfig(applied);
   assert.equal(rolled.transcription?.sttModel, "deepgram/nova-3");

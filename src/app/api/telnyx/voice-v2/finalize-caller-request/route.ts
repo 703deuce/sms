@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeVoiceV2FinalizeCallerRequest } from "@/lib/voice-v2/finalize-caller-request";
+import { resolveTrustedTransovoVoiceCallId } from "@/lib/voice-v2/intake/resolve-trusted-call-id";
 import { VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 
 export async function POST(request: Request) {
@@ -18,22 +19,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, speak: "Wrong tool.", error: "tool_type_mismatch" }, { status: 200 });
   }
 
-  const callId =
-    String(body.call_id || body.callId || request.headers.get("x-telnyx-call-control-id") || "") ||
-    null;
+  const callControlId =
+    String(
+      body.call_id ||
+        body.callId ||
+        body.call_control_id ||
+        request.headers.get("x-telnyx-call-control-id") ||
+        "",
+    ).trim() || null;
   const conversationId = String(body.conversation_id || body.conversationId || "").trim() || null;
+  const trustedVoiceCallId = resolveTrustedTransovoVoiceCallId({
+    headers: request.headers,
+    body,
+  });
+  const fromE164 = String(body.from || body.caller || body.from_e164 || "").trim() || null;
 
   const result = await executeVoiceV2FinalizeCallerRequest({
     workspaceId,
     agentId,
-    callControlId: callId,
+    callControlId,
     conversationId,
-    voiceCallId: callId,
+    voiceCallId: trustedVoiceCallId,
+    fromE164,
     summary: body.summary ? String(body.summary) : undefined,
   });
 
   return NextResponse.json({
-    ok: result.status === "CALLER_REQUEST_ACCEPTED",
+    ok:
+      result.status === "CALLER_REQUEST_ACCEPTED" ||
+      result.status === "FINALIZED" ||
+      result.status === "ALREADY_FINALIZED",
     speak: result.speak,
     ...result,
   });

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { IntakeFieldKey, IntakeFieldStatus } from "./types";
 import { validateIntakeFieldPayload } from "./validate-fields";
+import { applyCallerAniToIntakeState } from "./caller-phone";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
@@ -267,6 +268,9 @@ export async function executeVoiceV2SaveIntakeFields(
   if (!ctx) {
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
   }
+
+  ctx = applyCallerAniToIntakeState(ctx, fromE164);
+  setVoiceV2CallContext(ctx);
 
   const canonicalSessionKey = ctx.sessionKey;
 

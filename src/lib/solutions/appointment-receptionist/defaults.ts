@@ -1,4 +1,8 @@
 import type { AppointmentReceptionistWizardState } from "./types";
+import {
+  DEFAULT_VOICE_V2_WIZARD_CATALOG_ID,
+  VOICE_V2_WIZARD_ELEVENLABS_VOICES,
+} from "./voice-v2-wizard-elevenlabs-catalog";
 
 export const DEFAULT_CONNECTION_GREETING =
   "Thank you for calling. One moment, please, while I connect you with our receptionist.";
@@ -84,111 +88,16 @@ export const ANSWER_WHEN_OPTIONS = [
   },
 ];
 
-export const WIZARD_VOICES = [
-  {
-    id: "ava-warm-us",
-    label: "Astra",
-    badge: "NaturalHD",
-    description: "Warm, clear, and friendly — proven phone finalist",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "allie-ultra",
-    label: "Allie",
-    badge: "Ultra",
-    description: "Natural conversationalist — best slightly sped up",
-    gender: "female" as const,
-    recommendedSpeed: 1.15,
-  },
-  {
-    id: "maya-energetic-us",
-    label: "Luna",
-    badge: "NaturalHD",
-    description: "Calm, smooth, and reassuring",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "celeste-naturalhd",
-    label: "Celeste",
-    badge: "NaturalHD",
-    description: "Polished, slightly more formal receptionist",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "sofia-friendly-us",
-    label: "Andromeda",
-    badge: "NaturalHD",
-    description: "Modern general-purpose assistant",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "marcus-confident-us",
-    label: "Albion",
-    badge: "NaturalHD",
-    description: "Confident, crisp, professional male",
-    gender: "male" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "mia-ultra",
-    label: "Mia",
-    badge: "Ultra",
-    description: "Task-oriented agent — appointment & structured service",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-    note: "Falls back to Maia if Mia is unavailable on your Telnyx account",
-    fallbackId: "maia-ultra",
-  },
-  {
-    id: "howard-ultra",
-    label: "Howard",
-    badge: "Ultra",
-    description: "Mature, steady, trustworthy male",
-    gender: "male" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "harry-ultra",
-    label: "Harry",
-    badge: "Ultra",
-    description: "Service advisor — warm seasoned male",
-    gender: "male" as const,
-    recommendedSpeed: 1,
-    note: "Falls back to Orion if Harry is unavailable on your Telnyx account",
-    fallbackId: "orion-naturalhd",
-  },
-  {
-    id: "jasper-ultra",
-    label: "Jasper",
-    badge: "Ultra",
-    description: "Friendly, sales-adjacent service specialist",
-    gender: "male" as const,
-    recommendedSpeed: 1,
-  },
-] as const;
+export const WIZARD_VOICES = VOICE_V2_WIZARD_ELEVENLABS_VOICES.map((v) => ({
+  id: v.catalogId,
+  label: v.label,
+  badge: v.badge || "ElevenLabs",
+  description: v.description,
+  gender: v.gender,
+  recommendedSpeed: v.recommendedSpeed ?? 1.08,
+}));
 
-export const WIZARD_VOICE_BACKUPS = [
-  {
-    id: "orion-naturalhd",
-    label: "Orion",
-    badge: "NaturalHD",
-    description: "Second NaturalHD male option",
-    gender: "male" as const,
-    recommendedSpeed: 1,
-  },
-  {
-    id: "callie-ultra",
-    label: "Callie",
-    badge: "Ultra",
-    description: "Warm encourager — backup female Ultra",
-    gender: "female" as const,
-    recommendedSpeed: 1,
-  },
-] as const;
+export const WIZARD_VOICE_BACKUPS: typeof WIZARD_VOICES = [];
 
 export const TEST_SCENARIOS = [
   {
@@ -534,9 +443,9 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
       "Never provide medical, legal, or financial conclusions",
     ],
 
-    voiceId: "ava-warm-us",
-    voiceLabel: "Astra",
-    speakingSpeed: 1,
+    voiceId: DEFAULT_VOICE_V2_WIZARD_CATALOG_ID,
+    voiceLabel: "Jessica",
+    speakingSpeed: 1.08,
     responsiveness: 0.8,
     interruptionSensitivity: 0.75,
 

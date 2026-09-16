@@ -10,21 +10,42 @@ import {
 } from "@/lib/voice-v2/booking-strategy";
 import { deliverVoiceV2BusinessRequestNotifications } from "./business-request-notifications";
 import { transitionAfterCallerRequestFinalized } from "./booking-workflow";
+import {
+  applyCallerAniToIntakeState,
+  resolveCallerAniForSession,
+} from "./intake/caller-phone";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./intake/load-call-context";
 import { getIntakeReadiness } from "./intake/readiness";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./intake/session-store";
 import type { VoiceV2CallContext } from "./intake/types";
+import {
+  primaryOutcomeSucceeded,
+  resolveVoiceV2PrimaryOutcome,
+  type VoiceV2PrimaryOutcome,
+} from "./primary-outcome";
 
 export type FinalizeCallerRequestResult =
   | {
       status: "CALLER_REQUEST_ACCEPTED";
       outcome: "MESSAGE_TAKEN" | "APPOINTMENT_REQUESTED";
+      record_complete: boolean;
+      missing_for_record: string[];
       speak: string;
       voice_v2_status: "CALLER_REQUEST_ACCEPTED";
     }
   | {
+      status: "FINALIZED";
+      primary_outcome: VoiceV2PrimaryOutcome;
+      record_complete: boolean;
+      missing_for_record: string[];
+      missing_required_action_fields: string[];
+      speak: string;
+      voice_v2_status: "CALLER_REQUEST_FINALIZED";
+    }
+  | {
       status: "NOT_READY";
       missing_for_record: string[];
+      missing_required_action_fields?: string[];
       voice_v2_status: "CALLER_REQUEST_NOT_READY";
       speak: string;
     }
@@ -57,25 +78,93 @@ async function resolveStrategy(
   return resolveVoiceV2BookingStrategy(parseVoiceAgentConfig(runtime));
 }
 
+async function persistFinalizeMetadata(input: {
+  voiceCallId: string | null;
+  workspaceId: string;
+  primaryOutcome: VoiceV2PrimaryOutcome;
+  recordComplete: boolean;
+  missingForRecord: string[];
+  fields: Record<string, string>;
+  strategy: VoiceV2BookingStrategy;
+  structuredOutcome?: "MESSAGE_TAKEN" | "APPOINTMENT_REQUESTED";
+  summary?: string;
+  pref: string;
+}) {
+  if (!input.voiceCallId) return;
+
+  const prisma = getPrisma();
+  const existing = await prisma.voiceCall.findFirst({
+    where: { id: input.voiceCallId, workspaceId: input.workspaceId },
+    select: { metadata: true, outcome: true },
+  });
+  const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
+
+  let outcome = existing?.outcome;
+  if (input.primaryOutcome === "BOOKED") {
+    outcome = "booked";
+  } else if (input.structuredOutcome === "APPOINTMENT_REQUESTED") {
+    outcome = "appointment_requested";
+  } else if (input.structuredOutcome === "MESSAGE_TAKEN") {
+    outcome = "message_taken";
+  }
+
+  await prisma.voiceCall
+    .update({
+      where: { id: input.voiceCallId },
+      data: {
+        ...(outcome ? { outcome } : {}),
+        metadata: {
+          ...prevMeta,
+          voiceV2PrimaryOutcome: input.primaryOutcome,
+          voiceV2RecordComplete: input.recordComplete,
+          voiceV2MissingForRecord: input.missingForRecord,
+          ...(input.structuredOutcome
+            ? {
+                voiceV2StructuredOutcome: input.structuredOutcome,
+                voiceV2Request: {
+                  fields: input.fields,
+                  schedulingPreference: input.pref || null,
+                  summary: input.summary?.trim() || null,
+                  bookingStrategy: input.strategy,
+                  acceptedAt: new Date().toISOString(),
+                },
+              }
+            : {}),
+        },
+      },
+    })
+    .catch(() => undefined);
+}
+
 export async function executeVoiceV2FinalizeCallerRequest(input: {
   workspaceId: string;
   agentId: string;
   callControlId?: string | null;
   conversationId?: string | null;
   voiceCallId?: string | null;
+  fromE164?: string | null;
   summary?: string;
 }): Promise<FinalizeCallerRequestResult> {
   const sessionKey = resolveSessionKey({
     callControlId: input.callControlId,
     conversationId: input.conversationId,
   });
-  const ctx =
+
+  const ani = await resolveCallerAniForSession({
+    workspaceId: input.workspaceId,
+    fromE164: input.fromE164,
+    trustedPrismaCallId: input.voiceCallId,
+  });
+
+  let ctx =
     (sessionKey ? getVoiceV2CallContext(sessionKey) : null) ||
     (await ensureVoiceV2CallContext({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       callControlId: input.callControlId,
       conversationId: input.conversationId,
+      fromE164: ani,
+      trustedPrismaCallId: input.voiceCallId,
     }));
 
   if (!ctx) {
@@ -85,6 +174,9 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
       speak: "I could not save that right now. Please try again in a moment.",
     };
   }
+
+  ctx = applyCallerAniToIntakeState(ctx, ani);
+  setVoiceV2CallContext(ctx);
 
   if (ctx.bookingWorkflow?.callerRequestFinalized) {
     return {
@@ -96,21 +188,68 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
 
   const strategy = await resolveStrategy(ctx, input.workspaceId, input.agentId);
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-  if (readiness.missingForRecord.length > 0) {
+  const primaryOutcome = resolveVoiceV2PrimaryOutcome(ctx);
+  const recordComplete = readiness.missingForRecord.length === 0;
+
+  // Primary provider action already succeeded — finalize with incomplete record if needed.
+  if (primaryOutcomeSucceeded(primaryOutcome)) {
+    const nextCtx = transitionAfterCallerRequestFinalized(ctx);
+    setVoiceV2CallContext(nextCtx);
+
+    const fields = intakeSnapshot(ctx);
+    await persistFinalizeMetadata({
+      voiceCallId: input.voiceCallId,
+      workspaceId: input.workspaceId,
+      primaryOutcome,
+      recordComplete,
+      missingForRecord: readiness.missingForRecord,
+      fields,
+      strategy,
+      summary: input.summary,
+      pref: schedulingSummary(ctx),
+    });
+
+    const speak =
+      primaryOutcome === "BOOKED"
+        ? recordComplete
+          ? "Thanks for calling. You're all set — we look forward to seeing you."
+          : "Thanks for calling. Your appointment is confirmed. Have a great day."
+        : primaryOutcome === "BOOKING_LINK_SENT"
+          ? "Thanks for calling. I'll text you that link shortly. Goodbye."
+          : "Thanks for calling. Take care.";
+
     return {
-      status: "NOT_READY",
+      status: "FINALIZED",
+      primary_outcome: primaryOutcome,
+      record_complete: recordComplete,
       missing_for_record: readiness.missingForRecord,
-      voice_v2_status: "CALLER_REQUEST_NOT_READY",
-      speak: "I still need a bit more information before I can send this to the team.",
+      missing_required_action_fields: [],
+      speak,
+      voice_v2_status: "CALLER_REQUEST_FINALIZED",
     };
   }
+
+  // No successful primary action yet — hard blockers only (not record-only fields).
   if (strategy === "REQUEST_ONLY" && !ctx.bookingWorkflow?.requestedDate) {
     return {
       status: "NOT_READY",
       missing_for_record: ["scheduling_preference"],
+      missing_required_action_fields: ["scheduling_preference"],
       voice_v2_status: "CALLER_REQUEST_NOT_READY",
       speak: "What day or time works best for the appointment?",
     };
+  }
+
+  if (strategy === "REQUEST_ONLY" || strategy === "NONE") {
+    if (readiness.missingBeforeBooking.length > 0) {
+      return {
+        status: "NOT_READY",
+        missing_for_record: readiness.missingBeforeBooking,
+        missing_required_action_fields: readiness.missingBeforeBooking,
+        voice_v2_status: "CALLER_REQUEST_NOT_READY",
+        speak: "I still need a bit more information before I can send this to the team.",
+      };
+    }
   }
 
   const outcome = structuredOutcomeForStrategy(strategy);
@@ -123,36 +262,18 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
   const nextCtx = transitionAfterCallerRequestFinalized(ctx);
   setVoiceV2CallContext(nextCtx);
 
-  const voiceCallId = input.voiceCallId?.trim() || null;
-  if (voiceCallId) {
-    const prisma = getPrisma();
-    const existing = await prisma.voiceCall.findFirst({
-      where: { id: voiceCallId, workspaceId: input.workspaceId },
-      select: { metadata: true },
-    });
-    const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
-    const voiceOutcome =
-      outcome === "APPOINTMENT_REQUESTED" ? "appointment_requested" : "message_taken";
-    await prisma.voiceCall
-      .update({
-        where: { id: voiceCallId },
-        data: {
-          outcome: voiceOutcome,
-          metadata: {
-            ...prevMeta,
-            voiceV2StructuredOutcome: outcome,
-            voiceV2Request: {
-              fields,
-              schedulingPreference: pref || null,
-              summary: input.summary?.trim() || null,
-              bookingStrategy: strategy,
-              acceptedAt: new Date().toISOString(),
-            },
-          },
-        },
-      })
-      .catch(() => undefined);
-  }
+  await persistFinalizeMetadata({
+    voiceCallId: input.voiceCallId,
+    workspaceId: input.workspaceId,
+    primaryOutcome: outcome === "APPOINTMENT_REQUESTED" ? "APPOINTMENT_REQUESTED" : "MESSAGE_TAKEN",
+    recordComplete: true,
+    missingForRecord: [],
+    fields,
+    strategy,
+    structuredOutcome: outcome,
+    summary: input.summary,
+    pref,
+  });
 
   const runtime = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
   const config = parseVoiceAgentConfig(runtime);
@@ -164,7 +285,7 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
 
   void deliverVoiceV2BusinessRequestNotifications({
     workspaceId: input.workspaceId,
-    callId: voiceCallId,
+    callId: input.voiceCallId,
     outcome,
     callerName,
     callerPhone,
@@ -184,6 +305,8 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
   return {
     status: "CALLER_REQUEST_ACCEPTED",
     outcome,
+    record_complete: true,
+    missing_for_record: [],
     speak,
     voice_v2_status: "CALLER_REQUEST_ACCEPTED",
   };
