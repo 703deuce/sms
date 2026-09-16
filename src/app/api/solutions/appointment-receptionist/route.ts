@@ -11,7 +11,9 @@ import { hasBlockingActivationIssues } from "@/lib/solutions/appointment-recepti
 import type {
   AppointmentReceptionistWizardState,
   WizardPersistAction,
+  WizardStepId,
 } from "@/lib/solutions/appointment-receptionist/types";
+import { mergeWizardStateForSave } from "@/lib/solutions/appointment-receptionist/merge-wizard-state-on-save";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
   loadAppointmentReceptionistSetup,
@@ -46,12 +48,26 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       action?: WizardPersistAction;
       state?: AppointmentReceptionistWizardState;
+      wizardStepId?: WizardStepId;
     };
 
     const action = body.action || "save_draft";
-    const state = body.state;
+    let state = body.state;
     if (!state || typeof state !== "object") {
       return NextResponse.json({ error: "state is required" }, { status: 400 });
+    }
+
+    if (state.agentId && body.wizardStepId && action !== "create_draft") {
+      const existing = await loadAppointmentReceptionistSetup(auth.workspaceId, {
+        agentId: state.agentId,
+      });
+      if (existing?.state) {
+        state = mergeWizardStateForSave(
+          existing.state as AppointmentReceptionistWizardState,
+          state,
+          body.wizardStepId,
+        );
+      }
     }
 
     const activationMode = state.activationMode || "activate_now";

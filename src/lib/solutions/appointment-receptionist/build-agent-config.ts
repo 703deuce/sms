@@ -555,6 +555,7 @@ export function buildWizardAgentConfig(
       appointmentReceptionistWizard: {
         // Full wizard snapshot so scheduled promote can re-run activate hooks.
         ...state,
+        solutionName: state.solutionName,
         phoneNumberId: state.phoneNumberId,
         phoneNumberE164: state.phoneNumberE164,
         agentName: state.agentName,

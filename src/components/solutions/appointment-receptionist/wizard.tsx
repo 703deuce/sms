@@ -322,7 +322,11 @@ export function AppointmentReceptionistWizard({
       const res = await fetch("/api/solutions/appointment-receptionist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, state: payload }),
+        body: JSON.stringify({
+          action,
+          state: payload,
+          wizardStepId: steps[stepIndex]?.id,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
