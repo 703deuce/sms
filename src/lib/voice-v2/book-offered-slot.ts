@@ -313,14 +313,14 @@ export async function executeVoiceV2BookOfferedSlot(
   timingMs.REVALIDATION_MS = Date.now() - revalStart;
   marks.SLOT_REVALIDATION_END = isoMark();
 
-  const localConflict = await prisma.voiceAppointment.findFirst({
-    where: {
-      workspaceId,
-      status: { not: "cancelled" },
-      startsAt: { lte: endUtc },
-      endsAt: { gte: startUtc },
-    },
-  });
+  const { findAuthoritativeVoiceAppointmentConflict } = await import(
+    "@/lib/voice/calendar/voice-appointment-reconcile"
+  );
+  const localConflict = await findAuthoritativeVoiceAppointmentConflict(
+    workspaceId,
+    startUtc,
+    endUtc,
+  );
   if (localConflict) {
     endVoiceV2GraphCollection();
     timingMs.TOTAL_BACKEND_MS = Date.now() - t0;

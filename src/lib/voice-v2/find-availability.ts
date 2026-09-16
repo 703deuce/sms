@@ -257,6 +257,19 @@ export async function executeVoiceV2FindAvailability(
       typeof svcCfg.bookingHours === "string" ? svcCfg.bookingHours : undefined,
     );
 
+    const { listAuthoritativeVoiceAppointmentBusyIntervals } = await import(
+      "@/lib/voice/calendar/voice-appointment-reconcile"
+    );
+    const ledgerBusy = await listAuthoritativeVoiceAppointmentBusyIntervals(
+      input.workspaceId,
+      windowStartUtc,
+      windowEndUtc,
+      bufferMinutes,
+    );
+    if (ledgerBusy.length) {
+      busy = busy.concat(ledgerBusy);
+    }
+
     const rawSlots = computeFreeSlots(
       busy,
       durationMinutes,

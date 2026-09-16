@@ -1,9 +1,9 @@
-import { getPrisma } from "@/lib/db";
 import type { BusyInterval } from "@/lib/voice/calendar/providers";
+import { listAuthoritativeVoiceAppointmentBusyIntervals } from "@/lib/voice/calendar/voice-appointment-reconcile";
 
 /**
- * Confirmed Transovo appointments block availability the same as provider busy time.
- * Covers MCTB/voice bookings immediately, even if Graph/Google busy is stale.
+ * Transovo ledger busy merged into provider availability.
+ * Only provider-confirmed rows and short-lived holds block — not stale cert/test rows.
  */
 export async function listWorkspaceAppointmentBusyIntervals(
   workspaceId: string,
@@ -11,22 +11,12 @@ export async function listWorkspaceAppointmentBusyIntervals(
   rangeEnd: Date,
   bufferMinutes = 0,
 ): Promise<BusyInterval[]> {
-  const bufferMs = Math.max(0, bufferMinutes) * 60_000;
-  const prisma = getPrisma();
-  const rows = await prisma.voiceAppointment.findMany({
-    where: {
-      workspaceId,
-      status: { not: "cancelled" },
-      startsAt: { lte: new Date(rangeEnd.getTime() + bufferMs) },
-      endsAt: { gte: new Date(rangeStart.getTime() - bufferMs) },
-    },
-    select: { startsAt: true, endsAt: true },
-  });
-
-  return rows.map((row) => ({
-    start: new Date(row.startsAt.getTime() - bufferMs),
-    end: new Date(row.endsAt.getTime() + bufferMs),
-  }));
+  return listAuthoritativeVoiceAppointmentBusyIntervals(
+    workspaceId,
+    rangeStart,
+    rangeEnd,
+    bufferMinutes,
+  );
 }
 
 export function slotOverlapsBusyIntervals(
