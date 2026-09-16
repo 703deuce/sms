@@ -12,6 +12,7 @@ import {
   exprVarEqualsString,
   llmEdgeCondition,
 } from "./workflow-expression";
+import { ONE_AMY_V2_WORKFLOW_APPEND } from "@/lib/voice-v2/one-amy/amy-core-static-prompt";
 
 export const WORKFLOW_NODE_IDS = {
   GENERAL: "n_general",
@@ -133,7 +134,10 @@ export function buildAmyConversationWorkflow(
     toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake,
   );
   const liveBookingPath = v2PstnLiveBooking && v2LiveToolsReady;
-  const generalInstructions = liveBookingPath
+  const oneAmyV2 = liveBookingPath;
+  const generalInstructions = oneAmyV2
+    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${ONE_AMY_V2_WORKFLOW_APPEND}`
+    : liveBookingPath
     ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${V2_PSTN_GENERAL_APPEND}`
     : canonicalBooking
       ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${CANONICAL_BOOKING_GENERAL_APPEND}`
@@ -147,6 +151,12 @@ export function buildAmyConversationWorkflow(
   const liveBookingEdgeLlm =
     "The caller wants to schedule an appointment, check availability, pick a time, or continue booking on the live calendar (not merely asking for a link by text).";
 
+  const v2ToolIds = [
+    toolIds.voiceV2SaveIntake,
+    toolIds.voiceV2Find,
+    toolIds.voiceV2Book,
+  ].filter(Boolean) as string[];
+
   const nodes: Record<string, unknown>[] = [
     {
       id: WORKFLOW_NODE_IDS.GENERAL,
@@ -154,7 +164,7 @@ export function buildAmyConversationWorkflow(
       type: "prompt",
       instructions_mode: "append",
       instructions: generalInstructions,
-      shared_tool_ids: [],
+      shared_tool_ids: oneAmyV2 ? v2ToolIds : [],
       tools_mode: "replace",
       position: { x: 80, y: 80 },
     },
@@ -168,7 +178,7 @@ export function buildAmyConversationWorkflow(
       tools_mode: "replace",
       position: { x: 360, y: 40 },
     },
-    ...(liveBookingPath
+    ...(liveBookingPath && !oneAmyV2
       ? [
           {
             id: WORKFLOW_NODE_IDS.LIVE_BOOKING,
@@ -176,11 +186,7 @@ export function buildAmyConversationWorkflow(
             type: "prompt",
             instructions_mode: "append",
             instructions: LIVE_BOOKING_V2_INSTRUCTIONS,
-            shared_tool_ids: [
-              toolIds.voiceV2SaveIntake,
-              toolIds.voiceV2Find,
-              toolIds.voiceV2Book,
-            ].filter(Boolean),
+            shared_tool_ids: v2ToolIds,
             tools_mode: "replace",
             position: { x: 360, y: 120 },
           },
@@ -245,7 +251,7 @@ export function buildAmyConversationWorkflow(
   ];
 
   const edges: Record<string, unknown>[] = [
-    ...((liveBookingPath || (canonicalBooking && toolIds.voiceAiBooking))
+    ...((!oneAmyV2 && (liveBookingPath || (canonicalBooking && toolIds.voiceAiBooking)))
       ? [
           {
             id: "e_general_live_booking",
@@ -364,6 +370,15 @@ export function workflowNodeExpectedTools(
 ): string[] {
   switch (nodeId) {
     case WORKFLOW_NODE_IDS.GENERAL:
+      if (toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake) {
+        return [
+          "voice_v2_save_intake_fields",
+          "voice_v2_find_availability",
+          "voice_v2_book_offered_slot",
+        ];
+      }
+      return [];
+    // Legacy canonical booking only — V2 PSTN uses one-Amy tools on GENERAL.
     case WORKFLOW_NODE_IDS.RECOVERY:
       return [];
     case WORKFLOW_NODE_IDS.ACTION:

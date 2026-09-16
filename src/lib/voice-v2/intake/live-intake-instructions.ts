@@ -15,12 +15,22 @@ const REQ_LABEL: Record<string, string> = {
 /**
  * Compiled into receptionist prompt + Telnyx PSTN append — single source for what Amy may ask.
  */
-export function buildVoiceV2LiveIntakeInstructions(schema: VoiceV2IntakeSchema): string {
+export function buildVoiceV2LiveIntakeInstructions(
+  schema: VoiceV2IntakeSchema,
+  options?: { oneAmy?: boolean },
+): string {
   const enabled = new Set(schema.fields.map((f) => f.key));
   const disabled = INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k));
 
   const lines: string[] = [
     "VOICE V2 INTAKE AUTHORITY (sole source for live booking intake):",
+    ...(options?.oneAmy
+      ? [
+          "Do not call intake save solely because the caller wants to book or schedule.",
+          "Do not save booking-intent phrases as service_reason (for example 'book an appointment').",
+          "When multiple enabled fields arrive in one utterance, save them in one call.",
+        ]
+      : []),
     "Use voice_v2_save_intake_fields when the caller supplies configured values.",
     "Use the Voice V2 intake schema as the only source of truth for what information to actively request.",
     "Do not ask for disabled fields. Do not re-ask fields already known in session state or already stated by the caller.",

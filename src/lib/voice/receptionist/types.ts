@@ -51,6 +51,8 @@ export type ReceptionistCompiledSnapshot = {
   voiceV2IntakeAuthority?: boolean;
   /** Precompiled VOICE V2 INTAKE AUTHORITY block for prompts */
   voiceV2IntakeInstructions?: string;
+  /** One-Amy Voice V2 PSTN: single conversational node, layered static core prompt */
+  voiceV2OneAmy?: boolean;
   enabledBuiltinTools: string[];
   /** Customer job instructions — what the receptionist should do (always loaded). */
   agentJobInstructions: string;

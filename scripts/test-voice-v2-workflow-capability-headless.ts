@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * Voice V2 PSTN workflow capability certification (directive §8).
+ * Voice V2 PSTN workflow capability certification (one-Amy).
  *
  * npx tsx scripts/test-voice-v2-workflow-capability-headless.ts
  */
@@ -76,6 +76,15 @@ function configWith(input: {
   } as VoiceAgentConfig);
 }
 
+function generalNode(flow: Record<string, unknown>) {
+  const nodes = flow.nodes as Array<{
+    id: string;
+    instructions?: string;
+    shared_tool_ids?: string[];
+  }>;
+  return nodes.find((n) => n.id === WORKFLOW_NODE_IDS.GENERAL);
+}
+
 function liveNode(flow: Record<string, unknown>) {
   const nodes = flow.nodes as Array<{
     id: string;
@@ -83,11 +92,6 @@ function liveNode(flow: Record<string, unknown>) {
     shared_tool_ids?: string[];
   }>;
   return nodes.find((n) => n.id === WORKFLOW_NODE_IDS.LIVE_BOOKING);
-}
-
-function generalNode(flow: Record<string, unknown>) {
-  const nodes = flow.nodes as Array<{ id: string; instructions?: string }>;
-  return nodes.find((n) => n.id === WORKFLOW_NODE_IDS.GENERAL);
 }
 
 function hasLiveBookingEdge(flow: Record<string, unknown>) {
@@ -105,11 +109,19 @@ function readBackFromPayload(
     ["v2_save", VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME],
     ["st_legacy_book", "voice_ai_booking_turn"],
   ]);
+  const general = generalNode(flow);
   const live = liveNode(flow);
   return verifyVoiceV2WorkflowReadBack({
     expectedVoiceV2Booking: true,
     readBack: {
       tool_ids,
+      generalNode: general
+        ? {
+            id: general.id,
+            shared_tool_ids: general.shared_tool_ids || [],
+            instructions: general.instructions || "",
+          }
+        : null,
       liveBookingNode: live
         ? {
             id: live.id,
@@ -122,7 +134,6 @@ function readBackFromPayload(
   });
 }
 
-// Authority: single runtime gate (pstn-workflow-mode)
 const authorityFns = [isVoiceV2PstnLiveBookingMode, expectedVoiceV2LiveBooking];
 pass(
   "CONFIG_AUTHORITY_SINGLE_GATE",
@@ -134,48 +145,43 @@ pass(
 );
 metric("VOICE_V2_CONFIG_AUTHORITY_COUNT", 1);
 
-// A — after-hours + V2 enabled
 const cfgA = configWith({ afterHours: true, voiceV2PstnLiveBooking: true });
 const planA = buildDesiredTelnyxWorkflowPayload({
   shared: baseShared,
   v2Shared: v2Ids,
   config: cfgA,
 });
-const liveA = liveNode(planA.conversation_flow);
 const generalA = generalNode(planA.conversation_flow);
-const toolsA = workflowNodeExpectedTools(WORKFLOW_NODE_IDS.LIVE_BOOKING, {
-  ...v2Ids,
+const toolsA = workflowNodeExpectedTools(WORKFLOW_NODE_IDS.GENERAL, {
   voiceV2Find: v2Ids.findId,
   voiceV2Book: v2Ids.bookId,
   voiceV2SaveIntake: v2Ids.saveIntakeId,
 });
-pass("A_LIVE_BOOKING_NODE", Boolean(liveA));
+pass("A_NO_LIVE_BOOKING_NODE", !liveNode(planA.conversation_flow));
 pass(
-  "A_V2_TOOLS_ON_NODE",
-  JSON.stringify(liveA?.shared_tool_ids?.sort()) === JSON.stringify([v2Ids.saveIntakeId, v2Ids.findId, v2Ids.bookId].sort()),
+  "A_V2_TOOLS_ON_GENERAL",
+  JSON.stringify(generalA?.shared_tool_ids?.sort()) ===
+    JSON.stringify([v2Ids.saveIntakeId, v2Ids.findId, v2Ids.bookId].sort()),
 );
 pass(
-  "A_LIVE_INSTRUCTIONS",
+  "A_ONE_AMY_GENERAL_INSTRUCTIONS",
   Boolean(
-    liveA?.instructions?.includes("voice_v2_find_availability") &&
-      liveA?.instructions?.includes("voice_v2_book_offered_slot") &&
-      liveA?.instructions?.includes("voice_v2_save_intake_fields"),
+    generalA?.instructions?.includes("same assistant") ||
+      generalA?.instructions?.includes("intake-save"),
   ),
-);
-pass(
-  "A_GENERAL_LIVE_BOOKING_AVAILABLE",
-  Boolean(generalA?.instructions?.includes("CAN book on the live Microsoft calendar")),
 );
 pass(
   "A_NOT_CALLBACK_ONLY_GENERAL",
   !String(generalA?.instructions || "").includes("not live calendar booking on this call"),
 );
-pass("A_HAS_LIVE_EDGE", hasLiveBookingEdge(planA.conversation_flow));
+pass("A_NO_LIVE_EDGE", !hasLiveBookingEdge(planA.conversation_flow));
 pass("A_READBACK", readBackFromPayload(planA.tool_ids, planA.conversation_flow).ok === true);
-pass("A_EXPECTED_TOOLS", toolsA.join(",") === "voice_v2_save_intake_fields,voice_v2_find_availability,voice_v2_book_offered_slot");
+pass(
+  "A_EXPECTED_TOOLS",
+  toolsA.join(",") === "voice_v2_save_intake_fields,voice_v2_find_availability,voice_v2_book_offered_slot",
+);
 metric("V2_TOOLSET_AFTER_HOURS_ENABLED", failures.some((f) => f.startsWith("A_")) ? "FAIL" : "PASS");
 
-// B — after-hours + V2 disabled
 const cfgB = configWith({ afterHours: true, voiceV2PstnLiveBooking: false });
 const planB = buildDesiredTelnyxWorkflowPayload({
   shared: baseShared,
@@ -192,59 +198,58 @@ pass(
   !planB.tool_ids.some((id) => [v2Ids.findId, v2Ids.bookId, v2Ids.saveIntakeId].includes(id)),
 );
 
-// C — normal hours + V2 enabled
 const cfgC = configWith({ afterHours: false, voiceV2PstnLiveBooking: true });
 const planC = buildDesiredTelnyxWorkflowPayload({
   shared: baseShared,
   v2Shared: v2Ids,
   config: cfgC,
 });
-pass("C_LIVE_NODE", Boolean(liveNode(planC.conversation_flow)));
+pass("C_NO_LIVE_NODE", !liveNode(planC.conversation_flow));
 pass("C_READBACK", readBackFromPayload(planC.tool_ids, planC.conversation_flow).ok === true);
 
-// D — republish idempotency (pure planner)
 const d1 = buildDesiredTelnyxWorkflowPayload({ shared: baseShared, v2Shared: v2Ids, config: cfgA });
 const d2 = buildDesiredTelnyxWorkflowPayload({ shared: baseShared, v2Shared: v2Ids, config: cfgA });
 pass(
   "D_TOOL_IDS_STABLE",
   JSON.stringify(d1.tool_ids.sort()) === JSON.stringify(d2.tool_ids.sort()),
 );
-const liveD1 = liveNode(d1.conversation_flow)?.shared_tool_ids?.sort();
-const liveD2 = liveNode(d2.conversation_flow)?.shared_tool_ids?.sort();
-pass("D_LIVE_TOOLS_STABLE", JSON.stringify(liveD1) === JSON.stringify(liveD2));
+const generalD1 = generalNode(d1.conversation_flow)?.shared_tool_ids?.sort();
+const generalD2 = generalNode(d2.conversation_flow)?.shared_tool_ids?.sort();
+pass("D_GENERAL_TOOLS_STABLE", JSON.stringify(generalD1) === JSON.stringify(generalD2));
 metric("V2_TOOLSET_SURVIVES_REPUBLISH", failures.some((f) => f.startsWith("D_")) ? "FAIL" : "PASS");
 
-// E — stale Telnyx: rebuild from config restores trio
 const staleReadBack = verifyVoiceV2WorkflowReadBack({
   expectedVoiceV2Booking: true,
   readBack: {
     tool_ids: [baseShared.sendResourceId, v2Ids.findId],
-    liveBookingNode: {
+    generalNode: {
       shared_tool_ids: [v2Ids.findId],
       instructions: "partial",
     },
-    displayNameByToolId: new Map([
-      [v2Ids.findId, VOICE_V2_TELNYX_TOOL_NAME],
-    ]),
+    liveBookingNode: null,
+    displayNameByToolId: new Map([[v2Ids.findId, VOICE_V2_TELNYX_TOOL_NAME]]),
   },
 });
 pass("E_STALE_READBACK_FAILS", staleReadBack.ok === false);
 const restored = readBackFromPayload(d1.tool_ids, d1.conversation_flow);
 pass("E_SYNC_RESTORES", restored.ok === true);
 
-// F — capability mismatch on read-back
 const fResult = verifyVoiceV2WorkflowReadBack({
   expectedVoiceV2Booking: true,
   readBack: {
     tool_ids: [v2Ids.findId, v2Ids.saveIntakeId, v2Ids.bookId],
-    liveBookingNode: {
+    generalNode: {
       shared_tool_ids: [v2Ids.findId, v2Ids.saveIntakeId],
-      instructions:
-        "voice_v2_save_intake_fields voice_v2_find_availability voice_v2_book_offered_slot",
+      instructions: "one amy",
+    },
+    liveBookingNode: {
+      shared_tool_ids: [v2Ids.bookId],
+      instructions: "handoff",
     },
     displayNameByToolId: new Map([
       [v2Ids.findId, VOICE_V2_TELNYX_TOOL_NAME],
       [v2Ids.saveIntakeId, VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME],
+      [v2Ids.bookId, VOICE_V2_BOOK_TELNYX_TOOL_NAME],
     ]),
   },
 });
@@ -252,31 +257,29 @@ pass(
   "F_MISMATCH_CODE",
   !fResult.ok && fResult.ok === false && (fResult as { code: string }).code === VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
 );
-pass("F_MISSING_BOOK_ON_NODE", String((fResult as { detail?: string }).detail || "").includes("book"));
+pass(
+  "F_V2_ON_LIVE_NODE_FAILS",
+  String((fResult as { detail?: string }).detail || "").includes("handoff"),
+);
 
-// G — booking intent routing (graph + instructions)
-pass("G_LIVE_BOOKING_ROUTE", hasLiveBookingEdge(planA.conversation_flow));
+pass("G_NO_LIVE_BOOKING_ROUTE", !hasLiveBookingEdge(planA.conversation_flow));
 pass(
   "G_NOT_CALLBACK_OVERRIDE",
   !String(generalA?.instructions || "").toLowerCase().includes("don't have live booking"),
 );
 metric("LIVE_BOOKING_ROUTE_AFTER_HOURS", failures.some((f) => f.startsWith("G_")) ? "FAIL" : "PASS");
 
-// Callback override count when V2 on
-const ahNoV2General = String(generalNode(planB.conversation_flow)?.instructions || "");
 const ahV2General = String(generalA?.instructions || "");
 const callbackOverrideWhenV2 =
   ahV2General.includes("not live calendar booking") ||
   ahV2General.includes("text a booking link (not live") ||
-  !hasLiveBookingEdge(planA.conversation_flow)
+  hasLiveBookingEdge(planA.conversation_flow)
     ? 1
     : 0;
 metric("CALLBACK_OVERRIDE_WHEN_V2_ENABLED", callbackOverrideWhenV2);
 
-// Silent degradation: mismatch must fail closed
 metric("SILENT_TOOLSET_DEGRADATION", staleReadBack.ok || fResult.ok ? 1 : 0);
 
-// Call snapshot from config only
 const snap = buildVoiceV2CallCapabilitySnapshot(cfgA);
 pass(
   "SNAPSHOT_ALL_TRUE_WHEN_FLAG",
@@ -286,7 +289,6 @@ pass(
     snap.bookToolAvailable,
 );
 
-// Required display names constant matches trio
 pass(
   "REQUIRED_TOOL_NAMES",
   VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES.length === 3 &&

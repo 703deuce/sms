@@ -18,6 +18,7 @@ import {
 } from "./intake-idempotency";
 import type { VoiceV2ContextLookupTrace } from "../session/context-lookup-trace";
 import { isTrustedPrismaVoiceCallId } from "./resolve-trusted-call-id";
+import { stripBookingIntentOnlyServiceReason } from "./booking-intent-guard";
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -242,7 +243,23 @@ export async function executeVoiceV2SaveIntakeFields(
 
   trace.mark("VALIDATION_START");
   const vStart = Date.now();
-  const validation = validateIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
+  const validationRaw = validateIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
+  const normalized = stripBookingIntentOnlyServiceReason(validationRaw.normalized);
+  let validation = validationRaw;
+  if (normalized !== validationRaw.normalized) {
+    if (validationRaw.ok && Object.keys(normalized).length === 0) {
+      validation = {
+        ok: false,
+        normalized,
+        invalidFields: ["service_reason"],
+        disabledFields: validationRaw.disabledFields,
+      };
+    } else if (validationRaw.ok) {
+      validation = { ...validationRaw, normalized };
+    } else {
+      validation = { ...validationRaw, normalized };
+    }
+  }
   const validationMs = Date.now() - vStart;
   trace.mark("VALIDATION_END", { ms: validationMs });
 

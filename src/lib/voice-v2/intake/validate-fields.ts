@@ -3,6 +3,7 @@ import "server-only";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import { INTAKE_FIELD_KEYS, type IntakeFieldKey, type VoiceV2IntakeSchema } from "./types";
 import { normalizeVoiceIntakeEmail } from "./normalize-email";
+import { isBookingIntentOnlyServiceReason } from "./booking-intent-guard";
 
 export type FieldValidationResult =
   | {
@@ -42,8 +43,14 @@ export function validateIntakeFieldPayload(
     switch (k) {
       case "name":
       case "address":
-      case "service_reason":
         normalized[k] = str;
+        break;
+      case "service_reason":
+        if (isBookingIntentOnlyServiceReason(str)) {
+          invalidFields.push(k);
+        } else {
+          normalized[k] = str;
+        }
         break;
       case "email": {
         const email = normalizeVoiceIntakeEmail(str) ?? (str.includes("@") ? str.trim().toLowerCase() : null);

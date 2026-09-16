@@ -44,6 +44,11 @@ export function buildVoiceV2CallCapabilitySnapshot(
 
 export type TelnyxWorkflowReadBack = {
   tool_ids: string[];
+  generalNode?: {
+    id?: string;
+    shared_tool_ids?: string[];
+    instructions?: string;
+  } | null;
   liveBookingNode?: {
     id?: string;
     shared_tool_ids?: string[];
@@ -57,8 +62,11 @@ export function verifyVoiceV2WorkflowReadBack(input: {
   readBack: TelnyxWorkflowReadBack;
 }): { ok: true } | { ok: false; code: string; detail: string } {
   if (!input.expectedVoiceV2Booking) {
-    const liveIds = input.readBack.liveBookingNode?.shared_tool_ids || [];
-    const hasV2OnNode = liveIds.some((id) => {
+    const nodeIds = [
+      ...(input.readBack.liveBookingNode?.shared_tool_ids || []),
+      ...(input.readBack.generalNode?.shared_tool_ids || []),
+    ];
+    const hasV2OnNode = nodeIds.some((id) => {
       const name = input.readBack.displayNameByToolId.get(id) || "";
       return (VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES as readonly string[]).includes(name);
     });
@@ -81,28 +89,40 @@ export function verifyVoiceV2WorkflowReadBack(input: {
     if (!hasOnAssistant) missing.push(`${displayName}:assistant_tool_ids`);
   }
 
-  const live = input.readBack.liveBookingNode;
-  if (!live?.shared_tool_ids?.length) {
-    missing.push("n_live_booking:missing_node_or_tools");
+  const general = input.readBack.generalNode;
+  if (!general?.shared_tool_ids?.length) {
+    missing.push("n_general:missing_v2_tools");
   } else {
     for (const displayName of VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES) {
-      const onNode = live.shared_tool_ids.some(
+      const onNode = general.shared_tool_ids.some(
         (id) => input.readBack.displayNameByToolId.get(id) === displayName,
       );
-      if (!onNode) missing.push(`${displayName}:live_booking_node`);
+      if (!onNode) missing.push(`${displayName}:general_node`);
     }
   }
 
-  const instr = String(live?.instructions || "").toLowerCase();
-  if (
-    !instr.includes("voice_v2_save_intake_fields") ||
-    !instr.includes("voice_v2_find_availability") ||
-    !instr.includes("voice_v2_book_offered_slot")
-  ) {
-    missing.push("live_booking_instructions:v2_missing");
+  const live = input.readBack.liveBookingNode;
+  const liveIds = live?.shared_tool_ids || [];
+  const v2OnLiveNode = liveIds.some((id) => {
+    const name = input.readBack.displayNameByToolId.get(id) || "";
+    return (VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES as readonly string[]).includes(name);
+  });
+  if (v2OnLiveNode) {
+    missing.push("n_live_booking:v2_tools_must_not_be_on_handoff_node");
   }
-  if (instr.includes("don't have live booking") || instr.includes("do not have live booking")) {
-    missing.push("live_booking_instructions:denies_live_booking");
+
+  const generalInstr = String(general?.instructions || "").toLowerCase();
+  if (
+    generalInstr.includes("move to live booking") ||
+    (generalInstr.includes("transfer") && generalInstr.includes("booking"))
+  ) {
+    missing.push("general_instructions:booking_handoff_language");
+  }
+  if (
+    generalInstr.includes("don't have live booking") ||
+    generalInstr.includes("do not have live booking")
+  ) {
+    missing.push("general_instructions:denies_live_booking");
   }
 
   if (missing.length) {

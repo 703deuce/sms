@@ -98,7 +98,14 @@ export function buildGeneratedWorkflowRules(
     if (booking?.minimumNoticeHours) {
       lines.push(`- Do not book within ${booking.minimumNoticeHours} hours of the current time.`);
     }
-    if (snapshot.voiceV2IntakeAuthority) {
+    if (snapshot.voiceV2OneAmy) {
+      lines.push(
+        "- One-Amy live booking: remain the same assistant; no handoff to a booking node.",
+        "- Do not call intake save for booking intent alone.",
+        "- Save real intake values together when the caller supplies them in one utterance.",
+        "- Check availability only after a usable scheduling preference; book only canonical offered slots.",
+      );
+    } else if (snapshot.voiceV2IntakeAuthority) {
       lines.push(
         "- Voice V2 intake: use voice_v2_save_intake_fields and missingBeforeBooking from tool results — not legacy field manifest.",
         "- When missingBeforeBooking is empty, call voice_v2_find_availability immediately.",

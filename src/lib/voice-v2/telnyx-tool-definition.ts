@@ -133,7 +133,7 @@ export function buildVoiceV2SaveIntakeFieldsTelnyxWebhook(input: {
     webhook: {
       name: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
       description:
-        "Save caller information that the caller has actually provided during this call. Call as soon as the caller gives one or more configured intake values (name, email, phone, address, service_reason). If the caller gives several values in one utterance, save them together in a single call. Do not invent missing values. Do not resend unchanged values unless the caller corrected them.",
+        "Save caller information the caller actually provided (name, email, phone, address, service_reason). Use only when there are real field values — not for booking intent alone (for example 'I need to book an appointment'). If several values arrive in one utterance, save them together in one call. Do not invent values. Do not save generic booking phrases as service_reason.",
       url: input.webhookUrl,
       method: "POST",
       timeout_ms: 5000,

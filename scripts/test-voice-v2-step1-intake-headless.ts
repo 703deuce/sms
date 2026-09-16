@@ -15,6 +15,7 @@ import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
 import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
 import { evaluateBookingIntakeGate } from "../src/lib/voice-v2/intake/booking-gate";
 import { validateIntakeFieldPayload } from "../src/lib/voice-v2/intake/validate-fields";
+import { isBookingIntentOnlyServiceReason } from "../src/lib/voice-v2/intake/booking-intent-guard";
 import {
   extractPostCallIntakeCandidates,
   mergePostCallBackfills,
@@ -451,6 +452,15 @@ async function main() {
     extractPostCallIntakeCandidates("Caller: old@example.com\nCaller: new@example.com", t15canon),
   );
   check("TEST_15_CORRECTION_PRECEDENCE", t15.email?.value === "new@example.com");
+
+  const fakeIntent = validateIntakeFieldPayload(intakeSchemaFromWizardOnly(baseWizard()), {
+    service_reason: "book an appointment",
+  });
+  check("TEST_16_FAKE_BOOKING_INTAKE_SAVE", fakeIntent.ok === false);
+  check(
+    "TEST_16_BOOKING_INTENT_GUARD",
+    isBookingIntentOnlyServiceReason("I need to book an appointment"),
+  );
 
   const failed = checks.filter((c) => !c.pass);
   const metrics = {

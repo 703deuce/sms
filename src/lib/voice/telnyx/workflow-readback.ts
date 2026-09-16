@@ -14,10 +14,20 @@ export async function readTelnyxWorkflowState(assistantId: string): Promise<Teln
     remote) as Record<string, unknown>;
   const tool_ids = Array.isArray(data.tool_ids) ? (data.tool_ids as string[]) : [];
   const flow = data.conversation_flow as { nodes?: Array<Record<string, unknown>> } | undefined;
+  const generalNode = flow?.nodes?.find((n) => n.id === "n_general") || null;
   const liveBookingNode = flow?.nodes?.find((n) => n.id === "n_live_booking") || null;
 
   return {
     tool_ids,
+    generalNode: generalNode
+      ? {
+          id: String(generalNode.id || ""),
+          shared_tool_ids: Array.isArray(generalNode.shared_tool_ids)
+            ? (generalNode.shared_tool_ids as string[])
+            : [],
+          instructions: String(generalNode.instructions || ""),
+        }
+      : null,
     liveBookingNode: liveBookingNode
       ? {
           id: String(liveBookingNode.id || ""),

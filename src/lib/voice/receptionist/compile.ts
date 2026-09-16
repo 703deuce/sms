@@ -25,6 +25,7 @@ import {
   buildVoiceV2LiveIntakeInstructions,
   useVoiceV2IntakeAuthority,
 } from "@/lib/voice-v2/intake/live-intake-instructions";
+import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -229,8 +230,11 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
         },
       } as VoiceAgentConfig)
     : null;
+  const voiceV2OneAmy = isVoiceV2PstnLiveBookingMode({
+    advanced: input.advanced,
+  } as VoiceAgentConfig);
   const voiceV2IntakeInstructions = voiceV2IntakeSchema
-    ? buildVoiceV2LiveIntakeInstructions(voiceV2IntakeSchema)
+    ? buildVoiceV2LiveIntakeInstructions(voiceV2IntakeSchema, { oneAmy: voiceV2OneAmy })
     : undefined;
 
   const partialSnapshot = {
@@ -246,6 +250,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     fieldManifest,
     voiceV2IntakeAuthority,
     voiceV2IntakeInstructions,
+    voiceV2OneAmy,
     enabledBuiltinTools,
     agentJobInstructions,
     agentPersonalityNotes,

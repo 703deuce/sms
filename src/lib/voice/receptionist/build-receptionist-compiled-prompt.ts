@@ -1,5 +1,6 @@
 import type { ReceptionistCompiledSnapshot } from "./types";
 import { TRANSOVO_RECEPTIONIST_CONSTITUTION } from "./transovo-receptionist-constitution";
+import { AMY_V2_CORE_STATIC_PROMPT } from "@/lib/voice-v2/one-amy/amy-core-static-prompt";
 import { buildToolFeedbackVocabularyForPrompt } from "@/lib/voice/tool-feedback";
 import { buildGeneratedWorkflowRules } from "./build-generated-workflow-rules";
 import {
@@ -257,8 +258,11 @@ function buildCallConfigurationSection(snapshot: ReceptionistCompiledSnapshot): 
  * Runtime call state and tools are outside this string.
  */
 export function buildReceptionistCompiledPrompt(snapshot: ReceptionistCompiledSnapshot): string {
+  const staticCore = snapshot.voiceV2OneAmy
+    ? AMY_V2_CORE_STATIC_PROMPT
+    : TRANSOVO_RECEPTIONIST_CONSTITUTION;
   const sections = [
-    TRANSOVO_RECEPTIONIST_CONSTITUTION,
+    staticCore,
     "",
     "AGENT",
     personalityFromSnapshot(snapshot),
