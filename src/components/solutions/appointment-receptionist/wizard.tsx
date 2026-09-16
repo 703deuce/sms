@@ -40,6 +40,7 @@ export type AppointmentReceptionistWizardProps = {
   presentation?: "legacy" | "mctb";
   onAgentStatusChange?: (status: "draft" | "active" | "needs_attention" | null) => void;
   onAgentIdChange?: (agentId: string | null) => void;
+  onSolutionNameChange?: (solutionName: string) => void;
 };
 
 function mctbDefaultState(): AppointmentReceptionistWizardState {
@@ -55,6 +56,7 @@ export function AppointmentReceptionistWizard({
   presentation = "legacy",
   onAgentStatusChange,
   onAgentIdChange,
+  onSolutionNameChange,
 }: AppointmentReceptionistWizardProps) {
   const isMctb = presentation === "mctb";
   const storageKey = isMctb ? STORAGE_KEY_MCTB : STORAGE_KEY_LEGACY;
@@ -90,6 +92,12 @@ export function AppointmentReceptionistWizard({
   useEffect(() => {
     onAgentIdChange?.(state.agentId || null);
   }, [state.agentId, onAgentIdChange]);
+
+  useEffect(() => {
+    if (isMctb && state.solutionName?.trim()) {
+      onSolutionNameChange?.(state.solutionName.trim());
+    }
+  }, [isMctb, state.solutionName, onSolutionNameChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,7 +300,7 @@ export function AppointmentReceptionistWizard({
   const headline = useMemo(() => {
     if (isMctb) {
       return {
-        title: "After-Hours Voice Agent",
+        title: state.solutionName?.trim() || "After-Hours Voice Agent",
         subtitle:
           "Answer missed and after-hours calls with an AI agent that follows your business rules.",
       };

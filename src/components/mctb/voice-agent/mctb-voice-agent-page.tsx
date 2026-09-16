@@ -12,6 +12,7 @@ type AgentStatus = "draft" | "active" | "needs_attention" | null;
 export function MctbVoiceAgentPage() {
   const [agentStatus, setAgentStatus] = useState<AgentStatus>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [pageTitle, setPageTitle] = useState("After-Hours Voice Agent");
   const onAgentStatusChange = useCallback((status: AgentStatus) => {
     setAgentStatus(status);
   }, []);
@@ -38,7 +39,7 @@ export function MctbVoiceAgentPage() {
         <header className="mctb-va-header">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="mctb-va-title">After-Hours Voice Agent</h1>
+              <h1 className="mctb-va-title">{pageTitle}</h1>
               {statusLabel ? (
                 <span className={`mctb-va-status-pill ${statusClass}`}>{statusLabel}</span>
               ) : null}
@@ -72,6 +73,7 @@ export function MctbVoiceAgentPage() {
           presentation="mctb"
           onAgentStatusChange={onAgentStatusChange}
           onAgentIdChange={setAgentId}
+          onSolutionNameChange={setPageTitle}
         />
       </div>
     </MctbPageContainer>
