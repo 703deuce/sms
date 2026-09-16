@@ -127,58 +127,64 @@ export function CallHandlingStep({
           </div>
           ) : null}
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold">Human transfer</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Transfer triggers</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {state.transferTriggers.map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium"
-                >
-                  {t}
-                </span>
-              ))}
+          {presentation === "mctb" ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h3 className="text-sm font-semibold">Human transfer</h3>
+              <InfoCallout>
+                Human phone transfer is not part of the Voice V2 (One-Amy) PSTN runtime yet (see{" "}
+                <code className="text-xs">docs/VOICE-V2-HARDENING-REPORT.md</code>). This wizard
+                surface does not expose transfer destination or triggers so PSTN tests are not
+                misread as transfer-ready. Values may still persist from legacy flows and can sync
+                to the Telnyx workflow HUMAN node — that path is legacy, not certified V2 transfer.
+              </InfoCallout>
             </div>
-            <div className="mt-4 space-y-2">
-              <Label>Transfer destination</Label>
-              <div className="flex items-center gap-2 rounded-lg border border-border p-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <UserRound className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <Input
-                    className="h-8 border-0 bg-transparent px-0 shadow-none"
-                    placeholder="Name"
-                    value={state.transferDestinationName}
-                    onChange={(e) => patch({ transferDestinationName: e.target.value })}
-                  />
-                  <Input
-                    className="h-8 border-0 bg-transparent px-0 shadow-none"
-                    placeholder="+1 (555) 000-0000"
-                    value={state.transferDestinationPhone}
-                    onChange={(e) => patch({ transferDestinationPhone: e.target.value })}
-                  />
-                </div>
-              </div>
-              <Label>Ring for</Label>
-              <select
-                className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
-                value={state.transferRingSeconds}
-                onChange={(e) => patch({ transferRingSeconds: Number(e.target.value) })}
-              >
-                {[10, 15, 20, 30, 45].map((s) => (
-                  <option key={s} value={s}>
-                    {s} seconds
-                  </option>
+          ) : (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h3 className="text-sm font-semibold">Human transfer</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Transfer triggers</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {state.transferTriggers.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium"
+                  >
+                    {t}
+                  </span>
                 ))}
-              </select>
-              {presentation === "mctb" ? (
-                <InfoCallout>
-                  Warm transfer is not available on Voice Agent (V2) phone calls yet. Transfer
-                  destination settings are saved for cold handoff when transfer is enabled.
-                </InfoCallout>
-              ) : (
+              </div>
+              <div className="mt-4 space-y-2">
+                <Label>Transfer destination</Label>
+                <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <UserRound className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      className="h-8 border-0 bg-transparent px-0 shadow-none"
+                      placeholder="Name"
+                      value={state.transferDestinationName}
+                      onChange={(e) => patch({ transferDestinationName: e.target.value })}
+                    />
+                    <Input
+                      className="h-8 border-0 bg-transparent px-0 shadow-none"
+                      placeholder="+1 (555) 000-0000"
+                      value={state.transferDestinationPhone}
+                      onChange={(e) => patch({ transferDestinationPhone: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Label>Ring for</Label>
+                <select
+                  className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                  value={state.transferRingSeconds}
+                  onChange={(e) => patch({ transferRingSeconds: Number(e.target.value) })}
+                >
+                  {[10, 15, 20, 30, 45].map((s) => (
+                    <option key={s} value={s}>
+                      {s} seconds
+                    </option>
+                  ))}
+                </select>
                 <label className="mt-3 flex items-start gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -193,25 +199,25 @@ export function CallHandlingStep({
                     </span>
                   </span>
                 </label>
-              )}
-              <label className="mt-2 flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.detectVoicemailOnTransfer}
-                  onChange={(e) =>
-                    patch({ detectVoicemailOnTransfer: e.target.checked })
-                  }
-                />
-                <span>
-                  <span className="font-medium">Detect voicemail on transfer</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Return to AI if the transfer lands in voicemail.
+                <label className="mt-2 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.detectVoicemailOnTransfer}
+                    onChange={(e) =>
+                      patch({ detectVoicemailOnTransfer: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">Detect voicemail on transfer</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Return to AI if the transfer lands in voicemail.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold">Fallbacks</h3>

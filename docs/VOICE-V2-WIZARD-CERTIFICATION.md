@@ -43,43 +43,60 @@ Script: `node scripts/wizard-571-voice-line-api-setup.mjs`
 
 ## 3. Wizard field wiring (27-control inventory)
 
-**Legend:** CONNECTED = UI → save merge → `buildWizardAgentConfig` → publish → runtime consumer traced in code.  
-PARTIAL = persists/publishes but runtime limited or MCTB UI hides control.  
-NOT_APPLICABLE = not shown on MCTB wizard surface.  
-DEAD = would mislead user (none remaining after this pass).
+**Source of truth:** `scripts/wizard-control-inventory.json` — **exactly 27 rows** (one row per control; no extra matrix lines).
 
-| Page | Control | Persisted | Published | Runtime consumer | Connected | Fix made |
-|------|---------|-----------|-----------|------------------|-----------|----------|
-| Purpose | Agent name | `solutionName` (step merge) | `appointmentReceptionistWizard`, `displayName`, dynvars | Shell title, setup, prompt | **YES** | H1 sync (`bd5dc547`) |
-| Purpose | Capability cards | `capabilities` | advanced + workflow | Capability/tools, booking gates | **YES** | — |
-| Purpose | When should this agent answer | `answerWhen` | `inboundRules`, routing mode | Schedule / answer mode | **YES** | — |
-| Phone | Number source cards | `numberSource` | wizard snapshot | Phone assignment UX | **YES** | — |
-| Phone | Transovo number list | `phoneNumberId` | agent row + inbound block | TeXML route, `setInboundHandlingMode` | **YES** | 571 API attach |
-| Phone | Outbound SMS mode | `outboundSmsMode` | `messaging` | SMS transport | **N/A** | Hidden on MCTB phone step |
-| Phone | Call recording | `callRecording` | `compliance` | Recording disclosure | **YES** | Legacy step only on full wizard |
-| Business Knowledge | Business name | `businessName` | Layer B / dynvars | `buildBusinessKnowledgePromptSection`, V2 Layer B | **YES** | — |
-| Business Knowledge | Website URL | `websiteUrl` | knowledge config | Knowledge scan / KB | **YES** | — |
-| Business Knowledge | Knowledge source cards | `knowledgeSource` | `knowledge` advanced | RAG eligibility | **YES** | — |
-| Business Knowledge | Knowledge items / FAQs | `knowledgeItems` | knowledge + prompt | Layer B, RAG | **YES** | — |
-| Business Knowledge | Agent display name | `agentName` | identity + prompt | Greeting / persona | **YES** | — |
-| Business Knowledge | Opening greeting | `openingGreeting` | callHandling.greeting | TeXML / assistant greeting | **YES** | — |
-| Business Knowledge | Timezone | `timezone` | dynvars, scheduling | Datetime / booking TZ | **YES** | — |
+**Legend (Voice V2 PSTN / MCTB wizard):**
+
+| Status | Meaning |
+|--------|---------|
+| **CONNECTED** | UI (where shown) → step merge → `buildWizardAgentConfig` → publish → **Voice V2 One-Amy PSTN** consumer (`src/lib/voice-v2/*`, V2 Telnyx tools on GENERAL node) |
+| **NOT_STARTED** | May persist/publish to legacy config, but **not** a certified V2 PSTN runtime capability (`docs/VOICE-V2-HARDENING-REPORT.md`) |
+| **NOT_APPLICABLE** | Not exposed on MCTB wizard surface |
+
+**Per-page row counts:** Purpose 3 · Phone 4 · Business Knowledge 8 · Booking 5 · Call Handling 2 · Voice 2 · Test 1 · Activate 2 → **27**.
+
+| Page | Control | Persisted | Published | Runtime consumer | V2 connected | Notes |
+|------|---------|-----------|-----------|------------------|--------------|-------|
+| Purpose | Agent name | `solutionName` | wizard snapshot, dynvars | Shell title, Layer B, setup | **YES** | H1 sync (`bd5dc547`) |
+| Purpose | Capability cards | `capabilities` | advanced + workflow | V2 capability / booking gates | **YES** | — |
+| Purpose | When should this agent answer | `answerWhen` | `inboundRules` | Answer mode / routing context | **YES** | — |
+| Phone | Number source cards | `numberSource` | wizard snapshot | Assignment UX | **YES** | — |
+| Phone | Transovo number list | `phoneNumberId` | agent + inbound block | TeXML route, inbound mode API | **YES** | 571 API attach |
+| Phone | Outbound SMS mode | `outboundSmsMode` | `messaging` | SMS transport | **N/A** | Not on MCTB phone step |
+| Phone | Call recording | `callRecording` | `compliance` | Recording disclosure | **YES** | Shown on phone step |
+| Business Knowledge | Business name | `businessName` | Layer B / dynvars | V2 knowledge Layer B | **YES** | — |
+| Business Knowledge | Website URL | `websiteUrl` | knowledge advanced | KB / scan | **YES** | — |
+| Business Knowledge | Knowledge source cards | `knowledgeSource` | knowledge advanced | RAG eligibility | **YES** | — |
+| Business Knowledge | Knowledge items / FAQs | `knowledgeItems` | knowledge + prompt | Layer B, `voice_v2_search_knowledge` | **YES** | — |
+| Business Knowledge | Agent display name | `agentName` | identity + prompt | Persona / greeting | **YES** | — |
+| Business Knowledge | Opening greeting | `openingGreeting` | `callHandling.greeting` | Telnyx assistant greeting | **YES** | — |
+| Business Knowledge | Timezone | `timezone` | dynvars | Booking / display TZ | **YES** | — |
 | Business Knowledge | Long-term memory | `longTermMemory` | `advanced.memory` | Memory config | **YES** | — |
-| Booking | Calendar provider cards | `calendarProvider` | `voiceV2Calendly` / Microsoft hooks | Provider selection | **YES** | — |
-| Booking | When someone wants an appointment | `bookingStrategy` | `advanced.bookingStrategy`, `voiceV2PstnLiveBooking` | V2 workflow + tool eligibility | **YES** | Strategy tests added |
-| Booking | Send link URL | `bookingLinkUrl` | validated `bookingLink` | `voice_v2_send_booking_link` | **YES** | — |
-| Booking | Caller collect fields | `collectFields` | `voiceV2Intake`, `callerFields` | Intake schema + save_intake tools | **YES** | bridge tests |
-| Booking | Qualification enabled | `qualificationEnabled` + rules | `qualification` advanced | Layer B + evaluator | **YES** | — |
-| Call Handling | Transfer destination phone | `transferDestinationPhone` | `transfers`, `transferPolicy` | Transfer / escalate tools | **YES** | — |
-| Call Handling | Transfer triggers | `transferTriggers` | `transfers.triggers` | Prompt + transfer tool | **YES** | — |
-| Call Handling | Warm transfer (UI) | `warmTransfer` | `transfers.warmTransfer` | Telnyx warm (legacy path) | **N/A** | MCTB: hidden + callout (V2 PSTN) |
-| Voice | Voice picker | `voiceId` | `voiceLanguage` | Telnyx assistant sync | **YES** | — |
+| Booking | Calendar provider cards | `calendarProvider` | `voiceV2Calendly` / Microsoft | Provider selection | **YES** | — |
+| Booking | When someone wants an appointment | `bookingStrategy` | `bookingStrategy`, `voiceV2PstnLiveBooking` | V2 workflow + tool set | **YES** | Headless strategy tests |
+| Booking | Send link URL | `bookingLinkUrl` | `bookingLink` | `voice_v2_send_booking_link` | **YES** | — |
+| Booking | Caller collect fields | `collectFields` | `voiceV2Intake`, `callerFields` | Intake schema + save tools | **YES** | Bridge tests |
+| Booking | Qualification enabled | `qualification*` | `qualification` advanced | Layer B + evaluator | **YES** | — |
+| Call Handling | Transfer destination phone | `transferDestinationPhone` | `transfers.destinationPhone`, `transferPolicy` | Legacy Telnyx **HUMAN** node `transfer` tool only | **NOT_STARTED** | Hidden on MCTB UI; not V2 PSTN |
+| Call Handling | Transfer triggers | `transferTriggers` | `transfers.triggers`, system prompt lines | Legacy prompt / HUMAN routing | **NOT_STARTED** | Hidden on MCTB UI; not V2 PSTN |
+| Voice | Voice picker | `voiceId` | `voiceLanguage` | Telnyx assistant TTS | **YES** | — |
 | Voice | Speaking speed | `speakingSpeed` | `voiceLanguage.speed` | TTS timing | **YES** | — |
-| Test | Test scenario / run test | `lastTestPassed` | readiness only | Activation checklist | **YES** | No PSTN in cert |
+| Test | Test scenario / run test | `lastTestPassed` | readiness flags | Activation checklist | **YES** | No PSTN in backend cert |
 | Activate | Activation mode | `activationMode` | publish action | Lifecycle | **YES** | — |
 | Activate | Publish / Activate | POST `activate` | `publishVoiceAgent` | ACTIVE + Telnyx + TeXML | **YES** | #386 |
 
-**Totals:** 27 controls — **22 CONNECTED**, **3 NOT_APPLICABLE**, **0 DEAD**, **0 PARTIAL** (warm transfer reclassified N/A on MCTB UI).
+**Totals (27 inventory rows):** **24 CONNECTED** · **1 NOT_APPLICABLE** · **2 NOT_STARTED** · **0 DEAD**
+
+### Transfer / urgency (explicit)
+
+| Wizard field | Persists? | Publishes to | Voice V2 One-Amy PSTN runtime |
+|--------------|-----------|--------------|-------------------------------|
+| `transferDestinationPhone` | Yes (`call-handling` merge) | `draftConfig.transfers`, `receptionistAdvanced.transferPolicy`, Telnyx workflow **HUMAN** node when `toolIds.transfer` set | **No** — hardening report: transfer/urgency **NOT_STARTED** in `voice-v2`; One-Amy GENERAL node uses V2 tools only (`conversation-workflow.ts` `v2ToolIds`). `transfer_available` dynvar comes from legacy `call-session-context.ts`, not V2 session execution. |
+| `transferTriggers` | Yes | `transfers.triggers`, `buildSystemPrompt` lines | **No** — prompt-only on legacy path; not V2 transfer product. |
+
+**MCTB UI:** Human transfer block is **hidden** (callout only) so PSTN testers are not told transfer is wired for V2. Warm transfer remains legacy-only on non-MCTB wizard.
+
+**Not in inventory (informational only):** `warmTransfer` / `detectVoicemailOnTransfer` — legacy wizard controls, not separate inventory rows.
 
 ---
 
@@ -160,8 +177,9 @@ Optional later: `node scripts/voice-v2-wizard-full-cert.mjs` (not run in this pa
 ## 13. Bugs fixed in this pass
 
 1. `test-wizard-advanced-bridge.ts` — pin `MICROSOFT_365` before asserting live booking flag.  
-2. MCTB Call Handling — honest warm-transfer callout (not connected on V2 PSTN).  
-3. Production 571 line — re-attached `VOICE_AGENT` + wizard phone save via API script.
+2. MCTB Call Handling — human transfer hidden on V2 surface; legacy-only publish path documented.  
+3. Production 571 line — re-attached `VOICE_AGENT` + wizard phone save via API script.  
+4. Certification matrix reconciled to **27** inventory rows with correct totals.
 
 ---
 
