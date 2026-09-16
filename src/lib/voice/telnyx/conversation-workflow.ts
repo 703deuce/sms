@@ -37,6 +37,7 @@ export type WorkflowSharedToolIds = {
   voiceV2Book?: string | null;
   voiceV2SaveIntake?: string | null;
   voiceV2FinalizeRequest?: string | null;
+  voiceV2SendBookingLink?: string | null;
   voiceV2FindExisting?: string | null;
   voiceV2Reschedule?: string | null;
   voiceV2Cancel?: string | null;
@@ -96,6 +97,14 @@ const V2_REQUEST_ONLY_GENERAL_APPEND = [
   "When enough information is collected, call voice_v2_finalize_caller_request.",
   "Never say the appointment is confirmed, booked, or that a time is available.",
   "Tell the caller the team will follow up to confirm.",
+].join(" ");
+
+const V2_SEND_LINK_GENERAL_APPEND = [
+  "Appointment handling: text the business configured booking link when the caller wants to schedule.",
+  "Use voice_v2_save_intake_fields for configured caller information.",
+  "Offer to text the booking link; after SMS consent, call voice_v2_send_booking_link.",
+  "Do NOT check live calendar availability, do NOT book on the call, and do NOT say the caller is booked or confirmed.",
+  "Only say the link was sent after voice_v2_send_booking_link succeeds.",
 ].join(" ");
 
 const V2_MESSAGE_ONLY_GENERAL_APPEND = [
@@ -159,7 +168,8 @@ export function buildAmyConversationWorkflow(
     toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake,
   );
   const v2IntakeToolsReady = Boolean(
-    toolIds.voiceV2SaveIntake && toolIds.voiceV2FinalizeRequest,
+    toolIds.voiceV2SaveIntake &&
+      (toolIds.voiceV2FinalizeRequest || toolIds.voiceV2SendBookingLink),
   );
   const liveBookingPath = v2PstnLiveBooking && v2LiveToolsReady;
   const oneAmyV2 = v2OneAmy && (v2IntakeToolsReady || liveBookingPath);
@@ -168,9 +178,11 @@ export function buildAmyConversationWorkflow(
       ? V2_PSTN_GENERAL_APPEND
       : bookingStrategy === "REQUEST_ONLY"
         ? V2_REQUEST_ONLY_GENERAL_APPEND
-        : bookingStrategy === "NONE"
-          ? V2_MESSAGE_ONLY_GENERAL_APPEND
-          : "";
+        : bookingStrategy === "SEND_LINK"
+          ? V2_SEND_LINK_GENERAL_APPEND
+          : bookingStrategy === "NONE"
+            ? V2_MESSAGE_ONLY_GENERAL_APPEND
+            : "";
   const generalInstructions = oneAmyV2
     ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${modeAppend} ${ONE_AMY_V2_WORKFLOW_APPEND}`
     : liveBookingPath
@@ -187,9 +199,13 @@ export function buildAmyConversationWorkflow(
   const liveBookingEdgeLlm =
     "The caller wants to schedule an appointment, check availability, pick a time, or continue booking on the live calendar (not merely asking for a link by text).";
 
+  const completionToolId =
+    bookingStrategy === "SEND_LINK"
+      ? toolIds.voiceV2SendBookingLink
+      : toolIds.voiceV2FinalizeRequest;
   const v2ToolIds = [
     toolIds.voiceV2SaveIntake,
-    toolIds.voiceV2FinalizeRequest,
+    completionToolId,
     ...(voiceV2StrategyAllowsFindBook(bookingStrategy)
       ? [
           toolIds.voiceV2Find,
@@ -414,6 +430,9 @@ export function workflowNodeExpectedTools(
 ): string[] {
   switch (nodeId) {
     case WORKFLOW_NODE_IDS.GENERAL:
+      if (toolIds.voiceV2SaveIntake && toolIds.voiceV2SendBookingLink) {
+        return ["voice_v2_save_intake_fields", "voice_v2_send_booking_link"];
+      }
       if (toolIds.voiceV2SaveIntake && toolIds.voiceV2FinalizeRequest) {
         const names = ["voice_v2_save_intake_fields", "voice_v2_finalize_caller_request"];
         if (toolIds.voiceV2Find && toolIds.voiceV2Book) {

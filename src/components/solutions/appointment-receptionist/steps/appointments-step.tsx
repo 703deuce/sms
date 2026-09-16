@@ -331,6 +331,36 @@ export function AppointmentsStep({
               />
             ))}
           </div>
+          {(state.bookingStrategy || "MICROSOFT_365") === "SEND_LINK" ? (
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              <label className="block text-sm font-medium" htmlFor="booking-link-url">
+                Booking link URL
+              </label>
+              <input
+                id="booking-link-url"
+                type="url"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                placeholder="https://calendly.com/your-business"
+                value={state.bookingLinkUrl || ""}
+                onChange={(e) => patch({ bookingLinkUrl: e.target.value })}
+              />
+              <label className="block text-sm font-medium" htmlFor="booking-link-label">
+                Link label (optional)
+              </label>
+              <input
+                id="booking-link-label"
+                type="text"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                placeholder="Book your appointment"
+                value={state.bookingLinkLabel || ""}
+                onChange={(e) => patch({ bookingLinkLabel: e.target.value })}
+              />
+              <p className="text-[12px] text-muted-foreground">
+                Amy texts this exact link after the caller agrees to receive it by SMS. Use https://
+                for production.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-xl border border-border bg-card">

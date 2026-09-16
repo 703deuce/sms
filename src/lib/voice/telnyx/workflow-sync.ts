@@ -54,6 +54,7 @@ export function buildDesiredTelnyxWorkflowPayload(input: {
       voiceV2Book: input.v2Shared?.bookId ?? null,
       voiceV2SaveIntake: input.v2Shared?.saveIntakeId ?? null,
       voiceV2FinalizeRequest: input.v2Shared?.finalizeRequestId ?? null,
+      voiceV2SendBookingLink: input.v2Shared?.sendBookingLinkId ?? null,
       voiceV2FindExisting: input.v2Shared?.findExistingId ?? null,
       voiceV2Reschedule: input.v2Shared?.rescheduleId ?? null,
       voiceV2Cancel: input.v2Shared?.cancelId ?? null,
@@ -108,7 +109,22 @@ export async function syncConversationWorkflowToTelnyx(input: {
       agentId: input.agentId,
       bookingStrategy,
     });
-    if (!v2Shared.saveIntakeId || !v2Shared.finalizeRequestId) {
+    const sendLinkMode = bookingStrategy === "SEND_LINK";
+    if (!v2Shared.saveIntakeId) {
+      return {
+        ok: false,
+        error: "voice_v2_shared_tools_unavailable",
+        capabilityMismatch: VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
+      };
+    }
+    if (sendLinkMode && !v2Shared.sendBookingLinkId) {
+      return {
+        ok: false,
+        error: "voice_v2_send_link_tool_unavailable",
+        capabilityMismatch: VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
+      };
+    }
+    if (!sendLinkMode && !v2Shared.finalizeRequestId) {
       return {
         ok: false,
         error: "voice_v2_shared_tools_unavailable",
@@ -140,7 +156,8 @@ export async function syncConversationWorkflowToTelnyx(input: {
     const readBack = await readTelnyxWorkflowState(input.assistantId);
     const verified = verifyVoiceV2WorkflowReadBack({
       expectedVoiceV2Booking: v2PstnLiveBooking,
-      expectedOneAmyIntake: v2OneAmy && !v2PstnLiveBooking,
+      expectedOneAmyIntake: v2OneAmy && !v2PstnLiveBooking && bookingStrategy !== "SEND_LINK",
+      expectedOneAmySendLink: bookingStrategy === "SEND_LINK",
       readBack,
     });
     if (!verified.ok) {

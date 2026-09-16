@@ -23,6 +23,9 @@ import {
   VOICE_V2_FINALIZE_CALLER_REQUEST_BODY,
   VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
   VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
+  VOICE_V2_SEND_BOOKING_LINK_BODY,
+  VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE,
+  VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { VoiceV2BookingStrategy } from "@/lib/voice-v2/booking-strategy";
 import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
@@ -108,17 +111,35 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     description: "Voice Booking V2: save caller intake fields in one call.",
   });
 
-  const finalizeRequestId = await ensureSharedWebhookTool({
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    displayName: VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
-    toolType: VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
-    urlPath: "/api/telnyx/voice-v2/finalize-caller-request",
-    bodyParameters: VOICE_V2_FINALIZE_CALLER_REQUEST_BODY,
-    timeoutMs: 8000,
-    description:
-      "Accept caller message or appointment request for business follow-up (not live booking).",
-  });
+  const sendBookingLinkId =
+    strategy === "SEND_LINK"
+      ? await ensureSharedWebhookTool({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          displayName: VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME,
+          toolType: VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE,
+          urlPath: "/api/telnyx/voice-v2/send-booking-link",
+          bodyParameters: VOICE_V2_SEND_BOOKING_LINK_BODY,
+          timeoutMs: 12000,
+          description:
+            "Send the business configured booking link by SMS after caller agrees. URL comes from runtime config only.",
+        })
+      : null;
+
+  const finalizeRequestId =
+    strategy === "SEND_LINK"
+      ? null
+      : await ensureSharedWebhookTool({
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          displayName: VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
+          toolType: VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
+          urlPath: "/api/telnyx/voice-v2/finalize-caller-request",
+          bodyParameters: VOICE_V2_FINALIZE_CALLER_REQUEST_BODY,
+          timeoutMs: 8000,
+          description:
+            "Accept caller message or appointment request for business follow-up (not live booking).",
+        });
 
   if (!liveFindBook) {
     return {
@@ -129,6 +150,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
       rescheduleId: null,
       cancelId: null,
       finalizeRequestId,
+      sendBookingLinkId,
     };
   }
 
@@ -190,5 +212,6 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     rescheduleId,
     cancelId,
     finalizeRequestId,
+    sendBookingLinkId: null,
   };
 }

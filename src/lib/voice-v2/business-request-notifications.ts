@@ -66,14 +66,19 @@ export async function deliverVoiceV2BusinessRequestNotifications(
   const reason = input.serviceReason?.trim() || "";
   const pref = input.schedulingSummary?.trim() || "";
   const isAppointment = input.outcome === "APPOINTMENT_REQUESTED";
+  const isBookingLink = input.outcome === "BOOKING_LINK_SENT";
 
-  const subject = isAppointment
-    ? `New appointment request from ${name}`
-    : `New message from ${name}`;
+  const subject = isBookingLink
+    ? `Booking link sent — ${name}`
+    : isAppointment
+      ? `New appointment request from ${name}`
+      : `New message from ${name}`;
 
-  const statusLine = isAppointment
-    ? "Appointment requested — NOT YET CONFIRMED"
-    : "Message taken — follow up with caller";
+  const statusLine = isBookingLink
+    ? "Booking link sent to caller — NOT an appointment booking"
+    : isAppointment
+      ? "Appointment requested — NOT YET CONFIRMED"
+      : "Message taken — follow up with caller";
 
   const bodyLines = [
     `Caller: ${name}`,

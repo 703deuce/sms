@@ -16,6 +16,28 @@ export const VOICE_V2_CANCEL_TELNYX_TOOL_NAME = "transovo-voice-v2-cancel-appoin
 export const VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE = "voice_v2_finalize_caller_request";
 export const VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME =
   "transovo-voice-v2-finalize-caller-request";
+export const VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE = "voice_v2_send_booking_link";
+export const VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME =
+  "transovo-voice-v2-send-booking-link";
+
+export const VOICE_V2_SEND_BOOKING_LINK_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    recipient_phone: {
+      type: "string",
+      description:
+        "Optional E.164 destination when different from caller ID. Omit to use the caller's number.",
+    },
+    verbal_sms_consent: {
+      type: "boolean",
+      description: "True after the caller agreed to receive the booking link by text.",
+    },
+    tool_invocation_id: { type: "string" },
+    call_id: { type: "string" },
+    conversation_id: { type: "string" },
+  },
+  required: [],
+});
 
 export const VOICE_V2_FINALIZE_CALLER_REQUEST_BODY = strictWebhookBodyParameters({
   type: "object",

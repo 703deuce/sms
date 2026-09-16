@@ -73,7 +73,12 @@ export function isVoiceV2PstnOneAmyMode(
   config?: VoiceAgentConfig | { advanced?: Record<string, unknown> } | null,
 ): boolean {
   const strategy = resolveVoiceV2BookingStrategy(config);
-  return strategy === "MICROSOFT_365" || strategy === "REQUEST_ONLY" || strategy === "NONE";
+  return (
+    strategy === "MICROSOFT_365" ||
+    strategy === "REQUEST_ONLY" ||
+    strategy === "SEND_LINK" ||
+    strategy === "NONE"
+  );
 }
 
 export function isVoiceV2PstnLiveBookingMode(
@@ -95,6 +100,8 @@ export function voiceV2StrategyRequiresSchedulingPreference(
 export type VoiceV2StructuredOutcome =
   | "MESSAGE_TAKEN"
   | "APPOINTMENT_REQUESTED"
+  | "BOOKING_LINK_SENT"
+  | "BOOKING_LINK_SEND_FAILED"
   | "BOOKED";
 
 export function structuredOutcomeForStrategy(

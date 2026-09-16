@@ -163,6 +163,9 @@ export type AppointmentReceptionistWizardState = {
   selectedAppointmentTypeId: string | null;
   /** What Amy does when a caller wants an appointment (maps to published bookingStrategy). */
   bookingStrategy?: VoiceWizardBookingStrategy | null;
+  /** Trusted booking URL when bookingStrategy is SEND_LINK. */
+  bookingLinkUrl?: string | null;
+  bookingLinkLabel?: string | null;
 
   bookingBehavior: {
     askPreferredDayFirst: boolean;

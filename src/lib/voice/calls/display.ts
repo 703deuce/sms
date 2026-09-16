@@ -4,6 +4,7 @@ export type CallOutcomeBadge =
   | "New Lead"
   | "Message Taken"
   | "Appointment Requested"
+  | "Booking Link Sent"
   | "Appointment Booked"
   | "Transferred"
   | "FAQ"
@@ -118,6 +119,9 @@ export function deriveCallOutcomeBadge(call: CallRowLike): CallOutcomeBadge {
   if (call.appointmentBooked) return "Appointment Booked";
   const outcome = String(call.outcome || "").toLowerCase();
   if (outcome.includes("spam")) return "Spam";
+  if (outcome.includes("booking_link_sent")) {
+    return "Booking Link Sent";
+  }
   if (outcome.includes("appointment_requested") || outcome.includes("appointment request")) {
     return "Appointment Requested";
   }
@@ -156,6 +160,7 @@ export const OUTCOME_BADGE_STYLES: Record<CallOutcomeBadge, string> = {
   "Lead Captured": "bg-violet-50 text-violet-700 ring-violet-200",
   "Message Taken": "bg-indigo-50 text-indigo-700 ring-indigo-200",
   "Appointment Requested": "bg-sky-50 text-sky-800 ring-sky-200",
+  "Booking Link Sent": "bg-teal-50 text-teal-800 ring-teal-200",
   "Appointment Booked": "bg-amber-50 text-amber-800 ring-amber-200",
   Transferred: "bg-violet-50 text-violet-700 ring-violet-200",
   FAQ: "bg-slate-100 text-slate-700 ring-slate-200",

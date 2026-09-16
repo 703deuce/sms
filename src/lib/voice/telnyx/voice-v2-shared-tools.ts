@@ -7,6 +7,7 @@ import {
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
   VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
+  VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 
 export type VoiceV2SharedToolIds = {
@@ -17,6 +18,7 @@ export type VoiceV2SharedToolIds = {
   rescheduleId: string | null;
   cancelId: string | null;
   finalizeRequestId: string | null;
+  sendBookingLinkId: string | null;
 };
 
 export async function resolveVoiceV2SharedToolIds(): Promise<VoiceV2SharedToolIds> {
@@ -35,6 +37,9 @@ export async function resolveVoiceV2SharedToolIds(): Promise<VoiceV2SharedToolId
     finalizeRequestId:
       tools.find((t) => t.display_name === VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME)
         ?.id || null,
+    sendBookingLinkId:
+      tools.find((t) => t.display_name === VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME)?.id ||
+      null,
   };
 }
 
@@ -50,6 +55,7 @@ export function mergeVoiceV2ToolIds(base: string[], v2: VoiceV2SharedToolIds): s
         v2.rescheduleId,
         v2.cancelId,
         v2.finalizeRequestId,
+        v2.sendBookingLinkId,
       ].filter(Boolean) as string[],
     ),
   ];

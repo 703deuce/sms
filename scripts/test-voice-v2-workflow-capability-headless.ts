@@ -55,6 +55,7 @@ const v2Ids = {
   bookId: "v2_book",
   saveIntakeId: "v2_save",
   finalizeRequestId: "v2_finalize",
+  sendBookingLinkId: null,
   findExistingId: null,
   rescheduleId: null,
   cancelId: null,

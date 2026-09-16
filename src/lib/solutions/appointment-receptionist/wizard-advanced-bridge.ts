@@ -9,6 +9,7 @@ import {
   type IntakeRequirementLevel,
 } from "@/lib/voice-v2/intake/types";
 import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
+import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
 import type { AppointmentReceptionistWizardState } from "./types";
 
@@ -111,6 +112,14 @@ export function mergeAppointmentWizardAdvanced(
 
   const bookingStrategy = deriveBookingStrategyFromWizard(state);
   const voiceV2PstnLiveBooking = bookingStrategy === "MICROSOFT_365";
+  const linkRaw = String(state.bookingLinkUrl || "").trim();
+  const linkValidated = linkRaw ? validateBookingLinkUrl(linkRaw) : null;
+  const bookingLink =
+    bookingStrategy === "SEND_LINK" && linkValidated?.ok ? linkValidated.url : undefined;
+  const bookingLinkLabel =
+    bookingStrategy === "SEND_LINK"
+      ? String(state.bookingLinkLabel || "Book your appointment").trim()
+      : undefined;
 
   return {
     ...(existingAdvanced || {}),
@@ -118,6 +127,7 @@ export function mergeAppointmentWizardAdvanced(
     conversationWorkflowMode: true,
     bookingStrategy,
     voiceV2PstnLiveBooking,
+    ...(bookingLink ? { bookingLink, bookingLinkLabel } : {}),
     voiceV2Intake,
     receptionistAdvanced: {
       ...prev,

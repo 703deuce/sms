@@ -14,6 +14,7 @@ export type VoiceV2NextStage =
   | "BOOK_SELECTED_SLOT"
   | "BOOKING_CONFIRMED"
   | "FINALIZE_CALLER_REQUEST"
+  | "SEND_BOOKING_LINK"
   | "CALLBACK_REQUESTED"
   | "HANDOFF_REQUIRED"
   | "COMPLETE";
@@ -27,6 +28,9 @@ export interface VoiceV2BookingWorkflow {
   bookingConfirmed: boolean;
   /** Caller request accepted into durable follow-up (message or appointment request). */
   callerRequestFinalized: boolean;
+  /** Trusted booking link SMS accepted by messaging provider for this call. */
+  bookingLinkSent: boolean;
+  deliveryDestinationE164?: string | null;
   /** YYYY-MM-DD when caller or FIND supplied a date */
   requestedDate: string | null;
   /** Last date passed to FIND (dedupe guidance) */
@@ -49,6 +53,8 @@ export function defaultVoiceV2BookingWorkflow(): VoiceV2BookingWorkflow {
     bookingCancelled: false,
     bookingConfirmed: false,
     callerRequestFinalized: false,
+    bookingLinkSent: false,
+    deliveryDestinationE164: null,
     requestedDate: null,
     lastFindRequestedDate: null,
     nextStage: "COLLECT_REQUIRED_INTAKE",
@@ -106,6 +112,7 @@ export function isBookingWorkflowTerminal(w: VoiceV2BookingWorkflow): boolean {
     w.bookingCancelled ||
     w.callbackRequested ||
     w.callerRequestFinalized ||
+    w.bookingLinkSent ||
     w.nextStage === "BOOKING_CONFIRMED" ||
     w.nextStage === "COMPLETE" ||
     w.nextStage === "CALLBACK_REQUESTED"
@@ -125,6 +132,12 @@ export function evaluateBookingContinueRequired(input: {
     if (input.readiness.missingForRecord.length > 0) return true;
     if (!input.workflow.requestedDate) return true;
     return !input.workflow.callerRequestFinalized;
+  }
+  if (strategy === "SEND_LINK") {
+    if (!input.workflow.bookingIntentActive) return false;
+    if (isBookingWorkflowTerminal(input.workflow)) return false;
+    if (input.workflow.bookingLinkSent) return false;
+    return true;
   }
   if (!input.voiceV2PstnLiveBooking) return false;
   if (!input.workflow.bookingIntentActive) return false;
@@ -155,6 +168,12 @@ export function deriveVoiceV2NextStage(input: {
     if (!w.requestedDate) return "COLLECT_SCHEDULING_PREFERENCE";
     return "FINALIZE_CALLER_REQUEST";
   }
+  if (strategy === "SEND_LINK") {
+    if (!w.bookingIntentActive) return "COLLECT_REQUIRED_INTAKE";
+    if (w.bookingLinkSent) return "COMPLETE";
+    if (input.readiness.missingForRecord.length > 0) return "COLLECT_REQUIRED_INTAKE";
+    return "SEND_BOOKING_LINK";
+  }
   if (!w.bookingIntentActive) return "COLLECT_REQUIRED_INTAKE";
   if (input.readiness.missingBeforeBooking.length > 0) return "COLLECT_REQUIRED_INTAKE";
   if (input.hasActiveOfferSet) return "OFFER_SLOTS";
@@ -178,6 +197,8 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
       return [];
     case "FINALIZE_CALLER_REQUEST":
       return ["voice_v2_finalize_caller_request"];
+    case "SEND_BOOKING_LINK":
+      return ["voice_v2_send_booking_link"];
     case "CALLBACK_REQUESTED":
       return ["callback_path"];
     case "HANDOFF_REQUIRED":
@@ -205,6 +226,8 @@ export function runtimeHintForStage(
       return "Intake complete and date is known. Acknowledge the date briefly, then call voice_v2_find_availability now. Do not ask for the day again. Do not callback-close.";
     case "FINALIZE_CALLER_REQUEST":
       return "You have enough to send this to the team. Call voice_v2_finalize_caller_request. Do not say the appointment is confirmed or booked.";
+    case "SEND_BOOKING_LINK":
+      return "Offer to text the configured booking link. After the caller agrees to SMS, call voice_v2_send_booking_link with verbal_sms_consent true. Do not say they are booked or confirmed.";
     case "OFFER_SLOTS":
       return "Offer returned slots only. When caller picks one, call voice_v2_book_offered_slot.";
     case "CALLBACK_REQUESTED":
@@ -300,6 +323,20 @@ export function transitionAfterIntakeSave(input: {
   });
 
   return mergeWorkflowIntoContext(input.ctx, workflow);
+}
+
+export function transitionAfterBookingLinkSent(
+  ctx: VoiceV2CallContext,
+  destinationE164: string,
+): VoiceV2CallContext {
+  const workflow = {
+    ...workflowFromContext(ctx),
+    bookingIntentActive: true,
+    bookingLinkSent: true,
+    deliveryDestinationE164: destinationE164,
+    nextStage: "COMPLETE" as VoiceV2NextStage,
+  };
+  return mergeWorkflowIntoContext(ctx, workflow);
 }
 
 export function transitionAfterCallerRequestFinalized(ctx: VoiceV2CallContext): VoiceV2CallContext {
