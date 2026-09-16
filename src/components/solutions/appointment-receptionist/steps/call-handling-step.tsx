@@ -173,20 +173,27 @@ export function CallHandlingStep({
                   </option>
                 ))}
               </select>
-              <label className="mt-3 flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={state.warmTransfer}
-                  onChange={(e) => patch({ warmTransfer: e.target.checked })}
-                />
-                <span>
-                  <span className="font-medium">Warm transfer</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    Hold the caller and introduce them before connecting.
+              {presentation === "mctb" ? (
+                <InfoCallout>
+                  Warm transfer is not available on Voice Agent (V2) phone calls yet. Transfer
+                  destination settings are saved for cold handoff when transfer is enabled.
+                </InfoCallout>
+              ) : (
+                <label className="mt-3 flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={state.warmTransfer}
+                    onChange={(e) => patch({ warmTransfer: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-medium">Warm transfer</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Hold the caller and introduce them before connecting.
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+              )}
               <label className="mt-2 flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
