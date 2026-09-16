@@ -31,6 +31,9 @@ export type WorkflowSharedToolIds = {
   voiceV2Find?: string | null;
   voiceV2Book?: string | null;
   voiceV2SaveIntake?: string | null;
+  voiceV2FindExisting?: string | null;
+  voiceV2Reschedule?: string | null;
+  voiceV2Cancel?: string | null;
   hangup?: string | null;
   transfer?: string | null;
   retrieval?: string | null;
@@ -155,6 +158,9 @@ export function buildAmyConversationWorkflow(
     toolIds.voiceV2SaveIntake,
     toolIds.voiceV2Find,
     toolIds.voiceV2Book,
+    toolIds.voiceV2FindExisting,
+    toolIds.voiceV2Reschedule,
+    toolIds.voiceV2Cancel,
   ].filter(Boolean) as string[];
 
   const nodes: Record<string, unknown>[] = [

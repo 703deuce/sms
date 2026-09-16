@@ -26,6 +26,10 @@ import {
   type VoiceV2GraphSpan,
 } from "./graph-instrumentation";
 import { persistVoiceV2OfferSet } from "./offer-set-store";
+import { subtractBusyInterval } from "./appointment-changes/busy-exclude";
+import { resolveSessionKey } from "./intake/load-call-context";
+import { getVoiceV2CallContext } from "./intake/session-store";
+import { getAppointmentActionState } from "./appointment-changes/ref-store";
 
 function isoMark(): string {
   return new Date().toISOString();
@@ -145,7 +149,7 @@ export async function executeVoiceV2FindAvailability(
     marks.GRAPH_STARTED = isoMark();
     const graphStart = Date.now();
     beginVoiceV2GraphCollection((span) => graphSpans.push(span));
-    let busy;
+    let busy: Array<{ start: Date; end: Date }>;
     try {
       busy = await getMicrosoftBusy(token, windowStartUtc, windowEndUtc, {
         ctx: { connectionId: conn.id, config },
@@ -157,6 +161,26 @@ export async function executeVoiceV2FindAvailability(
     }
     marks.GRAPH_COMPLETE = isoMark();
     timingMs.GRAPH_MS = Date.now() - graphStart;
+
+    const callIdForCtx =
+      options?.voiceCallId ||
+      (raw.call_id || raw.callId ? String(raw.call_id || raw.callId) : null);
+    if (callIdForCtx) {
+      const sk = resolveSessionKey({ callControlId: callIdForCtx, conversationId: null });
+      const ctx = sk ? getVoiceV2CallContext(sk) : null;
+      const action = getAppointmentActionState(ctx);
+      const refId =
+        String(raw.appointment_ref_id || "").trim() ||
+        action?.selectedRefId ||
+        "";
+      const ref = refId && action?.refsById?.[refId] ? action.refsById[refId] : null;
+      if (ref && action?.intent === "RESCHEDULE") {
+        busy = subtractBusyInterval(busy, {
+          start: new Date(ref.startsAtUtc),
+          end: new Date(ref.endsAtUtc),
+        });
+      }
+    }
 
     marks.AVAILABILITY_COMPUTE_STARTED = isoMark();
     const computeStart = Date.now();

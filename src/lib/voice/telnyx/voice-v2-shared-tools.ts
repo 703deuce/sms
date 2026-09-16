@@ -1,6 +1,9 @@
 import * as ai from "./ai-client";
 import {
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_CANCEL_TELNYX_TOOL_NAME,
+  VOICE_V2_FIND_EXISTING_TELNYX_TOOL_NAME,
+  VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
@@ -9,6 +12,9 @@ export type VoiceV2SharedToolIds = {
   findId: string | null;
   bookId: string | null;
   saveIntakeId: string | null;
+  findExistingId: string | null;
+  rescheduleId: string | null;
+  cancelId: string | null;
 };
 
 export async function resolveVoiceV2SharedToolIds(): Promise<VoiceV2SharedToolIds> {
@@ -19,9 +25,26 @@ export async function resolveVoiceV2SharedToolIds(): Promise<VoiceV2SharedToolId
     bookId: tools.find((t) => t.display_name === VOICE_V2_BOOK_TELNYX_TOOL_NAME)?.id || null,
     saveIntakeId:
       tools.find((t) => t.display_name === VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME)?.id || null,
+    findExistingId:
+      tools.find((t) => t.display_name === VOICE_V2_FIND_EXISTING_TELNYX_TOOL_NAME)?.id || null,
+    rescheduleId:
+      tools.find((t) => t.display_name === VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME)?.id || null,
+    cancelId: tools.find((t) => t.display_name === VOICE_V2_CANCEL_TELNYX_TOOL_NAME)?.id || null,
   };
 }
 
 export function mergeVoiceV2ToolIds(base: string[], v2: VoiceV2SharedToolIds): string[] {
-  return [...new Set([...base, v2.findId, v2.bookId, v2.saveIntakeId].filter(Boolean) as string[])];
+  return [
+    ...new Set(
+      [
+        ...base,
+        v2.findId,
+        v2.bookId,
+        v2.saveIntakeId,
+        v2.findExistingId,
+        v2.rescheduleId,
+        v2.cancelId,
+      ].filter(Boolean) as string[],
+    ),
+  ];
 }

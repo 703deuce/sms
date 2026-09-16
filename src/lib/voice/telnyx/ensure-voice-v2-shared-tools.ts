@@ -11,6 +11,15 @@ import {
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
+  VOICE_V2_FIND_EXISTING_BODY,
+  VOICE_V2_FIND_EXISTING_TOOL_TYPE,
+  VOICE_V2_FIND_EXISTING_TELNYX_TOOL_NAME,
+  VOICE_V2_RESCHEDULE_BODY,
+  VOICE_V2_RESCHEDULE_TOOL_TYPE,
+  VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME,
+  VOICE_V2_CANCEL_BODY,
+  VOICE_V2_CANCEL_TOOL_TYPE,
+  VOICE_V2_CANCEL_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { VoiceV2SharedToolIds } from "./voice-v2-shared-tools";
 
@@ -109,5 +118,35 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     timeoutMs: 5000,
     description: "Voice Booking V2: save caller intake fields in one call.",
   });
-  return { findId, bookId, saveIntakeId };
+  const findExistingId = await ensureSharedWebhookTool({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    displayName: VOICE_V2_FIND_EXISTING_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_FIND_EXISTING_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/find-existing-appointment",
+    bodyParameters: VOICE_V2_FIND_EXISTING_BODY,
+    timeoutMs: 10000,
+    description: "Voice V2: find caller's existing appointment for reschedule or cancel.",
+  });
+  const rescheduleId = await ensureSharedWebhookTool({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    displayName: VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_RESCHEDULE_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/reschedule-appointment",
+    bodyParameters: VOICE_V2_RESCHEDULE_BODY,
+    timeoutMs: 15000,
+    description: "Voice V2: move existing appointment to a canonical offered slot.",
+  });
+  const cancelId = await ensureSharedWebhookTool({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    displayName: VOICE_V2_CANCEL_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_CANCEL_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/cancel-appointment",
+    bodyParameters: VOICE_V2_CANCEL_BODY,
+    timeoutMs: 15000,
+    description: "Voice V2: cancel an existing appointment after caller confirmation.",
+  });
+  return { findId, bookId, saveIntakeId, findExistingId, rescheduleId, cancelId };
 }

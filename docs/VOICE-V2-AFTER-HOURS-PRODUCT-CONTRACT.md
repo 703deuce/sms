@@ -633,6 +633,9 @@ Maintain this matrix in this document. Status values:
 | GENERIC_CUSTOM_INTAKE | HEADLESS_CERTIFIED | Wizard bridge + `callerFields` + save/readiness; **PSTN pending** |
 | MULTI_FIELD_CAPTURE | HEADLESS_CERTIFIED | `voice_v2_save_intake_fields` batch; **PSTN pending** |
 | NO_REASK_KNOWN_FIELDS | HEADLESS_CERTIFIED | Intake instructions + readiness skip; **PSTN pending** |
+| FIND_EXISTING_APPOINTMENT | HEADLESS_CERTIFIED | `voice_v2_find_existing_appointment`; **PSTN pending** |
+| RESCHEDULE | IMPLEMENTED | Microsoft `updateMicrosoftEvent` (PATCH); reuses FIND + offer set; **PSTN pending** |
+| CANCEL | IMPLEMENTED | Microsoft `cancelOrDeleteMicrosoftEvent` (/cancel); **PSTN pending** |
 | MICROSOFT_365_BOOKING | PSTN_CERTIFIED | FIND/BOOK/Graph; frozen core |
 | SCHEDULING_PREFERENCE_MEMORY | HEADLESS_CERTIFIED | `3ed1e46` — no date-only save; **PSTN recert pending** |
 | FAQ_PROMPT_KNOWLEDGE | IMPLEMENTED | Receptionist/wizard business injection — verify/certify |

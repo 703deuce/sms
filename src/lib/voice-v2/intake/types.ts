@@ -70,7 +70,10 @@ export interface VoiceV2CallContext {
     voiceV2PstnLiveBooking?: boolean;
     bookingEnabled?: boolean;
     intakeEnabled?: boolean;
+    rescheduleEnabled?: boolean;
+    cancelEnabled?: boolean;
   };
+  appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;
 }
 
 export interface IntakeReadinessResult {

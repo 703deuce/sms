@@ -6,6 +6,13 @@ export const VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE = "voice_v2_book_offered_slot"
 export const VOICE_V2_BOOK_TELNYX_TOOL_NAME = "transovo-voice-v2-book-offered-slot";
 export const VOICE_V2_SAVE_INTAKE_TOOL_TYPE = "voice_v2_save_intake_fields";
 export const VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME = "transovo-voice-v2-save-intake-fields";
+export const VOICE_V2_FIND_EXISTING_TOOL_TYPE = "voice_v2_find_existing_appointment";
+export const VOICE_V2_FIND_EXISTING_TELNYX_TOOL_NAME =
+  "transovo-voice-v2-find-existing-appointment";
+export const VOICE_V2_RESCHEDULE_TOOL_TYPE = "voice_v2_reschedule_appointment";
+export const VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME = "transovo-voice-v2-reschedule-appointment";
+export const VOICE_V2_CANCEL_TOOL_TYPE = "voice_v2_cancel_appointment";
+export const VOICE_V2_CANCEL_TELNYX_TOOL_NAME = "transovo-voice-v2-cancel-appointment";
 
 export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
   type: "object",
@@ -85,6 +92,42 @@ export const VOICE_V2_FIND_AVAILABILITY_BODY = strictWebhookBodyParameters({
     },
   },
   required: ["requested_date", "time_window"],
+});
+
+export const VOICE_V2_FIND_EXISTING_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    intent: { type: "string", enum: ["RESCHEDULE", "CANCEL"] },
+    appointment_date: {
+      type: "string",
+      description: "Optional YYYY-MM-DD hint for which appointment",
+    },
+    tool_invocation_id: { type: "string" },
+  },
+});
+
+export const VOICE_V2_RESCHEDULE_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    appointment_ref_id: { type: "string" },
+    offer_set_id: { type: "string" },
+    selected_slot_id: { type: "string" },
+    tool_invocation_id: { type: "string" },
+  },
+  required: ["appointment_ref_id", "offer_set_id", "selected_slot_id"],
+});
+
+export const VOICE_V2_CANCEL_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    appointment_ref_id: { type: "string" },
+    caller_confirmed: {
+      type: "boolean",
+      description: "True after caller explicitly confirmed cancellation",
+    },
+    tool_invocation_id: { type: "string" },
+  },
+  required: ["appointment_ref_id", "caller_confirmed"],
 });
 
 export function buildVoiceV2FindAvailabilityTelnyxWebhook(input: {

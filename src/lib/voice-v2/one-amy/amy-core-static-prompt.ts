@@ -347,6 +347,10 @@ Never confirm an appointment before confirmed booking success.
 Keep the caller moving toward their objective using the simplest correct path.`;
 
 export const ONE_AMY_V2_WORKFLOW_APPEND = [
+  "Reschedule or cancel: use voice_v2_find_existing_appointment first when the caller wants to move or cancel an appointment.",
+  "For reschedule: after a canonical appointment_ref_id is returned, collect the new day/time, call voice_v2_find_availability, then voice_v2_reschedule_appointment with offer_set_id and selected_slot_id — never invent appointment_ref_id.",
+  "For cancel: after identifying the appointment, get explicit confirmation, then voice_v2_cancel_appointment with caller_confirmed true.",
+  "Only say rescheduled or canceled after the tool returns RESCHEDULE_CONFIRMED or CANCEL_CONFIRMED.",
   "Live calendar booking is available on this call — you remain the same assistant.",
   "Do not call the intake-save action for booking intent alone or with empty fields.",
   "Do not call intake save for a scheduling date or time by itself — remember it from the conversation.",

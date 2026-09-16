@@ -138,6 +138,18 @@ export function mergeAppointmentWizardAdvanced(
         destinationE164: state.transferDestinationPhone?.trim() || prev.transferPolicy.destinationE164,
         warmTransfer: state.warmTransfer ?? prev.transferPolicy.warmTransfer,
       },
+      actionPermissions: {
+        ...prev.actionPermissions,
+        bookAppointments: state.capabilities.includes("book_appointments"),
+        rescheduleAppointments: state.capabilities.includes("reschedule"),
+        cancelAppointments: state.capabilities.includes("cancel"),
+        takeMessages: state.capabilities.includes("take_messages"),
+        sendSms:
+          state.capabilities.includes("send_sms_confirmations") ||
+          state.bookingBehavior?.sendSmsAfterBooking,
+        transferCalls: state.capabilities.includes("transfer_calls"),
+        updateContact: true,
+      },
     },
   };
 }
