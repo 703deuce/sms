@@ -626,7 +626,13 @@ Maintain this matrix in this document. Status values:
 | Capability | Status | Notes |
 |------------|--------|--------|
 | ONE_AMY | PSTN_CERTIFIED | One thread; no General→Booking handoff |
-| GENERIC_CUSTOM_INTAKE | HEADLESS_CERTIFIED | `7489c565` — wizard `callerFields` + save/readiness; **PSTN pending** |
+| WIZARD_8_PAGE_FUNCTIONAL | HEADLESS_CERTIFIED | `collectFields` → `receptionistAdvanced` + `voiceV2Intake` on save/recompile; **production UI sweep + PSTN pending** |
+| NUMBER_ASSIGNMENT_FROM_WIZARD | IMPLEMENTED | MCTB TeXML lock surfaced in UI; takeover clears lock metadata on wizard save/activate; **PSTN pending** |
+| PUBLISHED_CONFIG_DRIVES_PSTN | IMPLEMENTED | Activate → `publishVoiceAgent` + trigger Telnyx; **PSTN pending** |
+| FULL_CONVERSATION_CONTINUITY | IMPLEMENTED | Same Telnyx thread + transcript; structured intake supplements; **PSTN pending** |
+| GENERIC_CUSTOM_INTAKE | HEADLESS_CERTIFIED | Wizard bridge + `callerFields` + save/readiness; **PSTN pending** |
+| MULTI_FIELD_CAPTURE | HEADLESS_CERTIFIED | `voice_v2_save_intake_fields` batch; **PSTN pending** |
+| NO_REASK_KNOWN_FIELDS | HEADLESS_CERTIFIED | Intake instructions + readiness skip; **PSTN pending** |
 | MICROSOFT_365_BOOKING | PSTN_CERTIFIED | FIND/BOOK/Graph; frozen core |
 | SCHEDULING_PREFERENCE_MEMORY | HEADLESS_CERTIFIED | `3ed1e46` — no date-only save; **PSTN recert pending** |
 | FAQ_PROMPT_KNOWLEDGE | IMPLEMENTED | Receptionist/wizard business injection — verify/certify |
