@@ -381,6 +381,18 @@ API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow r
 
 ---
 
+## Cursor Cloud — Coolify production deployment (mandatory)
+
+**Full workflow:** `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`
+
+- SSH: runtime secret `COOLIFY_SSH_KEY`, alias `ssh coolify-server` (`root@128.140.102.51`). Never print the key.
+- **Push to `master` starts deployment; it does not finish the task.** Follow commit → Coolify build → new container → production verification. Fix failures from deployment/runtime logs and redeploy until healthy.
+- **First task in a session:** run the discovery section in that doc (read-only SSH) and confirm the production map (repo → Coolify app → container → URL → `commitSha`).
+
+Primary production domain is in Coolify (`COOLIFY_FQDN` on the web container) · health/version: `GET /api/health` · repo `703deuce/sms` @ `master` · Coolify app UUID `ds8s3hjin60qs6g7s0iqkixs` (scheduler sibling: `tgjridm6vrmrgljkfrr0rpjn`). Update the doc map if discovery differs.
+
+---
+
 ## Database migrations (production)
 
 Schema changes ship as Prisma migrations under `prisma/migrations/`. **Every Coolify deploy** runs `scripts/deploy-db-migrations.sh` (`npx prisma migrate deploy`) when `DATABASE_URL` is set. Do not add runtime fallbacks that hide missing tables — apply migrations instead. Manual: `npm run db:deploy`.
