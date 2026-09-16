@@ -674,6 +674,7 @@ Maintain this matrix in this document. Status values:
 | CALLBACK_PREFERENCE | HEADLESS_CERTIFIED | `voice_v2_create_callback_request`; not appointment time; **PSTN pending** |
 | EXISTING_VS_NEW_CUSTOMER | IMPLEMENTED | `customer_status` generic field + `distinguishNewExisting` |
 | FALLBACK_BEHAVIOR | HEADLESS_CERTIFIED | Unified fallback resolver + wizard `transferFallback` |
+| AI_CALL_RECOVERY | IMPLEMENTED | Voice → existing SMS text agent continuation; see `docs/VOICE-V2-AI-CALL-RECOVERY.md`; **PSTN pending** |
 
 ---
 
