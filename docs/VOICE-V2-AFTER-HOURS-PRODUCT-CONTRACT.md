@@ -643,7 +643,7 @@ Maintain this matrix in this document. Status values:
 | MESSAGE_ONLY | IMPLEMENTED | Wizard `bookingStrategy=NONE` + finalize tool; **PSTN pending** |
 | LEAD_QUALIFICATION | NOT_STARTED | Reuse generic intake when built |
 | REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |
-| SEND_BOOKING_LINK | NOT_STARTED | |
+| SEND_BOOKING_LINK | HEADLESS_CERTIFIED | `bookingStrategy=SEND_LINK` + pinned `bookingLink`; **PSTN pending** |
 | CALENDLY_BOOKING | NOT_STARTED | |
 | RESCHEDULE | NOT_STARTED | |
 | CANCEL | NOT_STARTED | |
