@@ -33,14 +33,48 @@ export default function NotetakerHome() {
     if (requested === "add") setMode("add");
   }, []);
 
-  // Mirrors: fetch("/api/meetings/overview")
+  // Canonical combined overview: Transovo Video + AI Notetaker sessions
   function loadOverview() {
     setLoading(true);
     setLoadError(false);
-    fetch("/api/meetings/overview")
+    fetch("/api/video/overview")
       .then((r) => parseJsonResponse<{ data?: OverviewData }>(r))
       .then((json) => {
-        setData(json.data || null);
+        const raw = json.data;
+        if (!raw) {
+          setData(null);
+          setLoading(false);
+          return;
+        }
+        const videoRows = (raw.upcomingVideoMeetings || []).map((m) => ({
+          id: `video_${m.id}`,
+          title: m.title,
+          status: m.status,
+          meetingPlatform: "transovo_video" as const,
+          meetingUrl: m.meetingUrl,
+          scheduledStartAt: m.scheduledStartAt,
+          hostJoinUrl: m.hostJoinUrl,
+          appointmentId: m.appointmentId,
+          videoMeetingId: m.id,
+        }));
+        const notetakerRows = (raw.upcomingSessions || []).map((s) => ({
+          ...s,
+          meetingPlatform: (s as { meetingPlatform?: string }).meetingPlatform || "unknown_supported",
+        })) as OverviewData["upcomingSessions"];
+        const merged = [...videoRows, ...notetakerRows].sort((a, b) => {
+          const ta = a.scheduledStartAt ? new Date(a.scheduledStartAt).getTime() : 0;
+          const tb = b.scheduledStartAt ? new Date(b.scheduledStartAt).getTime() : 0;
+          return ta - tb;
+        });
+        setData({
+          entitlements: {
+            aiNotetaker: raw.entitlements?.aiNotetaker ?? false,
+            transovoVideo: raw.entitlements?.transovoVideo ?? false,
+          },
+          upcomingSessions: merged,
+          upcomingVideoMeetings: raw.upcomingVideoMeetings,
+          recentRecaps: raw.recentRecaps || [],
+        });
         setLoading(false);
       })
       .catch(() => {
@@ -108,7 +142,7 @@ export default function NotetakerHome() {
     return (
       <div style={{ maxWidth: 1024, margin: "0 auto", padding: 24 }}>
         <h1 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-          AI Notetaker
+          Upcoming Meetings
         </h1>
         <div
           className="card"
@@ -140,6 +174,7 @@ export default function NotetakerHome() {
   }
 
   const entitled = data?.entitlements.aiNotetaker;
+  const videoEntitled = data?.entitlements.transovoVideo;
 
   return (
     <div style={{ maxWidth: 1024, margin: "0 auto", padding: 24 }}>
@@ -147,7 +182,7 @@ export default function NotetakerHome() {
       <div className="page-header-row" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <h1 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-            AI Notetaker
+            Upcoming Meetings
           </h1>
           <p
             style={{
@@ -158,9 +193,10 @@ export default function NotetakerHome() {
               lineHeight: 1.55,
             }}
           >
-            Add AI notes to Zoom, Google Meet, Microsoft Teams, or Webex.
-            Transovo joins your meeting, records, transcribes, and prepares a
-            recap with action items.
+            View scheduled meetings, join calls, and manage meeting details.
+            {entitled
+              ? " Add AI Notetaker to external Zoom, Meet, Teams, or Webex links."
+              : null}
           </p>
         </div>
         {mode === "home" && entitled ? (
@@ -198,7 +234,8 @@ export default function NotetakerHome() {
       <div style={{ display: "flex", flexDirection: "column", gap: 28, marginTop: 24 }}>
         {mode === "home" ? (
           <>
-            {/* Add to a meeting card */}
+            {/* Add AI Notetaker to external meeting */}
+            {entitled ? (
             <div className="card" style={{ padding: 24 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                 <span
@@ -256,6 +293,17 @@ export default function NotetakerHome() {
                 </div>
               </div>
             </div>
+            ) : videoEntitled ? (
+              <div className="card" style={{ padding: 20 }}>
+                <p style={{ fontSize: 13, color: "var(--muted-foreground)", margin: 0 }}>
+                  Transovo Video meetings appear below. Configure AI Notetaker defaults under{" "}
+                  <a href="/settings/ai-notetaker" style={{ fontWeight: 600, color: "var(--primary)" }}>
+                    Settings → Meetings
+                  </a>
+                  .
+                </p>
+              </div>
+            ) : null}
 
             {error ? (
               <p role="alert" className="text-red-600" style={{ fontSize: 13, margin: 0 }}>
@@ -292,6 +340,11 @@ export default function NotetakerHome() {
                 <UpcomingList
                   sessions={data?.upcomingSessions ?? []}
                   onJoin={setJoinSession}
+                  emptyHelper={
+                    entitled || videoEntitled
+                      ? "Scheduled meetings will appear here."
+                      : "Meeting features are not available on your current plan."
+                  }
                 />
               </section>
 

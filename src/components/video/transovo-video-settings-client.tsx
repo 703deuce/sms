@@ -37,6 +37,14 @@ export function TransovoVideoSettingsClient() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div>
+        <nav className="mb-4 flex gap-4 border-b border-border text-sm" aria-label="Meetings settings">
+          <a href="/settings/ai-notetaker" className="pb-2 text-muted-foreground hover:text-foreground">
+            AI Notetaker
+          </a>
+          <span className="border-b-2 border-primary pb-2 font-medium text-foreground" aria-current="page">
+            Transovo Video
+          </span>
+        </nav>
         <h1 className="font-display text-2xl font-semibold">Transovo Video</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Defaults for native browser video meetings on appointments.
