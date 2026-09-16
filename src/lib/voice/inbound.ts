@@ -476,6 +476,19 @@ async function startAiOnInboundCall(input: {
         return { started: false, reason: "ai_assistant_start_failed" };
       }
 
+      const assistantStartReturnedAt = Date.now();
+      const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
+      scheduleVoiceV2CallWarmup({
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+        callId: input.callId,
+        callControlId: input.telnyxCallControlId,
+        fromE164: callRow?.fromE164,
+        agentConfig: cfg,
+        assistantStartReturnedAt,
+        warmupScheduledAt: Date.now(),
+      });
+
       const pstnDiag = buildPstnAudioDiagnostics({
         callControlId: input.telnyxCallControlId,
         outputGainDb,
@@ -490,6 +503,7 @@ async function startAiOnInboundCall(input: {
           eventType: "media.ai_assistant_start",
           payload: {
             at: aiHandoffAt,
+            ASSISTANT_START_RETURNED_AT: assistantStartReturnedAt,
             answerToAiMs: aiHandoffAt - answerAt,
             startupMask: maskResult,
             greetingPreview: (greeting || "").slice(0, 160),
@@ -502,25 +516,15 @@ async function startAiOnInboundCall(input: {
       }).catch(() => undefined);
 
       if (shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND")) {
-        await startCallRecording(input.telnyxCallControlId);
+        void startCallRecording(input.telnyxCallControlId);
       }
-      await startCallTranscription(input.telnyxCallControlId);
+      void startCallTranscription(input.telnyxCallControlId);
 
       const { resolveAiVersionStamp } = await import("./platform/admission");
       const versionStamp = await resolveAiVersionStamp({
         workspaceId: input.workspaceId,
         agentId: agent.id,
         publishedVersionId: agent.publishedVersionId,
-      });
-
-      const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
-      scheduleVoiceV2CallWarmup({
-        workspaceId: input.workspaceId,
-        agentId: agent.id,
-        callId: input.callId,
-        callControlId: input.telnyxCallControlId,
-        fromE164: callRow?.fromE164,
-        agentConfig: cfg,
       });
 
       await prisma.voiceCall.update({

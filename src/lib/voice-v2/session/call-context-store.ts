@@ -357,6 +357,52 @@ class RedisVoiceV2CallContextStore implements VoiceV2CallContextStore {
 
 const l1 = new Map<string, L1Entry>();
 
+/** Hangup before L2 exists — blocks late warmup / ensure from creating ACTIVE context. */
+const terminatedSessionKeys = new Set<string>();
+
+function tombstoneRedisKey(canonical: string): string {
+  return `voice:v2:tombstone:${canonical}`;
+}
+
+export function registerVoiceV2SessionTerminated(canonicalKey: string): void {
+  terminatedSessionKeys.add(canonicalKey);
+  void persistTerminatedTombstone(canonicalKey);
+}
+
+async function persistTerminatedTombstone(canonicalKey: string): Promise<void> {
+  if (process.env.VOICE_V2_ALLOW_MEMORY_L2 === "1") return;
+  if (!process.env.REDIS_URL?.trim()) return;
+  try {
+    const IORedis = (await import("ioredis")).default;
+    const r = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+    await r.connect().catch(() => undefined);
+    await r.set(tombstoneRedisKey(canonicalKey), "1", "EX", VOICE_V2_CALL_CONTEXT_TTL_SEC);
+    await r.quit().catch(() => undefined);
+  } catch {
+    // non-blocking
+  }
+}
+
+export async function isVoiceV2SessionTerminated(canonicalKey: string): Promise<boolean> {
+  if (terminatedSessionKeys.has(canonicalKey)) return true;
+  if (process.env.VOICE_V2_ALLOW_MEMORY_L2 === "1") return false;
+  if (!process.env.REDIS_URL?.trim()) return false;
+  try {
+    const IORedis = (await import("ioredis")).default;
+    const r = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 2, lazyConnect: true });
+    await r.connect().catch(() => undefined);
+    const hit = await r.get(tombstoneRedisKey(canonicalKey));
+    await r.quit().catch(() => undefined);
+    return hit === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearVoiceV2SessionTerminatedForTests(): void {
+  terminatedSessionKeys.clear();
+}
+
 let storeSingleton: VoiceV2CallContextStore | null = null;
 let storeMode: "redis" | "memory" | null = null;
 
@@ -383,6 +429,7 @@ export function resetVoiceV2CallContextStoreForTests(store?: VoiceV2CallContextS
   storeSingleton = store ?? new InMemoryVoiceV2CallContextStore();
   storeMode = "memory";
   l1.clear();
+  terminatedSessionKeys.clear();
 }
 
 /** Test helper — force store re-resolution (e.g. production fail-closed). */
@@ -486,6 +533,13 @@ export async function createVoiceV2CallContext(
   },
   options?: CreateVoiceV2CallContextOptions,
 ): Promise<VoiceV2CallContextRecord> {
+  if (await isVoiceV2SessionTerminated(input.identity.sessionKey)) {
+    voiceV2ContextMetric("VOICE_V2_CONTEXT_ENDED_WRITE_REJECTED", {
+      key: input.identity.sessionKey,
+      phase: "create_blocked",
+    });
+    throw new Error(`VoiceV2CallContext create blocked: session terminated (${input.identity.sessionKey})`);
+  }
   const store = getVoiceV2CallContextStore();
   const record = buildRecordFromLegacy({
     payload: { ...input.payload, sessionKey: input.identity.sessionKey },
@@ -541,10 +595,13 @@ export async function persistVoiceV2CallContextPayload(
 }
 
 export async function markVoiceV2CallContextEnded(canonicalKey: string): Promise<VoiceV2PatchResult> {
+  registerVoiceV2SessionTerminated(canonicalKey);
   const store = getVoiceV2CallContextStore();
   const result = await store.markEnded(canonicalKey);
   if (result.applied) {
     hydrateL1(result.record);
+  } else if (result.reason === "NOT_FOUND") {
+    l1.delete(canonicalKey);
   }
   return result;
 }

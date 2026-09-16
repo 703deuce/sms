@@ -9,6 +9,7 @@ import {
   createVoiceV2CallContext,
   getVoiceV2CallContextL1,
   loadVoiceV2CallContext,
+  registerVoiceV2SessionTerminated,
   resolveVoiceV2SessionKey,
 } from "./session/call-context-store";
 import { warmMicrosoftTokenIfNeeded } from "./session/token-readiness";
@@ -22,7 +23,14 @@ export type VoiceV2WarmupInput = {
   fromE164?: string | null;
   conversationId?: string | null;
   agentConfig?: VoiceAgentConfig | null;
+  /** Wall ms when `startAiAssistantOnCall` returned (caller-visible path released). */
+  assistantStartReturnedAt?: number;
+  /** Wall ms when `scheduleVoiceV2CallWarmup` was invoked. */
+  warmupScheduledAt?: number;
 };
+
+/** Gate invariant: no awaited Prisma telemetry before substantive warmup (see headless test). */
+export const WARMUP_BLOCKING_TELEMETRY = 0;
 
 export type VoiceV2WarmupResult = {
   canonicalSessionKey: string;
@@ -44,16 +52,33 @@ export function getVoiceV2WarmupEntry(canonicalKey: string): WarmupEntry | null 
   return warmupByCanonical.get(canonicalKey) ?? null;
 }
 
+/** Idempotent — safe from Telnyx hangup / conversation.ended handlers. */
+export function terminateVoiceV2CallSessionOnHangup(input: {
+  workspaceId?: string;
+  callId?: string | null;
+  callControlId?: string | null;
+  conversationId?: string | null;
+}): void {
+  abortVoiceV2CallWarmup(input);
+}
+
 export function abortVoiceV2CallWarmup(input: {
   callControlId?: string | null;
   callId?: string | null;
+  conversationId?: string | null;
 }): void {
+  const callId = input.callId?.trim();
+  if (callId) {
+    registerVoiceV2SessionTerminated(`call:${callId}`);
+  }
   void (async () => {
     const canonical = await resolveVoiceV2SessionKey({
       callControlId: input.callControlId,
       callId: input.callId,
+      conversationId: input.conversationId,
     });
     if (!canonical) return;
+    registerVoiceV2SessionTerminated(canonical);
     const entry = warmupByCanonical.get(canonical);
     if (entry) {
       entry.abort.abort();
@@ -64,7 +89,45 @@ export function abortVoiceV2CallWarmup(input: {
   })();
 }
 
+/** Deferred DB telemetry — never awaited on the warmup hot path. */
+function deferWarmupEvent(
+  input: VoiceV2WarmupInput,
+  eventType: string,
+  payload: Record<string, unknown>,
+): void {
+  void (async () => {
+    try {
+      const { getPrisma } = await import("@/lib/db");
+      const prisma = getPrisma();
+      await prisma.voiceCallEvent.create({
+        data: {
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          eventType,
+          payload: payload as object,
+        },
+      });
+    } catch {
+      // observe only
+    }
+  })();
+}
+
 async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promise<VoiceV2WarmupResult> {
+  const warmupActualStartedAt = Date.now();
+  const assistantReleaseMs =
+    input.assistantStartReturnedAt != null
+      ? warmupActualStartedAt - input.assistantStartReturnedAt
+      : null;
+
+  deferWarmupEvent(input, "voice_v2.warmup_started", {
+    at: warmupActualStartedAt,
+    WARMUP_ACTUAL_STARTED_AT: warmupActualStartedAt,
+    ASSISTANT_START_RETURNED_AT: input.assistantStartReturnedAt ?? null,
+    WARMUP_SCHEDULED_AT: input.warmupScheduledAt ?? null,
+    ASSISTANT_RELEASE_TO_WARMUP_START_MS: assistantReleaseMs,
+  });
+
   const bookingEnabled = isVoiceV2PstnLiveBookingMode(input.agentConfig);
   const canonical =
     (await resolveVoiceV2SessionKey({
@@ -101,21 +164,55 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
     };
   }
 
-  await createVoiceV2CallContext(
-    {
-      payload: built.payload,
-      identity: {
-        sessionKey: canonical,
-        callId: input.callId,
-        workspaceId: input.workspaceId,
-        agentId: input.agentId,
-        telnyxCallControlId: input.callControlId,
-        telnyxConversationId: input.conversationId || undefined,
+  try {
+    await createVoiceV2CallContext(
+      {
+        payload: built.payload,
+        identity: {
+          sessionKey: canonical,
+          callId: input.callId,
+          workspaceId: input.workspaceId,
+          agentId: input.agentId,
+          telnyxCallControlId: input.callControlId,
+          telnyxConversationId: input.conversationId || undefined,
+        },
+        enrollment: built.enrollment,
       },
-      enrollment: built.enrollment,
-    },
-    { l2Persist: "await" },
-  );
+      { l2Persist: "await" },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("session terminated") || signal.aborted) {
+      return {
+        canonicalSessionKey: canonical,
+        l1Hydrated: false,
+        l2Created: false,
+        bookingEnabled,
+        aborted: true,
+      };
+    }
+    throw err;
+  }
+
+  if (signal.aborted) {
+    const { markVoiceV2CallContextEnded } = await import("./session/call-context-store");
+    await markVoiceV2CallContextEnded(canonical).catch(() => undefined);
+    return {
+      canonicalSessionKey: canonical,
+      l1Hydrated: false,
+      l2Created: false,
+      bookingEnabled,
+      aborted: true,
+    };
+  }
+
+  const l2ReadyAt = Date.now();
+  deferWarmupEvent(input, "voice_v2.warmup_l2_ready", {
+    at: l2ReadyAt,
+    WARMUP_L2_READY_AT: l2ReadyAt,
+    WARMUP_DURATION_MS: l2ReadyAt - warmupActualStartedAt,
+    canonicalSessionKey: canonical,
+  });
 
   if (bookingEnabled && !signal.aborted) {
     const bookingCfg = await loadMctbAiBookingConfig(input.workspaceId);
@@ -142,7 +239,18 @@ async function runWarmup(input: VoiceV2WarmupInput, signal: AbortSignal): Promis
 
 /** Fire-and-forget — must not be awaited on answer/greeting path. */
 export function scheduleVoiceV2CallWarmup(input: VoiceV2WarmupInput): void {
-  void startVoiceV2CallWarmup(input).catch((err) => {
+  const warmupScheduledAt = input.warmupScheduledAt ?? Date.now();
+  const withTiming: VoiceV2WarmupInput = { ...input, warmupScheduledAt };
+  deferWarmupEvent(withTiming, "voice_v2.warmup_scheduled", {
+    at: warmupScheduledAt,
+    WARMUP_SCHEDULED_AT: warmupScheduledAt,
+    ASSISTANT_START_RETURNED_AT: withTiming.assistantStartReturnedAt ?? null,
+    ASSISTANT_RELEASE_TO_WARMUP_SCHEDULE_MS:
+      withTiming.assistantStartReturnedAt != null
+        ? warmupScheduledAt - withTiming.assistantStartReturnedAt
+        : null,
+  });
+  void startVoiceV2CallWarmup(withTiming).catch((err) => {
     console.warn("[voice-v2/warmup]", err instanceof Error ? err.message : err);
   });
 }

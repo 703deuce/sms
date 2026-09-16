@@ -1030,6 +1030,20 @@ export async function processVoiceWebhookEvent(input: {
         }
 
         if (aiStartOk) {
+        const assistantStartReturnedAt = Date.now();
+        const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
+        scheduleVoiceV2CallWarmup({
+          workspaceId,
+          agentId: agent.id,
+          callId: call.id,
+          callControlId: controlId,
+          fromE164: call.fromE164,
+          conversationId: call.telnyxConversationId,
+          agentConfig: cfg,
+          assistantStartReturnedAt,
+          warmupScheduledAt: Date.now(),
+        });
+
         const pstnDiag = buildPstnAudioDiagnostics({
           callControlId: controlId,
           outputGainDb,
@@ -1045,6 +1059,7 @@ export async function processVoiceWebhookEvent(input: {
               eventType: "media.ai_assistant_start",
               payload: {
                 at: aiHandoffAt,
+                ASSISTANT_START_RETURNED_AT: assistantStartReturnedAt,
                 startupMask: maskResult,
                 greetingPreview: (greeting || "").slice(0, 160),
                 speaksFirst,
@@ -1059,9 +1074,9 @@ export async function processVoiceWebhookEvent(input: {
         const recordingDirection =
           call.direction === "OUTBOUND" ? "OUTBOUND" : "INBOUND";
         if (shouldStartCallRecording(cfg.callHandling?.callRecording, recordingDirection)) {
-          await startCallRecording(controlId);
+          void startCallRecording(controlId);
         }
-        await startCallTranscription(controlId);
+        void startCallTranscription(controlId);
         const { resolveAiVersionStamp } = await import("../platform/admission");
         const versionStamp = await resolveAiVersionStamp({
           workspaceId,
@@ -1127,6 +1142,15 @@ export async function processVoiceWebhookEvent(input: {
         },
       });
     }
+    const { terminateVoiceV2CallSessionOnHangup } = await import(
+      "@/lib/voice-v2/call-warmup"
+    );
+    terminateVoiceV2CallSessionOnHangup({
+      workspaceId,
+      callId: call.id,
+      callControlId: call.telnyxCallControlId,
+      conversationId: call.telnyxConversationId,
+    });
     await enqueueJob({
       jobType: "voice_post_call",
       queueName: "voice-calls",

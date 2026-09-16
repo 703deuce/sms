@@ -3,6 +3,7 @@ import "server-only";
 import { getVoiceV2CallContext } from "./session-store";
 import {
   createVoiceV2CallContext,
+  isVoiceV2SessionTerminated,
   loadVoiceV2CallContext,
   resolveVoiceV2SessionKey,
 } from "../session/call-context-store";
@@ -49,6 +50,11 @@ export async function ensureVoiceV2CallContext(input: {
       callId: input.callId,
     })) || sessionKey;
   if (!canonical) return null;
+
+  if (await isVoiceV2SessionTerminated(canonical)) {
+    input.trace?.mark("CALL_CONTEXT_LOOKUP_END", { cache_hit: false, source: "terminated" });
+    return null;
+  }
 
   const l1 =
     getVoiceV2CallContext(canonical) || (sessionKey ? getVoiceV2CallContext(sessionKey) : null);

@@ -9,11 +9,12 @@
 1. `answer` (Call Control)
 2. Optional startup greeting mask / disclosure (may be concurrent with mask)
 3. `startAiAssistantOnCall` (Amy greeting / assistant live) — **await completes**
-4. Recording + transcription starts
-5. **`scheduleVoiceV2CallWarmup(...)`** — **void, not awaited**
-6. `voiceCall.update` (metadata)
+4. **`scheduleVoiceV2CallWarmup(...)`** — **immediate, void, not awaited**
+5. `media.ai_assistant_start` event (telemetry)
+6. Recording + transcription — **void**, concurrent with warmup
+7. `voiceCall.update` (metadata)
 
-Warmup begins **after** the assistant handoff that releases greeting, **before** DB metadata update (both non-blocking for audio).
+Warmup races recording/transcription; it does **not** wait behind them. Warmup telemetry is **deferred** (no awaited Prisma before Redis/context work).
 
 ## 2. Concurrency vs answer/greeting
 
@@ -35,7 +36,7 @@ Independent failures do not block greeting; `ensure` joins in-flight warmup via 
 
 ## 4. Cancellation
 
-`abortVoiceV2CallWarmup({ callControlId, callId })` — aborts `AbortController`, marks context `ENDED`.
+`terminateVoiceV2CallSessionOnHangup` is wired on Telnyx termination events in `webhook-handlers.ts` (not test-only). It aborts in-flight warmup, marks context `ENDED`, and sets a tombstone so late warmup cannot create an `ACTIVE` session after hangup.
 
 ## 5–8. Metrics
 
