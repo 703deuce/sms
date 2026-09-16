@@ -45,7 +45,10 @@ export function shouldSkipLiveKitProvisionForMctbPhone(
   opts?: { appointmentWizard?: boolean },
 ): boolean {
   if (isMctbTexmlIngressLocked(settingsJson)) return true;
-  if (!opts?.appointmentWizard) return false;
+  if (isMctbTexmlVoiceIngress(settingsJson)) return true;
+  if (isPhoneMctbSipIngress(settingsJson)) return true;
+  // Appointment receptionist wizard (MCTB voice agent) always publishes via TeXML → assistant.
+  if (opts?.appointmentWizard) return true;
   const settings = readPhoneMctbSettings(settingsJson);
   const inbound = settings.mctbInbound;
   if (!inbound || typeof inbound !== "object" || Array.isArray(inbound)) return false;

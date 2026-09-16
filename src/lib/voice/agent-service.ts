@@ -539,12 +539,17 @@ export async function publishVoiceAgent(
   }
 
   // Product default (Telnyx): point the DID at TeXML → assistant.
-  // LiveKit: provision shared SIP trunk + Telnyx FQDN route via API.
+  // LiveKit: provision shared SIP trunk + Telnyx FQDN route via API (skipped for MCTB wizard / TeXML-locked DIDs).
   let texmlRoute: {
     matched?: boolean;
     path?: string;
     texmlAppId?: string;
   } | null = null;
+
+  const appointmentWizard = Boolean(
+    (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
+  );
+  let skipLiveKitForMctb = false;
 
   if (isLiveKitVoiceRuntime() && updated.phoneNumberId) {
     const phone = await prisma.phoneNumber.findFirst({
@@ -554,14 +559,12 @@ export async function publishVoiceAgent(
     const { shouldSkipLiveKitProvisionForMctbPhone } = await import(
       "@/lib/mctb/sip-ingress/sync"
     );
-    const appointmentWizard = Boolean(
-      (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
-    );
-    const skipLiveKitForMctb =
+    skipLiveKitForMctb = Boolean(
       phone &&
-      shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
-        appointmentWizard,
-      });
+        shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
+          appointmentWizard,
+        }),
+    );
     if (skipLiveKitForMctb) {
       console.warn(
         "[voice] Skipping LiveKit provision on publish — MCTB TeXML / wizard voice line",
@@ -585,39 +588,59 @@ export async function publishVoiceAgent(
         await rollbackPublish(`LiveKit provisioning failed — deploy rolled back: ${detail}`);
       }
     }
-  } else {
-    const {
-      usesTexmlDirectInbound,
-      routePhoneToTexmlAssistant,
-    } = await import("./telnyx/texml-direct-route");
-    if (usesTexmlDirectInbound(config) && updated.phoneNumberId) {
-      const phone = await prisma.phoneNumber.findFirst({
-        where: { id: updated.phoneNumberId, workspaceId },
-        select: { e164: true, providerNumberId: true },
+  }
+
+  const {
+    usesTexmlDirectInbound,
+    routePhoneToTexmlAssistant,
+  } = await import("./telnyx/texml-direct-route");
+  const shouldRouteTexmlAssistant =
+    Boolean(updated.phoneNumberId && refreshedAfterSync.telnyxAssistantId) &&
+    (appointmentWizard ||
+      skipLiveKitForMctb ||
+      (!isLiveKitVoiceRuntime() && usesTexmlDirectInbound(config)));
+
+  if (shouldRouteTexmlAssistant && updated.phoneNumberId) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: updated.phoneNumberId, workspaceId },
+      select: { e164: true, providerNumberId: true, settingsJson: true },
+    });
+    if (!phone?.e164) {
+      await rollbackPublish(
+        "Phone number missing for TeXML direct route — deploy rolled back",
+      );
+    }
+    let preferredTexmlAppId: string | undefined;
+    try {
+      const { readMctbInboundBlock } = await import(
+        "@/lib/mctb/inbound-handling/line-config-parse"
+      );
+      const inbound = readMctbInboundBlock(phone!.settingsJson);
+      preferredTexmlAppId =
+        typeof inbound.voiceTexmlAppId === "string"
+          ? inbound.voiceTexmlAppId.trim()
+          : undefined;
+    } catch {
+      preferredTexmlAppId = undefined;
+    }
+    try {
+      texmlRoute = await routePhoneToTexmlAssistant({
+        e164: phone!.e164,
+        assistantId: refreshedAfterSync.telnyxAssistantId!,
+        providerNumberId: phone!.providerNumberId,
+        preferredTexmlAppId,
       });
-      if (!phone?.e164) {
-        await rollbackPublish(
-          "Phone number missing for TeXML direct route — deploy rolled back",
-        );
-      }
-      try {
-        texmlRoute = await routePhoneToTexmlAssistant({
-          e164: phone!.e164,
-          assistantId: refreshedAfterSync.telnyxAssistantId!,
-          providerNumberId: phone!.providerNumberId,
-        });
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        console.error("[voice] TeXML direct route failed", err);
-        await rollbackPublish(
-          `TeXML direct routing failed — deploy rolled back: ${detail}`,
-        );
-      }
-      if (!texmlRoute?.matched) {
-        await rollbackPublish(
-          `TeXML route did not match live connection — deploy rolled back (${texmlRoute?.path || "no path"})`,
-        );
-      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[voice] TeXML direct route failed", err);
+      await rollbackPublish(
+        `TeXML direct routing failed — deploy rolled back: ${detail}`,
+      );
+    }
+    if (!texmlRoute?.matched) {
+      await rollbackPublish(
+        `TeXML route did not match live connection — deploy rolled back (${texmlRoute?.path || "no path"})`,
+      );
     }
   }
 
@@ -689,6 +712,39 @@ export async function syncLiveWizardDraftToProvider(
         exclusive: true,
         allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
       });
+
+      if (appointmentWizard) {
+        const refreshed = await prisma.voiceAgent.findUnique({
+          where: { id: agentId },
+          select: { telnyxAssistantId: true },
+        });
+        const assistantId = refreshed?.telnyxAssistantId?.trim();
+        if (assistantId) {
+          const phone = await prisma.phoneNumber.findFirst({
+            where: { id: agent.phoneNumberId, workspaceId },
+            select: { e164: true, providerNumberId: true, settingsJson: true },
+          });
+          if (phone?.e164) {
+            const { routePhoneToTexmlAssistant } = await import(
+              "./telnyx/texml-direct-route"
+            );
+            const { readMctbInboundBlock } = await import(
+              "@/lib/mctb/inbound-handling/line-config-parse"
+            );
+            const inbound = readMctbInboundBlock(phone.settingsJson);
+            const preferredTexmlAppId =
+              typeof inbound.voiceTexmlAppId === "string"
+                ? inbound.voiceTexmlAppId.trim()
+                : undefined;
+            await routePhoneToTexmlAssistant({
+              e164: phone.e164,
+              assistantId,
+              providerNumberId: phone.providerNumberId,
+              preferredTexmlAppId,
+            });
+          }
+        }
+      }
     }
 
     return { synced: true };
