@@ -9,6 +9,9 @@ import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-s
 import { getReceptionistCompiledFromAdvanced } from "../src/lib/voice/receptionist/runtime";
 
 const state = createDefaultWizardState();
+state.bookingStrategy = "MICROSOFT_365";
+state.calendarProvider = "microsoft";
+state.calendarConnected = true;
 state.collectFields = [
   ...state.collectFields.filter((f) => f.id !== "notes"),
   {
