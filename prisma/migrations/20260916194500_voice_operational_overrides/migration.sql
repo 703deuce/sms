@@ -19,4 +19,4 @@ CREATE TABLE "voice_operational_overrides" (
 CREATE INDEX "voice_operational_overrides_workspaceId_kind_effectiveFrom_idx" ON "voice_operational_overrides"("workspaceId", "kind", "effectiveFrom");
 
 -- AddForeignKey
-ALTER TABLE "voice_operational_overrides" ADD CONSTRAINT "voice_operational_overrides_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "voice_operational_overrides" ADD CONSTRAINT "voice_operational_overrides_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;

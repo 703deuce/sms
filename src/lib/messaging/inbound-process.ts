@@ -654,6 +654,35 @@ export async function processInboundMessage(input: {
     /* non-fatal */
   }
 
+  try {
+    const voiceRecovery = await (
+      await import("@/lib/voice-v2/ai-call-recovery/inbound-reply")
+    ).tryHandleVoiceV2AiCallRecoveryInboundSms({
+      workspaceId: input.workspaceId,
+      conversationId: conversation.id,
+      fromE164: from,
+      toE164: input.to,
+      body,
+      providerMessageId: input.providerMessageId,
+    });
+    if (voiceRecovery.handled && voiceRecovery.reply) {
+      await prisma.conversationMessage.create({
+        data: {
+          conversationId: conversation.id,
+          direction: "outbound",
+          body: voiceRecovery.reply,
+        },
+      });
+      return {
+        kind: "message",
+        replyText: voiceRecovery.reply,
+        conversationId: conversation.id,
+      };
+    }
+  } catch {
+    /* non-fatal — fall through */
+  }
+
   // Canonical appointment AI for natural-language SMS (after STOP/HELP/YES/C/X).
   try {
     const pendingAppt = await prisma.voiceAppointment.findFirst({

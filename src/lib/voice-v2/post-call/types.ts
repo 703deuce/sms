@@ -15,8 +15,9 @@ export type VoiceV2PostCallFieldCandidate = {
   verdict: "FOUND" | "NOT_FOUND" | "AMBIGUOUS";
   evidence?: string;
   confidence?: number;
-  source: "POST_CALL_TRANSCRIPT";
+  source: "POST_CALL_LLM_EXTRACTION";
   channel?: "caller" | "agent" | "mixed";
+  isExplicitCorrection?: boolean;
 };
 
 export type VoiceV2PostCallReconcileFieldResult = {

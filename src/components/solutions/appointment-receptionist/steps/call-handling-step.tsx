@@ -287,6 +287,81 @@ export function CallHandlingStep({
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold">AI Call Recovery</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Text callers when an AI conversation ends before their request is resolved. Replies
+              continue in your existing SMS text agent with voice context — not a separate recovery
+              bot.
+            </p>
+            <div className="mt-3 space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={state.aiCallRecoveryEnabled === true}
+                  onChange={(e) => patch({ aiCallRecoveryEnabled: e.target.checked })}
+                />
+                <span className="font-medium">
+                  Text callers when an AI conversation ends before their request is resolved
+                </span>
+              </label>
+              {state.aiCallRecoveryEnabled ? (
+                <>
+                  <div>
+                    <Label>Messaging permission</Label>
+                    <select
+                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                      value={state.aiCallRecoveryConsentMode || "DISABLED"}
+                      onChange={(e) =>
+                        patch({
+                          aiCallRecoveryConsentMode: e.target.value as
+                            | "DISABLED"
+                            | "EXISTING_CONSENT"
+                            | "PLATFORM_CAPTURED_CONSENT",
+                        })
+                      }
+                    >
+                      <option value="DISABLED">Disabled</option>
+                      <option value="EXISTING_CONSENT">Existing consent</option>
+                      <option value="PLATFORM_CAPTURED_CONSENT">
+                        Platform-captured consent
+                      </option>
+                    </select>
+                  </div>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={state.aiCallRecoveryContinueOverSms !== false}
+                      onChange={(e) =>
+                        patch({ aiCallRecoveryContinueOverSms: e.target.checked })
+                      }
+                    />
+                    <span>
+                      Let callers continue the same conversation by text (voice transcript and
+                      captured fields carry over)
+                    </span>
+                  </label>
+                  <div>
+                    <Label>Send delay</Label>
+                    <select
+                      className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+                      value={String(state.aiCallRecoveryDelaySeconds ?? 0)}
+                      onChange={(e) =>
+                        patch({ aiCallRecoveryDelaySeconds: Number(e.target.value) })
+                      }
+                    >
+                      <option value="0">Immediately (after internal settle)</option>
+                      <option value="15">15 seconds</option>
+                      <option value="30">30 seconds</option>
+                    </select>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="text-sm font-semibold">Fallbacks</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               What happens if transfer or booking fails

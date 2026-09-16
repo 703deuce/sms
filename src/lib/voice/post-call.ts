@@ -68,6 +68,14 @@ export async function processPostCall(callId: string) {
     call.metadata && typeof call.metadata === "object" && !Array.isArray(call.metadata)
       ? (call.metadata as Record<string, unknown>)
       : {};
+
+  const { callUsesVoiceV2PostCallPipeline, deepgramApiKeyConfigured } = await import(
+    "@/lib/voice-v2/post-call/transcription-pipeline"
+  );
+  const deferAuthoritativeSummaryToReconciliation =
+    Boolean(insight) &&
+    deepgramApiKeyConfigured() &&
+    (await callUsesVoiceV2PostCallPipeline(call.id));
   const callFactStore = callMeta.callFactStore as { facts?: Record<string, unknown> } | undefined;
   const callFacts =
     callFactStore?.facts && typeof callFactStore.facts === "object"
@@ -80,6 +88,18 @@ export async function processPostCall(callId: string) {
       : {};
 
   if (insight) {
+    if (deferAuthoritativeSummaryToReconciliation) {
+      await prisma.voiceCall.update({
+        where: { id: call.id },
+        data: {
+          metadata: {
+            ...callMeta,
+            voiceV2ProvisionalInsightPendingReconciliation: true,
+            voiceV2ProvisionalSummaryText: insight.summary?.slice(0, 4000) || null,
+          } as object,
+        },
+      });
+    } else {
     const extractedCustom: Record<string, unknown> = {
       urgency: insight.urgency,
       ...(insight.extractedFields || {}),
@@ -159,6 +179,7 @@ export async function processPostCall(callId: string) {
           snapshot: receptionistSnapshot,
         }).catch(() => undefined);
       }
+    }
     }
   }
 
@@ -390,6 +411,36 @@ export async function processPostCall(callId: string) {
   await processVoiceV2PostCallIntake(call.id).catch((err) => {
     console.warn("[post-call] voice v2 intake reconcile failed", call.id, err);
   });
+
+  try {
+    const { callUsesVoiceV2PostCallPipeline } = await import(
+      "@/lib/voice-v2/post-call/transcription-pipeline"
+    );
+    const { loadVoiceV2AiCallRecoveryConfigForAgent } = await import(
+      "@/lib/voice-v2/ai-call-recovery/config"
+    );
+    const { enqueueVoiceV2AiCallRecoverySettle } = await import(
+      "@/lib/voice-v2/ai-call-recovery/settle-job"
+    );
+    if (await callUsesVoiceV2PostCallPipeline(call.id)) {
+      const recoveryCfg = await loadVoiceV2AiCallRecoveryConfigForAgent({
+        workspaceId: call.workspaceId,
+        agentId: call.agentId,
+        agentVersionId: call.agentVersionId,
+      });
+      if (recoveryCfg.enabled) {
+        await enqueueVoiceV2AiCallRecoverySettle({
+          workspaceId: call.workspaceId,
+          callId: call.id,
+          agentId: call.agentId,
+          agentVersionId: call.agentVersionId,
+          delaySeconds: recoveryCfg.delaySeconds,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[post-call] voice v2 ai call recovery enqueue failed", call.id, err);
+  }
 
   return { ok: true, callId, missed: isMissed };
 }

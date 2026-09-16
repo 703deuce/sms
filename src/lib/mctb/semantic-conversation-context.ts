@@ -156,7 +156,19 @@ export async function buildMctbSemanticConversationContext(input: {
   workspaceId: string;
   conversationId: string;
   latestCustomerMessage: string;
+  /** When known — narrows durable recovery session lookup beyond smsConversationId. */
+  recoverySmsCallerE164?: string;
+  recoverySmsBusinessE164?: string;
 }): Promise<MctbSemanticConversationContext> {
+  const { mergeVoiceContinuationIntoConversationTurns, resolveVoiceV2SmsContinuation } =
+    await import("@/lib/voice-v2/ai-call-recovery/continuation-hydration");
+  const voiceContinuation = await resolveVoiceV2SmsContinuation({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    callerE164: input.recoverySmsCallerE164,
+    sendingE164: input.recoverySmsBusinessE164,
+  });
+
   const [state, session, inbox] = await Promise.all([
     loadLeadRecoveryState({ workspaceId: input.workspaceId, conversationId: input.conversationId }),
     getMctbAiBookingSessionStore().get(input.conversationId),
@@ -166,6 +178,10 @@ export async function buildMctbSemanticConversationContext(input: {
   const collected: Record<string, string> = {};
   for (const [k, v] of Object.entries(state.collectedFields)) {
     if (v != null && String(v).trim()) collected[k] = String(v);
+  }
+  if (voiceContinuation?.structuredState) {
+    Object.assign(collected, voiceContinuation.structuredState.callerFields);
+    Object.assign(collected, voiceContinuation.structuredState.customFields);
   }
 
   const offered = (session?.offeredSlots ?? []).map((s, i) => ({
@@ -188,11 +204,17 @@ export async function buildMctbSemanticConversationContext(input: {
     pending_slot_id: session?.pendingSlotId ?? null,
   };
 
-  const rawThread = resolveRawThread(
+  let rawThread = resolveRawThread(
     inbox,
     state.conversationThread ?? [],
     input.latestCustomerMessage,
   );
+  if (voiceContinuation?.voiceTranscript?.length) {
+    rawThread = mergeVoiceContinuationIntoConversationTurns({
+      voiceTurns: voiceContinuation.voiceTranscript,
+      smsTurns: rawThread,
+    });
+  }
   const { conversation, truncated, message_count } = applyConversationTruncationPolicy(rawThread);
   const payloadPreview = JSON.stringify({ conversation, structured_state });
   const context_estimated_tokens = estimateContextTokens(payloadPreview);

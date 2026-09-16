@@ -247,6 +247,16 @@ export type AppointmentReceptionistWizardState = {
     | import("@/lib/voice-v2/after-hours-handling-types").VoiceV2SalesSolicitationAction
     | null;
 
+  /** Voice V2 — AI Call Recovery (unresolved AI voice → SMS text-agent continuation). */
+  aiCallRecoveryEnabled?: boolean | null;
+  aiCallRecoveryConsentMode?:
+    | import("@/lib/voice-v2/ai-call-recovery/types").VoiceV2AiCallRecoveryConsentMode
+    | null;
+  aiCallRecoverySendingPhoneNumberId?: string | null;
+  aiCallRecoveryContinueOverSms?: boolean | null;
+  aiCallRecoveryDelaySeconds?: number | null;
+  aiCallRecoverySendWhenCallbackCreated?: boolean | null;
+
   agentName: string;
   businessName: string;
   role: string;
