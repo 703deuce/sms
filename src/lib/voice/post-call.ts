@@ -391,6 +391,36 @@ export async function processPostCall(callId: string) {
     console.warn("[post-call] voice v2 intake reconcile failed", call.id, err);
   });
 
+  try {
+    const { callUsesVoiceV2PostCallPipeline } = await import(
+      "@/lib/voice-v2/post-call/transcription-pipeline"
+    );
+    const { loadVoiceV2AiCallRecoveryConfigForAgent } = await import(
+      "@/lib/voice-v2/ai-call-recovery/config"
+    );
+    const { enqueueVoiceV2AiCallRecoverySettle } = await import(
+      "@/lib/voice-v2/ai-call-recovery/settle-job"
+    );
+    if (await callUsesVoiceV2PostCallPipeline(call.id)) {
+      const recoveryCfg = await loadVoiceV2AiCallRecoveryConfigForAgent({
+        workspaceId: call.workspaceId,
+        agentId: call.agentId,
+        agentVersionId: call.agentVersionId,
+      });
+      if (recoveryCfg.enabled) {
+        await enqueueVoiceV2AiCallRecoverySettle({
+          workspaceId: call.workspaceId,
+          callId: call.id,
+          agentId: call.agentId,
+          agentVersionId: call.agentVersionId,
+          delaySeconds: recoveryCfg.delaySeconds,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("[post-call] voice v2 ai call recovery enqueue failed", call.id, err);
+  }
+
   return { ok: true, callId, missed: isMissed };
 }
 

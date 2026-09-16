@@ -409,6 +409,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       );
       return executeVoiceV2PostCallTranscriptionJob(payload as Record<string, unknown>);
     }
+    case "voice_v2_ai_call_recovery_settle": {
+      const { executeVoiceV2AiCallRecoverySettleJob } = await import(
+        "@/lib/voice-v2/ai-call-recovery/settle-job"
+      );
+      return executeVoiceV2AiCallRecoverySettleJob(payload as Record<string, unknown>);
+    }
     case "voice_appointment_provider_sync": {
       const { syncAppointmentToProvider, markAppointmentSyncFailed } = await import(
         "@/lib/voice/agent-tool-gateway/provider-sync"

@@ -157,6 +157,11 @@ export async function buildMctbSemanticConversationContext(input: {
   conversationId: string;
   latestCustomerMessage: string;
 }): Promise<MctbSemanticConversationContext> {
+  const { getVoiceV2SmsContinuation, mergeVoiceContinuationIntoConversationTurns } = await import(
+    "@/lib/voice-v2/ai-call-recovery/continuation-hydration"
+  );
+  const voiceContinuation = getVoiceV2SmsContinuation(input.conversationId);
+
   const [state, session, inbox] = await Promise.all([
     loadLeadRecoveryState({ workspaceId: input.workspaceId, conversationId: input.conversationId }),
     getMctbAiBookingSessionStore().get(input.conversationId),
@@ -166,6 +171,10 @@ export async function buildMctbSemanticConversationContext(input: {
   const collected: Record<string, string> = {};
   for (const [k, v] of Object.entries(state.collectedFields)) {
     if (v != null && String(v).trim()) collected[k] = String(v);
+  }
+  if (voiceContinuation?.structuredState) {
+    Object.assign(collected, voiceContinuation.structuredState.callerFields);
+    Object.assign(collected, voiceContinuation.structuredState.customFields);
   }
 
   const offered = (session?.offeredSlots ?? []).map((s, i) => ({
@@ -188,11 +197,17 @@ export async function buildMctbSemanticConversationContext(input: {
     pending_slot_id: session?.pendingSlotId ?? null,
   };
 
-  const rawThread = resolveRawThread(
+  let rawThread = resolveRawThread(
     inbox,
     state.conversationThread ?? [],
     input.latestCustomerMessage,
   );
+  if (voiceContinuation?.voiceTranscript?.length) {
+    rawThread = mergeVoiceContinuationIntoConversationTurns({
+      voiceTurns: voiceContinuation.voiceTranscript,
+      smsTurns: rawThread,
+    });
+  }
   const { conversation, truncated, message_count } = applyConversationTruncationPolicy(rawThread);
   const payloadPreview = JSON.stringify({ conversation, structured_state });
   const context_estimated_tokens = estimateContextTokens(payloadPreview);
