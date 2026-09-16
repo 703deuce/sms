@@ -333,7 +333,6 @@ export async function executeVoiceV2BookOfferedSlot(
     };
   }
 
-  const agentId = options?.agentId?.trim() || String(raw.agent_id || "").trim() || "";
   if (agentId) {
     const { evaluateBookingIntakeGate } = await import("./intake/booking-gate");
     const gate = await evaluateBookingIntakeGate({

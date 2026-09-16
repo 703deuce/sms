@@ -1,4 +1,4 @@
-import "server-only";
+/** Pure publish/resolve helpers — safe for receptionist client compile (no server-only). */
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
