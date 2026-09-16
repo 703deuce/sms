@@ -25,6 +25,27 @@ import {
   extractSchedulingRequestedDate,
   intakeFieldsHaveValues,
 } from "./scheduling-preference";
+import { applyQualificationToContext } from "../qualification-evaluator";
+import type { VoiceV2PublishedQualificationConfig } from "../qualification-types";
+
+function qualificationConfigFromContext(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+): VoiceV2PublishedQualificationConfig {
+  const cap = ctx.capabilities;
+  return {
+    qualificationEnabled: Boolean(cap?.qualificationEnabled),
+    qualificationRequiredBeforePrimaryAction: Boolean(
+      cap?.qualificationRequiredBeforePrimaryAction,
+    ),
+    qualificationRevision: cap?.qualificationRevision || "none",
+    rules: cap?.qualificationRules || [],
+    rulesMatchMode: cap?.qualificationRulesMatchMode === "ANY" ? "ANY" : "ALL",
+    supportedZipCodes: cap?.qualificationSupportedZipCodes || [],
+    notQualifiedFallback: cap?.qualificationNotQualifiedFallback || "TAKE_MESSAGE",
+    needsReviewFallback: cap?.qualificationNeedsReviewFallback || "TAKE_MESSAGE",
+    qualificationFieldKeys: cap?.qualificationFieldKeys || [],
+  };
+}
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -89,7 +110,7 @@ async function attachBookingWorkflow(
     workspaceId,
     agentId,
   );
-  const nextCtx = transitionAfterIntakeSave({
+  let nextCtx = transitionAfterIntakeSave({
     ctx,
     raw,
     savedKeys,
@@ -97,6 +118,10 @@ async function attachBookingWorkflow(
     voiceV2PstnLiveBooking,
     bookingStrategy,
   });
+  nextCtx = applyQualificationToContext(
+    nextCtx,
+    qualificationConfigFromContext(nextCtx),
+  );
   setVoiceV2CallContext(nextCtx);
   trace?.mark("WORKFLOW_TRANSITION_END");
   return {

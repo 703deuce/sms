@@ -119,6 +119,26 @@ export async function executeVoiceV2FindAvailability(
         };
       }
       bookingStrategy = gate.strategy;
+      const qualGate = await (
+        await import("./qualification-gate")
+      ).evaluateQualificationPrimaryActionGate({
+        workspaceId: input.workspaceId,
+        agentId,
+        ctx,
+      });
+      if (!qualGate.allowed) {
+        return {
+          status: "ERROR",
+          error: qualGate.status,
+          timing: marks,
+          timing_ms: timingMs,
+          graph: {
+            GRAPH_REQUEST_COUNT: 0,
+            GRAPH_HTTP_STATUS: 0,
+            TOKEN_REFRESH_REQUIRED: false,
+          },
+        };
+      }
     }
 
     if (bookingStrategy === "CALENDLY") {

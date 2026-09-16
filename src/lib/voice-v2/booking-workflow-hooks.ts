@@ -75,6 +75,7 @@ export function workflowPayloadForContext(
     workflow,
     readiness,
     hasActiveOfferSet: hasOffer,
+    ctx,
   });
 }
 

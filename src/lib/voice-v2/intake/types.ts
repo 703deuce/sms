@@ -50,6 +50,12 @@ export interface AskedFieldMemory {
 }
 
 import type { VoiceV2BookingWorkflow } from "../booking-workflow";
+import type {
+  VoiceV2QualificationRuleRow,
+  VoiceV2QualificationState,
+  VoiceV2QualificationFallbackAction,
+  VoiceV2QualificationRuleMatchMode,
+} from "../qualification-types";
 
 export interface VoiceV2CallContext {
   sessionKey: string;
@@ -76,7 +82,17 @@ export interface VoiceV2CallContext {
     knowledgeBaseEnabled?: boolean;
     knowledgeBaseRevision?: string;
     knowledgeBaseIds?: string[];
+    qualificationEnabled?: boolean;
+    qualificationRequiredBeforePrimaryAction?: boolean;
+    qualificationRevision?: string;
+    qualificationRules?: VoiceV2QualificationRuleRow[];
+    qualificationRulesMatchMode?: VoiceV2QualificationRuleMatchMode;
+    qualificationSupportedZipCodes?: string[];
+    qualificationNotQualifiedFallback?: VoiceV2QualificationFallbackAction;
+    qualificationNeedsReviewFallback?: VoiceV2QualificationFallbackAction;
+    qualificationFieldKeys?: string[];
   };
+  qualification?: VoiceV2QualificationState;
   appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;
 }
 

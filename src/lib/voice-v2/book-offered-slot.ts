@@ -119,6 +119,23 @@ export async function executeVoiceV2BookOfferedSlot(
         timing_ms: timingMs,
       };
     }
+    const qualGate = await (
+      await import("./qualification-gate")
+    ).evaluateQualificationPrimaryActionGate({
+      workspaceId,
+      agentId,
+      ctx,
+    });
+    if (!qualGate.allowed) {
+      timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
+      marks.RESPONSE_SENT = isoMark();
+      return {
+        status: "ERROR",
+        error: qualGate.status,
+        timing: marks,
+        timing_ms: timingMs,
+      };
+    }
   }
 
   if (!offerSetId || !selectedSlotId) {

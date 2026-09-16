@@ -22,6 +22,7 @@ export type CallerFieldRow = {
   askWhen: AskWhenMode;
   confirm: boolean;
   enabled: boolean;
+  useForQualification?: boolean;
 };
 
 export type IntentRuleRow = {
