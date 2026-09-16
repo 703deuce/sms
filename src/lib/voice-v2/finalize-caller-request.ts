@@ -102,6 +102,12 @@ async function persistFinalizeMetadata(input: {
   let outcome = existing?.outcome;
   if (input.primaryOutcome === "BOOKED") {
     outcome = "booked";
+  } else if (input.primaryOutcome === "RESCHEDULED") {
+    outcome = "rescheduled";
+  } else if (input.primaryOutcome === "CANCELED") {
+    outcome = "canceled";
+  } else if (input.primaryOutcome === "TRANSFERRED") {
+    outcome = "transferred";
   } else if (input.structuredOutcome === "APPOINTMENT_REQUESTED") {
     outcome = "appointment_requested";
   } else if (input.structuredOutcome === "MESSAGE_TAKEN") {
@@ -216,7 +222,15 @@ export async function executeVoiceV2FinalizeCallerRequest(input: {
           : "Thanks for calling. Your appointment is confirmed. Have a great day."
         : primaryOutcome === "BOOKING_LINK_SENT"
           ? "Thanks for calling. I'll text you that link shortly. Goodbye."
-          : "Thanks for calling. Take care.";
+          : primaryOutcome === "TRANSFERRED"
+            ? "Thanks for calling. Goodbye."
+            : primaryOutcome === "RESCHEDULED"
+              ? "Thanks for calling. Your appointment has been updated. Goodbye."
+              : primaryOutcome === "CANCELED"
+                ? "Thanks for calling. Your appointment has been canceled. Goodbye."
+                : primaryOutcome === "CALLBACK_REQUESTED"
+                  ? "Thanks for calling. We'll call you back soon. Goodbye."
+                  : "Thanks for calling. Take care.";
 
     return {
       status: "FINALIZED",

@@ -8,7 +8,7 @@ import {
   type CalendarConfig,
 } from "@/lib/voice/calendar/providers";
 import { resolveSessionKey } from "../intake/load-call-context";
-import { resolveStoredAppointmentRef, selectAppointmentRef } from "./ref-store";
+import { markAppointmentActionStatus, resolveStoredAppointmentRef, selectAppointmentRef } from "./ref-store";
 import type { CancelAppointmentResult } from "./types";
 
 export async function executeVoiceV2CancelAppointment(
@@ -63,6 +63,7 @@ export async function executeVoiceV2CancelAppointment(
     where: { idempotencyKey },
   });
   if (existing?.resultJson) {
+    markAppointmentActionStatus(sessionKey, "CANCEL_CONFIRMED");
     const cached = existing.resultJson as Record<string, unknown>;
     return {
       status: "CANCEL_CONFIRMED",
@@ -130,6 +131,8 @@ export async function executeVoiceV2CancelAppointment(
     const code = (err as { code?: string }).code;
     if (code !== "P2002") throw err;
   }
+
+  markAppointmentActionStatus(sessionKey, "CANCEL_CONFIRMED");
 
   return {
     status: "CANCEL_CONFIRMED",

@@ -71,3 +71,15 @@ export function selectAppointmentRef(sessionKey: string, appointmentRefId: strin
   } as Partial<VoiceV2CallContext>);
   return true;
 }
+
+export function markAppointmentActionStatus(
+  sessionKey: string,
+  status: "RESCHEDULE_CONFIRMED" | "CANCEL_CONFIRMED",
+): void {
+  const ctx = getVoiceV2CallContext(sessionKey);
+  const action = getAppointmentActionState(ctx);
+  if (!action) return;
+  patchVoiceV2CallContext(sessionKey, {
+    appointmentAction: { ...action, status },
+  } as Partial<VoiceV2CallContext>);
+}

@@ -61,6 +61,8 @@ export interface VoiceV2CallContext {
   sessionKey: string;
   workspaceId: string;
   agentId: string;
+  /** Inbound PSTN ANI — never replaced when caller gives a different callback number. */
+  callerAniE164?: string | null;
   businessTimezone: string;
   intakeSchema: VoiceV2IntakeSchema;
   intakeState: VoiceV2IntakeState;

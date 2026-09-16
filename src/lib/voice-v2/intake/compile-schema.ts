@@ -56,7 +56,7 @@ function callerRowValueType(row: CallerFieldRow): IntakeFieldValueType {
     return BUILTIN_VALUE_TYPE[mapped as BuiltinIntakeFieldKey];
   }
   if (row.id === "email" || mapped === "email") return "email";
-  if (row.id === "phone" || mapped === "phone") return "phone";
+  if (row.id === "phone" || mapped === "phone" || mapped === "callback_number") return "phone";
   if (row.id === "address" || mapped === "address") return "address";
   return "text";
 }

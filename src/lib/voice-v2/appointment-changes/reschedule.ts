@@ -10,7 +10,7 @@ import {
 } from "@/lib/voice/calendar/providers";
 import { loadVoiceV2OfferSet } from "../offer-set-store";
 import { resolveSessionKey } from "../intake/load-call-context";
-import { resolveStoredAppointmentRef, selectAppointmentRef } from "./ref-store";
+import { markAppointmentActionStatus, resolveStoredAppointmentRef, selectAppointmentRef } from "./ref-store";
 import type { RescheduleAppointmentResult } from "./types";
 
 function slotOverlapsBusy(
@@ -70,6 +70,7 @@ export async function executeVoiceV2RescheduleAppointment(
     where: { idempotencyKey },
   });
   if (existing?.microsoftEventId && existing.resultJson) {
+    markAppointmentActionStatus(sessionKey, "RESCHEDULE_CONFIRMED");
     const cached = existing.resultJson as Record<string, unknown>;
     return {
       status: "RESCHEDULE_CONFIRMED",
@@ -174,6 +175,8 @@ export async function executeVoiceV2RescheduleAppointment(
     const code = (err as { code?: string }).code;
     if (code !== "P2002") throw err;
   }
+
+  markAppointmentActionStatus(sessionKey, "RESCHEDULE_CONFIRMED");
 
   return {
     status: "RESCHEDULE_CONFIRMED",

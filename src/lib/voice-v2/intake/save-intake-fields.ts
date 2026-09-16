@@ -2,7 +2,7 @@ import "server-only";
 
 import type { IntakeFieldKey, IntakeFieldStatus } from "./types";
 import { validateIntakeFieldPayload } from "./validate-fields";
-import { applyCallerAniToIntakeState } from "./caller-phone";
+import { applyCallerAniToIntakeState, redirectPhoneSaveAwayFromAni } from "./caller-phone";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
@@ -329,7 +329,8 @@ export async function executeVoiceV2SaveIntakeFields(
   trace.mark("VALIDATION_START");
   const vStart = Date.now();
   const validationRaw = validateIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
-  const normalized = stripBookingIntentOnlyServiceReason(validationRaw.normalized);
+  let normalized = stripBookingIntentOnlyServiceReason(validationRaw.normalized);
+  normalized = redirectPhoneSaveAwayFromAni(ctx, normalized);
   let validation = validationRaw;
   if (normalized !== validationRaw.normalized) {
     if (validationRaw.ok && Object.keys(normalized).length === 0) {
