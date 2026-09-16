@@ -539,6 +539,18 @@ export async function handleTexmlStatusCallback(request: Request) {
       const { destroyRealtimeSession } = await import("@/lib/voice/realtime-session/init");
       await destroyRealtimeSession(callId).catch(() => undefined);
 
+      const hangupControlId = pick(
+        eventPayload.call_control_id,
+        eventPayload.CallSid,
+        eventPayload.CallControlId,
+      );
+      const { terminateVoiceV2CallSessionOnHangup } = await import("@/lib/voice-v2/call-warmup");
+      terminateVoiceV2CallSessionOnHangup({
+        callId,
+        callControlId: hangupControlId,
+        conversationId: pick(eventPayload.conversation_id, eventPayload.ConversationId),
+      });
+
       let call = await prisma.voiceCall.findUnique({
         where: { id: callId },
       });
@@ -610,6 +622,30 @@ export async function handleTexmlStatusCallback(request: Request) {
           },
         })
         .catch(() => undefined);
+
+      const controlId = pick(
+        eventPayload.call_control_id,
+        eventPayload.CallSid,
+        eventPayload.CallControlId,
+      );
+      if (controlId) {
+        const { scheduleVoiceV2WarmupForEnsuredVoiceCall } = await import(
+          "@/lib/voice-v2/schedule-warmup-for-voice-call"
+        );
+        const warmup = await scheduleVoiceV2WarmupForEnsuredVoiceCall({
+          callId,
+          callControlId: controlId,
+          conversationId: pick(eventPayload.conversation_id, eventPayload.ConversationId),
+        }).catch((err) => {
+          console.warn("[texml-status] voice_v2_warmup", err);
+          return { scheduled: false, reason: "exception" };
+        });
+        traceMctbPipelineOk("texml-status", "voice_v2_warmup_scheduled", {
+          callId,
+          callControlId: controlId,
+          ...warmup,
+        });
+      }
     } else if (eventType === "call.initiated" || eventType === "call.ringing") {
       await prisma.voiceCall
         .update({

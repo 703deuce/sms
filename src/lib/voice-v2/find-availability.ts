@@ -27,9 +27,8 @@ import {
 } from "./graph-instrumentation";
 import { persistVoiceV2OfferSet } from "./offer-set-store";
 import { subtractBusyInterval } from "./appointment-changes/busy-exclude";
-import { resolveSessionKey } from "./intake/load-call-context";
-import { getVoiceV2CallContext } from "./intake/session-store";
 import { getAppointmentActionState } from "./appointment-changes/ref-store";
+import { resolveVoiceV2ContextForFind } from "./resolve-context-for-find";
 import { executeVoiceV2FindAvailabilityCalendly } from "./find-availability-calendly";
 import type { VoiceV2BookingStrategy } from "./booking-strategy";
 
@@ -75,7 +74,7 @@ function emptyTimingMs(): VoiceV2TimingMs {
 export async function executeVoiceV2FindAvailability(
   raw: Record<string, unknown>,
   resolvedWorkspaceId: string,
-  options?: { voiceCallId?: string | null },
+  options?: { voiceCallId?: string | null; trustedPrismaCallId?: string | null },
 ): Promise<VoiceV2FindAvailabilityResult> {
   const t0 = Date.now();
   const marks: VoiceV2TimingMarks = { REQUEST_RECEIVED: isoMark() };
@@ -219,12 +218,19 @@ export async function executeVoiceV2FindAvailability(
     marks.GRAPH_COMPLETE = isoMark();
     timingMs.GRAPH_MS = Date.now() - graphStart;
 
-    const callIdForCtx =
+    const callControlId =
       options?.voiceCallId ||
       (raw.call_id || raw.callId ? String(raw.call_id || raw.callId) : null);
-    if (callIdForCtx) {
-      const sk = resolveSessionKey({ callControlId: callIdForCtx, conversationId: null });
-      const ctx = sk ? getVoiceV2CallContext(sk) : null;
+    const conversationId =
+      raw.conversation_id || raw.conversationId
+        ? String(raw.conversation_id || raw.conversationId)
+        : null;
+    if (callControlId || conversationId || options?.trustedPrismaCallId) {
+      const ctx = await resolveVoiceV2ContextForFind({
+        callControlId,
+        conversationId,
+        trustedPrismaCallId: options?.trustedPrismaCallId,
+      });
       const action = getAppointmentActionState(ctx);
       const refId =
         String(raw.appointment_ref_id || "").trim() ||

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { executeVoiceV2FindAvailability } from "@/lib/voice-v2/find-availability";
 import { formatVoiceV2TelnyxToolResponse } from "@/lib/voice-v2/telnyx-response";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import { resolveTrustedTransovoVoiceCallId } from "@/lib/voice-v2/intake/resolve-trusted-call-id";
 
 /**
  * Isolated Telnyx webhook for Voice Booking V2 (FIND_AVAILABILITY only).
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   const callId =
     String(body.call_id || body.callId || request.headers.get("x-telnyx-call-control-id") || "") ||
     null;
+  const trustedPrismaCallId = resolveTrustedTransovoVoiceCallId({ headers: request.headers, body });
 
   const result = await executeVoiceV2FindAvailability(
     {
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
       call_id: callId,
     },
     workspaceId,
-    { voiceCallId: callId },
+    { voiceCallId: callId, trustedPrismaCallId },
   );
 
   if (result.status === "AVAILABILITY_FOUND" && callId) {
