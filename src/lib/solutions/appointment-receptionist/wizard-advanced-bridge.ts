@@ -11,6 +11,7 @@ import {
 import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
 import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
+import { calendlyConfigFromWizard } from "@/lib/voice-v2/calendly-booking-config";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
@@ -111,7 +112,9 @@ export function mergeAppointmentWizardAdvanced(
   const voiceV2Intake = wizardCollectFieldsToVoiceV2Intake(state.collectFields || []);
 
   const bookingStrategy = deriveBookingStrategyFromWizard(state);
-  const voiceV2PstnLiveBooking = bookingStrategy === "MICROSOFT_365";
+  const voiceV2PstnLiveBooking =
+    bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY";
+  const voiceV2Calendly = calendlyConfigFromWizard(state);
   const linkRaw = String(state.bookingLinkUrl || "").trim();
   const linkValidated = linkRaw ? validateBookingLinkUrl(linkRaw) : null;
   const bookingLink =
@@ -127,6 +130,7 @@ export function mergeAppointmentWizardAdvanced(
     conversationWorkflowMode: true,
     bookingStrategy,
     voiceV2PstnLiveBooking,
+    ...(voiceV2Calendly ? { voiceV2Calendly } : {}),
     ...(bookingLink ? { bookingLink, bookingLinkLabel } : {}),
     voiceV2Intake,
     receptionistAdvanced: {

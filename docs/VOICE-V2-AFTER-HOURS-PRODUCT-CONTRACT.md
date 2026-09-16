@@ -644,7 +644,7 @@ Maintain this matrix in this document. Status values:
 | LEAD_QUALIFICATION | NOT_STARTED | Reuse generic intake when built |
 | REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |
 | SEND_BOOKING_LINK | HEADLESS_CERTIFIED | `bookingStrategy=SEND_LINK` + pinned `bookingLink`; **PSTN pending** |
-| CALENDLY_BOOKING | NOT_STARTED | |
+| CALENDLY_BOOKING | HEADLESS_CERTIFIED | PSTN pending paid Calendly account |
 | RESCHEDULE | NOT_STARTED | |
 | CANCEL | NOT_STARTED | |
 | SMS_DURING_CALL | NOT_STARTED | |

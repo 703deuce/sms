@@ -57,7 +57,7 @@ export function buildVoiceV2CallCapabilitySnapshot(
   config?: VoiceAgentConfig | { advanced?: Record<string, unknown> } | null,
 ): VoiceV2CallCapabilitySnapshot {
   const strategy = resolveVoiceV2BookingStrategy(config);
-  const live = strategy === "MICROSOFT_365";
+  const live = strategy === "MICROSOFT_365" || strategy === "CALENDLY";
   const oneAmy = isVoiceV2PstnOneAmyMode(config);
   return {
     bookingStrategy: strategy,

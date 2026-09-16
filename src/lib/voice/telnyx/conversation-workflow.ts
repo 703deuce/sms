@@ -174,7 +174,7 @@ export function buildAmyConversationWorkflow(
   const liveBookingPath = v2PstnLiveBooking && v2LiveToolsReady;
   const oneAmyV2 = v2OneAmy && (v2IntakeToolsReady || liveBookingPath);
   const modeAppend =
-    bookingStrategy === "MICROSOFT_365"
+    bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY"
       ? V2_PSTN_GENERAL_APPEND
       : bookingStrategy === "REQUEST_ONLY"
         ? V2_REQUEST_ONLY_GENERAL_APPEND

@@ -49,6 +49,13 @@ export function deriveBookingStrategyFromWizard(
   ) {
     return "MICROSOFT_365";
   }
+  if (
+    perm === "book_directly" &&
+    wizard.calendarConnected &&
+    wizard.calendarProvider === "calendly"
+  ) {
+    return "CALENDLY";
+  }
   return "REQUEST_ONLY";
 }
 
@@ -75,6 +82,7 @@ export function isVoiceV2PstnOneAmyMode(
   const strategy = resolveVoiceV2BookingStrategy(config);
   return (
     strategy === "MICROSOFT_365" ||
+    strategy === "CALENDLY" ||
     strategy === "REQUEST_ONLY" ||
     strategy === "SEND_LINK" ||
     strategy === "NONE"
@@ -84,17 +92,22 @@ export function isVoiceV2PstnOneAmyMode(
 export function isVoiceV2PstnLiveBookingMode(
   config?: VoiceAgentConfig | { advanced?: Record<string, unknown> } | null,
 ): boolean {
-  return resolveVoiceV2BookingStrategy(config) === "MICROSOFT_365";
+  const strategy = resolveVoiceV2BookingStrategy(config);
+  return strategy === "MICROSOFT_365" || strategy === "CALENDLY";
 }
 
 export function voiceV2StrategyAllowsFindBook(strategy: VoiceV2BookingStrategy): boolean {
-  return strategy === "MICROSOFT_365";
+  return strategy === "MICROSOFT_365" || strategy === "CALENDLY";
 }
 
 export function voiceV2StrategyRequiresSchedulingPreference(
   strategy: VoiceV2BookingStrategy,
 ): boolean {
-  return strategy === "MICROSOFT_365" || strategy === "REQUEST_ONLY";
+  return (
+    strategy === "MICROSOFT_365" ||
+    strategy === "CALENDLY" ||
+    strategy === "REQUEST_ONLY"
+  );
 }
 
 export type VoiceV2StructuredOutcome =

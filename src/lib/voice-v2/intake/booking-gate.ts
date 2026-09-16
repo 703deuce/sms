@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { VoiceV2BookingStrategy } from "../booking-strategy";
+import { voiceV2CalendlyRequiresEmail } from "../calendly-booking-config";
 import { getIntakeReadiness } from "./readiness";
 import { ensureVoiceV2CallContext } from "./load-call-context";
 import { getVoiceV2CallContext } from "./session-store";
@@ -19,6 +21,7 @@ export async function evaluateBookingIntakeGate(input: {
   callControlId?: string | null;
   conversationId?: string | null;
   fromE164?: string | null;
+  bookingStrategy?: VoiceV2BookingStrategy;
 }): Promise<BookingIntakeGateResult> {
   const sessionKey = input.callControlId
     ? `cc:${input.callControlId.trim()}`
@@ -40,12 +43,22 @@ export async function evaluateBookingIntakeGate(input: {
   }
 
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-  if (readiness.missingBeforeBooking.length === 0) {
+  const strategy =
+    input.bookingStrategy ?? ctx.capabilities?.bookingStrategy ?? "MICROSOFT_365";
+  const missing = [...readiness.missingBeforeBooking];
+  if (
+    strategy === "CALENDLY" &&
+    voiceV2CalendlyRequiresEmail() &&
+    !ctx.intakeState.email?.value?.trim()
+  ) {
+    if (!missing.includes("email")) missing.push("email");
+  }
+  if (missing.length === 0) {
     return { allowed: true };
   }
   return {
     allowed: false,
     status: "MISSING_REQUIRED_FIELDS",
-    missing_fields: readiness.missingBeforeBooking,
+    missing_fields: missing,
   };
 }

@@ -206,6 +206,20 @@ export async function executeVoiceV2BookOfferedSlot(
     };
   }
 
+  if (slot.provider === "calendly") {
+    const { executeVoiceV2BookOfferedSlotCalendly } = await import("./book-offered-slot-calendly");
+    return executeVoiceV2BookOfferedSlotCalendly(raw, workspaceId, {
+      agentId: options?.agentId,
+      offerSetId,
+      selectedSlotId,
+      idempotencyKey,
+      callId,
+      marks,
+      timingMs,
+      t0,
+    });
+  }
+
   const startUtc = new Date(slot.start_utc);
   const endUtc = new Date(slot.end_utc);
   if (Number.isNaN(startUtc.getTime()) || Number.isNaN(endUtc.getTime())) {

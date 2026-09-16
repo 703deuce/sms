@@ -58,6 +58,15 @@ export function AppointmentsStep({
     Array<{ provider: string; status: string; config?: Record<string, unknown> | null }>
   >([]);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
+  const [calendlyEventTypes, setCalendlyEventTypes] = useState<
+    Array<{ uri: string; name: string; durationMinutes: number }>
+  >([]);
+  const [calendlyEventTypesError, setCalendlyEventTypesError] = useState<string | null>(null);
+  const [calendlyCapabilities, setCalendlyCapabilities] = useState<{
+    directBookingPreflightOk?: boolean;
+    planBlocked?: boolean;
+    connected?: boolean;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -103,6 +112,37 @@ export function AppointmentsStep({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if ((state.bookingStrategy || "MICROSOFT_365") !== "CALENDLY") return;
+    void (async () => {
+      setCalendlyEventTypesError(null);
+      try {
+        const [typesRes, capRes] = await Promise.all([
+          fetch("/api/integrations/calendly/event-types"),
+          fetch("/api/integrations/calendly/capabilities"),
+        ]);
+        const typesJson = await typesRes.json().catch(() => ({}));
+        const capJson = await capRes.json().catch(() => ({}));
+        if (!typesRes.ok) {
+          setCalendlyEventTypesError(
+            String(typesJson.error || "Could not load Calendly event types."),
+          );
+          setCalendlyEventTypes([]);
+        } else {
+          const rows = (typesJson.data || []) as Array<{
+            uri: string;
+            name: string;
+            durationMinutes: number;
+          }>;
+          setCalendlyEventTypes(rows);
+        }
+        setCalendlyCapabilities(capJson.data || null);
+      } catch {
+        setCalendlyEventTypesError("Could not load Calendly event types.");
+      }
+    })();
+  }, [state.bookingStrategy, state.calendarConnected, state.calendarProvider]);
 
   async function connectCalendar(providerId: string) {
     setBusyProvider(providerId);
@@ -291,7 +331,12 @@ export function AppointmentsStep({
                 [
                   "MICROSOFT_365",
                   "Book an appointment for them",
-                  "Check live calendar availability and book on the call.",
+                  "Check live calendar availability and book on the call (Microsoft 365).",
+                ],
+                [
+                  "CALENDLY",
+                  "Book appointments with Calendly",
+                  "Check real Calendly availability and book on the call (paid Calendly plan).",
                 ],
                 [
                   "REQUEST_ONLY",
@@ -321,16 +366,71 @@ export function AppointmentsStep({
                   } else {
                     caps.add("book_appointments");
                   }
-                  patch({
+                  const next: Partial<AppointmentReceptionistWizardState> = {
                     bookingStrategy: id,
                     capabilities: [...caps],
-                  });
+                  };
+                  if (id === "CALENDLY") {
+                    next.calendarProvider = "calendly";
+                  }
+                  if (id === "MICROSOFT_365") {
+                    next.calendarProvider =
+                      state.calendarProvider === "calendly" ? "microsoft" : state.calendarProvider;
+                  }
+                  patch(next);
                 }}
                 label={label}
                 description={desc}
               />
             ))}
           </div>
+          {(state.bookingStrategy || "MICROSOFT_365") === "CALENDLY" ? (
+            <div className="mt-4 space-y-3 border-t border-border pt-4">
+              {calendlyCapabilities?.planBlocked ? (
+                <InfoCallout>
+                  Direct Calendly booking requires a supported paid Calendly plan (Standard or
+                  above). You can use &quot;Send our booking link&quot; instead, or upgrade Calendly.
+                </InfoCallout>
+              ) : null}
+              {!state.calendarConnected || state.calendarProvider !== "calendly" ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect Calendly above, then choose the event type Amy should book.
+                </p>
+              ) : null}
+              <label className="block text-sm font-medium" htmlFor="calendly-event-type">
+                Calendly event type
+              </label>
+              <select
+                id="calendly-event-type"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                value={state.calendlyEventTypeUri || ""}
+                onChange={(e) => {
+                  const uri = e.target.value;
+                  const row = calendlyEventTypes.find((t) => t.uri === uri);
+                  patch({
+                    calendlyEventTypeUri: uri || null,
+                    calendlyEventTypeName: row?.name || null,
+                    calendlyEventTypeDurationMin: row?.durationMinutes ?? null,
+                  });
+                }}
+                disabled={!calendlyEventTypes.length}
+              >
+                <option value="">Select event type…</option>
+                {calendlyEventTypes.map((t) => (
+                  <option key={t.uri} value={t.uri}>
+                    {t.name} ({t.durationMinutes} min)
+                  </option>
+                ))}
+              </select>
+              {calendlyEventTypesError ? (
+                <p className="text-[12px] text-destructive">{calendlyEventTypesError}</p>
+              ) : null}
+              <p className="text-[12px] text-muted-foreground">
+                Amy books only this event type. Caller email is required before confirming a
+                Calendly booking.
+              </p>
+            </div>
+          ) : null}
           {(state.bookingStrategy || "MICROSOFT_365") === "SEND_LINK" ? (
             <div className="mt-4 space-y-3 border-t border-border pt-4">
               <label className="block text-sm font-medium" htmlFor="booking-link-url">

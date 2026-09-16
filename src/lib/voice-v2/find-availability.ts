@@ -30,6 +30,8 @@ import { subtractBusyInterval } from "./appointment-changes/busy-exclude";
 import { resolveSessionKey } from "./intake/load-call-context";
 import { getVoiceV2CallContext } from "./intake/session-store";
 import { getAppointmentActionState } from "./appointment-changes/ref-store";
+import { executeVoiceV2FindAvailabilityCalendly } from "./find-availability-calendly";
+import type { VoiceV2BookingStrategy } from "./booking-strategy";
 
 function isoMark(): string {
   return new Date().toISOString();
@@ -89,6 +91,7 @@ export async function executeVoiceV2FindAvailability(
     timingMs.VALIDATION_MS = Date.now() - vStart;
 
     const agentId = String(raw.agent_id || raw.agentId || "").trim();
+    let bookingStrategy: VoiceV2BookingStrategy = "MICROSOFT_365";
     if (agentId) {
       const sessionKey = resolveSessionKey({
         callControlId: options?.voiceCallId || String(raw.call_id || raw.callId || ""),
@@ -115,6 +118,11 @@ export async function executeVoiceV2FindAvailability(
           },
         };
       }
+      bookingStrategy = gate.strategy;
+    }
+
+    if (bookingStrategy === "CALENDLY") {
+      return executeVoiceV2FindAvailabilityCalendly(raw, resolvedWorkspaceId, options);
     }
 
     const wsStart = Date.now();

@@ -166,6 +166,11 @@ export type AppointmentReceptionistWizardState = {
   /** Trusted booking URL when bookingStrategy is SEND_LINK. */
   bookingLinkUrl?: string | null;
   bookingLinkLabel?: string | null;
+  /** Calendly event type for bookingStrategy CALENDLY */
+  calendlyEventTypeUri?: string | null;
+  calendlyEventTypeName?: string | null;
+  calendlyEventTypeDurationMin?: number | null;
+  calendlyTimezone?: string | null;
 
   bookingBehavior: {
     askPreferredDayFirst: boolean;

@@ -20,6 +20,12 @@ export type VoiceV2Slot = {
   spoken_label?: string;
   start_utc: string;
   end_utc: string;
+  /** Provider dispatch for BOOK — not exposed to the model */
+  provider?: "microsoft" | "calendly";
+  provider_metadata?: {
+    event_type_uri?: string;
+    calendly_start_time?: string;
+  };
 };
 
 export type VoiceV2TimingMarks = {
