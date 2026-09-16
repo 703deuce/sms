@@ -133,6 +133,13 @@ export async function updateVoiceAgentDraft(
       }
     : prevConfig;
 
+  if (
+    (nextConfig.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard
+  ) {
+    const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
+    nextConfig = recompileReceptionistFromDraft(nextConfig);
+  }
+
   // Flux profiles must not keep a leftover local endpointingMs from a prior cascade.
   {
     const { isFluxEagerLatencyProfile } = await import("./latency-profiles");
@@ -165,11 +172,16 @@ export async function updateVoiceAgentDraft(
     // Publish/activate claims exclusively via publishVoiceAgent → sync (exclusive).
     const nextStatus = patch.status || existing.status;
     const exclusive = nextStatus === "ACTIVE";
+    const appointmentWizard = Boolean(
+      (nextConfig.advanced as Record<string, unknown> | undefined)
+        ?.appointmentReceptionistWizard,
+    );
     await syncVoiceAgentPhoneAssignment({
       workspaceId,
       agentId,
       phoneNumberId: patch.phoneNumberId,
       exclusive,
+      allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
     });
 
     // LiveKit: provision Telnyx FQDN + shared trunk when an ACTIVE agent gets a DID.
@@ -480,11 +492,15 @@ export async function publishVoiceAgent(
 
   try {
     const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+    const appointmentWizard = Boolean(
+      (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
+    );
     await syncVoiceAgentPhoneAssignment({
       workspaceId,
       agentId,
       phoneNumberId: updated.phoneNumberId,
       exclusive: true,
+      allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
     });
   } catch (err) {
     console.error("[voice] phone assignment sync failed", err);

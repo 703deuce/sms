@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSession, jsonError } from "@/lib/api-auth";
 import { getPrisma } from "@/lib/db";
+import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
 
 type AiOwnerInfo = {
   id: string;
@@ -19,10 +20,17 @@ export async function GET() {
       e164: string;
       friendlyName: string | null;
       status: string;
+      settingsJson: unknown;
     }> = await prisma.phoneNumber.findMany({
       where: { workspaceId: auth.workspaceId },
       orderBy: { e164: "asc" },
-      select: { id: true, e164: true, friendlyName: true, status: true },
+      select: {
+        id: true,
+        e164: true,
+        friendlyName: true,
+        status: true,
+        settingsJson: true,
+      },
     });
 
     if (rows.length === 0) {
@@ -125,6 +133,7 @@ export async function GET() {
             }
           : null,
         hasSoftphoneAssignment: softphonePhones.has(row.id),
+        mctbTexmlLocked: isMctbTexmlIngressLocked(row.settingsJson),
       };
     });
 

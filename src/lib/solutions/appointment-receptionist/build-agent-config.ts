@@ -14,6 +14,8 @@ import { compileVoiceAgentPromptFromWizard } from "@/lib/voice/prompt/compile-vo
 import { buildBusinessKnowledgePromptSection } from "@/lib/voice/prompt/build-business-context";
 import { applyAmyMinimumSideEffectConfig } from "@/lib/voice/telnyx/amy-minimum-side-effect";
 import { buildDefaultOutboundSmsMessaging } from "@/lib/voice/sms/voice-outbound-sms-config";
+import { mergeAppointmentWizardAdvanced } from "./wizard-advanced-bridge";
+import { recompileReceptionistFromDraft } from "@/lib/voice/receptionist/recompile";
 
 export { buildBusinessKnowledgePromptSection };
 
@@ -364,7 +366,7 @@ export function buildWizardAgentConfig(
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
 
-  return applyAmyMinimumSideEffectConfig({
+  const draft = applyAmyMinimumSideEffectConfig({
     ...base,
     identity: {
       ...base.identity,
@@ -548,7 +550,7 @@ export function buildWizardAgentConfig(
       ],
       scoringRules: base.postCall?.scoringRules,
     },
-    advanced: {
+    advanced: mergeAppointmentWizardAdvanced(state, {
       ...(base.advanced || {}),
       appointmentReceptionistWizard: {
         // Full wizard snapshot so scheduled promote can re-run activate hooks.
@@ -569,7 +571,6 @@ export function buildWizardAgentConfig(
         scheduledAt: state.scheduledAt || null,
         lastTestPassed: state.lastTestPassed,
       },
-      capabilityPack: "appointment_receptionist",
       ...(state.longTermMemory
         ? {
             memory: {
@@ -585,7 +586,9 @@ export function buildWizardAgentConfig(
             },
           }),
       voiceArchitectureVersion: "telnyx-production-v1",
-    },
+    }),
   });
+
+  return recompileReceptionistFromDraft(draft);
 }
 

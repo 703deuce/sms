@@ -11,6 +11,7 @@ import {
   compileReceptionistConfig,
   type ReceptionistDraftInput,
 } from "./compile";
+import { mergeAppointmentWizardAdvanced } from "@/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
 import { getReceptionistCompiledFromAdvanced } from "./runtime";
 import {
   getLiveKitAgentTemplateFromAdvanced,
@@ -85,10 +86,15 @@ export function recompileReceptionistFromDraft(config: VoiceAgentConfig): VoiceA
     | AppointmentReceptionistWizardState
     | undefined;
   if (!wizard && appointmentWizard) {
-    const draftInput = appointmentWizardToDraftInput(appointmentWizard, config, advanced || {});
+    const mergedAdvanced = mergeAppointmentWizardAdvanced(appointmentWizard, advanced || {});
+    const draftInput = appointmentWizardToDraftInput(
+      appointmentWizard,
+      config,
+      mergedAdvanced,
+    );
     const snapshot = compileReceptionistConfig(draftInput);
     return applyCompiledToVoiceConfig(config, snapshot, {
-      ...(advanced || {}),
+      ...mergedAdvanced,
       appointmentReceptionistWizard: appointmentWizard,
     });
   }

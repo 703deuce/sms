@@ -40,7 +40,9 @@ function readCallerFields(config: VoiceAgentConfig | null | undefined): CallerFi
 }
 
 export function callerFieldIdToIntakeKey(id: string): string {
-  const trimmed = id.trim();
+  let trimmed = id.trim();
+  if (trimmed === "full_name") trimmed = "name";
+  if (trimmed.startsWith("custom_")) trimmed = trimmed.slice("custom_".length);
   return CALLER_ID_TO_INTAKE_KEY[trimmed] ?? trimmed;
 }
 

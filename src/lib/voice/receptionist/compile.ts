@@ -132,7 +132,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   }
 
   let fieldManifest: AgentFieldDefinition[] = [];
-  if (caps.has("collect_info")) {
+  if (caps.has("collect_info") || caps.has("book_appointments")) {
     if (advanced?.callerFields?.length) {
       fieldManifest = fieldManifestFromAdvancedRows(advanced.callerFields);
     } else {

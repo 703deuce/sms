@@ -19,6 +19,7 @@ type PhoneRow = {
   status: string;
   aiOwner?: { id: string; name: string; status: string } | null;
   hasSoftphoneAssignment?: boolean;
+  mctbTexmlLocked?: boolean;
 };
 
 const GREETING_OPTIONS: Array<{ id: ConnectionGreetingMode; label: string }> = [
@@ -299,6 +300,11 @@ export function PhoneStep({
                     {formatPhone(n.e164)}
                     {n.friendlyName ? ` · ${n.friendlyName}` : ""}
                   </span>
+                  {n.mctbTexmlLocked ? (
+                    <span className="mt-0.5 block font-normal text-amber-700">
+                      MCTB TeXML ingress — activate here to route this number to this receptionist
+                    </span>
+                  ) : null}
                   {ownedByOther ? (
                     <span className="mt-0.5 block font-normal text-muted-foreground">
                       Currently answered by {ownedByOther.name}
@@ -321,6 +327,13 @@ export function PhoneStep({
                 Selecting this number switches inbound calls from{" "}
                 <strong>{otherOwner.name}</strong> to this appointment receptionist when you
                 activate. Only one AI agent answers a number at a time.
+              </InfoCallout>
+            ) : null}
+            {selected?.mctbTexmlLocked ? (
+              <InfoCallout>
+                This number is currently marked for MCTB TeXML missed-call recovery. When you
+                save or activate this receptionist, Transovo will switch inbound routing to this
+                Voice Agent for this DID only. Other MCTB numbers are unchanged.
               </InfoCallout>
             ) : null}
             {selected?.hasSoftphoneAssignment ? (
