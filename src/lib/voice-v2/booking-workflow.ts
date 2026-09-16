@@ -3,6 +3,7 @@
  * No FIND/BOOK/Graph changes — stage authority for tool responses + prompts.
  */
 
+import type { VoiceV2BookingStrategy } from "./booking-strategy";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
 
 export type VoiceV2NextStage =
@@ -12,6 +13,7 @@ export type VoiceV2NextStage =
   | "OFFER_SLOTS"
   | "BOOK_SELECTED_SLOT"
   | "BOOKING_CONFIRMED"
+  | "FINALIZE_CALLER_REQUEST"
   | "CALLBACK_REQUESTED"
   | "HANDOFF_REQUIRED"
   | "COMPLETE";
@@ -23,6 +25,8 @@ export interface VoiceV2BookingWorkflow {
   callbackRequested: boolean;
   bookingCancelled: boolean;
   bookingConfirmed: boolean;
+  /** Caller request accepted into durable follow-up (message or appointment request). */
+  callerRequestFinalized: boolean;
   /** YYYY-MM-DD when caller or FIND supplied a date */
   requestedDate: string | null;
   /** Last date passed to FIND (dedupe guidance) */
@@ -44,6 +48,7 @@ export function defaultVoiceV2BookingWorkflow(): VoiceV2BookingWorkflow {
     callbackRequested: false,
     bookingCancelled: false,
     bookingConfirmed: false,
+    callerRequestFinalized: false,
     requestedDate: null,
     lastFindRequestedDate: null,
     nextStage: "COLLECT_REQUIRED_INTAKE",
@@ -100,6 +105,7 @@ export function isBookingWorkflowTerminal(w: VoiceV2BookingWorkflow): boolean {
     w.bookingConfirmed ||
     w.bookingCancelled ||
     w.callbackRequested ||
+    w.callerRequestFinalized ||
     w.nextStage === "BOOKING_CONFIRMED" ||
     w.nextStage === "COMPLETE" ||
     w.nextStage === "CALLBACK_REQUESTED"
@@ -108,9 +114,18 @@ export function isBookingWorkflowTerminal(w: VoiceV2BookingWorkflow): boolean {
 
 export function evaluateBookingContinueRequired(input: {
   voiceV2PstnLiveBooking: boolean;
+  bookingStrategy?: VoiceV2BookingStrategy;
   workflow: VoiceV2BookingWorkflow;
   readiness: IntakeReadinessResult;
 }): boolean {
+  const strategy = input.bookingStrategy ?? (input.voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
+  if (strategy === "REQUEST_ONLY") {
+    if (!input.workflow.bookingIntentActive) return false;
+    if (isBookingWorkflowTerminal(input.workflow)) return false;
+    if (input.readiness.missingForRecord.length > 0) return true;
+    if (!input.workflow.requestedDate) return true;
+    return !input.workflow.callerRequestFinalized;
+  }
   if (!input.voiceV2PstnLiveBooking) return false;
   if (!input.workflow.bookingIntentActive) return false;
   if (isBookingWorkflowTerminal(input.workflow)) return false;
@@ -122,11 +137,24 @@ export function deriveVoiceV2NextStage(input: {
   workflow: VoiceV2BookingWorkflow;
   readiness: IntakeReadinessResult;
   hasActiveOfferSet: boolean;
+  bookingStrategy?: VoiceV2BookingStrategy;
 }): VoiceV2NextStage {
   const w = input.workflow;
+  const strategy = input.bookingStrategy ?? "MICROSOFT_365";
   if (w.bookingConfirmed) return "BOOKING_CONFIRMED";
+  if (w.callerRequestFinalized) return "COMPLETE";
   if (w.callbackRequested) return "CALLBACK_REQUESTED";
   if (w.bookingCancelled) return "COMPLETE";
+  if (strategy === "NONE") {
+    if (input.readiness.missingForRecord.length > 0) return "COLLECT_REQUIRED_INTAKE";
+    return "FINALIZE_CALLER_REQUEST";
+  }
+  if (strategy === "REQUEST_ONLY") {
+    if (!w.bookingIntentActive) return "COLLECT_REQUIRED_INTAKE";
+    if (input.readiness.missingForRecord.length > 0) return "COLLECT_REQUIRED_INTAKE";
+    if (!w.requestedDate) return "COLLECT_SCHEDULING_PREFERENCE";
+    return "FINALIZE_CALLER_REQUEST";
+  }
   if (!w.bookingIntentActive) return "COLLECT_REQUIRED_INTAKE";
   if (input.readiness.missingBeforeBooking.length > 0) return "COLLECT_REQUIRED_INTAKE";
   if (input.hasActiveOfferSet) return "OFFER_SLOTS";
@@ -148,6 +176,8 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
       return ["voice_v2_book_offered_slot"];
     case "BOOKING_CONFIRMED":
       return [];
+    case "FINALIZE_CALLER_REQUEST":
+      return ["voice_v2_finalize_caller_request"];
     case "CALLBACK_REQUESTED":
       return ["callback_path"];
     case "HANDOFF_REQUIRED":
@@ -173,6 +203,8 @@ export function runtimeHintForStage(
       return "Intake complete. Ask what day works for the appointment. Do not close with callback or follow-up.";
     case "FIND_AVAILABILITY":
       return "Intake complete and date is known. Acknowledge the date briefly, then call voice_v2_find_availability now. Do not ask for the day again. Do not callback-close.";
+    case "FINALIZE_CALLER_REQUEST":
+      return "You have enough to send this to the team. Call voice_v2_finalize_caller_request. Do not say the appointment is confirmed or booked.";
     case "OFFER_SLOTS":
       return "Offer returned slots only. When caller picks one, call voice_v2_book_offered_slot.";
     case "CALLBACK_REQUESTED":
@@ -193,18 +225,23 @@ export function mergeWorkflowIntoContext(
 
 export function buildWorkflowToolPayload(input: {
   voiceV2PstnLiveBooking: boolean;
+  bookingStrategy?: VoiceV2BookingStrategy;
   workflow: VoiceV2BookingWorkflow;
   readiness: IntakeReadinessResult;
   hasActiveOfferSet?: boolean;
 }): Record<string, unknown> {
+  const strategy =
+    input.bookingStrategy ?? (input.voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
   const nextStage = deriveVoiceV2NextStage({
     workflow: input.workflow,
     readiness: input.readiness,
     hasActiveOfferSet: input.hasActiveOfferSet ?? false,
+    bookingStrategy: strategy,
   });
   const workflow = { ...input.workflow, nextStage };
   const booking_continue_required = evaluateBookingContinueRequired({
     voiceV2PstnLiveBooking: input.voiceV2PstnLiveBooking,
+    bookingStrategy: strategy,
     workflow,
     readiness: input.readiness,
   });
@@ -235,6 +272,7 @@ export function transitionAfterIntakeSave(input: {
   savedKeys: IntakeFieldKey[];
   readiness: IntakeReadinessResult;
   voiceV2PstnLiveBooking: boolean;
+  bookingStrategy?: VoiceV2BookingStrategy;
 }): VoiceV2CallContext {
   let workflow = applyIntakeWorkflowSignals(workflowFromContext(input.ctx), {
     raw: input.raw,
@@ -250,13 +288,27 @@ export function transitionAfterIntakeSave(input: {
     Boolean(input.ctx.currentOfferSet?.offerSetId) &&
     (input.ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
 
+  const strategy =
+    input.bookingStrategy ??
+    input.ctx.capabilities?.bookingStrategy ??
+    (input.voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
   workflow.nextStage = deriveVoiceV2NextStage({
     workflow,
     readiness: input.readiness,
     hasActiveOfferSet: hasOffer,
+    bookingStrategy: strategy,
   });
 
   return mergeWorkflowIntoContext(input.ctx, workflow);
+}
+
+export function transitionAfterCallerRequestFinalized(ctx: VoiceV2CallContext): VoiceV2CallContext {
+  const workflow = {
+    ...workflowFromContext(ctx),
+    callerRequestFinalized: true,
+    nextStage: "COMPLETE" as VoiceV2NextStage,
+  };
+  return mergeWorkflowIntoContext(ctx, workflow);
 }
 
 export function transitionAfterFind(input: {

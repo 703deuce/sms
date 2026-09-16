@@ -68,6 +68,7 @@ export interface VoiceV2CallContext {
   /** Pinned capabilities from enrollment / L2 record (warm tool path). */
   capabilities?: {
     voiceV2PstnLiveBooking?: boolean;
+    bookingStrategy?: import("../booking-strategy").VoiceV2BookingStrategy;
     bookingEnabled?: boolean;
     intakeEnabled?: boolean;
     rescheduleEnabled?: boolean;

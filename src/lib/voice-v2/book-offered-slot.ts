@@ -93,6 +93,33 @@ export async function executeVoiceV2BookOfferedSlot(
     raw.tool_invocation_id || raw.toolInvocationId || raw.invocation_id || "",
   ).trim();
   const callId = raw.call_id || raw.callId ? String(raw.call_id || raw.callId) : null;
+  const agentId = String(options?.agentId || raw.agent_id || raw.agentId || "").trim();
+  if (agentId) {
+    const { resolveSessionKey } = await import("./intake/load-call-context");
+    const { getVoiceV2CallContext } = await import("./intake/session-store");
+    const sessionKey = resolveSessionKey({
+      callControlId: callId,
+      conversationId: String(raw.conversation_id || raw.conversationId || ""),
+    });
+    const ctx = sessionKey ? getVoiceV2CallContext(sessionKey) : null;
+    const gate = await (
+      await import("./authorize-find-book")
+    ).assertVoiceV2FindBookAllowed({
+      workspaceId,
+      agentId,
+      ctx,
+    });
+    if (!gate.allowed) {
+      timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
+      marks.RESPONSE_SENT = isoMark();
+      return {
+        status: "ERROR",
+        error: gate.status,
+        timing: marks,
+        timing_ms: timingMs,
+      };
+    }
+  }
 
   if (!offerSetId || !selectedSlotId) {
     timingMs.TOTAL_BACKEND_MS = Date.now() - t0;

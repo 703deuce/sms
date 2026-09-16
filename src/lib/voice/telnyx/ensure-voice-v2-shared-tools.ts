@@ -20,7 +20,12 @@ import {
   VOICE_V2_CANCEL_BODY,
   VOICE_V2_CANCEL_TOOL_TYPE,
   VOICE_V2_CANCEL_TELNYX_TOOL_NAME,
+  VOICE_V2_FINALIZE_CALLER_REQUEST_BODY,
+  VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
+  VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
+import type { VoiceV2BookingStrategy } from "@/lib/voice-v2/booking-strategy";
+import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
 import type { VoiceV2SharedToolIds } from "./voice-v2-shared-tools";
 
 function unwrapToolId(res: unknown): string | null {
@@ -87,7 +92,46 @@ async function ensureSharedWebhookTool(input: {
 export async function ensureVoiceV2SharedToolsForAgent(input: {
   workspaceId: string;
   agentId: string;
+  bookingStrategy?: VoiceV2BookingStrategy;
 }): Promise<VoiceV2SharedToolIds> {
+  const strategy = input.bookingStrategy ?? "MICROSOFT_365";
+  const liveFindBook = voiceV2StrategyAllowsFindBook(strategy);
+
+  const saveIntakeId = await ensureSharedWebhookTool({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    displayName: VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/save-intake-fields",
+    bodyParameters: VOICE_V2_SAVE_INTAKE_BODY,
+    timeoutMs: 5000,
+    description: "Voice Booking V2: save caller intake fields in one call.",
+  });
+
+  const finalizeRequestId = await ensureSharedWebhookTool({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    displayName: VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
+    toolType: VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
+    urlPath: "/api/telnyx/voice-v2/finalize-caller-request",
+    bodyParameters: VOICE_V2_FINALIZE_CALLER_REQUEST_BODY,
+    timeoutMs: 8000,
+    description:
+      "Accept caller message or appointment request for business follow-up (not live booking).",
+  });
+
+  if (!liveFindBook) {
+    return {
+      findId: null,
+      bookId: null,
+      saveIntakeId,
+      findExistingId: null,
+      rescheduleId: null,
+      cancelId: null,
+      finalizeRequestId,
+    };
+  }
+
   const findId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
@@ -107,16 +151,6 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     bodyParameters: VOICE_V2_BOOK_OFFERED_SLOT_BODY,
     timeoutMs: 15000,
     description: "Voice Booking V2: book using offer_set_id + selected_slot_id.",
-  });
-  const saveIntakeId = await ensureSharedWebhookTool({
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    displayName: VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
-    toolType: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
-    urlPath: "/api/telnyx/voice-v2/save-intake-fields",
-    bodyParameters: VOICE_V2_SAVE_INTAKE_BODY,
-    timeoutMs: 5000,
-    description: "Voice Booking V2: save caller intake fields in one call.",
   });
   const findExistingId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
@@ -148,5 +182,13 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     timeoutMs: 15000,
     description: "Voice V2: cancel an existing appointment after caller confirmation.",
   });
-  return { findId, bookId, saveIntakeId, findExistingId, rescheduleId, cancelId };
+  return {
+    findId,
+    bookId,
+    saveIntakeId,
+    findExistingId,
+    rescheduleId,
+    cancelId,
+    finalizeRequestId,
+  };
 }

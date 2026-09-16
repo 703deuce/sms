@@ -5,7 +5,12 @@
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { isAfterHoursVoiceProfile } from "@/lib/voice/runtime/voice-profile";
 import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
-import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  isVoiceV2PstnLiveBookingMode,
+  isVoiceV2PstnOneAmyMode,
+  resolveVoiceV2BookingStrategy,
+} from "@/lib/voice-v2/pstn-workflow-mode";
+import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
 import {
   expressionEdgeCondition,
   exprVarEqualsBool,
@@ -31,6 +36,7 @@ export type WorkflowSharedToolIds = {
   voiceV2Find?: string | null;
   voiceV2Book?: string | null;
   voiceV2SaveIntake?: string | null;
+  voiceV2FinalizeRequest?: string | null;
   voiceV2FindExisting?: string | null;
   voiceV2Reschedule?: string | null;
   voiceV2Cancel?: string | null;
@@ -84,6 +90,20 @@ const V2_PSTN_GENERAL_APPEND = [
   "Callback or text link is fallback only after a tool failure or if the caller declines live scheduling.",
 ].join(" ");
 
+const V2_REQUEST_ONLY_GENERAL_APPEND = [
+  "Appointment handling: take the caller's preferred day/time and details — do NOT check live calendar availability.",
+  "Use voice_v2_save_intake_fields for configured fields and scheduling preferences.",
+  "When enough information is collected, call voice_v2_finalize_caller_request.",
+  "Never say the appointment is confirmed, booked, or that a time is available.",
+  "Tell the caller the team will follow up to confirm.",
+].join(" ");
+
+const V2_MESSAGE_ONLY_GENERAL_APPEND = [
+  "Take a message or callback request — do not steer into live booking.",
+  "Use voice_v2_save_intake_fields for configured caller information.",
+  "When ready, call voice_v2_finalize_caller_request to send the message to the business.",
+].join(" ");
+
 const LIVE_BOOKING_V2_INSTRUCTIONS = [
   "Live Voice V2 booking on this call.",
   "Save intake with voice_v2_save_intake_fields when the caller provides configured fields.",
@@ -132,14 +152,27 @@ export function buildAmyConversationWorkflow(
   const wizard = wizardFromConfig(config);
   const afterHours = wizard ? isAfterHoursVoiceProfile(wizard) : false;
   const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(config);
+  const bookingStrategy = resolveVoiceV2BookingStrategy(config);
   const v2PstnLiveBooking = isVoiceV2PstnLiveBookingMode(config);
+  const v2OneAmy = isVoiceV2PstnOneAmyMode(config);
   const v2LiveToolsReady = Boolean(
     toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake,
   );
+  const v2IntakeToolsReady = Boolean(
+    toolIds.voiceV2SaveIntake && toolIds.voiceV2FinalizeRequest,
+  );
   const liveBookingPath = v2PstnLiveBooking && v2LiveToolsReady;
-  const oneAmyV2 = liveBookingPath;
+  const oneAmyV2 = v2OneAmy && (v2IntakeToolsReady || liveBookingPath);
+  const modeAppend =
+    bookingStrategy === "MICROSOFT_365"
+      ? V2_PSTN_GENERAL_APPEND
+      : bookingStrategy === "REQUEST_ONLY"
+        ? V2_REQUEST_ONLY_GENERAL_APPEND
+        : bookingStrategy === "NONE"
+          ? V2_MESSAGE_ONLY_GENERAL_APPEND
+          : "";
   const generalInstructions = oneAmyV2
-    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${ONE_AMY_V2_WORKFLOW_APPEND}`
+    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${modeAppend} ${ONE_AMY_V2_WORKFLOW_APPEND}`
     : liveBookingPath
     ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${V2_PSTN_GENERAL_APPEND}`
     : canonicalBooking
@@ -156,11 +189,16 @@ export function buildAmyConversationWorkflow(
 
   const v2ToolIds = [
     toolIds.voiceV2SaveIntake,
-    toolIds.voiceV2Find,
-    toolIds.voiceV2Book,
-    toolIds.voiceV2FindExisting,
-    toolIds.voiceV2Reschedule,
-    toolIds.voiceV2Cancel,
+    toolIds.voiceV2FinalizeRequest,
+    ...(voiceV2StrategyAllowsFindBook(bookingStrategy)
+      ? [
+          toolIds.voiceV2Find,
+          toolIds.voiceV2Book,
+          toolIds.voiceV2FindExisting,
+          toolIds.voiceV2Reschedule,
+          toolIds.voiceV2Cancel,
+        ]
+      : []),
   ].filter(Boolean) as string[];
 
   const nodes: Record<string, unknown>[] = [
@@ -376,12 +414,12 @@ export function workflowNodeExpectedTools(
 ): string[] {
   switch (nodeId) {
     case WORKFLOW_NODE_IDS.GENERAL:
-      if (toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake) {
-        return [
-          "voice_v2_save_intake_fields",
-          "voice_v2_find_availability",
-          "voice_v2_book_offered_slot",
-        ];
+      if (toolIds.voiceV2SaveIntake && toolIds.voiceV2FinalizeRequest) {
+        const names = ["voice_v2_save_intake_fields", "voice_v2_finalize_caller_request"];
+        if (toolIds.voiceV2Find && toolIds.voiceV2Book) {
+          names.push("voice_v2_find_availability", "voice_v2_book_offered_slot");
+        }
+        return names;
       }
       return [];
     // Legacy canonical booking only — V2 PSTN uses one-Amy tools on GENERAL.

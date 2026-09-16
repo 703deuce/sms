@@ -4,6 +4,7 @@ import type {
   AppointmentReceptionistWizardState,
   AppointmentTypeConfig,
   BookingPermission,
+  VoiceWizardBookingStrategy,
 } from "@/lib/solutions/appointment-receptionist/types";
 import {
   isLiveCalendarStatus,
@@ -274,6 +275,61 @@ export function AppointmentsStep({
                 />
               );
             })}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            When someone wants an appointment
+          </p>
+          <p className="mt-1 mb-3 text-[12px] text-muted-foreground">
+            Amy stays the same assistant — this chooses what she is allowed to do on the call.
+          </p>
+          <div className="space-y-2">
+            {(
+              [
+                [
+                  "MICROSOFT_365",
+                  "Book an appointment for them",
+                  "Check live calendar availability and book on the call.",
+                ],
+                [
+                  "REQUEST_ONLY",
+                  "Take their preferred time and have us confirm it",
+                  "Collect preferred day/time and details — the team confirms later.",
+                ],
+                [
+                  "SEND_LINK",
+                  "Send our booking link",
+                  "Text a link so they can pick a time themselves.",
+                ],
+                [
+                  "NONE",
+                  "Take a message / have us follow up",
+                  "General message or callback — not an appointment request flow.",
+                ],
+              ] as Array<[VoiceWizardBookingStrategy, string, string]>
+            ).map(([id, label, desc]) => (
+              <RadioRow
+                key={id}
+                selected={(state.bookingStrategy || "MICROSOFT_365") === id}
+                onClick={() => {
+                  const caps = new Set(state.capabilities);
+                  if (id === "NONE") {
+                    caps.delete("book_appointments");
+                    caps.add("take_messages");
+                  } else {
+                    caps.add("book_appointments");
+                  }
+                  patch({
+                    bookingStrategy: id,
+                    capabilities: [...caps],
+                  });
+                }}
+                label={label}
+                description={desc}
+              />
+            ))}
           </div>
         </div>
 

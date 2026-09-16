@@ -3,7 +3,9 @@ import { BUILTIN_INTAKE_FIELD_KEYS } from "./wizard-config";
 
 /** True when Voice V2 intake is the sole live field authority (Step 1 booking). */
 export function useVoiceV2IntakeAuthority(capabilities: string[]): boolean {
-  return capabilities.includes("book_appointments");
+  return (
+    capabilities.includes("book_appointments") || capabilities.includes("take_messages")
+  );
 }
 
 const REQ_LABEL: Record<string, string> = {

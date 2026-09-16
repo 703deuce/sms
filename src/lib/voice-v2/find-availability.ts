@@ -88,6 +88,35 @@ export async function executeVoiceV2FindAvailability(
     marks.INPUT_VALIDATED = isoMark();
     timingMs.VALIDATION_MS = Date.now() - vStart;
 
+    const agentId = String(raw.agent_id || raw.agentId || "").trim();
+    if (agentId) {
+      const sessionKey = resolveSessionKey({
+        callControlId: options?.voiceCallId || String(raw.call_id || raw.callId || ""),
+        conversationId: String(raw.conversation_id || raw.conversationId || ""),
+      });
+      const ctx = sessionKey ? getVoiceV2CallContext(sessionKey) : null;
+      const gate = await (
+        await import("./authorize-find-book")
+      ).assertVoiceV2FindBookAllowed({
+        workspaceId: input.workspaceId,
+        agentId,
+        ctx,
+      });
+      if (!gate.allowed) {
+        return {
+          status: "ERROR",
+          error: gate.status,
+          timing: marks,
+          timing_ms: timingMs,
+          graph: {
+            GRAPH_REQUEST_COUNT: 0,
+            GRAPH_HTTP_STATUS: 0,
+            TOKEN_REFRESH_REQUIRED: false,
+          },
+        };
+      }
+    }
+
     const wsStart = Date.now();
     const bookingCfg = await loadMctbAiBookingConfig(input.workspaceId);
     const timezone = bookingCfg.timezone?.trim() || "America/New_York";

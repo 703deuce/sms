@@ -7,7 +7,11 @@ import * as ai from "./ai-client";
 import { buildAmyConversationWorkflow } from "./conversation-workflow";
 import { ensureTransovoSharedWorkflowTools } from "./shared-tools";
 import { isVoiceCanonicalAiBookingPublishMode } from "@/lib/voice/workflow-engine/tool-publish";
-import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  isVoiceV2PstnLiveBookingMode,
+  isVoiceV2PstnOneAmyMode,
+  resolveVoiceV2BookingStrategy,
+} from "@/lib/voice-v2/pstn-workflow-mode";
 import {
   expectedVoiceV2LiveBooking,
   verifyVoiceV2WorkflowReadBack,
@@ -38,6 +42,7 @@ export function buildDesiredTelnyxWorkflowPayload(input: {
 } {
   const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(input.config);
   const v2PstnLiveBooking = expectedVoiceV2LiveBooking(input.config);
+  const v2OneAmy = isVoiceV2PstnOneAmyMode(input.config);
 
   const conversation_flow = buildAmyConversationWorkflow(
     {
@@ -48,6 +53,7 @@ export function buildDesiredTelnyxWorkflowPayload(input: {
       voiceV2Find: input.v2Shared?.findId ?? null,
       voiceV2Book: input.v2Shared?.bookId ?? null,
       voiceV2SaveIntake: input.v2Shared?.saveIntakeId ?? null,
+      voiceV2FinalizeRequest: input.v2Shared?.finalizeRequestId ?? null,
       voiceV2FindExisting: input.v2Shared?.findExistingId ?? null,
       voiceV2Reschedule: input.v2Shared?.rescheduleId ?? null,
       voiceV2Cancel: input.v2Shared?.cancelId ?? null,
@@ -65,7 +71,7 @@ export function buildDesiredTelnyxWorkflowPayload(input: {
     input.shared.hangupId,
     input.shared.transferId,
   ].filter(Boolean) as string[];
-  if (input.v2Shared) {
+  if (input.v2Shared && v2OneAmy) {
     tool_ids = mergeVoiceV2ToolIds(tool_ids, input.v2Shared);
   }
 
@@ -92,17 +98,27 @@ export async function syncConversationWorkflowToTelnyx(input: {
   });
 
   const v2PstnLiveBooking = expectedVoiceV2LiveBooking(input.config);
+  const bookingStrategy = resolveVoiceV2BookingStrategy(input.config);
+  const v2OneAmy = isVoiceV2PstnOneAmyMode(input.config);
 
   let v2Shared = null as Awaited<ReturnType<typeof ensureVoiceV2SharedToolsForAgent>> | null;
-  if (v2PstnLiveBooking) {
+  if (v2OneAmy) {
     v2Shared = await ensureVoiceV2SharedToolsForAgent({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
+      bookingStrategy,
     });
-    if (!v2Shared.findId || !v2Shared.bookId || !v2Shared.saveIntakeId) {
+    if (!v2Shared.saveIntakeId || !v2Shared.finalizeRequestId) {
       return {
         ok: false,
         error: "voice_v2_shared_tools_unavailable",
+        capabilityMismatch: VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
+      };
+    }
+    if (v2PstnLiveBooking && (!v2Shared.findId || !v2Shared.bookId)) {
+      return {
+        ok: false,
+        error: "voice_v2_live_booking_tools_unavailable",
         capabilityMismatch: VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
       };
     }
@@ -124,6 +140,7 @@ export async function syncConversationWorkflowToTelnyx(input: {
     const readBack = await readTelnyxWorkflowState(input.assistantId);
     const verified = verifyVoiceV2WorkflowReadBack({
       expectedVoiceV2Booking: v2PstnLiveBooking,
+      expectedOneAmyIntake: v2OneAmy && !v2PstnLiveBooking,
       readBack,
     });
     if (!verified.ok) {

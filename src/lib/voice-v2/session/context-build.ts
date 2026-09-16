@@ -4,6 +4,8 @@ import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { normalizeCallerAni } from "@/lib/voice/call-identity";
+import { resolveVoiceV2BookingStrategy } from "../booking-strategy";
+import { isVoiceV2PstnOneAmyMode } from "../pstn-workflow-mode";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -45,6 +47,8 @@ export async function buildVoiceV2CallContextPayload(input: {
     agentId: input.agentId,
     callId: input.callId,
   });
+  const bookingStrategy = resolveVoiceV2BookingStrategy(config);
+  const oneAmy = isVoiceV2PstnOneAmyMode(config);
   const payload: VoiceV2CallContext = {
     sessionKey: input.canonicalSessionKey,
     workspaceId: input.workspaceId,
@@ -55,6 +59,12 @@ export async function buildVoiceV2CallContextPayload(input: {
     askedFields: {},
     compiledAt: new Date().toISOString(),
     intakeSaveCount: 0,
+    capabilities: {
+      bookingStrategy,
+      voiceV2PstnLiveBooking: bookingStrategy === "MICROSOFT_365",
+      bookingEnabled: bookingStrategy === "MICROSOFT_365",
+      intakeEnabled: oneAmy,
+    },
   };
   return { payload, enrollment, bookingTimezone: timezone };
 }

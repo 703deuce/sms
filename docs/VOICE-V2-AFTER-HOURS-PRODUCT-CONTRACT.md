@@ -640,9 +640,9 @@ Maintain this matrix in this document. Status values:
 | SCHEDULING_PREFERENCE_MEMORY | HEADLESS_CERTIFIED | `3ed1e46` — no date-only save; **PSTN recert pending** |
 | FAQ_PROMPT_KNOWLEDGE | IMPLEMENTED | Receptionist/wizard business injection — verify/certify |
 | LARGE_KNOWLEDGE_BASE_RAG | NOT_STARTED | |
-| MESSAGE_ONLY | NOT_STARTED | |
+| MESSAGE_ONLY | IMPLEMENTED | Wizard `bookingStrategy=NONE` + finalize tool; **PSTN pending** |
 | LEAD_QUALIFICATION | NOT_STARTED | Reuse generic intake when built |
-| REQUEST_ONLY_BOOKING | NOT_STARTED | |
+| REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |
 | SEND_BOOKING_LINK | NOT_STARTED | |
 | CALENDLY_BOOKING | NOT_STARTED | |
 | RESCHEDULE | NOT_STARTED | |

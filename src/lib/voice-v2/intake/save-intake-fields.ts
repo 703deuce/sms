@@ -8,6 +8,7 @@ import { scheduleIntakePersistence } from "./persist-deferred";
 import { getIntakeReadiness } from "./readiness";
 import { transitionAfterIntakeSave } from "../booking-workflow";
 import {
+  resolveVoiceV2BookingStrategyForContext,
   resolveVoiceV2PstnLiveBookingForContext,
   workflowPayloadForContext,
 } from "../booking-workflow-hooks";
@@ -83,18 +84,24 @@ async function attachBookingWorkflow(
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const { flag: voiceV2PstnLiveBooking, reloaded: pstnFlagReloaded } =
     await resolveVoiceV2PstnLiveBookingForContext(ctx, workspaceId, agentId);
+  const bookingStrategy = await resolveVoiceV2BookingStrategyForContext(
+    ctx,
+    workspaceId,
+    agentId,
+  );
   const nextCtx = transitionAfterIntakeSave({
     ctx,
     raw,
     savedKeys,
     readiness,
     voiceV2PstnLiveBooking,
+    bookingStrategy,
   });
   setVoiceV2CallContext(nextCtx);
   trace?.mark("WORKFLOW_TRANSITION_END");
   return {
     ctx: nextCtx,
-    workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking),
+    workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking, bookingStrategy),
     pstnFlagReloaded,
   };
 }

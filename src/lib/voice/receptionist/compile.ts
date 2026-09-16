@@ -25,7 +25,7 @@ import {
   buildVoiceV2LiveIntakeInstructions,
   useVoiceV2IntakeAuthority,
 } from "@/lib/voice-v2/intake/live-intake-instructions";
-import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -230,7 +230,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
         },
       } as VoiceAgentConfig)
     : null;
-  const voiceV2OneAmy = isVoiceV2PstnLiveBookingMode({
+  const voiceV2OneAmy = isVoiceV2PstnOneAmyMode({
     advanced: input.advanced,
   } as VoiceAgentConfig);
   const voiceV2IntakeInstructions = voiceV2IntakeSchema
@@ -356,9 +356,12 @@ export function applyCompiledToVoiceConfig(
     },
     advanced: {
       ...(mergedAdvanced as object),
-      voiceV2PstnLiveBooking: snapshot.capabilities.includes("book_appointments")
-        ? mergedAdvanced?.voiceV2PstnLiveBooking !== false
-        : mergedAdvanced?.voiceV2PstnLiveBooking === true,
+      voiceV2PstnLiveBooking:
+        mergedAdvanced?.bookingStrategy === "MICROSOFT_365" ||
+        (mergedAdvanced?.voiceV2PstnLiveBooking === true &&
+          mergedAdvanced?.bookingStrategy !== "REQUEST_ONLY" &&
+          mergedAdvanced?.bookingStrategy !== "NONE"),
+      bookingStrategy: mergedAdvanced?.bookingStrategy,
       conversationWorkflowMode: mergedAdvanced?.conversationWorkflowMode ?? true,
       livekitProfile: snapshot.livekitProfile,
       realtimeModel: snapshot.realtimeModel,

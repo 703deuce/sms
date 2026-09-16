@@ -5,6 +5,7 @@
  * npx tsx scripts/test-voice-v2-workflow-capability-headless.ts
  */
 import { applyWizardPreset, createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
+import { mergeAppointmentWizardAdvanced } from "../src/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
 import { applyAmyMinimumSideEffectConfig } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import {
   buildAmyConversationWorkflow,
@@ -22,6 +23,7 @@ import {
 import { isVoiceV2PstnLiveBookingMode } from "../src/lib/voice-v2/pstn-workflow-mode";
 import {
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
+  VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
 } from "../src/lib/voice-v2/telnyx-tool-definition";
@@ -52,6 +54,10 @@ const v2Ids = {
   findId: "v2_find",
   bookId: "v2_book",
   saveIntakeId: "v2_save",
+  finalizeRequestId: "v2_finalize",
+  findExistingId: null,
+  rescheduleId: null,
+  cancelId: null,
 };
 
 function configWith(input: {
@@ -65,12 +71,23 @@ function configWith(input: {
   );
   if (input.bookAppointments !== false) {
     wizard.capabilities = [...new Set([...wizard.capabilities, "book_appointments"])];
+  } else {
+    wizard.capabilities = wizard.capabilities.filter((c) => c !== "book_appointments");
+    wizard.capabilities.push("take_messages");
   }
+  if (input.voiceV2PstnLiveBooking) {
+    wizard.bookingStrategy = "MICROSOFT_365";
+    wizard.calendarConnected = true;
+    wizard.calendarProvider = "microsoft";
+  } else {
+    wizard.bookingStrategy = input.bookAppointments === false ? "NONE" : "REQUEST_ONLY";
+  }
+  const advanced = mergeAppointmentWizardAdvanced(wizard, {});
   return applyAmyMinimumSideEffectConfig({
     enabledBuiltinTools: [],
     advanced: {
       appointmentReceptionistWizard: wizard,
-      voiceV2PstnLiveBooking: input.voiceV2PstnLiveBooking === true,
+      ...advanced,
       conversationWorkflowMode: true,
     },
   } as VoiceAgentConfig);
@@ -107,6 +124,7 @@ function readBackFromPayload(
     ["v2_find", VOICE_V2_TELNYX_TOOL_NAME],
     ["v2_book", VOICE_V2_BOOK_TELNYX_TOOL_NAME],
     ["v2_save", VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME],
+    ["v2_finalize", VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME],
     ["st_legacy_book", "voice_ai_booking_turn"],
   ]);
   const general = generalNode(flow);
@@ -156,12 +174,15 @@ const toolsA = workflowNodeExpectedTools(WORKFLOW_NODE_IDS.GENERAL, {
   voiceV2Find: v2Ids.findId,
   voiceV2Book: v2Ids.bookId,
   voiceV2SaveIntake: v2Ids.saveIntakeId,
+  voiceV2FinalizeRequest: v2Ids.finalizeRequestId,
 });
 pass("A_NO_LIVE_BOOKING_NODE", !liveNode(planA.conversation_flow));
 pass(
   "A_V2_TOOLS_ON_GENERAL",
   JSON.stringify(generalA?.shared_tool_ids?.sort()) ===
-    JSON.stringify([v2Ids.saveIntakeId, v2Ids.findId, v2Ids.bookId].sort()),
+    JSON.stringify(
+      [v2Ids.saveIntakeId, v2Ids.finalizeRequestId, v2Ids.findId, v2Ids.bookId].sort(),
+    ),
 );
 pass(
   "A_ONE_AMY_GENERAL_INSTRUCTIONS",
@@ -178,7 +199,8 @@ pass("A_NO_LIVE_EDGE", !hasLiveBookingEdge(planA.conversation_flow));
 pass("A_READBACK", readBackFromPayload(planA.tool_ids, planA.conversation_flow).ok === true);
 pass(
   "A_EXPECTED_TOOLS",
-  toolsA.join(",") === "voice_v2_save_intake_fields,voice_v2_find_availability,voice_v2_book_offered_slot",
+  toolsA.join(",") ===
+    "voice_v2_save_intake_fields,voice_v2_finalize_caller_request,voice_v2_find_availability,voice_v2_book_offered_slot",
 );
 metric("V2_TOOLSET_AFTER_HOURS_ENABLED", failures.some((f) => f.startsWith("A_")) ? "FAIL" : "PASS");
 
@@ -291,8 +313,18 @@ pass(
 
 pass(
   "REQUIRED_TOOL_NAMES",
-  VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES.length === 3 &&
+  VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES.length === 4 &&
     VOICE_V2_REQUIRED_SHARED_DISPLAY_NAMES.includes(VOICE_V2_TELNYX_TOOL_NAME),
+);
+
+pass(
+  "REQUEST_ONLY_NO_FIND_ON_GENERAL",
+  !workflowNodeExpectedTools(WORKFLOW_NODE_IDS.GENERAL, {
+    voiceV2Find: null,
+    voiceV2Book: null,
+    voiceV2SaveIntake: v2Ids.saveIntakeId,
+    voiceV2FinalizeRequest: v2Ids.finalizeRequestId,
+  }).includes("voice_v2_find_availability"),
 );
 
 console.log("\n--- Voice V2 workflow capability report ---");

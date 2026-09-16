@@ -65,6 +65,14 @@ export type BookingPermission =
   | "waitlist"
   | "require_deposit";
 
+/** Published Voice V2 booking mode (wizard control plane). */
+export type VoiceWizardBookingStrategy =
+  | "NONE"
+  | "REQUEST_ONLY"
+  | "SEND_LINK"
+  | "MICROSOFT_365"
+  | "CALENDLY";
+
 export type FallbackAction =
   | "return_to_ai"
   | "take_message"
@@ -153,6 +161,8 @@ export type AppointmentReceptionistWizardState = {
   calendarEmail: string | null;
   appointmentTypes: AppointmentTypeConfig[];
   selectedAppointmentTypeId: string | null;
+  /** What Amy does when a caller wants an appointment (maps to published bookingStrategy). */
+  bookingStrategy?: VoiceWizardBookingStrategy | null;
 
   bookingBehavior: {
     askPreferredDayFirst: boolean;

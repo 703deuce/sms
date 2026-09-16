@@ -13,6 +13,23 @@ export const VOICE_V2_RESCHEDULE_TOOL_TYPE = "voice_v2_reschedule_appointment";
 export const VOICE_V2_RESCHEDULE_TELNYX_TOOL_NAME = "transovo-voice-v2-reschedule-appointment";
 export const VOICE_V2_CANCEL_TOOL_TYPE = "voice_v2_cancel_appointment";
 export const VOICE_V2_CANCEL_TELNYX_TOOL_NAME = "transovo-voice-v2-cancel-appointment";
+export const VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE = "voice_v2_finalize_caller_request";
+export const VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME =
+  "transovo-voice-v2-finalize-caller-request";
+
+export const VOICE_V2_FINALIZE_CALLER_REQUEST_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    summary: {
+      type: "string",
+      description: "Optional short summary of the caller request for the business.",
+    },
+    tool_invocation_id: { type: "string" },
+    call_id: { type: "string" },
+    conversation_id: { type: "string" },
+  },
+  required: [],
+});
 
 export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
   type: "object",

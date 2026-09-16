@@ -1,6 +1,9 @@
 import "server-only";
 
-import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  isVoiceV2PstnLiveBookingMode,
+  resolveVoiceV2BookingStrategy,
+} from "@/lib/voice-v2/pstn-workflow-mode";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import {
@@ -37,9 +40,20 @@ export async function resolveVoiceV2PstnLiveBookingForContext(
   return { flag, reloaded: true };
 }
 
+export async function resolveVoiceV2BookingStrategyForContext(
+  ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
+  workspaceId: string,
+  agentId: string,
+): Promise<ReturnType<typeof resolveVoiceV2BookingStrategy>> {
+  if (ctx.capabilities?.bookingStrategy) return ctx.capabilities.bookingStrategy;
+  const runtime = await loadVoiceAgentRuntimeConfig(workspaceId, agentId);
+  return resolveVoiceV2BookingStrategy(parseVoiceAgentConfig(runtime));
+}
+
 export function workflowPayloadForContext(
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
   voiceV2PstnLiveBooking: boolean,
+  bookingStrategy?: ReturnType<typeof resolveVoiceV2BookingStrategy>,
 ): Record<string, unknown> {
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const hasOffer =
@@ -52,6 +66,7 @@ export function workflowPayloadForContext(
   });
   return buildWorkflowToolPayload({
     voiceV2PstnLiveBooking,
+    bookingStrategy: bookingStrategy ?? ctx.capabilities?.bookingStrategy,
     workflow,
     readiness,
     hasActiveOfferSet: hasOffer,

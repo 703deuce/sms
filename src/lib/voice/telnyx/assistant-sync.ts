@@ -545,9 +545,12 @@ export async function syncTelnyxAssistant(
           workflowNodes: workflowResult.workflowNodes,
         };
       }
-      const { isVoiceV2PstnLiveBookingMode } = await import("@/lib/voice-v2/pstn-workflow-mode");
+      const { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } = await import(
+        "@/lib/voice-v2/pstn-workflow-mode"
+      );
       if (
         isVoiceV2PstnLiveBookingMode(config) ||
+        isVoiceV2PstnOneAmyMode(config) ||
         workflowResult.capabilityMismatch
       ) {
         return {

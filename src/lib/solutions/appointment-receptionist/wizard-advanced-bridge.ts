@@ -9,6 +9,7 @@ import {
   type IntakeRequirementLevel,
 } from "@/lib/voice-v2/intake/types";
 import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
@@ -108,13 +109,15 @@ export function mergeAppointmentWizardAdvanced(
   const callerFields = wizardCollectFieldsToCallerRows(state.collectFields || []);
   const voiceV2Intake = wizardCollectFieldsToVoiceV2Intake(state.collectFields || []);
 
-  const books = state.capabilities.includes("book_appointments");
+  const bookingStrategy = deriveBookingStrategyFromWizard(state);
+  const voiceV2PstnLiveBooking = bookingStrategy === "MICROSOFT_365";
 
   return {
     ...(existingAdvanced || {}),
     capabilityPack: "appointment_receptionist",
     conversationWorkflowMode: true,
-    voiceV2PstnLiveBooking: books,
+    bookingStrategy,
+    voiceV2PstnLiveBooking,
     voiceV2Intake,
     receptionistAdvanced: {
       ...prev,
