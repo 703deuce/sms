@@ -168,6 +168,12 @@ export class InMemoryVoiceV2CallContextStore implements VoiceV2CallContextStore 
         ...rec,
         payload: input.payload,
         booking: projectOfferFromLegacy(input.payload),
+        bookingPreference: input.payload.bookingWorkflow?.requestedDate
+          ? {
+              requestedDate: input.payload.bookingWorkflow.requestedDate,
+              updatedAt: new Date().toISOString(),
+            }
+          : rec.bookingPreference,
       }),
     });
   }
@@ -330,6 +336,12 @@ class RedisVoiceV2CallContextStore implements VoiceV2CallContextStore {
         ...rec,
         payload: input.payload,
         booking: projectOfferFromLegacy(input.payload),
+        bookingPreference: input.payload.bookingWorkflow?.requestedDate
+          ? {
+              requestedDate: input.payload.bookingWorkflow.requestedDate,
+              updatedAt: new Date().toISOString(),
+            }
+          : rec.bookingPreference,
       }),
     });
   }
@@ -807,6 +819,12 @@ export function updateVoiceV2CallContextL1Payload(ctx: VoiceV2CallContext): void
       ...entry.record,
       payload: ctx,
       booking: projectOfferFromLegacy(ctx),
+      bookingPreference: ctx.bookingWorkflow?.requestedDate
+        ? {
+            requestedDate: ctx.bookingWorkflow.requestedDate,
+            updatedAt: new Date().toISOString(),
+          }
+        : entry.record.bookingPreference,
     };
     l1.set(ctx.sessionKey, { record: nextRecord });
     return;

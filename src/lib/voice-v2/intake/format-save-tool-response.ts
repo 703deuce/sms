@@ -10,13 +10,20 @@ function mergeWorkflowFields(
   return { ...base, ...workflow };
 }
 
-function speakForWorkflowStage(stage: VoiceV2NextStage | undefined, bookingContinue: boolean): string | null {
+function speakForWorkflowStage(
+  stage: VoiceV2NextStage | undefined,
+  bookingContinue: boolean,
+  missingBeforeBooking: string[],
+): string | null {
+  if (stage === "COLLECT_REQUIRED_INTAKE" && missingBeforeBooking.length > 0) {
+    return "Got it. Ask only for the missing caller details — do not ask for the day again.";
+  }
   if (!bookingContinue) return null;
   if (stage === "COLLECT_SCHEDULING_PREFERENCE") {
     return "Saved. Ask what day works for the appointment — do not close with callback or follow-up.";
   }
   if (stage === "FIND_AVAILABILITY") {
-    return "Saved. Call voice_v2_find_availability now — do not offer callback.";
+    return "Thanks. Acknowledge the known day briefly, then call voice_v2_find_availability — do not ask for the day again.";
   }
   return "Saved. Continue live booking — do not close with callback or follow-up.";
 }
@@ -49,7 +56,7 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
     const wf = result.workflow;
     const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
     const bookingContinue = wf?.booking_continue_required === true;
-    const wfSpeak = speakForWorkflowStage(stage, bookingContinue);
+    const wfSpeak = speakForWorkflowStage(stage, bookingContinue, missingBeforeBooking);
     if (wfSpeak && !invalid.length) speak = wfSpeak;
 
     return mergeWorkflowFields(
@@ -79,7 +86,7 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
       missingBeforeBooking.length === 0
         ? "That detail is not collected on this line. Continue with find availability."
         : "That field is not collected on this line. Continue with the remaining required details only.";
-    const wfSpeak = speakForWorkflowStage(stage, bookingContinue);
+    const wfSpeak = speakForWorkflowStage(stage, bookingContinue, missingBeforeBooking);
     if (wfSpeak && missingBeforeBooking.length === 0) speak = wfSpeak;
 
     return mergeWorkflowFields(
@@ -90,6 +97,32 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
         ignored_fields: result.ignored_fields,
         saved_fields: result.saved_fields,
         disabled_fields: result.ignored_fields,
+        missingBeforeBooking,
+        readiness: result.readiness,
+        continue: true,
+        timing_ms: result.timing_ms,
+        speak,
+      },
+      wf,
+    );
+  }
+
+  if (result.status === "SCHEDULING_PREFERENCE_NOTED") {
+    const wf = result.workflow;
+    const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
+    const speak =
+      missingBeforeBooking.length > 0
+        ? "Got it. Ask only for the missing caller details — do not ask for the day again."
+        : speakForWorkflowStage(stage, wf?.booking_continue_required === true, missingBeforeBooking) ||
+          "Got it.";
+    return mergeWorkflowFields(
+      {
+        ok: true,
+        status: "SCHEDULING_PREFERENCE_NOTED",
+        voice_v2_status: "SCHEDULING_PREFERENCE_NOTED",
+        requested_date: result.requested_date,
+        saved_fields: [],
+        saved: [],
         missingBeforeBooking,
         readiness: result.readiness,
         continue: true,

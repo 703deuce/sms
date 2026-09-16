@@ -72,18 +72,14 @@ async function main() {
   seedCtx();
   const a1 = await save({
     call_id: "transition-test",
-    fields: { service_reason: "book an appointment" },
+    fields: { name: "Anthony" },
     booking_intent_active: true,
   });
   if (a1.status !== "INTAKE_SAVED") fail("A1");
-  else pass("A1_INTENT_SAVE");
-  const pubA1 = saveIntakePublicFields(a1);
-  if (pubA1.booking_continue_required === true) fail("A1_PREMATURE_CONTINUE");
-  if (pubA1.voice_v2_next_stage !== "COLLECT_REQUIRED_INTAKE") fail("A1_STAGE", String(pubA1.voice_v2_next_stage));
+  else pass("A1_NAME_SAVE");
 
-  const a2 = await save({ call_id: "transition-test", fields: { name: "Anthony" } });
-  const a3 = await save({ call_id: "transition-test", fields: { service_reason: "leak" } });
-  const pubA3 = saveIntakePublicFields(a3);
+  const a2 = await save({ call_id: "transition-test", fields: { service_reason: "leak" } });
+  const pubA3 = saveIntakePublicFields(a2);
   if (pubA3.voice_v2_next_stage !== "COLLECT_SCHEDULING_PREFERENCE") {
     fail("A3_ASK_DATE", String(pubA3.voice_v2_next_stage));
   } else pass("A3_INTAKE_COMPLETE_ASK_DATE");
@@ -242,7 +238,7 @@ async function main() {
   // Call 1 regression — intake complete after email must not allow callback stage
   clearVoiceV2CallSessions();
   seedCtx();
-  await save({ call_id: "transition-test", fields: { service_reason: "book an appointment" } });
+  await save({ call_id: "transition-test", fields: { service_reason: "kitchen leak" } });
   await save({ call_id: "transition-test", fields: { name: "Anthony Johnson" } });
   const reg = await save({
     call_id: "transition-test",

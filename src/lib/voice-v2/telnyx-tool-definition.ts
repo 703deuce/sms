@@ -30,23 +30,11 @@ export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
       type: "string",
       description: "Unique id for this tool call",
     },
-    booking_intent_active: {
-      type: "boolean",
-      description:
-        "Set true when the caller is trying to schedule/book on this call (sticky for the session).",
-    },
     workflow_signal: {
       type: "string",
       description:
         "Structured workflow only: prefer_callback when caller wants a callback; cancel_booking when they abandon scheduling.",
       enum: ["prefer_callback", "cancel_booking"],
-    },
-    scheduling_preference: {
-      type: "object",
-      description: "Optional date preference before FIND (YYYY-MM-DD).",
-      properties: {
-        requested_date: { type: "string", description: "YYYY-MM-DD" },
-      },
     },
   },
   required: ["fields"],
@@ -133,7 +121,7 @@ export function buildVoiceV2SaveIntakeFieldsTelnyxWebhook(input: {
     webhook: {
       name: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
       description:
-        "Save caller information the caller actually provided (name, email, phone, address, service_reason). Use only when there are real field values — not for booking intent alone (for example 'I need to book an appointment'). If several values arrive in one utterance, save them together in one call. Do not invent values. Do not save generic booking phrases as service_reason.",
+        "Save enabled intake field values the caller actually provided (name, email, phone, address, service_reason). Do not call this for booking intent alone or for a scheduling date/time by itself — remember scheduling in conversation and use voice_v2_find_availability when intake is complete. If several intake values arrive in one utterance, save them together in one call.",
       url: input.webhookUrl,
       method: "POST",
       timeout_ms: 5000,

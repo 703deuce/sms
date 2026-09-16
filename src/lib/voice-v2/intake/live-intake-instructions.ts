@@ -27,6 +27,8 @@ export function buildVoiceV2LiveIntakeInstructions(
     ...(options?.oneAmy
       ? [
           "Do not call intake save solely because the caller wants to book or schedule.",
+          "Do not call intake save for a scheduling date or time alone (for example 'tomorrow') — retain it in the conversation.",
+          "If the caller already gave a day or time, do not ask for it again.",
           "Do not save booking-intent phrases as service_reason (for example 'book an appointment').",
           "When multiple enabled fields arrive in one utterance, save them in one call.",
         ]

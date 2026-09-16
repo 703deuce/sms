@@ -19,6 +19,11 @@ import {
 import type { VoiceV2ContextLookupTrace } from "../session/context-lookup-trace";
 import { isTrustedPrismaVoiceCallId } from "./resolve-trusted-call-id";
 import { stripBookingIntentOnlyServiceReason } from "./booking-intent-guard";
+import {
+  applySchedulingPreferenceToContext,
+  extractSchedulingRequestedDate,
+  intakeFieldsHaveValues,
+} from "./scheduling-preference";
 
 export type SaveIntakeTimingMs = {
   VALIDATION_MS: number;
@@ -47,6 +52,14 @@ export type SaveIntakeResult =
       status: "FIELD_NOT_ENABLED";
       ignored_fields: IntakeFieldKey[];
       saved_fields: IntakeFieldKey[];
+      readiness: ReturnType<typeof getIntakeReadiness>;
+      workflow?: Record<string, unknown>;
+      observability?: { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number };
+      timing_ms: SaveIntakeTimingMs;
+    }
+  | {
+      status: "SCHEDULING_PREFERENCE_NOTED";
+      requested_date: string;
       readiness: ReturnType<typeof getIntakeReadiness>;
       workflow?: Record<string, unknown>;
       observability?: { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number };
@@ -224,7 +237,9 @@ export async function executeVoiceV2SaveIntakeFields(
   async function finishWithIdempotency(result: SaveIntakeResult): Promise<SaveIntakeResult> {
     if (
       toolInvocationId &&
-      (result.status === "INTAKE_SAVED" || result.status === "FIELD_NOT_ENABLED")
+      (result.status === "INTAKE_SAVED" ||
+        result.status === "FIELD_NOT_ENABLED" ||
+        result.status === "SCHEDULING_PREFERENCE_NOTED")
     ) {
       await storeIntakeIdempotentResult(canonicalSessionKey, toolInvocationId, result);
     }
@@ -239,6 +254,36 @@ export async function executeVoiceV2SaveIntakeFields(
       disabled_fields: [],
       timing_ms: emptyTiming(),
     };
+  }
+
+  const schedulingDate = extractSchedulingRequestedDate(raw);
+  if (!intakeFieldsHaveValues(fieldsRaw) && !schedulingDate) {
+    return {
+      status: "INTAKE_VALIDATION_ERROR",
+      invalid_fields: [],
+      disabled_fields: [],
+      timing_ms: emptyTiming(),
+    };
+  }
+  if (schedulingDate && !intakeFieldsHaveValues(fieldsRaw)) {
+    trace.mark("VALIDATION_START");
+    trace.mark("VALIDATION_END", { ms: 0, scheduling_only: true });
+    ctx = applySchedulingPreferenceToContext(ctx, raw, schedulingDate);
+    setVoiceV2CallContext(ctx);
+    const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
+    const wf = await attachBookingWorkflow(ctx, raw, [], workspaceId, agentId, trace);
+    return finishWithIdempotency({
+      status: "SCHEDULING_PREFERENCE_NOTED",
+      requested_date: schedulingDate,
+      readiness,
+      workflow: wf.workflow,
+      observability: finalizeObservability(wf.ctx, trace),
+      timing_ms: {
+        VALIDATION_MS: 0,
+        STATE_UPDATE_MS: 0,
+        TOTAL_MS: Date.now() - t0,
+      },
+    });
   }
 
   trace.mark("VALIDATION_START");

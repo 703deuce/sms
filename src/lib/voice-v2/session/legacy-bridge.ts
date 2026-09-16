@@ -8,6 +8,10 @@ import type {
   VoiceV2EnrollmentSnapshot,
 } from "./types";
 import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION } from "./types";
+import {
+  mergeWorkflowIntoContext,
+  workflowFromContext,
+} from "../booking-workflow";
 
 export function projectOfferFromLegacy(ctx: VoiceV2CallContext): VoiceV2CallContextRecord["booking"] {
   const timezone = ctx.businessTimezone;
@@ -49,6 +53,12 @@ export function buildRecordFromLegacy(input: {
       bookingEnabled: true,
       intakeEnabled: true,
     },
+    bookingPreference: input.payload.bookingWorkflow?.requestedDate
+      ? {
+          requestedDate: input.payload.bookingWorkflow.requestedDate,
+          updatedAt: new Date().toISOString(),
+        }
+      : undefined,
     booking,
     config: {
       configFingerprint:
@@ -61,6 +71,20 @@ export function buildRecordFromLegacy(input: {
 
 export function syncLegacyFromRecord(record: VoiceV2CallContextRecord): VoiceV2CallContext {
   const payload = record.payload;
+  const prefDate = record.bookingPreference?.requestedDate?.trim();
+  if (prefDate) {
+    const wf = workflowFromContext(payload);
+    if (!wf.requestedDate) {
+      Object.assign(
+        payload,
+        mergeWorkflowIntoContext(payload, {
+          ...wf,
+          requestedDate: prefDate,
+          bookingIntentActive: wf.bookingIntentActive || true,
+        }),
+      );
+    }
+  }
   const offer = record.booking.currentOffer;
   if (offer) {
     payload.currentOfferSet = {

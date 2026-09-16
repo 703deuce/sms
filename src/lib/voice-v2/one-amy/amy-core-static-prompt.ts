@@ -349,6 +349,8 @@ Keep the caller moving toward their objective using the simplest correct path.`;
 export const ONE_AMY_V2_WORKFLOW_APPEND = [
   "Live calendar booking is available on this call — you remain the same assistant.",
   "Do not call the intake-save action for booking intent alone or with empty fields.",
+  "Do not call intake save for a scheduling date or time by itself — remember it from the conversation.",
+  "If the caller already gave a scheduling preference, do not ask for the day again.",
   "Save only real caller field values; combine multiple fields from one utterance in one save.",
   "Check availability only after a usable scheduling date or window; book only a canonical offered slot.",
 ].join(" ");

@@ -159,12 +159,20 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
   }
 }
 
-export function runtimeHintForStage(stage: VoiceV2NextStage): string {
+export function runtimeHintForStage(
+  stage: VoiceV2NextStage,
+  workflow?: VoiceV2BookingWorkflow,
+): string {
   switch (stage) {
+    case "COLLECT_REQUIRED_INTAKE":
+      if (workflow?.requestedDate) {
+        return `Caller already gave a scheduling preference (${workflow.requestedDate}). Ask only for missing intake fields. Do not ask for the day again.`;
+      }
+      return "";
     case "COLLECT_SCHEDULING_PREFERENCE":
       return "Intake complete. Ask what day works for the appointment. Do not close with callback or follow-up.";
     case "FIND_AVAILABILITY":
-      return "Intake complete and date is known. Call voice_v2_find_availability now. Do not callback-close.";
+      return "Intake complete and date is known. Acknowledge the date briefly, then call voice_v2_find_availability now. Do not ask for the day again. Do not callback-close.";
     case "OFFER_SLOTS":
       return "Offer returned slots only. When caller picks one, call voice_v2_book_offered_slot.";
     case "CALLBACK_REQUESTED":
@@ -205,8 +213,12 @@ export function buildWorkflowToolPayload(input: {
     voice_v2_next_stage: nextStage,
     booking_continue_required,
     allowed_next_actions: allowedNextActionsForStage(nextStage),
-    runtime_hint: runtimeHintForStage(nextStage),
+    runtime_hint: runtimeHintForStage(nextStage, workflow),
   };
+
+  if (workflow.requestedDate) {
+    payload.known_scheduling_preference = { requested_date: workflow.requestedDate };
+  }
 
   if (booking_continue_required) {
     payload.forbidden_actions = [...VOICE_V2_FORBIDDEN_WHEN_BOOKING_CONTINUE];
