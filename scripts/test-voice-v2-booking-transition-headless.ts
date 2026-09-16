@@ -55,6 +55,11 @@ function seedCtx(overrides?: Partial<VoiceV2CallContext>): VoiceV2CallContext {
     intakeState: {},
     askedFields: {},
     compiledAt: new Date().toISOString(),
+    capabilities: {
+      bookingStrategy: "MICROSOFT_365",
+      voiceV2PstnLiveBooking: true,
+      ...(overrides?.capabilities ?? {}),
+    },
     ...overrides,
   };
   setVoiceV2CallContext(ctx);
@@ -238,11 +243,20 @@ async function main() {
   // Call 1 regression — intake complete after email must not allow callback stage
   clearVoiceV2CallSessions();
   seedCtx();
-  await save({ call_id: "transition-test", fields: { service_reason: "kitchen leak" } });
-  await save({ call_id: "transition-test", fields: { name: "Anthony Johnson" } });
+  await save({
+    call_id: "transition-test",
+    fields: { service_reason: "kitchen leak" },
+    booking_intent_active: true,
+  });
+  await save({
+    call_id: "transition-test",
+    fields: { name: "Anthony Johnson" },
+    booking_intent_active: true,
+  });
   const reg = await save({
     call_id: "transition-test",
     fields: { email: "anthony@test.com" },
+    booking_intent_active: true,
   });
   const pubReg = saveIntakePublicFields(reg);
   if (

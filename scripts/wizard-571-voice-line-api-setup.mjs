@@ -2,11 +2,11 @@
  * Assign ws_1 designated 571 test DID to Voice Agent wizard agent via API (no UI).
  * Does not place PSTN calls.
  *
- *   BASE_URL=<app-url> AGENT_ID=... PHONE_E164=+15714073615 node scripts/wizard-571-voice-line-api-setup.mjs
+ *   BASE_URL=... AGENT_ID=... PHONE_E164=... node scripts/wizard-571-voice-line-api-setup.mjs
  */
-const BASE = (process.env.BASE_URL || process.env.APP_URL || "").replace(/\/$/, "");
+const BASE = (process.env.BASE_URL || "").replace(/\/$/, "");
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
-const PHONE_E164 = (process.env.PHONE_E164 || "+15714073615").trim();
+const PHONE_E164 = (process.env.PHONE_E164 || "").trim();
 const EMAIL = (process.env.OWNER_EMAIL || "alex@harborhome.co").trim().toLowerCase();
 const BOOTSTRAP = "transovo-smoke-bootstrap-b56f-aug2026";
 
@@ -52,6 +52,7 @@ async function api(cookie, path, { method = "GET", body } = {}) {
 
 async function main() {
   if (!BASE) throw new Error("BASE_URL required");
+  if (!PHONE_E164) throw new Error("PHONE_E164 required (571 test DID)");
 
   const health = await fetch(`${BASE}/api/health`).then((r) => r.json());
   const cookie = await smokeLogin();
