@@ -158,8 +158,8 @@ Orchestration: **Telnyx Conversation Workflow** (synced in `workflow-sync.ts` / 
 | Question | Answer (571 assistant, live) |
 |----------|-------------------------------|
 | **LLM** | `openai/gpt-5.4-mini` via Telnyx (`openai_key`) |
-| **STT** | `deepgram/flux` (English + keyterms) |
-| **TTS** | Telnyx **NaturalHD** — `Telnyx.NaturalHD.astra` @ 1.08× |
+| **STT** | `deepgram/flux` (English + keyterms; target EOT **0.7 / 0.4 / 3000**) |
+| **TTS** | **ElevenLabs** (wizard catalog) — was NaturalHD Astra before this pass |
 | **Ingress** | TeXML app **3049047658506225103** → this assistant |
 | **Booking** | Voice V2 **find-availability** + **book-offered-slot** → Microsoft Graph |
 | **Noise** | Krisp on telephony leg |
