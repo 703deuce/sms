@@ -5,7 +5,8 @@ import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
 import { normalizeCallerAni } from "@/lib/voice/call-identity";
 import { resolveVoiceV2BookingStrategy } from "../booking-strategy";
-import { isVoiceV2PstnOneAmyMode } from "../pstn-workflow-mode";
+import { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } from "../pstn-workflow-mode";
+import { resolveVoiceV2KnowledgeConfig } from "../knowledge-config";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -49,6 +50,8 @@ export async function buildVoiceV2CallContextPayload(input: {
   });
   const bookingStrategy = resolveVoiceV2BookingStrategy(config);
   const oneAmy = isVoiceV2PstnOneAmyMode(config);
+  const liveBooking = isVoiceV2PstnLiveBookingMode(config);
+  const knowledge = resolveVoiceV2KnowledgeConfig(config);
   const payload: VoiceV2CallContext = {
     sessionKey: input.canonicalSessionKey,
     workspaceId: input.workspaceId,
@@ -61,9 +64,12 @@ export async function buildVoiceV2CallContextPayload(input: {
     intakeSaveCount: 0,
     capabilities: {
       bookingStrategy,
-      voiceV2PstnLiveBooking: bookingStrategy === "MICROSOFT_365",
-      bookingEnabled: bookingStrategy === "MICROSOFT_365",
+      voiceV2PstnLiveBooking: liveBooking,
+      bookingEnabled: liveBooking,
       intakeEnabled: oneAmy,
+      knowledgeBaseEnabled: knowledge.knowledgeBaseEnabled,
+      knowledgeBaseRevision: knowledge.knowledgeBaseRevision,
+      knowledgeBaseIds: knowledge.knowledgeBaseIds,
     },
   };
   return { payload, enrollment, bookingTimezone: timezone };

@@ -53,6 +53,8 @@ export type ReceptionistCompiledSnapshot = {
   voiceV2IntakeInstructions?: string;
   /** One-Amy Voice V2 PSTN: single conversational node, layered static core prompt */
   voiceV2OneAmy?: boolean;
+  /** Layer B: when large KB search is enabled for this agent */
+  voiceV2KnowledgeInstructions?: string;
   enabledBuiltinTools: string[];
   /** Customer job instructions — what the receptionist should do (always loaded). */
   agentJobInstructions: string;

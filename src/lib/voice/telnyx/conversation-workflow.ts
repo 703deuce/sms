@@ -41,6 +41,7 @@ export type WorkflowSharedToolIds = {
   voiceV2FindExisting?: string | null;
   voiceV2Reschedule?: string | null;
   voiceV2Cancel?: string | null;
+  voiceV2SearchKnowledge?: string | null;
   hangup?: string | null;
   transfer?: string | null;
   retrieval?: string | null;
@@ -206,6 +207,7 @@ export function buildAmyConversationWorkflow(
   const v2ToolIds = [
     toolIds.voiceV2SaveIntake,
     completionToolId,
+    toolIds.voiceV2SearchKnowledge,
     ...(voiceV2StrategyAllowsFindBook(bookingStrategy)
       ? [
           toolIds.voiceV2Find,
@@ -431,12 +433,17 @@ export function workflowNodeExpectedTools(
   switch (nodeId) {
     case WORKFLOW_NODE_IDS.GENERAL:
       if (toolIds.voiceV2SaveIntake && toolIds.voiceV2SendBookingLink) {
-        return ["voice_v2_save_intake_fields", "voice_v2_send_booking_link"];
+        const names = ["voice_v2_save_intake_fields", "voice_v2_send_booking_link"];
+        if (toolIds.voiceV2SearchKnowledge) names.push("voice_v2_search_knowledge");
+        return names;
       }
       if (toolIds.voiceV2SaveIntake && toolIds.voiceV2FinalizeRequest) {
         const names = ["voice_v2_save_intake_fields", "voice_v2_finalize_caller_request"];
         if (toolIds.voiceV2Find && toolIds.voiceV2Book) {
           names.push("voice_v2_find_availability", "voice_v2_book_offered_slot");
+        }
+        if (toolIds.voiceV2SearchKnowledge) {
+          names.push("voice_v2_search_knowledge");
         }
         return names;
       }

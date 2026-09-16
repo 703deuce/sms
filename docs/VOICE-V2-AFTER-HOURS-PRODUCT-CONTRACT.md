@@ -638,8 +638,12 @@ Maintain this matrix in this document. Status values:
 | CANCEL | IMPLEMENTED | Microsoft `cancelOrDeleteMicrosoftEvent` (/cancel); **PSTN pending** |
 | MICROSOFT_365_BOOKING | PSTN_CERTIFIED | FIND/BOOK/Graph; frozen core |
 | SCHEDULING_PREFERENCE_MEMORY | HEADLESS_CERTIFIED | `3ed1e46` — no date-only save; **PSTN recert pending** |
-| FAQ_PROMPT_KNOWLEDGE | IMPLEMENTED | Receptionist/wizard business injection — verify/certify |
-| LARGE_KNOWLEDGE_BASE_RAG | NOT_STARTED | |
+| FAQ_PROMPT_KNOWLEDGE | HEADLESS_CERTIFIED | Wizard `knowledgeItems` + `buildBusinessKnowledgePromptSection`; fast path — no RAG on hours/FAQs |
+| LARGE_KNOWLEDGE_BASE_RAG | HEADLESS_CERTIFIED | `voice_v2_search_knowledge` + async KB ingest; composable with all `bookingStrategy` values; **PSTN pending** |
+| PDF_KNOWLEDGE_UPLOAD | IMPLEMENTED | Wizard upload → `/api/voice/knowledge/:id/upload`; **production UI + PSTN pending** |
+| KNOWLEDGE_SOURCE_REVISION | IMPLEMENTED | `advanced.knowledge` + `knowledgeBaseRevision` pinned per call |
+| KNOWLEDGE_TENANT_ISOLATION | IMPLEMENTED | `resolveAgentKnowledgeBaseIds` workspace + published ID allow-list; **automated tenant test pending** |
+| KNOWLEDGE_WIZARD_TOGGLE | HEADLESS_CERTIFIED | `knowledgeBaseEnabled` on information step; publish drives Telnyx tool eligibility |
 | MESSAGE_ONLY | IMPLEMENTED | Wizard `bookingStrategy=NONE` + finalize tool; **PSTN pending** |
 | LEAD_QUALIFICATION | NOT_STARTED | Reuse generic intake when built |
 | REQUEST_ONLY_BOOKING | HEADLESS_CERTIFIED | `bookingStrategy=REQUEST_ONLY`; **PSTN pending** |

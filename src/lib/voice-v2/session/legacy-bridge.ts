@@ -56,6 +56,9 @@ export function buildRecordFromLegacy(input: {
         intakeEnabled: input.payload.capabilities?.intakeEnabled ?? true,
         voiceV2PstnLiveBooking: input.payload.capabilities?.voiceV2PstnLiveBooking,
         bookingStrategy: input.payload.capabilities?.bookingStrategy,
+        knowledgeBaseEnabled: input.payload.capabilities?.knowledgeBaseEnabled,
+        knowledgeBaseRevision: input.payload.capabilities?.knowledgeBaseRevision,
+        knowledgeBaseIds: input.payload.capabilities?.knowledgeBaseIds,
       } satisfies VoiceV2ContextCapabilities),
     bookingPreference: input.payload.bookingWorkflow?.requestedDate
       ? {
@@ -110,6 +113,12 @@ export function syncLegacyFromRecord(record: VoiceV2CallContextRecord): VoiceV2C
     intakeEnabled: record.capabilities.intakeEnabled,
     bookingStrategy:
       record.capabilities.bookingStrategy ?? payload.capabilities?.bookingStrategy,
+    knowledgeBaseEnabled:
+      record.capabilities.knowledgeBaseEnabled ?? payload.capabilities?.knowledgeBaseEnabled,
+    knowledgeBaseRevision:
+      record.capabilities.knowledgeBaseRevision ?? payload.capabilities?.knowledgeBaseRevision,
+    knowledgeBaseIds:
+      record.capabilities.knowledgeBaseIds ?? payload.capabilities?.knowledgeBaseIds,
   };
   return payload;
 }

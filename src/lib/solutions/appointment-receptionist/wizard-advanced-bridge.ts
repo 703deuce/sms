@@ -12,6 +12,7 @@ import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
 import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
 import { calendlyConfigFromWizard } from "@/lib/voice-v2/calendly-booking-config";
+import { knowledgeConfigFromWizard } from "@/lib/voice-v2/knowledge-config";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
@@ -115,6 +116,13 @@ export function mergeAppointmentWizardAdvanced(
   const voiceV2PstnLiveBooking =
     bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY";
   const voiceV2Calendly = calendlyConfigFromWizard(state);
+  const draftKbIds = Array.isArray(existingAdvanced?.knowledgeBaseIds)
+    ? (existingAdvanced.knowledgeBaseIds as string[]).map(String).filter(Boolean)
+    : [];
+  const knowledge = knowledgeConfigFromWizard(state, draftKbIds);
+  const knowledgeBaseIds = knowledge.knowledgeBaseIds.length
+    ? knowledge.knowledgeBaseIds
+    : draftKbIds;
   const linkRaw = String(state.bookingLinkUrl || "").trim();
   const linkValidated = linkRaw ? validateBookingLinkUrl(linkRaw) : null;
   const bookingLink =
@@ -131,6 +139,8 @@ export function mergeAppointmentWizardAdvanced(
     bookingStrategy,
     voiceV2PstnLiveBooking,
     ...(voiceV2Calendly ? { voiceV2Calendly } : {}),
+    knowledge,
+    ...(knowledgeBaseIds.length ? { knowledgeBaseIds } : {}),
     ...(bookingLink ? { bookingLink, bookingLinkLabel } : {}),
     voiceV2Intake,
     receptionistAdvanced: {
