@@ -7,6 +7,7 @@ import { isMctbTexmlVoiceIngress } from "@/lib/mctb/sip-ingress/sync";
 import { traceMctbDebug } from "@/lib/mctb/debug";
 import { mctbTexmlE164Variants } from "./e164-lookup";
 import { MCTB_TEXML_ROUTING_MODE, MCTB_TEXML_ROUTING_OWNER } from "./constants";
+import { resolveMctbPlatformOwnerWorkspaceId } from "@/lib/mctb/platform-owner-workspace";
 
 type PhoneRow = {
   id: string;
@@ -78,6 +79,10 @@ async function scoreIngressPhoneRow(phone: PhoneRow): Promise<number> {
 
   if (settings.platformDemo === true) score -= 300;
   if (String(settings.mctbRole || "").toLowerCase() === "platform_demo") score -= 100;
+  if (settings.liveQaMirror === true) score -= 250;
+
+  const platformOwnerWs = resolveMctbPlatformOwnerWorkspaceId();
+  if (phone.workspaceId === platformOwnerWs) score += 500;
 
   return score;
 }

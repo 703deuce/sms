@@ -68,8 +68,11 @@ async function main() {
     });
   }
 
-  let workspace = await prisma.workspace.findUnique({ where: { slug: CERT_WORKSPACE_SLUG } });
-  if (!workspace) {
+  const enforceSingleWs = process.env.TRANSOVO_ENFORCE_SINGLE_WORKSPACE === "1";
+  let workspace = enforceSingleWs
+    ? await prisma.workspace.findUnique({ where: { id: "ws_1" } })
+    : await prisma.workspace.findUnique({ where: { slug: CERT_WORKSPACE_SLUG } });
+  if (!workspace && !enforceSingleWs) {
     workspace = await prisma.workspace.create({
       data: {
         name: "Mass Texting Browser Cert",
@@ -79,6 +82,13 @@ async function main() {
         billingPlan: "trial",
       },
     });
+  }
+  if (!workspace) {
+    throw new Error(
+      enforceSingleWs
+        ? "TRANSOVO_ENFORCE_SINGLE_WORKSPACE=1 but ws_1 is missing"
+        : "Cert workspace missing and creation disabled",
+    );
   }
 
   const existingMembership = await prisma.membership.findFirst({

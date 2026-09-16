@@ -6,10 +6,13 @@ import assert from "node:assert/strict";
 import { subtractBusyInterval } from "../src/lib/voice-v2/appointment-changes/busy-exclude";
 import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
 import {
+  getAppointmentActionState,
   resolveStoredAppointmentRef,
   storeAppointmentRefs,
 } from "../src/lib/voice-v2/appointment-changes/ref-store";
 import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+
+assert.equal(getAppointmentActionState(null), undefined, "null PSTN context must not throw");
 
 const sessionKey = "cc:appt-change-test";
 clearVoiceV2CallSessions();

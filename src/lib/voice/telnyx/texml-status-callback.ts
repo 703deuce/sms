@@ -28,6 +28,7 @@ import {
 import { probeCfnaIngress, shouldProbeCfnaPayload } from "@/lib/mctb/cfna-ingress-probe";
 import { resolveMctbTexmlCallLegContext } from "@/lib/mctb/texml-ingress/call-leg-context";
 import { logMctbEntryTiming } from "@/lib/mctb/texml-ingress/entry-timing";
+import { resolveInboundPhoneRowByE164 } from "@/lib/phone/resolve-inbound-e164";
 import { traceMctbTexml } from "@/lib/mctb/texml-ingress/trace";
 
 function formToRecord(raw: string): Record<string, string> {
@@ -292,10 +293,13 @@ export async function handleTexmlStatusCallback(request: Request) {
   }
 
   if (toEarly) {
-    const pnMctb = await prisma.phoneNumber.findFirst({
-      where: { e164: toEarly },
-      select: { workspaceId: true, settingsJson: true },
-    });
+    const pnResolved = await resolveInboundPhoneRowByE164(toEarly);
+    const pnMctb = pnResolved
+      ? await prisma.phoneNumber.findFirst({
+          where: { id: pnResolved.id },
+          select: { workspaceId: true, settingsJson: true },
+        })
+      : null;
     const { isMctbTexmlVoiceIngress } = await import("@/lib/mctb/sip-ingress/sync");
     const { MCTB_CONSENT_MODE_EXISTING } = await import("@/lib/mctb/consent-mode");
     if (pnMctb && isMctbTexmlVoiceIngress(pnMctb.settingsJson)) {
@@ -422,10 +426,7 @@ export async function handleTexmlStatusCallback(request: Request) {
     toEarly &&
     (eventType === "call.initiated" || eventType === "call.ringing")
   ) {
-    const pnEarly = await prisma.phoneNumber.findFirst({
-      where: { e164: toEarly },
-      select: { id: true, workspaceId: true },
-    });
+    const pnEarly = await resolveInboundPhoneRowByE164(toEarly);
     if (pnEarly) {
       const { hasActiveSmartRoutingOnNumber } = await import(
         "@/lib/smart-routing/flow-service"
@@ -636,10 +637,7 @@ export async function handleTexmlStatusCallback(request: Request) {
       callSid: callSidForTrace || null,
     });
     if (to && from) {
-      const pn = await prisma.phoneNumber.findFirst({
-        where: { e164: to },
-        select: { id: true, workspaceId: true },
-      });
+      const pn = await resolveInboundPhoneRowByE164(to);
       if (pn) {
         const ensured2 = await ensureVoiceCallForTelnyxEvent({
           eventType: eventType || "call.initiated",

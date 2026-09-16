@@ -8,6 +8,7 @@
 
 import { getPrisma } from "@/lib/db";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
+import { resolveInboundPhoneRowByE164 } from "@/lib/phone/resolve-inbound-e164";
 import { backfillCallAni } from "@/lib/voice/call-identity";
 
 function pickString(...vals: unknown[]): string {
@@ -276,10 +277,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
       }
     }
   } else if (to) {
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { e164: to },
-      select: { id: true, workspaceId: true },
-    });
+    const pn = await resolveInboundPhoneRowByE164(to);
     if (pn) {
       workspaceId = pn.workspaceId;
       phoneNumberId = pn.id;

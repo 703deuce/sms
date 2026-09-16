@@ -17,7 +17,8 @@ export type VoiceV2AppointmentActionState = {
 export function getAppointmentActionState(
   ctx: VoiceV2CallContext | null,
 ): VoiceV2AppointmentActionState | undefined {
-  return (ctx as { appointmentAction?: VoiceV2AppointmentActionState }).appointmentAction;
+  if (!ctx) return undefined;
+  return ctx.appointmentAction;
 }
 
 export function storeAppointmentRefs(input: {
