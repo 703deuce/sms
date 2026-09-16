@@ -97,9 +97,9 @@ export async function importTelnyxNumbersIntoWorkspace(input: {
 
   for (const n of candidates) {
     if (!n.id) continue;
-    const elsewhere = await prisma.phoneNumber.findFirst({
-      where: { e164: n.e164, NOT: { workspaceId: input.workspaceId } },
-      select: { id: true, workspaceId: true },
+    const { findActiveE164Owner } = await import("@/lib/phone/e164-workspace-uniqueness");
+    const elsewhere = await findActiveE164Owner(n.e164, {
+      exceptWorkspaceId: input.workspaceId,
     });
     if (elsewhere) {
       imported.push({

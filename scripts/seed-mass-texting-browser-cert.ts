@@ -14,6 +14,7 @@ import { activateMassTextingTrial } from "../src/lib/mass-texting/trial-lifecycl
 import { loadMassTextOverviewMetrics } from "../src/lib/mass-texting/overview-metrics";
 import { buildPreSendReview } from "../src/lib/mass-texting/pre-send-review";
 import { normalizeE164 } from "../src/lib/messaging/twilio-mappings";
+import { assertE164AssignableToWorkspace } from "../src/lib/phone/e164-workspace-uniqueness";
 
 export const CERT_BROWSER_EMAIL = "mt-cert-browser@transovo.test";
 const CERT_NAME = "Mass Text Cert Browser";
@@ -157,6 +158,8 @@ async function main() {
       useCase: "mixed",
     },
   });
+
+  await assertE164AssignableToWorkspace(workspace.id, SENDER_E164);
 
   await prisma.phoneNumber.upsert({
     where: { workspaceId_e164: { workspaceId: workspace.id, e164: SENDER_E164 } },
