@@ -181,6 +181,14 @@ PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transpo
 
 **Known TeXML-direct failure mode:** Telnyx may invoke `get_runtime_context` before a `VoiceCall` row exists (only hangup status_callback created the call). Fix: `ensureVoiceCallForToolWebhook` on `/api/telnyx/voice/tools` + early TeXML lifecycle — see PR #102.
 
+## Voice V2 — Cloud Agent handoff (one-Amy PSTN booking)
+
+**Read first for Voice V2 / Caller Amy PSTN work:** `docs/VOICE-V2-CLOUD-AGENT-HANDOFF.md`
+
+One Amy, no General→Booking handoff, three V2 tools only, frozen FIND/BOOK/Microsoft/CallContext. Push to `master` is not done until Coolify deploy + production verify (`docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`, `ssh coolify-server`). After code changes: monitor build logs on the server, fix root errors, redeploy until green, then **stop for PSTN retest**.
+
+---
+
 ## Voice Booking V2 — known-good baseline (locked)
 
 **Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
