@@ -564,7 +564,11 @@ export function AppointmentReceptionistWizard({
               <p className="max-w-md text-right text-xs text-danger sm:mr-3">{error}</p>
             ) : null}
             <div className="flex gap-2">
-              <Button variant="outline" disabled={busy} onClick={() => void onSaveDraft()}>
+              <Button
+                variant="outline"
+                disabled={busy || !hydrated}
+                onClick={() => void onSaveDraft()}
+              >
                 {isMctb ? "Save" : "Save draft"}
               </Button>
               <Button
@@ -572,7 +576,7 @@ export function AppointmentReceptionistWizard({
                 data-testid={
                   stepIndex === steps.length - 1 ? "wizard-activate-footer" : "wizard-continue"
                 }
-                disabled={busy}
+                disabled={busy || !hydrated}
                 onClick={() => void onContinue()}
               >
                 {busy
