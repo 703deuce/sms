@@ -114,7 +114,7 @@ export function AppointmentReceptionistWizard({
                     createDefaultWizardState(),
                     preset || loaded.state.preset || null,
                   );
-              setState({
+              const merged = {
                 ...base,
                 ...loaded.state,
                 setupId: loaded.setupId || undefined,
@@ -123,7 +123,12 @@ export function AppointmentReceptionistWizard({
                 preset: isMctb
                   ? loaded.state.preset || "after_hours"
                   : preset || loaded.state.preset || null,
-              });
+              };
+              if (isMctb && loaded.agentId) {
+                merged.solutionName =
+                  loaded.state.solutionName?.trim() || merged.solutionName;
+              }
+              setState(merged);
               const statusRaw = String(loaded.status || loaded.agentStatus || "").toUpperCase();
               const life =
                 statusRaw === "ACTIVE" ? "active" : statusRaw === "DRAFT" ? "draft" : null;
