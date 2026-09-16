@@ -83,9 +83,8 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-v
 | On-call schedule template | On-call operational override |
 | Callback SLA policy | Callback deadlines / overdue |
 
-## Known limitations (this pass)
+## Known limitations
 
-- Wizard UI for full weekly hours editor is incremental; defaults apply when unset.
-- Post-call friction LLM classifier is typed/stubbed; realtime signals are authoritative for gating.
-- Full analytics dashboard UI is API-backed; drill-down uses existing call detail routes.
-- PSTN certification for on-call transfer remains manual.
+- Post-call friction uses transcript heuristics (not a separate LLM pass); realtime signals remain authoritative for gating.
+- PSTN certification for on-call transfer and after-hours flows remains manual.
+- Agent Runtime Quality (heard-text reconciliation, turn profiles, generation epochs) is a separate future pass.

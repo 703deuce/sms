@@ -49,6 +49,9 @@ export function TestStep({
   );
   const [qualityBusy, setQualityBusy] = useState(false);
   const [qualitySummary, setQualitySummary] = useState<string | null>(null);
+  const [qualityResults, setQualityResults] = useState<
+    Array<{ scenarioId: string; status: string; observed: string }>
+  >([]);
 
   useEffect(() => {
     if (!scenarios.some((s) => s.id === state.testScenario) && scenarios[0]) {
@@ -309,6 +312,7 @@ export function TestStep({
             if (!state.agentId) return;
             setQualityBusy(true);
             setQualitySummary(null);
+            setQualityResults([]);
             try {
               const res = await fetch("/api/voice-v2/quality-studio/run", {
                 method: "POST",
@@ -320,7 +324,13 @@ export function TestStep({
                 setQualitySummary(json.error || "Quality run failed");
                 return;
               }
-              const fails = (json.results || []).filter((r: { status: string }) => r.status === "FAIL");
+              const results = (json.results || []) as Array<{
+                scenarioId: string;
+                status: string;
+                observed: string;
+              }>;
+              setQualityResults(results);
+              const fails = results.filter((r) => r.status === "FAIL");
               patch({
                 qualityStudioLastRun: {
                   configHash: json.configHash,
@@ -341,6 +351,26 @@ export function TestStep({
           {qualityBusy ? "Running…" : "Run Quality Studio"}
         </Button>
         {qualitySummary ? <p className="text-sm">{qualitySummary}</p> : null}
+        {qualityResults.length > 0 ? (
+          <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
+            {qualityResults.map((r) => (
+              <li key={r.scenarioId} className="flex justify-between gap-2">
+                <span>{r.scenarioId.replace(/_/g, " ")}</span>
+                <span
+                  className={
+                    r.status === "PASS"
+                      ? "text-success"
+                      : r.status === "FAIL"
+                        ? "text-destructive"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {r.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {state.qualityStudioLastRun ? (
           <p className="text-xs text-muted-foreground">
             Last run {new Date(state.qualityStudioLastRun.testedAt).toLocaleString()}

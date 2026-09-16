@@ -15,6 +15,7 @@ import { buildBusinessKnowledgePromptSection } from "@/lib/voice/prompt/build-bu
 import { applyAmyMinimumSideEffectConfig } from "@/lib/voice/telnyx/amy-minimum-side-effect";
 import { buildDefaultOutboundSmsMessaging } from "@/lib/voice/sms/voice-outbound-sms-config";
 import { mergeAppointmentWizardAdvanced } from "./wizard-advanced-bridge";
+import { ensureWizardOperatingMaturity } from "./operating-maturity-wizard";
 import { recompileReceptionistFromDraft } from "@/lib/voice/receptionist/recompile";
 import {
   elevenLabsVoiceLanguagePublishFields,
@@ -556,7 +557,7 @@ export function buildWizardAgentConfig(
     },
     advanced: mergeAppointmentWizardAdvanced(state, {
       ...(base.advanced || {}),
-      voiceV2OperatingMaturity: state.operatingMaturity,
+      voiceV2OperatingMaturity: ensureWizardOperatingMaturity(state),
       appointmentReceptionistWizard: {
         // Full wizard snapshot so scheduled promote can re-run activate hooks.
         ...state,

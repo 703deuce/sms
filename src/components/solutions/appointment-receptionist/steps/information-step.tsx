@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { InfoCallout, SelectableCard, SidePanel, StatusPill } from "../ui";
+import { BusinessScheduleEditor } from "../operating-maturity-editor";
 
 type KnowledgeItem = AppointmentReceptionistWizardState["knowledgeItems"][number];
 
@@ -857,6 +858,8 @@ export function InformationStep({
             </div>
           </div>
         ) : null}
+
+        <BusinessScheduleEditor state={state} patch={patch} />
       </div>
 
       <SidePanel title="Knowledge quality">

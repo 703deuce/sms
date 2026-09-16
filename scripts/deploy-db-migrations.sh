@@ -36,6 +36,14 @@ SQL
   npx prisma migrate resolve --rolled-back "${FAILED_MCTB_DURABLE_OPS_MIGRATION}" || true
 }
 
+migrate_status="$(npx prisma migrate status 2>&1 || true)"
+if echo "$migrate_status" | grep -F "${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION}" | grep -qiE 'failed|not yet applied'; then
+  recover_failed_voice_v2_ai_call_recovery_migration
+fi
+if echo "$migrate_status" | grep -F "${FAILED_VOICE_OPERATIONAL_OVERRIDES_MIGRATION}" | grep -qiE 'failed|not yet applied'; then
+  recover_failed_voice_operational_overrides_migration
+fi
+
 echo "[db-deploy] Applying Prisma migrations..."
 set +e
 deploy_out="$(npx prisma migrate deploy 2>&1)"

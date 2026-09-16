@@ -19,6 +19,7 @@ import {
   validateAfterHoursHandlingWizard,
 } from "@/lib/voice-v2/after-hours-handling-config";
 import { DEFAULT_VOICE_V2_AI_CALL_RECOVERY_CONFIG } from "@/lib/voice-v2/ai-call-recovery/types";
+import { ensureWizardOperatingMaturity } from "./operating-maturity-wizard";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { wizardCollectFieldIdToCallerRowId } from "./wizard-collect-field-id";
 
@@ -140,6 +141,8 @@ export function mergeAppointmentWizardAdvanced(
       ? String(state.bookingLinkLabel || "Book your appointment").trim()
       : undefined;
 
+  const voiceV2OperatingMaturity = ensureWizardOperatingMaturity(state);
+
   const voiceV2AiCallRecovery = {
     ...DEFAULT_VOICE_V2_AI_CALL_RECOVERY_CONFIG,
     enabled: state.aiCallRecoveryEnabled === true,
@@ -153,6 +156,7 @@ export function mergeAppointmentWizardAdvanced(
   return {
     ...(existingAdvanced || {}),
     capabilityPack: "appointment_receptionist",
+    voiceV2OperatingMaturity,
     voiceV2AiCallRecovery,
     conversationWorkflowMode: true,
     bookingStrategy,

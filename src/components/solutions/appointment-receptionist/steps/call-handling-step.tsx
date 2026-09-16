@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 import { InfoCallout, RadioRow, SidePanel, StatusPill } from "../ui";
 import { UrgencyRulesEditor } from "../urgency-rules-editor";
+import {
+  AfterHoursBehaviorEditor,
+  CallbackSlaEditor,
+  OnCallScheduleEditor,
+} from "../operating-maturity-editor";
 
 const LEGACY_BOOKING_FLOW_STEPS = [
   "Understand request",
@@ -417,6 +422,10 @@ export function CallHandlingStep({
             </div>
           </div>
         </div>
+
+        <AfterHoursBehaviorEditor state={state} patch={patch} />
+        <OnCallScheduleEditor state={state} patch={patch} />
+        <CallbackSlaEditor state={state} patch={patch} />
       </div>
 
       <SidePanel title="Call handling preview">

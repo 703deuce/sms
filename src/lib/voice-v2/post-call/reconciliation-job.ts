@@ -127,6 +127,15 @@ export async function runVoiceV2PostCallReconciliationJob(input: {
     },
   });
 
+  const { persistVoiceV2CallQualityOnHangup } = await import(
+    "../operating-maturity/call-quality-persist"
+  );
+  await persistVoiceV2CallQualityOnHangup({
+    workspaceId: input.workspaceId,
+    callId: input.callId,
+    transcript: input.transcript,
+  }).catch(() => undefined);
+
   return { ok: true, recordComplete: reconciled.recordComplete, summary };
 }
 

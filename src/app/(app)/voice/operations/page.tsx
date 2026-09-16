@@ -9,6 +9,14 @@ type Snapshot = {
   onCall: { label: string } | null;
 };
 
+type CallbackRow = {
+  id: string;
+  callerPhone: string;
+  lifecycle: string;
+  promisedDeadline: string | null;
+  createdAt: string;
+};
+
 export default function VoiceOperationsPage() {
   const [agentId, setAgentId] = useState("");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -17,6 +25,13 @@ export default function VoiceOperationsPage() {
   const [closureUntil, setClosureUntil] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [callbacks, setCallbacks] = useState<CallbackRow[]>([]);
+
+  async function loadCallbacks() {
+    const res = await fetch("/api/voice-v2/operations/callbacks");
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) setCallbacks(json.data || []);
+  }
 
   async function loadSnapshot() {
     if (!agentId.trim()) return;
@@ -31,6 +46,7 @@ export default function VoiceOperationsPage() {
     }
     setSnapshot(json);
     setOnCallLabel(json.onCall?.label || "");
+    await loadCallbacks();
   }
 
   useEffect(() => {
@@ -148,10 +164,55 @@ export default function VoiceOperationsPage() {
         </Button>
       </section>
 
+      <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <h2 className="font-medium">Open callbacks</h2>
+        {callbacks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No recent callback requests.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {callbacks.slice(0, 8).map((cb) => (
+              <li
+                key={cb.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-2"
+              >
+                <div>
+                  <p className="font-medium">{cb.callerPhone}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {cb.lifecycle}
+                    {cb.promisedDeadline
+                      ? ` · due ${new Date(cb.promisedDeadline).toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+                {cb.lifecycle !== "COMPLETED" && cb.lifecycle !== "CANCELED" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      await fetch("/api/voice-v2/operations/callbacks", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ callbackId: cb.id, lifecycle: "COMPLETED" }),
+                      });
+                      setBusy(false);
+                      await loadCallbacks();
+                    }}
+                  >
+                    Mark complete
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <p className="text-xs text-muted-foreground">
-        Callbacks and unresolved calls: use{" "}
-        <a href="/voice/callback-requests" className="underline">Callbacks</a> and call history. Analytics:{" "}
-        <a href="/voice/analytics" className="underline">Voice analytics</a>.
+        Analytics:{" "}
+        <a href="/voice/analytics/after-hours" className="underline">After-hours dashboard</a>.
       </p>
     </div>
   );

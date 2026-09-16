@@ -442,6 +442,18 @@ export async function processPostCall(callId: string) {
     console.warn("[post-call] voice v2 ai call recovery enqueue failed", call.id, err);
   }
 
+  try {
+    const { persistVoiceV2CallQualityOnHangup } = await import(
+      "@/lib/voice-v2/operating-maturity/call-quality-persist"
+    );
+    await persistVoiceV2CallQualityOnHangup({
+      workspaceId: call.workspaceId,
+      callId: call.id,
+    });
+  } catch (err) {
+    console.warn("[post-call] voice v2 quality persist failed", call.id, err);
+  }
+
   return { ok: true, callId, missed: isMissed };
 }
 
