@@ -181,6 +181,10 @@ PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transpo
 
 **Known TeXML-direct failure mode:** Telnyx may invoke `get_runtime_context` before a `VoiceCall` row exists (only hangup status_callback created the call). Fix: `ensureVoiceCallForToolWebhook` on `/api/telnyx/voice/tools` + early TeXML lifecycle — see PR #102.
 
+## Voice V2 after-hours product (mandatory)
+
+**Source of truth:** `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md` — locked architecture, capability checklist, regression and certification rules. Read before any Voice V2 after-hours feature work.
+
 ## Voice Booking V2 — known-good baseline (locked)
 
 **Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
