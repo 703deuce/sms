@@ -46,6 +46,18 @@ export type VoiceV2ContextCapabilities = {
   voiceV2PstnLiveBooking?: boolean;
   /** Wizard-published mode — pinned for entire call. */
   bookingStrategy?: import("../booking-strategy").VoiceV2BookingStrategy;
+  knowledgeBaseEnabled?: boolean;
+  knowledgeBaseRevision?: string;
+  knowledgeBaseIds?: string[];
+  qualificationEnabled?: boolean;
+  qualificationRequiredBeforePrimaryAction?: boolean;
+  qualificationRevision?: string;
+  qualificationRules?: import("../qualification-types").VoiceV2QualificationRuleRow[];
+  qualificationRulesMatchMode?: import("../qualification-types").VoiceV2QualificationRuleMatchMode;
+  qualificationSupportedZipCodes?: string[];
+  qualificationNotQualifiedFallback?: import("../qualification-types").VoiceV2QualificationFallbackAction;
+  qualificationNeedsReviewFallback?: import("../qualification-types").VoiceV2QualificationFallbackAction;
+  qualificationFieldKeys?: string[];
 };
 
 export type VoiceV2BookingPreference = {
