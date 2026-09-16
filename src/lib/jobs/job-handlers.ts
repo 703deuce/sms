@@ -1183,6 +1183,12 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!jobId) throw new Error("jobId required");
       return processBulkVerifyJob(jobId);
     }
+    case "voice_v2_callback_sla_overdue_scan": {
+      const { executeVoiceV2CallbackSlaOverdueScan } = await import(
+        "@/lib/voice-v2/operating-maturity/callback-overdue-job"
+      );
+      return executeVoiceV2CallbackSlaOverdueScan();
+    }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
   }
@@ -1294,6 +1300,13 @@ export async function processDueJobs(limit = 25) {
     queueName: "maintenance",
     payload: { minuteKey },
     idempotencyKey: `appt-platform-reminders:${minuteKey}`,
+  });
+
+  await enqueueJob({
+    jobType: "voice_v2_callback_sla_overdue_scan",
+    queueName: "maintenance",
+    payload: { minuteKey },
+    idempotencyKey: `voice-v2-callback-sla:${minuteKey}`,
   });
 
   await enqueueJob({

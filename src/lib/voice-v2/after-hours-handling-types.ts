@@ -146,4 +146,13 @@ export type VoiceV2AfterHoursRuntimeState = {
   callerClassification?: VoiceV2CallerClassification;
   pendingHandlingAction?: VoiceV2HandlingAction;
   attemptedFallbacks?: VoiceV2FallbackAction[];
+  /** Live operating condition (pinned schedule + dynamic overrides). */
+  operating?: {
+    operatingState: string;
+    operatingStateReason?: string;
+    operatingStateResolvedAt: string;
+    onCallEntryId?: string;
+    onCallLabel?: string;
+    onCallTransferPlanId?: string | null;
+  };
 };

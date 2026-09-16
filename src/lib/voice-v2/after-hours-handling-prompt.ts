@@ -64,6 +64,9 @@ export function buildVoiceV2AfterHoursLayerBInstructions(
     "Business hours and holidays are knowledge for answers only — they do not control whether this call reached you. Calls arrive because the business/carrier forwarded them.",
   );
   lines.push(
+    "BUSINESS OPERATING STATE: Runtime may mark the business OPEN, CLOSED_AFTER_HOURS, WEEKEND, HOLIDAY, TEMPORARILY_CLOSED, or OVERFLOW. Use that state for what actions are allowed now — do not promise front-office transfer when closed unless runtime allows it. On-call escalation may be available when configured.",
+  );
+  lines.push(
     "SMS: only narrow transactional uses (booking link with consent, business notifications). No general marketing texts to callers.",
   );
 

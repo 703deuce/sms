@@ -281,6 +281,14 @@ export type AppointmentReceptionistWizardState = {
   /** Enable CRM note/contact tools alongside message taking. */
   crmEnabled: boolean;
   timezone: string;
+
+  /** Voice V2 operating maturity (hours, on-call, SLA) — pinned at publish. */
+  operatingMaturity?: import("@/lib/voice-v2/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
+  qualityStudioLastRun?: {
+    configHash: string;
+    testedAt: string;
+    publishBlockers?: string[];
+  };
 };
 
 export type WizardPersistAction = "save_draft" | "activate" | "create_draft";

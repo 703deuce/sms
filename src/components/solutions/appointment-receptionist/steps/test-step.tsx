@@ -47,6 +47,8 @@ export function TestStep({
   const [assistantId, setAssistantId] = useState<string | null>(
     state.telnyxAssistantId || null,
   );
+  const [qualityBusy, setQualityBusy] = useState(false);
+  const [qualitySummary, setQualitySummary] = useState<string | null>(null);
 
   useEffect(() => {
     if (!scenarios.some((s) => s.id === state.testScenario) && scenarios[0]) {
@@ -292,6 +294,58 @@ export function TestStep({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <h3 className="font-medium">Agent Quality Studio</h3>
+        <p className="text-sm text-muted-foreground">
+          Headless scenario suite against your draft configuration (no PSTN).
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={qualityBusy || !state.agentId}
+          onClick={async () => {
+            if (!state.agentId) return;
+            setQualityBusy(true);
+            setQualitySummary(null);
+            try {
+              const res = await fetch("/api/voice-v2/quality-studio/run", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ agentId: state.agentId }),
+              });
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                setQualitySummary(json.error || "Quality run failed");
+                return;
+              }
+              const fails = (json.results || []).filter((r: { status: string }) => r.status === "FAIL");
+              patch({
+                qualityStudioLastRun: {
+                  configHash: json.configHash,
+                  testedAt: new Date().toISOString(),
+                  publishBlockers: json.publishBlockers,
+                },
+              });
+              setQualitySummary(
+                fails.length
+                  ? `${fails.length} scenario(s) failed`
+                  : `PASS — ${(json.results || []).length} scenarios`,
+              );
+            } finally {
+              setQualityBusy(false);
+            }
+          }}
+        >
+          {qualityBusy ? "Running…" : "Run Quality Studio"}
+        </Button>
+        {qualitySummary ? <p className="text-sm">{qualitySummary}</p> : null}
+        {state.qualityStudioLastRun ? (
+          <p className="text-xs text-muted-foreground">
+            Last run {new Date(state.qualityStudioLastRun.testedAt).toLocaleString()}
+          </p>
+        ) : null}
       </div>
 
       <SidePanel title="Test summary">

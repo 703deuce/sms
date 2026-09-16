@@ -556,6 +556,7 @@ export function buildWizardAgentConfig(
     },
     advanced: mergeAppointmentWizardAdvanced(state, {
       ...(base.advanced || {}),
+      voiceV2OperatingMaturity: state.operatingMaturity,
       appointmentReceptionistWizard: {
         // Full wizard snapshot so scheduled promote can re-run activate hooks.
         ...state,

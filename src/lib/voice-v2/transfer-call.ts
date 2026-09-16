@@ -4,6 +4,7 @@ import { getVoiceV2CallContext, setVoiceV2CallContext } from "./intake/session-s
 import { resolveSessionKey } from "./intake/load-call-context";
 import type { VoiceV2PublishedAfterHoursHandlingConfig } from "./after-hours-handling-types";
 import { executeVoiceV2TransferPlan, rejectArbitraryTransferDestination } from "./transfer/transfer-executor";
+import { resolveOnCallTransferPlanId } from "./operating-maturity/on-call";
 import type { VoiceV2TransferProvider } from "./transfer/transfer-provider";
 
 export type TransferCallInput = {
@@ -51,12 +52,24 @@ export async function executeVoiceV2TransferCall(input: TransferCallInput) {
     };
   }
 
+  const onCallPlan = resolveOnCallTransferPlanId({
+    onCall: ctx.afterHours?.operating?.onCallTransferPlanId
+      ? {
+          entryId: ctx.afterHours.operating.onCallEntryId || "on_call",
+          label: ctx.afterHours.operating.onCallLabel || "On-call",
+          transferPlanId: ctx.afterHours.operating.onCallTransferPlanId,
+          source: "SCHEDULE",
+        }
+      : null,
+    defaultPlanId: input.config.defaultTransferPlanId,
+  });
+
   const result = await executeVoiceV2TransferPlan({
     ctx,
     config: input.config,
     provider: input.provider,
     callControlId: input.callControlId || sessionKey.replace(/^cc:/, ""),
-    planId: input.transferPlanId,
+    planId: input.transferPlanId || onCallPlan || undefined,
     invocationId: input.invocationId,
     callerRequested: input.callerRequested,
   });

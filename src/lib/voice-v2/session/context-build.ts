@@ -14,6 +14,9 @@ import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
 import type { VoiceV2EnrollmentSnapshot } from "./types";
+import { applyOperatingMaturityToCallContext } from "../operating-maturity/apply-to-call-context";
+import { loadLiveOnCallOverride, loadLiveTemporaryClosure } from "../operating-maturity/operational-store";
+import { resolveOperatingMaturityFromAgentAdvanced } from "../operating-maturity/wizard-config";
 
 function prefillPhone(fromE164?: string | null): VoiceV2IntakeState {
   const ani = normalizeCallerAni(fromE164 || "");
@@ -94,5 +97,21 @@ export async function buildVoiceV2CallContextPayload(input: {
     },
   };
   payload = applyCallerAniToIntakeState(payload, input.fromE164);
+
+  const maturity = resolveOperatingMaturityFromAgentAdvanced(
+    config.advanced as Record<string, unknown>,
+  );
+  const [liveClosure, onCallOverride] = await Promise.all([
+    loadLiveTemporaryClosure({ workspaceId: input.workspaceId, agentId: input.agentId }),
+    loadLiveOnCallOverride({ workspaceId: input.workspaceId, agentId: input.agentId }),
+  ]);
+  const applied = applyOperatingMaturityToCallContext({
+    ctx: payload,
+    maturity,
+    liveTemporaryClosure: liveClosure,
+    onCallOverride,
+  });
+  payload = applied.ctx;
+
   return { payload, enrollment, bookingTimezone: timezone };
 }

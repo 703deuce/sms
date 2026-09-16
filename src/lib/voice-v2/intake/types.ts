@@ -98,6 +98,7 @@ export interface VoiceV2CallContext {
     callbackToolAvailable?: boolean;
     /** Pinned wizard revision for intake schema — post-call reconciliation uses this. */
     intakeSchemaRevision?: string;
+    operatingMaturityRevision?: string;
   };
   qualification?: VoiceV2QualificationState;
   appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;

@@ -471,6 +471,7 @@ model Workspace {
   platformProductSubscriptions PlatformProductSubscription[]
   platformTranscriptionUsageRecords PlatformTranscriptionUsageRecord[]
   callbackRequests CallbackRequest[]
+  voiceOperationalOverrides VoiceOperationalOverride[]
   mctbRequestFormSubmissions MctbRequestFormSubmission[]
   mctbHandoffConfig MctbHandoffConfig?
   mctbBookingLinks MctbBookingLink[]
@@ -595,6 +596,24 @@ model PlatformTranscriptionUsageRecord {
   @@index([workspaceId, recordedAt])
   @@index([subscriptionId])
   @@map("platform_transcription_usage_records")
+}
+
+model VoiceOperationalOverride {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  agentId         String?
+  kind            String
+  payload         Json
+  effectiveFrom   DateTime  @default(now())
+  effectiveUntil  DateTime?
+  createdByUserId String?
+  auditJson       Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, kind, effectiveFrom])
+  @@map("voice_operational_overrides")
 }
 
 model CallbackRequest {

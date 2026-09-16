@@ -659,7 +659,15 @@ Maintain this matrix in this document. Status values:
 | WARM_TRANSFER | IMPLEMENTED | Briefing + DTMF accept path; Telnyx warm leg **PSTN pending** |
 | WATERFALL_TRANSFER | HEADLESS_CERTIFIED | Sequential plan; mock/provider tests; **PSTN pending** |
 | URGENCY_ESCALATION | HEADLESS_CERTIFIED | Deterministic rules on intake fields; **PSTN pending** |
-| BUSINESS_HOURS_RULES | IMPLEMENTED | Wizard/advanced — verify/certify |
+| BUSINESS_HOURS_RULES | IMPLEMENTED | `operatingMaturity.businessSchedule` + resolver — wizard UI incremental |
+| OPERATING_STATE | HEADLESS_CERTIFIED | `resolveVoiceV2OperatingState` — no routing mutation |
+| ON_CALL_SCHEDULING | IMPLEMENTED | Schedule + operational override — PSTN pending |
+| FRICTION_TELEMETRY | IMPLEMENTED | Realtime signals; post-call LLM telemetry hook |
+| RESOLUTION_AUDIT | HEADLESS_CERTIFIED | `normalizeVoiceV2ResolutionAudit` |
+| CALLBACK_SLA | IMPLEMENTED | Metadata + overdue job — completion UI uses callback queue |
+| QUALITY_STUDIO | HEADLESS_CERTIFIED | Wizard Test + API runner |
+| AFTER_HOURS_ANALYTICS | IMPLEMENTED | API aggregation — dashboard drill-down incremental |
+| MOBILE_OPERATIONS | IMPLEMENTED | `/voice/operations` responsive UI |
 | SPAM_FILTERING | HEADLESS_CERTIFIED | Conservative vendor/sales classification; **PSTN pending** |
 | MULTILINGUAL | NOT_STARTED | |
 | CALL_SUMMARY | IMPLEMENTED | Partial — verify |
