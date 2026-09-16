@@ -193,10 +193,17 @@ export async function updateVoiceAgentDraft(
           where: { id: patch.phoneNumberId, workspaceId },
           select: { settingsJson: true },
         });
-        const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
-        if (phone && isMctbTexmlIngressLocked(phone.settingsJson)) {
+        const { shouldSkipLiveKitProvisionForMctbPhone } = await import(
+          "@/lib/mctb/sip-ingress/sync"
+        );
+        if (
+          phone &&
+          shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
+            appointmentWizard,
+          })
+        ) {
           console.warn(
-            "[voice] Skipping LiveKit provision — DID locked to MCTB TeXML",
+            "[voice] Skipping LiveKit provision — MCTB TeXML / wizard voice line",
             patch.phoneNumberId,
           );
         } else {
@@ -544,10 +551,20 @@ export async function publishVoiceAgent(
       where: { id: updated.phoneNumberId, workspaceId },
       select: { settingsJson: true },
     });
-    const { isMctbTexmlIngressLocked } = await import("@/lib/mctb/sip-ingress/sync");
-    if (phone && isMctbTexmlIngressLocked(phone.settingsJson)) {
+    const { shouldSkipLiveKitProvisionForMctbPhone } = await import(
+      "@/lib/mctb/sip-ingress/sync"
+    );
+    const appointmentWizard = Boolean(
+      (config.advanced as Record<string, unknown> | undefined)?.appointmentReceptionistWizard,
+    );
+    const skipLiveKitForMctb =
+      phone &&
+      shouldSkipLiveKitProvisionForMctbPhone(phone.settingsJson, {
+        appointmentWizard,
+      });
+    if (skipLiveKitForMctb) {
       console.warn(
-        "[voice] Skipping LiveKit provision on publish — DID locked to MCTB TeXML",
+        "[voice] Skipping LiveKit provision on publish — MCTB TeXML / wizard voice line",
         updated.phoneNumberId,
       );
     } else {

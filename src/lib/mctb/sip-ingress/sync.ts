@@ -39,6 +39,23 @@ export function isMctbTexmlIngressLocked(settingsJson: unknown): boolean {
   return isMctbTexmlVoiceIngress(settingsJson);
 }
 
+/** MCTB after-hours wizard uses TeXML assistant routing — not LiveKit FQDN provision. */
+export function shouldSkipLiveKitProvisionForMctbPhone(
+  settingsJson: unknown,
+  opts?: { appointmentWizard?: boolean },
+): boolean {
+  if (isMctbTexmlIngressLocked(settingsJson)) return true;
+  if (!opts?.appointmentWizard) return false;
+  const settings = readPhoneMctbSettings(settingsJson);
+  const inbound = settings.mctbInbound;
+  if (!inbound || typeof inbound !== "object" || Array.isArray(inbound)) return false;
+  const block = inbound as Record<string, unknown>;
+  return (
+    block.inboundHandlingMode === "VOICE_AGENT" ||
+    Boolean(block.voiceTexmlAppId)
+  );
+}
+
 export class MctbTexmlProvisionLockedError extends Error {
   readonly code = "mctb_texml_locked";
 
