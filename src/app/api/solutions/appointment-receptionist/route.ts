@@ -187,10 +187,12 @@ export async function POST(request: Request) {
     // would stop inbound AI until the scheduled promote runs).
     const existingAgent = await getPrisma().voiceAgent.findFirst({
       where: { id: agentId, workspaceId: auth.workspaceId },
-      select: { status: true },
+      select: { status: true, publishedVersionId: true },
     });
     const preserveActiveOnSchedule =
       scheduleOnly && existingAgent?.status === "ACTIVE";
+    const preserveActiveOnDraftSave =
+      effectiveAction === "save_draft" && existingAgent?.status === "ACTIVE";
 
     const updated = await updateVoiceAgentDraft(auth.workspaceId, agentId, {
       name,
@@ -200,8 +202,50 @@ export async function POST(request: Request) {
       purpose: "appointment_receptionist",
       phoneNumberId: shouldPublish ? state.phoneNumberId : state.phoneNumberId,
       draftConfig: configWithKb,
-      status: shouldPublish || preserveActiveOnSchedule ? undefined : "DRAFT",
+      status:
+        shouldPublish || preserveActiveOnSchedule || preserveActiveOnDraftSave
+          ? undefined
+          : "DRAFT",
     });
+
+    if (preserveActiveOnDraftSave && state.phoneNumberId) {
+      const { syncLiveWizardDraftToProvider } = await import("@/lib/voice/agent-service");
+      const liveSync = await syncLiveWizardDraftToProvider(auth.workspaceId, agentId);
+      if (!liveSync.synced && liveSync.error && liveSync.error !== "not_live") {
+        warnings.push(`Live call sync: ${liveSync.error}`);
+      } else if (liveSync.synced) {
+        try {
+          const { isMctbV1Primary } = await import("@/lib/workspace/platform-launch");
+          if (isMctbV1Primary()) {
+            const { setInboundHandlingMode } = await import(
+              "@/lib/mctb/inbound-handling/switch-mode"
+            );
+            const { persistMctbLineInboundConfig } = await import(
+              "@/lib/mctb/inbound-handling/line-config"
+            );
+            await persistMctbLineInboundConfig({
+              workspaceId: auth.workspaceId,
+              phoneNumberId: state.phoneNumberId,
+              patch: { voiceAgentId: agentId },
+            }).catch(() => undefined);
+            await setInboundHandlingMode({
+              workspaceId: auth.workspaceId,
+              mode: "VOICE_AGENT",
+              phoneNumberId: state.phoneNumberId,
+              voiceAgentId: agentId,
+            }).catch((err) => {
+              warnings.push(
+                err instanceof Error
+                  ? `Voice call-handling refresh: ${err.message}`
+                  : "Voice call-handling refresh failed",
+              );
+            });
+          }
+        } catch {
+          // non-blocking
+        }
+      }
+    }
 
     // Long-term memory via VoiceMemoryConfig — enable or explicitly disable.
     if (shouldPublish || scheduleOnly || effectiveAction !== "create_draft") {
@@ -243,7 +287,9 @@ export async function POST(request: Request) {
       state: { ...state, agentId },
       published:
         !shouldPublish &&
-        (preserveActiveOnSchedule || existingAgent?.status === "ACTIVE"),
+        (preserveActiveOnSchedule ||
+          preserveActiveOnDraftSave ||
+          existingAgent?.status === "ACTIVE"),
       links: {
         calendarConnectionId: hooks.calendarConnectionId,
       },

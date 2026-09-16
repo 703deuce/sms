@@ -478,7 +478,7 @@ export async function loadAppointmentReceptionistSetup(
     setupId: setup?.id || agent?.sourceSolutionSetupId || null,
     agentId: agent?.id || null,
     outcomeSlug,
-    status: setup?.status || agent?.status || "DRAFT",
+    status: agent?.status || setup?.status || "DRAFT",
     state,
   };
 }

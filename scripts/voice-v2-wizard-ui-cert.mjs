@@ -69,14 +69,29 @@ function backendSnapshot() {
   }
 }
 
+/** Coolify production save_draft can take 60–120s (hooks + workflow compile). */
 async function waitReady(page) {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 200; i++) {
     const working = await page.getByRole("button", { name: /Working/i }).count();
     if (!working) return;
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
   }
+  await page.screenshot({ path: `${OUT_DIR}/stuck-working.png`, fullPage: true });
   const err = await page.locator(".text-danger").first().textContent().catch(() => "");
   throw new Error(`Wizard stuck on Working… ${err || ""}`.trim());
+}
+
+async function apiSaveDraft(page, state, wizardStepId) {
+  const res = await page.request.post(`${BASE}/api/solutions/appointment-receptionist`, {
+    headers: { "content-type": "application/json" },
+    data: { action: "save_draft", state, wizardStepId },
+    timeout: 180000,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok()) {
+    throw new Error(`save_draft ${res.status()}: ${JSON.stringify(json).slice(0, 400)}`);
+  }
+  return json?.data;
 }
 
 async function clickSaveDraft(page) {
@@ -257,17 +272,12 @@ async function main() {
   if (!refreshOk) fail(`${STEP_ORDER[0]} solutionName lost on refresh`);
 
   // —— Cross-page stale save ——
-  await goToStepByLabel(page, STEP_ORDER[3]);
-  const stratBefore = (await fetchWizardState(page))?.state?.bookingStrategy;
-  // Toggle strategy via UI if radios exist
-  const requestOnly = page.getByText(/request only|collect.*request/i).first();
-  let changedStrategy = false;
-  if (await requestOnly.isVisible().catch(() => false)) {
-    await requestOnly.click();
-    changedStrategy = true;
-    await clickSaveDraft(page);
-  }
+  api = await fetchWizardState(page);
+  const stratBefore = api?.state?.bookingStrategy;
+  const apptState = { ...api.state, bookingStrategy: "REQUEST_ONLY" };
+  await apiSaveDraft(page, apptState, "appointments");
   const stratAfterAppt = (await fetchWizardState(page))?.state?.bookingStrategy;
+  const changedStrategy = stratAfterAppt === "REQUEST_ONLY";
 
   await goToStepByLabel(page, STEP_ORDER[2]);
   const bizInput = page
@@ -299,15 +309,12 @@ async function main() {
   // —— Custom caller field (Booking / Appointments step) ——
   await goToStepByLabel(page, STEP_ORDER[3]);
   await page.screenshot({ path: `${OUT_DIR}/booking-step.png`, fullPage: true });
-  const addFieldBtn = page.getByRole("button", { name: /^Add field$/i }).first();
-  if (await addFieldBtn.isVisible().catch(() => false)) {
-    await addFieldBtn.click();
-    await page.waitForTimeout(300);
-    const labelInputs = page.locator('input[placeholder*="Label"], input[aria-label*="Label"]');
-    const lastLabel = labelInputs.last();
-    await lastLabel.fill("Mother's name");
-    const question = page.getByPlaceholder(/question|ask/i).last();
-    if (await question.count()) await question.fill("What is your mother's name?");
+  const fieldInput = page.locator("#new-collect-field");
+  if (await fieldInput.isVisible().catch(() => false)) {
+    await fieldInput.scrollIntoViewIfNeeded();
+    await fieldInput.fill("Mother's name");
+    await page.getByRole("button", { name: /^Add field$/i }).click();
+    await page.waitForTimeout(400);
     await clickSaveDraft(page);
     api = await fetchWizardState(page);
     const fields = api?.state?.collectFields || [];
@@ -315,6 +322,7 @@ async function main() {
       (f) =>
         /mother/i.test(f.label || "") ||
         f.id === "mothers_name" ||
+        f.id === "custom_mother_s_name" ||
         /mother/i.test(f.id || ""),
     );
     row({
@@ -341,8 +349,22 @@ async function main() {
       page: STEP_ORDER[3],
       label: "Add caller field",
       status: "BLOCKED",
-      note: "Add field control not found",
+      note: "#new-collect-field not visible (scroll/booking UI)",
     });
+  }
+
+  // —— Per-step smoke: page loads without error banner ——
+  for (let si = 0; si < STEP_ORDER.length; si++) {
+    await goToStepIndex(page, si);
+    const errBanner = await page.locator(".text-danger").first().textContent().catch(() => "");
+    row({
+      page: STEP_ORDER[si],
+      section: "load",
+      label: "Step renders",
+      status: errBanner?.trim() ? "FAIL" : "PASS",
+      note: errBanner?.trim() || "",
+    });
+    if (errBanner?.trim()) fail(`${STEP_ORDER[si]} error: ${errBanner.trim()}`);
   }
 
   // —— Restore solution name (partial) ——

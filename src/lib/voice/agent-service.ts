@@ -614,6 +614,73 @@ export async function publishVoiceAgent(
   };
 }
 
+/**
+ * After a wizard save_draft on an already-live agent: update the published config
+ * snapshot and sync Telnyx without demoting ACTIVE or creating a new version row.
+ */
+export async function syncLiveWizardDraftToProvider(
+  workspaceId: string,
+  agentId: string,
+): Promise<{ synced: boolean; error?: string }> {
+  const prisma = getPrisma();
+  const agent = await prisma.voiceAgent.findFirst({
+    where: { id: agentId, workspaceId },
+  });
+  if (!agent?.publishedVersionId || agent.status !== "ACTIVE") {
+    return { synced: false, error: "not_live" };
+  }
+
+  try {
+    const { applyFlowToAgentDraft } = await import("./flow/apply");
+    const applied = await applyFlowToAgentDraft({
+      workspaceId,
+      agentId,
+      agentType: agent.agentType,
+      draftConfig: parseVoiceAgentConfig(agent.draftConfig),
+      strict: true,
+    });
+    const { recompileReceptionistFromDraft } = await import("./receptionist/recompile");
+    const { attachPythonRuntimeBootstrapSnapshot } = await import(
+      "./python-runtime-bridge/build-bootstrap-snapshot"
+    );
+    let config = attachPythonRuntimeBootstrapSnapshot(
+      recompileReceptionistFromDraft(applied.config),
+      { workspaceId, agentId, agentName: agent.name },
+    );
+    const { enrichVoiceAgentConfigForCanonicalAiBooking } = await import(
+      "./ai-booking/publish-config"
+    );
+    config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agentId, config);
+
+    await prisma.voiceAgentVersion.update({
+      where: { id: agent.publishedVersionId },
+      data: { config: config as object },
+    });
+
+    await syncAssistantToTelnyx(workspaceId, agentId, agent, config);
+
+    if (agent.phoneNumberId) {
+      const { syncVoiceAgentPhoneAssignment } = await import("./agent-phone");
+      const appointmentWizard = Boolean(
+        (config.advanced as Record<string, unknown> | undefined)
+          ?.appointmentReceptionistWizard,
+      );
+      await syncVoiceAgentPhoneAssignment({
+        workspaceId,
+        agentId,
+        phoneNumberId: agent.phoneNumberId,
+        exclusive: true,
+        allowMctbTexmlVoiceAgentTakeover: appointmentWizard,
+      });
+    }
+
+    return { synced: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { synced: false, error: message };
+  }
+}
+
 export async function rollbackVoiceAgent(
   workspaceId: string,
   agentId: string,
