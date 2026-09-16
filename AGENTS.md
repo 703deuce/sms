@@ -185,6 +185,14 @@ PR #100 (`continue_workflow` timeout/fillers) does **not** fix zero tool transpo
 
 **Source of truth:** `docs/VOICE-V2-AFTER-HOURS-PRODUCT-CONTRACT.md` — locked architecture, capability checklist, regression and certification rules. Read before any Voice V2 after-hours feature work.
 
+## Voice V2 — Cloud Agent handoff (one-Amy PSTN booking)
+
+**Read first for Voice V2 / Caller Amy PSTN work:** `docs/VOICE-V2-CLOUD-AGENT-HANDOFF.md`
+
+One Amy, no General→Booking handoff, three V2 tools only, frozen FIND/BOOK/Microsoft/CallContext. Push to `master` is not done until Coolify deploy + production verify (`docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`, `ssh coolify-server`). After code changes: monitor build logs on the server, fix root errors, redeploy until green, then **stop for PSTN retest**.
+
+---
+
 ## Voice Booking V2 — known-good baseline (locked)
 
 **Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
@@ -382,6 +390,18 @@ Not “API tests pass.” Done when the **full user journey** in `MASS_TEXTING_G
 | Media | `/messaging/media` | `kimi-media-connected.tsx` |
 
 API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow review — they skip connected-shell state bugs.
+
+---
+
+## Cursor Cloud — Coolify production deployment (mandatory)
+
+**Full workflow:** `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`
+
+- SSH: runtime secret `COOLIFY_SSH_KEY`, alias `ssh coolify-server` (`root@128.140.102.51`). Never print the key.
+- **Push to `master` starts deployment; it does not finish the task.** Follow commit → Coolify build → new container → production verification. Fix failures from deployment/runtime logs and redeploy until healthy.
+- **First task in a session:** run the discovery section in that doc (read-only SSH) and confirm the production map (repo → Coolify app → container → URL → `commitSha`).
+
+Primary production domain is in Coolify (`COOLIFY_FQDN` on the web container) · health/version: `GET /api/health` · repo `703deuce/sms` @ `master` · Coolify app UUID `ds8s3hjin60qs6g7s0iqkixs` (scheduler sibling: `tgjridm6vrmrgljkfrr0rpjn`). Update the doc map if discovery differs.
 
 ---
 
