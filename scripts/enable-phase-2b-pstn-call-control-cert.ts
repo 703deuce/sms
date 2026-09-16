@@ -54,6 +54,25 @@ async function main() {
     },
   });
 
+  await prisma.voiceAgentPhoneNumber.upsert({
+    where: {
+      agentId_phoneNumberId: { agentId: AGENT_ID, phoneNumberId: phone.id },
+    },
+    create: {
+      workspaceId: WORKSPACE_ID,
+      agentId: AGENT_ID,
+      phoneNumberId: phone.id,
+      inboundEnabled: true,
+      outboundEnabled: true,
+      isDefault: true,
+    },
+    update: {
+      inboundEnabled: true,
+      outboundEnabled: true,
+      isDefault: true,
+    },
+  });
+
   console.log("Publishing with inboundRoutingMode:", getInboundRoutingMode(next));
   const published = await publishVoiceAgent(
     WORKSPACE_ID,
@@ -109,6 +128,11 @@ async function main() {
     console.error("Inbound not ready — fix issues above before cert call");
     process.exit(1);
   }
+
+  console.log(
+    "\nNOTE: Call Control cert requires app deploy with inbound E164 disambiguation fix. " +
+      "If PSTN fails, run restore-texml path in ops runbook before retrying CC.",
+  );
 }
 
 main().catch((err) => {

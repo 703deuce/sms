@@ -412,9 +412,22 @@ export async function processVoiceWebhookEvent(input: {
     const to = String(eventPayload.to || "");
     const from = String(eventPayload.from || "");
     const callControlId = String(eventPayload.call_control_id || "");
-    const pn = await prisma.phoneNumber.findFirst({
-      where: { e164: to, releasedAt: null, status: { not: "Released" } },
-    });
+    const { resolveAgentByCalledNumber } = await import(
+      "@/lib/telephony/provisioning/agent-routing"
+    );
+    const inboundRoute = await resolveAgentByCalledNumber(to);
+    const pn = inboundRoute
+      ? await prisma.phoneNumber.findFirst({
+          where: {
+            id: inboundRoute.phoneNumberId,
+            workspaceId: inboundRoute.workspaceId,
+            releasedAt: null,
+            status: { not: "Released" },
+          },
+        })
+      : await prisma.phoneNumber.findFirst({
+          where: { e164: to, releasedAt: null, status: { not: "Released" } },
+        });
     if (pn && callControlId) {
       const forwardedFrom = parseTelnyxForwardedFrom(eventPayload);
       const { resolveSmartRoutingIngress } = await import(
