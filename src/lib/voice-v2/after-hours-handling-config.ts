@@ -1,7 +1,5 @@
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import {
-  wizardCollectFieldIdToCallerRowId,
-} from "@/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
+import { wizardCollectFieldIdToCallerRowId } from "@/lib/solutions/appointment-receptionist/wizard-collect-field-id";
 import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
 import type {
   VoiceV2FallbackAction,

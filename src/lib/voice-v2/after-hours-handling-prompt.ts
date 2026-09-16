@@ -1,4 +1,4 @@
-import "server-only";
+/** Pure prompt layer — safe for receptionist client compile (no server-only). */
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import type { VoiceV2PublishedAfterHoursHandlingConfig } from "./after-hours-handling-types";

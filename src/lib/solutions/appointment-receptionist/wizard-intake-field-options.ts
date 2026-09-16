@@ -1,7 +1,5 @@
 import type { AppointmentReceptionistWizardState } from "./types";
-import {
-  wizardCollectFieldIdToCallerRowId,
-} from "./wizard-advanced-bridge";
+import { wizardCollectFieldIdToCallerRowId } from "./wizard-collect-field-id";
 import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
 
 export type WizardIntakeFieldOption = {

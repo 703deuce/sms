@@ -19,16 +19,11 @@ import {
   validateAfterHoursHandlingWizard,
 } from "@/lib/voice-v2/after-hours-handling-config";
 import type { AppointmentReceptionistWizardState } from "./types";
+import { wizardCollectFieldIdToCallerRowId } from "./wizard-collect-field-id";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
 
-/** Map 8-page wizard collect field ids → receptionist caller field ids. */
-export function wizardCollectFieldIdToCallerRowId(id: string): string {
-  const trimmed = id.trim();
-  if (trimmed === "full_name") return "name";
-  if (trimmed === "service") return "reason";
-  return trimmed;
-}
+export { wizardCollectFieldIdToCallerRowId } from "./wizard-collect-field-id";
 
 function askWhenForField(
   rowId: string,
