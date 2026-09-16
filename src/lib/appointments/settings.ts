@@ -138,6 +138,7 @@ export function appendTimeline(
     type: event.type,
     label: event.label,
     detail: event.detail,
+    actor: event.actor,
   });
   base.timeline = timeline.slice(-50);
   return base;

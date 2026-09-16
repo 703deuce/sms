@@ -337,6 +337,7 @@ export default function TypeEditorPanel({
           <div className="px-5 pb-5 pt-2 space-y-8 border-t border-[#ecedf2]">
         <TypeAdvancedSections
           form={form}
+          appointmentTypeId={appointmentTypeId || undefined}
           staffOptions={staffOptions}
           locationOptions={locationOptions}
           connectedPaymentProviders={connectedPaymentProviders}

@@ -14,6 +14,7 @@ import { Button, Card, StatusBadge, fmtPhone, money, fmtDateTime } from "./ui";
 import { AppointmentHeader } from "./AppointmentHeader";
 import { ReminderSchedule } from "./ReminderSchedule";
 import { ActivityTimeline } from "./ActivityTimeline";
+import { ManageAppointmentLinkCard } from "./ManageAppointmentLinkCard";
 import { RescheduleModal } from "./RescheduleModal";
 import { CancelModal } from "./CancelModal";
 import { VideoMeetingPanel } from "./VideoMeetingPanel";
@@ -574,6 +575,15 @@ export function AppointmentDetail({ appointmentId }: { appointmentId: string }) 
               </div>
             )}
           </Card>
+
+          <ManageAppointmentLinkCard
+            appointmentId={appointmentId}
+            manageUrl={appt.manageAppointmentUrl}
+            issuedAt={appt.manageAppointmentTokenIssuedAt}
+            timezone={appt.timezone}
+            readOnly={isTerminal}
+            onUpdated={() => void fetchAppt()}
+          />
 
           <ActivityTimeline events={appt.timeline} />
         </div>
