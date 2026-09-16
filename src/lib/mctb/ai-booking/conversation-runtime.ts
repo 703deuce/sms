@@ -33,6 +33,8 @@ export async function handleMctbAiBookingInboundSms(input: {
   writeEpoch?: number;
   /** Set when Lead Recovery policy already armed AI_BOOK — skip redundant router gate. */
   forceSchedulingRoute?: boolean;
+  recoverySmsCallerE164?: string;
+  recoverySmsBusinessE164?: string;
 }): Promise<MctbAiBookingInboundResult> {
   const config = await loadMctbAiBookingConfig(input.workspaceId);
   if (!config.enabled || config.upgradeRequired) {
@@ -67,6 +69,8 @@ export async function handleMctbAiBookingInboundSms(input: {
           workspaceId: input.workspaceId,
           conversationId,
           latestCustomerMessage: input.body,
+          recoverySmsCallerE164: input.recoverySmsCallerE164,
+          recoverySmsBusinessE164: input.recoverySmsBusinessE164,
         });
         const routerPayload = bookingRouterUserPayload(ctx);
         return runIntentRouterAgent({
@@ -128,6 +132,8 @@ export async function handleMctbAiBookingInboundSms(input: {
     workspaceId: input.workspaceId,
     conversationId,
     latestCustomerMessage: input.body,
+    recoverySmsCallerE164: input.recoverySmsCallerE164,
+    recoverySmsBusinessE164: input.recoverySmsBusinessE164,
   });
 
   const specialist = await runSchedulingSpecialistAgent({

@@ -203,7 +203,26 @@ export async function executeVoiceV2AiCallRecoverySettleJob(
   }
 
   if (evaluation.delivery === "SEND_CALLBACK_ACK_SMS") {
-    return { ok: true, skipped: true, reason: "callback_ack_delegated" };
+    const { sendVoiceV2CallbackAckSms } = await import("./send-callback-ack-sms");
+    const ack = await sendVoiceV2CallbackAckSms({
+      workspaceId: call.workspaceId,
+      callId: call.id,
+      agentId: call.agentId,
+      callerE164: call.fromE164,
+      sendingPhoneNumberId: config.sendingPhoneNumberId,
+      sendingE164: eligibility.sendingE164,
+    });
+    if (!ack.ok) {
+      await recordVoiceV2AiCallRecoveryAnalytics(call.workspaceId, "recovery_suppressed", {
+        callId,
+        reason: ack.reason,
+      });
+      return { ok: true, skipped: true, reason: ack.reason };
+    }
+    await recordVoiceV2AiCallRecoveryAnalytics(call.workspaceId, "callback_ack_sent", {
+      callId,
+    });
+    return { ok: true, sent: true, delivery: "SEND_CALLBACK_ACK_SMS" };
   }
 
   const subtype = evaluation.recoverySubtype ?? "GENERAL_UNRESOLVED";

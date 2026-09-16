@@ -120,6 +120,17 @@ function baseInput(
   assert.equal(r.delivery, "SEND_CALLBACK_ACK_SMS");
 }
 
+// Repeated hangup cooldown
+{
+  const r = evaluateAiCallRecovery(
+    baseInput({
+      messagingEligibility: { ...baseEligibility(), activeRecoveryCooldown: true },
+    }),
+  );
+  assert.equal(r.delivery, "NO_SMS");
+  assert.equal(r.reason, "recovery_cooldown");
+}
+
 // AI refusal
 {
   const r = evaluateAiCallRecovery(

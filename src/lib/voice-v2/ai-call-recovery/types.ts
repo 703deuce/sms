@@ -105,6 +105,7 @@ export type VoiceV2RecoveryStructuredState = {
     provider?: string;
     strategy?: string;
     offerSetId?: string;
+    slotIds?: string[];
     selectedSlotId?: string;
     bookingStatus?: string;
   };

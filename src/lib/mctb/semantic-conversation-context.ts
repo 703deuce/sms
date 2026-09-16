@@ -156,11 +156,18 @@ export async function buildMctbSemanticConversationContext(input: {
   workspaceId: string;
   conversationId: string;
   latestCustomerMessage: string;
+  /** When known — narrows durable recovery session lookup beyond smsConversationId. */
+  recoverySmsCallerE164?: string;
+  recoverySmsBusinessE164?: string;
 }): Promise<MctbSemanticConversationContext> {
-  const { getVoiceV2SmsContinuation, mergeVoiceContinuationIntoConversationTurns } = await import(
-    "@/lib/voice-v2/ai-call-recovery/continuation-hydration"
-  );
-  const voiceContinuation = getVoiceV2SmsContinuation(input.conversationId);
+  const { mergeVoiceContinuationIntoConversationTurns, resolveVoiceV2SmsContinuation } =
+    await import("@/lib/voice-v2/ai-call-recovery/continuation-hydration");
+  const voiceContinuation = await resolveVoiceV2SmsContinuation({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    callerE164: input.recoverySmsCallerE164,
+    sendingE164: input.recoverySmsBusinessE164,
+  });
 
   const [state, session, inbox] = await Promise.all([
     loadLeadRecoveryState({ workspaceId: input.workspaceId, conversationId: input.conversationId }),

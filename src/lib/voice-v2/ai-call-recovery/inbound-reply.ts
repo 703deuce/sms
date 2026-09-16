@@ -1,14 +1,12 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import {
-  getVoiceV2SmsContinuation,
-  mergeVoiceContinuationIntoConversationTurns,
-  registerVoiceV2SmsContinuation,
-} from "./continuation-hydration";
-import { findActiveRecoverySessionForInbound } from "./session-store";
+import { registerVoiceV2SmsContinuation, resolveVoiceV2SmsContinuation } from "./continuation-hydration";
+import { buildVoiceV2SmsContinuationBundleFromSession } from "./durable-continuation";
+import { rehydrateVoiceRecoveryOfferSetForSms } from "./offer-set-rehydration";
+import { findRecoverySessionForSmsContinuation } from "./session-store";
 import { recordVoiceV2AiCallRecoveryAnalytics } from "./analytics";
-import type { VoiceV2RecoveryStructuredState, VoiceV2RecoveryTranscriptTurn } from "./types";
+import type { VoiceV2RecoveryStructuredState } from "./types";
 
 export async function tryHandleVoiceV2AiCallRecoveryInboundSms(input: {
   workspaceId: string;
@@ -18,8 +16,9 @@ export async function tryHandleVoiceV2AiCallRecoveryInboundSms(input: {
   body: string;
   providerMessageId?: string | null;
 }): Promise<{ handled: boolean; reply?: string; reason?: string }> {
-  const session = await findActiveRecoverySessionForInbound({
+  const session = await findRecoverySessionForSmsContinuation({
     workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
     callerE164: input.fromE164,
     sendingE164: input.toE164,
   });
@@ -42,21 +41,21 @@ export async function tryHandleVoiceV2AiCallRecoveryInboundSms(input: {
     });
   }
 
-  const structuredState = session.structuredState as VoiceV2RecoveryStructuredState;
-  const voiceTranscript = (session.voiceTranscriptTurns || []) as VoiceV2RecoveryTranscriptTurn[];
-  const actionTimeline = (session.actionTimeline || []) as Array<{ kind: string; summary: string }>;
+  const bundle = buildVoiceV2SmsContinuationBundleFromSession(session);
+  registerVoiceV2SmsContinuation(input.conversationId, bundle);
 
-  registerVoiceV2SmsContinuation(input.conversationId, {
-    continuationSource: "VOICE_CALL",
-    sourceVoiceCallId: session.voiceCallId,
-    recoverySessionId: session.id,
+  const structuredState = bundle.structuredState;
+
+  await rehydrateVoiceRecoveryOfferSetForSms({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
     structuredState,
-    voiceTranscript,
-    actionTimeline,
-    callSummary: session.callSummary,
+    customerPhone: input.fromE164,
+    customerName: structuredState.callerFields.name,
+    customerEmail: structuredState.callerFields.email,
   });
 
-  await seedAiBookingSessionFromVoiceState({
+  await seedLeadRecoveryCollectedFieldsFromVoice({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
     structuredState,
@@ -73,6 +72,8 @@ export async function tryHandleVoiceV2AiCallRecoveryInboundSms(input: {
     forceSchedulingRoute:
       structuredState.recoverySubtype === "BOOKING_INTERRUPTED" ||
       Boolean(structuredState.booking?.offerSetId),
+    recoverySmsCallerE164: input.fromE164,
+    recoverySmsBusinessE164: input.toE164,
   });
 
   if (booking.handled) {
@@ -82,53 +83,47 @@ export async function tryHandleVoiceV2AiCallRecoveryInboundSms(input: {
     return { handled: true, reply: booking.reply };
   }
 
-  const cont = getVoiceV2SmsContinuation(input.conversationId);
+  const cont = await resolveVoiceV2SmsContinuation({
+    workspaceId: input.workspaceId,
+    conversationId: input.conversationId,
+    callerE164: input.fromE164,
+    sendingE164: input.toE164,
+  });
   if (cont) {
     const { buildMctbSemanticConversationContext } = await import(
       "@/lib/mctb/semantic-conversation-context"
     );
-    const ctx = await buildMctbSemanticConversationContext({
+    await buildMctbSemanticConversationContext({
       workspaceId: input.workspaceId,
       conversationId: input.conversationId,
       latestCustomerMessage: input.body,
-    });
-    mergeVoiceContinuationIntoConversationTurns({
-      voiceTurns: cont.voiceTranscript,
-      smsTurns: ctx.conversation,
+      recoverySmsCallerE164: input.fromE164,
+      recoverySmsBusinessE164: input.toE164,
     });
   }
 
   return { handled: false, reason: "text_agent_not_handled" };
 }
 
-async function seedAiBookingSessionFromVoiceState(input: {
+async function seedLeadRecoveryCollectedFieldsFromVoice(input: {
   workspaceId: string;
   conversationId: string;
   structuredState: VoiceV2RecoveryStructuredState;
 }) {
-  const booking = input.structuredState.booking;
-  if (!booking?.offerSetId) return;
-  const { getMctbAiBookingSessionStore } = await import("@/lib/mctb/ai-booking/session-store");
-  const store = getMctbAiBookingSessionStore();
-  const existing = await store.get(input.conversationId);
-  if (existing?.offeredSlots?.length) return;
-
-  const provider =
-    booking.strategy === "CALENDLY"
-      ? "calendly"
-      : booking.strategy === "MICROSOFT_365"
-        ? "microsoft"
-        : "microsoft";
-
-  await store.save({
-    conversationId: input.conversationId,
+  const { loadLeadRecoveryState, saveLeadRecoveryState } = await import(
+    "@/lib/mctb/lead-recovery/state-store"
+  );
+  const state = await loadLeadRecoveryState({
     workspaceId: input.workspaceId,
-    provider,
-    offerSetId: booking.offerSetId,
-    bookingTimezone: "America/New_York",
-    stage: "AWAITING_SLOT_SELECTION",
-    offeredSlots: [],
-    pendingSlotId: booking.selectedSlotId ?? null,
-    updatedAt: new Date().toISOString(),
+    conversationId: input.conversationId,
   });
+  const collected = { ...state.collectedFields };
+  for (const [k, v] of Object.entries(input.structuredState.callerFields)) {
+    if (v?.trim()) collected[k] = v;
+  }
+  for (const [k, v] of Object.entries(input.structuredState.customFields)) {
+    if (v?.trim()) collected[k] = v;
+  }
+  state.collectedFields = collected;
+  await saveLeadRecoveryState(state);
 }

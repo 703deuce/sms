@@ -50,6 +50,7 @@ export function buildVoiceV2RecoveryStructuredState(input: {
       provider: ctx.bookingState?.status ? strategy : undefined,
       strategy,
       offerSetId: ctx.currentOfferSet?.offerSetId,
+      slotIds: ctx.currentOfferSet?.slotIds,
       selectedSlotId: ctx.bookingState?.selectedSlotId,
       bookingStatus: ctx.bookingWorkflow?.bookingConfirmed
         ? "CONFIRMED"
