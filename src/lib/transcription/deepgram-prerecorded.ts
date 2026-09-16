@@ -5,15 +5,21 @@ const DEEPGRAM_MODEL = "nova-3";
 export type DeepgramPrerecordedOptions = {
   /** Enable speaker diarization for multi-party call recordings. */
   diarize?: boolean;
+  /** Dual-channel Telnyx recordings — separate transcript per channel. */
+  multichannel?: boolean;
   language?: string;
 };
 
 export type DeepgramTranscriptionResult = {
   text: string | null;
+  fullText?: string | null;
   language?: string | null;
   durationSeconds?: number | null;
   model: string;
   provider: "deepgram";
+  requestId?: string;
+  channelTexts?: { caller?: string; agent?: string };
+  raw?: unknown;
 };
 
 function getDeepgramApiKey(): string | null {
@@ -47,6 +53,10 @@ export async function transcribeAudioUrlWithDeepgram(
     params.set("diarize", "true");
     params.set("utterances", "true");
   }
+  if (options?.multichannel) {
+    params.set("multichannel", "true");
+    params.set("utterances", "true");
+  }
 
   const res = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
     method: "POST",
@@ -63,33 +73,49 @@ export async function transcribeAudioUrlWithDeepgram(
   }
 
   const payload = (await res.json()) as {
+    request_id?: string;
     results?: {
       channels?: Array<{
         alternatives?: Array<{ transcript?: string; confidence?: number }>;
       }>;
-      utterances?: Array<{ transcript?: string }>;
+      utterances?: Array<{ transcript?: string; channel?: number }>;
     };
     metadata?: { duration?: number; detected_language?: string };
   };
 
+  const channelTexts: string[] =
+    payload.results?.channels?.map(
+      (ch) => ch.alternatives?.[0]?.transcript?.trim() || "",
+    ) || [];
+
   let text = "";
-  if (options?.diarize && payload.results?.utterances?.length) {
+  if (options?.multichannel && channelTexts.length > 1) {
+    text = channelTexts.filter(Boolean).join("\n");
+  } else if (options?.diarize && payload.results?.utterances?.length) {
     text = payload.results.utterances
       .map((u) => (u.transcript || "").trim())
       .filter(Boolean)
       .join("\n");
   } else {
-    text =
-      payload.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() || "";
+    text = channelTexts[0] || "";
   }
+
+  const callerChannel = channelTexts[0] || text;
+  const agentChannel = channelTexts[1] || "";
 
   return {
     text: text || null,
+    fullText: text || null,
     language: payload.metadata?.detected_language?.trim() || options?.language || "en",
     durationSeconds:
       typeof payload.metadata?.duration === "number" ? payload.metadata.duration : null,
     model: DEEPGRAM_MODEL,
     provider: "deepgram",
+    requestId: payload.request_id,
+    channelTexts: options?.multichannel
+      ? { caller: callerChannel, agent: agentChannel }
+      : undefined,
+    raw: payload,
   };
 }
 

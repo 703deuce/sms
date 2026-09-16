@@ -9,6 +9,7 @@ import { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } from "../pstn-w
 import { resolveVoiceV2KnowledgeConfig } from "../knowledge-config";
 import { resolveVoiceV2QualificationConfig } from "../qualification-config";
 import { resolveAfterHoursHandlingFromAgentAdvanced } from "../after-hours-handling-config";
+import { applyCallerAniToIntakeState } from "../intake/caller-phone";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -58,7 +59,7 @@ export async function buildVoiceV2CallContextPayload(input: {
   const afterHoursHandling =
     resolveAfterHoursHandlingFromAgentAdvanced(config.advanced as Record<string, unknown>) ||
     undefined;
-  const payload: VoiceV2CallContext = {
+  let payload: VoiceV2CallContext = {
     sessionKey: input.canonicalSessionKey,
     workspaceId: input.workspaceId,
     agentId: input.agentId,
@@ -89,7 +90,9 @@ export async function buildVoiceV2CallContextPayload(input: {
       afterHoursHandling,
       transferToolAvailable: afterHoursHandling?.transferEnabled === true,
       callbackToolAvailable: afterHoursHandling?.callbackRequestsEnabled === true,
+      intakeSchemaRevision: enrollment.publishedConfigRevision || undefined,
     },
   };
+  payload = applyCallerAniToIntakeState(payload, input.fromE164);
   return { payload, enrollment, bookingTimezone: timezone };
 }

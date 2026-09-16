@@ -1,6 +1,8 @@
 import type { SaveIntakeResult } from "./save-intake-fields";
+import { listKnownCallerFieldValues } from "./caller-field-state";
 import type { IntakeFieldKey } from "./types";
 import type { VoiceV2NextStage } from "../booking-workflow";
+import { getVoiceV2CallContext } from "./session-store";
 
 function mergeWorkflowFields(
   base: Record<string, unknown>,
@@ -28,12 +30,23 @@ function speakForWorkflowStage(
   return "Saved. Continue live booking — do not close with callback or follow-up.";
 }
 
-export function saveIntakePublicFields(result: SaveIntakeResult): Record<string, unknown> {
+function knownFieldsPayload(sessionKey?: string): Record<string, string> {
+  if (!sessionKey) return {};
+  const ctx = getVoiceV2CallContext(sessionKey);
+  if (!ctx) return {};
+  return listKnownCallerFieldValues(ctx) as Record<string, string>;
+}
+
+export function saveIntakePublicFields(
+  result: SaveIntakeResult,
+  sessionKey?: string,
+): Record<string, unknown> {
   const readiness =
     result.status === "INTAKE_SAVED" || result.status === "FIELD_NOT_ENABLED"
       ? result.readiness
       : undefined;
   const missingBeforeBooking = readiness?.missingBeforeBooking ?? [];
+  const knownCallerFields = knownFieldsPayload(sessionKey);
 
   if (result.status === "INTAKE_SAVED") {
     const ignored = result.ignored_fields || [];
@@ -69,6 +82,8 @@ export function saveIntakePublicFields(result: SaveIntakeResult): Record<string,
         ignored_fields: ignored,
         invalid_fields: invalid.length ? invalid : undefined,
         missingBeforeBooking,
+        missing_for_booking_only: missingBeforeBooking,
+        known_caller_fields: knownCallerFields,
         readiness: result.readiness,
         continue: bookingContinue || missingBeforeBooking.length === 0 || invalid.length === 0,
         timing_ms: result.timing_ms,

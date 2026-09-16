@@ -51,7 +51,8 @@ export async function POST(request: Request) {
     { trace, trustedPrismaCallId, lookupTrace },
   );
 
-  const payload = formatVoiceV2SaveIntakeTelnyxResponse(result);
+  const sessionKey = callControlId ? `cc:${callControlId}` : trustedPrismaCallId ? `call:${trustedPrismaCallId}` : undefined;
+  const payload = formatVoiceV2SaveIntakeTelnyxResponse(result, sessionKey);
   const webhookMs = Date.now() - ingressStarted;
 
   const observabilityPayload =

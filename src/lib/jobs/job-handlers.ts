@@ -366,7 +366,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
       if (!callId) throw new Error("callId required");
       const urls = payload.recordingUrl as Record<string, string> | undefined;
       const storageUrl = urls?.mp3 || urls?.wav || null;
-      await prisma.voiceRecording.create({
+      const recording = await prisma.voiceRecording.create({
         data: {
           workspaceId,
           callId,
@@ -390,8 +390,24 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
               ? "outbound"
               : "inbound",
         }).catch(() => undefined);
+        const { enqueueVoiceV2PostCallTranscription } = await import(
+          "@/lib/voice-v2/post-call/transcription-pipeline"
+        );
+        await enqueueVoiceV2PostCallTranscription({
+          workspaceId,
+          callId,
+          recordingId: recording.id,
+          recordingUrl: storageUrl,
+          channels: recording.channels,
+        }).catch(() => undefined);
       }
       return { ok: true };
+    }
+    case "voice_v2_post_call_transcription": {
+      const { executeVoiceV2PostCallTranscriptionJob } = await import(
+        "@/lib/voice-v2/post-call/transcription-pipeline"
+      );
+      return executeVoiceV2PostCallTranscriptionJob(payload as Record<string, unknown>);
     }
     case "voice_appointment_provider_sync": {
       const { syncAppointmentToProvider, markAppointmentSyncFailed } = await import(
