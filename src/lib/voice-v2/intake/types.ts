@@ -73,6 +73,9 @@ export interface VoiceV2CallContext {
     intakeEnabled?: boolean;
     rescheduleEnabled?: boolean;
     cancelEnabled?: boolean;
+    knowledgeBaseEnabled?: boolean;
+    knowledgeBaseRevision?: string;
+    knowledgeBaseIds?: string[];
   };
   appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;
 }

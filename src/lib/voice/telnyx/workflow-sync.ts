@@ -19,6 +19,7 @@ import {
 } from "@/lib/voice-v2/workflow-capability";
 import { mergeVoiceV2ToolIds } from "./voice-v2-shared-tools";
 import { ensureVoiceV2SharedToolsForAgent } from "./ensure-voice-v2-shared-tools";
+import { isVoiceV2KnowledgeSearchEnabled } from "@/lib/voice-v2/knowledge-config";
 import { readTelnyxWorkflowState } from "./workflow-readback";
 import type { VoiceV2SharedToolIds } from "./voice-v2-shared-tools";
 
@@ -58,6 +59,7 @@ export function buildDesiredTelnyxWorkflowPayload(input: {
       voiceV2FindExisting: input.v2Shared?.findExistingId ?? null,
       voiceV2Reschedule: input.v2Shared?.rescheduleId ?? null,
       voiceV2Cancel: input.v2Shared?.cancelId ?? null,
+      voiceV2SearchKnowledge: input.v2Shared?.searchKnowledgeId ?? null,
       hangup: input.shared.hangupId,
       transfer: input.shared.transferId,
       retrieval: null,
@@ -108,6 +110,7 @@ export async function syncConversationWorkflowToTelnyx(input: {
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       bookingStrategy,
+      knowledgeBaseEnabled: isVoiceV2KnowledgeSearchEnabled(input.config),
     });
     const sendLinkMode = bookingStrategy === "SEND_LINK";
     if (!v2Shared.saveIntakeId) {

@@ -406,6 +406,7 @@ export function InformationStep({
       knowledgeItems: items,
       knowledgeSource: "upload_docs",
       linkedKnowledgeBaseId: kbId || state.linkedKnowledgeBaseId,
+      knowledgeBaseEnabled: state.knowledgeBaseEnabled === false ? false : true,
     });
     setUploadNote(
       `${uploaded} file(s) added${warned ? `, ${warned} need attention` : ""}.`,
@@ -507,6 +508,44 @@ export function InformationStep({
             Add business information so the AI can answer with confidence. Facts
             here are written into the agent knowledge on save/activate.
           </p>
+          <div className="mt-4 rounded-xl border border-border bg-card p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-border"
+                checked={state.knowledgeBaseEnabled !== false}
+                onChange={(e) =>
+                  patch({
+                    knowledgeBaseEnabled: e.target.checked,
+                  })
+                }
+              />
+              <span className="min-w-0">
+                <span className="text-sm font-medium">
+                  Search uploaded documents during calls
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Hours, services, and FAQs in your profile below are always
+                  available immediately. Turn this on to let Amy search PDFs and
+                  other indexed documents when a caller asks something not covered
+                  there.
+                </span>
+              </span>
+            </label>
+            {state.knowledgeBaseEnabled === false ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Large document search is off. Prompt facts and FAQs still work.
+              </p>
+            ) : !state.linkedKnowledgeBaseId &&
+              state.knowledgeSource !== "upload_docs" &&
+              state.knowledgeSource !== "website" &&
+              state.knowledgeSource !== "connect_data" ? (
+              <p className="mt-2 text-xs text-warning">
+                Upload a document, scan a website, or connect a knowledge base to
+                enable document search.
+              </p>
+            ) : null}
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <SelectableCard
               selected={state.knowledgeSource === "website"}
@@ -666,6 +705,11 @@ export function InformationStep({
               onSelect={(id) => {
                 patch({
                   linkedKnowledgeBaseId: id,
+                  knowledgeBaseEnabled: id
+                    ? state.knowledgeBaseEnabled === false
+                      ? false
+                      : true
+                    : state.knowledgeBaseEnabled,
                   knowledgeItems: upsertItem(state.knowledgeItems, "linked-kb", {
                     label: "Linked knowledge base",
                     summary: id

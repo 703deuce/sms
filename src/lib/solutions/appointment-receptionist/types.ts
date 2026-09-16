@@ -148,6 +148,9 @@ export type AppointmentReceptionistWizardState = {
   websiteUrl: string;
   /** Optional existing VoiceKnowledgeBase to attach on save/activate. */
   linkedKnowledgeBaseId?: string | null;
+  /** Large document KB search (RAG) — composable with any bookingStrategy. */
+  knowledgeBaseEnabled?: boolean | null;
+  knowledgeBaseRevision?: string | null;
   knowledgeItems: Array<{
     id: string;
     label: string;

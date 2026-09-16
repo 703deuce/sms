@@ -26,6 +26,9 @@ import {
   VOICE_V2_SEND_BOOKING_LINK_BODY,
   VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE,
   VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME,
+  VOICE_V2_SEARCH_KNOWLEDGE_BODY,
+  VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE,
+  VOICE_V2_SEARCH_KNOWLEDGE_TELNYX_TOOL_NAME,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { VoiceV2BookingStrategy } from "@/lib/voice-v2/booking-strategy";
 import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
@@ -96,9 +99,11 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
   workspaceId: string;
   agentId: string;
   bookingStrategy?: VoiceV2BookingStrategy;
+  knowledgeBaseEnabled?: boolean;
 }): Promise<VoiceV2SharedToolIds> {
   const strategy = input.bookingStrategy ?? "MICROSOFT_365";
   const liveFindBook = voiceV2StrategyAllowsFindBook(strategy);
+  const knowledgeEnabled = input.knowledgeBaseEnabled === true;
 
   const saveIntakeId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
@@ -141,6 +146,20 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
             "Accept caller message or appointment request for business follow-up (not live booking).",
         });
 
+  const searchKnowledgeId = knowledgeEnabled
+    ? await ensureSharedWebhookTool({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        displayName: VOICE_V2_SEARCH_KNOWLEDGE_TELNYX_TOOL_NAME,
+        toolType: VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE,
+        urlPath: "/api/telnyx/voice-v2/search-knowledge",
+        bodyParameters: VOICE_V2_SEARCH_KNOWLEDGE_BODY,
+        timeoutMs: 12000,
+        description:
+          "Search indexed business documents when the answer is not in the Business knowledge prompt section.",
+      })
+    : null;
+
   if (!liveFindBook) {
     return {
       findId: null,
@@ -151,6 +170,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
       cancelId: null,
       finalizeRequestId,
       sendBookingLinkId,
+      searchKnowledgeId,
     };
   }
 
@@ -212,6 +232,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     rescheduleId,
     cancelId,
     finalizeRequestId,
-    sendBookingLinkId: null,
+    sendBookingLinkId,
+    searchKnowledgeId,
   };
 }

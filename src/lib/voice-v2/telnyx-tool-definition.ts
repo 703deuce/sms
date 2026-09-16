@@ -19,6 +19,9 @@ export const VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME =
 export const VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE = "voice_v2_send_booking_link";
 export const VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME =
   "transovo-voice-v2-send-booking-link";
+export const VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE = "voice_v2_search_knowledge";
+export const VOICE_V2_SEARCH_KNOWLEDGE_TELNYX_TOOL_NAME =
+  "transovo-voice-v2-search-knowledge";
 
 export const VOICE_V2_SEND_BOOKING_LINK_BODY = strictWebhookBodyParameters({
   type: "object",
@@ -107,6 +110,21 @@ export const VOICE_V2_BOOK_OFFERED_SLOT_BODY = strictWebhookBodyParameters({
     },
   },
   required: ["offer_set_id", "selected_slot_id"],
+});
+
+export const VOICE_V2_SEARCH_KNOWLEDGE_BODY = strictWebhookBodyParameters({
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description:
+        "Concise self-contained question for business documents (include conversational context when needed).",
+    },
+    tool_invocation_id: { type: "string" },
+    call_id: { type: "string" },
+    conversation_id: { type: "string" },
+  },
+  required: ["query"],
 });
 
 export const VOICE_V2_FIND_AVAILABILITY_BODY = strictWebhookBodyParameters({

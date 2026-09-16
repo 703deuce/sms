@@ -26,6 +26,7 @@ import {
   useVoiceV2IntakeAuthority,
 } from "@/lib/voice-v2/intake/live-intake-instructions";
 import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-v2/knowledge-config";
 
 export type ReceptionistDraftInput = {
   agentName: string;
@@ -236,6 +237,10 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   const voiceV2IntakeInstructions = voiceV2IntakeSchema
     ? buildVoiceV2LiveIntakeInstructions(voiceV2IntakeSchema, { oneAmy: voiceV2OneAmy })
     : undefined;
+  const voiceV2KnowledgeInstructions =
+    buildVoiceV2KnowledgeLayerBInstructions({
+      advanced: input.advanced,
+    } as VoiceAgentConfig) || undefined;
 
   const partialSnapshot = {
     livekitProfile: "frontdesk_realtime" as const,
@@ -251,6 +256,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     voiceV2IntakeAuthority,
     voiceV2IntakeInstructions,
     voiceV2OneAmy,
+    voiceV2KnowledgeInstructions,
     enabledBuiltinTools,
     agentJobInstructions,
     agentPersonalityNotes,
