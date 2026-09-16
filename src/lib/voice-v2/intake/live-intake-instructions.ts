@@ -1,5 +1,5 @@
 import type { IntakeFieldKey, VoiceV2IntakeSchema } from "./types";
-import { INTAKE_FIELD_KEYS } from "./wizard-config";
+import { BUILTIN_INTAKE_FIELD_KEYS } from "./wizard-config";
 
 /** True when Voice V2 intake is the sole live field authority (Step 1 booking). */
 export function useVoiceV2IntakeAuthority(capabilities: string[]): boolean {
@@ -20,7 +20,7 @@ export function buildVoiceV2LiveIntakeInstructions(
   options?: { oneAmy?: boolean },
 ): string {
   const enabled = new Set(schema.fields.map((f) => f.key));
-  const disabled = INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k));
+  const disabled = BUILTIN_INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k));
 
   const lines: string[] = [
     "VOICE V2 INTAKE AUTHORITY (sole source for live booking intake):",
@@ -31,9 +31,10 @@ export function buildVoiceV2LiveIntakeInstructions(
           "If the caller already gave a day or time, do not ask for it again.",
           "Do not save booking-intent phrases as service_reason (for example 'book an appointment').",
           "When multiple enabled fields arrive in one utterance, save them in one call.",
+          "Every enabled configured intake field (built-in or custom) is memorable — if the caller provides a value, save it and do not ask again unless unclear, invalid, or corrected.",
         ]
       : []),
-    "Use voice_v2_save_intake_fields when the caller supplies configured values.",
+    "Use voice_v2_save_intake_fields when the caller supplies configured values (including custom wizard field keys).",
     "Use the Voice V2 intake schema as the only source of truth for what information to actively request.",
     "Do not ask for disabled fields. Do not re-ask fields already known in session state or already stated by the caller.",
     "If the caller volunteers a disabled field, acknowledge naturally if appropriate and continue — never treat it as an error, never retry saving it, never switch to callback/message mode because of it.",
@@ -69,7 +70,7 @@ export function legacyFieldManifestLeaksDisabledIntake(
   const leaks: string[] = [];
   for (const row of legacyManifest) {
     const key = row.id as IntakeFieldKey;
-    if (INTAKE_FIELD_KEYS.includes(key) && !enabled.has(key)) {
+    if (BUILTIN_INTAKE_FIELD_KEYS.includes(key as (typeof BUILTIN_INTAKE_FIELD_KEYS)[number]) && !enabled.has(key)) {
       leaks.push(row.label || key);
     }
   }

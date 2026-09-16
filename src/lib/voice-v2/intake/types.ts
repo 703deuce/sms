@@ -5,7 +5,11 @@ import type {
 } from "./wizard-config";
 
 export type { IntakeFieldKey, IntakeRequirementLevel, VoiceV2IntakeWizardConfig };
-export { INTAKE_FIELD_KEYS } from "./wizard-config";
+export {
+  BUILTIN_INTAKE_FIELD_KEYS,
+  INTAKE_FIELD_KEYS,
+  type BuiltinIntakeFieldKey,
+} from "./wizard-config";
 
 export type IntakeFieldStatus =
   | "MISSING"
@@ -23,13 +27,9 @@ export interface IntakeFieldValue {
   updatedAt: string;
 }
 
-export interface VoiceV2IntakeState {
-  name?: IntakeFieldValue;
-  email?: IntakeFieldValue;
-  phone?: IntakeFieldValue;
-  address?: IntakeFieldValue;
-  service_reason?: IntakeFieldValue;
-}
+export type VoiceV2IntakeState = Record<string, IntakeFieldValue>;
+
+export type IntakeFieldValueType = "text" | "phone" | "email" | "address";
 
 export interface CompiledIntakeField {
   key: IntakeFieldKey;
@@ -37,6 +37,7 @@ export interface CompiledIntakeField {
   requirementLevel: IntakeRequirementLevel;
   label: string;
   questionText: string;
+  valueType: IntakeFieldValueType;
 }
 
 export interface VoiceV2IntakeSchema {

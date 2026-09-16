@@ -7,7 +7,9 @@ export function strictToolSchema(body: Record<string, unknown>): Record<string, 
     const props = { ...(next.properties as Record<string, unknown>) };
     for (const [key, val] of Object.entries(props)) {
       if (val && typeof val === "object" && !Array.isArray(val)) {
-        props[key] = { ...(val as Record<string, unknown>), additionalProperties: false };
+        const obj = val as Record<string, unknown>;
+        props[key] =
+          "additionalProperties" in obj ? { ...obj } : { ...obj, additionalProperties: false };
       }
     }
     next.properties = props;

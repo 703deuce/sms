@@ -1,7 +1,8 @@
-import type { IntakeFieldKey, IntakeRequirementLevel } from "./types";
+import type { IntakeRequirementLevel } from "./types";
+import type { BuiltinIntakeFieldKey } from "./wizard-config";
 
 export const INTAKE_FIELD_DEFAULTS: Record<
-  IntakeFieldKey,
+  BuiltinIntakeFieldKey,
   { label: string; questionText: string; requirementLevel: IntakeRequirementLevel; enabled: boolean }
 > = {
   name: {
