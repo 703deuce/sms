@@ -9,6 +9,15 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 FAILED_MCTB_DURABLE_OPS_MIGRATION="20260914220000_mctb_durable_operations"
+FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION="20260916190000_voice_v2_ai_call_recovery"
+
+recover_failed_voice_v2_ai_call_recovery_migration() {
+  echo "[db-deploy] Recovering failed migration ${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION} (drop partial table + mark rolled back)..."
+  npx prisma db execute --stdin <<'SQL' || true
+DROP TABLE IF EXISTS "voice_v2_ai_call_recovery_sessions" CASCADE;
+SQL
+  npx prisma migrate resolve --rolled-back "${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION}" || true
+}
 
 recover_failed_mctb_durable_operations_migration() {
   echo "[db-deploy] Recovering failed migration ${FAILED_MCTB_DURABLE_OPS_MIGRATION} (drop partial table + mark rolled back)..."
@@ -26,7 +35,11 @@ set -e
 echo "$deploy_out"
 
 if [[ "$deploy_code" -ne 0 ]]; then
-  if echo "$deploy_out" | grep -q "${FAILED_MCTB_DURABLE_OPS_MIGRATION}"; then
+  if echo "$deploy_out" | grep -q "${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION}"; then
+    recover_failed_voice_v2_ai_call_recovery_migration
+    echo "[db-deploy] Retrying prisma migrate deploy after AI call recovery migration recovery..."
+    npx prisma migrate deploy
+  elif echo "$deploy_out" | grep -q "${FAILED_MCTB_DURABLE_OPS_MIGRATION}"; then
     recover_failed_mctb_durable_operations_migration
     echo "[db-deploy] Retrying prisma migrate deploy after recovery..."
     npx prisma migrate deploy

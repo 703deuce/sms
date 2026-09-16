@@ -47,4 +47,4 @@ CREATE INDEX "voice_v2_ai_call_recovery_sessions_workspaceId_callerE164_sending_
 ALTER TABLE "voice_v2_ai_call_recovery_sessions" ADD CONSTRAINT "voice_v2_ai_call_recovery_sessions_voiceCallId_fkey" FOREIGN KEY ("voiceCallId") REFERENCES "voice_calls"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "voice_v2_ai_call_recovery_sessions" ADD CONSTRAINT "voice_v2_ai_call_recovery_sessions_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "voice_v2_ai_call_recovery_sessions" ADD CONSTRAINT "voice_v2_ai_call_recovery_sessions_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
