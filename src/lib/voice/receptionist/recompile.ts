@@ -12,6 +12,7 @@ import {
   type ReceptionistDraftInput,
 } from "./compile";
 import { mergeAppointmentWizardAdvanced } from "@/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
+import { resolveVoiceV2WizardVoiceForPublish } from "@/lib/solutions/appointment-receptionist/voice-v2-wizard-elevenlabs-catalog";
 import { getReceptionistCompiledFromAdvanced } from "./runtime";
 import {
   getLiveKitAgentTemplateFromAdvanced,
@@ -66,7 +67,14 @@ function appointmentWizardToDraftInput(
     answerTiming: mapAnswerWhen(state.answerWhen),
     capabilities: [...caps],
     collectFields: (state.collectFields || []).filter((f) => f.enabled).map((f) => f.id),
-    voiceId: state.voiceId || config.voiceLanguage?.voiceId || "marin",
+    voiceId: (() => {
+      const raw = state.voiceId || config.voiceLanguage?.voiceId || "";
+      try {
+        return resolveVoiceV2WizardVoiceForPublish(raw).catalogId;
+      } catch {
+        return raw || "marin";
+      }
+    })(),
     voiceLabel: state.voiceLabel,
     advanced: {
       ...advanced,

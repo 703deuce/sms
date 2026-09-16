@@ -25,7 +25,15 @@ import {
   buildVoiceV2LiveIntakeInstructions,
   useVoiceV2IntakeAuthority,
 } from "@/lib/voice-v2/intake/live-intake-instructions";
-import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  isVoiceV2PstnLiveBookingMode,
+  isVoiceV2PstnOneAmyMode,
+} from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  elevenLabsVoiceLanguagePublishFields,
+  getVoiceV2WizardElevenLabsVoice,
+  resolveVoiceV2WizardVoiceForPublish,
+} from "@/lib/solutions/appointment-receptionist/voice-v2-wizard-elevenlabs-catalog";
 import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-v2/knowledge-config";
 import { buildVoiceV2QualificationLayerBInstructions } from "@/lib/voice-v2/qualification-config";
 import { buildVoiceV2AfterHoursLayerBInstructions } from "@/lib/voice-v2/after-hours-handling-prompt";
@@ -162,8 +170,28 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
   const elevenLabsVoice = normalizeWizardVoiceToElevenLabs(input.voiceId);
   const realtimeVoice = normalizeWizardVoiceToRealtime(input.voiceId);
   const outputModeRaw = input.advanced?.realtimeOutputMode as string | undefined;
-  const realtimeOutputMode =
-    outputModeRaw === "elevenlabs" ? ("elevenlabs" as const) : ("native" as const);
+  const pstnTelnyxStack = isVoiceV2PstnOneAmyMode({
+    advanced: input.advanced,
+  } as VoiceAgentConfig);
+  const pstnLiveBooking = isVoiceV2PstnLiveBookingMode({
+    advanced: input.advanced,
+  } as VoiceAgentConfig);
+  const forceElevenLabsOnTelnyx =
+    pstnTelnyxStack || pstnLiveBooking || Boolean(input.advanced?.appointmentReceptionistWizard);
+  let realtimeOutputMode: "elevenlabs" | "native" =
+    outputModeRaw === "elevenlabs" ? "elevenlabs" : "native";
+  if (forceElevenLabsOnTelnyx) {
+    realtimeOutputMode = "elevenlabs";
+  }
+  let publishedVoiceId =
+    realtimeOutputMode === "elevenlabs" ? elevenLabsVoice : realtimeVoice;
+  if (realtimeOutputMode === "elevenlabs" && forceElevenLabsOnTelnyx) {
+    try {
+      publishedVoiceId = resolveVoiceV2WizardVoiceForPublish(input.voiceId).catalogId;
+    } catch {
+      // Legacy wizard ids still map via normalizeWizardVoiceToElevenLabs above.
+    }
+  }
   const voiceMeta = input.voiceLabel?.trim();
   const wiz = input.advanced?.receptionistWizard as
     | {
@@ -280,7 +308,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
     realtimeModel,
     realtimeOutputMode,
     ttsModel: RECEPTIONIST_TTS_MODEL as "eleven_flash_v2_5",
-    voiceId: realtimeOutputMode === "elevenlabs" ? elevenLabsVoice : realtimeVoice,
+    voiceId: publishedVoiceId,
     voiceLabel: voiceMeta || undefined,
     voiceSpeed,
     elevenLabsStability: voiceTuning.stability,
@@ -351,17 +379,34 @@ export function applyCompiledToVoiceConfig(
       ...base.callHandling,
       startupGreeting: { enabled: true, text: snapshot.greeting },
     },
-    voiceLanguage: {
-      ...base.voiceLanguage,
-      voiceId: snapshot.voiceId,
-      primaryLanguage: snapshot.language,
-      speed: snapshot.voiceSpeed ?? base.voiceLanguage?.speed ?? 1.08,
-      elevenLabsTuning: true,
-      elevenLabsStability: snapshot.elevenLabsStability,
-      elevenLabsSimilarityBoost: snapshot.elevenLabsSimilarityBoost,
-      elevenLabsStyle: snapshot.elevenLabsStyle,
-      elevenLabsSpeakerBoost: snapshot.elevenLabsSpeakerBoost,
-    },
+    voiceLanguage: (() => {
+      const elCatalog =
+        snapshot.realtimeOutputMode === "elevenlabs"
+          ? getVoiceV2WizardElevenLabsVoice(snapshot.voiceId) ||
+            (() => {
+              try {
+                return resolveVoiceV2WizardVoiceForPublish(snapshot.voiceId);
+              } catch {
+                return null;
+              }
+            })()
+          : null;
+      const elFields = elCatalog
+        ? elevenLabsVoiceLanguagePublishFields(elCatalog)
+        : {};
+      return {
+        ...base.voiceLanguage,
+        ...elFields,
+        voiceId: elFields.voiceId ?? snapshot.voiceId,
+        primaryLanguage: snapshot.language,
+        speed: snapshot.voiceSpeed ?? base.voiceLanguage?.speed ?? 1.08,
+        elevenLabsTuning: snapshot.realtimeOutputMode === "elevenlabs",
+        elevenLabsStability: snapshot.elevenLabsStability,
+        elevenLabsSimilarityBoost: snapshot.elevenLabsSimilarityBoost,
+        elevenLabsStyle: snapshot.elevenLabsStyle,
+        elevenLabsSpeakerBoost: snapshot.elevenLabsSpeakerBoost,
+      };
+    })(),
     inboundRules: {
       ...base.inboundRules,
       answerWhen: snapshot.answerWhen,
