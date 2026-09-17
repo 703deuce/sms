@@ -48,7 +48,8 @@ export function buildVoiceV2LiveIntakeInstructions(
     "Use voice_v2_save_intake_fields with wizard field keys (including custom keys) when persisting caller-provided values.",
     "FIELD_NOT_ENABLED means the field is disabled — continue booking; not failure, not callback.",
     "Once missingBeforeBooking is empty, follow voice_v2_next_stage from the save tool (scheduling vs FIND).",
-    "For email: always put the caller's address in fields.email when they give it — use the transcript text (anthony@example.com, or anthony at example dot com). Runtime accepts @ and spoken forms; do not skip save_intake after they answer.",
+    "Live intake is conversation capture, not web-form validation: any non-empty caller value for an enabled field is KNOWN — never re-ask because of punctuation or format.",
+    "Put what they said in fields.* on save_intake (email, name, custom fields). Optional normalization may run later; format never blocks save or BOOK gates (presence only for REQUIRED_BEFORE_BOOKING).",
   ];
 
   if (schema.fields.length) {

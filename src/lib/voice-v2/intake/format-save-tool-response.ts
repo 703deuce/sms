@@ -58,14 +58,7 @@ export function saveIntakePublicFields(
         : "Saved."
       : "No changes.";
     if (invalid.length) {
-      if (invalid.includes("email")) {
-        speak =
-          missingBeforeBooking.length === 0
-            ? "Got the other details. I still need your email — say it like name at domain dot com, or spell the part before the at sign."
-            : "Saved what I could. For email, say it like name at gmail dot com so I can save it.";
-      } else {
-        speak = "Saved what I could. Could you repeat the part I didn't catch?";
-      }
+      speak = "Saved what I could. Continue with the remaining details.";
     }
     const wf = result.workflow;
     const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
@@ -181,10 +174,8 @@ export function saveIntakePublicFields(
         ? "Tool payload was empty — include fields.email (and any other values the caller just gave) on voice_v2_save_intake_fields."
         : undefined,
       speak: noFields
-        ? "Include the caller's email in fields.email on save_intake, then continue."
-        : result.invalid_fields.includes("email")
-          ? "Repeat the email once more — say it like anthony at example dot com, or with an at sign."
-          : "I didn't catch that correctly. Could you repeat it?",
+        ? "Include what the caller just said in fields on save_intake (for example fields.email), then continue."
+        : "I didn't get a value to save — include the caller's answer in fields on save_intake.",
     };
   }
 

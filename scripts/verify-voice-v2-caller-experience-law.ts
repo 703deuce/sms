@@ -101,6 +101,15 @@ runHeadless(
   `${PRELOAD} npx tsx scripts/test-voice-v2-wizard-conversational-intake-headless.ts`,
 );
 runHeadless("test-voice-v2-custom-intake-headless.ts", `${PRELOAD} npx tsx scripts/test-voice-v2-custom-intake-headless.ts`);
+runHeadless("test-voice-v2-email-intake.ts", `${PRELOAD} npx tsx scripts/test-voice-v2-email-intake.ts`);
+
+const intakeCapture = readFileSync("src/lib/voice-v2/intake/validate-fields.ts", "utf8");
+if (!intakeCapture.includes("conversation capture")) {
+  fail("intake capture must document presence-only live-call semantics");
+}
+if (intakeCapture.includes("acceptVoiceIntakeEmail")) {
+  fail("intake capture must not gate on acceptVoiceIntakeEmail");
+}
 
 const compileTs = readFileSync("src/lib/voice/receptionist/compile.ts", "utf8");
 if (compileTs.includes("voiceV2Intake: advanced?.voiceV2Intake")) {

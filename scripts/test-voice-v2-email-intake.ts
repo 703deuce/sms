@@ -1,8 +1,6 @@
 #!/usr/bin/env npx tsx
-import {
-  acceptVoiceIntakeEmail,
-  normalizeVoiceIntakeEmail,
-} from "../src/lib/voice-v2/intake/normalize-email";
+import { captureIntakeFieldPayload } from "../src/lib/voice-v2/intake/validate-fields";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
 
 const failures: string[] = [];
 function check(name: string, cond: boolean) {
@@ -10,38 +8,46 @@ function check(name: string, cond: boolean) {
   else console.log("✓", name);
 }
 
+const schema = compileVoiceV2IntakeSchema({
+  advanced: {
+    voiceV2Intake: {
+      fields: {
+        email: { enabled: true, requirementLevel: "REQUIRED_BEFORE_BOOKING" },
+        name: { enabled: true, requirementLevel: "OPTIONAL" },
+      },
+    },
+  },
+} as Parameters<typeof compileVoiceV2IntakeSchema>[0]);
+
+function cap(fields: Record<string, string>) {
+  return captureIntakeFieldPayload(schema, fields);
+}
+
 check(
-  "spoken at dot",
-  normalizeVoiceIntakeEmail("anthony at gmail dot com") === "anthony@gmail.com",
+  "literal @ stored raw",
+  cap({ email: "anthony@example.com" }).ok &&
+    cap({ email: "anthony@example.com" }).normalized?.email === "anthony@example.com",
 );
 check(
-  "spaced letters",
-  normalizeVoiceIntakeEmail("a n t h o n y at g mail dot com") === "anthony@gmail.com",
-);
-check("already valid", normalizeVoiceIntakeEmail("Anthony@Example.COM") === "anthony@example.com");
-check(
-  "prefix strip",
-  normalizeVoiceIntakeEmail("my email is bob at acme dot org") === "bob@acme.org",
+  "unusual email stored raw",
+  cap({ email: "bob@localhost" }).ok && cap({ email: "bob@localhost" }).normalized?.email === "bob@localhost",
 );
 check(
-  "spelled domain",
-  normalizeVoiceIntakeEmail("ajohnson at long h p dot com") === "ajohnson@longhp.com",
+  "partial domain stored raw",
+  cap({ email: "anthony@example" }).ok &&
+    cap({ email: "anthony@example" }).normalized?.email === "anthony@example",
 );
 check(
-  "literal @ example.com",
-  acceptVoiceIntakeEmail("anthony@example.com") === "anthony@example.com",
+  "spoken email stored raw (not rejected)",
+  cap({ email: "anthony at example dot com" }).ok &&
+    cap({ email: "anthony at example dot com" }).normalized?.email === "anthony at example dot com",
 );
-check(
-  "literal @ with spaces",
-  acceptVoiceIntakeEmail("anthony @ example.com") === "anthony@example.com",
-);
-check(
-  "loose no TLD dot required",
-  acceptVoiceIntakeEmail("user@domain") === "user@domain",
-);
+check("single-letter name", cap({ name: "Q" }).ok);
+check("unusual business name as custom", cap({ name: "!!! Plumbing" }).ok);
+check("empty email = no capture", !cap({ email: "" }).ok);
 
 if (failures.length) {
   console.error("FAIL:", failures);
   process.exit(1);
 }
-console.log("\nEmail intake checks passed.");
+console.log("\nVoice V2 intake presence capture checks passed.");

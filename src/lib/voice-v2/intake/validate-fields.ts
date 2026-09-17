@@ -1,20 +1,26 @@
-import "server-only";
-
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { IntakeFieldKey, IntakeFieldValueType, VoiceV2IntakeSchema } from "./types";
-import { acceptVoiceIntakeEmail } from "./normalize-email";
+import { normalizeVoiceIntakeEmail } from "./normalize-email";
 import { isBookingIntentOnlyServiceReason } from "./booking-intent-guard";
+
+/** Live-call intake: presence capture, not web-form format validation. */
+export type IntakeFieldCapture = {
+  raw: string;
+  normalizedValue?: string;
+};
 
 export type FieldValidationResult =
   | {
       ok: true;
       normalized: Partial<Record<IntakeFieldKey, string>>;
+      captures: Partial<Record<IntakeFieldKey, IntakeFieldCapture>>;
       disabledFields: IntakeFieldKey[];
       invalidFields: IntakeFieldKey[];
     }
   | {
       ok: false;
       normalized: Partial<Record<IntakeFieldKey, string>>;
+      captures: Partial<Record<IntakeFieldKey, IntakeFieldCapture>>;
       invalidFields: IntakeFieldKey[];
       disabledFields: IntakeFieldKey[];
     };
@@ -53,7 +59,7 @@ const INTAKE_FIELD_ALIASES: Record<string, IntakeFieldKey> = {
   callback_number: "phone",
 };
 
-function coerceIntakeFieldString(value: unknown): string {
+export function coerceIntakeFieldString(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value.trim();
   if (typeof value === "object" && "value" in (value as object)) {
@@ -78,67 +84,106 @@ export function normalizeIntakeFieldKeys(
   return out;
 }
 
-function normalizeByType(
+/** Best-effort companion value — never rejects raw capture. */
+export function bestEffortNormalizeIntakeValue(
   valueType: IntakeFieldValueType,
   key: string,
-  str: string,
-): string | null {
+  raw: string,
+): string | undefined {
   switch (valueType) {
-    case "text":
-      if (key === "service_reason" && isBookingIntentOnlyServiceReason(str)) return null;
-      return str;
-    case "address":
-      return str;
     case "email": {
-      return acceptVoiceIntakeEmail(str);
+      const n = normalizeVoiceIntakeEmail(raw);
+      if (!n || n === raw) return undefined;
+      return n;
     }
     case "phone":
       try {
-        return normalizeE164(str);
+        const e164 = normalizeE164(raw);
+        return e164 !== raw ? e164 : undefined;
       } catch {
-        return null;
+        return undefined;
       }
     default:
-      return str;
+      return undefined;
   }
 }
 
-export function validateIntakeFieldPayload(
+function shouldSkipServiceReasonValue(key: string, raw: string): boolean {
+  return key === "service_reason" && isBookingIntentOnlyServiceReason(raw);
+}
+
+/**
+ * Voice V2 live intake — conversation capture, not web-form validation.
+ * Caller speech is evidence: non-empty → KNOWN. Optional normalizedValue is annotation only.
+ * invalidFields = enabled keys explicitly sent empty (no usable answer in payload).
+ * Booking-intent-only service_reason is not a field value (caller-first law).
+ * Format regex never rejects; post-call reconciliation owns cleanup.
+ */
+export function captureIntakeFieldPayload(
   schema: VoiceV2IntakeSchema,
   rawFields: Record<string, unknown>,
 ): FieldValidationResult {
   const fields = normalizeIntakeFieldKeys(rawFields);
   const enabled = schemaFieldMap(schema);
+  const captures: Partial<Record<IntakeFieldKey, IntakeFieldCapture>> = {};
   const normalized: Partial<Record<IntakeFieldKey, string>> = {};
   const invalidFields: IntakeFieldKey[] = [];
   const disabledFields: IntakeFieldKey[] = [];
 
   for (const [key, value] of Object.entries(fields)) {
-    const k = resolveSchemaFieldKey(enabled, key);
+    const k = resolveSchemaFieldKey(enabled, key) as IntakeFieldKey;
     if (!k) continue;
     const str = coerceIntakeFieldString(value);
-    if (!str) {
-      if (enabled.has(k)) invalidFields.push(k as IntakeFieldKey);
-      continue;
-    }
     const valueType = enabled.get(k);
+
     if (!valueType) {
-      disabledFields.push(k as IntakeFieldKey);
+      if (str) disabledFields.push(k);
       continue;
     }
-    const norm = normalizeByType(valueType, k, str);
-    if (!norm) {
-      invalidFields.push(k as IntakeFieldKey);
+
+    if (!str) {
+      invalidFields.push(k);
       continue;
     }
-    normalized[k as IntakeFieldKey] = norm;
+
+    if (shouldSkipServiceReasonValue(k, str)) {
+      invalidFields.push(k);
+      continue;
+    }
+
+    const companion = bestEffortNormalizeIntakeValue(valueType, k, str);
+    captures[k] = { raw: str, normalizedValue: companion };
+    normalized[k] = str;
   }
 
-  if (invalidFields.length) {
-    return { ok: false, normalized, invalidFields, disabledFields };
+  const capturedCount = Object.keys(captures).length;
+  if (capturedCount > 0) {
+    return {
+      ok: true,
+      normalized,
+      captures,
+      disabledFields,
+      invalidFields: invalidFields.length ? invalidFields : [],
+    };
   }
-  if (Object.keys(normalized).length === 0 && disabledFields.length > 0) {
-    return { ok: false, normalized, invalidFields, disabledFields };
+
+  if (invalidFields.length > 0 || disabledFields.length > 0) {
+    return { ok: false, normalized, captures, invalidFields, disabledFields };
   }
-  return { ok: true, normalized, disabledFields, invalidFields: [] };
+
+  return {
+    ok: false,
+    normalized,
+    captures,
+    invalidFields: [],
+    disabledFields: [],
+  };
+}
+
+/** @deprecated name — use captureIntakeFieldPayload */
+export function validateIntakeFieldPayload(
+  schema: VoiceV2IntakeSchema,
+  rawFields: Record<string, unknown>,
+): FieldValidationResult {
+  return captureIntakeFieldPayload(schema, rawFields);
 }

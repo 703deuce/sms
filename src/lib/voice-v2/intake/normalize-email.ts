@@ -58,13 +58,14 @@ export function normalizeVoiceIntakeEmail(raw: string): string | null {
   return s;
 }
 
+/** Post-call / CRM helpers — not a live-call acceptance gate. */
 export function isValidIntakeEmail(raw: string): boolean {
-  return acceptVoiceIntakeEmail(raw) !== null;
+  return String(raw ?? "").trim().length > 0;
 }
 
 /**
- * Voice/PSTN intake — prefer saving what the caller said over rejecting.
- * Strict RFC shape is not required; @ with local + domain is enough.
+ * Optional spoken-email normalization for companion values — never rejects raw capture.
+ * @deprecated for live gates — use captureIntakeFieldPayload presence rules instead.
  */
 export function acceptVoiceIntakeEmail(raw: string): string | null {
   const trimmed = String(raw ?? "").trim();
