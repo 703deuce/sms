@@ -20,6 +20,7 @@ if [[ -z "$CONTAINER" ]]; then echo "No web container" >&2; exit 1; fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAR="/tmp/voice-bridge-patch.tgz"
 BRIDGE_FILES=(
+  src/lib/voice/telnyx/openai-live-bridge
   src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts
   src/lib/voice/telnyx/openai-realtime-bridge/call-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts
@@ -49,6 +50,7 @@ if [[ "$MODE" == "config_only" ]]; then
     src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
+    src/lib/voice/telnyx/openai-live-bridge \
     src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/flags.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/start-on-call.ts \
@@ -62,7 +64,7 @@ scp -o BatchMode=yes "$TAR" "coolify-server:/tmp/voice-bridge-patch.tgz"
 
 TRANSPORT_WRITE=""
 if [[ "$MODE" == "live" ]]; then
-  TRANSPORT_WRITE="echo openai_live > /app/.voice_ai_transport &&"
+  TRANSPORT_WRITE="echo openai_live > /app/.voice_ai_transport && echo 1 > /app/.openai_live_delegation &&"
 elif [[ "$MODE" == "realtime" ]]; then
   TRANSPORT_WRITE="echo openai_realtime > /app/.voice_ai_transport &&"
 fi
