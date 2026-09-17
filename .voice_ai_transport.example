@@ -1,1 +1,4 @@
-openai_live
+# Amy Live experiment (greeting + frontend prompt):
+# openai_live
+# Official GPT-Live protocol baseline (caller speaks first, no greeting):
+openai_live_minimal

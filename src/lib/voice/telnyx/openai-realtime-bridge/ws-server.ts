@@ -5,6 +5,7 @@ import { getRealtimeBridgeListenPort } from "./config";
 import { verifyRealtimeBridgeStreamToken } from "./stream-token";
 import { runTelnyxOpenAiRealtimeBridge } from "./call-bridge";
 import { runTelnyxOpenAiLiveBridge } from "./live-call-bridge";
+import { runTelnyxOpenAiLiveMinimalBridge } from "./live-minimal-call-bridge";
 import { resolveVoiceAiTransport } from "./flags";
 
 let httpServer: HttpServer | null = null;
@@ -91,9 +92,11 @@ export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
     const typedClaims = claims as import("./stream-token").RealtimeBridgeStreamClaims;
     const transport = resolveVoiceAiTransport();
     const run =
-      transport === "openai_live"
-        ? runTelnyxOpenAiLiveBridge({ claims: typedClaims, telnyxSocket: ws })
-        : runTelnyxOpenAiRealtimeBridge({ claims: typedClaims, telnyxSocket: ws });
+      transport === "openai_live_minimal"
+        ? runTelnyxOpenAiLiveMinimalBridge({ claims: typedClaims, telnyxSocket: ws })
+        : transport === "openai_live"
+          ? runTelnyxOpenAiLiveBridge({ claims: typedClaims, telnyxSocket: ws })
+          : runTelnyxOpenAiRealtimeBridge({ claims: typedClaims, telnyxSocket: ws });
     void run.catch((err) => {
       console.error(`[${transport}-bridge] session failed`, err);
       ws.close(1011, "bridge_failed");
