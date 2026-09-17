@@ -71,7 +71,7 @@ elif [[ "$MODE" == "live" ]]; then
   ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/probe-openai-live.ts'"
   echo "--- Live Telnyx smoke ---"
   ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/smoke-openai-live-bridge.ts'"
-  echo "openai_live active. Default baseline A: no instructions, caller speaks first (OPENAI_LIVE_BASELINE). Grep LIVE_CLIENT_EVENT / openai_live_unexpected_client_event during PSTN test."
+  echo "openai_live active on +1 571-407-3615. Baseline A (default): caller speaks first. Logs: LIVE_OUT / LIVE_IN / LIVE_STATS"
 elif [[ "$MODE" == "realtime" ]]; then
   echo "--- Realtime Test A ---"
   ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && HOLD_MS=6000 NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/openai-realtime-test-a-minimal.ts'"
