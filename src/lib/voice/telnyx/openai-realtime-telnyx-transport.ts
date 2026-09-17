@@ -7,7 +7,7 @@ import {
   OPENAI_REALTIME_MINI_MODEL_ID,
   OPENAI_REALTIME_BRIDGE_VOICE as OPENAI_REALTIME_AMY_VOICE,
   shouldUseOpenAiRealtimeMediaBridge,
-} from "@/lib/voice/telnyx/openai-realtime-bridge/flags";
+} from "@/lib/voice/telnyx/openai-realtime-bridge/public-flags";
 import { applyOpenAiRealtimeMediaBridgeConfig } from "@/lib/voice/telnyx/openai-realtime-bridge/apply-bridge-config";
 import { resolveConfiguredRealtimeVoice } from "@/lib/voice/realtime-voice-picker";
 import {
