@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   if (callId && workspaceId) {
     const { getPrisma } = await import("@/lib/db");
     const prisma = getPrisma();
-    await prisma.auditLog
+    void prisma.auditLog
       .create({
         data: {
           workspaceId,
