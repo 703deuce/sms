@@ -40,6 +40,7 @@ async function main() {
           event: "start",
           stream_id: "smoke_stream_1",
           start: {
+            stream_id: "smoke_stream_1",
             call_control_id: "cc_smoke",
             media_format: { encoding: "PCMU", sample_rate: 8000 },
           },
