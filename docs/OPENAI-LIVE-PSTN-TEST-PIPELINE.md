@@ -10,7 +10,7 @@
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
 
-**PSTN answer path (`openai_live`):** Recording-disclosure Call Control TTS is **off** for this transport (`inboundRecordingDisclosureEnabled`). Bridge starts right after answer. Baseline **G** greeting uses OpenAI’s documented flow: `session.instructions.append` + `session.commentary.append` after `session.started` (see `live-greeting.ts`).
+**PSTN answer path (`openai_live`):** No recording-disclosure TTS anywhere in inbound. **`runGptLivePstnLeanAnswer`** = claim → answer → `streaming_start` only (no agent config load, no disclosure, no workflow enroll). Telnyx webhooks run from **Next standalone** — after src changes run `./scripts/prod-gpt-live-rebuild-web.sh` (not config-only hotpatch). Baseline **G** greeting: `live-greeting.ts` after `session.started`.
 
 ---
 

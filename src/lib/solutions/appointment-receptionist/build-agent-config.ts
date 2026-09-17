@@ -461,10 +461,7 @@ export function buildWizardAgentConfig(
     },
     compliance: {
       ...(base.compliance || {}),
-      recordingDisclosure: recordingOn,
-      ...(recordingOn
-        ? { recordingDisclosureText: DEFAULT_RECORDING_DISCLOSURE }
-        : {}),
+      recordingDisclosure: false,
     },
     transfers: {
       ...(base.transfers || {}),

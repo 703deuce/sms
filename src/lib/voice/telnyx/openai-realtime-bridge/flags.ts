@@ -5,9 +5,9 @@ import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode"
 
 function readVoiceAiTransportFile(): string | null {
   const candidates = [
+    "/app/.voice_ai_transport",
     process.env.VOICE_AI_TRANSPORT_FILE?.trim(),
     join(process.cwd(), ".voice_ai_transport"),
-    "/app/.voice_ai_transport",
   ].filter(Boolean) as string[];
   for (const path of candidates) {
     try {
@@ -62,12 +62,9 @@ export function isGptLivePstnBridgeActive(): boolean {
   return resolveVoiceAiTransport() === "openai_live";
 }
 
-/**
- * Recording-disclosure TTS on inbound answer (Call Control speak).
- * Disabled for GPT-Live PSTN test — Amy opens via Live; no separate disclaimer clip.
- */
-export function inboundRecordingDisclosureEnabled(): boolean {
-  return !isGptLivePstnBridgeActive();
+/** Lean inbound: answer + media stream only (no disclosure, masks, warmup, or telemetry DB). */
+export function isGptLivePstnLeanInbound(): boolean {
+  return isGptLivePstnBridgeActive();
 }
 
 /** Realtime GA bridge vs GPT-Live PSTN experiment (`openai_live`). */
