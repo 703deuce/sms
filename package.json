@@ -111,6 +111,7 @@
     "test:openai-live-test-a": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/probe-openai-live-session.ts",
     "test:openai-live-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/probe-openai-live.ts",
     "test:openai-live-smoke": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/smoke-openai-live-bridge.ts",
+    "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "verify:voice-v2-caller-experience-law": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-voice-v2-caller-experience-law.ts",
     "watch:cfna-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/watch-cfna-probe.ts",
     "query:cfna-probe-db": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/query-cfna-probe-db.ts",
