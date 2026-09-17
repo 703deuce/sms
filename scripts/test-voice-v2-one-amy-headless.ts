@@ -120,7 +120,8 @@ pass("ONE_AMY_FLAG", snapshot.voiceV2OneAmy === true);
 pass(
   "MULTI_FIELD_POLICY",
   snapshot.compiledPrompt.includes("save them in one call") ||
-    snapshot.compiledPrompt.includes("together in one call"),
+    snapshot.compiledPrompt.includes("together in one call") ||
+    snapshot.compiledPrompt.includes("in one call when possible"),
 );
 pass("FAKE_BOOKING_INTAKE_SAVES", isBookingIntentOnlyServiceReason("book an appointment"));
 

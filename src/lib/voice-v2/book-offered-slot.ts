@@ -75,6 +75,7 @@ export async function executeVoiceV2BookOfferedSlot(
       status: "SLOT_UNAVAILABLE" | "INVALID_OFFER" | "ERROR" | "MISSING_REQUIRED_FIELDS";
       error: string;
       missing_fields?: string[];
+      speak?: string;
       timing: VoiceV2BookTimingMarks;
       timing_ms: VoiceV2BookTimingMs;
     }

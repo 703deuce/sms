@@ -227,11 +227,7 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
 
   const voiceV2IntakeAuthority = useVoiceV2IntakeAuthority([...caps]);
   const voiceV2IntakeSchema = voiceV2IntakeAuthority
-    ? compileVoiceV2IntakeSchema({
-        advanced: {
-          voiceV2Intake: advanced?.voiceV2Intake,
-        },
-      } as VoiceAgentConfig)
+    ? compileVoiceV2IntakeSchema({ advanced: input.advanced } as VoiceAgentConfig)
     : null;
   const voiceV2OneAmy = isVoiceV2PstnOneAmyMode({
     advanced: input.advanced,

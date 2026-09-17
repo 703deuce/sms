@@ -22,15 +22,18 @@ export function formatVoiceV2BookTelnyxResponse(result: BookResult): Record<stri
   }
   if (result.status === "MISSING_REQUIRED_FIELDS") {
     const missing = result.missing_fields || [];
+    const speak =
+      result.speak ||
+      (missing.length === 1
+        ? `I still need your ${missing[0]} before I can book that time.`
+        : "I still need a bit more information before I can book that time.");
     return {
       ok: false,
       status: "MISSING_REQUIRED_FIELDS",
       voice_v2_status: "MISSING_REQUIRED_FIELDS",
       missing_fields: missing,
-      speak:
-        missing.length === 1
-          ? `I still need your ${missing[0]} before I can book that time.`
-          : "I still need a bit more information before I can book that time.",
+      missing_before_booking: missing,
+      speak,
       error: result.error,
       timing_ms: result.timing_ms,
     };

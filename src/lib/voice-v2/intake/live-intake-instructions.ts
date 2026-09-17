@@ -9,9 +9,9 @@ export function useVoiceV2IntakeAuthority(capabilities: string[]): boolean {
 }
 
 const REQ_LABEL: Record<string, string> = {
-  OPTIONAL: "optional",
-  REQUIRED_FOR_RECORD: "required for record (do not block booking)",
-  REQUIRED_BEFORE_BOOKING: "required before booking",
+  OPTIONAL: "optional (never block booking)",
+  REQUIRED_FOR_RECORD: "required for record (collect when natural; never block booking)",
+  REQUIRED_BEFORE_BOOKING: "required before booking (must be valid before BOOK)",
 };
 
 /**
@@ -25,36 +25,40 @@ export function buildVoiceV2LiveIntakeInstructions(
   const disabled = BUILTIN_INTAKE_FIELD_KEYS.filter((k) => !enabled.has(k));
 
   const lines: string[] = [
-    "VOICE V2 INTAKE AUTHORITY (sole source for live booking intake):",
+    "VOICE V2 INTAKE AUTHORITY (published wizard schema — built-in and custom fields):",
     ...(options?.oneAmy
       ? [
-          "Do not call intake save solely because the caller wants to book or schedule.",
-          "Do not call intake save for a scheduling date or time alone (for example 'tomorrow') — retain it in the conversation.",
-          "If the caller already gave a day or time, do not ask for it again.",
+          "Collect intake conversationally. The live transcript is your memory; do not re-ask known information.",
+          "Booking intent alone is conversational only — never call voice_v2_save_intake_fields merely because the caller wants to book or schedule.",
+          'Example: Caller: "I need to make an appointment." Amy: "Absolutely. I can help with that. What name should I put it under?" — no tool for intent alone.',
+          "When the caller volunteers one or more configured field values, remember all of them. Ask only for what is still missing.",
+          "Call voice_v2_save_intake_fields only when saving real field values (batch every new value from the turn in one call when possible).",
+          "Do not call save after every single word, and never call save solely to enter booking mode.",
+          "Do not call save for scheduling date/time alone — use conversation memory until FIND; scheduling-only saves are handled without blocking intake fields.",
           "Do not save booking-intent phrases as service_reason (for example 'book an appointment').",
-          "When multiple enabled fields arrive in one utterance, save them in one call.",
-          "Every enabled configured intake field (built-in or custom) is memorable — if the caller provides a value, save it and do not ask again unless unclear, invalid, or corrected.",
+          "Latest explicit correction wins (for example email corrected mid-call).",
+          "Before voice_v2_find_availability: briefly acknowledge naturally (for example 'Let me see what I have open for Tuesday') then call FIND.",
+          "Before voice_v2_book_offered_slot: briefly acknowledge (for example 'Give me a moment while I lock in that time') then call BOOK.",
+          "Never say booked/confirmed/reserved until BOOK returns BOOKING_CONFIRMED.",
+          "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND or BOOK.",
         ]
       : []),
-    "Use voice_v2_save_intake_fields when the caller supplies configured values (including custom wizard field keys).",
-    "Use the Voice V2 intake schema as the only source of truth for what information to actively request.",
-    "Do not ask for disabled fields. Do not re-ask fields already known in session state or already stated by the caller.",
-    "If the caller volunteers a disabled field, acknowledge naturally if appropriate and continue — never treat it as an error, never retry saving it, never switch to callback/message mode because of it.",
-    "FIELD_NOT_ENABLED from the save tool means continue booking — not failure, not callback.",
-    "Once missingBeforeBooking is empty, follow voice_v2_next_stage from the save tool result (COLLECT_SCHEDULING_PREFERENCE vs FIND_AVAILABILITY). Never callback-close when booking_continue_required is true.",
-    "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND/BOOK.",
-    "For email: before voice_v2_save_intake_fields, normalize speech to user@domain.tld (convert 'at'→@, 'dot'→., remove spaces). Never send raw spoken filler like 'my email is'.",
+    "Requirement levels (strict): REQUIRED_BEFORE_BOOKING gates BOOK only. REQUIRED_FOR_RECORD must not block BOOK. OPTIONAL never blocks. DISABLED fields do not exist — never ask, save, or mention.",
+    "Use voice_v2_save_intake_fields with wizard field keys (including custom keys) when persisting caller-provided values.",
+    "FIELD_NOT_ENABLED means the field is disabled — continue booking; not failure, not callback.",
+    "Once missingBeforeBooking is empty, follow voice_v2_next_stage from the save tool (scheduling vs FIND).",
+    "For email: normalize speech to user@domain.tld before save (at→@, dot→., no filler phrases).",
   ];
 
   if (schema.fields.length) {
-    lines.push("Enabled fields:");
+    lines.push("Enabled wizard fields (dynamic — includes custom):");
     for (const f of schema.fields) {
       lines.push(
-        `- ${f.key}: ${REQ_LABEL[f.requirementLevel] || f.requirementLevel}; ask only if missing: "${f.questionText}"`,
+        `- ${f.key}: ${REQ_LABEL[f.requirementLevel] || f.requirementLevel}; if missing ask: "${f.questionText}"`,
       );
     }
   } else {
-    lines.push("Enabled fields: (none configured — use defaults at runtime compile).");
+    lines.push("Enabled fields: (none configured — runtime compile applies defaults).");
   }
 
   if (disabled.length) {

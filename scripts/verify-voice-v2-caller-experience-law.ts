@@ -62,6 +62,9 @@ for (const [name, src] of [
     fail(`${name} route must void-defer audit telemetry after provider result`);
   }
 }
+if (!bookRoute.includes("evaluateBookingIntakeGate")) {
+  fail("PSTN book route must run wizard BOOK gate before certified executor");
+}
 
 const inbound = readFileSync("src/lib/voice/inbound.ts", "utf8");
 if (!inbound.includes("scheduleVoiceV2CallWarmup")) {
@@ -93,5 +96,15 @@ runHeadless(
   `${PRELOAD} VOICE_V2_ALLOW_MEMORY_L2=1 npx tsx scripts/test-voice-v2-call-warmup-phase-2b.ts`,
 );
 runHeadless("test-voice-v2-certified-boundary.ts", "npx tsx scripts/test-voice-v2-certified-boundary.ts");
+runHeadless(
+  "test-voice-v2-wizard-conversational-intake-headless.ts",
+  `${PRELOAD} npx tsx scripts/test-voice-v2-wizard-conversational-intake-headless.ts`,
+);
+runHeadless("test-voice-v2-custom-intake-headless.ts", `${PRELOAD} npx tsx scripts/test-voice-v2-custom-intake-headless.ts`);
+
+const compileTs = readFileSync("src/lib/voice/receptionist/compile.ts", "utf8");
+if (compileTs.includes("voiceV2Intake: advanced?.voiceV2Intake")) {
+  fail("compile must pass full advanced to compileVoiceV2IntakeSchema for custom callerFields");
+}
 
 console.log("PASS: verify-voice-v2-caller-experience-law");

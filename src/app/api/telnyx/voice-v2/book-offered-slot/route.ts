@@ -30,6 +30,52 @@ export async function POST(request: Request) {
     String(body.call_id || body.callId || request.headers.get("x-telnyx-call-control-id") || "") ||
     null;
 
+  if (agentId && callId) {
+    const { evaluateBookingIntakeGate } = await import("@/lib/voice-v2/intake/booking-gate");
+    const { resolveSessionKey } = await import("@/lib/voice-v2/intake/load-call-context");
+    const { getVoiceV2CallContext } = await import("@/lib/voice-v2/intake/session-store");
+    const { speakForMissingBeforeBookingFields } = await import(
+      "@/lib/voice-v2/intake/missing-field-speak"
+    );
+    const gate = await evaluateBookingIntakeGate({
+      workspaceId,
+      agentId,
+      callControlId: callId,
+      conversationId: String(body.conversation_id || body.telnyx_conversation_id || ""),
+      fromE164: String(body.from || body.caller || ""),
+    });
+    if (!gate.allowed) {
+      const sk = resolveSessionKey({
+        callControlId: callId,
+        conversationId: String(body.conversation_id || body.telnyx_conversation_id || ""),
+      });
+      const ctx = sk ? getVoiceV2CallContext(sk) : null;
+      const speak = ctx
+        ? speakForMissingBeforeBookingFields(ctx.intakeSchema, gate.missing_fields)
+        : undefined;
+      const ms = Date.now() - ingressStarted;
+      const payload = formatVoiceV2BookTelnyxResponse({
+        status: "MISSING_REQUIRED_FIELDS",
+        missing_fields: gate.missing_fields,
+        error: "missing_required_intake_fields",
+        speak,
+        timing_ms: {
+          OFFER_RESOLUTION_MS: 0,
+          REVALIDATION_MS: 0,
+          TOKEN_MS: 0,
+          GRAPH_CREATE_MS: 0,
+          TOTAL_BACKEND_MS: ms,
+        },
+      });
+      return NextResponse.json({
+        ...payload,
+        call_id: callId,
+        booking_pipeline: "microsoft_365_certified",
+        telnyx_to_transovo_ms: ms,
+      });
+    }
+  }
+
   const result = await executeMicrosoft365CertifiedBookOfferedSlot(
     { ...body, call_id: callId },
     workspaceId,

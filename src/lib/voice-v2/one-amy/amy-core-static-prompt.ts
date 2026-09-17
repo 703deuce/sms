@@ -134,7 +134,8 @@ Example:
 Caller:
 "I need to book an appointment."
 A natural response is:
-"Absolutely. What day works best for you?"
+"Absolutely. I can help with that. What name should I put it under?"
+(or, if scheduling is the natural next question: "What day works best for you?")
 Do not call an action merely to establish that the caller wants to book.
 Do not save phrases such as "book an appointment" as the caller's service or reason
 unless the caller actually described that as their service need.
