@@ -15,6 +15,10 @@ import { buildVoiceV2CallCapabilitySnapshot } from "@/lib/voice-v2/workflow-capa
 import { VOICE_V2_SAVE_INTAKE_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 import { REALTIME_SAVE_INTAKE_DEFERRED_OUTPUT } from "./realtime-tools";
 import { logRealtimeBridgeEvent } from "./telemetry";
+import {
+  buildOpenAiRealtimeGaGreetingResponse,
+  buildOpenAiRealtimeGaSessionUpdate,
+} from "./ga-session";
 
 type TelnyxMediaEvent = {
   event?: string;
@@ -71,7 +75,6 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
   const openAi = new WebSocket(openAiUrl, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "OpenAI-Beta": "realtime=v1",
     },
   });
 
@@ -150,13 +153,11 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       streamReady: Boolean(streamId),
       sessionReady: openAiSessionReady,
     });
-    sendOpenAi({
-      type: "response.create",
-      response: {
-        modalities: ["audio", "text"],
-        instructions: `Say exactly this greeting naturally: ${greeting}`,
-      },
-    });
+    sendOpenAi(
+      buildOpenAiRealtimeGaGreetingResponse(
+        `Say exactly this greeting naturally: ${greeting}`,
+      ),
+    );
   };
 
   const onTelnyxStreamReady = (id: string) => {
@@ -177,29 +178,13 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
         callId: input.claims.callId,
         model,
         voice: OPENAI_REALTIME_BRIDGE_VOICE,
-        input_audio_format: "g711_ulaw",
-        output_audio_format: "g711_ulaw",
+        input_audio_format: "audio/pcmu",
+        output_audio_format: "audio/pcmu",
         session_mode: "single_persistent_per_call",
+        realtime_api: "ga",
       });
     }
-    sendOpenAi({
-      type: "session.update",
-      session: {
-        modalities: ["text", "audio"],
-        instructions,
-        voice: OPENAI_REALTIME_BRIDGE_VOICE,
-        input_audio_format: "g711_ulaw",
-        output_audio_format: "g711_ulaw",
-        turn_detection: { type: "server_vad" },
-        tools: tools.map((t) => ({
-          type: "function",
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })),
-        tool_choice: "auto",
-      },
-    });
+    sendOpenAi(buildOpenAiRealtimeGaSessionUpdate({ instructions, tools }));
     setTimeout(() => {
       if (openAiSessionReady) return;
       openAiSessionReady = true;
@@ -225,6 +210,14 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       return;
     }
     const type = String(ev.type || "");
+
+    if (type === "error") {
+      logRealtimeBridgeEvent("openai_realtime_error", {
+        callId: input.claims.callId,
+        error: ev.error ?? ev,
+      });
+      return;
+    }
 
     if (type === "session.updated") {
       if (!openAiSessionReady) {
@@ -390,8 +383,21 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
     }
   };
 
-  openAi.on("close", closeBoth);
+  openAi.on("close", (code, reason) => {
+    logRealtimeBridgeEvent("openai_realtime_ws_closed", {
+      callId: input.claims.callId,
+      code,
+      reason: reason.toString(),
+    });
+    closeBoth();
+  });
   input.telnyxSocket.on("close", () => openAi.close());
-  openAi.on("error", (err) => console.error("[realtime-bridge] openai ws", err));
+  openAi.on("error", (err) => {
+    console.error("[realtime-bridge] openai ws", err);
+    logRealtimeBridgeEvent("openai_realtime_ws_error", {
+      callId: input.claims.callId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  });
   input.telnyxSocket.on("error", (err) => console.error("[realtime-bridge] telnyx ws", err));
 }
