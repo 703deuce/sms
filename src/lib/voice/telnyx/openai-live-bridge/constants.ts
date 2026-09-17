@@ -27,7 +27,23 @@ export const OPENAI_LIVE_VOICE =
   process.env.OPENAI_LIVE_VOICE?.trim() || OPENAI_REALTIME_BRIDGE_VOICE;
 
 export const OPENAI_LIVE_BACKEND_MODEL =
-  process.env.OPENAI_LIVE_BACKEND_MODEL?.trim() || "gpt-5-mini";
+  process.env.OPENAI_LIVE_BACKEND_MODEL?.trim() || "gpt-6-astra";
+
+/** Structured log — Live frontend vs delegated Responses backend (do not conflate with Telnyx TTS). */
+export function logLiveModelConfig(extra?: Record<string, unknown>): void {
+  console.info(
+    `LIVE_MODEL_CONFIG ${JSON.stringify({
+      live_frontend_model: OPENAI_LIVE_MODEL_ID,
+      responses_backend_model: OPENAI_LIVE_BACKEND_MODEL,
+      live_voice: OPENAI_LIVE_VOICE,
+      reasoning_effort: "low",
+      text_verbosity: "low",
+      parallel_tool_calls: false,
+      tool_choice: "auto",
+      ...extra,
+    })}`,
+  );
+}
 
 /** Use split Live frontend + Responses backend instruction files (default on). */
 export function isOpenAiLiveSplitPromptsEnabled(): boolean {

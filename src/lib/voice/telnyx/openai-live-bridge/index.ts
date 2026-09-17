@@ -12,6 +12,7 @@ export {
 export { buildOpenAiLiveSplitSessionStartPayload } from "./live-session-start";
 export {
   OPENAI_LIVE_BACKEND_MODEL,
+  logLiveModelConfig,
   isOpenAiLiveDelegationEnabled,
   isOpenAiLiveSplitPromptsEnabled,
 } from "./constants";

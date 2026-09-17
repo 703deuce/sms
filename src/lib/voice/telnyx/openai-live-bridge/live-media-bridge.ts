@@ -24,7 +24,7 @@ import { createLiveDelegationHandler } from "./live-delegation-handler";
 import { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
 import { disposeLiveCallRuntime } from "./live-call-runtime";
-import { isOpenAiLiveDelegationEnabled } from "./constants";
+import { isOpenAiLiveDelegationEnabled, logLiveModelConfig } from "./constants";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 
 type LiveEvent = {
@@ -227,6 +227,10 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       ms_since_session_started: sessionStartedAt ? Date.now() - sessionStartedAt : 0,
       lazy_runtime: true,
     });
+    logLiveModelConfig({
+      call_id: callId,
+      event: "session.update_delegation_attached",
+    });
   };
 
   const maybeSyncCallerIntent = (utterance: string | null) => {
@@ -364,6 +368,12 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           liveStarted = true;
           sessionStartedAt = Date.now();
           const openAiSessionId = String((event.session as { id?: string })?.id ?? "");
+          logLiveModelConfig({
+            call_id: callId,
+            live_session_id: openAiSessionId,
+            delegation_enabled: delegationEnabled,
+            event: "session.started",
+          });
           if (input.immediateLiveStart?.toolContext.controlPlane) {
             input.immediateLiveStart.toolContext.controlPlane.setLiveSessionId(openAiSessionId);
           }
