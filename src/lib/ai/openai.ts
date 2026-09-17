@@ -14,7 +14,8 @@ export function getOpenAiModel() {
   return process.env.OPENAI_MODEL?.trim() || "gpt-5-nano";
 }
 
-function chatCompletionUsesMaxCompletionTokens(model: string): boolean {
+/** Newer OpenAI chat models: max_completion_tokens, default temperature only. */
+export function isOpenAiChatCompletionModernModel(model: string): boolean {
   const m = model.toLowerCase();
   return (
     m.includes("gpt-5") ||
@@ -24,6 +25,10 @@ function chatCompletionUsesMaxCompletionTokens(model: string): boolean {
     m.startsWith("o3") ||
     m.includes("astra")
   );
+}
+
+function chatCompletionUsesMaxCompletionTokens(model: string): boolean {
+  return isOpenAiChatCompletionModernModel(model);
 }
 
 export async function openAiChatCompletion(
@@ -36,9 +41,12 @@ export async function openAiChatCompletion(
 
   const model = options?.model?.trim() || getOpenAiModel();
   const maxOut = options?.maxTokens ?? 800;
-  const tokenLimitField = chatCompletionUsesMaxCompletionTokens(model)
-    ? { max_completion_tokens: maxOut }
-    : { max_tokens: maxOut };
+  const modern = chatCompletionUsesMaxCompletionTokens(model);
+  const tokenLimitField = modern ? { max_completion_tokens: maxOut } : { max_tokens: maxOut };
+  const temperatureField =
+    modern || options?.temperature === undefined
+      ? {}
+      : { temperature: options.temperature };
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -48,7 +56,7 @@ export async function openAiChatCompletion(
     },
     body: JSON.stringify({
       model,
-      temperature: options?.temperature ?? 0.4,
+      ...temperatureField,
       ...tokenLimitField,
       messages: [
         { role: "system", content: system },

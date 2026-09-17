@@ -196,7 +196,6 @@ export const astraCallerInterpreter: CallerInterpreter = {
       const raw = await Promise.race([
         openAiChatCompletion(buildAstraSystemPrompt(), user, {
           model,
-          temperature: 0.1,
           maxTokens: 400,
         }),
         new Promise<null>((_, reject) =>
