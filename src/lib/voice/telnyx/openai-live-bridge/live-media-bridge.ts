@@ -143,6 +143,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       void syncLiveCallerUtteranceIntent({
         claims: streamClaimsForTeardown,
         callerUtterance: stable.text,
+        fullConversationTranscript: conversationTranscript.formatFull(),
         stableUtterance: stable,
         controlPlane: liveControlPlane,
         sendLiveOut,
@@ -450,6 +451,15 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         }
 
         if (isLiveInputTranscriptDone(type)) {
+          // Provider idle hint only — NOT a semantic-final utterance from OpenAI.
+          // Authoritative completion remains assembler stabilization + revision guard.
+          console.info(
+            `LIVE_INPUT_TRANSCRIPT_PROVIDER_IDLE_HINT ${JSON.stringify({
+              callId,
+              event_type: type,
+              note: "schedules_utterance_assembler_settle_only",
+            })}`,
+          );
           callerUtteranceAssembler.onCallerAudioEndedEstimate(performance.now());
           return;
         }
@@ -558,6 +568,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
   const closeLiveSession = () => {
     callerUtteranceAssembler.dispose();
+    clearUtteranceRevisionGuard(callId);
     if (!liveRuntimeDisposed && streamClaimsForTeardown) {
       liveRuntimeDisposed = true;
       void disposeLiveCallRuntime(streamClaimsForTeardown);

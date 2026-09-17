@@ -12,6 +12,8 @@ import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-s
 import { applyCallerIntentToCallContext } from "../src/lib/voice-v2/caller-intent-interpreter";
 import { callerMeaningToIntentInterpretation } from "../src/lib/voice-v2/caller-meaning-apply";
 import { deterministicCallerInterpreter } from "../src/lib/voice-v2/deterministic-caller-interpreter";
+import type { InterpreterContext } from "../src/lib/voice-v2/caller-meaning";
+import type { VoiceDialogGoal } from "../src/lib/voice-v2/dialog-goal";
 import {
   parseCallerMeaningFromModelJson,
 } from "../src/lib/voice-v2/astra-caller-interpreter";
@@ -78,18 +80,46 @@ function stableRef(text: string, rev = 1) {
   };
 }
 
-async function interpretDeterministic(text: string, prior = "UNKNOWN" as const) {
-  const res = await deterministicCallerInterpreter.interpret({
-    priorActiveGoal: prior,
-    businessTimezone: "America/Los_Angeles",
+function interpreterCtx(
+  text: string,
+  prior: VoiceDialogGoal,
+  callContext: VoiceV2CallContext,
+  transcript = "",
+): InterpreterContext {
+  return {
     stable: stableRef(text),
+    fullConversationTranscript: transcript || `Caller: ${text}`,
+    callContext,
+    priorActiveGoal: prior,
+    activeGoal: prior,
+    currentWorkflowStage: "COLLECT_REQUIRED_INTAKE",
+    businessTimezone: callContext.businessTimezone,
+    currentDateTimeIso: new Date().toISOString(),
+    schedulingPreference: callContext.schedulingPreference ?? null,
+    effectiveRequestedDate: callContext.schedulingPreference?.requestedDate ?? null,
+    currentOfferSet: null,
+    acceptedIntakeSnapshot: {},
     callId: "call_a",
-  });
+  };
+}
+
+async function interpretDeterministic(
+  text: string,
+  prior: VoiceDialogGoal,
+  callContext: VoiceV2CallContext,
+) {
+  const res = await deterministicCallerInterpreter.interpret(
+    interpreterCtx(text, prior, callContext),
+  );
   return res.meaning;
 }
 
-async function applyMeaning(ctx: VoiceV2CallContext, text: string, priorGoal: ReturnType<typeof dialogFromContext>["activeGoal"]) {
-  const meaning = await interpretDeterministic(text, priorGoal);
+async function applyMeaning(
+  ctx: VoiceV2CallContext,
+  text: string,
+  priorGoal: ReturnType<typeof dialogFromContext>["activeGoal"],
+) {
+  const meaning = await interpretDeterministic(text, priorGoal, ctx);
   const interpretation = callerMeaningToIntentInterpretation(meaning);
   return applyCallerIntentToCallContext(ctx, interpretation, text, { turnId: "utt_test_1" });
 }
@@ -157,7 +187,7 @@ async function main() {
   const merge = await mergeCallerFactsIntoCallContext(ctx, {
     utterance: "actually make it Thursday instead",
     interpretation: callerMeaningToIntentInterpretation(
-      await interpretDeterministic("actually make it Thursday instead", "BOOK_APPOINTMENT"),
+      await interpretDeterministic("actually make it Thursday instead", "BOOK_APPOINTMENT", ctx),
     ),
     turnId: "utt_corr",
   });

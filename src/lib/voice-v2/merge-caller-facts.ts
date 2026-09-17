@@ -19,7 +19,10 @@ import {
 } from "./scheduling-preference-state";
 import { mergeUtteranceIntakeFactsIntoContext } from "./intake/apply-intake-facts";
 import { resolveSelectedSlotIdFromOffer } from "./resolve-slot-from-offer";
+import { resolveSlotIdFromOfferReference } from "./resolve-slot-from-offer-ordinal";
 import { loadVoiceV2OfferSet } from "./offer-set-store";
+import type { CallerMeaningFacts } from "./caller-meaning";
+import { rederiveWorkflowStageForContext } from "./workflow-rederive";
 
 export type MergeCallerFactsInput = {
   utterance: string;
@@ -27,6 +30,7 @@ export type MergeCallerFactsInput = {
   evidence?: string;
   now?: Date;
   turnId?: string;
+  meaningFacts?: CallerMeaningFacts;
 };
 
 export type MergeCallerFactsResult = {
@@ -126,10 +130,24 @@ export async function mergeCallerFactsIntoCallContext(
   next = mergeWorkflowIntoContext(next, workflow);
 
   const offerId = next.currentOfferSet?.offerSetId;
-  if (offerId && input.utterance.trim()) {
+  if (offerId) {
     const loaded = await loadVoiceV2OfferSet(next.workspaceId, offerId).catch(() => null);
     if (loaded?.slots?.length) {
-      const slotId = resolveSelectedSlotIdFromOffer(loaded.slots, input.utterance);
+      let slotId: string | null = null;
+      const mf = input.meaningFacts;
+      if (mf?.selected_slot_id && loaded.slots.some((s) => s.slot_id === mf.selected_slot_id)) {
+        slotId = mf.selected_slot_id;
+      } else if (mf?.selected_slot_ordinal && mf.selected_slot_ordinal > 0) {
+        slotId = loaded.slots[mf.selected_slot_ordinal - 1]?.slot_id ?? null;
+      } else if (mf?.selected_slot_spoken_label) {
+        slotId =
+          resolveSlotIdFromOfferReference(loaded.slots, mf.selected_slot_spoken_label) ??
+          resolveSelectedSlotIdFromOffer(loaded.slots, mf.selected_slot_spoken_label);
+      } else if (input.utterance.trim()) {
+        slotId =
+          resolveSlotIdFromOfferReference(loaded.slots, input.utterance) ??
+          resolveSelectedSlotIdFromOffer(loaded.slots, input.utterance);
+      }
       if (slotId && next.bookingState?.selectedSlotId !== slotId) {
         next = {
           ...next,

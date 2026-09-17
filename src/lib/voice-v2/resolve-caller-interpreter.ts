@@ -1,16 +1,16 @@
 import "server-only";
 
-import type {
-  CallerInterpretationResult,
-  CallerInterpreter,
-  InterpreterContext,
-} from "./caller-meaning";
+import type { CallerInterpretationResult, InterpreterContext } from "./caller-meaning";
 import { astraCallerInterpreter, isVoiceV2AstraInterpreterEnabled } from "./astra-caller-interpreter";
 import { deterministicCallerInterpreter } from "./deterministic-caller-interpreter";
+import {
+  classifyInterpreterSafeFallback,
+  preserveStateCallerMeaning,
+} from "./interpreter-safe-fallback";
 
 /**
- * Primary interpreter: Astra when enabled, always falls back to deterministic on failure.
- * Returns canonical CallerMeaning — no downstream branching by implementation.
+ * Primary interpreter entry. Returns canonical CallerMeaning + merge policy.
+ * When Astra is enabled, ambiguous failures preserve durable state (no full deterministic rewrite).
  */
 export async function interpretStableCallerUtterance(
   ctx: InterpreterContext,
@@ -18,20 +18,38 @@ export async function interpretStableCallerUtterance(
   if (isVoiceV2AstraInterpreterEnabled()) {
     const astra = await astraCallerInterpreter.interpret(ctx);
     if (astra?.meaning) {
-      return astra;
+      return { ...astra, mergePolicy: "full" };
     }
-    const deterministic = await deterministicCallerInterpreter.interpret(ctx);
+
+    const safe = classifyInterpreterSafeFallback(ctx);
+    if (safe.mergePolicy === "literal_facts_only" && safe.meaning) {
+      return {
+        meaning: safe.meaning,
+        implementationId: "safe_literal_fallback",
+        latencyMs: 0,
+        fallbackReason: safe.reason,
+        mergePolicy: "literal_facts_only",
+      };
+    }
+
     return {
-      ...deterministic,
-      fallbackReason: "astra_unavailable_or_invalid",
+      meaning: preserveStateCallerMeaning(ctx),
+      implementationId: "preserve_state",
+      latencyMs: 0,
+      fallbackReason: safe.reason,
+      mergePolicy: "none",
     };
   }
-  return deterministicCallerInterpreter.interpret(ctx);
-}
 
-export function getConfiguredCallerInterpreters(): CallerInterpreter[] {
-  if (isVoiceV2AstraInterpreterEnabled()) {
-    return [astraCallerInterpreter, deterministicCallerInterpreter];
+  const deterministic = await deterministicCallerInterpreter.interpret(ctx);
+  if (!deterministic) {
+    return {
+      meaning: preserveStateCallerMeaning(ctx),
+      implementationId: "preserve_state",
+      latencyMs: 0,
+      fallbackReason: "deterministic_unavailable",
+      mergePolicy: "none",
+    };
   }
-  return [deterministicCallerInterpreter];
+  return { ...deterministic, mergePolicy: "full" };
 }

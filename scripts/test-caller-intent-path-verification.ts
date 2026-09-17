@@ -34,7 +34,12 @@ function main() {
   pass(
     "SYNC_UNIFIED_INTERPRETER",
     sync.includes("interpretStableCallerUtterance") &&
-      sync.includes("callerMeaningToIntentInterpretation"),
+      sync.includes("applyCallerMeaningToCallContext") &&
+      sync.includes("buildInterpreterContext"),
+  );
+  pass(
+    "FULL_TRANSCRIPT_TO_INTERPRETER",
+    sync.includes("fullConversationTranscript"),
   );
   pass(
     "REVISION_GUARD",
@@ -46,7 +51,7 @@ function main() {
   );
   pass(
     "SYNC_CALLS_MERGE_VIA_APPLY",
-    sync.includes("applyCallerIntentToCallContext") &&
+    sync.includes("applyCallerMeaningToCallContext") &&
       sync.includes("runLiveControlPlaneTurn"),
   );
   pass(

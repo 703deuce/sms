@@ -73,10 +73,19 @@ export function parseCallerMeaningFromModelJson(
 
   const goalRaw = String(obj.active_goal ?? "UNKNOWN").trim() as VoiceDialogGoal;
   const active_goal = VALID_GOALS.has(goalRaw) ? goalRaw : "UNKNOWN";
-  const facts =
+  const rawFacts =
     obj.facts && typeof obj.facts === "object" && !Array.isArray(obj.facts)
-      ? (obj.facts as CallerMeaningFacts)
+      ? (obj.facts as Record<string, unknown>)
       : {};
+  const facts: CallerMeaningFacts = {
+    requested_date: (rawFacts.requested_date as string) ?? null,
+    requested_daypart: (rawFacts.requested_daypart as string) ?? null,
+    requested_time: (rawFacts.requested_time as string) ?? null,
+    selected_slot_spoken_label: (rawFacts.selected_slot_spoken_label as string) ?? null,
+    selected_slot_ordinal:
+      rawFacts.selected_slot_ordinal != null ? Number(rawFacts.selected_slot_ordinal) : null,
+    selected_slot_id: (rawFacts.selected_slot_id as string) ?? null,
+  };
   const corrections = Array.isArray(obj.corrections)
     ? obj.corrections.map((c) => String(c).trim()).filter(Boolean)
     : [];
@@ -113,7 +122,10 @@ Output shape:
   "facts": {
     "requested_date": "YYYY-MM-DD or null",
     "requested_daypart": "morning|afternoon|evening|noon or null",
-    "requested_time": "localized time phrase or null"
+    "requested_time": "localized time phrase or null",
+    "selected_slot_spoken_label": "e.g. 11 AM or null when not choosing a slot",
+    "selected_slot_ordinal": "1-based index in offered_slots when caller says first/second/later one",
+    "selected_slot_id": "slot_id from offered_slots when certain, else null"
   },
   "corrections": ["short phrases the caller used to correct earlier info"],
   "explicit_action_requests": ["callback", "transfer", "cancel booking", etc.],
@@ -123,9 +135,31 @@ Output shape:
 }
 
 Rules:
+- Use full_conversation_transcript + accepted_intake_snapshot + offered_slots to resolve references ("the later one", "use the email I gave").
+- Conversation history is evidence only — never output workflow/stage/tool fields.
 - Corrections like "actually Thursday" belong in corrections and update facts.
 - Side questions during booking → digression true, keep booking goal in active_goal when still booking.
 - Do not invent dates; use null when not stated.`;
+}
+
+function buildAstraUserPayload(ctx: import("./caller-meaning").InterpreterContext): string {
+  return JSON.stringify({
+    stable_utterance: {
+      utterance_id: ctx.stable.utterance_id,
+      revision: ctx.stable.revision,
+      text: ctx.stable.text,
+    },
+    full_conversation_transcript: ctx.fullConversationTranscript,
+    active_goal: ctx.activeGoal,
+    prior_active_goal: ctx.priorActiveGoal,
+    current_workflow_stage: ctx.currentWorkflowStage,
+    business_timezone: ctx.businessTimezone,
+    current_datetime_iso: ctx.currentDateTimeIso,
+    scheduling_preference: ctx.schedulingPreference,
+    effective_requested_date: ctx.effectiveRequestedDate,
+    accepted_intake_snapshot: ctx.acceptedIntakeSnapshot,
+    current_offer_set: ctx.currentOfferSet,
+  });
 }
 
 export const astraCallerInterpreter: CallerInterpreter = {
@@ -137,13 +171,7 @@ export const astraCallerInterpreter: CallerInterpreter = {
     if (!utterance || !getOpenAiApiKey()) return null;
 
     const model = astraBackendModel();
-    const user = JSON.stringify({
-      prior_active_goal: ctx.priorActiveGoal,
-      business_timezone: ctx.businessTimezone,
-      caller_utterance: utterance,
-      utterance_id: ctx.stable.utterance_id,
-      revision: ctx.stable.revision,
-    });
+    const user = buildAstraUserPayload(ctx);
 
     try {
       const raw = await Promise.race([
@@ -168,6 +196,7 @@ export const astraCallerInterpreter: CallerInterpreter = {
         meaning: parsed,
         implementationId: this.implementationId,
         latencyMs: Date.now() - started,
+        mergePolicy: "full",
       };
     } catch (err) {
       console.error(

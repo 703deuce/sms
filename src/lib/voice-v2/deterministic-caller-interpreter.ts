@@ -6,14 +6,10 @@ import type {
   CallerMeaning,
   InterpreterContext,
 } from "./caller-meaning";
-import type { VoiceDialogGoal } from "./dialog-goal";
 import { interpretCallerUtterance } from "./caller-intent-interpreter";
 
-function toCallerMeaning(
-  utterance: string,
-  priorActiveGoal: VoiceDialogGoal,
-): CallerMeaning {
-  const legacy = interpretCallerUtterance(utterance, { activeGoal: priorActiveGoal });
+function toCallerMeaning(utterance: string, ctx: InterpreterContext): CallerMeaning {
+  const legacy = interpretCallerUtterance(utterance, { activeGoal: ctx.priorActiveGoal });
   return {
     active_goal: legacy.intent,
     facts: {
@@ -36,11 +32,12 @@ export const deterministicCallerInterpreter: CallerInterpreter = {
   async interpret(ctx: InterpreterContext): Promise<CallerInterpretationResult> {
     const started = Date.now();
     const utterance = ctx.stable.text.trim();
-    const meaning = toCallerMeaning(utterance, ctx.priorActiveGoal);
+    const meaning = toCallerMeaning(utterance, ctx);
     return {
       meaning,
       implementationId: this.implementationId,
       latencyMs: Date.now() - started,
+      mergePolicy: "full",
     };
   },
 };
