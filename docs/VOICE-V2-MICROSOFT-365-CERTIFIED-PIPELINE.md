@@ -4,7 +4,8 @@
 
 ## Authority
 
-- Baseline commit: **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
+- Graph/FIND/BOOK core: **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
+- **Availability authority:** Microsoft Graph busy **plus** authoritative Transovo ledger rows only (`internal/microsoft-local-ledger-busy.ts`) — orphan/stale `VoiceAppointment` rows do **not** block slots.
 - Source copy: `src/lib/voice-v2/pipelines/microsoft-365-certified/`
 - Verification: `npx tsx scripts/verify-microsoft-365-certified-pipeline-frozen.ts`
 
@@ -42,4 +43,4 @@ Booking-critical code from **`06125f5f`** is vendored under `pipelines/microsoft
 
 Audit: `npx tsx scripts/audit-microsoft-365-certified-booking-imports.ts`
 
-Stale/orphan `VoiceAppointment` reconciliation stays **outside** this tree — it may clean data before booking but must not change frozen FIND/BOOK logic.
+Ledger classification lives **inside** `internal/microsoft-local-ledger-busy.ts` (vendored copy; do not import `voice-appointment-reconcile`). FIND and BOOK share the same classifier. After PSTN recert, freeze that commit as the new Microsoft baseline.

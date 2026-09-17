@@ -85,6 +85,9 @@ for (const file of graph) {
     ) {
       externalBooking.push({ file: relative(process.cwd(), file), spec });
     }
+    if (spec.includes("voice-appointment-reconcile")) {
+      externalBooking.push({ file: relative(process.cwd(), file), spec });
+    }
     if (spec.includes("voice/calendar") && !file.includes("/internal/")) {
       externalBooking.push({ file: relative(process.cwd(), file), spec });
     }

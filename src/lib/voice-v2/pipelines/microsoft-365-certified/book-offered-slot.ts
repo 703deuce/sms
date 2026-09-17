@@ -17,6 +17,7 @@ import {
   endVoiceV2GraphCollection,
   type VoiceV2GraphSpan,
 } from "./internal/graph-instrumentation";
+import { findReconciledVoiceAppointmentConflict } from "./internal/microsoft-local-ledger-busy";
 
 export type VoiceV2BookTimingMarks = {
   WEBHOOK_RECEIVED?: string;
@@ -253,14 +254,11 @@ export async function executeMicrosoft365CertifiedBookOfferedSlot(
   timingMs.REVALIDATION_MS = Date.now() - revalStart;
   marks.SLOT_REVALIDATION_END = isoMark();
 
-  const localConflict = await prisma.voiceAppointment.findFirst({
-    where: {
-      workspaceId,
-      status: { not: "cancelled" },
-      startsAt: { lte: endUtc },
-      endsAt: { gte: startUtc },
-    },
-  });
+  const localConflict = await findReconciledVoiceAppointmentConflict(
+    workspaceId,
+    startUtc,
+    endUtc,
+  );
   if (localConflict) {
     endVoiceV2GraphCollection();
     timingMs.TOTAL_BACKEND_MS = Date.now() - t0;

@@ -26,6 +26,10 @@ import {
   type VoiceV2GraphSpan,
 } from "./internal/graph-instrumentation";
 import { persistVoiceV2OfferSet } from "./internal/offer-set-store";
+import {
+  listReconciledVoiceAppointmentBusyIntervals,
+  mergeProviderBusyWithReconciledLedger,
+} from "./internal/microsoft-local-ledger-busy";
 
 function isoMark(): string {
   return new Date().toISOString();
@@ -169,6 +173,14 @@ export async function executeMicrosoft365CertifiedFindAvailability(
     const hours = parseBookingHours(
       typeof svcCfg.bookingHours === "string" ? svcCfg.bookingHours : undefined,
     );
+
+    const ledgerBusy = await listReconciledVoiceAppointmentBusyIntervals(
+      input.workspaceId,
+      windowStartUtc,
+      windowEndUtc,
+      bufferMinutes,
+    );
+    busy = mergeProviderBusyWithReconciledLedger(busy, ledgerBusy);
 
     const rawSlots = computeFreeSlots(
       busy,
