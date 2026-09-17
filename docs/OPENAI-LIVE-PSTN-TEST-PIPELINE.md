@@ -10,6 +10,8 @@
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
 
+**PSTN answer path (`openai_live`):** No recording-disclosure TTS — media bridge starts immediately after answer so Amy can greet via Live `session.start` instructions (baseline **G**).
+
 ---
 
 ## Protocol baseline (bridge behavior)
