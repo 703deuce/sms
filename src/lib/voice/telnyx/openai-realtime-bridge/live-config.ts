@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { OPENAI_LIVE_API_KIND, OPENAI_LIVE_WS_URL } from "./openai-realtime-protocol";
 import { OPENAI_REALTIME_BRIDGE_VOICE } from "./flags";
 
@@ -55,7 +56,7 @@ export function buildOpenAiLiveSessionInstructions(
     case "A":
       return undefined;
     case "B":
-      return "You are Amy, a helpful phone receptionist.";
+      return "You are a helpful phone assistant.";
     case "C":
       return [
         "You are Amy, a helpful phone receptionist.",
@@ -87,7 +88,7 @@ export function buildOpenAiLiveSessionStartPayload(): Record<string, unknown> {
   }
   return {
     type: "session.start",
-    event_id: `live_start_${Date.now()}`,
+    event_id: `live_start_${crypto.randomUUID()}`,
     session,
   };
 }

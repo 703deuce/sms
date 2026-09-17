@@ -2,7 +2,7 @@
 
 **Purpose:** Tune **when Amy is allowed to speak** on GPT-Live before wiring booking delegation. Not Microsoft FIND/BOOK, not Voice V2 tool orchestration.
 
-**Single transport:** `openai_live` only. There is no separate `openai_live_minimal` bridge — legacy transport file values `openai_live_minimal`, `live_minimal`, and `minimal` are aliases that resolve to the same `live-call-bridge.ts` in `flags.ts`.
+**Single transport:** `openai_live` only. Protocol wiring is **`live-minimal-bridge.ts`** (diagnostic baseline); `live-call-bridge.ts` is a thin Telnyx entry. Legacy transport file values `openai_live_minimal`, `live_minimal`, and `minimal` alias to `openai_live` in `flags.ts`.
 
 **Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`.
 
@@ -14,7 +14,7 @@
 
 ## Protocol baseline (bridge behavior)
 
-One path in `live-call-bridge.ts`:
+One path in `live-minimal-bridge.ts` (via `openai_live` transport):
 
 1. `session.start` (model + PCMU 8 kHz + optional instructions per baseline)
 2. `session.started`
@@ -23,7 +23,9 @@ One path in `live-call-bridge.ts`:
 
 **Not sent after start:** `response.create`, scripted greeting via `session.instructions.append` / `session.commentary.append`, tools, or delegation.
 
-Grep logs: `LIVE_CLIENT_EVENT`, `LIVE_SERVER_EVENT`, `openai_live_unexpected_client_event`, `openai_live_diag_*`.
+Grep logs: `LIVE_OUT`, `LIVE_IN`, `LIVE_STATS`, `[telnyx] stream started`.
+
+Verify baseline file: `./scripts/verify-live-baseline-forbidden.sh`
 
 ---
 
@@ -32,7 +34,7 @@ Grep logs: `LIVE_CLIENT_EVENT`, `LIVE_SERVER_EVENT`, `openai_live_unexpected_cli
 | Baseline | `OPENAI_LIVE_BASELINE` | Instructions |
 |----------|------------------------|--------------|
 | **A** (default) | `A` | None — caller speaks first |
-| **B** | `B` | One-line Amy identity |
+| **B** | `B` | `You are a helpful phone assistant.` (first conversational test after A) |
 | **C** | `C` | B + short one-question rule |
 | **D** | `D` | Previous long conversational frontend (prompt tuning only after A–C pass) |
 
@@ -98,4 +100,4 @@ Do **not** ask Live to decide when silence is “too long.”
 1. Edit baselines in **`live-config.ts`** (`buildOpenAiLiveSessionInstructions`) — not `instructions.ts` (Realtime/V2) unless switching transport to `openai_realtime`.
 2. No Realtime VAD env vars for Live.
 3. Hot-patch: `--config-only` for Live bridge + config; `--live` sets transport file to `openai_live`.
-4. Do **not** reintroduce `live-minimal-call-bridge.ts` or a third PSTN Live variant.
+4. Keep Realtime booking on `openai_realtime` only; extend Live via baselines, not a second transport.

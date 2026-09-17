@@ -23,6 +23,7 @@ BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts
   src/lib/voice/telnyx/openai-realtime-bridge/call-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts
   src/lib/voice/telnyx/openai-realtime-bridge/ga-session.ts
@@ -39,6 +40,7 @@ if [[ "$MODE" == "config_only" ]]; then
   tar czf "$TAR" -C "$ROOT" \
     src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts \
+    src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/flags.ts

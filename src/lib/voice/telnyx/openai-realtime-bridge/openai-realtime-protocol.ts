@@ -7,13 +7,16 @@ import { OPENAI_REALTIME_MINI_MODEL_ID } from "./flags";
  *   Lifecycle: session.created → session.update → session.updated → input_audio_buffer.append /
  *   response.output_audio.delta.
  *
- * - **Live** `wss://api.openai.com/v1/live/sessions` — model gpt-live-1 (mini is rejected here).
- *   Lifecycle: session.start → session.started → session.input_audio.append /
- *   session.output_audio.delta.
+ * - **Live** primary WebSocket (no model query string on URL; model in session.start).
+ *   Docs may show `wss://api.openai.com/v1/live`; production default is `/v1/live/sessions`
+ *   unless `OPENAI_LIVE_WS_URL` overrides.
+ *   Lifecycle: session.start → session.started → session.input_audio.append →
+ *   output_audio.delta (or session.output_audio.delta).
  */
 export const OPENAI_REALTIME_API_KIND = "openai_realtime_v1" as const;
 export const OPENAI_LIVE_API_KIND = "openai_live_v1" as const;
-export const OPENAI_LIVE_WS_URL = "wss://api.openai.com/v1/live/sessions";
+export const OPENAI_LIVE_WS_URL =
+  process.env.OPENAI_LIVE_WS_URL?.trim() || "wss://api.openai.com/v1/live/sessions";
 export const OPENAI_LIVE_DEFAULT_MODEL = "gpt-live-1";
 
 export const OPENAI_REALTIME_WS_HOST = "api.openai.com";
