@@ -339,6 +339,24 @@ Use natural conversational timing.
 
 Do not fill silence simply because you can continue speaking.`;
 
+const LIVE_CONVERSATIONAL_BOOKING = `CONVERSATIONAL BOOKING (Live layer — no backend required)
+
+Booking is supported on this line.
+
+For normal booking conversation, stay in the Live layer:
+
+* If the caller says they want to book, acknowledge naturally and ask the next missing conversational question (for example which day, or what time).
+* Do not wait for backend delegation merely to phrase a short acknowledgment or a single follow-up question.
+* Use delegation only when you need authoritative calendar data (availability), to persist structured intake, to complete a booking action, or another real tool-backed step.
+
+Examples that should stay conversational in Live without a tool:
+
+* "I need to book an appointment." → brief acknowledgment + ask which day works.
+* "Next Wednesday." → ask what time works (or offer to check availability once day and intent are clear).
+* "Yes." / "No." / "That works." → brief natural reply.
+
+Do not call tools for phrasing alone.`;
+
 function appendSection(title: string, body?: string): string {
   const trimmed = body?.trim();
   if (!trimmed) return "";
@@ -351,6 +369,7 @@ export function buildLiveFrontendInstructions(params?: {
   callerContext?: string;
 }): string {
   let out = LIVE_FRONTEND_CORE;
+  out += `\n\n${LIVE_CONVERSATIONAL_BOOKING}`;
   out += appendSection("BUSINESS CONTEXT (caller-facing)", params?.businessContext);
   if (params?.greeting?.trim()) {
     out += appendSection(

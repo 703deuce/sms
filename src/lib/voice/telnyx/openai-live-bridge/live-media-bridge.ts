@@ -1,5 +1,13 @@
 import WebSocket from "ws";
+import { performance } from "node:perf_hooks";
+import { CallerAudioActivityDetector } from "./live-caller-audio-activity";
 import { liveBaselineEventId } from "./live-event-ids";
+import {
+  createTurnTraceHooks,
+  isLiveInputTranscriptDelta,
+  isLiveOutputTranscriptDelta,
+  LiveTurnTracer,
+} from "./live-turn-trace";
 import {
   buildLiveOpeningGreetingInstructionAppend,
   buildLiveOpeningGreetingKickoffCommentary,
@@ -46,10 +54,6 @@ export function shouldForwardInboundTelnyxTrackToLive(track: string | undefined)
 
 export function isLiveOutputAudioDelta(type: string): boolean {
   return type === "output_audio.delta" || type === "session.output_audio.delta";
-}
-
-export function isLiveOutputTranscriptDelta(type: string): boolean {
-  return type === "output_transcript.delta" || type === "session.output_transcript.delta";
 }
 
 function logLiveOut(type: string, extra?: Record<string, unknown>) {
@@ -115,8 +119,19 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   let liveGreetingKickoffSent = false;
   let sessionStartedAt = 0;
   let staticDelegationAttached = false;
+  const turnTracer = new LiveTurnTracer(callId);
+  const turnTraceHooks = createTurnTraceHooks(turnTracer);
+  const callerAudioDetector = new CallerAudioActivityDetector();
 
   milestone("telnyx_ws_attached");
+  console.info(
+    `LIVE_BRIDGE_OBS ${JSON.stringify({
+      callId,
+      event: "timer_audit",
+      setTimeout_on_live_path: false,
+      note: "no artificial debounce between caller speech and Live output",
+    })}`,
+  );
 
   const logStats = (reason: string) => {
     console.info(
@@ -156,6 +171,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       callId,
       callContext: toolContext,
       sendLiveOut,
+      turnTrace: turnTraceHooks,
     });
   };
 
@@ -180,6 +196,16 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     });
   };
 
+  const processInboundCallerFrame = (payloadB64: string) => {
+    const telnyxAt = performance.now();
+    for (const ev of callerAudioDetector.processFrame(payloadB64, telnyxAt)) {
+      turnTracer.onCallerActivity(ev);
+    }
+    const forwardedAt = performance.now();
+    turnTracer.onTelnyxInboundFrame(telnyxAt, forwardedAt);
+    return forwardedAt;
+  };
+
   const appendCallerAudio = (payloadB64: string, track?: string) => {
     if (!liveStarted) return;
     if (!shouldForwardInboundTelnyxTrackToLive(track)) {
@@ -187,6 +213,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       maybeLogStats();
       return;
     }
+    processInboundCallerFrame(payloadB64);
     telnyxInboundFrames += 1;
     openaiInputAudioFrames += 1;
     maybeLogStats();
@@ -203,7 +230,11 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     }
   };
 
-  const sendAudioToTelnyx = (base64Audio: string, fromFlush = false) => {
+  const sendAudioToTelnyx = (
+    base64Audio: string,
+    fromFlush = false,
+    openAiDeltaPerf?: number,
+  ) => {
     if (!telnyxStreamId || input.telnyxSocket.readyState !== WebSocket.OPEN) {
       if (!fromFlush && pendingAmyAudio.length < MAX_PENDING_AMY_AUDIO) {
         pendingAmyAudio.push(base64Audio);
@@ -212,6 +243,9 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     }
     openaiOutputAudioFrames += 1;
     maybeLogStats();
+    if (openAiDeltaPerf != null) {
+      turnTracer.onFirstAudioSentToTelnyx(openAiDeltaPerf);
+    }
     input.telnyxSocket.send(
       JSON.stringify({
         event: "media",
@@ -320,20 +354,34 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           return;
         }
 
+        if (isLiveInputTranscriptDelta(type)) {
+          const delta = String(event.delta ?? "");
+          if (delta) {
+            turnTracer.onLiveInputTranscriptDelta(delta, event as Record<string, unknown>);
+          }
+          return;
+        }
+
         if (isLiveOutputAudioDelta(type) && event.delta) {
+          const openAiAt = performance.now();
+          turnTracer.onFirstOutputAudioDelta(event as Record<string, unknown>);
           if (!firstOutputAudioLogged) {
             firstOutputAudioLogged = true;
             milestone("first_output_audio_delta");
             logLiveIn("output_audio.delta", { callId, first: true });
           }
-          sendAudioToTelnyx(String(event.delta));
+          sendAudioToTelnyx(String(event.delta), false, openAiAt);
           return;
         }
 
         if (isLiveOutputTranscriptDelta(type)) {
+          const delta = String(event.delta ?? "");
+          if (delta) {
+            turnTracer.onLiveOutputTranscriptDelta(delta, event as Record<string, unknown>);
+          }
           logLiveIn("output_transcript.delta", {
             callId,
-            delta: String(event.delta ?? ""),
+            delta,
           });
           return;
         }
@@ -419,6 +467,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
     if (!liveStarted) {
       if (shouldForwardInboundTelnyxTrackToLive(track)) {
+        processInboundCallerFrame(payload);
         if (pendingCallerAudio.length < MAX_PENDING_CALLER_AUDIO) {
           pendingCallerAudio.push(payload);
         } else {

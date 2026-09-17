@@ -5,6 +5,7 @@ import {
   liveToolExecutorLabel,
 } from "./live-tool-runtime";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import type { LiveTurnTraceHooks } from "./live-turn-trace";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -18,6 +19,7 @@ export function createLiveDelegationHandler(input: {
   callId: string;
   callContext: LiveToolDispatchContext;
   sendLiveOut: (event: Record<string, unknown>) => void;
+  turnTrace?: LiveTurnTraceHooks;
 }) {
   let toolBusy = false;
 
@@ -51,6 +53,7 @@ export function createLiveDelegationHandler(input: {
       type: "response.create",
       event_id: liveBaselineEventId("resp_cont"),
     });
+    input.turnTrace?.onResponseCreateSent();
     logLiveObs("RESPONSE_CONTINUED", {
       callId: input.callId,
       delegation_id,
@@ -92,6 +95,7 @@ export function createLiveDelegationHandler(input: {
       generationAtStart = input.callContext.schedulingGeneration;
     }
 
+    input.turnTrace?.onToolCalled(toolName);
     logLiveObs("FUNCTION_CALL", {
       callId: input.callId,
       tool_name: toolName,
@@ -183,10 +187,18 @@ export function createLiveDelegationHandler(input: {
   const handleLiveServerEvent = async (liveEvent: LiveEvent) => {
     const type = String(liveEvent.type || "");
 
-    if (type === "delegation.started" || type === "response.delegation.started") {
+    if (
+      type === "delegation.started" ||
+      type === "response.delegation.started" ||
+      type === "session.delegation.created" ||
+      type === "delegation.created"
+    ) {
+      const delegationId = (liveEvent.delegation_id as string | null) ?? null;
+      input.turnTrace?.onDelegationCreated(delegationId);
       logLiveObs("DELEGATION_STARTED", {
         callId: input.callId,
-        delegation_id: liveEvent.delegation_id ?? null,
+        delegation_id: delegationId,
+        event_type: type,
       });
       return;
     }
@@ -204,6 +216,9 @@ export function createLiveDelegationHandler(input: {
       delegation_id: delegationId ?? null,
       response_type: responseType,
     });
+    if (responseType) {
+      input.turnTrace?.onFirstResponseEvent(responseType, delegationId ?? null);
+    }
 
     switch (responseType) {
       case "response.output_item.done": {
