@@ -12,6 +12,8 @@ import {
   LEGACY_CASCADE_PROFILE,
   NATIVE_AUDIO_MODEL_ID,
   NATIVE_AUDIO_ULTRAVOX_PROFILE,
+  OPENAI_REALTIME_GPT_MINI_PROFILE,
+  OPENAI_REALTIME_GPT_MINI_TELNYX_MODEL_ID,
   ORDINARY_TURN_LATENCY_BANDS,
   applyLatencyProfileToConfig,
   buildFluxTranscriptionSettings,
@@ -138,6 +140,12 @@ assert.equal(
   "unknown_requires_call_trace",
 );
 assert.equal(isNativeAudioModel(NATIVE_AUDIO_MODEL_ID), true);
+assert.equal(isNativeAudioModel(OPENAI_REALTIME_GPT_MINI_TELNYX_MODEL_ID), true);
+assert.equal(
+  OPENAI_REALTIME_GPT_MINI_PROFILE.fields.model?.modelId,
+  OPENAI_REALTIME_GPT_MINI_TELNYX_MODEL_ID,
+);
+assert.equal(OPENAI_REALTIME_GPT_MINI_PROFILE.fields.transcription.enabled, false);
 assert.equal(LEGACY_CASCADE_PROFILE.fields.transcription.sttModel, "deepgram/nova-3");
 
 section("Apply B: Flux settings + wait-only plan");

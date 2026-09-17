@@ -26,6 +26,10 @@ import {
   useVoiceV2IntakeAuthority,
 } from "@/lib/voice-v2/intake/live-intake-instructions";
 import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
+import {
+  OPENAI_REALTIME_MINI_MODEL_ID,
+  resolveCompiledRealtimeModel,
+} from "@/lib/voice/telnyx/openai-realtime-telnyx-transport";
 import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-v2/knowledge-config";
 import { buildVoiceV2QualificationLayerBInstructions } from "@/lib/voice-v2/qualification-config";
 import { buildVoiceV2AfterHoursLayerBInstructions } from "@/lib/voice-v2/after-hours-handling-prompt";
@@ -221,9 +225,12 @@ export function compileReceptionistConfig(input: ReceptionistDraftInput): Recept
 
   const voiceSpeed = voiceTuning.speed;
 
-  const modelRaw = String(input.advanced?.realtimeModel || "gpt-realtime-2.1-mini").trim();
+  const modelRaw = String(input.advanced?.realtimeModel || "").trim();
+  const resolvedModel = resolveCompiledRealtimeModel(modelRaw);
   const realtimeModel =
-    modelRaw === "gpt-realtime-2.1" ? ("gpt-realtime-2.1" as const) : ("gpt-realtime-2.1-mini" as const);
+    resolvedModel === "gpt-realtime-2.1"
+      ? ("gpt-realtime-2.1" as const)
+      : (OPENAI_REALTIME_MINI_MODEL_ID as typeof OPENAI_REALTIME_MINI_MODEL_ID);
 
   const voiceV2IntakeAuthority = useVoiceV2IntakeAuthority([...caps]);
   const voiceV2IntakeSchema = voiceV2IntakeAuthority

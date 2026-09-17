@@ -21,6 +21,8 @@ import {
   elevenLabsVoiceLanguagePublishFields,
   resolveVoiceV2WizardVoiceForPublish,
 } from "./voice-v2-wizard-elevenlabs-catalog";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
+import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 
 export { buildBusinessKnowledgePromptSection };
 
@@ -370,6 +372,9 @@ export function buildWizardAgentConfig(
   const silenceTimeoutMs = silenceTimeoutFromResponsiveness(state.responsiveness);
   const keyterms = buildTranscriptionKeyterms(state);
   const recordingOn = state.callRecording !== "off";
+  const bookingStrategy = deriveBookingStrategyFromWizard(state);
+  const useOpenAiRealtimeTelnyxTransport =
+    bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY";
 
   const draft = applyAmyMinimumSideEffectConfig({
     ...base,
@@ -400,9 +405,14 @@ export function buildWizardAgentConfig(
     },
     voiceLanguage: {
       ...base.voiceLanguage,
-      ...elevenLabsVoiceLanguagePublishFields(
-        resolveVoiceV2WizardVoiceForPublish(state.voiceId),
-      ),
+      ...(useOpenAiRealtimeTelnyxTransport
+        ? {
+            voiceId: normalizeWizardVoiceToRealtime(state.voiceId),
+            speed: state.speakingSpeed ?? base.voiceLanguage?.speed,
+          }
+        : elevenLabsVoiceLanguagePublishFields(
+            resolveVoiceV2WizardVoiceForPublish(state.voiceId),
+          )),
       speed: state.speakingSpeed ?? base.voiceLanguage?.speed,
       responsiveness: responsivenessLevel,
       interruptionHandling: interruptionLevel,
@@ -412,14 +422,24 @@ export function buildWizardAgentConfig(
       primaryLanguage: lang.primaryLanguage,
       bargeIn: state.interruptionSensitivity >= 0.3,
     },
-    transcription: {
-      ...base.transcription,
-      enabled: true,
-      sttProvider: "deepgram",
-      sttModel: "deepgram/nova-3",
-      language: lang.transcriptionLanguage,
-      keyterms,
-    },
+    transcription: useOpenAiRealtimeTelnyxTransport
+      ? {
+          ...base.transcription,
+          enabled: false,
+          sttProvider: undefined,
+          sttModel: undefined,
+          language: lang.transcriptionLanguage,
+          keyterms: undefined,
+          settings: undefined,
+        }
+      : {
+          ...base.transcription,
+          enabled: true,
+          sttProvider: "deepgram",
+          sttModel: "deepgram/nova-3",
+          language: lang.transcriptionLanguage,
+          keyterms,
+        },
     callHandling: {
       ...(base.callHandling || {}),
       greeting,

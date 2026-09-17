@@ -14,6 +14,7 @@ import {
   isElevenLabsProviderVoice,
   parseElevenLabsCatalogId,
 } from "@/lib/voice/elevenlabs/models";
+import { isOpenAiRealtimeNativeVoice } from "@/lib/voice/outbound/realtime-native-voices";
 import { buildElevenLabsVoiceSettings } from "@/lib/voice/elevenlabs/voice-settings";
 
 export type VoiceQualityTier = "premium" | "standard" | "economy";
@@ -569,6 +570,9 @@ export function resolveProviderVoiceId(catalogOrProviderId: string | undefined |
   }
   if (raw.startsWith("Telnyx.NaturalHD.") || raw.startsWith("Telnyx.Natural.")) {
     return raw;
+  }
+  if (isOpenAiRealtimeNativeVoice(raw)) {
+    return raw.trim().toLowerCase();
   }
   // xAI stays preview-only until explicitly validated for Assistants.
   if (raw.startsWith("xAI.")) {

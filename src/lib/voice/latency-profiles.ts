@@ -14,6 +14,7 @@
  */
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
+import { TELNYX_OPENAI_REALTIME_MINI_MODEL_ID } from "@/lib/voice/telnyx/openai-realtime-telnyx-transport";
 
 export const LATENCY_PROFILE_IDS = [
   "legacy_cascade",
@@ -22,6 +23,7 @@ export const LATENCY_PROFILE_IDS = [
   "flux_b_balanced",
   "flux_b_patient",
   "native_audio_ultravox",
+  "openai_realtime_gpt_21_mini",
 ] as const;
 
 export type LatencyProfileId = (typeof LATENCY_PROFILE_IDS)[number];
@@ -33,6 +35,8 @@ export const VERSION_B_FAST: LatencyProfileId = "flux_b_fast";
 export const VERSION_B_BALANCED: LatencyProfileId = "flux_b_balanced";
 export const VERSION_B_PATIENT: LatencyProfileId = "flux_b_patient";
 export const VERSION_C_NATIVE_AUDIO: LatencyProfileId = "native_audio_ultravox";
+export const VERSION_OPENAI_REALTIME_MINI: LatencyProfileId =
+  "openai_realtime_gpt_21_mini";
 
 export const ACTIVE_LATENCY_PROFILE_DEFAULT: LatencyProfileId = "flux_b_balanced";
 
@@ -41,6 +45,10 @@ export const FAST_LLM_MODEL_ID = "anthropic/claude-haiku-4-5";
 
 /** Native-audio experiment model (Telnyx Inference audio-language model ID). */
 export const NATIVE_AUDIO_MODEL_ID = "fixie-ai/ultravox-v0_4_1-llama-3_1-8b";
+
+/** OpenAI GPT-Realtime-2.1 Mini on Telnyx Assistants (native audio in/out). */
+export const OPENAI_REALTIME_GPT_MINI_TELNYX_MODEL_ID =
+  TELNYX_OPENAI_REALTIME_MINI_MODEL_ID;
 
 /** Candidate IDs to probe if the primary Ultravox model is rejected. */
 export const NATIVE_AUDIO_MODEL_CANDIDATES = [
@@ -308,6 +316,52 @@ export const FLUX_B_PATIENT_PROFILE: LatencyProfileDefinition = {
  *
  * Do not copy Flux punctuation endpointing timers into this profile.
  */
+/**
+ * OpenAI GPT-Realtime-2.1 Mini — native speech on Telnyx Assistants.
+ * No Deepgram STT or separate TTS on the live path when the account supports the model.
+ */
+export const OPENAI_REALTIME_GPT_MINI_PROFILE: LatencyProfileDefinition = {
+  id: "openai_realtime_gpt_21_mini",
+  versionLabel: "RT",
+  label: "OpenAI GPT-Realtime-2.1 Mini (native audio)",
+  description:
+    "Telnyx Assistants with openai/gpt-realtime-2.1-mini + OpenAI native voice (marin). Requires Telnyx model access (error 10027 if not enabled). Transcription/STT omitted; server VAD via realtime model.",  // pragma: allowlist secret
+  fields: {
+    transcription: {
+      enabled: false,
+      sttModel: undefined,
+      settings: undefined,
+    },
+    voiceLanguage: {
+      silenceTimeoutMs: 2500,
+      bargeIn: true,
+      preferUltra: false,
+    },
+    model: {
+      modelId: OPENAI_REALTIME_GPT_MINI_TELNYX_MODEL_ID,
+    },
+    startSpeakingPlan: null,
+    greetingMode: "fixed",
+    nativeAudio: true,
+    skipDynamicVariablesWebhook: true,
+    telnyxFieldPlan: {
+      transcription: "ignored_by_native_audio_model",
+      eot_threshold: "not_sent",
+      eager_eot_threshold: "not_sent",
+      eot_timeout_ms: "not_sent",
+      start_speaking_wait_seconds: "sent_may_be_ignored",
+      on_punctuation_seconds: "not_sent",
+      on_no_punctuation_seconds: "not_sent",
+      on_number_seconds: "not_sent",
+      endpointingMs_local: "not_sent",
+      voice_settings_ultra: "not_sent",
+      dynamic_variables_webhook: "not_sent",
+      openai_realtime_outgoing_audio_path: "native_model_audio",
+      transcription_endpointing_plan_cleared: "sent_and_applicable",
+    },
+  },
+};
+
 export const NATIVE_AUDIO_ULTRAVOX_PROFILE: LatencyProfileDefinition = {
   id: "native_audio_ultravox",
   versionLabel: "C",
@@ -360,6 +414,7 @@ export const LATENCY_PROFILES: Record<LatencyProfileId, LatencyProfileDefinition
     flux_b_balanced: FLUX_B_BALANCED_PROFILE,
     flux_b_patient: FLUX_B_PATIENT_PROFILE,
     native_audio_ultravox: NATIVE_AUDIO_ULTRAVOX_PROFILE,
+    openai_realtime_gpt_21_mini: OPENAI_REALTIME_GPT_MINI_PROFILE,
   };
 
 /** Tools that must stay synchronous (caller needs the result). */
@@ -471,7 +526,11 @@ export function isDeepgramFluxModel(model?: string | null): boolean {
 
 export function isNativeAudioModel(model?: string | null): boolean {
   const m = String(model || "").toLowerCase();
-  return m.includes("ultravox") || m.startsWith("fixie-ai/");
+  return (
+    m.includes("ultravox") ||
+    m.startsWith("fixie-ai/") ||
+    m.includes("gpt-realtime")
+  );
 }
 
 /** Version B variants or C — apply tool async/fillers and low-latency startup prefs. */
@@ -513,6 +572,8 @@ export function resolveLatencyProfileAlias(
     B_FAST: "flux_b_fast",
     B_PATIENT: "flux_b_patient",
     C: "native_audio_ultravox",
+    RT: "openai_realtime_gpt_21_mini",
+    OPENAI_REALTIME: "openai_realtime_gpt_21_mini",
     BALANCED: "flux_b_balanced",
     FAST: "flux_b_fast",
     PATIENT: "flux_b_patient",
