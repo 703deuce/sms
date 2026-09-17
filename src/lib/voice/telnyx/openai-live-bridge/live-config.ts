@@ -3,7 +3,7 @@ import {
   OPENAI_LIVE_API_KIND,
   OPENAI_LIVE_WS_URL,
 } from "../openai-realtime-bridge/openai-realtime-protocol";
-import { OPENAI_REALTIME_BRIDGE_VOICE } from "../openai-realtime-bridge/flags";
+import { OPENAI_REALTIME_BRIDGE_VOICE } from "../openai-realtime-bridge/public-flags";
 import { buildLiveSessionConfig } from "./build-live-session-config";
 import { isOpenAiLiveDelegationEnabled, isOpenAiLiveSplitPromptsEnabled } from "./constants";
 

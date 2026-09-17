@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { OPENAI_REALTIME_BRIDGE_VOICE } from "../openai-realtime-bridge/flags";
+import { OPENAI_REALTIME_BRIDGE_VOICE } from "../openai-realtime-bridge/public-flags";
 
 function readOpenAiLiveDelegationFile(): string | null {
   const candidates = [
