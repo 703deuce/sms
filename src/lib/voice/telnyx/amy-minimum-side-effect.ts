@@ -12,9 +12,7 @@ import { OPENAI_API_KEY_REF } from "@/lib/voice/telnyx/official-baseline";
 import { applyAmyProductionVoiceTuning } from "./amy-production-voice-tuning";
 import { applyLatencyProfileToConfig } from "@/lib/voice/latency-profiles";
 import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
-import {
-  shouldUseOpenAiRealtimeMediaBridge,
-} from "@/lib/voice/telnyx/openai-realtime-bridge/flags";
+import { shouldUseOpenAiRealtimeMediaBridge } from "@/lib/voice/telnyx/openai-realtime-bridge/public-flags";
 import { applyOpenAiRealtimeMediaBridgeConfig } from "@/lib/voice/telnyx/openai-realtime-bridge/apply-bridge-config";
 
 export const AMY_MINIMUM_SIDE_EFFECT_MODEL = "openai/gpt-5.4-mini";
