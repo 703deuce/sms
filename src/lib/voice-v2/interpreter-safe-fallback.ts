@@ -16,8 +16,14 @@ const GOAL_SWITCH_RE =
 const EXPLICIT_CALLBACK_RE =
   /\b(call\s+me\s+back|callback)\b/i;
 
+function isSchedulingCaptureContext(ctx: InterpreterContext): boolean {
+  if (isActiveBookingGoal(ctx.activeGoal)) return true;
+  const stage = ctx.currentWorkflowStage;
+  return stage === "COLLECT_SCHEDULING_PREFERENCE" || stage === "FIND_AVAILABILITY";
+}
+
 function hasSafeSchedulingLiteral(utterance: string, ctx: InterpreterContext): boolean {
-  if (!isActiveBookingGoal(ctx.activeGoal)) return false;
+  if (!isSchedulingCaptureContext(ctx)) return false;
   if (utteranceLooksLikeSchedulingCorrection(utterance)) return false;
   if (AMBIGUOUS_REFERENCE_RE.test(utterance)) return false;
   const resolved = resolveSpokenDateYmd({

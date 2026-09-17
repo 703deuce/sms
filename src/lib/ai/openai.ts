@@ -14,6 +14,18 @@ export function getOpenAiModel() {
   return process.env.OPENAI_MODEL?.trim() || "gpt-5-nano";
 }
 
+function chatCompletionUsesMaxCompletionTokens(model: string): boolean {
+  const m = model.toLowerCase();
+  return (
+    m.includes("gpt-5") ||
+    m.includes("gpt-6") ||
+    m.includes("gpt-live") ||
+    m.startsWith("o1") ||
+    m.startsWith("o3") ||
+    m.includes("astra")
+  );
+}
+
 export async function openAiChatCompletion(
   system: string,
   user: string,
@@ -22,6 +34,12 @@ export async function openAiChatCompletion(
   const apiKey = getOpenAiApiKey();
   if (!apiKey) return null;
 
+  const model = options?.model?.trim() || getOpenAiModel();
+  const maxOut = options?.maxTokens ?? 800;
+  const tokenLimitField = chatCompletionUsesMaxCompletionTokens(model)
+    ? { max_completion_tokens: maxOut }
+    : { max_tokens: maxOut };
+
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -29,9 +47,9 @@ export async function openAiChatCompletion(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: options?.model?.trim() || getOpenAiModel(),
+      model,
       temperature: options?.temperature ?? 0.4,
-      max_tokens: options?.maxTokens ?? 800,
+      ...tokenLimitField,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
