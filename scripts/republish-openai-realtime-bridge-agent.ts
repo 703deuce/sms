@@ -14,19 +14,14 @@ import { diagnoseAndRepairInboundNumber } from "@/lib/voice/telnyx/inbound-diagn
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 
 /**
- * ws_1 PSTN lines (set PHONE_E164 / AGENT_ID):
- * - 571 cert: +15714073615 / cmshz2lc25c622c4i58303501
- * - 866 Amy:  +18663464256 / cmsdkcnwr5p3i5s0h3i1x0j60
+ * ws_1 OpenAI Realtime bridge republish — 571 cert line only (override via env).
+ * Default: +15714073615 / cmshz2lc25c622c4i58303501
  */
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const PHONE_E164 = process.env.PHONE_E164 || "+15714073615";
-const PHONE_ID =
-  process.env.PHONE_ID ||
-  (PHONE_E164.includes("866") ? "cmsc3numa1j17084g391t2z5l" : "cmsgtjms84g6l2h0o255w1e3v");
+const PHONE_ID = process.env.PHONE_ID || "cmsgtjms84g6l2h0o255w1e3v";
 const AGENT_ID =
-  process.env.VOICE_AGENT_ID ||
-  process.env.AGENT_ID ||
-  (PHONE_E164.includes("866") ? "cmsdkcnwr5p3i5s0h3i1x0j60" : "cmshz2lc25c622c4i58303501");
+  process.env.VOICE_AGENT_ID || process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
 const PUBLISHED_BY = process.env.PUBLISHED_BY || "openai-realtime-bridge-republish";
 
 async function main() {

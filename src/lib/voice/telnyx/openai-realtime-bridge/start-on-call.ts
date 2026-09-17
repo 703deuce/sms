@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { shouldUseOpenAiRealtimeMediaBridge } from "./flags";
 import { startTelnyxBidirectionalMediaStream } from "./telnyx-streaming";
-import { startTelnyxRealtimeBridgeServer } from "./ws-server";
+import { ensureTelnyxRealtimeBridgeServer } from "./ws-server";
 import { getOpenAiApiKey } from "./config";
 import { initializeRealtimeSessionForCall } from "@/lib/voice/realtime-session/init";
 
@@ -24,7 +24,7 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
     return { started: false, reason: "openai_api_key_missing" };
   }
 
-  await startTelnyxRealtimeBridgeServer();
+  await ensureTelnyxRealtimeBridgeServer();
 
   await initializeRealtimeSessionForCall({
     callId: input.callId,
