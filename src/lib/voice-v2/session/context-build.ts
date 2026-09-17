@@ -10,6 +10,7 @@ import { resolveVoiceV2KnowledgeConfig } from "../knowledge-config";
 import { resolveVoiceV2QualificationConfig } from "../qualification-config";
 import { resolveAfterHoursHandlingFromAgentAdvanced } from "../after-hours-handling-config";
 import { applyCallerAniToIntakeState } from "../intake/caller-phone";
+import { prefillIntakeStateFromContact } from "../intake/prefill-contact";
 import { compileVoiceV2IntakeSchema } from "../intake/compile-schema";
 import type { VoiceV2CallContext, VoiceV2IntakeState } from "../intake/types";
 import { buildVoiceV2EnrollmentSnapshot } from "./enrollment";
@@ -97,6 +98,17 @@ export async function buildVoiceV2CallContextPayload(input: {
     },
   };
   payload = applyCallerAniToIntakeState(payload, input.fromE164);
+  payload = {
+    ...payload,
+    intakeState: await prefillIntakeStateFromContact({
+      workspaceId: input.workspaceId,
+      intakeSchema: payload.intakeSchema,
+      intakeState: payload.intakeState,
+      fromE164: input.fromE164,
+      trustedPrismaCallId:
+        input.callId?.trim() && input.callId.trim().length > 10 ? input.callId.trim() : null,
+    }),
+  };
 
   const maturity = resolveOperatingMaturityFromAgentAdvanced(
     config.advanced as Record<string, unknown>,

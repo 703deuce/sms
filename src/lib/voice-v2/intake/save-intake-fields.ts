@@ -2,7 +2,30 @@ import "server-only";
 
 import type { IntakeFieldKey, IntakeFieldStatus } from "./types";
 import { validateIntakeFieldPayload } from "./validate-fields";
+
+function coalesceSaveIntakeFieldsRaw(raw: Record<string, unknown>): Record<string, unknown> | undefined {
+  const base = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
+  const out: Record<string, unknown> =
+    base && typeof base === "object" ? { ...base } : {};
+  const topLevel: Array<[string, string]> = [
+    ["email", "email"],
+    ["name", "name"],
+    ["phone", "phone"],
+    ["address", "address"],
+    ["service_reason", "service_reason"],
+  ];
+  for (const [rawKey, intakeKey] of topLevel) {
+    const v = raw[rawKey];
+    if (v != null && String(v).trim() && !String(out[intakeKey] ?? "").trim()) {
+      out[intakeKey] = v;
+    }
+  }
+  if (base && typeof base === "object") return out;
+  if (!Object.keys(out).length) return undefined;
+  return out;
+}
 import { applyCallerAniToIntakeState, redirectPhoneSaveAwayFromAni } from "./caller-phone";
+import { prefillIntakeStateFromContact } from "./prefill-contact";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
@@ -293,6 +316,16 @@ export async function executeVoiceV2SaveIntakeFields(
   }
 
   ctx = applyCallerAniToIntakeState(ctx, fromE164);
+  const withContact = await prefillIntakeStateFromContact({
+    workspaceId,
+    intakeSchema: ctx.intakeSchema,
+    intakeState: ctx.intakeState,
+    fromE164,
+    trustedPrismaCallId,
+  });
+  if (withContact !== ctx.intakeState) {
+    ctx = { ...ctx, intakeState: withContact };
+  }
   setVoiceV2CallContext(ctx);
 
   const canonicalSessionKey = ctx.sessionKey;
@@ -309,7 +342,7 @@ export async function executeVoiceV2SaveIntakeFields(
     return result;
   }
 
-  const fieldsRaw = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
+  const fieldsRaw = coalesceSaveIntakeFieldsRaw(raw);
   if (!fieldsRaw || typeof fieldsRaw !== "object") {
     return {
       status: "INTAKE_VALIDATION_ERROR",

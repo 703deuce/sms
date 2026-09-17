@@ -23,6 +23,35 @@ function schemaFieldMap(schema: VoiceV2IntakeSchema): Map<string, IntakeFieldVal
   return new Map(schema.fields.map((f) => [f.key, f.valueType]));
 }
 
+const INTAKE_FIELD_ALIASES: Record<string, IntakeFieldKey> = {
+  sys_email: "email",
+  customer_email: "email",
+  caller_email: "email",
+  sys_name: "name",
+  full_name: "name",
+  customer_name: "name",
+  caller_name: "name",
+  sys_phone: "phone",
+  customer_phone: "phone",
+  callback_number: "phone",
+};
+
+/** Map common LLM / CRM keys onto wizard intake keys before validation. */
+export function normalizeIntakeFieldKeys(
+  rawFields: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawFields)) {
+    const k = key.trim();
+    if (!k) continue;
+    const mapped = (INTAKE_FIELD_ALIASES[k] || k) as IntakeFieldKey;
+    if (out[mapped] === undefined || String(out[mapped] ?? "").trim() === "") {
+      out[mapped] = value;
+    }
+  }
+  return out;
+}
+
 function normalizeByType(
   valueType: IntakeFieldValueType,
   key: string,
@@ -55,17 +84,18 @@ export function validateIntakeFieldPayload(
   schema: VoiceV2IntakeSchema,
   rawFields: Record<string, unknown>,
 ): FieldValidationResult {
+  const fields = normalizeIntakeFieldKeys(rawFields);
   const enabled = schemaFieldMap(schema);
   const normalized: Partial<Record<IntakeFieldKey, string>> = {};
   const invalidFields: IntakeFieldKey[] = [];
   const disabledFields: IntakeFieldKey[] = [];
 
-  for (const [key, value] of Object.entries(rawFields)) {
+  for (const [key, value] of Object.entries(fields)) {
     const k = key.trim();
     if (!k) continue;
     const str = String(value ?? "").trim();
     if (!str) {
-      if (enabled.has(k)) invalidFields.push(k);
+      if (enabled.has(k)) invalidFields.push(k as IntakeFieldKey);
       continue;
     }
     const valueType = enabled.get(k);

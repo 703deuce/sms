@@ -5,6 +5,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_PREFIX_RE =
   /^(?:my\s+)?(?:e\s*-?\s*mail(?:\s+address)?\s+is|email\s+is|it's|it is|the email is)\s+/i;
 
+/** Collapse STT like "l o n g h p" → "longhp" while keeping "g mail" as two tokens until dot/at rules run. */
+function collapseSpelledToken(part: string): string {
+  let p = part.trim();
+  if (!p) return "";
+  if (p.includes("@")) return p.replace(/\s+/g, "");
+  const tokens = p.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) return p.replace(/\s+/g, "");
+  const allShort = tokens.every((t) => t.length === 1 && /[a-z0-9]/i.test(t));
+  if (allShort) return tokens.join("");
+  return tokens.join("");
+}
+
 /**
  * Turn spoken or messy STT email into a deliverable address when possible.
  * Examples: "anthony at gmail dot com", "a n t h o n y at g mail dot com"
@@ -29,14 +41,14 @@ export function normalizeVoiceIntakeEmail(raw: string): string | null {
     }
     if (s.includes("@")) {
       const at = s.indexOf("@");
-      const local = s.slice(0, at).replace(/\s+/g, "");
-      const domain = s.slice(at + 1).replace(/\s+/g, "");
+      const local = collapseSpelledToken(s.slice(0, at));
+      const domain = collapseSpelledToken(s.slice(at + 1));
       s = `${local}@${domain}`;
     } else {
-      s = s.replace(/\s+/g, "");
+      s = collapseSpelledToken(s);
     }
   } else {
-    s = s.replace(/\s+/g, "");
+    s = collapseSpelledToken(s);
   }
 
   s = s.toLowerCase();

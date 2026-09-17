@@ -20,6 +20,10 @@ check(
   "prefix strip",
   normalizeVoiceIntakeEmail("my email is bob at acme dot org") === "bob@acme.org",
 );
+check(
+  "spelled domain",
+  normalizeVoiceIntakeEmail("ajohnson at long h p dot com") === "ajohnson@longhp.com",
+);
 
 if (failures.length) {
   console.error("FAIL:", failures);

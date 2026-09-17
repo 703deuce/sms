@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { executeMicrosoft365CertifiedFindAvailability } from "@/lib/voice-v2/pipelines/microsoft-365-certified";
+import { executePstnMicrosoftFindWithPeripheral } from "@/lib/voice-v2/pstn-microsoft-find";
 import { formatVoiceV2TelnyxToolResponse } from "@/lib/voice-v2/telnyx-response";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 
@@ -34,15 +34,46 @@ export async function POST(request: Request) {
   const callId =
     String(body.call_id || body.callId || request.headers.get("x-telnyx-call-control-id") || "") ||
     null;
+  const conversationId =
+    typeof body.conversation_id === "string"
+      ? body.conversation_id
+      : request.headers.get("x-telnyx-conversation-id");
+  const fromE164 = String(body.from || body.caller || "").trim();
+  const requestedDate = body.requested_date ?? body.requestedDate;
 
-  const result = await executeMicrosoft365CertifiedFindAvailability(
-    {
-      ...body,
-      call_id: callId,
-    },
-    workspaceId,
-    { voiceCallId: callId },
-  );
+  let result;
+  if (agentId && callId) {
+    const wrapped = await executePstnMicrosoftFindWithPeripheral(body, workspaceId, {
+      agentId,
+      callId,
+      conversationId,
+      fromE164: fromE164 || undefined,
+      requestedDate,
+    });
+    if (wrapped.blocked) {
+      const ms = Date.now() - ingressStarted;
+      return NextResponse.json({
+        ok: false,
+        status: wrapped.status,
+        voice_v2_status: wrapped.status,
+        speak: wrapped.speak,
+        error: wrapped.status,
+        call_id: callId,
+        booking_pipeline: "microsoft_365_certified",
+        telnyx_to_transovo_ms: ms,
+      });
+    }
+    result = wrapped.result;
+  } else {
+    const { executeMicrosoft365CertifiedFindAvailability } = await import(
+      "@/lib/voice-v2/pipelines/microsoft-365-certified"
+    );
+    result = await executeMicrosoft365CertifiedFindAvailability(
+      { ...body, call_id: callId },
+      workspaceId,
+      { voiceCallId: callId },
+    );
+  }
 
   const payload = formatVoiceV2TelnyxToolResponse(result);
   const httpResponseAtMs = Date.now();

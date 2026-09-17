@@ -39,6 +39,7 @@ export function buildVoiceV2LiveIntakeInstructions(
           "Latest explicit correction wins (for example email corrected mid-call).",
           "Before voice_v2_find_availability: briefly acknowledge naturally (for example 'Let me see what I have open for Tuesday') then call FIND.",
           "Before voice_v2_book_offered_slot: briefly acknowledge (for example 'Give me a moment while I lock in that time') then call BOOK.",
+          "After FIND returns slots, do not call FIND again or re-ask the day when the caller picks a time — map their choice (for example three PM) to selected_slot_id and call BOOK.",
           "Never say booked/confirmed/reserved until BOOK returns BOOKING_CONFIRMED.",
           "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND or BOOK.",
         ]
