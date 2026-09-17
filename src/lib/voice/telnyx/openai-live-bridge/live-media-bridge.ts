@@ -314,8 +314,13 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         }
 
         if (type === "error") {
-          console.error(JSON.stringify(event.error ?? event, null, 2));
-          logLiveIn("error", { callId });
+          const errPayload = (event.error ?? event) as Record<string, unknown>;
+          console.error(JSON.stringify(errPayload, null, 2));
+          logLiveIn("error", {
+            callId,
+            code: errPayload.code ?? null,
+            message: errPayload.message ?? null,
+          });
           return;
         }
 

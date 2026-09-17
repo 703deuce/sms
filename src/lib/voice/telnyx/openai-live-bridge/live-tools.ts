@@ -31,6 +31,7 @@ import {
   buildVoiceV2CallCapabilitySnapshot,
 } from "@/lib/voice-v2/workflow-capability";
 import { isVoiceV2KnowledgeSearchEnabled } from "@/lib/voice-v2/knowledge-config";
+import { adaptParametersForOpenAiLiveStrict } from "./live-tool-schema";
 
 export type LiveResponsesFunctionTool = {
   type: "function";
@@ -45,7 +46,13 @@ function fnTool(
   description: string,
   parameters: Record<string, unknown>,
 ): LiveResponsesFunctionTool {
-  return { type: "function", name, description, strict: true, parameters };
+  return {
+    type: "function",
+    name,
+    description,
+    strict: true,
+    parameters: adaptParametersForOpenAiLiveStrict(parameters),
+  };
 }
 
 export function buildLiveVoiceTools(input: {
