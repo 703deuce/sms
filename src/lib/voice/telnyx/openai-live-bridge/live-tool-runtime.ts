@@ -106,10 +106,17 @@ export async function ensureLiveToolDispatchContextHydrated(
   if (ctx.agentConfigHydrated) return;
   if (!ctx._hydratePromise) {
     ctx._hydratePromise = (async () => {
+      const t0 = Date.now();
       const runtime = await loadVoiceAgentRuntimeConfig(ctx.workspaceId, ctx.agentId);
       const config = parseVoiceAgentConfig(runtime);
       ctx.capability = buildVoiceV2CallCapabilitySnapshot(config);
       ctx.agentConfigHydrated = true;
+      console.info(
+        `LIVE_TOOL_CONTEXT_HYDRATE ${JSON.stringify({
+          callId: ctx.callId,
+          elapsed_ms: Date.now() - t0,
+        })}`,
+      );
     })();
   }
   await ctx._hydratePromise;
