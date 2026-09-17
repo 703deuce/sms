@@ -1,5 +1,8 @@
 #!/usr/bin/env npx tsx
-import { normalizeVoiceIntakeEmail } from "../src/lib/voice-v2/intake/normalize-email";
+import {
+  acceptVoiceIntakeEmail,
+  normalizeVoiceIntakeEmail,
+} from "../src/lib/voice-v2/intake/normalize-email";
 
 const failures: string[] = [];
 function check(name: string, cond: boolean) {
@@ -23,6 +26,18 @@ check(
 check(
   "spelled domain",
   normalizeVoiceIntakeEmail("ajohnson at long h p dot com") === "ajohnson@longhp.com",
+);
+check(
+  "literal @ example.com",
+  acceptVoiceIntakeEmail("anthony@example.com") === "anthony@example.com",
+);
+check(
+  "literal @ with spaces",
+  acceptVoiceIntakeEmail("anthony @ example.com") === "anthony@example.com",
+);
+check(
+  "loose no TLD dot required",
+  acceptVoiceIntakeEmail("user@domain") === "user@domain",
 );
 
 if (failures.length) {

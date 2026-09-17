@@ -97,7 +97,7 @@ export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
         email: {
           type: "string",
           description:
-            "Email as user@domain.tld. Convert spoken forms (at, dot, spaced letters) before saving.",
+            "Caller's email from the transcript — pass as they said it (e.g. anthony@example.com or anthony at example dot com). Required whenever they just gave their email.",
         },
         phone: { type: "string" },
         address: { type: "string" },

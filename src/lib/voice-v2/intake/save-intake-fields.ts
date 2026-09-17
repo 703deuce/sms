@@ -25,7 +25,6 @@ function coalesceSaveIntakeFieldsRaw(raw: Record<string, unknown>): Record<strin
   return out;
 }
 import { applyCallerAniToIntakeState, redirectPhoneSaveAwayFromAni } from "./caller-phone";
-import { prefillIntakeStateFromContact } from "./prefill-contact";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
@@ -316,16 +315,6 @@ export async function executeVoiceV2SaveIntakeFields(
   }
 
   ctx = applyCallerAniToIntakeState(ctx, fromE164);
-  const withContact = await prefillIntakeStateFromContact({
-    workspaceId,
-    intakeSchema: ctx.intakeSchema,
-    intakeState: ctx.intakeState,
-    fromE164,
-    trustedPrismaCallId,
-  });
-  if (withContact !== ctx.intakeState) {
-    ctx = { ...ctx, intakeState: withContact };
-  }
   setVoiceV2CallContext(ctx);
 
   const canonicalSessionKey = ctx.sessionKey;

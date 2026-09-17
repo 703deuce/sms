@@ -2,7 +2,7 @@ import "server-only";
 
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
 import type { IntakeFieldKey, IntakeFieldValueType, VoiceV2IntakeSchema } from "./types";
-import { normalizeVoiceIntakeEmail } from "./normalize-email";
+import { acceptVoiceIntakeEmail } from "./normalize-email";
 import { isBookingIntentOnlyServiceReason } from "./booking-intent-guard";
 
 export type FieldValidationResult =
@@ -23,7 +23,24 @@ function schemaFieldMap(schema: VoiceV2IntakeSchema): Map<string, IntakeFieldVal
   return new Map(schema.fields.map((f) => [f.key, f.valueType]));
 }
 
+function resolveSchemaFieldKey(
+  enabled: Map<string, IntakeFieldValueType>,
+  rawKey: string,
+): string {
+  const k = rawKey.trim();
+  if (!k) return k;
+  if (enabled.has(k)) return k;
+  const lower = k.toLowerCase();
+  if (enabled.has(lower)) return lower;
+  return (INTAKE_FIELD_ALIASES[lower] || k) as string;
+}
+
 const INTAKE_FIELD_ALIASES: Record<string, IntakeFieldKey> = {
+  email: "email",
+  name: "name",
+  phone: "phone",
+  address: "address",
+  service_reason: "service_reason",
   sys_email: "email",
   customer_email: "email",
   caller_email: "email",
@@ -36,6 +53,15 @@ const INTAKE_FIELD_ALIASES: Record<string, IntakeFieldKey> = {
   callback_number: "phone",
 };
 
+function coerceIntakeFieldString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object" && "value" in (value as object)) {
+    return String((value as { value?: unknown }).value ?? "").trim();
+  }
+  return String(value).trim();
+}
+
 /** Map common LLM / CRM keys onto wizard intake keys before validation. */
 export function normalizeIntakeFieldKeys(
   rawFields: Record<string, unknown>,
@@ -44,8 +70,8 @@ export function normalizeIntakeFieldKeys(
   for (const [key, value] of Object.entries(rawFields)) {
     const k = key.trim();
     if (!k) continue;
-    const mapped = (INTAKE_FIELD_ALIASES[k] || k) as IntakeFieldKey;
-    if (out[mapped] === undefined || String(out[mapped] ?? "").trim() === "") {
+    const mapped = (INTAKE_FIELD_ALIASES[k.toLowerCase()] || k.toLowerCase()) as IntakeFieldKey;
+    if (out[mapped] === undefined || coerceIntakeFieldString(out[mapped]) === "") {
       out[mapped] = value;
     }
   }
@@ -64,10 +90,7 @@ function normalizeByType(
     case "address":
       return str;
     case "email": {
-      const email =
-        normalizeVoiceIntakeEmail(str) ?? (str.includes("@") ? str.trim().toLowerCase() : null);
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
-      return email;
+      return acceptVoiceIntakeEmail(str);
     }
     case "phone":
       try {
@@ -91,24 +114,24 @@ export function validateIntakeFieldPayload(
   const disabledFields: IntakeFieldKey[] = [];
 
   for (const [key, value] of Object.entries(fields)) {
-    const k = key.trim();
+    const k = resolveSchemaFieldKey(enabled, key);
     if (!k) continue;
-    const str = String(value ?? "").trim();
+    const str = coerceIntakeFieldString(value);
     if (!str) {
       if (enabled.has(k)) invalidFields.push(k as IntakeFieldKey);
       continue;
     }
     const valueType = enabled.get(k);
     if (!valueType) {
-      disabledFields.push(k);
+      disabledFields.push(k as IntakeFieldKey);
       continue;
     }
     const norm = normalizeByType(valueType, k, str);
     if (!norm) {
-      invalidFields.push(k);
+      invalidFields.push(k as IntakeFieldKey);
       continue;
     }
-    normalized[k] = norm;
+    normalized[k as IntakeFieldKey] = norm;
   }
 
   if (invalidFields.length) {

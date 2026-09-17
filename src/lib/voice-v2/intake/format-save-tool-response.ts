@@ -167,17 +167,24 @@ export function saveIntakePublicFields(
   }
 
   if (result.status === "INTAKE_VALIDATION_ERROR") {
+    const noFields =
+      result.invalid_fields.length === 0 && result.disabled_fields.length === 0;
     return {
       ok: false,
       status: "INTAKE_VALIDATION_ERROR",
       voice_v2_status: "INTAKE_VALIDATION_ERROR",
       invalid_fields: result.invalid_fields,
       disabled_fields: result.disabled_fields,
-      continue: false,
+      continue: true,
       timing_ms: result.timing_ms,
-      speak: result.invalid_fields.includes("email")
-        ? "I didn't get the email in a format I can save. Try name at domain dot com — for example, alex at company dot com."
-        : "I didn't catch that correctly. Could you repeat it?",
+      runtime_hint: noFields
+        ? "Tool payload was empty — include fields.email (and any other values the caller just gave) on voice_v2_save_intake_fields."
+        : undefined,
+      speak: noFields
+        ? "Include the caller's email in fields.email on save_intake, then continue."
+        : result.invalid_fields.includes("email")
+          ? "Repeat the email once more — say it like anthony at example dot com, or with an at sign."
+          : "I didn't catch that correctly. Could you repeat it?",
     };
   }
 
