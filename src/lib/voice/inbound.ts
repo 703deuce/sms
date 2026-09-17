@@ -445,22 +445,40 @@ async function startAiOnInboundCall(input: {
 
       const aiHandoffAt = Date.now();
       let aiStartOk = false;
+      const { shouldUseOpenAiRealtimeMediaBridge } = await import(
+        "@/lib/voice/telnyx/openai-realtime-bridge/flags"
+      );
+      const useRealtimeBridge = shouldUseOpenAiRealtimeMediaBridge(cfg);
       try {
-        await startAiAssistantOnCall({
-          callControlId: input.telnyxCallControlId,
-          assistantId: agent.telnyxAssistantId,
-          // One complete greeting from the selected AI voice — not a short “Thanks”.
-          // When speaksFirst=caller, omit greeting so the assistant waits.
-          greeting: greeting || undefined,
-          dynamicVariables,
-          clientState: {
+        if (useRealtimeBridge) {
+          const { startOpenAiRealtimeMediaBridgeOnCall } = await import(
+            "@/lib/voice/telnyx/openai-realtime-bridge/start-on-call"
+          );
+          const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
+          const bridge = await startOpenAiRealtimeMediaBridgeOnCall({
             workspaceId: input.workspaceId,
             callId: input.callId,
             agentId: agent.id,
-            // Webhook stops the bed when the assistant conversation is ready.
-            connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
-          },
-        });
+            telnyxCallControlId: input.telnyxCallControlId,
+            fromE164: callRow?.fromE164,
+          });
+          if (!bridge.started) {
+            throw new Error(bridge.reason || "realtime_bridge_start_failed");
+          }
+        } else {
+          await startAiAssistantOnCall({
+            callControlId: input.telnyxCallControlId,
+            assistantId: agent.telnyxAssistantId,
+            greeting: greeting || undefined,
+            dynamicVariables,
+            clientState: {
+              workspaceId: input.workspaceId,
+              callId: input.callId,
+              agentId: agent.id,
+              connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
+            },
+          });
+        }
         aiStartOk = true;
       } catch (err) {
         await handleAiAssistantStartFailure({
@@ -469,7 +487,10 @@ async function startAiOnInboundCall(input: {
           telnyxCallControlId: input.telnyxCallControlId,
           error: err,
         });
-        return { started: false, reason: "ai_assistant_start_failed" };
+        return {
+          started: false,
+          reason: useRealtimeBridge ? "realtime_bridge_start_failed" : "ai_assistant_start_failed",
+        };
       }
 
       if (!aiStartOk) {

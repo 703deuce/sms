@@ -13,9 +13,9 @@ import { applyAmyProductionVoiceTuning } from "./amy-production-voice-tuning";
 import { applyLatencyProfileToConfig } from "@/lib/voice/latency-profiles";
 import { isConversationWorkflowMode } from "@/lib/voice/workflow-engine/tool-publish";
 import {
-  applyOpenAiRealtimeTelnyxTransport,
-  shouldUseOpenAiRealtimeTelnyxTransport,
-} from "@/lib/voice/telnyx/openai-realtime-telnyx-transport";
+  shouldUseOpenAiRealtimeMediaBridge,
+} from "@/lib/voice/telnyx/openai-realtime-bridge/flags";
+import { applyOpenAiRealtimeMediaBridgeConfig } from "@/lib/voice/telnyx/openai-realtime-bridge/apply-bridge-config";
 
 export const AMY_MINIMUM_SIDE_EFFECT_MODEL = "openai/gpt-5.4-mini";
 /** Production Flux profile — balanced EOT (not flux_b_fast lab variant). */
@@ -57,7 +57,7 @@ export function applyAmyMinimumSideEffectConfig(
   const tuned = applyAmyProductionVoiceTuning(config);
   const workflowMode = true;
 
-  if (shouldUseOpenAiRealtimeTelnyxTransport(tuned)) {
+  if (shouldUseOpenAiRealtimeMediaBridge(tuned)) {
     const minimalTools = workflowMode
       ? new Set(["hangup", "transfer", "send_resource", "search_business_details"])
       : new Set([
@@ -70,7 +70,7 @@ export function applyAmyMinimumSideEffectConfig(
           "escalate_human",
           "transfer",
         ]);
-    return applyOpenAiRealtimeTelnyxTransport({
+    return applyOpenAiRealtimeMediaBridgeConfig({
       ...tuned,
       enabledBuiltinTools: Array.from(minimalTools),
       advanced: {

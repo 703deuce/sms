@@ -1071,28 +1071,51 @@ export async function processVoiceWebhookEvent(input: {
 
         const aiHandoffAt = Date.now();
         let aiStartOk = false;
+        const { shouldUseOpenAiRealtimeMediaBridge } = await import(
+          "./openai-realtime-bridge/flags"
+        );
+        const useRealtimeBridge = shouldUseOpenAiRealtimeMediaBridge(cfg);
         try {
-          await startAiAssistantOnCall({
-            callControlId: controlId,
-            assistantId: agent.telnyxAssistantId,
-            greeting: greeting || undefined,
-            dynamicVariables,
-            clientState: {
+          if (useRealtimeBridge) {
+            const { startOpenAiRealtimeMediaBridgeOnCall } = await import(
+              "./openai-realtime-bridge/start-on-call"
+            );
+            const bridge = await startOpenAiRealtimeMediaBridgeOnCall({
               workspaceId,
               callId: call.id,
               agentId: agent.id,
-              connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
-            },
-          });
+              telnyxCallControlId: controlId,
+              fromE164: call.fromE164,
+            });
+            if (!bridge.started) {
+              throw new Error(bridge.reason || "realtime_bridge_start_failed");
+            }
+          } else {
+            await startAiAssistantOnCall({
+              callControlId: controlId,
+              assistantId: agent.telnyxAssistantId,
+              greeting: greeting || undefined,
+              dynamicVariables,
+              clientState: {
+                workspaceId,
+                callId: call.id,
+                agentId: agent.id,
+                connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
+              },
+            });
+          }
           aiStartOk = true;
         } catch (err) {
-          console.error("[voice/webhook] ai_assistant_start", err);
+          console.error(
+            useRealtimeBridge ? "[voice/webhook] realtime_bridge_start" : "[voice/webhook] ai_assistant_start",
+            err,
+          );
           await recordFailureDiagnostic({
             workspaceId,
             agentId: agent.id,
             callId: call.id,
             category: "runtime",
-            code: "ai_assistant_start_failed",
+            code: useRealtimeBridge ? "realtime_bridge_start_failed" : "ai_assistant_start_failed",
             message: err instanceof Error ? err.message : String(err),
           }).catch(() => undefined);
           const { handleAiAssistantStartFailure } = await import("../inbound");
