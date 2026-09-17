@@ -1,31 +1,31 @@
 import "server-only";
 
-import { getPrisma } from "../../lib/db";
-import { loadMctbAiBookingConfig } from "../../lib/mctb/ai-booking/config";
-import { resolveMctbMicrosoftConnectionId } from "../../lib/mctb/ai-booking/microsoft-connection";
-import { slotIdFor } from "../../lib/mctb/ai-booking/slot-id";
-import { parseBookingHours } from "../../lib/solutions/appointment-receptionist/notice-utils";
+import { getPrisma } from "@/lib/db";
+import { loadMctbAiBookingConfig } from "./internal/workspace-booking-config";
+import { resolveMctbMicrosoftConnectionId } from "./internal/microsoft-connection";
+import { slotIdFor } from "./internal/slot-id";
+import { parseBookingHours } from "./internal/parse-booking-hours";
 import {
   computeFreeSlots,
   getMicrosoftBusy,
   getValidAccessToken,
   hasOAuthTokens,
   type CalendarConfig,
-} from "../../lib/voice/calendar/providers";
-import { wallTimeInZoneToUtc } from "../../lib/voice/calendar/timezone-slots";
-import { validateVoiceV2FindAvailabilityInput } from "../../validate-input";
+} from "./internal/calendar-providers";
+import { wallTimeInZoneToUtc } from "./internal/timezone-slots";
+import { validateVoiceV2FindAvailabilityInput } from "./internal/validate-input";
 import type {
   VoiceV2FindAvailabilityResult,
   VoiceV2Slot,
   VoiceV2TimingMarks,
   VoiceV2TimingMs,
-} from "../../types";
+} from "./internal/types";
 import {
   beginVoiceV2GraphCollection,
   endVoiceV2GraphCollection,
   type VoiceV2GraphSpan,
-} from "../../graph-instrumentation";
-import { persistVoiceV2OfferSet } from "../../offer-set-store";
+} from "./internal/graph-instrumentation";
+import { persistVoiceV2OfferSet } from "./internal/offer-set-store";
 
 function isoMark(): string {
   return new Date().toISOString();

@@ -13,11 +13,33 @@ const BOOK_BASE = execSync(`git show ${BASE}:src/lib/voice-v2/book-offered-slot.
   encoding: "utf8",
 });
 
-function normalizeCertified(src: string, exportFrom: string, exportTo: string): string {
+function stripImports(src: string): string {
   return src
-    .replaceAll('from "../../lib/', 'from "@/lib/')
-    .replace(exportTo, exportFrom)
-    .replace(/from "\.\.\/\.\.\/([^"]+)"/g, 'from "./$1"');
+    .split("\n")
+    .filter((line) => !/^\s*import\s/.test(line))
+    .join("\n");
+}
+
+/** Map frozen internal modules back to baseline paths for logic-only comparison. */
+const INTERNAL_TO_BASELINE: Record<string, string> = {
+  "./internal/calendar-providers": "@/lib/voice/calendar/providers",
+  "./internal/workspace-booking-config": "@/lib/mctb/ai-booking/config",
+  "./internal/microsoft-connection": "@/lib/mctb/ai-booking/microsoft-connection",
+  "./internal/slot-id": "@/lib/mctb/ai-booking/slot-id",
+  "./internal/parse-booking-hours": "@/lib/solutions/appointment-receptionist/notice-utils",
+  "./internal/timezone-slots": "@/lib/voice/calendar/timezone-slots",
+  "./internal/validate-input": "./validate-input",
+  "./internal/types": "./types",
+  "./internal/graph-instrumentation": "./graph-instrumentation",
+  "./internal/offer-set-store": "./offer-set-store",
+};
+
+function normalizeCertified(src: string, exportFrom: string, exportTo: string): string {
+  let out = stripImports(src).replace(exportTo, exportFrom);
+  for (const [internal, baseline] of Object.entries(INTERNAL_TO_BASELINE)) {
+    out = out.replaceAll(`from "${internal}"`, `from "${baseline}"`);
+  }
+  return out;
 }
 
 const findCert = readFileSync(
@@ -40,13 +62,28 @@ const bookNorm = normalizeCertified(
   "executeMicrosoft365CertifiedBookOfferedSlot",
 );
 
-if (findNorm !== FIND_BASE) {
+const findBaseNorm = stripImports(FIND_BASE);
+const bookBaseNorm = stripImports(BOOK_BASE);
+if (findNorm !== findBaseNorm) {
   console.error("FAIL: certified FIND diverged from baseline", BASE);
   process.exit(1);
 }
-if (bookNorm !== BOOK_BASE) {
+if (bookNorm !== bookBaseNorm) {
   console.error("FAIL: certified BOOK diverged from baseline", BASE);
   process.exit(1);
+}
+
+const forbiddenEntryImports = [
+  "../offer-set-store",
+  "../validate-input",
+  "@/lib/voice-v2/find-availability",
+  "@/lib/voice/calendar/providers",
+];
+for (const frag of forbiddenEntryImports) {
+  if (findCert.includes(frag) || bookCert.includes(frag)) {
+    console.error("FAIL: certified entry still imports shared booking path:", frag);
+    process.exit(1);
+  }
 }
 
 const findRoute = readFileSync("src/app/api/telnyx/voice-v2/find-availability/route.ts", "utf8");

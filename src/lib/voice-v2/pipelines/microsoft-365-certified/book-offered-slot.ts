@@ -1,22 +1,22 @@
 import "server-only";
 
-import { getPrisma } from "../../lib/db";
-import { createId } from "../../lib/supabase/id";
-import { loadMctbAiBookingConfig } from "../../lib/mctb/ai-booking/config";
-import { resolveMctbMicrosoftConnectionId } from "../../lib/mctb/ai-booking/microsoft-connection";
+import { getPrisma } from "@/lib/db";
+import { createId } from "@/lib/supabase/id";
+import { loadMctbAiBookingConfig } from "./internal/workspace-booking-config";
+import { resolveMctbMicrosoftConnectionId } from "./internal/microsoft-connection";
 import {
   getMicrosoftBusy,
   getValidAccessToken,
   hasOAuthTokens,
   insertMicrosoftEvent,
   type CalendarConfig,
-} from "../../lib/voice/calendar/providers";
-import { loadVoiceV2OfferSet } from "../../offer-set-store";
+} from "./internal/calendar-providers";
+import { loadVoiceV2OfferSet } from "./internal/offer-set-store";
 import {
   beginVoiceV2GraphCollection,
   endVoiceV2GraphCollection,
   type VoiceV2GraphSpan,
-} from "../../graph-instrumentation";
+} from "./internal/graph-instrumentation";
 
 export type VoiceV2BookTimingMarks = {
   WEBHOOK_RECEIVED?: string;

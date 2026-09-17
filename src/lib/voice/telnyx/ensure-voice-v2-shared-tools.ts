@@ -2,10 +2,8 @@ import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
 import * as ai from "./ai-client";
 import { TelnyxApiError } from "./ai-client";
 import {
-  VOICE_V2_BOOK_OFFERED_SLOT_BODY,
   VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
-  VOICE_V2_FIND_AVAILABILITY_BODY,
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
   VOICE_V2_SAVE_INTAKE_BODY,
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
@@ -39,6 +37,14 @@ import {
 import type { VoiceV2BookingStrategy } from "@/lib/voice-v2/booking-strategy";
 import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
 import type { VoiceV2SharedToolIds } from "./voice-v2-shared-tools";
+import {
+  MICROSOFT_365_CERTIFIED_BOOK_OFFERED_SLOT_BODY,
+  MICROSOFT_365_CERTIFIED_FIND_AVAILABILITY_BODY,
+} from "@/lib/voice-v2/pipelines/microsoft-365-certified/telnyx-publish-bodies";
+import {
+  CALENDLY_VOICE_V2_BOOK_OFFERED_SLOT_BODY,
+  CALENDLY_VOICE_V2_FIND_AVAILABILITY_BODY,
+} from "@/lib/voice-v2/pipelines/calendly/telnyx-publish-bodies";
 
 function unwrapToolId(res: unknown): string | null {
   if (!res || typeof res !== "object") return null;
@@ -214,10 +220,19 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     };
   }
 
+  /** Dumb publish selector only — URLs + per-strategy Telnyx JSON schemas. No booking logic. */
   const findBookBase =
     strategy === "CALENDLY"
       ? "/api/telnyx/voice-v2/calendly"
       : "/api/telnyx/voice-v2";
+  const findBody =
+    strategy === "CALENDLY"
+      ? CALENDLY_VOICE_V2_FIND_AVAILABILITY_BODY
+      : MICROSOFT_365_CERTIFIED_FIND_AVAILABILITY_BODY;
+  const bookBody =
+    strategy === "CALENDLY"
+      ? CALENDLY_VOICE_V2_BOOK_OFFERED_SLOT_BODY
+      : MICROSOFT_365_CERTIFIED_BOOK_OFFERED_SLOT_BODY;
 
   const findId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
@@ -225,7 +240,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     displayName: VOICE_V2_TELNYX_TOOL_NAME,
     toolType: VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
     urlPath: `${findBookBase}/find-availability`,
-    bodyParameters: VOICE_V2_FIND_AVAILABILITY_BODY,
+    bodyParameters: findBody,
     timeoutMs: 10000,
     description:
       strategy === "CALENDLY"
@@ -238,7 +253,7 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     displayName: VOICE_V2_BOOK_TELNYX_TOOL_NAME,
     toolType: VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
     urlPath: `${findBookBase}/book-offered-slot`,
-    bodyParameters: VOICE_V2_BOOK_OFFERED_SLOT_BODY,
+    bodyParameters: bookBody,
     timeoutMs: 15000,
     description:
       strategy === "CALENDLY"

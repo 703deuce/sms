@@ -36,6 +36,10 @@ Publish wiring: `ensureVoiceV2SharedToolsForAgent` in `src/lib/voice/telnyx/ensu
 
 Any edit under `pipelines/microsoft-365-certified/` or the Microsoft 365 Telnyx FIND/BOOK routes.
 
-## Target layout (vertical slice)
+## Vertical slice (`internal/`)
 
-Over time, all Microsoft-specific booking code (timezone, offer store, validation, Graph calls) should live **under this tree** as copies — not as imports from Calendly or generic `voice-v2` booking engines. Until then, the verify script locks FIND/BOOK logic to `06125f5f`; new coupling into this module is forbidden.
+Booking-critical code from **`06125f5f`** is vendored under `pipelines/microsoft-365-certified/internal/` (calendar Graph, offer store, validation, timezone, workspace config, etc.). Entry FIND/BOOK import **only** `./internal/*` plus `@/lib/db` and `@/lib/supabase/id`.
+
+Audit: `npx tsx scripts/audit-microsoft-365-certified-booking-imports.ts`
+
+Stale/orphan `VoiceAppointment` reconciliation stays **outside** this tree — it may clean data before booking but must not change frozen FIND/BOOK logic.
