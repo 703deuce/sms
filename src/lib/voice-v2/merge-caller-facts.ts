@@ -91,6 +91,7 @@ export async function mergeCallerFactsIntoCallContext(
       hasActiveOfferSet: hasOffer,
       bookingStrategy: strategy,
       schedulingPreference: next.schedulingPreference,
+      selectedSlotId: next.bookingState?.selectedSlotId,
     }),
   };
 

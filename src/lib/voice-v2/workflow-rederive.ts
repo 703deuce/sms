@@ -26,6 +26,7 @@ export function rederiveWorkflowStageForContext(ctx: VoiceV2CallContext): VoiceV
       hasActiveOfferSet: hasOffer,
       bookingStrategy: strategy,
       schedulingPreference: ctx.schedulingPreference,
+      selectedSlotId: ctx.bookingState?.selectedSlotId,
     }),
   };
   return mergeWorkflowIntoContext(ctx, workflow);

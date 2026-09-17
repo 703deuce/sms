@@ -116,7 +116,7 @@ export const LIVE_TOOL_REGISTRY: Record<string, ToolExecutionContract> = {
     category: "SIDE_EFFECT",
     autoDispatchEligible: true,
     canRun(ctx, stage) {
-      if (stage !== "OFFER_SLOTS" && stage !== "BOOK_SELECTED_SLOT") return false;
+      if (stage !== "BOOK_SELECTED_SLOT") return false;
       if (!ctx.currentOfferSet?.offerSetId) return false;
       if (!ctx.bookingState?.selectedSlotId) return false;
       if (ctx.bookingWorkflow?.bookingConfirmed) return false;

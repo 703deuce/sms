@@ -227,6 +227,8 @@ export function deriveVoiceV2NextStage(input: {
   hasActiveOfferSet: boolean;
   bookingStrategy?: VoiceV2BookingStrategy;
   schedulingPreference?: VoiceV2SchedulingPreference;
+  /** Canonical slot pick from runtime — not model memory. */
+  selectedSlotId?: string | null;
 }): VoiceV2NextStage {
   const w = {
     ...input.workflow,
@@ -261,7 +263,11 @@ export function deriveVoiceV2NextStage(input: {
   }
   if (!w.bookingIntentActive) return "COLLECT_REQUIRED_INTAKE";
   if (input.readiness.missingBeforeBooking.length > 0) return "COLLECT_REQUIRED_INTAKE";
-  if (input.hasActiveOfferSet) return "OFFER_SLOTS";
+  if (input.hasActiveOfferSet) {
+    const slot = String(input.selectedSlotId || "").trim();
+    if (slot) return "BOOK_SELECTED_SLOT";
+    return "OFFER_SLOTS";
+  }
   if (w.requestedDate) return "FIND_AVAILABILITY";
   return "COLLECT_SCHEDULING_PREFERENCE";
 }
@@ -327,7 +333,9 @@ export function runtimeHintForStage(
       }
       return "Intake complete. Ask what day works for the appointment. Do not close with callback or follow-up.";
     case "FIND_AVAILABILITY":
-      return "Intake complete and date is known. Acknowledge the date briefly, then call voice_v2_find_availability now. Do not ask for the day again. Do not callback-close.";
+      return "Intake complete and date is known. Acknowledge briefly; the runtime runs calendar FIND when required_action is voice_v2_find_availability. Do not ask for the day again. Do not callback-close.";
+    case "BOOK_SELECTED_SLOT":
+      return "Caller selected a canonical slot. The runtime executes BOOK when required_action is voice_v2_book_offered_slot. Do not call FIND again.";
     case "FINALIZE_CALLER_REQUEST":
       return "You have enough to send this to the team. Call voice_v2_finalize_caller_request. Do not say the appointment is confirmed or booked.";
     case "SEND_BOOKING_LINK":
@@ -366,6 +374,7 @@ export function buildWorkflowToolPayload(input: {
     hasActiveOfferSet: input.hasActiveOfferSet ?? false,
     bookingStrategy: strategy,
     schedulingPreference: input.ctx?.schedulingPreference,
+    selectedSlotId: input.ctx?.bookingState?.selectedSlotId,
   });
   if (input.ctx) {
     nextStage = applyQualificationStageOverride(nextStage, input.ctx, strategy);
@@ -464,6 +473,7 @@ export function transitionAfterIntakeSave(input: {
     hasActiveOfferSet: hasOffer,
     bookingStrategy: strategy,
     schedulingPreference: ctx.schedulingPreference,
+    selectedSlotId: ctx.bookingState?.selectedSlotId,
   });
 
   return mergeWorkflowIntoContext(ctx, workflow);

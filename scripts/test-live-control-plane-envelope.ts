@@ -81,6 +81,22 @@ function main() {
     !(env.forbidden_actions as string[]).includes(VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE),
   );
 
+  const offerCtx = seedCtx({
+    currentOfferSet: { offerSetId: "v2offer_test", slotIds: ["slot_11am"] },
+    bookingState: { selectedSlotId: "slot_11am", status: "selected" },
+  });
+  const offerEnv = buildVoiceV2ControlPlaneEnvelope(offerCtx, true, "MICROSOFT_365");
+  pass(
+    "STAGE_BOOK_SELECTED",
+    offerEnv.voice_v2_next_stage === "BOOK_SELECTED_SLOT",
+    String(offerEnv.voice_v2_next_stage),
+  );
+  pass(
+    "REQUIRED_BOOK",
+    offerEnv.required_action === "voice_v2_book_offered_slot",
+    String(offerEnv.required_action),
+  );
+
   if (failures.length) {
     console.error("FAILURES:\n" + failures.map((f) => `  - ${f}`).join("\n"));
     process.exit(1);

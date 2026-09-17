@@ -5,8 +5,10 @@ import {
   dispatchLiveVoiceTool,
   type LiveToolDispatchContext,
 } from "./live-tool-runtime";
-import { getRegistryEntry } from "@/lib/voice-v2/live-tool-registry";
-import { validateBookArgsAgainstOfferSet } from "@/lib/voice-v2/live-tool-registry";
+import {
+  getRegistryEntry,
+  validateBookArgsAgainstOfferSet,
+} from "@/lib/voice-v2/live-tool-registry";
 import { VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
 

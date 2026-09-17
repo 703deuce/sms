@@ -39,6 +39,7 @@ export function buildVoiceV2ControlPlaneEnvelope(
     hasActiveOfferSet: hasOffer,
     bookingStrategy: strategy,
     schedulingPreference: ctx.schedulingPreference,
+    selectedSlotId: ctx.bookingState?.selectedSlotId,
   });
 
   const base = buildWorkflowToolPayload({
