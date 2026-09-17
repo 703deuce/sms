@@ -238,6 +238,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     sendLiveOut({
       type: "session.update",
       event_id: liveBaselineEventId("session_update_delegation"),
+      delegation_id: null,
       session: sessionPatch,
     });
     milestone("session_delegation_update_sent");

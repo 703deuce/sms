@@ -133,6 +133,7 @@ export function createLiveDelegationHandler(input: {
     input.sendLiveOut({
       type: "response.create",
       event_id: liveBaselineEventId("delegation_ctx_resp"),
+      delegation_id: activeDelegationId ?? null,
     });
     input.turnTrace?.onResponseCreateSent();
   };

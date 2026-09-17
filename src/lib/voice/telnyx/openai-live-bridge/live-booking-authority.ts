@@ -79,6 +79,7 @@ export function buildLiveFrontendBookingAuthorityAppendFromControlPlane(
   return {
     type: "session.instructions.append",
     event_id: liveBaselineEventId("booking_auth"),
+    delegation_id: null,
     content: buildLiveFrontendBookingAuthorityInstructionFromContext({
       ctx: controlPlane.getCallContext(),
       workflowEnvelope: controlPlane.getWorkflowEnvelope(),

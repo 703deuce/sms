@@ -199,6 +199,7 @@ export function createLiveControlPlane(input: {
       const env = this.getWorkflowEnvelope();
       return {
         type: "session.update",
+        delegation_id: null,
         session: buildLiveDelegationSessionPatch({
           tools,
           runtimeContext: JSON.stringify(

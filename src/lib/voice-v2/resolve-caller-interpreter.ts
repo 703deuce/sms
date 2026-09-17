@@ -32,6 +32,15 @@ export async function interpretStableCallerUtterance(
       };
     }
 
+    const deterministic = await deterministicCallerInterpreter.interpret(ctx);
+    if (deterministic?.meaning) {
+      return {
+        ...deterministic,
+        mergePolicy: "full",
+        fallbackReason: `astra_failed_${safe.reason}`,
+      };
+    }
+
     return {
       meaning: preserveStateCallerMeaning(ctx),
       implementationId: "preserve_state",
