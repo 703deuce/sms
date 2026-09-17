@@ -22,6 +22,7 @@ import {
   getRealtimeBridgePublicWssBase,
   OPENAI_REALTIME_BRIDGE_PUBLIC_WSS_URL,
 } from "../src/lib/voice/telnyx/openai-realtime-bridge/config";
+import { getInboundRoutingMode } from "../src/lib/voice/telnyx/texml-direct-route";
 
 process.env.VOICE_REALTIME_BRIDGE_SIGNING_SECRET = "test-bridge-secret";
 process.env.APP_URL = "https://app.transovo.ai";
@@ -71,5 +72,12 @@ assert.ok(
 
 process.env.APP_URL = "http://localhost:3000";
 assert.equal(getRealtimeBridgePublicWssBase(), "ws://localhost:3108");
+
+// Flux profile alone would be TeXML-direct; bridge forces Call Control for PSTN ingress.
+const fluxOnly = parseVoiceAgentConfig({
+  voiceTiming: { activeProfile: "flux_b_balanced" },
+  advanced: { voiceV2PstnLiveBooking: true, conversationWorkflowMode: true },
+});
+assert.equal(getInboundRoutingMode(fluxOnly), "call_control");
 
 console.log("OK — OpenAI Realtime media bridge checks passed");

@@ -44,7 +44,7 @@ Traefik on **`voice.transovo.ai`** must proxy WebSocket upgrades to the containe
 - Coolify: domain `voice.transovo.ai` → `http://<container>:3108` with **WebSocket** enabled.
 - Telnyx must reach valid **TLS** `wss://` from the public internet — not `wss://server-ip:3108` without a certificate.
 
-Republish wizard agent after enable so `inboundRoutingMode` is `call_control` (bridge apply sets this).
+**Ingress:** Bridge mode forces **Call Control** (not TeXML-direct assistant). On publish, the agent DID is pointed at `TELNYX_CONNECTION_ID` so inbound hits Transovo webhooks → `streaming_start` → WSS bridge. If a call still sounds like Flux/NaturalHD, the number is likely still on TeXML-direct — **republish** the live agent (or run inbound diagnostics) to move the DID to Call Control.
 
 ## Session lifecycle (locked)
 

@@ -593,14 +593,52 @@ export async function publishVoiceAgent(
   const {
     usesTexmlDirectInbound,
     routePhoneToTexmlAssistant,
+    routePhoneToCallControlConnection,
   } = await import("./telnyx/texml-direct-route");
+  const { shouldUseOpenAiRealtimeMediaBridge } = await import(
+    "./telnyx/openai-realtime-bridge/flags"
+  );
+  const realtimeMediaBridge = shouldUseOpenAiRealtimeMediaBridge(config);
   const shouldRouteTexmlAssistant =
     Boolean(updated.phoneNumberId && refreshedAfterSync.telnyxAssistantId) &&
+    !realtimeMediaBridge &&
     (appointmentWizard ||
       skipLiveKitForMctb ||
       (!isLiveKitVoiceRuntime() && usesTexmlDirectInbound(config)));
 
-  if (shouldRouteTexmlAssistant && updated.phoneNumberId) {
+  if (
+    realtimeMediaBridge &&
+    updated.phoneNumberId &&
+    !isLiveKitVoiceRuntime()
+  ) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: updated.phoneNumberId, workspaceId },
+      select: { e164: true, providerNumberId: true },
+    });
+    if (!phone?.e164) {
+      await rollbackPublish(
+        "Phone number missing for Call Control route (realtime media bridge) — deploy rolled back",
+      );
+    }
+    try {
+      const ccRoute = await routePhoneToCallControlConnection({
+        e164: phone!.e164,
+        providerNumberId: phone!.providerNumberId,
+      });
+      if (!ccRoute.matched) {
+        await rollbackPublish(
+          `Call Control route did not match live connection — deploy rolled back (${ccRoute.path})`,
+        );
+      }
+      texmlRoute = ccRoute as unknown as typeof texmlRoute;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[voice] Call Control route for realtime bridge failed", err);
+      await rollbackPublish(
+        `Call Control routing failed (realtime media bridge) — deploy rolled back: ${detail}`,
+      );
+    }
+  } else if (shouldRouteTexmlAssistant && updated.phoneNumberId) {
     const phone = await prisma.phoneNumber.findFirst({
       where: { id: updated.phoneNumberId, workspaceId },
       select: { e164: true, providerNumberId: true, settingsJson: true },

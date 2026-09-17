@@ -16,6 +16,7 @@ import {
   type LatencyProfileId,
 } from "@/lib/voice/latency-profiles";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
+import { shouldUseOpenAiRealtimeMediaBridge } from "@/lib/voice/telnyx/openai-realtime-bridge/flags";
 
 /** TeXML apps use status_callback (not Call Control webhook_event_url). */
 function texmlStatusCallbackBody() {
@@ -38,6 +39,10 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 export function getInboundRoutingMode(
   config: VoiceAgentConfig | null | undefined,
 ): InboundRoutingMode {
+  // OpenAI Realtime media bridge requires Call Control answer + streaming_start — never TeXML-direct assistant.
+  if (shouldUseOpenAiRealtimeMediaBridge(config)) {
+    return "call_control";
+  }
   const raw = String(
     (config?.callHandling as { inboundRoutingMode?: string } | undefined)
       ?.inboundRoutingMode || "",
@@ -68,6 +73,73 @@ export function usesTexmlDirectInbound(
 /**
  * Point a DID at a Telnyx assistant via TeXML (bypasses Transovo Call Control).
  */
+/**
+ * Point a DID at the Transovo Call Control application (inbound webhooks → bridge / assistant start).
+ */
+export async function routePhoneToCallControlConnection(input: {
+  e164: string;
+  providerNumberId?: string | null;
+  connectionId?: string | null;
+}): Promise<{
+  e164: string;
+  connectionId: string;
+  providerNumberId: string;
+  liveConnectionId: string | null;
+  matched: boolean;
+  path: string;
+}> {
+  const e164 = String(input.e164 || "").trim();
+  if (!e164) throw new Error("e164 required for Call Control route");
+
+  const { resolveVoiceConnectionId } = await import("@/lib/phone/telnyx-voice-connection");
+  let connectionId =
+    String(input.connectionId || "").trim() ||
+    process.env.TELNYX_CONNECTION_ID?.trim() ||
+    "";
+  if (!connectionId) {
+    connectionId = await resolveVoiceConnectionId();
+  }
+  if (!connectionId) {
+    throw new Error("TELNYX_CONNECTION_ID required to route inbound to Call Control");
+  }
+
+  let providerNumberId = String(input.providerNumberId || "").trim();
+  if (!providerNumberId) {
+    const listed = await telnyxRequest<{ data?: Array<Record<string, unknown>> }>(
+      "/phone_numbers",
+      { query: { "filter[phone_number]": e164, "page[size]": 5 } },
+    );
+    const rows = Array.isArray(listed.data) ? listed.data : [];
+    providerNumberId = String(rows[0]?.id || "");
+  }
+  if (!providerNumberId) {
+    throw new Error(`Phone ${e164} missing providerNumberId`);
+  }
+
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(providerNumberId)}`, {
+    method: "PATCH",
+    body: { connection_id: connectionId },
+  });
+
+  const phoneVerify = await telnyxRequest<{ data?: Record<string, unknown> }>(
+    `/phone_numbers/${encodeURIComponent(providerNumberId)}`,
+  );
+  const liveConnectionId =
+    String(
+      (asRecord(phoneVerify.data) || asRecord(phoneVerify) || {}).connection_id || "",
+    ) || null;
+  const matched = liveConnectionId === connectionId;
+
+  return {
+    e164,
+    connectionId,
+    providerNumberId,
+    liveConnectionId,
+    matched,
+    path: `${e164} → Call Control ${connectionId} (Transovo inbound webhooks)`,
+  };
+}
+
 export async function routePhoneToTexmlAssistant(input: {
   e164: string;
   assistantId: string;
