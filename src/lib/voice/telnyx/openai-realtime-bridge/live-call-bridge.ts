@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import { getOpenAiApiKey } from "./config";
 import type { RealtimeBridgeStreamClaims } from "./stream-token";
 import { logRealtimeBridgeEvent } from "./telemetry";
+import { createLiveBridgeDiagnostics } from "./live-bridge-diagnostics";
 import {
   OPENAI_LIVE_GREETING_LINE,
   OPENAI_LIVE_WEBSOCKET_URL,
@@ -11,7 +12,7 @@ import {
 
 type TelnyxMediaEvent = {
   event?: string;
-  media?: { payload?: string };
+  media?: { payload?: string; track?: string };
   stream_id?: string;
   start?: { stream_id?: string; streamSid?: string };
 };
@@ -23,6 +24,17 @@ function resolveTelnyxStreamId(ev: TelnyxMediaEvent): string | null {
   if (ev.start?.stream_id) return ev.start.stream_id;
   if (ev.start?.streamSid) return ev.start.streamSid;
   return null;
+}
+
+/** Only PSTN caller leg → Live input. Never forward outbound (Amy) track — prevents self-echo loops. */
+function shouldForwardTelnyxMediaToLive(track: string | undefined): boolean {
+  if (!track) {
+    return true;
+  }
+  const t = track.toLowerCase();
+  if (t === "outbound" || t === "outbound_track") return false;
+  if (t === "inbound" || t === "inbound_track") return true;
+  return true;
 }
 
 function summarizeOpenAiLiveError(ev: Record<string, unknown>): Record<string, unknown> {
@@ -46,10 +58,12 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 }): Promise<void> {
   const meta = liveBridgeMetadata();
   const bridgeStartedAt = Date.now();
+  const diag = createLiveBridgeDiagnostics(input.claims.callId);
   logRealtimeBridgeEvent("telnyx_media_ws_connected", {
     callId: input.claims.callId,
     workspaceId: input.claims.workspaceId,
     transport: "openai_live",
+    live_diag_trace: process.env.OPENAI_LIVE_DIAG_TRACE !== "0",
     ...meta,
   });
 
@@ -72,30 +86,40 @@ export async function runTelnyxOpenAiLiveBridge(input: {
   let tornDown = false;
   const pendingCallerAudio: string[] = [];
 
-  const sendOpenAi = (event: Record<string, unknown>) => {
+  const sendOpenAi = (event: Record<string, unknown>, source: string) => {
     if (!openAi || openAi.readyState !== WebSocket.OPEN) return;
     lastClientEvent = String(event.type || "");
+    diag.logClientEvent(source, event);
     openAi.send(JSON.stringify(event));
   };
 
-  const sendCallerAudioToOpenAi = (payloadB64: string) => {
+  const sendCallerAudioToOpenAi = (payloadB64: string, track?: string) => {
     if (!openAiSessionStarted || !openAi || openAi.readyState !== WebSocket.OPEN) return;
+    if (!shouldForwardTelnyxMediaToLive(track)) {
+      diag.logTelnyxMedia(track, "drop");
+      return;
+    }
+    diag.logTelnyxMedia(track, "forward");
     if (!firstCallerAudioForwarded) {
       firstCallerAudioForwarded = true;
       logRealtimeBridgeEvent("first_caller_audio_forwarded", {
         callId: input.claims.callId,
         transport: "openai_live",
+        track: track ?? "unspecified",
       });
     }
-    sendOpenAi({
-      type: "session.input_audio.append",
-      audio: payloadB64,
-    });
+    sendOpenAi(
+      {
+        type: "session.input_audio.append",
+        audio: payloadB64,
+      },
+      "sendCallerAudioToOpenAi",
+    );
   };
 
   const flushPendingCallerAudio = () => {
     while (pendingCallerAudio.length > 0) {
-      sendCallerAudioToOpenAi(pendingCallerAudio.shift()!);
+      sendCallerAudioToOpenAi(pendingCallerAudio.shift()!, "inbound");
     }
   };
 
@@ -103,19 +127,27 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     if (greetingSent || !openAiSessionStarted) return;
     greetingSent = true;
     const line = OPENAI_LIVE_GREETING_LINE;
-    sendOpenAi({
-      type: "session.instructions.append",
-      delegation_id: null,
-      content: `Your first spoken line on this call is, verbatim: "${line}"`,
-    });
-    sendOpenAi({
-      type: "session.commentary.append",
-      delegation_id: null,
-      content: line,
-    });
+    sendOpenAi(
+      {
+        type: "session.instructions.append",
+        delegation_id: null,
+        content: `Your first spoken line on this call is, verbatim: "${line}"`,
+      },
+      "sendAmyGreeting:instructions.append",
+    );
+    sendOpenAi(
+      {
+        type: "session.commentary.append",
+        delegation_id: null,
+        content: line,
+      },
+      "sendAmyGreeting:commentary.append",
+    );
     logRealtimeBridgeEvent("openai_live_greeting_sent", {
       callId: input.claims.callId,
+      client_events: 2,
     });
+    diag.flushFirst15sReportHint();
   };
 
   const sendAudioToTelnyx = (base64Audio: string) => {
@@ -157,7 +189,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
         model: meta.model,
         voice: meta.voice,
       });
-      sendOpenAi(startPayload);
+      sendOpenAi(startPayload, "connectOpenAiLive:session.start");
     });
 
     openAi.on("message", (raw) => {
@@ -168,6 +200,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
         return;
       }
       const type = String(ev.type || "");
+      diag.logServerEvent(ev);
 
       if (type === "error") {
         logRealtimeBridgeEvent("openai_live_error", {
@@ -179,6 +212,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
       if (type === "session.started" && !openAiSessionStarted) {
         openAiSessionStarted = true;
+        diag.markSessionStarted();
         logRealtimeBridgeEvent("openai_session_started", {
           callId: input.claims.callId,
           session_id: (ev.session as { id?: string })?.id,
@@ -244,7 +278,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     });
     try {
       if (openAi?.readyState === WebSocket.OPEN) {
-        sendOpenAi({ type: "session.close" });
+        sendOpenAi({ type: "session.close" }, "teardown:session.close");
         openAi.close();
       }
     } catch {
@@ -275,15 +309,17 @@ export async function runTelnyxOpenAiLiveBridge(input: {
       logRealtimeBridgeEvent("telnyx_start_received", {
         callId: input.claims.callId,
         stream_id: telnyxStreamId,
+        note: "streaming uses both_tracks; Live input forwards inbound only",
       });
       connectOpenAiLive();
       return;
     }
 
     if (ev.event === "media" && ev.media?.payload) {
+      const track = ev.media.track;
       if (openAiSessionStarted) {
-        sendCallerAudioToOpenAi(ev.media.payload);
-      } else {
+        sendCallerAudioToOpenAi(ev.media.payload, track);
+      } else if (shouldForwardTelnyxMediaToLive(track)) {
         if (pendingCallerAudio.length < MAX_PENDING_CALLER_AUDIO) {
           pendingCallerAudio.push(ev.media.payload);
         } else {
