@@ -1,10 +1,7 @@
 import crypto from "node:crypto";
 import { OPENAI_LIVE_API_KIND, OPENAI_LIVE_WS_URL } from "./openai-realtime-protocol";
 import { OPENAI_REALTIME_BRIDGE_VOICE } from "./flags";
-import {
-  OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS,
-  buildOpenAiLiveGreetingPreamble,
-} from "./live-frontend-instructions";
+import { OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS } from "./live-frontend-instructions";
 
 /** OpenAI Live primary WebSocket — not /v1/realtime. */
 export const OPENAI_LIVE_WEBSOCKET_URL = OPENAI_LIVE_WS_URL;
@@ -62,17 +59,14 @@ This PSTN test bridge has no backend delegation, tools, or business actions wire
 export function buildOpenAiLiveSessionInstructions(
   baseline: OpenAiLiveBaseline,
 ): string | undefined {
-  const greetingLine = resolveOpenAiLiveGreetingLine();
   switch (baseline) {
     case "A":
       return undefined;
     case "B":
       return "You are a helpful phone assistant.";
     case "G":
-      return [
-        buildOpenAiLiveGreetingPreamble(greetingLine),
-        OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS,
-      ].join("\n\n");
+      // Opening greeting is sent after session.started (see live-greeting.ts — OpenAI Live docs).
+      return OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS;
     case "C":
       return [
         "You are Amy, a helpful phone receptionist.",

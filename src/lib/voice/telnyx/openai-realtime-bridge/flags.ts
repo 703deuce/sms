@@ -62,6 +62,14 @@ export function isGptLivePstnBridgeActive(): boolean {
   return resolveVoiceAiTransport() === "openai_live";
 }
 
+/**
+ * Recording-disclosure TTS on inbound answer (Call Control speak).
+ * Disabled for GPT-Live PSTN test — Amy opens via Live; no separate disclaimer clip.
+ */
+export function inboundRecordingDisclosureEnabled(): boolean {
+  return !isGptLivePstnBridgeActive();
+}
+
 /** Realtime GA bridge vs GPT-Live PSTN experiment (`openai_live`). */
 export function resolveVoiceAiTransport(): "openai_live" | "openai_realtime" {
   const fromFile = readVoiceAiTransportFile();

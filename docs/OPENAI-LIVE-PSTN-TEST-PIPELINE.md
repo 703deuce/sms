@@ -10,7 +10,7 @@
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
 
-**PSTN answer path (`openai_live`):** No recording-disclosure TTS — media bridge starts immediately after answer so Amy can greet via Live `session.start` instructions (baseline **G**).
+**PSTN answer path (`openai_live`):** Recording-disclosure Call Control TTS is **off** for this transport (`inboundRecordingDisclosureEnabled`). Bridge starts right after answer. Baseline **G** greeting uses OpenAI’s documented flow: `session.instructions.append` + `session.commentary.append` after `session.started` (see `live-greeting.ts`).
 
 ---
 
@@ -23,7 +23,7 @@ One path in `live-minimal-bridge.ts` (via `openai_live` transport):
 3. **Inbound-only** Telnyx media → `session.input_audio.append` (drops outbound track to avoid self-echo loops)
 4. `session.output_audio.delta` → Telnyx
 
-**Not sent after start:** `response.create`, scripted greeting via `session.instructions.append` / `session.commentary.append`, tools, or delegation.
+**Not sent:** `response.create`, tools, or delegation. Baseline **G** opening uses `session.instructions.append` + `session.commentary.append` only for the greet-first sequence (`live-greeting.ts`).
 
 Grep logs: `LIVE_OUT`, `LIVE_IN`, `LIVE_STATS`, `[telnyx] stream started`.
 

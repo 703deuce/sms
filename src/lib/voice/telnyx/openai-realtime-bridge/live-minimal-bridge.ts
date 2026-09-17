@@ -1,5 +1,11 @@
 import crypto from "node:crypto";
 import WebSocket from "ws";
+import {
+  buildLiveOpeningGreetingInstructionAppend,
+  buildLiveOpeningGreetingKickoffCommentary,
+  isLiveInstructionsAppendedAck,
+  shouldSendLiveOpeningGreetingAfterSessionStarted,
+} from "./live-greeting";
 
 /** OpenAI Live primary WebSocket client events used by this diagnostic baseline. */
 export type LiveClientEventType =
@@ -104,6 +110,8 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
   let openaiInputAudioFrames = 0;
   let openaiOutputAudioFrames = 0;
   let lastStatsLogAt = 0;
+  let liveGreetingInstrEventId: string | null = null;
+  let liveGreetingKickoffSent = false;
 
   milestone("telnyx_ws_attached");
 
@@ -221,6 +229,31 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
           session_id: (event.session as { id?: string })?.id ?? "",
         });
         flushPendingCallerAudio();
+        if (shouldSendLiveOpeningGreetingAfterSessionStarted()) {
+          const instr = buildLiveOpeningGreetingInstructionAppend();
+          liveGreetingInstrEventId = String(instr.event_id ?? "");
+          sendLiveOut(instr);
+          milestone("live_greeting_instruction_sent", {
+            event_id: liveGreetingInstrEventId,
+          });
+        }
+        return;
+      }
+
+      if (
+        liveGreetingInstrEventId &&
+        !liveGreetingKickoffSent &&
+        isLiveInstructionsAppendedAck(event as Record<string, unknown>, liveGreetingInstrEventId)
+      ) {
+        liveGreetingKickoffSent = true;
+        sendLiveOut(buildLiveOpeningGreetingKickoffCommentary());
+        milestone("live_greeting_kickoff_sent");
+        return;
+      }
+
+      if (type === "session.command.rejected" && liveGreetingInstrEventId) {
+        console.error("[live-baseline] greeting command rejected", event);
+        logLiveIn("session.command.rejected", { callId });
         return;
       }
 

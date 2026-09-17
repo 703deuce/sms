@@ -243,10 +243,10 @@ async function speakRecordingDisclosure(
   callControlId: string,
   agentId?: string | null,
 ) {
-  const { isGptLivePstnBridgeActive } = await import(
+  const { inboundRecordingDisclosureEnabled } = await import(
     "@/lib/voice/telnyx/openai-realtime-bridge/flags"
   );
-  if (isGptLivePstnBridgeActive()) {
+  if (!inboundRecordingDisclosureEnabled()) {
     return;
   }
   const text = await resolveRecordingDisclosure(workspaceId, agentId);
@@ -464,7 +464,11 @@ async function startAiOnInboundCall(input: {
           : "ai";
       const recordingOn = shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND");
       const compliance = (cfg.compliance || {}) as Record<string, unknown>;
+      const { inboundRecordingDisclosureEnabled } = await import(
+        "@/lib/voice/telnyx/openai-realtime-bridge/flags"
+      );
       const disclosureText =
+        inboundRecordingDisclosureEnabled() &&
         !disclosureSpoken &&
         recordingOn &&
         (compliance.recordingDisclosure === true ||

@@ -64,6 +64,11 @@ async function main() {
   const prev = parseVoiceAgentConfig(agent.draftConfig);
   const next = applyAmyMinimumSideEffectConfig({
     ...prev,
+    compliance: {
+      ...(prev.compliance || {}),
+      recordingDisclosure: false,
+      recordingDisclosureText: "",
+    },
     voiceLanguage: {
       ...(prev.voiceLanguage || {}),
       voiceId: "marin",
