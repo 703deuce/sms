@@ -1,11 +1,13 @@
 import "server-only";
 
-import {
-  applyCallerIntentToCallContext,
-  logCallerIntentInterpretation,
-} from "@/lib/voice-v2/caller-intent-interpreter";
-import { interpretCallerUtteranceWithAstra } from "@/lib/voice-v2/astra-caller-interpreter";
+import { createHash } from "node:crypto";
+
+import { applyCallerIntentToCallContext } from "@/lib/voice-v2/caller-intent-interpreter";
+import { callerMeaningToIntentInterpretation } from "@/lib/voice-v2/caller-meaning-apply";
+import { interpretStableCallerUtterance } from "@/lib/voice-v2/resolve-caller-interpreter";
+import { stableUtteranceTextHash } from "@/lib/voice-v2/astra-caller-interpreter";
 import { dialogFromContext } from "@/lib/voice-v2/dialog-goal";
+import { workflowFromContext } from "@/lib/voice-v2/booking-workflow";
 import {
   loadAuthoritativeCallContextForLive,
   logDialogStateChanged,
@@ -13,16 +15,22 @@ import {
 } from "@/lib/voice-v2/dialog-manager";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "@/lib/voice-v2/intake/load-call-context";
 import { getVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
+import { getIntakeReadiness } from "@/lib/voice-v2/intake/readiness";
+import { deriveRequiredActionForStage } from "@/lib/voice-v2/booking-workflow";
 import type { LiveControlPlane } from "./live-control-plane";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
 import { runLiveControlPlaneTurn } from "./live-control-plane-turn";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 import type { StableCallerUtterance } from "./live-caller-utterance-assembler";
+import {
+  beginUtteranceInterpretation,
+  markUtteranceInterpretationApplied,
+  registerStableCallerUtterance,
+  shouldApplyUtteranceInterpretation,
+} from "./live-utterance-revision-guard";
 
-const inFlightStableKeys = new Map<string, string>();
-
-function stableKey(stable: StableCallerUtterance): string {
-  return `${stable.utterance_id}:${stable.revision}`;
+function utteranceTextHash(text: string): string {
+  return createHash("sha256").update(text.trim()).digest("hex").slice(0, 16);
 }
 
 export async function syncLiveCallerUtteranceIntent(input: {
@@ -38,11 +46,33 @@ export async function syncLiveCallerUtteranceIntent(input: {
   if (!utterance) return;
 
   const callId = input.claims.callId;
-  if (input.stableUtterance) {
-    const key = stableKey(input.stableUtterance);
-    if (inFlightStableKeys.get(callId) === key) return;
-    inFlightStableKeys.set(callId, key);
+  const stable =
+    input.stableUtterance ??
+    ({
+      utterance_id: `legacy_${Date.now()}`,
+      revision: 1,
+      start_ms: 0,
+      end_ms: 0,
+      stable_at: Date.now(),
+      text: utterance,
+    } satisfies StableCallerUtterance);
+
+  registerStableCallerUtterance(callId, stable);
+  if (!beginUtteranceInterpretation(callId, stable)) {
+    console.info(
+      `VOICE_CALLER_UTTERANCE_SUPERSEDED ${JSON.stringify({
+        call_id: callId,
+        utterance_id: stable.utterance_id,
+        revision: stable.revision,
+        phase: "begin",
+      })}`,
+    );
+    return;
   }
+
+  const stageBefore = input.controlPlane.getStage();
+  const requiredBefore =
+    input.controlPlane.getWorkflowEnvelope().required_action ?? null;
 
   try {
     const sessionKey = resolveSessionKey({
@@ -69,20 +99,43 @@ export async function syncLiveCallerUtteranceIntent(input: {
     if (!ctx) return;
 
     const priorGoal = dialogFromContext(ctx).activeGoal;
-    const turnId =
-      input.stableUtterance?.utterance_id ??
-      `caller_${Date.now()}_${utterance.slice(0, 32).replace(/\W/g, "")}`;
-
-    const interpreted = await interpretCallerUtteranceWithAstra({
-      utterance,
+    const interpretationResult = await interpretStableCallerUtterance({
       priorActiveGoal: priorGoal,
       businessTimezone: ctx.businessTimezone,
+      stable,
+      callId,
     });
-    const interpretation = interpreted.interpretation;
+
+    if (!shouldApplyUtteranceInterpretation(callId, stable)) {
+      console.info(
+        `VOICE_CALLER_UTTERANCE_SUPERSEDED ${JSON.stringify({
+          call_id: callId,
+          utterance_id: stable.utterance_id,
+          revision: stable.revision,
+          phase: "post_interpret",
+        })}`,
+      );
+      return;
+    }
+
+    const interpretation = callerMeaningToIntentInterpretation(interpretationResult.meaning);
+    const turnId = stable.utterance_id;
 
     const applied = await applyCallerIntentToCallContext(ctx, interpretation, utterance, {
       turnId,
     });
+
+    if (!shouldApplyUtteranceInterpretation(callId, stable)) {
+      console.info(
+        `VOICE_CALLER_UTTERANCE_SUPERSEDED ${JSON.stringify({
+          call_id: callId,
+          utterance_id: stable.utterance_id,
+          revision: stable.revision,
+          phase: "post_merge",
+        })}`,
+      );
+      return;
+    }
 
     if (applied.schedulingChanged && input.dispatchContext?.bumpSchedulingGeneration) {
       input.dispatchContext.bumpSchedulingGeneration("caller_scheduling_facts_superseded");
@@ -93,6 +146,7 @@ export async function syncLiveCallerUtteranceIntent(input: {
       sessionKey: applied.ctx.sessionKey?.trim() || ctx.sessionKey?.trim() || sessionKey,
     };
     persistCallContext(nextCtx);
+    markUtteranceInterpretationApplied(callId, stable);
 
     if (applied.previousActiveGoal !== applied.resultingActiveGoal) {
       logDialogStateChanged({
@@ -107,27 +161,6 @@ export async function syncLiveCallerUtteranceIntent(input: {
       });
     }
 
-    logCallerIntentInterpretation({
-      call_id: input.claims.callId,
-      live_session_id: input.controlPlane.getLiveSessionId(),
-      caller_utterance: utterance.slice(0, 500),
-      interpreter_source: interpreted.source,
-      utterance_id: input.stableUtterance?.utterance_id ?? null,
-      utterance_revision: input.stableUtterance?.revision ?? null,
-      stable_at: input.stableUtterance?.stable_at ?? null,
-      previous_active_goal: applied.previousActiveGoal,
-      candidate_intent: interpretation.intent,
-      confidence: interpretation.confidence,
-      explicit: interpretation.explicit,
-      evidence: interpretation.evidence,
-      digression: interpretation.digression,
-      resulting_active_goal: applied.resultingActiveGoal,
-      scheduling_changed: applied.schedulingChanged,
-      voice_v2_next_stage: input.controlPlane.getStage(),
-      allowed_next_actions: input.controlPlane.getWorkflowEnvelope().allowed_next_actions,
-      required_action: input.controlPlane.getWorkflowEnvelope().required_action ?? null,
-    });
-
     await runLiveControlPlaneTurn({
       controlPlane: input.controlPlane,
       sendLiveOut: input.sendLiveOut,
@@ -135,12 +168,47 @@ export async function syncLiveCallerUtteranceIntent(input: {
       autoDispatch: input.autoDispatch ?? Boolean(input.dispatchContext),
       reason: "caller_intent_sync",
     });
-  } finally {
-    if (input.stableUtterance) {
-      const key = stableKey(input.stableUtterance);
-      if (inFlightStableKeys.get(callId) === key) {
-        inFlightStableKeys.delete(callId);
-      }
-    }
+
+    const stageAfter = input.controlPlane.getStage();
+    const requiredAfter =
+      input.controlPlane.getWorkflowEnvelope().required_action ?? null;
+    const wf = workflowFromContext(nextCtx);
+
+    console.info(
+      `VOICE_STABLE_UTTERANCE_INTERPRETED ${JSON.stringify({
+        call_id: callId,
+        utterance_id: stable.utterance_id,
+        revision: stable.revision,
+        text_hash: utteranceTextHash(utterance),
+        stable_text_hash: stableUtteranceTextHash(utterance),
+        interpreter: interpretationResult.implementationId,
+        interpretation_latency_ms: interpretationResult.latencyMs,
+        fallback_reason: interpretationResult.fallbackReason ?? null,
+        corrections: interpretationResult.meaning.corrections,
+        ambiguities: interpretationResult.meaning.ambiguities,
+        scheduling_changed: applied.schedulingChanged,
+        facts_merged: {
+          requested_date: interpretationResult.meaning.facts.requested_date ?? null,
+          requested_daypart: interpretationResult.meaning.facts.requested_daypart ?? null,
+        },
+        stage_before: stageBefore,
+        stage_after: stageAfter,
+        required_action_before: requiredBefore,
+        required_action_after: requiredAfter,
+        auto_dispatch_key:
+          deriveRequiredActionForStage(
+            stageAfter,
+            wf,
+            getIntakeReadiness(nextCtx.intakeSchema, nextCtx.intakeState),
+            {
+              hasActiveOfferSet: Boolean(nextCtx.currentOfferSet?.offerSetId),
+              knownRequestedDate: nextCtx.schedulingPreference?.requestedDate ?? wf.requestedDate ?? null,
+            },
+          ) ?? null,
+        active_goal: interpretationResult.meaning.active_goal,
+      })}`,
+    );
+  } catch (err) {
+    console.error("[live-media] caller intent sync failed", err);
   }
 }

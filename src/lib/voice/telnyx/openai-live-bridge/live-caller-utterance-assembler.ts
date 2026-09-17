@@ -5,6 +5,7 @@
  */
 
 import { performance } from "node:perf_hooks";
+import { mergeLiveInputTranscriptText } from "./live-input-transcript-merge";
 
 export type StableCallerUtterance = {
   utterance_id: string;
@@ -39,6 +40,7 @@ export class LiveCallerUtteranceAssembler {
   private startMs: number | null = null;
   private lastEndMs = 0;
   private buffer = "";
+  private lastTranscriptContentId: string | undefined;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private lastCommittedRevision = -1;
 
@@ -69,12 +71,28 @@ export class LiveCallerUtteranceAssembler {
     this.scheduleSettle(perfMs);
   }
 
-  onTranscriptDelta(delta: string, perfMs = performance.now()) {
+  onTranscriptDelta(
+    delta: string,
+    perfMs = performance.now(),
+    opts?: { contentId?: string },
+  ) {
     if (!delta) return;
     this.cancelSettle();
     this.ensureUtteranceOpen(perfMs);
-    this.buffer += delta;
-    this.revision += 1;
+    const merged = mergeLiveInputTranscriptText(this.buffer, delta, {
+      contentId: opts?.contentId,
+      previousContentId: this.lastTranscriptContentId,
+    });
+    if (opts?.contentId) {
+      this.lastTranscriptContentId = opts.contentId;
+    }
+    if (merged.mode === "reset") {
+      this.buffer = merged.text;
+      this.revision += 1;
+    } else if (merged.mode !== "noop") {
+      this.buffer = merged.text;
+      this.revision += 1;
+    }
     this.lastEndMs = perfMs;
     this.scheduleSettle(perfMs);
   }
@@ -149,5 +167,6 @@ export class LiveCallerUtteranceAssembler {
     this.startMs = null;
     this.buffer = "";
     this.revision = 0;
+    this.lastTranscriptContentId = undefined;
   }
 }

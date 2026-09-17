@@ -1,7 +1,22 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { extractJsonFromLlm } from "@/lib/ai/llm";
 import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
+import type { VoiceDialogGoal } from "./dialog-goal";
+import type {
+  CallerInterpreter,
+  CallerInterpretationResult,
+  CallerMeaning,
+  CallerMeaningFacts,
+  InterpreterContext,
+} from "./caller-meaning";
+import {
+  detectInterpreterWorkflowAuthorityViolation,
+  logInterpreterWorkflowAuthorityViolation,
+  shouldFailOnInterpreterSchemaViolation,
+} from "./caller-interpreter-schema";
+
 function astraBackendModel(): string {
   return (
     process.env.VOICE_V2_ASTRA_MODEL?.trim() ||
@@ -9,39 +24,11 @@ function astraBackendModel(): string {
     "gpt-6-astra"
   );
 }
-import type { VoiceDialogGoal } from "./dialog-goal";
-import {
-  interpretCallerUtterance,
-  type VoiceCallerIntentInterpretation,
-  type VoiceCallerIntentEntities,
-} from "./caller-intent-interpreter";
 
-/** Astra may return meaning only — never workflow / dispatch authority. */
-export type AstraCallerInterpretation = {
-  active_goal: VoiceDialogGoal;
-  facts: {
-    requested_date?: string | null;
-    requested_daypart?: string | null;
-    requested_time?: string | null;
-    [key: string]: unknown;
-  };
-  corrections: string[];
-  explicit_action_requests: string[];
-  ambiguities: string[];
-  confidence: number;
-  digression?: boolean;
-};
-
-const FORBIDDEN_ASTRA_KEYS = new Set([
-  "stage",
-  "required_action",
-  "booking_confirmed",
-  "offer_set_id",
-  "allowed_next_actions",
-  "forbidden_actions",
-  "workflow_signal",
-  "next_stage",
-]);
+function astraTimeoutMs(): number {
+  const raw = Number(process.env.VOICE_V2_ASTRA_INTERPRETER_TIMEOUT_MS ?? 8000);
+  return Number.isFinite(raw) && raw >= 1000 ? Math.min(raw, 30_000) : 8000;
+}
 
 const VALID_GOALS = new Set<VoiceDialogGoal>([
   "BOOK_APPOINTMENT",
@@ -61,23 +48,34 @@ export function isVoiceV2AstraInterpreterEnabled(): boolean {
   return process.env.VOICE_V2_ASTRA_INTERPRETER_DEFAULT === "1";
 }
 
-function stripForbiddenKeys(raw: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (FORBIDDEN_ASTRA_KEYS.has(k)) continue;
-    out[k] = v;
-  }
-  return out;
-}
-
-export function parseAstraCallerInterpretation(raw: unknown): AstraCallerInterpretation | null {
+export function parseCallerMeaningFromModelJson(
+  raw: unknown,
+  utterance: string,
+  meta?: { callId?: string; utteranceId?: string },
+): CallerMeaning | null {
   if (!raw || typeof raw !== "object") return null;
-  const obj = stripForbiddenKeys(raw as Record<string, unknown>);
+  const obj = raw as Record<string, unknown>;
+
+  const violation = detectInterpreterWorkflowAuthorityViolation(obj);
+  if (violation) {
+    logInterpreterWorkflowAuthorityViolation({
+      call_id: meta?.callId ?? null,
+      utterance_id: meta?.utteranceId ?? null,
+      forbidden_keys: violation.forbiddenKeys,
+    });
+    if (shouldFailOnInterpreterSchemaViolation()) {
+      throw new Error(
+        `Interpreter schema violation: ${violation.forbiddenKeys.join(", ")}`,
+      );
+    }
+    return null;
+  }
+
   const goalRaw = String(obj.active_goal ?? "UNKNOWN").trim() as VoiceDialogGoal;
   const active_goal = VALID_GOALS.has(goalRaw) ? goalRaw : "UNKNOWN";
   const facts =
     obj.facts && typeof obj.facts === "object" && !Array.isArray(obj.facts)
-      ? (obj.facts as AstraCallerInterpretation["facts"])
+      ? (obj.facts as CallerMeaningFacts)
       : {};
   const corrections = Array.isArray(obj.corrections)
     ? obj.corrections.map((c) => String(c).trim()).filter(Boolean)
@@ -99,32 +97,7 @@ export function parseAstraCallerInterpretation(raw: unknown): AstraCallerInterpr
     ambiguities,
     confidence,
     digression,
-  };
-}
-
-export function astraToVoiceCallerIntent(
-  astra: AstraCallerInterpretation,
-  utterance: string,
-): VoiceCallerIntentInterpretation {
-  const entities: VoiceCallerIntentEntities = {
-    requested_day: astra.facts.requested_date ?? null,
-    requested_daypart: astra.facts.requested_daypart ?? null,
-    requested_time: astra.facts.requested_time ?? null,
-  };
-
-  const explicit =
-    astra.explicit_action_requests.length > 0 ||
-    astra.active_goal === "CALLBACK_REQUEST" ||
-    astra.active_goal === "TRANSFER_TO_HUMAN" ||
-    astra.active_goal === "CANCEL_APPOINTMENT";
-
-  return {
-    intent: astra.active_goal,
-    confidence: astra.confidence,
-    explicit,
-    evidence: utterance.slice(0, 240),
-    entities,
-    digression: Boolean(astra.digression) || astra.active_goal === "GENERAL_QUESTION",
+    evidence: utterance.trim(),
   };
 }
 
@@ -155,60 +128,60 @@ Rules:
 - Do not invent dates; use null when not stated.`;
 }
 
-export async function interpretCallerUtteranceWithAstra(input: {
-  utterance: string;
-  priorActiveGoal: VoiceDialogGoal;
-  businessTimezone?: string;
-}): Promise<{
-  interpretation: VoiceCallerIntentInterpretation;
-  source: "astra" | "deterministic";
-  astra?: AstraCallerInterpretation;
-}> {
-  const utterance = input.utterance.trim();
-  const prior = { activeGoal: input.priorActiveGoal };
+export const astraCallerInterpreter: CallerInterpreter = {
+  implementationId: "astra",
 
-  if (!isVoiceV2AstraInterpreterEnabled() || !utterance || !getOpenAiApiKey()) {
-    return {
-      interpretation: interpretCallerUtterance(utterance, prior),
-      source: "deterministic",
-    };
-  }
+  async interpret(ctx: InterpreterContext): Promise<CallerInterpretationResult | null> {
+    const started = Date.now();
+    const utterance = ctx.stable.text.trim();
+    if (!utterance || !getOpenAiApiKey()) return null;
 
-  const model = astraBackendModel();
-  const user = JSON.stringify({
-    prior_active_goal: input.priorActiveGoal,
-    business_timezone: input.businessTimezone ?? "America/New_York",
-    caller_utterance: utterance,
-  });
-
-  try {
-    const raw = await openAiChatCompletion(buildAstraSystemPrompt(), user, {
-      model,
-      temperature: 0.1,
-      maxTokens: 400,
+    const model = astraBackendModel();
+    const user = JSON.stringify({
+      prior_active_goal: ctx.priorActiveGoal,
+      business_timezone: ctx.businessTimezone,
+      caller_utterance: utterance,
+      utterance_id: ctx.stable.utterance_id,
+      revision: ctx.stable.revision,
     });
-    if (!raw) {
+
+    try {
+      const raw = await Promise.race([
+        openAiChatCompletion(buildAstraSystemPrompt(), user, {
+          model,
+          temperature: 0.1,
+          maxTokens: 400,
+        }),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("astra_interpreter_timeout")), astraTimeoutMs()),
+        ),
+      ]);
+      if (!raw) return null;
+
+      const parsed = parseCallerMeaningFromModelJson(extractJsonFromLlm(raw), utterance, {
+        callId: ctx.callId,
+        utteranceId: ctx.stable.utterance_id,
+      });
+      if (!parsed) return null;
+
       return {
-        interpretation: interpretCallerUtterance(utterance, prior),
-        source: "deterministic",
+        meaning: parsed,
+        implementationId: this.implementationId,
+        latencyMs: Date.now() - started,
       };
+    } catch (err) {
+      console.error(
+        `VOICE_ASTRA_INTERPRETER_FAILED ${JSON.stringify({
+          call_id: ctx.callId ?? null,
+          utterance_id: ctx.stable.utterance_id,
+          error: err instanceof Error ? err.message : String(err),
+        })}`,
+      );
+      return null;
     }
-    const parsed = parseAstraCallerInterpretation(extractJsonFromLlm(raw));
-    if (!parsed) {
-      return {
-        interpretation: interpretCallerUtterance(utterance, prior),
-        source: "deterministic",
-      };
-    }
-    return {
-      interpretation: astraToVoiceCallerIntent(parsed, utterance),
-      source: "astra",
-      astra: parsed,
-    };
-  } catch {
-    return {
-      interpretation: interpretCallerUtterance(utterance, prior),
-      source: "deterministic",
-    };
-  }
+  },
+};
+
+export function stableUtteranceTextHash(text: string): string {
+  return createHash("sha256").update(text.trim()).digest("hex").slice(0, 16);
 }

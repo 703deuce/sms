@@ -32,8 +32,13 @@ function main() {
       bridge.includes("onTranscriptDelta"),
   );
   pass(
-    "SYNC_USES_ASTRA_SLOT",
-    sync.includes("interpretCallerUtteranceWithAstra"),
+    "SYNC_UNIFIED_INTERPRETER",
+    sync.includes("interpretStableCallerUtterance") &&
+      sync.includes("callerMeaningToIntentInterpretation"),
+  );
+  pass(
+    "REVISION_GUARD",
+    sync.includes("shouldApplyUtteranceInterpretation"),
   );
   pass(
     "SYNC_NOT_IN_DELEGATION_HANDLER",

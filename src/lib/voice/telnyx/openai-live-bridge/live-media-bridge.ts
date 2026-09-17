@@ -11,6 +11,7 @@ import {
 } from "./live-turn-trace";
 import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
 import { LiveCallerUtteranceAssembler } from "./live-caller-utterance-assembler";
+import { clearUtteranceRevisionGuard } from "./live-utterance-revision-guard";
 import {
   buildLiveOpeningGreetingInstructionAppend,
   buildLiveOpeningGreetingKickoffCommentary,
@@ -434,7 +435,15 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           const delta = String(event.delta ?? "");
           if (delta) {
             conversationTranscript.appendDelta("caller", delta);
-            callerUtteranceAssembler.onTranscriptDelta(delta, performance.now());
+            const contentId = String(
+              event.item_id ??
+                event.content_id ??
+                (event as { item?: { id?: string } }).item?.id ??
+                "",
+            ).trim();
+            callerUtteranceAssembler.onTranscriptDelta(delta, performance.now(), {
+              contentId: contentId || undefined,
+            });
             turnTracer.onLiveInputTranscriptDelta(delta, event as Record<string, unknown>);
           }
           return;
