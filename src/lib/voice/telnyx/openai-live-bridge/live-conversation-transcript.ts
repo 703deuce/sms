@@ -15,6 +15,8 @@ export class LiveConversationTranscript {
   private open: Segment | null = null;
   /** Index into `segments` — transcript before this was already sent to delegation. */
   private delegationCursor = 0;
+  /** Segments already processed by per-turn caller intent sync. */
+  private intentCursor = 0;
 
   appendDelta(role: TranscriptRole, delta: string) {
     if (!delta) return;
@@ -68,5 +70,15 @@ export class LiveConversationTranscript {
 
   delegationCursorIndex(): number {
     return this.delegationCursor;
+  }
+
+  /** Finalize caller speech and return text not yet sent to intent sync (once per utterance). */
+  commitLatestCallerUtterance(): string | null {
+    this.flushOpen();
+    const slice = this.segments.slice(this.intentCursor);
+    const callerParts = slice.filter((s) => s.role === "caller").map((s) => s.text.trim());
+    if (callerParts.length === 0) return null;
+    this.intentCursor = this.segments.length;
+    return callerParts.join(" ").trim() || null;
   }
 }

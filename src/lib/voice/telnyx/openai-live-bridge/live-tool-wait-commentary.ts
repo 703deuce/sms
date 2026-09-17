@@ -54,6 +54,16 @@ function logWait(event: string, fields: Record<string, unknown>) {
   console.info(`LIVE_TOOL_WAIT_${event} ${JSON.stringify(fields)}`);
 }
 
+export function buildSessionThinkingAppendEvent(input: {
+  content: string;
+}): Record<string, unknown> {
+  return {
+    type: "session.thinking.append",
+    event_id: liveBaselineEventId("tool_wait_thinking"),
+    content: input.content,
+  };
+}
+
 export function buildSessionCommentaryAppendEvent(input: {
   delegationId: string | null;
   content: string;
@@ -144,6 +154,11 @@ export function createLiveToolWaitProgressController(input: {
         tool_name: input.toolName,
         commentary_skipped: false,
       });
+      input.sendLiveOut(
+        buildSessionThinkingAppendEvent({
+          content: `Tool ${input.toolName} started; awaiting certified runtime result.`,
+        }),
+      );
       appendCommentary(hints.initial);
       for (let i = 0; i < PROGRESS_MS.length; i++) {
         const t = setTimeout(() => {

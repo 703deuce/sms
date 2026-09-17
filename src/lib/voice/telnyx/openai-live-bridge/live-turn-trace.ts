@@ -9,6 +9,15 @@ export function isLiveInputTranscriptDelta(type: string): boolean {
   );
 }
 
+export function isLiveInputTranscriptDone(type: string): boolean {
+  return (
+    type === "input_transcript.done" ||
+    type === "session.input_transcript.done" ||
+    type === "input_transcript.completed" ||
+    type === "session.input_transcript.completed"
+  );
+}
+
 export function isLiveOutputTranscriptDelta(type: string): boolean {
   return type === "output_transcript.delta" || type === "session.output_transcript.delta";
 }

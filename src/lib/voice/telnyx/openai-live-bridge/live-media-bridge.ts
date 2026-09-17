@@ -5,9 +5,11 @@ import { liveBaselineEventId } from "./live-event-ids";
 import {
   createTurnTraceHooks,
   isLiveInputTranscriptDelta,
+  isLiveInputTranscriptDone,
   isLiveOutputTranscriptDelta,
   LiveTurnTracer,
 } from "./live-turn-trace";
+import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
 import {
   buildLiveOpeningGreetingInstructionAppend,
   buildLiveOpeningGreetingKickoffCommentary,
@@ -227,10 +229,25 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     });
   };
 
+  const maybeSyncCallerIntent = (utterance: string | null) => {
+    if (!utterance || !liveControlPlane || !streamClaimsForTeardown) return;
+    void syncLiveCallerUtteranceIntent({
+      claims: streamClaimsForTeardown,
+      callerUtterance: utterance,
+      controlPlane: liveControlPlane,
+      sendLiveOut,
+    }).catch((err) => {
+      console.error("[live-media] caller intent sync failed", err);
+    });
+  };
+
   const processInboundCallerFrame = (payloadB64: string) => {
     const telnyxAt = performance.now();
     for (const ev of callerAudioDetector.processFrame(payloadB64, telnyxAt)) {
       turnTracer.onCallerActivity(ev);
+      if (ev.type === "CALLER_AUDIO_ENDED_ESTIMATE") {
+        maybeSyncCallerIntent(conversationTranscript.commitLatestCallerUtterance());
+      }
     }
     const forwardedAt = performance.now();
     turnTracer.onTelnyxInboundFrame(telnyxAt, forwardedAt);
@@ -396,6 +413,11 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
             conversationTranscript.appendDelta("caller", delta);
             turnTracer.onLiveInputTranscriptDelta(delta, event as Record<string, unknown>);
           }
+          return;
+        }
+
+        if (isLiveInputTranscriptDone(type)) {
+          maybeSyncCallerIntent(conversationTranscript.commitLatestCallerUtterance());
           return;
         }
 

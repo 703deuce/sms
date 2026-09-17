@@ -23,6 +23,12 @@ export type VoiceV2DialogState = {
   /** Caller explicitly asked for callback-only handling (not Amy paraphrase). */
   explicitCallbackRequested: boolean;
   lastIntentEvidence?: string | null;
+  /** Natural-language scheduling hints from per-turn intent (not yet normalized to YYYY-MM-DD). */
+  schedulingHints?: {
+    requestedDay?: string | null;
+    requestedDaypart?: string | null;
+    requestedTime?: string | null;
+  };
 };
 
 export function defaultVoiceV2DialogState(): VoiceV2DialogState {
@@ -37,10 +43,15 @@ export function dialogFromContext(ctx: VoiceV2CallContext): VoiceV2DialogState {
   return ctx.dialog ?? defaultVoiceV2DialogState();
 }
 
-export function hasActiveBookingSchedulingIntent(workflow: VoiceV2BookingWorkflow): boolean {
+export function hasActiveBookingSchedulingIntent(
+  workflow: VoiceV2BookingWorkflow,
+  dialog?: VoiceV2DialogState,
+): boolean {
   if (!workflow.bookingIntentActive) return false;
   if (workflow.requestedDate) return true;
   if (workflow.lastFindRequestedDate) return true;
+  const hints = dialog?.schedulingHints;
+  if (hints?.requestedDay || hints?.requestedDaypart || hints?.requestedTime) return true;
   return false;
 }
 
@@ -88,6 +99,10 @@ export function applyDialogAndWorkflowPrecedence(input: {
     workflow.bookingIntentActive = true;
   }
 
+  if (input.raw.cancel_booking_requested === true || input.raw.cancelBookingRequested === true) {
+    workflow.bookingCancelled = true;
+  }
+
   const explicitCb = parseExplicitCallbackFromRaw(input.raw);
   if (explicitCb.explicit) {
     dialog.explicitCallbackRequested = true;
@@ -99,7 +114,10 @@ export function applyDialogAndWorkflowPrecedence(input: {
     if (dialog.activeGoal === "UNKNOWN" || dialog.activeGoal === "GENERAL_QUESTION") {
       dialog.activeGoal = "BOOK_APPOINTMENT";
     }
-    if (hasActiveBookingSchedulingIntent(workflow) || isActiveBookingGoal(dialog.activeGoal)) {
+    if (
+      hasActiveBookingSchedulingIntent(workflow, dialog) ||
+      isActiveBookingGoal(dialog.activeGoal)
+    ) {
       workflow.callbackRequested = false;
     }
   }

@@ -23,6 +23,10 @@ import { shouldIssueResponseCreateOnDelegation } from "./live-workflow-tool-filt
 import type { VoiceV2NextStage } from "@/lib/voice-v2/booking-workflow";
 import { VOICE_V2_SAVE_INTAKE_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 import { createLiveToolWaitProgressController } from "./live-tool-wait-commentary";
+import {
+  beginLiveVoiceToolExecution,
+  finishLiveVoiceToolExecution,
+} from "./live-tool-execution-record";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -285,11 +289,25 @@ export function createLiveDelegationHandler(input: {
       sendLiveOut: input.sendLiveOut,
     });
     waitProgress.start();
+    const toolInvocationId = String(
+      args.tool_invocation_id || args.toolInvocationId || callId,
+    ).trim();
+    const executionId = await beginLiveVoiceToolExecution({
+      workspaceId: input.claims.workspaceId,
+      callId: input.callId,
+      toolName,
+      toolInvocationId,
+      args,
+    });
+    let executionOutput: string | null = null;
+    let executionStatus: "completed" | "failed" = "completed";
+    let executionError: string | undefined;
     try {
       logLiveObs("TOOL_DISPATCH", {
         callId: input.callId,
         tool_name: toolName,
         executor: liveToolExecutorLabel(toolName),
+        voice_tool_execution_id: executionId,
       });
       const { output, discard, executor } = await dispatchLiveVoiceTool({
         toolName,
@@ -297,6 +315,7 @@ export function createLiveDelegationHandler(input: {
         openAiFunctionCallId: callId,
         callContext: input.callContext,
       });
+      executionOutput = output;
       waitProgress.complete();
       const elapsedMs = Date.now() - started;
       let voiceV2Status: string | null = null;
@@ -326,12 +345,14 @@ export function createLiveDelegationHandler(input: {
         superseded: discard || generationAtStart !== input.callContext.schedulingGeneration,
         ...(toolName === VOICE_V2_SAVE_INTAKE_TOOL_TYPE
           ? {
-              workflow_signal: args.workflow_signal ?? args.workflowSignal ?? null,
               booking_intent_active: args.booking_intent_active ?? args.bookingIntentActive ?? null,
               explicit_callback_requested:
                 args.explicit_callback_requested ?? args.explicitCallbackRequested ?? null,
+              cancel_booking_requested:
+                args.cancel_booking_requested ?? args.cancelBookingRequested ?? null,
               voice_v2_next_stage: parsedOut.voice_v2_next_stage ?? null,
               allowed_next_actions: parsedOut.allowed_next_actions ?? null,
+              active_goal: parsedOut.active_goal ?? null,
             }
           : {}),
       });
@@ -359,9 +380,16 @@ export function createLiveDelegationHandler(input: {
         });
       }
     } catch (err) {
+      executionStatus = "failed";
+      executionError = err instanceof Error ? err.message : String(err);
       waitProgress.complete();
       const elapsedMs = Date.now() - started;
       console.error("[live-delegation] tool dispatch failed", err);
+      executionOutput = JSON.stringify({
+        ok: false,
+        error: "TOOL_DISPATCH_FAILED",
+        message: executionError,
+      });
       await returnLiveToolResult({
         callId,
         delegationId: opts.delegationId,
@@ -375,6 +403,14 @@ export function createLiveDelegationHandler(input: {
         }),
       });
     } finally {
+      const elapsedMs = Date.now() - started;
+      await finishLiveVoiceToolExecution({
+        executionId,
+        status: executionStatus,
+        output: executionOutput ?? undefined,
+        errorMessage: executionError,
+        latencyMs: elapsedMs,
+      });
       toolBusy = false;
     }
   };

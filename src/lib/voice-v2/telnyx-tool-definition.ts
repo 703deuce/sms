@@ -112,11 +112,33 @@ export const VOICE_V2_SAVE_INTAKE_BODY = strictWebhookBodyParameters({
       type: "string",
       description: "Unique id for this tool call",
     },
-    workflow_signal: {
-      type: "string",
+    booking_intent_active: {
+      type: "boolean",
       description:
-        "Structured workflow only: prefer_callback when caller wants a callback; cancel_booking when they abandon scheduling.",
-      enum: ["prefer_callback", "cancel_booking"],
+        "True when the caller is trying to schedule or continue booking (facts only — runtime chooses next stage).",
+    },
+    explicit_callback_requested: {
+      type: "boolean",
+      description:
+        "True only when the caller explicitly asked for callback-only handling (not assistant suggestions).",
+    },
+    cancel_booking_requested: {
+      type: "boolean",
+      description: "True when the caller explicitly abandons scheduling on this call.",
+    },
+    intent_evidence: {
+      type: "string",
+      description: "Short quote from caller speech supporting explicit_callback or cancel flags.",
+    },
+    scheduling_preference: {
+      type: "object",
+      description: "Optional scheduling facts extracted from caller speech.",
+      properties: {
+        requested_date: { type: "string", description: "YYYY-MM-DD when known" },
+        requested_day: { type: "string", description: "Spoken day e.g. Friday" },
+        requested_daypart: { type: "string" },
+        requested_time: { type: "string" },
+      },
     },
   },
   required: ["fields"],

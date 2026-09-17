@@ -97,8 +97,14 @@ export function applyIntakeWorkflowSignals(
 ): VoiceV2BookingWorkflow {
   const w = { ...workflow };
   const signal = parseWorkflowSignal(input.raw);
-  // prefer_callback is a soft hint only — never sets callbackRequested (see dialog-goal precedence).
+  // prefer_callback is ignored — use explicit_callback_requested only (dialog-goal precedence).
   if (signal === "cancel_booking") w.bookingCancelled = true;
+  if (
+    input.raw.cancel_booking_requested === true ||
+    input.raw.cancelBookingRequested === true
+  ) {
+    w.bookingCancelled = true;
+  }
   if (input.raw.booking_intent_active === true || input.raw.bookingIntentActive === true) {
     w.bookingIntentActive = true;
   }
@@ -290,6 +296,7 @@ export function buildWorkflowToolPayload(input: {
     booking_continue_required,
     allowed_next_actions: allowedNextActionsForStage(nextStage),
     runtime_hint: runtimeHintForStage(nextStage, workflow),
+    active_goal: input.ctx?.dialog?.activeGoal ?? null,
   };
 
   if (workflow.requestedDate) {

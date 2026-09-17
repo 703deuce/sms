@@ -23,6 +23,7 @@ BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-live-bridge
   src/lib/voice-v2/session/call-context-store.ts
   src/lib/voice-v2/dialog-goal.ts
+  src/lib/voice-v2/caller-intent-interpreter.ts
   src/lib/voice-v2/booking-workflow.ts
   src/lib/voice-v2/booking-workflow-hooks.ts
   src/lib/voice-v2/intake/types.ts
@@ -58,6 +59,7 @@ if [[ "$MODE" == "config_only" ]]; then
     src/lib/voice/telnyx/openai-live-bridge \
     src/lib/voice-v2/session/call-context-store.ts \
     src/lib/voice-v2/dialog-goal.ts \
+    src/lib/voice-v2/caller-intent-interpreter.ts \
     src/lib/voice-v2/booking-workflow.ts \
     src/lib/voice-v2/booking-workflow-hooks.ts \
     src/lib/voice-v2/intake/types.ts \
