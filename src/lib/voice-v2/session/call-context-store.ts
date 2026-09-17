@@ -831,21 +831,24 @@ export function updateVoiceV2CallContextL1Payload(ctx: VoiceV2CallContext): void
           }
         : entry.record.bookingPreference,
     };
-    l1.set(ctx.sessionKey, { record: nextRecord });
+    hydrateL1(nextRecord);
     return;
   }
   const stub = buildRecordFromLegacy({
     payload: ctx,
     identity: {
       sessionKey: ctx.sessionKey,
-      callId: ctx.sessionKey,
+      callId: ctx.sessionKey.startsWith("call:") ? ctx.sessionKey.slice(5) : ctx.sessionKey,
       workspaceId: ctx.workspaceId,
       agentId: ctx.agentId,
+      telnyxCallControlId: ctx.sessionKey.startsWith("cc:")
+        ? ctx.sessionKey.slice(3)
+        : undefined,
     },
     enrollment: { enrolledAt: ctx.compiledAt },
     stateVersion: 0,
   });
-  l1.set(ctx.sessionKey, { record: stub });
+  hydrateL1(stub);
 }
 
 export const DISTRIBUTED_TOKEN_LOCK_PRIMITIVE =

@@ -217,6 +217,11 @@ export function applyCallerIntentToCallContext(
     };
   }
 
+  dialog.confidence = interpretation.confidence;
+  dialog.explicit = interpretation.explicit;
+  dialog.evidenceSpeaker = "caller";
+  dialog.updatedAt = new Date().toISOString();
+
   if (interpretation.intent === "CALLBACK_REQUEST" && interpretation.explicit) {
     dialog.explicitCallbackRequested = true;
     dialog.activeGoal = "CALLBACK_REQUEST";
@@ -226,6 +231,7 @@ export function applyCallerIntentToCallContext(
   } else if (interpretation.intent === "BOOK_APPOINTMENT" || interpretation.intent === "CHANGE_APPOINTMENT") {
     if (interpretation.explicit || dialog.activeGoal === "UNKNOWN" || dialog.activeGoal === "GENERAL_QUESTION") {
       dialog.activeGoal = interpretation.intent;
+      dialog.lastIntentEvidence = interpretation.evidence;
     }
     workflow.bookingIntentActive = true;
     workflow.callbackRequested = false;

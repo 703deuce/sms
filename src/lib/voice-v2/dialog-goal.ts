@@ -22,7 +22,12 @@ export type VoiceV2DialogState = {
   activeGoal: VoiceDialogGoal;
   /** Caller explicitly asked for callback-only handling (not Amy paraphrase). */
   explicitCallbackRequested: boolean;
+  confidence?: number;
+  explicit?: boolean;
   lastIntentEvidence?: string | null;
+  evidenceSpeaker?: "caller";
+  updatedAt?: string;
+  workflowCycleId?: number;
   /** Natural-language scheduling hints from per-turn intent (not yet normalized to YYYY-MM-DD). */
   schedulingHints?: {
     requestedDay?: string | null;
@@ -100,7 +105,12 @@ export function applyDialogAndWorkflowPrecedence(input: {
   }
 
   if (input.raw.cancel_booking_requested === true || input.raw.cancelBookingRequested === true) {
-    workflow.bookingCancelled = true;
+    const cancelEvidence = String(
+      input.raw.intent_evidence || input.raw.cancel_evidence || "",
+    ).trim();
+    if (cancelEvidence.length > 0) {
+      workflow.bookingCancelled = true;
+    }
   }
 
   const explicitCb = parseExplicitCallbackFromRaw(input.raw);

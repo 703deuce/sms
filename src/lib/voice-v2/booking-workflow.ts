@@ -4,7 +4,7 @@
  */
 
 import type { VoiceV2BookingStrategy } from "./booking-strategy";
-import { applyDialogAndWorkflowPrecedence } from "./dialog-goal";
+import { applyDialogAndWorkflowPrecedence, dialogFromContext, isActiveBookingGoal } from "./dialog-goal";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
 import {
   applyQualificationStageOverride,
@@ -73,6 +73,16 @@ export function workflowFromContext(ctx: VoiceV2CallContext): VoiceV2BookingWork
   return ctx.bookingWorkflow ?? defaultVoiceV2BookingWorkflow();
 }
 
+/** Align workflow flags with durable dialog goal before stage derivation. */
+export function workflowFromContextWithDialog(ctx: VoiceV2CallContext): VoiceV2BookingWorkflow {
+  let workflow = workflowFromContext(ctx);
+  const goal = dialogFromContext(ctx).activeGoal;
+  if (isActiveBookingGoal(goal)) {
+    workflow = { ...workflow, bookingIntentActive: true };
+  }
+  return workflow;
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function normalizeRequestedDate(raw: unknown): string | null {
@@ -87,6 +97,58 @@ export function parseWorkflowSignal(raw: Record<string, unknown>): VoiceV2Workfl
   return null;
 }
 
+function logIgnoredLegacyWorkflowSignal(raw: Record<string, unknown>) {
+  const signal = parseWorkflowSignal(raw);
+  if (!signal) return;
+  console.info(
+    `VOICE_LEGACY_WORKFLOW_SIGNAL_IGNORED ${JSON.stringify({
+      workflow_signal: signal,
+      note: "workflow_signal is not authoritative; use explicit fact fields with caller evidence",
+    })}`,
+  );
+}
+
+/** Caller-grounded cancel only — never from legacy workflow_signal alone. */
+export function applyCallerGroundedCancelFromRaw(
+  workflow: VoiceV2BookingWorkflow,
+  raw: Record<string, unknown>,
+): VoiceV2BookingWorkflow {
+  const w = { ...workflow };
+  logIgnoredLegacyWorkflowSignal(raw);
+  const evidence = String(raw.intent_evidence || raw.cancel_evidence || "").trim();
+  const explicitCancel =
+    (raw.cancel_booking_requested === true || raw.cancelBookingRequested === true) &&
+    evidence.length > 0;
+  if (explicitCancel) {
+    w.bookingCancelled = true;
+  }
+  return w;
+}
+
+export function guardBookingCancelDuringActiveBooking(input: {
+  workflow: VoiceV2BookingWorkflow;
+  dialogActiveGoal: import("./dialog-goal").VoiceDialogGoal;
+  explicitCancelEvidence: boolean;
+}): VoiceV2BookingWorkflow {
+  const w = { ...input.workflow };
+  if (
+    w.bookingCancelled &&
+    !input.explicitCancelEvidence &&
+    (input.dialogActiveGoal === "BOOK_APPOINTMENT" ||
+      input.dialogActiveGoal === "CHANGE_APPOINTMENT" ||
+      w.bookingIntentActive)
+  ) {
+    console.info(
+      `VOICE_WORKFLOW_CANCEL_GUARDED ${JSON.stringify({
+        reason: "cancel_without_caller_grounded_evidence",
+        active_goal: input.dialogActiveGoal,
+      })}`,
+    );
+    w.bookingCancelled = false;
+  }
+  return w;
+}
+
 export function applyIntakeWorkflowSignals(
   workflow: VoiceV2BookingWorkflow,
   input: {
@@ -95,16 +157,8 @@ export function applyIntakeWorkflowSignals(
     schedulingDateFromSave?: string | null;
   },
 ): VoiceV2BookingWorkflow {
-  const w = { ...workflow };
-  const signal = parseWorkflowSignal(input.raw);
-  // prefer_callback is ignored — use explicit_callback_requested only (dialog-goal precedence).
-  if (signal === "cancel_booking") w.bookingCancelled = true;
-  if (
-    input.raw.cancel_booking_requested === true ||
-    input.raw.cancelBookingRequested === true
-  ) {
-    w.bookingCancelled = true;
-  }
+  let w = { ...workflow };
+  w = applyCallerGroundedCancelFromRaw(w, input.raw);
   if (input.raw.booking_intent_active === true || input.raw.bookingIntentActive === true) {
     w.bookingIntentActive = true;
   }
@@ -341,6 +395,19 @@ export function transitionAfterIntakeSave(input: {
   });
   workflow = dialogApplied.workflow;
   let ctx = dialogApplied.ctx;
+
+  if (isActiveBookingGoal(dialogFromContext(ctx).activeGoal)) {
+    workflow = { ...workflow, bookingIntentActive: true };
+  }
+  const cancelEvidence = String(input.raw.intent_evidence || "").trim().length > 0;
+  workflow = guardBookingCancelDuringActiveBooking({
+    workflow,
+    dialogActiveGoal: dialogFromContext(ctx).activeGoal,
+    explicitCancelEvidence:
+      cancelEvidence &&
+      (input.raw.cancel_booking_requested === true || input.raw.cancelBookingRequested === true),
+  });
+  ctx = mergeWorkflowIntoContext(ctx, workflow);
 
   const hasOffer =
     Boolean(ctx.currentOfferSet?.offerSetId) &&

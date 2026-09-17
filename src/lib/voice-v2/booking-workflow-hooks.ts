@@ -11,7 +11,7 @@ import {
   deriveVoiceV2NextStage,
   transitionAfterFind,
   transitionAfterBookingConfirmed,
-  workflowFromContext,
+  workflowFromContextWithDialog,
 } from "./booking-workflow";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./intake/session-store";
 import { resolveSessionKey } from "./intake/load-call-context";
@@ -59,7 +59,7 @@ export function workflowPayloadForContext(
   const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
   const hasOffer =
     Boolean(ctx.currentOfferSet?.offerSetId) && (ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
-  const workflow = workflowFromContext(ctx);
+  const workflow = workflowFromContextWithDialog(ctx);
   const strategy =
     bookingStrategy ??
     ctx.capabilities?.bookingStrategy ??

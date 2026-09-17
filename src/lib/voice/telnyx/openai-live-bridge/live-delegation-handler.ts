@@ -135,10 +135,7 @@ export function createLiveDelegationHandler(input: {
       hydrated,
       isFirstDelegation,
     });
-    const contextItem = buildLiveDelegationContextItem({
-      developerText,
-      delegationId: delegationId ?? activeDelegationId,
-    });
+    const contextItem = buildLiveDelegationContextItem({ developerText });
     const eventId = String(contextItem.event_id || "");
     contextTracker.markSent(eventId, delegationEpisodeCount);
     input.sendLiveOut(contextItem);

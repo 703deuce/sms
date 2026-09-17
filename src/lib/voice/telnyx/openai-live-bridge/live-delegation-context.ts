@@ -64,6 +64,7 @@ function summarizeCallContextForDelegation(ctx: VoiceV2CallContext | null): Reco
   if (!ctx) return { loaded: false };
   return {
     loaded: true,
+    dialog: ctx.dialog ?? null,
     booking_workflow: ctx.bookingWorkflow ?? null,
     current_offer_set: ctx.currentOfferSet ?? null,
     capabilities: ctx.capabilities ?? null,
@@ -77,10 +78,8 @@ function summarizeCallContextForDelegation(ctx: VoiceV2CallContext | null): Reco
  */
 export function buildLiveDelegationContextItem(input: {
   developerText: string;
-  /** Required when pushing context inside an active delegated episode. */
-  delegationId?: string | null;
 }): Record<string, unknown> {
-  const event: Record<string, unknown> = {
+  return {
     type: "response.item.create",
     event_id: liveBaselineEventId("delegation_ctx"),
     item: {
@@ -94,8 +93,4 @@ export function buildLiveDelegationContextItem(input: {
       ],
     },
   };
-  if (input.delegationId) {
-    event.delegation_id = input.delegationId;
-  }
-  return event;
 }

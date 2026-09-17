@@ -6,8 +6,13 @@ import {
   logCallerIntentInterpretation,
 } from "@/lib/voice-v2/caller-intent-interpreter";
 import { dialogFromContext } from "@/lib/voice-v2/dialog-goal";
+import {
+  loadAuthoritativeCallContextForLive,
+  logDialogStateChanged,
+  persistCallContext,
+} from "@/lib/voice-v2/dialog-manager";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "@/lib/voice-v2/intake/load-call-context";
-import { getVoiceV2CallContext, setVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
+import { getVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
 import type { LiveControlPlane } from "./live-control-plane";
 import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
@@ -27,23 +32,46 @@ export async function syncLiveCallerUtteranceIntent(input: {
   });
   if (!sessionKey) return;
 
-  let ctx = getVoiceV2CallContext(sessionKey);
-  if (!ctx) {
-    ctx = await ensureVoiceV2CallContext({
+  let ctx =
+    (await loadAuthoritativeCallContextForLive({
+      workspaceId: input.claims.workspaceId,
+      agentId: input.claims.agentId,
+      callControlId: input.claims.callControlId,
+      prismaCallId: input.claims.callId,
+    })) ??
+    getVoiceV2CallContext(sessionKey) ??
+    (await ensureVoiceV2CallContext({
       workspaceId: input.claims.workspaceId,
       agentId: input.claims.agentId,
       callControlId: input.claims.callControlId,
       conversationId: input.claims.callControlId,
       trustedPrismaCallId: input.claims.callId,
-    });
-  }
+    }));
   if (!ctx) return;
 
   const priorGoal = dialogFromContext(ctx).activeGoal;
   const interpretation = interpretCallerUtterance(utterance, { activeGoal: priorGoal });
   const applied = applyCallerIntentToCallContext(ctx, interpretation);
 
-  setVoiceV2CallContext(sessionKey, applied.ctx);
+  const nextCtx = {
+    ...applied.ctx,
+    sessionKey: applied.ctx.sessionKey?.trim() || ctx.sessionKey?.trim() || sessionKey,
+  };
+  persistCallContext(nextCtx);
+
+  if (applied.previousActiveGoal !== applied.resultingActiveGoal) {
+    logDialogStateChanged({
+      call_id: input.claims.callId,
+      live_session_id: input.controlPlane.getLiveSessionId(),
+      previous_active_goal: applied.previousActiveGoal,
+      resulting_active_goal: applied.resultingActiveGoal,
+      candidate_intent: interpretation.intent,
+      confidence: interpretation.confidence,
+      explicit: interpretation.explicit,
+      evidence: interpretation.evidence?.slice(0, 500) ?? null,
+    });
+  }
+
   input.controlPlane.invalidateContextCache();
   await input.controlPlane.ensureHydrated();
 

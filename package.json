@@ -113,6 +113,7 @@
     "test:openai-live-smoke": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/smoke-openai-live-bridge.ts",
     "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "test:gpt-live-booking-intent-precedence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-booking-intent-precedence.ts",
+    "test:dialog-goal-l1-persistence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-dialog-goal-l1-persistence.ts",
     "test:gpt-live-tool-wait-schedule": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-gpt-live-tool-wait-schedule.ts",
     "verify:voice-v2-caller-experience-law": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-voice-v2-caller-experience-law.ts",
     "watch:cfna-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/watch-cfna-probe.ts",
