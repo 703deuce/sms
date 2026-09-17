@@ -1,11 +1,16 @@
 #!/usr/bin/env tsx
 /**
  * Production semantic ingress — stable utterance through live-stable-utterance-ingress → syncLiveCallerUtteranceIntent.
+ * Chained after orchestration in `npm run test:voice-v2-orchestration`.
+ * Optional: VOICE_V2_TEST_EXECUTORS=real (Microsoft FIND/BOOK) for integration — default fake.
+ * Astra paths: VOICE_V2_ASTRA_INTERPRETER=1 + VOICE_V2_TEST_ASTRA_MOCK=success|timeout|fail.
  */
 import "./preload-server-only.mjs";
 
-import { interpretStableCallerUtterance } from "@/lib/voice-v2/resolve-caller-interpreter";
 import { effectiveRequestedDate } from "@/lib/voice-v2/scheduling-preference-state";
+import {
+  setVoiceV2TestAstraMode,
+} from "@/lib/voice-v2/testing/astra-interpreter-test-hook";
 import {
   VoiceV2SemanticIngressHarness,
   buildStableUtterance,
@@ -80,6 +85,20 @@ async function testSplitEmailUtterance() {
     fail(`ingress_03: email not captured (${email})`);
   } else {
     pass("split intake utterances");
+  }
+  h.dispose();
+}
+
+async function testSplitEmailSpokenAt() {
+  resetSemanticIngressTestWorld();
+  const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_03B" });
+  await h.speak("My name is Anthony Johnson");
+  await h.speak("My email is anthony at example dot com");
+  const email = h.orchestration.controlPlane.getCallContext()?.intakeState.email?.value;
+  if (email !== "anthony@example.com") {
+    fail(`ingress_03b: spoken email not normalized (${email})`);
+  } else {
+    pass("split utterance: anthony at … → email captured");
   }
   h.dispose();
 }
@@ -198,6 +217,101 @@ async function testFullChainToBookingConfirmed() {
   h.dispose();
 }
 
+async function testAstraMockSuccess() {
+  resetSemanticIngressTestWorld();
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "1";
+  setVoiceV2TestAstraMode("success", {
+    successMeaning: (ctx) => ({
+      active_goal: "BOOK_APPOINTMENT",
+      facts: {
+        requested_date: "2026-09-25",
+        requested_daypart: "morning",
+        requested_time: null,
+        selected_slot_spoken_label: null,
+        selected_slot_ordinal: null,
+        selected_slot_id: null,
+      },
+      corrections: [],
+      explicit_action_requests: ["BOOK_APPOINTMENT"],
+      ambiguities: [],
+      confidence: 0.92,
+      digression: false,
+      evidence: ctx.stable.text,
+      literal_intake_fields: { name: "Astra User", email: "astra@example.com" },
+    }),
+  });
+  const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_ASTRA_OK" });
+  const ev = await h.speak("book me Friday morning I'm Astra User astra at example dot com");
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "0";
+  setVoiceV2TestAstraMode(null);
+  if (ev.terminal !== "interpreted") {
+    fail(`ingress_astra_ok: expected interpreted, got ${ev.terminal}`);
+  } else {
+    pass("Astra mock success → interpreted terminal");
+  }
+  h.dispose();
+}
+
+async function testAstraMockTimeoutFallback() {
+  resetSemanticIngressTestWorld();
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "1";
+  setVoiceV2TestAstraMode("timeout", { timeoutMs: 30 });
+  const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_ASTRA_TO" });
+  await h.speak("Anthony Johnson");
+  await h.speak("anthony@example.com");
+  const before = JSON.stringify(h.orchestration.controlPlane.getCallContext()?.intakeState ?? {});
+  const ev = await h.speak("I need September 25th in the morning");
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "0";
+  setVoiceV2TestAstraMode(null);
+  if (ev.terminal !== "interpreted") {
+    fail(`ingress_astra_timeout: expected interpreted via preserve/fallback, got ${ev.terminal}`);
+  }
+  const after = JSON.stringify(h.orchestration.controlPlane.getCallContext()?.intakeState ?? {});
+  if (before !== after) {
+    fail("ingress_astra_timeout: intake should be unchanged when Astra times out on scheduling utterance");
+  } else {
+    pass("Astra timeout → interpreted terminal (no silent drop)");
+  }
+  h.dispose();
+}
+
+async function testAstraMockFailPreserveState() {
+  resetSemanticIngressTestWorld();
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "1";
+  setVoiceV2TestAstraMode("fail");
+  const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_ASTRA_FAIL" });
+  await h.speak("Anthony Johnson anthony@example.com");
+  const ev = await h.speak("September 25th morning please");
+  process.env.VOICE_V2_ASTRA_INTERPRETER = "0";
+  setVoiceV2TestAstraMode(null);
+  if (ev.terminal !== "interpreted") {
+    fail(`ingress_astra_fail: expected interpreted, got ${ev.terminal}`);
+  } else {
+    pass("Astra fail → safe fallback → interpreted");
+  }
+  h.dispose();
+}
+
+async function testEveryUtteranceHasTerminal() {
+  resetSemanticIngressTestWorld();
+  const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_TERMINAL" });
+  await h.speak("hello");
+  await h.speak("September 25th please");
+  for (const ev of h.events) {
+    const ok = ["interpreted", "superseded", "failed", "rejected", "queued"].includes(ev.terminal);
+    if (!ok) {
+      fail(`ingress_terminal: missing terminal for ${ev.utterance_id}`);
+    }
+  }
+  const nonQueued = h.events.filter((e) => e.terminal !== "queued");
+  if (nonQueued.length < 2) {
+    fail("ingress_terminal: expected interpreted events");
+  } else {
+    pass("every stable utterance records explicit terminal");
+  }
+  h.dispose();
+}
+
 async function testNoSilentDropOnEmpty() {
   resetSemanticIngressTestWorld();
   const h = new VoiceV2SemanticIngressHarness({ callId: "INGRESS_EMPTY" });
@@ -228,10 +342,15 @@ async function main() {
   await testAppointmentBeforeControlPlaneReady();
   await testDateBeforeIntakeViaSpeech();
   await testSplitEmailUtterance();
+  await testSplitEmailSpokenAt();
   await testCorrectionFridayThursday();
   await testConcurrentCalls();
   await testRevisionSuperseded();
   await testInterpreterDeterministicSuccess();
+  await testAstraMockSuccess();
+  await testAstraMockTimeoutFallback();
+  await testAstraMockFailPreserveState();
+  await testEveryUtteranceHasTerminal();
   await testFullChainToBookingConfirmed();
   await testNoSilentDropOnEmpty();
 

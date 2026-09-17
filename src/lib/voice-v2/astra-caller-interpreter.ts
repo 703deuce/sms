@@ -22,6 +22,7 @@ import {
   logInterpreterWorkflowAuthorityViolation,
   shouldFailOnInterpreterSchemaViolation,
 } from "./caller-interpreter-schema";
+import { getVoiceV2TestAstraMode, runVoiceV2TestAstraMock } from "./testing/astra-interpreter-test-hook";
 
 function astraBackendModel(): string {
   return (
@@ -192,7 +193,24 @@ export const astraCallerInterpreter: CallerInterpreter = {
   async interpret(ctx: InterpreterContext): Promise<CallerInterpretationResult | null> {
     const started = Date.now();
     const utterance = ctx.stable.text.trim();
-    if (!utterance || !getOpenAiApiKey()) return null;
+    if (!utterance) return null;
+
+    if (getVoiceV2TestAstraMode()) {
+      try {
+        return await runVoiceV2TestAstraMock(ctx);
+      } catch (err) {
+        console.error(
+          `VOICE_ASTRA_INTERPRETER_FAILED ${JSON.stringify({
+            call_id: ctx.callId ?? null,
+            utterance_id: ctx.stable.utterance_id,
+            error: err instanceof Error ? err.message : String(err),
+          })}`,
+        );
+        return null;
+      }
+    }
+
+    if (!getOpenAiApiKey()) return null;
 
     const model = astraBackendModel();
     const user = buildAstraUserPayload(ctx);

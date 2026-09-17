@@ -249,6 +249,156 @@ async function scenario6_ambiguousSlotNoBook() {
   h.dispose();
 }
 
+async function scenario5_correctionDuringSlowFind() {
+  resetOrchestrationTestWorld();
+  let findStarted = 0;
+  let findCompleted = 0;
+  const h = new VoiceV2OrchestrationHarness({
+    callId: "TEST_CALL_005",
+    executors: {
+      findAvailability: async () => {
+        findStarted += 1;
+        await new Promise((r) => setTimeout(r, 80));
+        findCompleted += 1;
+        const result = {
+          status: "AVAILABILITY_FOUND",
+          voice_v2_status: "AVAILABILITY_FOUND",
+          offer_set_id: "offer_slow",
+          slots: [
+            {
+              slot_id: "slot_0900",
+              start: "2026-09-25T09:00:00-04:00",
+              spoken_label: "9 AM",
+              label: "9 AM",
+            },
+          ],
+          timing_ms: {},
+        };
+        return result;
+      },
+      bookOfferedSlot: async ({ args }) => ({
+        status: "BOOKING_CONFIRMED",
+        voice_v2_status: "BOOKING_CONFIRMED",
+        slot_id: String(args.selected_slot_id || "slot_0900"),
+      }),
+    },
+  });
+  await h.mergeMeaning(
+    buildCallerMeaning({
+      literal_intake_fields: { name: "Anthony Johnson", email: "anthony@example.com" },
+      facts: { requested_date: "2026-09-26" },
+    }),
+  );
+  const findPromise = h.runTurn("start_find");
+  await h.mergeMeaning(
+    buildCallerMeaning({
+      facts: { requested_date: "2026-09-25" },
+      corrections: ["requested_date"],
+      evidence: "actually Thursday",
+    }),
+  );
+  await findPromise;
+  const date = effectiveRequestedDate(h.controlPlane.getCallContext()!);
+  if (date !== "2026-09-25") {
+    fail(`scenario5: expected corrected date, got ${date}`);
+  }
+  if (findStarted < 1) {
+    fail("scenario5: FIND should have started");
+  }
+  pass("scenario5 correction while FIND slow — date authoritative");
+  h.dispose();
+}
+
+async function scenario7_idempotentFindDispatch() {
+  resetOrchestrationTestWorld();
+  const h = new VoiceV2OrchestrationHarness({ callId: "TEST_CALL_007" });
+  const payload = buildCallerMeaning({
+    literal_intake_fields: { name: "Anthony Johnson", email: "anthony@example.com" },
+    facts: { requested_date: "2026-09-25" },
+  });
+  await h.mergeMeaning(payload);
+  const findsAfterFirst = h.snapshot().dispatch_counts.find;
+  await h.mergeMeaning(
+    buildCallerMeaning({
+      evidence: "same facts again",
+      literal_intake_fields: { name: "Anthony Johnson" },
+    }),
+    { mergePolicy: "none" },
+  );
+  await h.runTurn("noop");
+  if (h.snapshot().dispatch_counts.find !== findsAfterFirst) {
+    fail(
+      `scenario7: duplicate noop merge should not re-FIND (${findsAfterFirst} -> ${h.snapshot().dispatch_counts.find})`,
+    );
+  }
+  pass("scenario7 idempotent FIND after noop merge");
+  h.dispose();
+}
+
+async function scenario10_bookFailureNoConfirmed() {
+  resetOrchestrationTestWorld();
+  let bookAttempts = 0;
+  const h = new VoiceV2OrchestrationHarness({
+    callId: "TEST_CALL_010",
+    executors: {
+      findAvailability: async () => ({
+        status: "AVAILABILITY_FOUND",
+        voice_v2_status: "AVAILABILITY_FOUND",
+        offer_set_id: "offer_fail_book",
+        slots: [
+          {
+            slot_id: "slot_0900",
+            start: "2026-09-25T09:00:00-04:00",
+            spoken_label: "9 AM",
+            label: "9 AM",
+          },
+          {
+            slot_id: "slot_1000",
+            start: "2026-09-25T10:00:00-04:00",
+            spoken_label: "10 AM",
+            label: "10 AM",
+          },
+        ],
+        timing_ms: {},
+      }),
+      bookOfferedSlot: async () => {
+        bookAttempts += 1;
+        return {
+          status: "BOOKING_FAILED",
+          voice_v2_status: "BOOKING_FAILED",
+          error: "provider_rejected",
+        };
+      },
+    },
+  });
+  await h.mergeMeaning(
+    buildCallerMeaning({
+      literal_intake_fields: { name: "Anthony Johnson", email: "anthony@example.com" },
+      facts: { requested_date: "2026-09-25" },
+    }),
+  );
+  const offerId = h.snapshot().offer_set_id;
+  if (offerId) h.seedOfferSet(offerId);
+  await h.mergeMeaning(
+    buildCallerMeaning({
+      facts: { selected_slot_ordinal: 2 },
+      evidence: "the second one",
+    }),
+  );
+  if (h.controlPlane.isBookingConfirmed()) {
+    fail("scenario10: BOOKING_CONFIRMED after failed BOOK");
+    h.dispose();
+    return;
+  }
+  if (bookAttempts < 1) {
+    fail("scenario10: BOOK should have been attempted");
+    h.dispose();
+    return;
+  }
+  pass("scenario10 BOOK failure — not confirmed");
+  h.dispose();
+}
+
 async function scenario9_interpreterFailurePreservesState() {
   resetOrchestrationTestWorld();
   const h = new VoiceV2OrchestrationHarness({ callId: "TEST_CALL_009" });
@@ -281,8 +431,11 @@ async function main() {
   await scenario2_intakeBeforeDate();
   await scenario3_allFactsOneUtterance();
   await scenario4_correctionBeforeFind();
+  await scenario5_correctionDuringSlowFind();
   await scenario6_ambiguousSlotNoBook();
+  await scenario7_idempotentFindDispatch();
   await scenario9_interpreterFailurePreservesState();
+  await scenario10_bookFailureNoConfirmed();
 
   if (failures > 0) {
     console.error(`\n${failures} scenario(s) FAILED`);

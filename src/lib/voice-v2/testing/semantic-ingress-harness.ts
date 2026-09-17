@@ -4,6 +4,7 @@ import type { StableCallerUtterance } from "@/lib/voice/telnyx/openai-live-bridg
 import { createLiveStableUtteranceIngress } from "@/lib/voice/telnyx/openai-live-bridge/live-stable-utterance-ingress";
 import type { SyncLiveCallerUtteranceIntentResult } from "@/lib/voice/telnyx/openai-live-bridge/live-caller-intent-sync";
 import { resetAllUtteranceRevisionGuards } from "@/lib/voice/telnyx/openai-live-bridge/live-utterance-revision-guard";
+import { resetVoiceV2TestAstraHook } from "./astra-interpreter-test-hook";
 import {
   ORCHESTRATION_TEST_CONFIG,
   VoiceV2OrchestrationHarness,
@@ -145,4 +146,5 @@ export function resetSemanticIngressTestWorld() {
   utteranceCounter = 0;
   resetOrchestrationTestWorld();
   resetAllUtteranceRevisionGuards();
+  resetVoiceV2TestAstraHook();
 }

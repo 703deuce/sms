@@ -1,0 +1,35 @@
+{
+  "call_id": "FIXTURE_CORRECTION_FIND",
+  "steps": [
+    {
+      "label": "intake + friday",
+      "meaning": {
+        "active_goal": "BOOK_APPOINTMENT",
+        "facts": { "requested_date": "2026-09-26" },
+        "literal_intake_fields": {
+          "name": "Anthony Johnson",
+          "email": "anthony@example.com"
+        },
+        "corrections": [],
+        "explicit_action_requests": ["BOOK_APPOINTMENT"],
+        "ambiguities": [],
+        "confidence": 0.95,
+        "digression": false,
+        "evidence": "Friday"
+      }
+    },
+    {
+      "label": "correct to thursday",
+      "meaning": {
+        "active_goal": "BOOK_APPOINTMENT",
+        "facts": { "requested_date": "2026-09-25" },
+        "corrections": ["requested_date"],
+        "explicit_action_requests": [],
+        "ambiguities": [],
+        "confidence": 0.95,
+        "digression": false,
+        "evidence": "actually Thursday"
+      }
+    }
+  ]
+}
