@@ -1,86 +1,100 @@
 # OpenAI Live (GPT-Live-1) — isolated PSTN test pipeline
 
-**Purpose:** Evaluate **voice behavior only** (turn-taking, interruptions, background noise, backchannels) on production PSTN via the hot-patched bridge — **not** booking, Microsoft, or Voice V2 tool orchestration.
+**Purpose:** Tune **when Amy is allowed to speak** on GPT-Live before wiring booking delegation. Not Microsoft FIND/BOOK, not Voice V2 tool orchestration.
 
-**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, or copy `.voice_ai_transport.example` → `.voice_ai_transport` in the repo root (local), or `/app/.voice_ai_transport` on the server. See `flags.ts`.
+**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`. See `flags.ts`.
 
-**Not a master release:** behavioral prompt changes live in `live-config.ts` on the experiment branch. To try on the running 571 test container without merging `master`, run `./scripts/prod-voice-bridge-hotpatch.sh --config-only` (or `--live` for full bridge files + transport).
+**Config source:** `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` (`OPENAI_LIVE_FRONTEND_INSTRUCTIONS`, `OPENAI_LIVE_GREETING_LINE`).
 
-**Code paths:**
-
-| Piece | Location |
-|--------|-----------|
-| Live frontend instructions (session.start) | `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` → `OPENAI_LIVE_FRONTEND_INSTRUCTIONS` |
-| Bridge (no tools) | `live-call-bridge.ts` |
-| Production Realtime (GA) path | `call-bridge.ts` + `flags.ts` → `openai_realtime` |
+**Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only`
 
 ---
 
-## Why behavioral instructions live on the Live frontend
+## Why Live is different from Realtime
 
-OpenAI positions **GPT-Live-1** around **when to speak, when not to speak**, interruption handling, thinking pauses, backchannels, and focus in background noise. The **Live API `session.start` instructions** are the right place for that — behavioral, not procedural.
+GPT-Live **continuously** decides many times per second whether to speak, listen, pause, interrupt, or acknowledge. It is **not** rigid user-turn → assistant-turn.
 
-Do **not** put into this Live frontend prompt (yet):
+The public Live session API does **not** expose Realtime-style VAD knobs (`threshold`, `silence_duration_ms`, `semantic_vad` eagerness, etc.). Shape tone, pace, and **when to talk** through **`session.start` instructions** only. Do not invent VAD parameters for Live in the bridge.
 
-- Booking rules, required-field intake, Microsoft/Graph instructions
-- Long business logic or wizard copy
-
-Those belong in **delegation / backend instructions** (`delegation.responses.instructions` in the Live API model) once voice behavior is proven. Keep the Live frontend **compact**.
-
-For the **current isolated test**, there is **no** delegation backend wired — the bridge has **no tools**. The frontend prompt includes an explicit “isolated test” line so Amy does not claim scheduling or account actions.
+Live stays **full-duplex** (good for barge-in, corrections, hesitation). The business dialogue should **feel turn-based**: Amy asks → **stops** → caller answers → Amy responds briefly.
 
 ---
 
-## Tuning after listening (first test pass)
+## Frontend prompt design (current baseline)
 
-Use the prompt in `live-config.ts` **almost verbatim**, then adjust only:
+- **Small and strict** — not the old giant Realtime/V2 system prompt.
+- **Turn-based receptionist policy** — one question per turn; **wait indefinitely** after a question; **never fill silence**.
+- **Minimal acknowledgments** — no mm-hmm / yeah while caller speaks; no “I’m still here”, “take your time”, “no rush”, “whenever you’re ready”.
+- **Yield immediately** if caller speaks over Amy (prefer interrupting Amy over talking over the customer).
 
-1. **Pause tolerance** — thinking pauses vs end-of-turn
-2. **Response speed** — prompt says *respond promptly after a clearly completed thought*, not “respond instantly”
-3. **Interruption aggressiveness** — stop when caller speaks
-4. **Backchannel frequency** — mm-hmm / got it / okay
+**Do not put in the Live frontend (yet):**
 
-**Wording that matters (from prod trivia call):**
+- Booking state machine, required fields, Microsoft/Graph, availability logic
+- Wording like: maintain flow, keep engaged, don’t leave awkward silence, reassure the caller, keep conversation moving, make natural acknowledgments
 
-- **Background noise:** Be explicit about what is **not** a turn (TV, music, another person not addressing Amy, dogs, etc.). Live can still react to background speech; instructions steer conservatism.
-- **Faster response:** *“Respond promptly after a clearly completed thought. Do not wait unnecessarily. But keep listening through natural thinking pauses.”*
-- **Interruptions:** *“If the caller begins speaking while you are talking, stop speaking promptly and listen.”*
-- **Caller talks to someone nearby:** Wait; only respond when the caller addresses you again.
+Those phrases push Live toward **KEEP TALKING**.
+
+**Delegation / backend (later):** required fields, FIND/BOOK, validation — `delegation.responses.instructions` once speech behavior passes tests. Current isolated bridge has **no tools**.
 
 ---
 
-## Manual PSTN test matrix (before touching real Amy / V2 pipeline)
+## Technical defaults (boring on purpose)
 
-Run on the **571 (or test) line** with `openai_live` active. One scenario at a time; note call ID and bridge logs.
+| Setting | Value |
+|---------|--------|
+| Model | `gpt-live-1` |
+| Audio | `audio/pcmu` @ 8000 Hz (Telnyx μ-law pass-through) |
+| Voice | `marin` (or env `OPENAI_LIVE_VOICE`) — fix one voice while tuning behavior |
+
+---
+
+## Greeting
+
+Use a **short** scripted greeting via `OPENAI_LIVE_GREETING_LINE`, then silence:
+
+> Thanks for calling. This is Amy. How can I help you?
+
+Avoid long virtual-receptionist monologues before the first question.
+
+---
+
+## Primary manual test (do this before booking copy)
+
+With `openai_live` active:
+
+1. Let Amy greet you.
+2. **Do not answer for ~10 seconds** → she should say **nothing**.
+3. Answer her question.
+4. Let her ask the next question.
+5. Stay silent again → she should say **nothing**.
+6. Start speaking while she is talking → she should **yield immediately**.
+
+If that passes, add booking-specific **frontend** snippets (still not the full state machine).
+
+---
+
+## Long silence / “Are you still there?”
+
+Do **not** ask Live to decide when silence is “too long.”
+
+**Future app rule (not in prompt yet):** after Amy asks a question, start a server timer (e.g. 12s); if no caller audio, inject one instruction: briefly check if the caller is still on the line — **once**.
+
+---
+
+## Extended matrix (after primary test)
 
 | # | Scenario |
 |---|----------|
-| 1 | Music in the room while you talk to Amy |
-| 2 | TV running in the background |
-| 3 | Someone else talks near you **without** addressing Amy |
-| 4 | Say something to another person mid-call, then return to Amy |
-| 5 | Cough while Amy is talking |
-| 6 | Dog barks |
-| 7 | Pause **1–2 seconds** mid-sentence |
-| 8 | Interrupt Amy mid-sentence |
-| 9 | Change mind while interrupting: “Tuesday—actually no, Wednesday” |
-| 10 | Several details in one breath |
-| 11 | Stay silent long enough to see if Amy jumps in too aggressively |
-
-**Evidence:** `docker logs` lines with `callId`; DB `voiceCallEvent` type `call.transcription`; metadata `voiceV2PostCallTranscript` after hangup.
+| 1 | Music / TV / dog / cough — no response |
+| 2 | Someone else talks nearby — wait |
+| 3 | Mid-sentence pause 1–2s — keep listening |
+| 4 | Interrupt + self-correct (“Tuesday—no, Wednesday”) |
+| 5 | Several facts in one breath — remember, don’t re-ask |
 
 ---
 
-## Relationship to Voice V2 production
+## Cursor rules
 
-- **Voice V2 one-Amy PSTN booking** remains on Telnyx Assistant / frozen FIND-BOOK path per `docs/VOICE-V2-CLOUD-AGENT-HANDOFF.md`.
-- **Live experiment** reuses Telnyx media ingress only; it does **not** replace certified booking runtime until explicitly integrated with Live delegation + tools.
-
----
-
-## Cursor agent rules (this workstream)
-
-1. Edit **only** `OPENAI_LIVE_FRONTEND_INSTRUCTIONS` in `live-config.ts` for behavioral changes on the test pipeline — not `instructions.ts` (Realtime/V2 loader) unless switching transport back to `openai_realtime`.
-2. Do not add booking, Microsoft, or intake blocks to the Live frontend prompt during the throwaway test phase.
-3. After prompt changes, hot-patch: `./scripts/prod-voice-bridge-hotpatch.sh --live` and re-run the manual matrix above.
-4. Log improvements (optional): persist `session.output_transcript.delta` text in `live-call-bridge.ts` for eval without relying on Telnyx ASR alone.
+1. Edit **`OPENAI_LIVE_FRONTEND_INSTRUCTIONS`** in `live-config.ts` for Live speech behavior — not `instructions.ts` (Realtime/V2) unless switching transport.
+2. No Realtime VAD env vars for Live.
+3. Hot-patch test container: `--config-only` for prompt/greeting only.
