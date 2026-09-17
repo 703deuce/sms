@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import { OPENAI_LIVE_API_KIND, OPENAI_LIVE_WS_URL } from "./openai-realtime-protocol";
 import { OPENAI_REALTIME_BRIDGE_VOICE } from "./flags";
+import {
+  OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS,
+  buildOpenAiLiveGreetingPreamble,
+} from "./live-frontend-instructions";
 
 /** OpenAI Live primary WebSocket — not /v1/realtime. */
 export const OPENAI_LIVE_WEBSOCKET_URL = OPENAI_LIVE_WS_URL;
@@ -66,10 +70,9 @@ export function buildOpenAiLiveSessionInstructions(
       return "You are a helpful phone assistant.";
     case "G":
       return [
-        "You are Amy, a helpful phone receptionist.",
-        `When the call connects, greet the caller immediately by saying: ${greetingLine}`,
-        "After the greeting, stop and listen. Do not speak again until the caller speaks.",
-      ].join(" ");
+        buildOpenAiLiveGreetingPreamble(greetingLine),
+        OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS,
+      ].join("\n\n");
     case "C":
       return [
         "You are Amy, a helpful phone receptionist.",
@@ -117,5 +120,5 @@ export function liveBridgeMetadata() {
 
 /** @deprecated */
 export const OPENAI_LIVE_GREETING_LINE = resolveOpenAiLiveGreetingLine();
-export const OPENAI_LIVE_FRONTEND_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;
-export const OPENAI_LIVE_MINIMAL_AMY_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;
+export const OPENAI_LIVE_FRONTEND_INSTRUCTIONS = OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS;
+export const OPENAI_LIVE_MINIMAL_AMY_INSTRUCTIONS = OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS;
