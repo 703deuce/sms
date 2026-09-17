@@ -47,45 +47,48 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
   startLiveVoiceV2OnCall(input.claims);
 
-  const config = await loadVoiceAgentRuntimeConfig(
-    input.claims.workspaceId,
-    input.claims.agentId,
-  );
-  const parsed = parseVoiceAgentConfig(config);
-  const handling = resolveAfterHoursHandlingFromAgentConfig(parsed);
-  const toolContext = createLiveToolDispatchContext({
-    claims: input.claims,
-    config: parsed,
-  });
-
-  let sessionStartPayload: Record<string, unknown>;
-
-  if (isOpenAiLiveDelegationEnabled()) {
-    const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
-      input.claims,
-    );
-    const tools = buildLiveVoiceTools({
-      config: parsed,
-      transferEnabled: Boolean(handling?.transferEnabled),
-    });
-    const session = buildLiveSessionConfig({
-      greeting: resolveOpenAiLiveGreetingLine(),
-      bookingContext,
-      runtimeContext,
-      tools,
-    });
-    sessionStartPayload = buildOpenAiLiveSessionStartPayload(session);
-  } else {
-    sessionStartPayload = buildOpenAiLiveSessionStartPayload();
-  }
-
+  // Attach Telnyx handlers immediately — Telnyx "start" must not be dropped while config loads.
   runOpenAiLiveMediaBridge({
     telnyxSocket: input.telnyxSocket,
     apiKey,
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
-    sessionStartPayload,
     callId,
-    toolContext: isOpenAiLiveDelegationEnabled() ? toolContext : undefined,
+    resolveSession: async () => {
+      const config = await loadVoiceAgentRuntimeConfig(
+        input.claims.workspaceId,
+        input.claims.agentId,
+      );
+      const parsed = parseVoiceAgentConfig(config);
+      const handling = resolveAfterHoursHandlingFromAgentConfig(parsed);
+      const toolContext = createLiveToolDispatchContext({
+        claims: input.claims,
+        config: parsed,
+      });
+
+      if (isOpenAiLiveDelegationEnabled()) {
+        const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
+          input.claims,
+        );
+        const tools = buildLiveVoiceTools({
+          config: parsed,
+          transferEnabled: Boolean(handling?.transferEnabled),
+        });
+        const session = buildLiveSessionConfig({
+          greeting: resolveOpenAiLiveGreetingLine(),
+          bookingContext,
+          runtimeContext,
+          tools,
+        });
+        return {
+          sessionStartPayload: buildOpenAiLiveSessionStartPayload(session),
+          toolContext,
+        };
+      }
+
+      return {
+        sessionStartPayload: buildOpenAiLiveSessionStartPayload(),
+      };
+    },
     onMilestone: (name, msSinceBridge, extra) => {
       logRealtimeBridgeEvent("openai_live_timing", {
         callId,

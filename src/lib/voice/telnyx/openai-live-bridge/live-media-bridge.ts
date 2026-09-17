@@ -60,11 +60,19 @@ function logLiveIn(type: string, extra?: Record<string, unknown>) {
   console.info(`LIVE_IN ${type}${extra ? ` ${JSON.stringify(extra)}` : ""}`);
 }
 
+export type LiveSessionReady = {
+  sessionStartPayload: Record<string, unknown>;
+  toolContext?: LiveToolDispatchContext;
+};
+
 export type LiveMediaBridgeInput = {
   telnyxSocket: WebSocket;
   apiKey: string;
   openAiLiveWsUrl: string;
-  sessionStartPayload: Record<string, unknown>;
+  /** Sync path — session payload known before bridge attach */
+  sessionStartPayload?: Record<string, unknown>;
+  /** Async path — attach Telnyx handlers immediately; resolve before OpenAI session.start */
+  resolveSession?: () => Promise<LiveSessionReady>;
   callId?: string;
   toolContext?: LiveToolDispatchContext;
   onMilestone?: (name: string, msSinceBridge: number, extra?: Record<string, unknown>) => void;
@@ -74,8 +82,11 @@ export type LiveMediaBridgeInput = {
  * GPT-Live ↔ Telnyx media bridge with optional Responses delegation tool loop.
  */
 export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
+  if (!input.sessionStartPayload && !input.resolveSession) {
+    throw new Error("live-media-bridge: sessionStartPayload or resolveSession required");
+  }
   const callId = input.callId ?? "unknown";
-  const delegationEnabled = isOpenAiLiveDelegationEnabled() && Boolean(input.toolContext);
+  let delegationEnabled = false;
   const bridgeStartedAt = Date.now();
   const milestone = (name: string, extra?: Record<string, unknown>) => {
     const ms = Date.now() - bridgeStartedAt;
@@ -130,14 +141,17 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     openAiWs.send(JSON.stringify(event));
   };
 
-  const delegationHandler =
-    delegationEnabled && input.toolContext
-      ? createLiveDelegationHandler({
-          callId,
-          callContext: input.toolContext,
-          sendLiveOut,
-        })
-      : null;
+  let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
+
+  const attachDelegation = (toolContext: LiveToolDispatchContext) => {
+    if (!isOpenAiLiveDelegationEnabled() || delegationHandler) return;
+    delegationEnabled = true;
+    delegationHandler = createLiveDelegationHandler({
+      callId,
+      callContext: toolContext,
+      sendLiveOut,
+    });
+  };
 
   const appendCallerAudio = (payloadB64: string, track?: string) => {
     if (!liveStarted) return;
@@ -193,15 +207,38 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     openAiWs.on("open", () => {
       milestone("openai_ws_open");
       if (sessionStartSent) return;
-      sessionStartSent = true;
-      const startEvent = {
-        ...input.sessionStartPayload,
-        event_id:
-          (input.sessionStartPayload.event_id as string) ||
-          liveBaselineEventId("session_start"),
-      };
-      sendLiveOut(startEvent);
-      milestone("session_start_sent", { delegation: delegationEnabled });
+      void (async () => {
+        try {
+          let payload: Record<string, unknown>;
+          if (input.resolveSession) {
+            milestone("session_resolve_start");
+            const ready = await input.resolveSession();
+            milestone("session_resolve_done");
+            payload = ready.sessionStartPayload;
+            if (ready.toolContext) {
+              attachDelegation(ready.toolContext);
+            }
+          } else {
+            payload = input.sessionStartPayload!;
+            if (input.toolContext) {
+              attachDelegation(input.toolContext);
+            }
+          }
+          if (sessionStartSent) return;
+          sessionStartSent = true;
+          const startEvent = {
+            ...payload,
+            event_id:
+              (payload.event_id as string) || liveBaselineEventId("session_start"),
+          };
+          sendLiveOut(startEvent);
+          milestone("session_start_sent", { delegation: delegationEnabled });
+        } catch (err) {
+          console.error("[live-media] session resolve/start failed", err);
+          input.telnyxSocket.close(1011, "session_start_failed");
+          openAiWs?.close();
+        }
+      })();
     });
 
     openAiWs.on("message", (raw) => {
