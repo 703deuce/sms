@@ -16,6 +16,7 @@ import {
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./intake/session-store";
 import { resolveSessionKey } from "./intake/load-call-context";
 import { getIntakeReadiness } from "./intake/readiness";
+import { filterAllowedActionsForDialog } from "./dialog-goal";
 
 export async function loadVoiceV2PstnLiveBookingFlag(
   workspaceId: string,
@@ -69,7 +70,7 @@ export function workflowPayloadForContext(
     hasActiveOfferSet: hasOffer,
     bookingStrategy: strategy,
   });
-  return buildWorkflowToolPayload({
+  const payload = buildWorkflowToolPayload({
     voiceV2PstnLiveBooking,
     bookingStrategy: strategy,
     workflow,
@@ -77,6 +78,11 @@ export function workflowPayloadForContext(
     hasActiveOfferSet: hasOffer,
     ctx,
   });
+  const allowed = filterAllowedActionsForDialog(
+    ctx,
+    (payload.allowed_next_actions as string[]) || [],
+  );
+  return { ...payload, allowed_next_actions: allowed };
 }
 
 export async function patchWorkflowAfterFind(input: {

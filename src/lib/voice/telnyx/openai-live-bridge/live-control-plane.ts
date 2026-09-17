@@ -27,6 +27,8 @@ import {
   isToolNameAllowedByWorkflow,
 } from "./live-workflow-tool-filter";
 import type { LiveResponsesFunctionTool } from "./live-tools";
+import { shouldBlockCallbackToolForContext } from "@/lib/voice-v2/dialog-goal";
+import { VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 
 export type LiveControlPlane = {
   callId: string;
@@ -228,6 +230,16 @@ export function createLiveControlPlane(input: {
     },
 
     gateToolName(toolName: string) {
+      if (
+        toolName === VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE &&
+        shouldBlockCallbackToolForContext(this.getCallContext())
+      ) {
+        return {
+          allowed: false,
+          speak: "Let's finish scheduling this appointment first.",
+          status: "CALLBACK_BLOCKED_ACTIVE_BOOKING",
+        };
+      }
       const env = this.getWorkflowEnvelope();
       const allowed = (env.allowed_next_actions as string[]) || [];
       if (!isToolNameAllowedByWorkflow(toolName, allowed)) {

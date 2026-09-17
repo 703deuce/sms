@@ -103,6 +103,7 @@ export interface VoiceV2CallContext {
   qualification?: VoiceV2QualificationState;
   appointmentAction?: import("../appointment-changes/ref-store").VoiceV2AppointmentActionState;
   afterHours?: import("../after-hours-handling-types").VoiceV2AfterHoursRuntimeState;
+  dialog?: import("../dialog-goal").VoiceV2DialogState;
 }
 
 export interface IntakeReadinessResult {

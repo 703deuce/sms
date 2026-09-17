@@ -21,6 +21,8 @@ import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/strea
 import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
 import { shouldIssueResponseCreateOnDelegation } from "./live-workflow-tool-filter";
 import type { VoiceV2NextStage } from "@/lib/voice-v2/booking-workflow";
+import { VOICE_V2_SAVE_INTAKE_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import { createLiveToolWaitProgressController } from "./live-tool-wait-commentary";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -53,6 +55,7 @@ export function createLiveDelegationHandler(input: {
   turnTrace?: LiveTurnTraceHooks;
 }) {
   let toolBusy = false;
+  let activeDelegationId: string | null = null;
   let delegationEpisodeCount = 0;
   let hydratedContext: LiveDelegationHydratedContext | null = null;
   let hydratePromise: Promise<void> | null = null;
@@ -128,7 +131,10 @@ export function createLiveDelegationHandler(input: {
       hydrated,
       isFirstDelegation,
     });
-    const contextItem = buildLiveDelegationContextItem({ developerText });
+    const contextItem = buildLiveDelegationContextItem({
+      developerText,
+      delegationId: delegationId ?? activeDelegationId,
+    });
     const eventId = String(contextItem.event_id || "");
     contextTracker.markSent(eventId, delegationEpisodeCount);
     input.sendLiveOut(contextItem);
@@ -139,8 +145,10 @@ export function createLiveDelegationHandler(input: {
     const allowed = (env.allowed_next_actions as string[]) || [];
 
     logLiveObs("DELEGATION_CONTEXT_ITEM_SENT", {
-      callId: input.callId,
-      delegation_id: delegationId,
+      call_id: input.callId,
+      has_active_delegation: Boolean(delegationId ?? activeDelegationId),
+      delegation_id: delegationId ?? activeDelegationId,
+      event_type: contextItem.type,
       episode: delegationEpisodeCount,
       event_id: eventId,
       developer_text_chars: developerText.length,
@@ -268,6 +276,15 @@ export function createLiveDelegationHandler(input: {
     });
 
     const started = Date.now();
+    const waitProgress = createLiveToolWaitProgressController({
+      callId: input.callId,
+      liveSessionId: controlPlane.getLiveSessionId(),
+      delegationId: opts.delegationId ?? activeDelegationId,
+      toolCallId: callId,
+      toolName,
+      sendLiveOut: input.sendLiveOut,
+    });
+    waitProgress.start();
     try {
       logLiveObs("TOOL_DISPATCH", {
         callId: input.callId,
@@ -280,6 +297,7 @@ export function createLiveDelegationHandler(input: {
         openAiFunctionCallId: callId,
         callContext: input.callContext,
       });
+      waitProgress.complete();
       const elapsedMs = Date.now() - started;
       let voiceV2Status: string | null = null;
       try {
@@ -291,6 +309,13 @@ export function createLiveDelegationHandler(input: {
       } catch {
         voiceV2Status = null;
       }
+      const parsedOut = (() => {
+        try {
+          return JSON.parse(output) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })();
       logLiveObs("TOOL_RESULT", {
         callId: input.callId,
         tool_name: toolName,
@@ -299,6 +324,16 @@ export function createLiveDelegationHandler(input: {
         output_bytes: output.length,
         voice_v2_status: voiceV2Status,
         superseded: discard || generationAtStart !== input.callContext.schedulingGeneration,
+        ...(toolName === VOICE_V2_SAVE_INTAKE_TOOL_TYPE
+          ? {
+              workflow_signal: args.workflow_signal ?? args.workflowSignal ?? null,
+              booking_intent_active: args.booking_intent_active ?? args.bookingIntentActive ?? null,
+              explicit_callback_requested:
+                args.explicit_callback_requested ?? args.explicitCallbackRequested ?? null,
+              voice_v2_next_stage: parsedOut.voice_v2_next_stage ?? null,
+              allowed_next_actions: parsedOut.allowed_next_actions ?? null,
+            }
+          : {}),
       });
       if (discard || generationAtStart !== input.callContext.schedulingGeneration) {
         await returnLiveToolResult({
@@ -324,6 +359,7 @@ export function createLiveDelegationHandler(input: {
         });
       }
     } catch (err) {
+      waitProgress.complete();
       const elapsedMs = Date.now() - started;
       console.error("[live-delegation] tool dispatch failed", err);
       await returnLiveToolResult({
@@ -357,6 +393,7 @@ export function createLiveDelegationHandler(input: {
       type === "delegation.created"
     ) {
       const delegationId = (liveEvent.delegation_id as string | null) ?? null;
+      if (delegationId) activeDelegationId = delegationId;
       input.turnTrace?.onDelegationCreated(delegationId);
       logLiveObs("DELEGATION_STARTED", {
         callId: input.callId,

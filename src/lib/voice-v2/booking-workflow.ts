@@ -4,6 +4,7 @@
  */
 
 import type { VoiceV2BookingStrategy } from "./booking-strategy";
+import { applyDialogAndWorkflowPrecedence } from "./dialog-goal";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
 import {
   applyQualificationStageOverride,
@@ -28,6 +29,8 @@ export type VoiceV2WorkflowSignal = "prefer_callback" | "cancel_booking";
 export interface VoiceV2BookingWorkflow {
   bookingIntentActive: boolean;
   callbackRequested: boolean;
+  /** Caller explicitly requested callback-only — not soft prefer_callback from the model. */
+  explicitCallbackRequested?: boolean;
   bookingCancelled: boolean;
   bookingConfirmed: boolean;
   /** Caller request accepted into durable follow-up (message or appointment request). */
@@ -54,6 +57,7 @@ export function defaultVoiceV2BookingWorkflow(): VoiceV2BookingWorkflow {
   return {
     bookingIntentActive: false,
     callbackRequested: false,
+    explicitCallbackRequested: false,
     bookingCancelled: false,
     bookingConfirmed: false,
     callerRequestFinalized: false,
@@ -93,7 +97,7 @@ export function applyIntakeWorkflowSignals(
 ): VoiceV2BookingWorkflow {
   const w = { ...workflow };
   const signal = parseWorkflowSignal(input.raw);
-  if (signal === "prefer_callback") w.callbackRequested = true;
+  // prefer_callback is a soft hint only — never sets callbackRequested (see dialog-goal precedence).
   if (signal === "cancel_booking") w.bookingCancelled = true;
   if (input.raw.booking_intent_active === true || input.raw.bookingIntentActive === true) {
     w.bookingIntentActive = true;
@@ -160,7 +164,11 @@ export function deriveVoiceV2NextStage(input: {
   const strategy = input.bookingStrategy ?? "MICROSOFT_365";
   if (w.bookingConfirmed) return "BOOKING_CONFIRMED";
   if (w.callerRequestFinalized) return "COMPLETE";
-  if (w.callbackRequested) return "CALLBACK_REQUESTED";
+  const callbackBlocksBooking =
+    w.callbackRequested &&
+    (w.explicitCallbackRequested === true ||
+      (!w.bookingIntentActive && !w.requestedDate));
+  if (callbackBlocksBooking) return "CALLBACK_REQUESTED";
   if (w.bookingCancelled) return "COMPLETE";
   if (strategy === "NONE") {
     if (input.readiness.missingForRecord.length > 0) return "COLLECT_REQUIRED_INTAKE";
@@ -318,10 +326,18 @@ export function transitionAfterIntakeSave(input: {
       })?.requested_date,
     ),
   });
+  const dialogApplied = applyDialogAndWorkflowPrecedence({
+    ctx: input.ctx,
+    raw: input.raw,
+    savedKeys: input.savedKeys,
+    workflow,
+  });
+  workflow = dialogApplied.workflow;
+  let ctx = dialogApplied.ctx;
 
   const hasOffer =
-    Boolean(input.ctx.currentOfferSet?.offerSetId) &&
-    (input.ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
+    Boolean(ctx.currentOfferSet?.offerSetId) &&
+    (ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
 
   const strategy =
     input.bookingStrategy ??
@@ -334,7 +350,7 @@ export function transitionAfterIntakeSave(input: {
     bookingStrategy: strategy,
   });
 
-  return mergeWorkflowIntoContext(input.ctx, workflow);
+  return mergeWorkflowIntoContext(ctx, workflow);
 }
 
 export function transitionAfterBookingLinkSent(

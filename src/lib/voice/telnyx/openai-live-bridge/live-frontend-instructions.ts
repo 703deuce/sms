@@ -377,6 +377,22 @@ unless runtime booking_status is BOOKING_CONFIRMED from the latest tool result.
 If the caller accepts an offered slot, delegate so the backend can call voice_v2_book_offered_slot.
 While booking is in progress you may only use brief wait language (for example "One moment while I get that set up").`;
 
+const LIVE_TOOL_WAIT_COMMENTARY = `TOOL-WAIT COMMENTARY (Live session.commentary.append)
+
+When the application sends commentary during a delegated action, briefly and naturally keep the caller informed without inventing results.
+
+* Use semantic hints from the app — phrase them in your own words.
+* Do not repeat progress unnecessarily.
+* Continue listening for caller interruptions; do not talk over them.
+* Progress commentary must never imply booking success (no "you're all set", "you're booked", "confirmed", "scheduled").
+* Only state authoritative outcomes after the application supplies them via tool results.`;
+
+const LIVE_AVAILABILITY_EXTERNAL_TRUTH = `AVAILABILITY IS EXTERNAL TRUTH
+
+Never state concrete appointment times (for example "8 AM", "9 AM", "10 o'clock") unless the latest authoritative state includes AVAILABILITY_FOUND with a real offer_set_id and slot list from voice_v2_find_availability.
+
+Before FIND runs you may say you can check a day or window (for example "I can check Friday morning for you") — but not "I have 8 or 9 available."`;
+
 function appendSection(title: string, body?: string): string {
   const trimmed = body?.trim();
   if (!trimmed) return "";
@@ -391,6 +407,8 @@ export function buildLiveFrontendInstructions(params?: {
   let out = LIVE_FRONTEND_CORE;
   out += `\n\n${LIVE_CONVERSATIONAL_BOOKING}`;
   out += `\n\n${LIVE_BOOKING_CONFIRMATION_INVARIANT}`;
+  out += `\n\n${LIVE_TOOL_WAIT_COMMENTARY}`;
+  out += `\n\n${LIVE_AVAILABILITY_EXTERNAL_TRUTH}`;
   out += appendSection("BUSINESS CONTEXT (caller-facing)", params?.businessContext);
   if (params?.greeting?.trim()) {
     out += appendSection(

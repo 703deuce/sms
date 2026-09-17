@@ -77,8 +77,10 @@ function summarizeCallContextForDelegation(ctx: VoiceV2CallContext | null): Reco
  */
 export function buildLiveDelegationContextItem(input: {
   developerText: string;
+  /** Required when pushing context inside an active delegated episode. */
+  delegationId?: string | null;
 }): Record<string, unknown> {
-  return {
+  const event: Record<string, unknown> = {
     type: "response.item.create",
     event_id: liveBaselineEventId("delegation_ctx"),
     item: {
@@ -92,4 +94,8 @@ export function buildLiveDelegationContextItem(input: {
       ],
     },
   };
+  if (input.delegationId) {
+    event.delegation_id = input.delegationId;
+  }
+  return event;
 }

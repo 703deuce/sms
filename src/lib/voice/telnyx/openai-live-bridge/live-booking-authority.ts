@@ -6,12 +6,24 @@ import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
 const BOOKING_CONFIRMATION_PATTERN =
   /\b(you(?:'re| are) (?:all set|booked|confirmed|scheduled)|i(?:'ve| have) (?:scheduled|booked)|your appointment is confirmed|we have you down|appointment (?:is )?confirmed|you(?:'re| are) set for)\b/i;
 
+/** Concrete slot times without a certified offer set (e.g. "8 or 9 AM"). */
+const CONCRETE_OFFER_WITHOUT_FIND_PATTERN =
+  /\b(?:i (?:can do|have)|(?:^|\s)(?:8|9|10|11)(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)|\d{1,2}\s*(?:a\.?m\.?|p\.?m\.?)\s+(?:or|and)\s+\d{1,2})/i;
+
 export function detectBookingConfirmationViolation(
   amyTranscriptChunk: string,
   bookingConfirmed: boolean,
 ): boolean {
   if (bookingConfirmed) return false;
   return BOOKING_CONFIRMATION_PATTERN.test(amyTranscriptChunk);
+}
+
+export function detectConcreteAvailabilityWithoutOfferSet(
+  amyTranscriptChunk: string,
+  hasOfferSet: boolean,
+): boolean {
+  if (hasOfferSet) return false;
+  return CONCRETE_OFFER_WITHOUT_FIND_PATTERN.test(amyTranscriptChunk);
 }
 
 export function buildLiveFrontendBookingAuthorityInstructionFromContext(input: {
@@ -29,6 +41,11 @@ export function buildLiveFrontendBookingAuthorityInstructionFromContext(input: {
     "FIND availability ≠ booked. Caller selecting a slot ≠ booked.",
     `allowed_next_actions=${JSON.stringify(input.workflowEnvelope.allowed_next_actions ?? [])}`,
   ];
+  if (!offer?.offerSetId) {
+    lines.push(
+      "NO certified offer_set_id yet — do not state specific available times to the caller. Only offer to check availability.",
+    );
+  }
   if (offer?.offerSetId) {
     lines.push(`current_offer_set_id=${offer.offerSetId}`);
     if (input.ctx?.bookingWorkflow?.requestedDate) {

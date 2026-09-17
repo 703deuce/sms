@@ -14,7 +14,10 @@ import {
   isLiveInstructionsAppendedAck,
   shouldSendLiveOpeningGreetingAfterSessionStarted,
 } from "./live-greeting";
-import { detectBookingConfirmationViolation } from "./live-booking-authority";
+import {
+  detectBookingConfirmationViolation,
+  detectConcreteAvailabilityWithoutOfferSet,
+} from "./live-booking-authority";
 import { createLiveDelegationHandler } from "./live-delegation-handler";
 import { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
@@ -413,6 +416,23 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           if (delta) {
             conversationTranscript.appendDelta("amy", delta);
             amyTranscriptBuffer += delta;
+            if (liveControlPlane) {
+              const hasOffer = Boolean(
+                liveControlPlane.getCallContext()?.currentOfferSet?.offerSetId,
+              );
+              if (
+                detectConcreteAvailabilityWithoutOfferSet(amyTranscriptBuffer, hasOffer)
+              ) {
+                console.error(
+                  `LIVE_CONCRETE_AVAILABILITY_VIOLATION ${JSON.stringify({
+                    callId,
+                    has_offer_set: hasOffer,
+                    transcript_tail: amyTranscriptBuffer.slice(-240),
+                  })}`,
+                );
+                amyTranscriptBuffer = "";
+              }
+            }
             if (
               liveControlPlane &&
               detectBookingConfirmationViolation(
