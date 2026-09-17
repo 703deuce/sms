@@ -1,5 +1,7 @@
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
-import { LIVEKIT_SELF_HOSTED_WSS_URL } from "@/lib/voice/media-backend/constants";
+
+/** Frozen public TLS WebSocket origin for Telnyx ↔ OpenAI Realtime (Call Control media only; not LiveKit). */
+export const OPENAI_REALTIME_BRIDGE_PUBLIC_WSS_URL = "wss://voice.transovo.ai";
 
 /** Internal WS listener (Telnyx media connects via Traefik → this port in production). */
 export const REALTIME_BRIDGE_LISTEN_PORT = 3108;
@@ -13,7 +15,6 @@ export function getRealtimeBridgeListenPort(): number {
 
 /**
  * Public WSS base Telnyx uses for `streaming_start` (TLS required on PSTN).
- * Production uses the same frozen voice host as self-hosted LiveKit (`voice.transovo.ai`).
  * Local dev uses ws://localhost:{port} when APP_URL is localhost.
  */
 export function getRealtimeBridgePublicWssBase(): string {
@@ -23,7 +24,7 @@ export function getRealtimeBridgePublicWssBase(): string {
     const port = getRealtimeBridgeListenPort();
     return `${wsOrigin.split(":").slice(0, 2).join(":")}:${port}`;
   }
-  return LIVEKIT_SELF_HOSTED_WSS_URL.replace(/\/$/, "");
+  return OPENAI_REALTIME_BRIDGE_PUBLIC_WSS_URL.replace(/\/$/, "");
 }
 
 export function getOpenAiApiKey(): string {

@@ -35,7 +35,7 @@ Telnyx AI Assistant STT/TTS/LLM are **not** on the active audio path when the br
 
 ### Public WSS URL (hardcoded — no env)
 
-Production Telnyx `stream_url` uses **`wss://voice.transovo.ai`** (same frozen host as `LIVEKIT_SELF_HOSTED_WSS_URL` in `src/lib/voice/media-backend/constants.ts`). Path: `/telnyx/media?token=…`.
+Production Telnyx `stream_url` uses **`wss://voice.transovo.ai`** (`OPENAI_REALTIME_BRIDGE_PUBLIC_WSS_URL` in `openai-realtime-bridge/config.ts` — Telnyx media edge only, not LiveKit). Path: `/telnyx/media?token=…`.
 
 ### Coolify / TLS (do not expose raw `:3108` publicly)
 
