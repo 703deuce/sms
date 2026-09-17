@@ -30,11 +30,39 @@ Telnyx AI Assistant STT/TTS/LLM are **not** on the active audio path when the br
 | `VOICE_REALTIME_MODEL` | OpenAI Realtime mini model id (see `flags.ts` default) |
 | `VOICE_REALTIME_VOICE` | Default `marin` |
 | `VOICE_V2_OPENAI_REALTIME_BRIDGE` | Set `0` to disable bridge (Flux assistant path) |
-| `VOICE_REALTIME_BRIDGE_PORT` | WS listener (default `3108`) |
-| `VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL` | Public `wss://` base Telnyx can reach |
+| `VOICE_REALTIME_BRIDGE_PORT` | **Internal** WS listener (default `3108`, bind `0.0.0.0`) |
+| `VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL` | **Required for PSTN** — external TLS `wss://` base (no path); Telnyx connects to `{base}/telnyx/media?token=…` |
 | `VOICE_REALTIME_BRIDGE_SIGNING_SECRET` | HMAC for stream tokens |
 
+### Coolify / TLS (do not expose raw `:3108` publicly)
+
+Prefer Traefik on your app domain proxying WebSocket upgrades to the container’s bridge port:
+
+- Example: `VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL=wss://voice.transovo.ai`
+- Coolify: add a second domain or path rule → `http://<container>:3108` with **WebSocket** enabled.
+- Telnyx must reach valid **TLS** `wss://` from the public internet — not `wss://server-ip:3108` without a certificate.
+
 Republish wizard agent after enable so `inboundRoutingMode` is `call_control` (bridge apply sets this).
+
+## Session lifecycle (locked)
+
+One PSTN call = one Telnyx media WebSocket + **one** OpenAI Realtime WebSocket until hangup. No reconnect per utterance or tool.
+
+## Intake on the hot path
+
+`voice_v2_save_intake_fields` persistence runs **async** in the bridge: Amy gets an immediate function result and keeps talking; canonical CallContext updates in the background. FIND/BOOK/transfer remain awaited (truth actions).
+
+## PSTN test — log grep (operator)
+
+During your test call, grep container logs for `source":"realtime_bridge"`:
+
+| Event | Meaning |
+|-------|---------|
+| `telnyx_media_ws_connected` | Telnyx media WS up |
+| `openai_realtime_session_connected` | Model + voice + `g711_ulaw` |
+| `first_amy_audio_delta` | Caller stop → first Amy audio |
+| `tool_function_call` / `tool_result` | Tool names + FIND/BOOK outcomes |
+| `legacySttTtsPath: false` | No Assistant STT/TTS on this path |
 
 ## Tool adapter
 

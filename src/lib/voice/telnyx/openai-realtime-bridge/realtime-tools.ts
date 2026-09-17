@@ -173,6 +173,15 @@ export function buildOpenAiRealtimeVoiceV2Tools(input: {
   return tools;
 }
 
+/** Immediate tool result for intake — persistence runs async in the bridge (no caller dead air). */
+export const REALTIME_SAVE_INTAKE_DEFERRED_OUTPUT = JSON.stringify({
+  ok: true,
+  voice_v2_status: "INTAKE_ACCEPTED",
+  speak: "",
+  persist_async: true,
+  hint: "Continue the conversation; canonical state updates in the background.",
+});
+
 export type RealtimeToolDispatchContext = {
   workspaceId: string;
   agentId: string;

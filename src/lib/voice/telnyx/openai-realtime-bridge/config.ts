@@ -6,7 +6,11 @@ export function getRealtimeBridgeListenPort(): number {
   return Number.isFinite(n) && n > 0 ? n : 3108;
 }
 
-/** Public WSS base Telnyx will connect to (must be reachable from Telnyx). */
+/**
+ * Public WSS base Telnyx will connect to (must be reachable from Telnyx).
+ * Use a TLS `wss://` URL on your Coolify/Traefik domain (e.g. `wss://voice.example.com`),
+ * not a raw public `:3108` unless that port has valid TLS. Path `/telnyx/media` is appended.
+ */
 export function getRealtimeBridgePublicWssBase(): string {
   const explicit = process.env.VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
