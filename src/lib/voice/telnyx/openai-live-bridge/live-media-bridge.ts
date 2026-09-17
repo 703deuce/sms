@@ -9,12 +9,11 @@ import {
   isLiveOutputTranscriptDelta,
   LiveTurnTracer,
 } from "./live-turn-trace";
-import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
 import {
   LiveCallerUtteranceAssembler,
   type StableCallerUtterance,
 } from "./live-caller-utterance-assembler";
-import { createPendingStableUtteranceQueue } from "./live-pending-stable-utterances";
+import { createLiveStableUtteranceIngress } from "./live-stable-utterance-ingress";
 import { assertLiveOutboundEventContract } from "./live-outbound-events";
 import { clearUtteranceRevisionGuard } from "./live-utterance-revision-guard";
 import {
@@ -141,82 +140,43 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const turnTraceHooks = createTurnTraceHooks(turnTracer);
   const conversationTranscript = new LiveConversationTranscript();
   const callerAudioDetector = new CallerAudioActivityDetector();
-  const pendingStableUtterances = createPendingStableUtteranceQueue();
-  let controlPlaneReady = false;
   let liveSessionId: string | null = null;
   let firstInputTranscriptDeltaLogged = false;
 
-  const isInterpretationReady = (): boolean =>
-    controlPlaneReady &&
-    Boolean(liveControlPlane && streamClaimsForTeardown && liveToolDispatchContext);
+  let liveToolDispatchContext: LiveToolDispatchContext | null =
+    input.immediateLiveStart?.toolContext ?? input.toolContext ?? null;
+  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null =
+    liveToolDispatchContext?.controlPlane ?? null;
+  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null =
+    input.immediateLiveStart?.claims ?? input.claims ?? null;
 
-  const interpretAndApplyStableUtterance = (stable: StableCallerUtterance) => {
-    if (!liveControlPlane || !streamClaimsForTeardown || !liveToolDispatchContext) return;
-    void syncLiveCallerUtteranceIntent({
-      claims: streamClaimsForTeardown,
-      callerUtterance: stable.text,
-      fullConversationTranscript: conversationTranscript.formatFull(),
-      stableUtterance: stable,
-      controlPlane: liveControlPlane,
-      sendLiveOut,
-      dispatchContext: liveToolDispatchContext,
-      autoDispatch: true,
-    }).catch((err) => {
-      console.error("[live-media] stable caller utterance intent sync failed", err);
-    });
-  };
+  const stableUtteranceIngress = createLiveStableUtteranceIngress({
+    callId,
+    getDeps: () => {
+      if (!liveControlPlane || !streamClaimsForTeardown || !liveToolDispatchContext) {
+        return null;
+      }
+      return {
+        claims: streamClaimsForTeardown,
+        controlPlane: liveControlPlane,
+        dispatchContext: liveToolDispatchContext,
+        sendLiveOut,
+        fullConversationTranscript: () => conversationTranscript.formatFull(),
+        liveSessionId,
+      };
+    },
+  });
 
   const markControlPlaneReady = (reason: string) => {
-    if (controlPlaneReady) return;
-    controlPlaneReady = true;
-    console.info(
-      `CONTROL_PLANE_READY ${JSON.stringify({
-        call_id: callId,
-        live_session_id: liveSessionId,
-        reason,
-        queued_utterances: pendingStableUtterances.size(),
-      })}`,
-    );
-    const queued = pendingStableUtterances.drain();
-    for (const utterance of queued) {
-      console.info(
-        `VOICE_STABLE_UTTERANCE_REPLAY ${JSON.stringify({
-          call_id: callId,
-          live_session_id: liveSessionId,
-          utterance_id: utterance.utterance_id,
-          revision: utterance.revision,
-        })}`,
-      );
-      interpretAndApplyStableUtterance(utterance);
-    }
+    stableUtteranceIngress.markControlPlaneReady(reason);
   };
 
   const callerUtteranceAssembler = new LiveCallerUtteranceAssembler({
     callId,
     onStable: (stable) => {
-      console.info(
-        `STABLE_UTTERANCE_CREATED ${JSON.stringify({
-          call_id: callId,
-          live_session_id: liveSessionId,
-          utterance_id: stable.utterance_id,
-          revision: stable.revision,
-          text_chars: stable.text.length,
-        })}`,
-      );
-      if (!isInterpretationReady()) {
-        pendingStableUtterances.enqueue(stable);
-        console.info(
-          `VOICE_STABLE_UTTERANCE_QUEUED ${JSON.stringify({
-            call_id: callId,
-            live_session_id: liveSessionId,
-            utterance_id: stable.utterance_id,
-            revision: stable.revision,
-            queue_depth: pendingStableUtterances.size(),
-          })}`,
-        );
-        return;
-      }
-      interpretAndApplyStableUtterance(stable);
+      void stableUtteranceIngress.ingestStableUtterance(stable).catch((err) => {
+        console.error("[live-media] stable caller utterance intent sync failed", err);
+      });
     },
   });
 
@@ -284,12 +244,6 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
-  let liveToolDispatchContext: LiveToolDispatchContext | null =
-    input.immediateLiveStart?.toolContext ?? input.toolContext ?? null;
-  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null =
-    liveToolDispatchContext?.controlPlane ?? null;
-  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null =
-    input.immediateLiveStart?.claims ?? input.claims ?? null;
   let liveRuntimeDisposed = false;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {

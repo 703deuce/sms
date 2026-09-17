@@ -28,6 +28,7 @@ import { runLiveControlPlaneTurn } from "@/lib/voice/telnyx/openai-live-bridge/l
 import type { RealtimeBridgeStreamClaims } from "@/lib/voice/telnyx/openai-realtime-bridge/stream-token";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 import { VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import { resetAllUtteranceRevisionGuards } from "@/lib/voice/telnyx/openai-live-bridge/live-utterance-revision-guard";
 
 export const ORCHESTRATION_TEST_CONFIG = {
   advanced: {
@@ -203,7 +204,9 @@ export class VoiceV2OrchestrationHarness {
     return {
       findAvailability: async () => {
         this.findCount += 1;
-        return defaultFakeFindResult();
+        const result = defaultFakeFindResult();
+        this.seedOfferSet(String(result.offer_set_id), result.slots);
+        return result;
       },
       bookOfferedSlot: async ({ args }) => {
         this.bookCount += 1;
@@ -348,6 +351,7 @@ export function resetOrchestrationTestWorld() {
   clearVoiceV2CallSessions();
   clearAllVoiceV2TestExecutors();
   clearVoiceV2OfferSetTestStore();
+  resetAllUtteranceRevisionGuards();
 }
 
 export function envelopeForContext(ctx: VoiceV2CallContext) {
