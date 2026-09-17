@@ -1,23 +1,29 @@
 #!/usr/bin/env tsx
 /**
- * Purge Voice AI agent data from the database (Telnyx assistants/DIDs are NOT touched).
+ * Reset Voice AI in the database: delete all agents + unlink DIDs from inbound AI routing.
+ * Does NOT delete the voice product code. Does NOT release numbers from your Telnyx account.
  *
- * One workspace (dry run):
- *   npx tsx scripts/purge-workspace-voice-agents.ts --workspace <id>
+ * Dry run:
+ *   NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/purge-workspace-voice-agents.ts --all
  *
- * One workspace (execute):
- *   CONFIRM_PURGE=1 npx tsx scripts/purge-workspace-voice-agents.ts --workspace <id>
+ * Execute (your solo tenant — all workspaces that have/had voice agents):
+ *   CONFIRM_PURGE=1 NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/purge-workspace-voice-agents.ts --all
  *
- * Every workspace that has voice agents (dry run):
- *   npx tsx scripts/purge-workspace-voice-agents.ts --all
- *
- * Execute platform-wide agent purge:
- *   CONFIRM_PURGE=1 npx tsx scripts/purge-workspace-voice-agents.ts --all
+ * One workspace:
+ *   CONFIRM_PURGE=1 ... --workspace ws_1
  */
 import "./preload-server-only.mjs";
 
 import type { PrismaClient } from "@prisma/client";
 import { getPrisma } from "@/lib/db";
+import { mergePhoneCapabilitySettings } from "@/lib/numbers/phone-capabilities";
+import { isMctbTexmlIngressLocked } from "@/lib/mctb/sip-ingress/sync";
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 function parseArgs(): { all: boolean; workspaceId: string | null } {
   const all = process.argv.includes("--all");
@@ -31,26 +37,103 @@ function parseArgs(): { all: boolean; workspaceId: string | null } {
   return { all, workspaceId };
 }
 
+async function resolveWorkspaceIds(
+  prisma: PrismaClient,
+  all: boolean,
+  workspaceId: string | null,
+): Promise<string[]> {
+  if (!all) return [workspaceId!];
+  const [fromAgents, fromJoins] = await Promise.all([
+    prisma.voiceAgent.findMany({ select: { workspaceId: true } }),
+    prisma.voiceAgentPhoneNumber.findMany({ select: { workspaceId: true } }),
+  ]);
+  return [...new Set([...fromAgents, ...fromJoins].map((r) => r.workspaceId))];
+}
+
 async function listAgents(prisma: PrismaClient, workspaceId: string) {
   return prisma.voiceAgent.findMany({
     where: { workspaceId },
-    select: { id: true, name: true, telnyxAssistantId: true, status: true },
+    select: { id: true, name: true, telnyxAssistantId: true, status: true, phoneNumberId: true },
     orderBy: { createdAt: "asc" },
   });
 }
 
-/** Delete voice-agent domain rows for one workspace (keeps PhoneNumber / MCTB / unrelated products). */
+async function listLinkedDids(prisma: PrismaClient, workspaceId: string) {
+  const joins = await prisma.voiceAgentPhoneNumber.findMany({
+    where: { workspaceId },
+    include: { agent: { select: { name: true } } },
+  });
+  const phones = await prisma.phoneNumber.findMany({
+    where: { workspaceId },
+    select: { id: true, e164: true, settingsJson: true },
+  });
+  const aiPhones = phones.filter((p) => {
+    const caps = asRecord(asRecord(p.settingsJson).capabilities);
+    return caps.aiAfterHoursEnabled === true || asRecord(p.settingsJson).aiAfterHoursEnabled === true;
+  });
+  return { joins, aiPhones };
+}
+
+/** Turn off Transovo inbound AI routing on each DID (keeps MCTB TeXML locks intact). */
+async function unlinkDidsFromVoiceAgents(prisma: PrismaClient, workspaceId: string) {
+  const phones = await prisma.phoneNumber.findMany({ where: { workspaceId } });
+  let updated = 0;
+
+  for (const pn of phones) {
+    const mctbLocked = isMctbTexmlIngressLocked(pn.settingsJson);
+    let next = mergePhoneCapabilitySettings(pn.settingsJson, { aiAfterHoursEnabled: false });
+    const telephony = { ...asRecord(next.telephony) };
+    delete telephony.explicitDispatch;
+    delete telephony.livekitDidDispatchRuleId;
+    delete telephony.voiceAgentId;
+    delete telephony.telnyxAssistantId;
+    delete telephony.publishedAgentId;
+    delete telephony.openaiLiveBridgeAgentId;
+
+    if (!mctbLocked) {
+      const mode = String(telephony.routingMode || "").toLowerCase();
+      if (
+        mode.includes("livekit") ||
+        mode.includes("realtime") ||
+        mode === "call_control" ||
+        mode.includes("openai")
+      ) {
+        delete telephony.routingMode;
+      }
+    }
+    next.telephony = telephony;
+    await prisma.phoneNumber.update({
+      where: { id: pn.id },
+      data: { settingsJson: next },
+    });
+    updated += 1;
+  }
+
+  await prisma.voiceAgentPhoneNumber.deleteMany({ where: { workspaceId } });
+
+  await prisma.automationFlow.updateMany({
+    where: { workspaceId, ownerAgentId: { not: null } },
+    data: { ownerAgentId: null },
+  });
+
+  const pausedDeployments = await prisma.triggerDeployment.updateMany({
+    where: {
+      workspaceId,
+      channel: "voice",
+      triggerBlockType: "inbound_call",
+      status: "live",
+    },
+    data: { status: "paused", pausedAt: new Date() },
+  });
+
+  return { phonesUpdated: updated, deploymentsPaused: pausedDeployments.count };
+}
+
+/** Delete voice-agent domain rows for one workspace (phone number rows stay; routing cleared separately). */
 async function purgeWorkspaceVoiceAgents(prisma: PrismaClient, workspaceId: string) {
-  const agentIds = (
-    await prisma.voiceAgent.findMany({
-      where: { workspaceId },
-      select: { id: true },
-    })
-  ).map((a) => a.id);
+  const count = await prisma.voiceAgent.count({ where: { workspaceId } });
+  if (!count) return 0;
 
-  if (!agentIds.length) return 0;
-
-  // Child / dependent rows (workspace-scoped voice tables).
   await prisma.voiceAssistantTestRun.deleteMany({ where: { workspaceId } });
   await prisma.voiceAssistantTest.deleteMany({ where: { workspaceId } });
   await prisma.voiceTestRun.deleteMany({ where: { workspaceId } });
@@ -74,9 +157,7 @@ async function purgeWorkspaceVoiceAgents(prisma: PrismaClient, workspaceId: stri
   await prisma.voiceToolExecution.deleteMany({ where: { workspaceId } });
   await prisma.voiceConversationInsight.deleteMany({ where: { workspaceId } });
   await prisma.voiceUsageRecord.deleteMany({ where: { workspaceId } });
-  await prisma.voiceTranscriptSegment.deleteMany({
-    where: { transcript: { workspaceId } },
-  });
+  await prisma.voiceTranscriptSegment.deleteMany({ where: { workspaceId } });
   await prisma.voiceTranscript.deleteMany({ where: { workspaceId } });
   await prisma.voiceCallLeg.deleteMany({ where: { workspaceId } });
   await prisma.voiceCallEvent.deleteMany({ where: { workspaceId } });
@@ -101,45 +182,58 @@ async function main() {
   const confirm = process.env.CONFIRM_PURGE === "1";
   const prisma = getPrisma();
 
-  const workspaceIds: string[] = all
-    ? [
-        ...new Set(
-          (
-            await prisma.voiceAgent.findMany({
-              select: { workspaceId: true },
-            })
-          ).map((r) => r.workspaceId),
-        ),
-      ]
-    : [workspaceId!];
+  const workspaceIds = await resolveWorkspaceIds(prisma, all, workspaceId);
+  if (!workspaceIds.length) {
+    console.info("No workspaces with voice agents or DID assignments found.");
+    return;
+  }
 
   let totalAgents = 0;
   for (const ws of workspaceIds) {
     const agents = await listAgents(prisma, ws);
+    const { joins, aiPhones } = await listLinkedDids(prisma, ws);
     totalAgents += agents.length;
-    console.info(`\nWorkspace ${ws}: ${agents.length} voice agent(s)`);
+    console.info(`\nWorkspace ${ws}: ${agents.length} agent(s), ${joins.length} DID link(s)`);
     for (const a of agents) {
       console.info(
-        `  - ${a.id}  ${a.name}  status=${a.status}  telnyx=${a.telnyxAssistantId ?? "—"}`,
+        `  agent ${a.id}  ${a.name}  telnyx=${a.telnyxAssistantId ?? "—"}  phone=${a.phoneNumberId ?? "—"}`,
       );
+    }
+    for (const j of joins) {
+      console.info(`  link phone=${j.phoneNumberId} → agent=${j.agentId} (${j.agent.name})`);
+    }
+    for (const p of aiPhones) {
+      console.info(`  AI-after-hours flag on ${p.e164}`);
     }
   }
 
   if (!confirm) {
     console.info(
-      `\nDry run — ${totalAgents} agent(s) across ${workspaceIds.length} workspace(s).`,
+      `\nDry run — ${totalAgents} agent(s) in ${workspaceIds.length} workspace(s).`,
     );
-    console.info("Set CONFIRM_PURGE=1 to delete (DB only; Telnyx assistants unchanged).");
+    console.info(
+      "CONFIRM_PURGE=1 will delete agents, clear DID→agent links, disable aiAfterHours on numbers (MCTB TeXML locks preserved).",
+    );
     return;
   }
 
   let removed = 0;
+  let phonesUpdated = 0;
+  let deploymentsPaused = 0;
   for (const ws of workspaceIds) {
     removed += await purgeWorkspaceVoiceAgents(prisma, ws);
+    const unlink = await unlinkDidsFromVoiceAgents(prisma, ws);
+    phonesUpdated += unlink.phonesUpdated;
+    deploymentsPaused += unlink.deploymentsPaused;
   }
 
-  console.info(`\nDeleted ${removed} voice agent row(s). Telnyx assistants/DIDs were not modified.`);
-  console.info("Create a new agent in Transovo and assign your new number when ready.");
+  console.info(`\nDone.`);
+  console.info(`  Voice agents deleted: ${removed}`);
+  console.info(`  Phone numbers cleared of inbound AI routing: ${phonesUpdated}`);
+  console.info(`  Live inbound voice trigger deployments paused: ${deploymentsPaused}`);
+  console.info(
+    "Telnyx may still point a DID at an old Call Control app until you assign a new agent or change routing in Telnyx — numbers are still in your account.",
+  );
 }
 
 main().catch((err) => {
