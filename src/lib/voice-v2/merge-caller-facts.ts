@@ -16,6 +16,9 @@ import {
   syncWorkflowRequestedDateFromScheduling,
   type VoiceV2SchedulingPreference,
 } from "./scheduling-preference-state";
+import { mergeUtteranceIntakeFactsIntoContext } from "./intake/apply-intake-facts";
+import { resolveSelectedSlotIdFromOffer } from "./resolve-slot-from-offer";
+import { loadVoiceV2OfferSet } from "./offer-set-store";
 
 export type MergeCallerFactsInput = {
   utterance: string;
@@ -27,22 +30,28 @@ export type MergeCallerFactsInput = {
 export type MergeCallerFactsResult = {
   ctx: VoiceV2CallContext;
   schedulingChanged: boolean;
+  intakeFieldsSaved: import("./intake/types").IntakeFieldKey[];
 };
 
 /**
  * Deterministic fact capture — independent of workflow stage and SAVE tool timing.
  * Interpreter proposes; runtime validates, normalizes, and persists.
  */
-export function mergeCallerFactsIntoCallContext(
+export async function mergeCallerFactsIntoCallContext(
   ctx: VoiceV2CallContext,
   input: MergeCallerFactsInput,
-): MergeCallerFactsResult {
-  if (input.interpretation.digression) {
-    return { ctx, schedulingChanged: false };
-  }
-
+): Promise<MergeCallerFactsResult> {
   let next = { ...ctx };
   let schedulingChanged = false;
+  let intakeFieldsSaved: import("./intake/types").IntakeFieldKey[] = [];
+
+  const intakeMerge = mergeUtteranceIntakeFactsIntoContext(next, input.utterance);
+  next = intakeMerge.ctx;
+  intakeFieldsSaved = intakeMerge.saved;
+
+  if (input.interpretation.digression) {
+    return { ctx: next, schedulingChanged: false, intakeFieldsSaved };
+  }
   let workflow: VoiceV2BookingWorkflow = { ...workflowFromContext(next) };
 
   if (isActiveBookingGoal(input.interpretation.intent) || isActiveBookingGoal(dialogFromContext(next).activeGoal)) {
@@ -86,28 +95,23 @@ export function mergeCallerFactsIntoCallContext(
   };
 
   next = mergeWorkflowIntoContext(next, workflow);
-  return { ctx: next, schedulingChanged };
+
+  const offerId = next.currentOfferSet?.offerSetId;
+  if (offerId && input.utterance.trim()) {
+    const loaded = await loadVoiceV2OfferSet(next.workspaceId, offerId).catch(() => null);
+    if (loaded?.slots?.length) {
+      const slotId = resolveSelectedSlotIdFromOffer(loaded.slots, input.utterance);
+      if (slotId && next.bookingState?.selectedSlotId !== slotId) {
+        next = {
+          ...next,
+          bookingState: { ...(next.bookingState ?? {}), selectedSlotId: slotId, status: "selected" },
+        };
+        next = rederiveWorkflowStageForContext(next);
+      }
+    }
+  }
+
+  return { ctx: next, schedulingChanged, intakeFieldsSaved };
 }
 
-/** Re-derive workflow stage after any context mutation (intake save, FIND, etc.). */
-export function rederiveWorkflowStageForContext(ctx: VoiceV2CallContext): VoiceV2CallContext {
-  let workflow = syncWorkflowRequestedDateFromScheduling(
-    workflowFromContext(ctx),
-    ctx.schedulingPreference,
-  );
-  const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-  const hasOffer =
-    Boolean(ctx.currentOfferSet?.offerSetId) && (ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
-  const strategy = ctx.capabilities?.bookingStrategy ?? "MICROSOFT_365";
-  workflow = {
-    ...workflow,
-    nextStage: deriveVoiceV2NextStage({
-      workflow,
-      readiness,
-      hasActiveOfferSet: hasOffer,
-      bookingStrategy: strategy,
-      schedulingPreference: ctx.schedulingPreference,
-    }),
-  };
-  return mergeWorkflowIntoContext(ctx, workflow);
-}
+export { rederiveWorkflowStageForContext } from "./workflow-rederive";

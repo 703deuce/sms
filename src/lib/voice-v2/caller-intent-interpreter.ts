@@ -201,17 +201,17 @@ export type ApplyCallerIntentResult = {
 };
 
 /** Merge per-turn caller interpretation into authoritative call context (no model workflow_signal). */
-export function applyCallerIntentToCallContext(
+export async function applyCallerIntentToCallContext(
   ctx: VoiceV2CallContext,
   interpretation: VoiceCallerIntentInterpretation,
   callerUtterance?: string,
-): ApplyCallerIntentResult {
+): Promise<ApplyCallerIntentResult> {
   const previousActiveGoal = dialogFromContext(ctx).activeGoal;
   let dialog: VoiceV2DialogState = { ...dialogFromContext(ctx) };
   let workflow: VoiceV2BookingWorkflow = { ...workflowFromContext(ctx) };
 
   if (interpretation.digression) {
-    const factMerge = mergeCallerFactsIntoCallContext(ctx, {
+    const factMerge = await mergeCallerFactsIntoCallContext(ctx, {
       utterance: (callerUtterance || interpretation.evidence).trim(),
       interpretation,
     });
@@ -280,7 +280,7 @@ export function applyCallerIntentToCallContext(
   });
 
   let mergedCtx = mergeWorkflowIntoContext(dialogApplied.ctx, dialogApplied.workflow);
-  const factMerge = mergeCallerFactsIntoCallContext(mergedCtx, {
+  const factMerge = await mergeCallerFactsIntoCallContext(mergedCtx, {
     utterance: (callerUtterance || interpretation.evidence).trim(),
     interpretation,
   });

@@ -60,7 +60,7 @@ function seed(): VoiceV2CallContext {
   return ctx;
 }
 
-function applyUtterance(ctx: VoiceV2CallContext, utterance: string) {
+async function applyUtterance(ctx: VoiceV2CallContext, utterance: string) {
   const prior = dialogFromContext(ctx).activeGoal;
   const interpretation = interpretCallerUtterance(utterance, { activeGoal: prior });
   return applyCallerIntentToCallContext(ctx, interpretation, utterance);
@@ -86,7 +86,7 @@ async function scenarioDateBeforeEmail() {
   let ctx = seed();
   const utterance =
     "I need an appointment on September 25, 2026 in the morning.";
-  const applied = applyUtterance(ctx, utterance);
+  const applied = await applyUtterance(ctx, utterance);
   ctx = applied.ctx;
   setVoiceV2CallContext(ctx);
 
@@ -146,7 +146,7 @@ async function scenarioEmailBeforeDate() {
   );
   pass("EMAIL_FIRST_SAVED", emailFirst.status === "INTAKE_SAVED", String(emailFirst.status));
   ctx = getVoiceV2CallContext(SESSION)!;
-  const applied = applyUtterance(
+  const applied = await applyUtterance(
     ctx,
     "Can we do September 26, 2026 afternoon?",
   );
@@ -187,9 +187,9 @@ async function scenarioEmailBeforeDate() {
 async function scenarioCorrection() {
   clearVoiceV2CallSessions();
   let ctx = seed();
-  ctx = applyUtterance(ctx, "Book me September 25, 2026 morning").ctx;
+  ctx = (await applyUtterance(ctx, "Book me September 25, 2026 morning")).ctx;
   setVoiceV2CallContext(ctx);
-  ctx = applyUtterance(ctx, "Actually make it September 24, 2026 afternoon").ctx;
+  ctx = (await applyUtterance(ctx, "Actually make it September 24, 2026 afternoon")).ctx;
   setVoiceV2CallContext(ctx);
   pass(
     "CORRECTION_DATE",

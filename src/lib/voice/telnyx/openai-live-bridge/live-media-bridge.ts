@@ -177,6 +177,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
   let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null = null;
+  let liveToolDispatchContext: LiveToolDispatchContext | null = null;
   let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null = null;
   let liveRuntimeDisposed = false;
 
@@ -197,6 +198,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       return;
     }
     liveControlPlane = toolContext.controlPlane;
+    liveToolDispatchContext = toolContext;
     streamClaimsForTeardown = claims;
     delegationHandler = createLiveDelegationHandler({
       callId,
@@ -240,6 +242,8 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       callerUtterance: utterance,
       controlPlane: liveControlPlane,
       sendLiveOut,
+      dispatchContext: liveToolDispatchContext ?? undefined,
+      autoDispatch: Boolean(liveToolDispatchContext),
     }).catch((err) => {
       console.error("[live-media] caller intent sync failed", err);
     });

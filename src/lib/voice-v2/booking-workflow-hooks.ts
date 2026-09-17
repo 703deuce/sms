@@ -6,17 +6,10 @@ import {
 } from "@/lib/voice-v2/pstn-workflow-mode";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import {
-  buildWorkflowToolPayload,
-  deriveVoiceV2NextStage,
-  transitionAfterFind,
-  transitionAfterBookingConfirmed,
-  workflowFromContextWithDialog,
-} from "./booking-workflow";
+import { transitionAfterFind, transitionAfterBookingConfirmed } from "./booking-workflow";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./intake/session-store";
 import { resolveSessionKey } from "./intake/load-call-context";
-import { getIntakeReadiness } from "./intake/readiness";
-import { filterAllowedActionsForDialog } from "./dialog-goal";
+import { buildVoiceV2ControlPlaneEnvelope } from "./control-plane-envelope";
 
 export async function loadVoiceV2PstnLiveBookingFlag(
   workspaceId: string,
@@ -56,34 +49,7 @@ export function workflowPayloadForContext(
   voiceV2PstnLiveBooking: boolean,
   bookingStrategy?: ReturnType<typeof resolveVoiceV2BookingStrategy>,
 ): Record<string, unknown> {
-  const readiness = getIntakeReadiness(ctx.intakeSchema, ctx.intakeState);
-  const hasOffer =
-    Boolean(ctx.currentOfferSet?.offerSetId) && (ctx.currentOfferSet?.slotIds?.length ?? 0) > 0;
-  const workflow = workflowFromContextWithDialog(ctx);
-  const strategy =
-    bookingStrategy ??
-    ctx.capabilities?.bookingStrategy ??
-    (voiceV2PstnLiveBooking ? "MICROSOFT_365" : "NONE");
-  workflow.nextStage = deriveVoiceV2NextStage({
-    workflow,
-    readiness,
-    hasActiveOfferSet: hasOffer,
-    bookingStrategy: strategy,
-    schedulingPreference: ctx.schedulingPreference,
-  });
-  const payload = buildWorkflowToolPayload({
-    voiceV2PstnLiveBooking,
-    bookingStrategy: strategy,
-    workflow,
-    readiness,
-    hasActiveOfferSet: hasOffer,
-    ctx,
-  });
-  const allowed = filterAllowedActionsForDialog(
-    ctx,
-    (payload.allowed_next_actions as string[]) || [],
-  );
-  return { ...payload, allowed_next_actions: allowed };
+  return buildVoiceV2ControlPlaneEnvelope(ctx, voiceV2PstnLiveBooking, bookingStrategy);
 }
 
 export async function patchWorkflowAfterFind(input: {

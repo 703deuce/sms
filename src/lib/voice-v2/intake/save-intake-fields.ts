@@ -12,7 +12,7 @@ import {
   transitionAfterIntakeSave,
   workflowFromContext,
 } from "../booking-workflow";
-import { rederiveWorkflowStageForContext } from "../merge-caller-facts";
+import { rederiveWorkflowStageForContext } from "../workflow-rederive";
 import {
   mergeSchedulingPreferenceRecord,
   syncWorkflowRequestedDateFromScheduling,

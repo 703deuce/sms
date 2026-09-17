@@ -18,7 +18,7 @@ import {
 } from "./live-delegation-context";
 import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
-import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
+import { runLiveControlPlaneTurn } from "./live-control-plane-turn";
 import { shouldIssueResponseCreateOnDelegation } from "./live-workflow-tool-filter";
 import type { VoiceV2NextStage } from "@/lib/voice-v2/booking-workflow";
 import { VOICE_V2_SAVE_INTAKE_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
@@ -70,18 +70,25 @@ export function createLiveDelegationHandler(input: {
   const controlPlane = input.callContext.controlPlane;
 
   const syncControlPlaneToLive = () => {
-    for (const event of buildLiveControlPlaneSyncEvents(controlPlane)) {
-      input.sendLiveOut(event);
-    }
-    const env = controlPlane.getWorkflowEnvelope();
-    logLiveObs("BACKEND_STATE_SYNC", {
-      call_id: input.callId,
-      live_session_id: controlPlane.getLiveSessionId(),
-      offer_set_id: controlPlane.getCallContext()?.currentOfferSet?.offerSetId ?? null,
-      booking_status: controlPlane.isBookingConfirmed() ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
-      booking_confirmed: controlPlane.isBookingConfirmed(),
-      voice_v2_next_stage: env.voice_v2_next_stage,
-      active_tool_names: controlPlane.getActiveTools().map((t) => t.name),
+    void runLiveControlPlaneTurn({
+      controlPlane,
+      sendLiveOut: input.sendLiveOut,
+      dispatchContext: input.callContext,
+      autoDispatch: true,
+      reason: "delegation_sync",
+    }).then(() => {
+      const env = controlPlane.getWorkflowEnvelope();
+      logLiveObs("BACKEND_STATE_SYNC", {
+        call_id: input.callId,
+        live_session_id: controlPlane.getLiveSessionId(),
+        offer_set_id: controlPlane.getCallContext()?.currentOfferSet?.offerSetId ?? null,
+        booking_status: controlPlane.isBookingConfirmed() ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
+        booking_confirmed: controlPlane.isBookingConfirmed(),
+        voice_v2_next_stage: env.voice_v2_next_stage,
+        required_action: env.required_action ?? null,
+        forbidden_actions: env.forbidden_actions,
+        active_tool_names: controlPlane.getActiveTools().map((t) => t.name),
+      });
     });
   };
 

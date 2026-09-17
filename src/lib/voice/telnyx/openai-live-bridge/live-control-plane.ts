@@ -114,7 +114,13 @@ export function createLiveControlPlane(input: {
         allowed_next_actions: ["voice_v2_save_intake_fields"],
         booking_continue_required: false,
         runtime_hint: "",
-        forbidden_actions: [],
+        forbidden_actions: [
+          "voice_v2_find_availability",
+          "voice_v2_book_offered_slot",
+          "voice_v2_finalize_caller_request",
+          "voice_v2_send_booking_link",
+        ],
+        required_action: null,
       };
     }
     const voiceV2PstnLiveBooking =

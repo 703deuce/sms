@@ -24,16 +24,16 @@ function minimalCtx(): VoiceV2CallContext {
 }
 
 describe("caller-intent-interpreter", () => {
-  it("persists BOOK_APPOINTMENT across name answer", () => {
+  it("persists BOOK_APPOINTMENT across name answer", async () => {
     let ctx = minimalCtx();
     const book = interpretCallerUtterance("I need to make an appointment.", {
       activeGoal: "UNKNOWN",
     });
-    ctx = applyCallerIntentToCallContext(ctx, book).ctx;
+    ctx = (await applyCallerIntentToCallContext(ctx, book)).ctx;
     expect(ctx.dialog?.activeGoal).toBe("BOOK_APPOINTMENT");
 
     const name = interpretCallerUtterance("Anthony.", { activeGoal: "BOOK_APPOINTMENT" });
-    ctx = applyCallerIntentToCallContext(ctx, name).ctx;
+    ctx = (await applyCallerIntentToCallContext(ctx, name)).ctx;
     expect(ctx.dialog?.activeGoal).toBe("BOOK_APPOINTMENT");
   });
 
@@ -45,14 +45,14 @@ describe("caller-intent-interpreter", () => {
     expect(interp.explicit).toBe(false);
   });
 
-  it("explicit callback overrides active booking", () => {
+  it("explicit callback overrides active booking", async () => {
     let ctx = minimalCtx();
     ctx.dialog = { activeGoal: "BOOK_APPOINTMENT", explicitCallbackRequested: false };
     ctx.bookingWorkflow = { ...defaultVoiceV2BookingWorkflow(), bookingIntentActive: true };
     const cb = interpretCallerUtterance("Just have somebody call me back instead.", {
       activeGoal: "BOOK_APPOINTMENT",
     });
-    ctx = applyCallerIntentToCallContext(ctx, cb).ctx;
+    ctx = (await applyCallerIntentToCallContext(ctx, cb)).ctx;
     expect(ctx.dialog?.activeGoal).toBe("CALLBACK_REQUEST");
     expect(ctx.dialog?.explicitCallbackRequested).toBe(true);
   });
