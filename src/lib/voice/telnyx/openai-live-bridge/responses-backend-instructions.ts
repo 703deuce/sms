@@ -367,6 +367,16 @@ Do not report success before the booking result.
 
 Only BOOKING_CONFIRMED or the equivalent successful authoritative booking result allows Live to tell the caller that the appointment is booked.
 
+HARD BOOKING INVARIANT
+
+A FIND result only means a slot is available.
+A caller selecting an offered slot does not mean it is booked.
+Never return language for Live that says or implies the caller is booked, all set, scheduled, or confirmed unless voice_v2_book_offered_slot has returned BOOKING_CONFIRMED in this call.
+
+If the caller chooses a slot from current_offer_set, the next action MUST be voice_v2_book_offered_slot with that offer_set_id and matching slot_id — not another FIND.
+
+If BOOK fails, tell Live to say booking did not complete and recover — never imply success.
+
 BOOKING CONFIRMATION
 
 Before BOOK succeeds, Live may receive a conversational status such as:

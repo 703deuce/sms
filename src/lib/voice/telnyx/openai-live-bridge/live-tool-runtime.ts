@@ -44,6 +44,8 @@ import {
   createLiveBookingSessionState,
   mergeFindArgsWithSessionState,
   recordFindInvocation,
+  recordLatestFindToolResult,
+  shouldShortCircuitRedundantFind,
   type LiveBookingSessionState,
 } from "./live-booking-session-state";
 import {
@@ -188,6 +190,25 @@ export async function dispatchLiveVoiceTool(input: {
     const requestedDate = String(merged.requested_date || merged.requestedDate || "").trim();
     ctx.onFindStarted?.(requestedDate);
 
+    if (shouldShortCircuitRedundantFind(merged, ctx.bookingSession)) {
+      const offer = ctx.bookingSession.currentOfferSet!;
+      const shortCircuit = formatVoiceV2TelnyxToolResponse({
+        voice_v2_status: "AVAILABILITY_FOUND",
+        offer_set_id: offer.offer_set_id,
+        slots: offer.slots.map((s) => ({
+          slot_id: s.slot_id,
+          label: s.spoken_label,
+        })),
+        speak:
+          "Current offer set is still valid. Do not FIND again. Call voice_v2_book_offered_slot when the caller selects a slot.",
+        redundant_find_blocked: true,
+      } as never);
+      const formatted = JSON.stringify(shortCircuit);
+      recordLatestFindToolResult(ctx.bookingSession, "AVAILABILITY_FOUND");
+      ctx.onBookingStateChanged?.();
+      return { executor: "live_find_short_circuit", output: formatted };
+    }
+
     const findBody: Record<string, unknown> = {
       ...body,
       ...merged,
@@ -213,6 +234,10 @@ export async function dispatchLiveVoiceTool(input: {
       error: parsed.error ? String(parsed.error) : null,
     });
     applyFindResultToSessionState(ctx.bookingSession, parsed);
+    recordLatestFindToolResult(
+      ctx.bookingSession,
+      String(parsed.voice_v2_status || parsed.status || "ERROR"),
+    );
     ctx.onBookingStateChanged?.();
 
     return {
@@ -227,6 +252,12 @@ export async function dispatchLiveVoiceTool(input: {
         "I cannot complete a booking on this line right now.",
         "BOOK_DISABLED",
       );
+    }
+    const selectedSlotId = String(
+      args.selected_slot_id || args.selectedSlotId || args.slot_id || "",
+    ).trim();
+    if (selectedSlotId) {
+      ctx.bookingSession.selectedSlotId = selectedSlotId;
     }
     const result = await executeVoiceV2BookOfferedSlot(body, ctx.workspaceId, {
       agentId: ctx.agentId,

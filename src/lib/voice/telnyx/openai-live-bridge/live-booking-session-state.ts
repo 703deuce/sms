@@ -26,19 +26,30 @@ export type LiveCurrentOfferSet = {
   time_window?: { start: string; end: string };
 };
 
+export type LiveLatestToolResult = {
+  tool: string;
+  voice_v2_status: string;
+  at_ms: number;
+  appointment_id?: string | null;
+};
+
 export type LiveBookingSessionState = {
   schedulingPreference: LiveSchedulingPreference;
   currentOfferSet: LiveCurrentOfferSet | null;
+  selectedSlotId: string | null;
   bookingConfirmed: boolean;
   findInvocationCount: number;
+  latestToolResult: LiveLatestToolResult | null;
 };
 
 export function createLiveBookingSessionState(): LiveBookingSessionState {
   return {
     schedulingPreference: {},
     currentOfferSet: null,
+    selectedSlotId: null,
     bookingConfirmed: false,
     findInvocationCount: 0,
+    latestToolResult: null,
   };
 }
 
@@ -130,6 +141,7 @@ export function applyFindResultToSessionState(
     requested_date: state.schedulingPreference.requested_date,
     time_window: state.schedulingPreference.time_window,
   };
+  state.selectedSlotId = null;
 }
 
 export function applyBookResultToSessionState(
@@ -137,14 +149,59 @@ export function applyBookResultToSessionState(
   toolOutput: Record<string, unknown>,
 ): void {
   const status = String(toolOutput.voice_v2_status || toolOutput.status || "");
+  state.latestToolResult = {
+    tool: "voice_v2_book_offered_slot",
+    voice_v2_status: status,
+    at_ms: Date.now(),
+    appointment_id: toolOutput.appointment_id
+      ? String(toolOutput.appointment_id)
+      : toolOutput.external_id
+        ? String(toolOutput.external_id)
+        : null,
+  };
   if (status === "BOOKING_CONFIRMED") {
     state.bookingConfirmed = true;
     state.currentOfferSet = null;
+    state.selectedSlotId = null;
   }
+}
+
+export function recordLatestFindToolResult(
+  state: LiveBookingSessionState,
+  voiceV2Status: string,
+): void {
+  state.latestToolResult = {
+    tool: "voice_v2_find_availability",
+    voice_v2_status: voiceV2Status,
+    at_ms: Date.now(),
+  };
+}
+
+function windowsEqual(
+  a?: { start: string; end: string },
+  b?: { start: string; end: string },
+): boolean {
+  if (!a || !b) return false;
+  return a.start === b.start && a.end === b.end;
+}
+
+/** Block duplicate FIND when the same date/window already has a canonical offer set. */
+export function shouldShortCircuitRedundantFind(
+  mergedArgs: Record<string, unknown>,
+  state: LiveBookingSessionState,
+): boolean {
+  const offer = state.currentOfferSet;
+  if (!offer || offer.slots.length === 0) return false;
+  const date = String(mergedArgs.requested_date || mergedArgs.requestedDate || "").trim();
+  const tw = parseTimeWindow(mergedArgs);
+  if (date && offer.requested_date && date !== offer.requested_date) return false;
+  if (tw && offer.time_window && !windowsEqual(tw, offer.time_window)) return false;
+  return true;
 }
 
 export function buildAuthoritativeBackendStatePayload(state: LiveBookingSessionState): Record<string, unknown> {
   return {
+    booking_status: state.bookingConfirmed ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
     current_scheduling_preference: state.schedulingPreference,
     current_offer_set: state.currentOfferSet
       ? {
@@ -157,7 +214,9 @@ export function buildAuthoritativeBackendStatePayload(state: LiveBookingSessionS
           time_window: state.currentOfferSet.time_window ?? null,
         }
       : null,
+    selected_slot_id: state.selectedSlotId,
     booking_confirmed: state.bookingConfirmed,
+    latest_authoritative_tool_result: state.latestToolResult,
     find_invocation_count_this_call: state.findInvocationCount,
   };
 }

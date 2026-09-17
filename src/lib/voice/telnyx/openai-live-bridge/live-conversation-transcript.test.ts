@@ -27,6 +27,6 @@ describe("LiveConversationTranscript", () => {
     });
     expect(text).toContain("wife prefers mornings");
     expect(text).toContain("Authoritative structured scheduling state");
-    expect(text).toContain("current_offer_set");
+    expect(text).toContain("booking_status");
   });
 });

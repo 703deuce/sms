@@ -14,6 +14,7 @@ import {
   isLiveInstructionsAppendedAck,
   shouldSendLiveOpeningGreetingAfterSessionStarted,
 } from "./live-greeting";
+import { detectBookingConfirmationViolation } from "./live-booking-authority";
 import { createLiveDelegationHandler } from "./live-delegation-handler";
 import { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
@@ -168,6 +169,8 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   };
 
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
+  let amyTranscriptBuffer = "";
+  let liveBookingSession: LiveToolDispatchContext["bookingSession"] | null = null;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {
     if (!isOpenAiLiveDelegationEnabled() || delegationHandler) return;
@@ -185,6 +188,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       console.error("[live-media] delegation missing stream claims");
       return;
     }
+    liveBookingSession = toolContext.bookingSession;
     delegationHandler = createLiveDelegationHandler({
       callId,
       claims,
@@ -328,6 +332,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         const type = String(event.type || "");
 
         if (delegationHandler) {
+          delegationHandler.observeInboundLiveEvent(event as Record<string, unknown>);
           await delegationHandler.handleLiveServerEvent(event as Record<string, unknown>);
         }
 
@@ -399,6 +404,27 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           const delta = String(event.delta ?? "");
           if (delta) {
             conversationTranscript.appendDelta("amy", delta);
+            amyTranscriptBuffer += delta;
+            if (
+              liveBookingSession &&
+              detectBookingConfirmationViolation(
+                amyTranscriptBuffer,
+                liveBookingSession.bookingConfirmed,
+              )
+            ) {
+              console.error(
+                `LIVE_BOOKING_CONFIRMATION_VIOLATION ${JSON.stringify({
+                  callId,
+                  booking_confirmed: liveBookingSession.bookingConfirmed,
+                  booking_status: liveBookingSession.bookingConfirmed
+                    ? "BOOKING_CONFIRMED"
+                    : "NOT_BOOKED",
+                  latest_tool: liveBookingSession.latestToolResult,
+                  transcript_tail: amyTranscriptBuffer.slice(-240),
+                })}`,
+              );
+              amyTranscriptBuffer = "";
+            }
             turnTracer.onLiveOutputTranscriptDelta(delta, event as Record<string, unknown>);
           }
           logLiveIn("output_transcript.delta", {

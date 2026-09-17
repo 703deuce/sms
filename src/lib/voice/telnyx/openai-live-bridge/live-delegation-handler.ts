@@ -9,7 +9,9 @@ import {
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { LiveTurnTraceHooks } from "./live-turn-trace";
+import { buildLiveFrontendBookingAuthorityAppend } from "./live-booking-authority";
 import { buildLiveDelegationRuntimeSessionUpdate } from "./live-backend-state-sync";
+import { createLiveDelegationContextTracker } from "./live-delegation-context-tracker";
 import type { LiveConversationTranscript } from "./live-conversation-transcript";
 import {
   buildDelegationDeveloperText,
@@ -39,6 +41,27 @@ export function createLiveDelegationHandler(input: {
   let delegationEpisodeCount = 0;
   let hydratedContext: LiveDelegationHydratedContext | null = null;
   let hydratePromise: Promise<void> | null = null;
+  const contextTracker = createLiveDelegationContextTracker({
+    callId: input.callId,
+    onLog: logLiveObs,
+  });
+
+  const syncBookingAuthorityToLive = () => {
+    input.sendLiveOut(
+      buildLiveDelegationRuntimeSessionUpdate(input.callContext.bookingSession),
+    );
+    input.sendLiveOut(
+      buildLiveFrontendBookingAuthorityAppend(input.callContext.bookingSession),
+    );
+    const state = input.callContext.bookingSession;
+    logLiveObs("BACKEND_STATE_SYNC", {
+      callId: input.callId,
+      offer_set_id: state.currentOfferSet?.offer_set_id ?? null,
+      find_count: state.findInvocationCount,
+      booking_status: state.bookingConfirmed ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
+      booking_confirmed: state.bookingConfirmed,
+    });
+  };
 
   const ensureHydratedContext = async (): Promise<LiveDelegationHydratedContext> => {
     if (hydratedContext) return hydratedContext;
@@ -74,17 +97,20 @@ export function createLiveDelegationHandler(input: {
       hydrated,
       isFirstDelegation,
     });
-    input.sendLiveOut(
-      buildLiveDelegationContextItem({
-        delegationId,
-        developerText,
-      }),
-    );
+    const contextItem = buildLiveDelegationContextItem({ developerText });
+    const eventId = String(contextItem.event_id || "");
+    contextTracker.markSent(eventId, delegationEpisodeCount);
+    input.sendLiveOut(contextItem);
+    input.sendLiveOut({
+      type: "response.create",
+      event_id: liveBaselineEventId("delegation_ctx_resp"),
+    });
     input.conversationTranscript.markDelegationCheckpoint();
-    logLiveObs("DELEGATION_CONTEXT_PUSHED", {
+    logLiveObs("DELEGATION_CONTEXT_ITEM_SENT", {
       callId: input.callId,
       delegation_id: delegationId,
       episode: delegationEpisodeCount,
+      event_id: eventId,
       developer_text_chars: developerText.length,
       transcript_cursor: input.conversationTranscript.delegationCursorIndex(),
       transcript_segments: input.conversationTranscript.segmentCount(),
@@ -92,14 +118,7 @@ export function createLiveDelegationHandler(input: {
   };
 
   input.callContext.onBookingStateChanged = () => {
-    input.sendLiveOut(
-      buildLiveDelegationRuntimeSessionUpdate(input.callContext.bookingSession),
-    );
-    logLiveObs("BACKEND_STATE_SYNC", {
-      callId: input.callId,
-      offer_set_id: input.callContext.bookingSession.currentOfferSet?.offer_set_id ?? null,
-      find_count: input.callContext.bookingSession.findInvocationCount,
-    });
+    syncBookingAuthorityToLive();
   };
 
   const returnLiveToolResult = async (opts: {
@@ -268,6 +287,10 @@ export function createLiveDelegationHandler(input: {
     }
   };
 
+  const observeInboundLiveEvent = (liveEvent: LiveEvent) => {
+    contextTracker.observeInbound(liveEvent);
+  };
+
   const handleLiveServerEvent = async (liveEvent: LiveEvent) => {
     const type = String(liveEvent.type || "");
 
@@ -333,5 +356,5 @@ export function createLiveDelegationHandler(input: {
     }
   };
 
-  return { handleLiveServerEvent };
+  return { handleLiveServerEvent, observeInboundLiveEvent };
 }

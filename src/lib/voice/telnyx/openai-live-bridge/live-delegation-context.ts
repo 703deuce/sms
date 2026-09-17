@@ -59,14 +59,13 @@ export function buildDelegationDeveloperText(input: {
  * Inject hybrid context into the delegated Responses backend via Live API.
  * @see response.item.create — developer message with input_text
  */
+/** Outbound Live client event — only type, event_id, and item (no delegation_id). */
 export function buildLiveDelegationContextItem(input: {
-  delegationId: string | null;
   developerText: string;
 }): Record<string, unknown> {
   return {
     type: "response.item.create",
     event_id: liveBaselineEventId("delegation_ctx"),
-    delegation_id: input.delegationId,
     item: {
       type: "message",
       role: "developer",

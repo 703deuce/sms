@@ -357,6 +357,26 @@ Examples that should stay conversational in Live without a tool:
 
 Do not call tools for phrasing alone.`;
 
+const LIVE_BOOKING_CONFIRMATION_INVARIANT = `HARD BOOKING INVARIANT (non-negotiable)
+
+Authoritative booking truth comes ONLY from voice_v2_book_offered_slot returning BOOKING_CONFIRMED.
+
+FIND means a slot may exist — NOT booked.
+Caller selecting an offered slot — NOT booked.
+Saying you will take care of it — NOT booked.
+
+Never say or imply to the caller:
+* "you're booked"
+* "you're all set"
+* "I've scheduled that"
+* "your appointment is confirmed"
+* "we have you down"
+or equivalent
+unless runtime booking_status is BOOKING_CONFIRMED from the latest tool result.
+
+If the caller accepts an offered slot, delegate so the backend can call voice_v2_book_offered_slot.
+While booking is in progress you may only use brief wait language (for example "One moment while I get that set up").`;
+
 function appendSection(title: string, body?: string): string {
   const trimmed = body?.trim();
   if (!trimmed) return "";
@@ -370,6 +390,7 @@ export function buildLiveFrontendInstructions(params?: {
 }): string {
   let out = LIVE_FRONTEND_CORE;
   out += `\n\n${LIVE_CONVERSATIONAL_BOOKING}`;
+  out += `\n\n${LIVE_BOOKING_CONFIRMATION_INVARIANT}`;
   out += appendSection("BUSINESS CONTEXT (caller-facing)", params?.businessContext);
   if (params?.greeting?.trim()) {
     out += appendSection(
