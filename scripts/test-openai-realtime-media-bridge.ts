@@ -17,8 +17,14 @@ import {
 } from "../src/lib/voice/telnyx/openai-realtime-bridge/stream-token";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-v2/telnyx-tool-definition";
 import { AMY_MINIMUM_SIDE_EFFECT_MODEL } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
+import {
+  buildTelnyxMediaStreamUrl,
+  getRealtimeBridgePublicWssBase,
+} from "../src/lib/voice/telnyx/openai-realtime-bridge/config";
+import { LIVEKIT_SELF_HOSTED_WSS_URL } from "../src/lib/voice/media-backend/constants";
 
 process.env.VOICE_REALTIME_BRIDGE_SIGNING_SECRET = "test-bridge-secret";
+process.env.APP_URL = "https://app.transovo.ai";
 
 const voiceV2Config = parseVoiceAgentConfig({
   advanced: {
@@ -57,5 +63,11 @@ assert.equal(claims?.callId, "call_1");
 
 const bridgeOnly = applyOpenAiRealtimeMediaBridgeConfig(voiceV2Config);
 assert.equal(bridgeOnly.callHandling?.inboundRoutingMode, "call_control");
+
+assert.equal(getRealtimeBridgePublicWssBase(), LIVEKIT_SELF_HOSTED_WSS_URL);
+assert.ok(buildTelnyxMediaStreamUrl("tok").startsWith(`${LIVEKIT_SELF_HOSTED_WSS_URL}/telnyx/media?token=`));
+
+process.env.APP_URL = "http://localhost:3000";
+assert.equal(getRealtimeBridgePublicWssBase(), "ws://localhost:3108");
 
 console.log("OK — OpenAI Realtime media bridge checks passed");

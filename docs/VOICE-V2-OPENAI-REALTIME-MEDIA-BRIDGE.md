@@ -30,16 +30,18 @@ Telnyx AI Assistant STT/TTS/LLM are **not** on the active audio path when the br
 | `VOICE_REALTIME_MODEL` | OpenAI Realtime mini model id (see `flags.ts` default) |
 | `VOICE_REALTIME_VOICE` | Default `marin` |
 | `VOICE_V2_OPENAI_REALTIME_BRIDGE` | Set `0` to disable bridge (Flux assistant path) |
-| `VOICE_REALTIME_BRIDGE_PORT` | **Internal** WS listener (default `3108`, bind `0.0.0.0`) |
-| `VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL` | **Required for PSTN** — external TLS `wss://` base (no path); Telnyx connects to `{base}/telnyx/media?token=…` |
-| `VOICE_REALTIME_BRIDGE_SIGNING_SECRET` | HMAC for stream tokens |
+| `VOICE_REALTIME_BRIDGE_PORT` | Optional override for **internal** WS listener (default `3108`, bind `0.0.0.0`) |
+| `VOICE_REALTIME_BRIDGE_SIGNING_SECRET` | Optional HMAC for stream tokens (defaults to `TRANSOVO_INTERNAL_API_KEY` / `NEXTAUTH_SECRET`) |
+
+### Public WSS URL (hardcoded — no env)
+
+Production Telnyx `stream_url` uses **`wss://voice.transovo.ai`** (same frozen host as `LIVEKIT_SELF_HOSTED_WSS_URL` in `src/lib/voice/media-backend/constants.ts`). Path: `/telnyx/media?token=…`.
 
 ### Coolify / TLS (do not expose raw `:3108` publicly)
 
-Prefer Traefik on your app domain proxying WebSocket upgrades to the container’s bridge port:
+Traefik on **`voice.transovo.ai`** must proxy WebSocket upgrades to the container’s bridge port (`3108`):
 
-- Example: `VOICE_REALTIME_BRIDGE_PUBLIC_WSS_URL=wss://voice.transovo.ai`
-- Coolify: add a second domain or path rule → `http://<container>:3108` with **WebSocket** enabled.
+- Coolify: domain `voice.transovo.ai` → `http://<container>:3108` with **WebSocket** enabled.
 - Telnyx must reach valid **TLS** `wss://` from the public internet — not `wss://server-ip:3108` without a certificate.
 
 Republish wizard agent after enable so `inboundRoutingMode` is `call_control` (bridge apply sets this).
