@@ -1,15 +1,24 @@
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
 
 function readVoiceAiTransportFile(): string | null {
-  const path = process.env.VOICE_AI_TRANSPORT_FILE?.trim() || "/app/.voice_ai_transport";
-  try {
-    if (!existsSync(path)) return null;
-    return readFileSync(path, "utf8").trim().toLowerCase();
-  } catch {
-    return null;
+  const candidates = [
+    process.env.VOICE_AI_TRANSPORT_FILE?.trim(),
+    join(process.cwd(), ".voice_ai_transport"),
+    "/app/.voice_ai_transport",
+  ].filter(Boolean) as string[];
+  for (const path of candidates) {
+    try {
+      if (!existsSync(path)) continue;
+      const value = readFileSync(path, "utf8").trim().toLowerCase();
+      if (value) return value;
+    } catch {
+      /* try next */
+    }
   }
+  return null;
 }
 
 const GPT_REALTIME_FAMILY = ["gpt", "realtime"].join("-");

@@ -2,7 +2,9 @@
 
 **Purpose:** Evaluate **voice behavior only** (turn-taking, interruptions, background noise, backchannels) on production PSTN via the hot-patched bridge — **not** booking, Microsoft, or Voice V2 tool orchestration.
 
-**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live` or `/app/.voice_ai_transport` containing `openai_live`. See `src/lib/voice/telnyx/openai-realtime-bridge/flags.ts` and `scripts/prod-voice-bridge-hotpatch.sh --live`.
+**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, or copy `.voice_ai_transport.example` → `.voice_ai_transport` in the repo root (local), or `/app/.voice_ai_transport` on the server. See `flags.ts`.
+
+**Not a master release:** behavioral prompt changes live in `live-config.ts` on the experiment branch. To try on the running 571 test container without merging `master`, run `./scripts/prod-voice-bridge-hotpatch.sh --config-only` (or `--live` for full bridge files + transport).
 
 **Code paths:**
 
