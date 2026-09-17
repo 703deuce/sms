@@ -6,4 +6,5 @@
 export { executeMicrosoft365CertifiedFindAvailability } from "./find-availability";
 export { executeMicrosoft365CertifiedBookOfferedSlot } from "./book-offered-slot";
 
+/** Graph/FIND/BOOK primitives through 06125f5f; authoritative local ledger vendored in internal/. */
 export const MICROSOFT_365_CERTIFIED_PIPELINE_BASELINE_SHA = "06125f5f";

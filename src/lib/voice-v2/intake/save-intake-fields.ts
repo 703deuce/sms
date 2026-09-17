@@ -20,7 +20,11 @@ import {
 } from "./intake-idempotency";
 import type { VoiceV2ContextLookupTrace } from "../session/context-lookup-trace";
 import { isTrustedPrismaVoiceCallId } from "./resolve-trusted-call-id";
-import { stripBookingIntentOnlyServiceReason } from "./booking-intent-guard";
+import {
+  isBookingIntentOnlyFields,
+  stripBookingIntentOnlyServiceReason,
+} from "./booking-intent-guard";
+import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../caller-experience-law";
 import {
   applySchedulingPreferenceToContext,
   extractSchedulingRequestedDate,
@@ -89,7 +93,12 @@ export type SaveIntakeResult =
       observability?: { trace: ReturnType<SaveIntakeTrace["toJSON"]>; save_sequence: number };
       timing_ms: SaveIntakeTimingMs;
     }
-  | { status: "SESSION_UNAVAILABLE"; timing_ms: SaveIntakeTimingMs };
+  | { status: "SESSION_UNAVAILABLE"; timing_ms: SaveIntakeTimingMs }
+  | {
+      status: typeof VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS;
+      timing_ms: SaveIntakeTimingMs;
+      law: string;
+    };
 
 async function attachBookingWorkflow(
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
@@ -243,6 +252,20 @@ export async function executeVoiceV2SaveIntakeFields(
 
   if (!sessionKey && !canonicalHint) {
     return { status: "SESSION_UNAVAILABLE", timing_ms: emptyTiming() };
+  }
+
+  const fieldsRawEarly = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
+  if (fieldsRawEarly && typeof fieldsRawEarly === "object" && isBookingIntentOnlyFields(fieldsRawEarly)) {
+    trace.mark("BOOKING_INTENT_CONVERSATION_ONLY", { law: "P7" });
+    return {
+      status: VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS,
+      timing_ms: {
+        VALIDATION_MS: 0,
+        STATE_UPDATE_MS: 0,
+        TOTAL_MS: Date.now() - t0,
+      },
+      law: "VOICE_V2_CALLER_EXPERIENCE_LAW_P7",
+    };
   }
 
   let ctx =

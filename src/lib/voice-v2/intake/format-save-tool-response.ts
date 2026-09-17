@@ -1,4 +1,5 @@
 import type { SaveIntakeResult } from "./save-intake-fields";
+import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../caller-experience-law";
 import { listKnownCallerFieldValues } from "./caller-field-state";
 import type { IntakeFieldKey } from "./types";
 import type { VoiceV2NextStage } from "../booking-workflow";
@@ -146,6 +147,23 @@ export function saveIntakePublicFields(
       },
       wf,
     );
+  }
+
+  if (result.status === VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS) {
+    return {
+      ok: false,
+      status: VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS,
+      voice_v2_status: VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS,
+      voice_v2_law_violation: result.law,
+      continue: true,
+      booking_continue_required: true,
+      forbidden_actions: ["voice_v2_save_intake_fields"],
+      runtime_hint:
+        "Caller expressed booking intent only. Respond in conversation immediately — do not call save_intake for intent. Ask what day works or collect the next real field.",
+      timing_ms: result.timing_ms,
+      speak:
+        "Absolutely — what day works best for you? Do not call intake save for booking intent alone.",
+    };
   }
 
   if (result.status === "INTAKE_VALIDATION_ERROR") {

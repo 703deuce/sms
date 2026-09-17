@@ -106,6 +106,7 @@
     "test:mctb-pipeline-trace": "tsx scripts/test-mctb-pipeline-trace.ts",
     "test:video-pipeline-trace": "tsx scripts/test-video-pipeline-trace.ts",
     "verify:mctb-final-pipeline": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-mctb-final-pipeline.ts",
+    "verify:voice-v2-caller-experience-law": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-voice-v2-caller-experience-law.ts",
     "watch:cfna-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/watch-cfna-probe.ts",
     "query:cfna-probe-db": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/query-cfna-probe-db.ts",
     "test:cfna-ingress-probe": "tsx scripts/test-cfna-ingress-probe.ts",

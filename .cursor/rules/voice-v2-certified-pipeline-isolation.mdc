@@ -11,6 +11,7 @@ alwaysApply: false
 # MANDATORY: Voice V2 certified pipeline isolation
 
 **Source of truth:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md`  
+**Caller experience law (always wins over latency shortcuts):** `docs/VOICE-V2-CALLER-EXPERIENCE-LAW.md` · `npm run verify:voice-v2-caller-experience-law`
 **Microsoft frozen path:** `docs/VOICE-V2-MICROSOFT-365-CERTIFIED-PIPELINE.md` · `pipelines/microsoft-365-certified/` · verify `scripts/verify-microsoft-365-certified-pipeline-frozen.ts`
 
 ## When this rule activates

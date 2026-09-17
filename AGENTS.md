@@ -203,7 +203,7 @@ Each `bookingStrategy` is a **sealed vertical slice** (copy-don’t-extract; no 
 
 **Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`) — **Microsoft FIND/BOOK back half only.**
 
-**Caller experience (front half, permanent):** `docs/VOICE-V2-CALLER-EXPERIENCE-NON-NEGOTIABLES.md` · rule `voice-v2-caller-experience-first.mdc` — greeting through intake must stay non-blocking; full transcript to the agent; only FIND/BOOK may block spoken claims. Never trade this for provider fixes.
+**Caller experience law (front half, binding):** `docs/VOICE-V2-CALLER-EXPERIENCE-LAW.md` · `npm run verify:voice-v2-caller-experience-law` (must PASS) · rule `voice-v2-caller-experience-first.mdc`. Greeting through intake stays non-blocking; full transcript; only FIND/BOOK block claims; intent-only save_intake is rejected in code (P7). Never trade this for provider fixes.
 
 Do **not** modify FIND/BOOK, Microsoft datetime adapter, offer-set logic, Telnyx V2 tool schema, or booking confirmation behavior without re-certifying PSTN find+book.
 

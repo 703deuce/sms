@@ -11,7 +11,7 @@ alwaysApply: true
 
 # MANDATORY: Voice V2 caller experience first (front half)
 
-**Source of truth:** `docs/VOICE-V2-CALLER-EXPERIENCE-NON-NEGOTIABLES.md`  
+**Source of truth:** `docs/VOICE-V2-CALLER-EXPERIENCE-LAW.md` (binding — `npm run verify:voice-v2-caller-experience-law` must PASS)  
 **Architecture:** `docs/VOICE_V2_CALLER_FIRST_ARCHITECTURE.md` (P6–P11, P14, P7, §15 operation classes)
 
 **Microsoft FIND/BOOK freeze is separate:** `transovo-voice-v2-certified-pipeline-isolation.mdc` · `KNOWN_GOOD_BASELINE.md` — does **not** replace this rule.

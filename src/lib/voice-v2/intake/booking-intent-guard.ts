@@ -39,11 +39,39 @@ export function isBookingIntentOnlyServiceReason(value: string): boolean {
   return false;
 }
 
+const GENERIC_APPOINTMENT_INTENT_ONLY = new Set([
+  "appointment",
+  "an appointment",
+  "a appointment",
+  "appointments",
+]);
+
+/** True when the only field is service_reason and it carries booking intent, not a service need. */
+export function isBookingIntentOnlyFields(fields: Record<string, unknown>): boolean {
+  const keys = Object.keys(fields).filter((k) => {
+    const v = fields[k];
+    if (v === null || v === undefined) return false;
+    return String(v).trim().length > 0;
+  });
+  if (keys.length !== 1 || keys[0] !== "service_reason") return false;
+  const sr = String(fields.service_reason ?? "");
+  const n = normalizeIntentPhrase(sr);
+  if (!n) return false;
+  if (isBookingIntentOnlyServiceReason(sr)) return true;
+  if (GENERIC_APPOINTMENT_INTENT_ONLY.has(n)) return true;
+  return false;
+}
+
 export function stripBookingIntentOnlyServiceReason(
   normalized: Partial<Record<string, string>>,
 ): Partial<Record<string, string>> {
   const sr = normalized.service_reason;
   if (sr && isBookingIntentOnlyServiceReason(sr)) {
+    const next = { ...normalized };
+    delete next.service_reason;
+    return next;
+  }
+  if (sr && GENERIC_APPOINTMENT_INTENT_ONLY.has(normalizeIntentPhrase(sr))) {
     const next = { ...normalized };
     delete next.service_reason;
     return next;
