@@ -17,7 +17,6 @@ import {
   mergeSchedulingPreferenceRecord,
   syncWorkflowRequestedDateFromScheduling,
 } from "../scheduling-preference-state";
-import { extractSchedulingRequestedDate } from "./scheduling-preference";
 import {
   resolveVoiceV2BookingStrategyForContext,
   resolveVoiceV2PstnLiveBookingForContext,

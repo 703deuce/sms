@@ -403,9 +403,6 @@ async function startAiOnInboundCall(input: {
 
       const aiHandoffAt = Date.now();
       let aiStartOk = false;
-      const { shouldUseOpenAiRealtimeMediaBridge } = await import(
-        "@/lib/voice/telnyx/openai-realtime-bridge/flags"
-      );
       const useRealtimeBridge = shouldUseOpenAiRealtimeMediaBridge(cfg);
       try {
         if (useRealtimeBridge) {
