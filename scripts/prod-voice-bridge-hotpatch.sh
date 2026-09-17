@@ -21,6 +21,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAR="/tmp/voice-bridge-patch.tgz"
 BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-live-bridge
+  src/lib/voice-v2/session/call-context-store.ts
   src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts
   src/lib/voice/telnyx/openai-realtime-bridge/call-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts
@@ -51,6 +52,7 @@ if [[ "$MODE" == "config_only" ]]; then
     src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
     src/lib/voice/telnyx/openai-live-bridge \
+    src/lib/voice-v2/session/call-context-store.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/flags.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/start-on-call.ts \
