@@ -47,6 +47,7 @@ BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-realtime-bridge/telnyx-streaming.ts
   src/lib/voice/telnyx/webhook-handlers.ts
   src/lib/voice/inbound.ts
+  src/lib/voice/calendar/resolve-datetime.ts
   scripts/realtime-bridge-listener.ts
   scripts/openai-realtime-test-a-minimal.ts
   scripts/smoke-realtime-bridge-openai.ts
