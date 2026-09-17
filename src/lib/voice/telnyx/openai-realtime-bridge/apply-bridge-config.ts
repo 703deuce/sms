@@ -8,7 +8,7 @@ import {
   type OpenAiRealtimeNativeVoice,
 } from "@/lib/voice/outbound/realtime-native-voices";
 import { resolveConfiguredRealtimeVoice } from "@/lib/voice/realtime-voice-picker";
-import { OPENAI_REALTIME_MINI_MODEL_ID, OPENAI_REALTIME_BRIDGE_VOICE } from "./flags";
+import { OPENAI_REALTIME_MINI_MODEL_ID, OPENAI_REALTIME_BRIDGE_VOICE } from "./public-flags";
 
 /**
  * Wizard/publish config for media-bridge mode.
