@@ -122,6 +122,7 @@
     "test:mctb-answer-test-texml": "tsx scripts/test-mctb-answer-test-texml.ts",
     "heal:ws1-admin": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/heal-ws1-admin-workspace.ts",
     "inventory:voice-lines": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/inventory-voice-lines.ts",
+    "purge:voice-agents": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/purge-workspace-voice-agents.ts",
     "cleanup:orphan-texml-apps": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-orphan-texml-apps.ts",
     "cleanup:livekit-fqdn-connections": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cleanup-livekit-fqdn-connections.ts",
     "sync:stripe-platform-catalog": "tsx scripts/sync-stripe-platform-catalog.ts --write-ids",
