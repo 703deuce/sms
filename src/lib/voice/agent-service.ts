@@ -418,6 +418,15 @@ export async function publishVoiceAgent(
     "./ai-booking/publish-config"
   );
   config = await enrichVoiceAgentConfigForCanonicalAiBooking(workspaceId, agentId, config);
+  const { shouldUseOpenAiRealtimeMediaBridge } = await import(
+    "./telnyx/openai-realtime-bridge/flags"
+  );
+  if (shouldUseOpenAiRealtimeMediaBridge(config)) {
+    const { applyAmyMinimumSideEffectConfig } = await import(
+      "./telnyx/amy-minimum-side-effect"
+    );
+    config = applyAmyMinimumSideEffectConfig(config);
+  }
   const issues = validateAgentForPublish(agent.name, config, {
     requirePhone:
       !config.identity?.directions?.length ||
@@ -522,10 +531,17 @@ export async function publishVoiceAgent(
   } catch (err) {
     const telnyxSyncError = err instanceof Error ? err.message : String(err);
     console.error("[voice] Telnyx assistant sync failed", err);
-    if (!isLiveKitVoiceRuntime()) {
+    const bridgeOn = shouldUseOpenAiRealtimeMediaBridge(config);
+    if (!isLiveKitVoiceRuntime() && !bridgeOn) {
       await rollbackPublish(
         `Telnyx assistant sync failed — deploy rolled back: ${telnyxSyncError}`,
       );
+    } else if (bridgeOn) {
+      console.warn(
+        "[voice] Telnyx assistant sync failed — continuing publish (OpenAI realtime media bridge)",
+        telnyxSyncError,
+      );
+      telnyxSync = { ok: false, bridgeMode: true, error: telnyxSyncError };
     }
   }
 
@@ -595,9 +611,6 @@ export async function publishVoiceAgent(
     routePhoneToTexmlAssistant,
     routePhoneToCallControlConnection,
   } = await import("./telnyx/texml-direct-route");
-  const { shouldUseOpenAiRealtimeMediaBridge } = await import(
-    "./telnyx/openai-realtime-bridge/flags"
-  );
   const realtimeMediaBridge = shouldUseOpenAiRealtimeMediaBridge(config);
   const shouldRouteTexmlAssistant =
     Boolean(updated.phoneNumberId && refreshedAfterSync.telnyxAssistantId) &&

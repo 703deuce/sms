@@ -635,6 +635,29 @@ export async function syncTelnyxAssistant(
   }
 
   async function enrichBestEffort(assistantId: string) {
+    const { shouldUseOpenAiRealtimeMediaBridge } = await import(
+      "./openai-realtime-bridge/flags"
+    );
+    if (shouldUseOpenAiRealtimeMediaBridge(config)) {
+      const slim: Record<string, unknown> = {
+        interruption_settings: enrichPayload.interruption_settings,
+        enabled_features: enrichPayload.enabled_features,
+        telephony_settings: enrichPayload.telephony_settings,
+      };
+      if (enrichPayload.transcription) {
+        slim.transcription = enrichPayload.transcription;
+      }
+      try {
+        await ai.updateAssistant(assistantId, slim);
+      } catch (err) {
+        console.warn(
+          "[assistant-sync] bridge mode assistant enrich (no Telnyx TTS voice) failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
+      return pushTools(assistantId);
+    }
+
     const voiceBase = { ...(enrichPayload.voice_settings as Record<string, unknown>) };
     const requestedVoice = String(voiceBase.voice || voiceId);
     const expressiveMode = Boolean(voiceBase.expressive_mode);
