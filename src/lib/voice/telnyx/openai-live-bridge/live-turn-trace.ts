@@ -64,6 +64,7 @@ export class LiveTurnTracer {
   private turnNumber = 0;
   private active: ActiveTurn | null = null;
   private awaitingCallerTurn = true;
+  private turnFinalized = false;
   private lastAmyOutputAudioPerf = 0;
   private telnyxForwardSampleEvery = 50;
   private inboundFrameCount = 0;
@@ -87,7 +88,13 @@ export class LiveTurnTracer {
     return turn;
   }
 
-  private ensureTurn(): ActiveTurn {
+  /** Attach Amy/delegation events to the current caller turn without opening a new turn. */
+  private activeTurnOrNull(): ActiveTurn | null {
+    return this.active;
+  }
+
+  /** Caller-side events may open a turn; Amy-only events must not. */
+  private ensureCallerTurn(): ActiveTurn {
     if (!this.active) {
       return this.startTurn();
     }
@@ -133,20 +140,22 @@ export class LiveTurnTracer {
     );
     this.active = null;
     this.awaitingCallerTurn = true;
+    this.turnFinalized = true;
   }
 
   onCallerActivity(event: CallerAudioActivityEvent) {
     if (event.type === "CALLER_AUDIO_STARTED") {
-      if (this.active && !this.awaitingCallerTurn) {
+      if (this.active && !this.turnFinalized) {
         this.finalizeTurn("new_caller_audio_before_amy_response");
       }
       const turn = this.startTurn();
+      this.turnFinalized = false;
       turn.t.callerAudioFirst = event.perfMs;
       logTurnEvent(this.callId, turn.n, "CALLER_AUDIO_FIRST", { perf_ms: event.perfMs });
       return;
     }
     if (event.type === "CALLER_AUDIO_ENDED_ESTIMATE") {
-      const turn = this.ensureTurn();
+      const turn = this.ensureCallerTurn();
       turn.t.callerAudioLast = event.perfMs;
       turn.t.callerAudioEndedEstimate = event.perfMs;
       logTurnEvent(this.callId, turn.n, "CALLER_AUDIO_LAST", { perf_ms: event.perfMs });
@@ -173,7 +182,7 @@ export class LiveTurnTracer {
   }
 
   onLiveInputTranscriptDelta(delta: string, event: Record<string, unknown>) {
-    const turn = this.ensureTurn();
+    const turn = this.ensureCallerTurn();
     const now = perfMs();
     if (turn.t.liveInputTranscriptFirst == null) {
       turn.t.liveInputTranscriptFirst = now;
@@ -197,7 +206,8 @@ export class LiveTurnTracer {
   }
 
   onDelegationCreated(delegationId: string | null) {
-    const turn = this.ensureTurn();
+    const turn = this.activeTurnOrNull();
+    if (!turn) return;
     if (turn.t.delegationCreated != null) return;
     turn.flags.delegated = true;
     turn.t.delegationCreated = perfMs();
@@ -208,7 +218,8 @@ export class LiveTurnTracer {
   }
 
   onFirstResponseEvent(responseType: string, delegationId: string | null) {
-    const turn = this.ensureTurn();
+    const turn = this.activeTurnOrNull();
+    if (!turn) return;
     if (turn.t.firstResponseEvent != null) return;
     turn.t.firstResponseEvent = perfMs();
     turn.firstResponseEventType = responseType;
@@ -220,7 +231,8 @@ export class LiveTurnTracer {
   }
 
   onToolCalled(toolName: string) {
-    const turn = this.ensureTurn();
+    const turn = this.activeTurnOrNull();
+    if (!turn) return;
     turn.flags.toolCalled = true;
     if (!turn.toolNames.includes(toolName)) {
       turn.toolNames.push(toolName);
@@ -228,7 +240,8 @@ export class LiveTurnTracer {
   }
 
   onLiveOutputTranscriptDelta(delta: string, event: Record<string, unknown>) {
-    const turn = this.ensureTurn();
+    const turn = this.activeTurnOrNull();
+    if (!turn) return;
     const now = perfMs();
     if (turn.t.firstOutputTranscript == null) {
       turn.t.firstOutputTranscript = now;
@@ -242,7 +255,12 @@ export class LiveTurnTracer {
   }
 
   onFirstOutputAudioDelta(event: Record<string, unknown>) {
-    const turn = this.ensureTurn();
+    let turn = this.activeTurnOrNull();
+    if (!turn && this.awaitingCallerTurn) {
+      turn = this.startTurn();
+      this.turnFinalized = false;
+    }
+    if (!turn) return;
     const now = perfMs();
     if (turn.t.firstOutputAudioDelta != null) return;
     turn.t.firstOutputAudioDelta = now;
@@ -255,7 +273,8 @@ export class LiveTurnTracer {
   }
 
   onFirstAudioSentToTelnyx(openAiDeltaPerf: number) {
-    const turn = this.ensureTurn();
+    const turn = this.activeTurnOrNull();
+    if (!turn) return;
     const now = perfMs();
     if (turn.t.firstAudioSentToTelnyx != null) return;
     turn.t.firstAudioSentToTelnyx = now;
@@ -264,7 +283,9 @@ export class LiveTurnTracer {
       openai_delta_perf_ms: openAiDeltaPerf,
       openai_to_telnyx_ms: Math.round(now - openAiDeltaPerf),
     });
-    this.finalizeTurn("amy_response_audio_started");
+    if (!this.turnFinalized) {
+      this.finalizeTurn("caller_turn_amy_response_started");
+    }
   }
 
   noteOutboundResponseCreate() {

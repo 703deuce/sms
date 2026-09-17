@@ -4,8 +4,12 @@ import {
   type LiveToolDispatchContext,
   liveToolExecutorLabel,
 } from "./live-tool-runtime";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import {
+  VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+  VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
+} from "@/lib/voice-v2/telnyx-tool-definition";
 import type { LiveTurnTraceHooks } from "./live-turn-trace";
+import { buildLiveDelegationRuntimeSessionUpdate } from "./live-backend-state-sync";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -22,6 +26,17 @@ export function createLiveDelegationHandler(input: {
   turnTrace?: LiveTurnTraceHooks;
 }) {
   let toolBusy = false;
+
+  input.callContext.onBookingStateChanged = () => {
+    input.sendLiveOut(
+      buildLiveDelegationRuntimeSessionUpdate(input.callContext.bookingSession),
+    );
+    logLiveObs("BACKEND_STATE_SYNC", {
+      callId: input.callId,
+      offer_set_id: input.callContext.bookingSession.currentOfferSet?.offer_set_id ?? null,
+      find_count: input.callContext.bookingSession.findInvocationCount,
+    });
+  };
 
   const returnLiveToolResult = async (opts: {
     callId: string;
@@ -106,6 +121,11 @@ export function createLiveDelegationHandler(input: {
       callId: input.callId,
       tool_name: toolName,
       arg_keys: Object.keys(args),
+      args:
+        toolName === VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE ||
+        toolName === VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE
+          ? args
+          : undefined,
     });
 
     const started = Date.now();

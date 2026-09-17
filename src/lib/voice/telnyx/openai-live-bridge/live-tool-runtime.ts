@@ -38,6 +38,21 @@ import { executeVoiceV2CreateCallbackRequest } from "@/lib/voice-v2/callback-req
 import { executeVoiceV2FindExistingAppointment } from "@/lib/voice-v2/appointment-changes/find-existing";
 import { executeVoiceV2RescheduleAppointment } from "@/lib/voice-v2/appointment-changes/reschedule";
 import { executeVoiceV2CancelAppointment } from "@/lib/voice-v2/appointment-changes/cancel";
+import {
+  applyBookResultToSessionState,
+  applyFindResultToSessionState,
+  createLiveBookingSessionState,
+  mergeFindArgsWithSessionState,
+  recordFindInvocation,
+  type LiveBookingSessionState,
+} from "./live-booking-session-state";
+import {
+  extractFindResultSlots,
+  logFindInput,
+  logFindResult,
+  parseFindToolOutput,
+} from "./live-find-trace";
+import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 
 export type LiveToolDispatchContext = {
   workspaceId: string;
@@ -50,6 +65,8 @@ export type LiveToolDispatchContext = {
   /** Lazy-loaded on first tool dispatch (not at Live session.start). */
   agentConfigHydrated?: boolean;
   _hydratePromise?: Promise<void>;
+  bookingSession: LiveBookingSessionState;
+  onBookingStateChanged?: () => void;
 };
 
 export type LiveCallRuntimeContext = LiveToolDispatchContext;
@@ -153,19 +170,54 @@ export async function dispatchLiveVoiceTool(input: {
         "FIND_DISABLED",
       );
     }
-    const requestedDate = String(args.requested_date || args.requestedDate || "").trim();
+    const { merged, mergeNotes } = mergeFindArgsWithSessionState(args, ctx.bookingSession);
+    const bookingCfg = await loadMctbAiBookingConfig(ctx.workspaceId);
+    const timezone = bookingCfg.timezone?.trim() || "America/New_York";
+    ctx.bookingSession.schedulingPreference.timezone = timezone;
+
+    logFindInput({
+      callId: ctx.callId,
+      callerRawPreference: args,
+      mergedPreference: merged,
+      mergeNotes,
+      timezone,
+      bookingState: ctx.bookingSession,
+    });
+
+    recordFindInvocation(ctx.bookingSession, merged);
+    const requestedDate = String(merged.requested_date || merged.requestedDate || "").trim();
     ctx.onFindStarted?.(requestedDate);
+
+    const findBody: Record<string, unknown> = {
+      ...body,
+      ...merged,
+      requested_date: merged.requested_date ?? merged.requestedDate,
+    };
+
     const result =
       strategy === "MICROSOFT_365"
-        ? await executeMicrosoft365CertifiedFindAvailability(body, ctx.workspaceId, {
+        ? await executeMicrosoft365CertifiedFindAvailability(findBody, ctx.workspaceId, {
             voiceCallId: ctx.callId,
           })
-        : await executeVoiceV2FindAvailability(body, ctx.workspaceId, {
+        : await executeVoiceV2FindAvailability(findBody, ctx.workspaceId, {
             voiceCallId: ctx.callId,
           });
+
+    const formatted = compactToolResultForModel(toolName, result as Record<string, unknown>);
+    const parsed = parseFindToolOutput(formatted);
+    logFindResult({
+      callId: ctx.callId,
+      offerSetId: parsed.offer_set_id ? String(parsed.offer_set_id) : null,
+      status: String(parsed.voice_v2_status || parsed.status || "ERROR"),
+      slots: extractFindResultSlots(parsed),
+      error: parsed.error ? String(parsed.error) : null,
+    });
+    applyFindResultToSessionState(ctx.bookingSession, parsed);
+    ctx.onBookingStateChanged?.();
+
     return {
       executor,
-      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
+      output: formatted,
     };
   }
 
@@ -180,9 +232,12 @@ export async function dispatchLiveVoiceTool(input: {
       agentId: ctx.agentId,
       certifiedPipeline: strategy === "MICROSOFT_365",
     });
+    const formatted = compactToolResultForModel(toolName, result as Record<string, unknown>);
+    applyBookResultToSessionState(ctx.bookingSession, parseFindToolOutput(formatted));
+    ctx.onBookingStateChanged?.();
     return {
       executor,
-      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
+      output: formatted,
     };
   }
 
@@ -375,6 +430,7 @@ export function createLiveToolDispatchContextFromClaims(
     callControlId: claims.callControlId,
     capability,
     schedulingGeneration: 0,
+    bookingSession: createLiveBookingSessionState(),
     agentConfigHydrated: Boolean(config),
     onFindStarted: (requestedDate) => {
       if (requestedDate && requestedDate !== lastFindDate) {
