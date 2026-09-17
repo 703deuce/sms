@@ -4,6 +4,8 @@ import { resolveSpokenDateYmd } from "@/lib/voice/calendar/resolve-datetime";
 
 export type VoiceV2SchedulingDaypart = "morning" | "afternoon" | "evening" | "noon";
 
+export type VoiceV2SchedulingFactSource = "caller" | "inferred" | "save_intake";
+
 export type VoiceV2SchedulingPreference = {
   requestedDate?: string;
   requestedTime?: string;
@@ -12,6 +14,9 @@ export type VoiceV2SchedulingPreference = {
   rawTimePhrase?: string;
   updatedAt?: string;
   evidence?: string;
+  source?: VoiceV2SchedulingFactSource;
+  confidence?: number;
+  turnId?: string;
 };
 
 export function schedulingPreferenceFromContext(
@@ -40,6 +45,7 @@ export function extractSchedulingFromCallerSpeech(input: {
   utterance: string;
   timezone: string;
   now?: Date;
+  turnId?: string;
   entities?: {
     requested_day?: string | null;
     requested_daypart?: string | null;
@@ -72,6 +78,9 @@ export function extractSchedulingFromCallerSpeech(input: {
   const out: Partial<VoiceV2SchedulingPreference> = {
     updatedAt: new Date().toISOString(),
     evidence: utterance.slice(0, 240),
+    source: "caller",
+    confidence: resolved?.confidence === "high" ? 0.95 : resolved?.confidence === "medium" ? 0.75 : 0.6,
+    turnId: input.turnId,
   };
 
   if (resolved?.ymd) {
@@ -91,19 +100,30 @@ export function extractSchedulingFromCallerSpeech(input: {
   return out;
 }
 
-/** Merge scheduling patch; latest explicit caller evidence wins. */
+export function utteranceLooksLikeSchedulingCorrection(utterance: string): boolean {
+  return /\b(actually|instead|not that|make it|change it to|rather)\b/i.test(utterance);
+}
+
+/** Merge scheduling patch; latest explicit caller correction wins over earlier statements. */
 export function mergeSchedulingPreferenceRecord(
   prior: VoiceV2SchedulingPreference | undefined,
   patch: Partial<VoiceV2SchedulingPreference>,
+  opts?: { forceReplace?: boolean },
 ): VoiceV2SchedulingPreference {
   const next: VoiceV2SchedulingPreference = { ...(prior ?? {}) };
-  if (patch.requestedDate) next.requestedDate = patch.requestedDate;
+  const force = opts?.forceReplace === true;
+  if (patch.requestedDate && (force || !prior?.requestedDate || patch.source === "caller")) {
+    next.requestedDate = patch.requestedDate;
+  }
   if (patch.requestedDaypart) next.requestedDaypart = patch.requestedDaypart;
   if (patch.requestedTime) next.requestedTime = patch.requestedTime;
   if (patch.rawDatePhrase) next.rawDatePhrase = patch.rawDatePhrase;
   if (patch.rawTimePhrase) next.rawTimePhrase = patch.rawTimePhrase;
   if (patch.evidence) next.evidence = patch.evidence;
   if (patch.updatedAt) next.updatedAt = patch.updatedAt;
+  if (patch.source) next.source = patch.source;
+  if (patch.confidence !== undefined) next.confidence = patch.confidence;
+  if (patch.turnId) next.turnId = patch.turnId;
   return next;
 }
 

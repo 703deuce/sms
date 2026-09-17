@@ -10,6 +10,10 @@ import {
 import type { VoiceV2BookingStrategy } from "./booking-strategy";
 import type { VoiceV2CallContext } from "./intake/types";
 import { deriveForbiddenToolActions, resolveRequiredActionForContext } from "./live-tool-registry";
+import {
+  computeRuntimeOwnedActions,
+  delegationAllowedActions,
+} from "./runtime-tool-ownership";
 import { filterAllowedActionsForDialog } from "./dialog-goal";
 import { getIntakeReadiness } from "./intake/readiness";
 
@@ -69,10 +73,15 @@ export function buildVoiceV2ControlPlaneEnvelope(
       hasActiveOfferSet: hasOffer,
     }) ?? (base.required_action as string | null) ?? null;
 
+  const runtimeOwned = computeRuntimeOwnedActions(ctx, stage, required);
+  const delegationAllowed = delegationAllowedActions(allowed, runtimeOwned);
+
   const envelope: VoiceV2ControlPlaneEnvelope = {
     ...base,
     voice_v2_next_stage: stage,
     allowed_next_actions: allowed,
+    delegation_allowed_actions: delegationAllowed,
+    runtime_owned_actions: runtimeOwned,
     forbidden_actions: [...forbidden],
     required_action: required,
     intake_readiness: {

@@ -205,6 +205,7 @@ export async function applyCallerIntentToCallContext(
   ctx: VoiceV2CallContext,
   interpretation: VoiceCallerIntentInterpretation,
   callerUtterance?: string,
+  opts?: { turnId?: string },
 ): Promise<ApplyCallerIntentResult> {
   const previousActiveGoal = dialogFromContext(ctx).activeGoal;
   let dialog: VoiceV2DialogState = { ...dialogFromContext(ctx) };
@@ -214,6 +215,7 @@ export async function applyCallerIntentToCallContext(
     const factMerge = await mergeCallerFactsIntoCallContext(ctx, {
       utterance: (callerUtterance || interpretation.evidence).trim(),
       interpretation,
+      turnId: opts?.turnId,
     });
     return {
       ctx: factMerge.ctx,
@@ -283,6 +285,7 @@ export async function applyCallerIntentToCallContext(
   const factMerge = await mergeCallerFactsIntoCallContext(mergedCtx, {
     utterance: (callerUtterance || interpretation.evidence).trim(),
     interpretation,
+    turnId: opts?.turnId,
   });
   mergedCtx = factMerge.ctx;
 

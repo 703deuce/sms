@@ -25,6 +25,9 @@ export interface IntakeFieldValue {
   status: IntakeFieldStatus;
   source: IntakeFieldSource;
   updatedAt: string;
+  /** Caller utterance snippet that last set this value. */
+  evidence?: string;
+  turnId?: string;
 }
 
 export type VoiceV2IntakeState = Record<string, IntakeFieldValue>;
@@ -106,6 +109,8 @@ export interface VoiceV2CallContext {
   dialog?: import("../dialog-goal").VoiceV2DialogState;
   /** Authoritative scheduling facts — persisted on interpreter merge, independent of SAVE timing. */
   schedulingPreference?: import("../scheduling-preference-state").VoiceV2SchedulingPreference;
+  /** Auto-dispatch idempotency — runtime owns required_action execution. */
+  runtimeDispatch?: import("../runtime-dispatch-state").VoiceV2RuntimeDispatchState;
 }
 
 export interface IntakeReadinessResult {

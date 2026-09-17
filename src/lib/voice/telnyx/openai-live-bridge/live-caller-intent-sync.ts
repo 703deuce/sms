@@ -53,8 +53,11 @@ export async function syncLiveCallerUtteranceIntent(input: {
   if (!ctx) return;
 
   const priorGoal = dialogFromContext(ctx).activeGoal;
+  const turnId = `caller_${Date.now()}_${utterance.slice(0, 32).replace(/\W/g, "")}`;
   const interpretation = interpretCallerUtterance(utterance, { activeGoal: priorGoal });
-  const applied = await applyCallerIntentToCallContext(ctx, interpretation, utterance);
+  const applied = await applyCallerIntentToCallContext(ctx, interpretation, utterance, {
+    turnId,
+  });
 
   const nextCtx = {
     ...applied.ctx,

@@ -17,7 +17,8 @@ export type LiveControlPlaneTurnInput = {
 };
 
 /**
- * Canonical post-mutation pipeline: persist already done → rehydrate → sync tools → optional auto-dispatch → re-sync.
+ * Canonical post-mutation pipeline: persist already done → rehydrate → auto-dispatch → sync Live tools.
+ * No delegation episode required; runs on every caller-intent merge and post-tool state change.
  */
 export async function runLiveControlPlaneTurn(
   input: LiveControlPlaneTurnInput,
@@ -26,12 +27,7 @@ export async function runLiveControlPlaneTurn(
   await input.controlPlane.ensureHydrated();
   input.controlPlane.logStageTransitionIfChanged();
 
-  if (input.sendLiveOut) {
-    for (const event of buildLiveControlPlaneSyncEvents(input.controlPlane)) {
-      input.sendLiveOut(event);
-    }
-  }
-
+  let dispatchedTool: string | undefined;
   if (input.autoDispatch && input.dispatchContext && input.sendLiveOut) {
     const first = await tryAutoDispatchRequiredAction({
       controlPlane: input.controlPlane,
@@ -39,12 +35,26 @@ export async function runLiveControlPlaneTurn(
       sendLiveOut: input.sendLiveOut,
     });
     if (first.dispatched) {
-      await runLiveControlPlaneTurn({
-        ...input,
-        autoDispatch: true,
-        reason: `${input.reason}_after_${first.toolName}`,
-      });
+      dispatchedTool = first.toolName;
+      input.controlPlane.invalidateContextCache();
+      await input.controlPlane.ensureHydrated();
+      input.controlPlane.logStageTransitionIfChanged();
     }
+  }
+
+  if (input.sendLiveOut) {
+    for (const event of buildLiveControlPlaneSyncEvents(input.controlPlane)) {
+      input.sendLiveOut(event);
+    }
+  }
+
+  if (dispatchedTool) {
+    await runLiveControlPlaneTurn({
+      ...input,
+      autoDispatch: true,
+      reason: `${input.reason}_after_${dispatchedTool}`,
+    });
+    return;
   }
 
   console.info(
@@ -53,7 +63,9 @@ export async function runLiveControlPlaneTurn(
       reason: input.reason,
       stage: input.controlPlane.getStage(),
       required_action: input.controlPlane.getWorkflowEnvelope().required_action ?? null,
-      allowed_next_actions: input.controlPlane.getWorkflowEnvelope().allowed_next_actions,
+      runtime_owned_actions: input.controlPlane.getWorkflowEnvelope().runtime_owned_actions,
+      delegation_allowed_actions:
+        input.controlPlane.getWorkflowEnvelope().delegation_allowed_actions,
     })}`,
   );
 }

@@ -182,7 +182,10 @@ export function createLiveControlPlane(input: {
     getActiveTools() {
       if (!agentConfig) return [];
       const env = this.getWorkflowEnvelope();
-      const allowed = (env.allowed_next_actions as string[]) || [];
+      const allowed =
+        (env.delegation_allowed_actions as string[]) ||
+        (env.allowed_next_actions as string[]) ||
+        [];
       return filterLiveToolsForWorkflow({
         config: agentConfig,
         capability,
@@ -247,6 +250,14 @@ export function createLiveControlPlane(input: {
         };
       }
       const env = this.getWorkflowEnvelope();
+      const runtimeOwned = (env.runtime_owned_actions as string[]) || [];
+      if (runtimeOwned.includes(toolName)) {
+        return {
+          allowed: false,
+          speak: "The system is already handling that step.",
+          status: "RUNTIME_OWNS_REQUIRED_ACTION",
+        };
+      }
       const allowed = (env.allowed_next_actions as string[]) || [];
       if (!isToolNameAllowedByWorkflow(toolName, allowed)) {
         return {

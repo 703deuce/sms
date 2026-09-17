@@ -176,9 +176,12 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
-  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null = null;
-  let liveToolDispatchContext: LiveToolDispatchContext | null = null;
-  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null = null;
+  let liveToolDispatchContext: LiveToolDispatchContext | null =
+    input.immediateLiveStart?.toolContext ?? input.toolContext ?? null;
+  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null =
+    liveToolDispatchContext?.controlPlane ?? null;
+  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null =
+    input.immediateLiveStart?.claims ?? input.claims ?? null;
   let liveRuntimeDisposed = false;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {

@@ -60,10 +60,10 @@ function seed(): VoiceV2CallContext {
   return ctx;
 }
 
-async function applyUtterance(ctx: VoiceV2CallContext, utterance: string) {
+async function applyUtterance(ctx: VoiceV2CallContext, utterance: string, turnId?: string) {
   const prior = dialogFromContext(ctx).activeGoal;
   const interpretation = interpretCallerUtterance(utterance, { activeGoal: prior });
-  return applyCallerIntentToCallContext(ctx, interpretation, utterance);
+  return applyCallerIntentToCallContext(ctx, interpretation, utterance, { turnId });
 }
 
 async function saveEmail() {

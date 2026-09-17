@@ -14,6 +14,7 @@ import {
   extractSchedulingFromCallerSpeech,
   mergeSchedulingPreferenceRecord,
   syncWorkflowRequestedDateFromScheduling,
+  utteranceLooksLikeSchedulingCorrection,
   type VoiceV2SchedulingPreference,
 } from "./scheduling-preference-state";
 import { mergeUtteranceIntakeFactsIntoContext } from "./intake/apply-intake-facts";
@@ -25,6 +26,7 @@ export type MergeCallerFactsInput = {
   interpretation: VoiceCallerIntentInterpretation;
   evidence?: string;
   now?: Date;
+  turnId?: string;
 };
 
 export type MergeCallerFactsResult = {
@@ -45,7 +47,7 @@ export async function mergeCallerFactsIntoCallContext(
   let schedulingChanged = false;
   let intakeFieldsSaved: import("./intake/types").IntakeFieldKey[] = [];
 
-  const intakeMerge = mergeUtteranceIntakeFactsIntoContext(next, input.utterance);
+  const intakeMerge = mergeUtteranceIntakeFactsIntoContext(next, input.utterance, input.turnId);
   next = intakeMerge.ctx;
   intakeFieldsSaved = intakeMerge.saved;
 
@@ -62,12 +64,15 @@ export async function mergeCallerFactsIntoCallContext(
     utterance: input.utterance,
     timezone: next.businessTimezone,
     now: input.now,
+    turnId: input.turnId,
     entities: input.interpretation.entities,
   });
 
   if (schedulingPatch && (schedulingPatch.requestedDate || schedulingPatch.requestedDaypart || schedulingPatch.requestedTime)) {
     const prior = next.schedulingPreference;
-    const mergedPref = mergeSchedulingPreferenceRecord(prior, schedulingPatch);
+    const mergedPref = mergeSchedulingPreferenceRecord(prior, schedulingPatch, {
+      forceReplace: utteranceLooksLikeSchedulingCorrection(input.utterance),
+    });
     const priorJson = JSON.stringify(prior ?? {});
     const nextJson = JSON.stringify(mergedPref);
     if (priorJson !== nextJson) {

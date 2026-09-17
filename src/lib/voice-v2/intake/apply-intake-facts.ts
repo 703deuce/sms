@@ -53,6 +53,7 @@ export function applyValidatedIntakeFieldsToContext(
 export function mergeUtteranceIntakeFactsIntoContext(
   ctx: VoiceV2CallContext,
   utterance: string,
+  turnId?: string,
 ): { ctx: VoiceV2CallContext; saved: IntakeFieldKey[] } {
   const raw = extractIntakeFieldsFromUtterance(utterance, ctx.intakeSchema);
   if (!Object.keys(raw).length) return { ctx, saved: [] };
@@ -60,5 +61,14 @@ export function mergeUtteranceIntakeFactsIntoContext(
   if (!validation.ok && !Object.keys(validation.normalized).length) {
     return { ctx, saved: [] };
   }
-  return applyValidatedIntakeFieldsToContext(ctx, validation.normalized);
+  const applied = applyValidatedIntakeFieldsToContext(ctx, validation.normalized);
+  if (!turnId || !applied.saved.length) return applied;
+  const nextState = { ...applied.ctx.intakeState };
+  for (const key of applied.saved) {
+    const row = nextState[key];
+    if (row) {
+      nextState[key] = { ...row, evidence: utterance.slice(0, 240), turnId };
+    }
+  }
+  return { ctx: { ...applied.ctx, intakeState: nextState }, saved: applied.saved };
 }
