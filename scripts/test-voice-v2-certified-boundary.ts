@@ -12,8 +12,16 @@ const bookRoute = readFileSync(
   "src/app/api/telnyx/voice-v2/book-offered-slot/route.ts",
   "utf8",
 );
-assert.ok(findRoute.includes("certifiedPipeline: true"));
-assert.ok(bookRoute.includes("certifiedPipeline: true"));
+assert.ok(
+  findRoute.includes("executeMicrosoft365CertifiedFindAvailability"),
+  "find route must use microsoft-365-certified pipeline only",
+);
+assert.ok(
+  bookRoute.includes("executeMicrosoft365CertifiedBookOfferedSlot"),
+  "book route must use microsoft-365-certified pipeline only",
+);
+assert.ok(!/await\s+prisma\.auditLog/.test(findRoute), "find route must void-defer audit");
+assert.ok(!/await\s+prisma\.auditLog/.test(bookRoute), "book route must void-defer audit");
 
 const handoff = certifiedBookingHandoffPayload({
   offerSetId: "v2offer_test",
