@@ -60,6 +60,8 @@ export async function mergeCallerFactsIntoCallContext(
     workflow = { ...workflow, bookingIntentActive: true };
   }
 
+  const strategy = next.capabilities?.bookingStrategy ?? "MICROSOFT_365";
+
   const schedulingPatch = extractSchedulingFromCallerSpeech({
     utterance: input.utterance,
     timezone: next.businessTimezone,
@@ -77,8 +79,31 @@ export async function mergeCallerFactsIntoCallContext(
     const nextJson = JSON.stringify(mergedPref);
     if (priorJson !== nextJson) {
       schedulingChanged = true;
+      const hadOffer = Boolean(next.currentOfferSet?.offerSetId);
       next = { ...next, schedulingPreference: mergedPref };
       workflow = syncWorkflowRequestedDateFromScheduling(workflow, mergedPref);
+      const correction = utteranceLooksLikeSchedulingCorrection(input.utterance);
+      if (correction || hadOffer) {
+        next = {
+          ...next,
+          currentOfferSet: undefined,
+          bookingState:
+            next.bookingState?.selectedSlotId
+              ? { ...next.bookingState, selectedSlotId: undefined, status: "pending" }
+              : next.bookingState,
+        };
+        workflow = {
+          ...workflow,
+          nextStage: deriveVoiceV2NextStage({
+            workflow,
+            readiness: getIntakeReadiness(next.intakeSchema, next.intakeState),
+            hasActiveOfferSet: false,
+            bookingStrategy: strategy,
+            schedulingPreference: mergedPref,
+            selectedSlotId: undefined,
+          }),
+        };
+      }
     }
   }
 
@@ -86,8 +111,6 @@ export async function mergeCallerFactsIntoCallContext(
   const hasOffer =
     Boolean(next.currentOfferSet?.offerSetId) &&
     (next.currentOfferSet?.slotIds?.length ?? 0) > 0;
-  const strategy = next.capabilities?.bookingStrategy ?? "MICROSOFT_365";
-
   workflow = {
     ...workflow,
     nextStage: deriveVoiceV2NextStage({

@@ -10,6 +10,7 @@ import {
   LiveTurnTracer,
 } from "./live-turn-trace";
 import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
+import { LiveCallerUtteranceAssembler } from "./live-caller-utterance-assembler";
 import {
   buildLiveOpeningGreetingInstructionAppend,
   buildLiveOpeningGreetingKickoffCommentary,
@@ -134,6 +135,23 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const turnTraceHooks = createTurnTraceHooks(turnTracer);
   const conversationTranscript = new LiveConversationTranscript();
   const callerAudioDetector = new CallerAudioActivityDetector();
+  const callerUtteranceAssembler = new LiveCallerUtteranceAssembler({
+    callId,
+    onStable: (stable) => {
+      if (!liveControlPlane || !streamClaimsForTeardown) return;
+      void syncLiveCallerUtteranceIntent({
+        claims: streamClaimsForTeardown,
+        callerUtterance: stable.text,
+        stableUtterance: stable,
+        controlPlane: liveControlPlane,
+        sendLiveOut,
+        dispatchContext: liveToolDispatchContext ?? undefined,
+        autoDispatch: Boolean(liveToolDispatchContext),
+      }).catch((err) => {
+        console.error("[live-media] stable caller utterance intent sync failed", err);
+      });
+    },
+  });
 
   milestone("telnyx_ws_attached");
   console.info(
@@ -238,26 +256,14 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     });
   };
 
-  const maybeSyncCallerIntent = (utterance: string | null) => {
-    if (!utterance || !liveControlPlane || !streamClaimsForTeardown) return;
-    void syncLiveCallerUtteranceIntent({
-      claims: streamClaimsForTeardown,
-      callerUtterance: utterance,
-      controlPlane: liveControlPlane,
-      sendLiveOut,
-      dispatchContext: liveToolDispatchContext ?? undefined,
-      autoDispatch: Boolean(liveToolDispatchContext),
-    }).catch((err) => {
-      console.error("[live-media] caller intent sync failed", err);
-    });
-  };
-
   const processInboundCallerFrame = (payloadB64: string) => {
     const telnyxAt = performance.now();
     for (const ev of callerAudioDetector.processFrame(payloadB64, telnyxAt)) {
       turnTracer.onCallerActivity(ev);
-      if (ev.type === "CALLER_AUDIO_ENDED_ESTIMATE") {
-        maybeSyncCallerIntent(conversationTranscript.commitLatestCallerUtterance());
+      if (ev.type === "CALLER_AUDIO_STARTED") {
+        callerUtteranceAssembler.onCallerAudioStarted(ev.perfMs);
+      } else if (ev.type === "CALLER_AUDIO_ENDED_ESTIMATE") {
+        callerUtteranceAssembler.onCallerAudioEndedEstimate(ev.perfMs);
       }
     }
     const forwardedAt = performance.now();
@@ -428,13 +434,14 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           const delta = String(event.delta ?? "");
           if (delta) {
             conversationTranscript.appendDelta("caller", delta);
+            callerUtteranceAssembler.onTranscriptDelta(delta, performance.now());
             turnTracer.onLiveInputTranscriptDelta(delta, event as Record<string, unknown>);
           }
           return;
         }
 
         if (isLiveInputTranscriptDone(type)) {
-          maybeSyncCallerIntent(conversationTranscript.commitLatestCallerUtterance());
+          callerUtteranceAssembler.onCallerAudioEndedEstimate(performance.now());
           return;
         }
 
@@ -541,6 +548,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   connectOpenAi();
 
   const closeLiveSession = () => {
+    callerUtteranceAssembler.dispose();
     if (!liveRuntimeDisposed && streamClaimsForTeardown) {
       liveRuntimeDisposed = true;
       void disposeLiveCallRuntime(streamClaimsForTeardown);

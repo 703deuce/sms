@@ -2,7 +2,7 @@
 /**
  * Documents + asserts: caller fact merge is NOT gated on session.delegation.created.
  *
- * Path: CALLER_AUDIO_ENDED_ESTIMATE → syncLiveCallerUtteranceIntent → applyCallerIntentToCallContext
+ * Path: transcript deltas + audio activity → LiveCallerUtteranceAssembler (stable) → syncLiveCallerUtteranceIntent
  *       → mergeCallerFactsIntoCallContext (deterministic interpreter today; Astra slot later).
  *
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-caller-intent-path-verification.ts
@@ -26,9 +26,14 @@ function main() {
   );
 
   pass(
-    "BRIDGE_CALLS_SYNC_ON_AUDIO_END",
-    bridge.includes("CALLER_AUDIO_ENDED_ESTIMATE") &&
-      bridge.includes("syncLiveCallerUtteranceIntent"),
+    "BRIDGE_UTTERANCE_ASSEMBLER",
+    bridge.includes("LiveCallerUtteranceAssembler") &&
+      bridge.includes("onCallerAudioEndedEstimate") &&
+      bridge.includes("onTranscriptDelta"),
+  );
+  pass(
+    "SYNC_USES_ASTRA_SLOT",
+    sync.includes("interpretCallerUtteranceWithAstra"),
   );
   pass(
     "SYNC_NOT_IN_DELEGATION_HANDLER",

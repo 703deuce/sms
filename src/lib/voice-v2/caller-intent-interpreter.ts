@@ -198,6 +198,7 @@ export type ApplyCallerIntentResult = {
   interpretation: VoiceCallerIntentInterpretation;
   previousActiveGoal: VoiceDialogGoal;
   resultingActiveGoal: VoiceDialogGoal;
+  schedulingChanged: boolean;
 };
 
 /** Merge per-turn caller interpretation into authoritative call context (no model workflow_signal). */
@@ -222,6 +223,7 @@ export async function applyCallerIntentToCallContext(
       interpretation,
       previousActiveGoal,
       resultingActiveGoal: dialogFromContext(factMerge.ctx).activeGoal,
+      schedulingChanged: factMerge.schedulingChanged,
     };
   }
 
@@ -294,6 +296,7 @@ export async function applyCallerIntentToCallContext(
     interpretation,
     previousActiveGoal,
     resultingActiveGoal: dialogFromContext(mergedCtx).activeGoal,
+    schedulingChanged: factMerge.schedulingChanged,
   };
 }
 

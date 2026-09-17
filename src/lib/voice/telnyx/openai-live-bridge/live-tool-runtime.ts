@@ -63,6 +63,8 @@ export type LiveToolDispatchContext = {
   capability: VoiceV2CallCapabilitySnapshot;
   schedulingGeneration: number;
   onFindStarted?: (requestedDate: string) => void;
+  /** Invalidate in-flight FIND when caller scheduling facts supersede. */
+  bumpSchedulingGeneration?: (reason: string) => void;
   /** Lazy-loaded on first tool dispatch (not at Live session.start). */
   agentConfigHydrated?: boolean;
   _hydratePromise?: Promise<void>;
@@ -517,6 +519,17 @@ export function createLiveToolDispatchContextFromClaims(
         lastFindGeneration += 1;
         ctx.schedulingGeneration = lastFindGeneration;
       }
+    },
+    bumpSchedulingGeneration: (reason) => {
+      lastFindGeneration += 1;
+      ctx.schedulingGeneration = lastFindGeneration;
+      console.info(
+        `LIVE_SCHEDULING_GENERATION_BUMP ${JSON.stringify({
+          call_id: claims.callId,
+          generation: lastFindGeneration,
+          reason,
+        })}`,
+      );
     },
   };
   return ctx;
