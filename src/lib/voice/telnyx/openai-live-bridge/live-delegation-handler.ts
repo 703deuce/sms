@@ -4,6 +4,7 @@ import {
   type LiveToolDispatchContext,
   liveToolExecutorLabel,
 } from "./live-tool-runtime";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -32,7 +33,6 @@ export function createLiveDelegationHandler(input: {
     input.sendLiveOut({
       type: "response.item.create",
       event_id: liveBaselineEventId("tool_out"),
-      delegation_id,
       item: {
         type: "function_call_output",
         call_id: opts.callId,
@@ -50,7 +50,6 @@ export function createLiveDelegationHandler(input: {
     input.sendLiveOut({
       type: "response.create",
       event_id: liveBaselineEventId("resp_cont"),
-      delegation_id,
     });
     logLiveObs("RESPONSE_CONTINUED", {
       callId: input.callId,
@@ -70,7 +69,6 @@ export function createLiveDelegationHandler(input: {
     toolBusy = true;
     const toolName = String(opts.item.name || "");
     const callId = String(opts.item.call_id || "");
-    const generationAtStart = input.callContext.schedulingGeneration;
     let args: Record<string, unknown> = {};
     try {
       args = JSON.parse(String(opts.item.arguments || "{}")) as Record<string, unknown>;
@@ -85,6 +83,13 @@ export function createLiveDelegationHandler(input: {
       });
       toolBusy = false;
       return;
+    }
+
+    let generationAtStart = input.callContext.schedulingGeneration;
+    if (toolName === VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE) {
+      const requestedDate = String(args.requested_date || args.requestedDate || "").trim();
+      input.callContext.onFindStarted?.(requestedDate);
+      generationAtStart = input.callContext.schedulingGeneration;
     }
 
     logLiveObs("FUNCTION_CALL", {
