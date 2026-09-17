@@ -13,6 +13,8 @@ import {
 } from "@/lib/voice/calendar/providers";
 import { loadVoiceV2OfferSet } from "./offer-set-store";
 import { resolveMicrosoftGraphTimeZoneId } from "@/lib/microsoft/graph-datetime-timezone";
+import { isVoiceV2CertifiedPipeline } from "./certified-booking-pipeline";
+import { resolveSelectedSlotIdFromOffer } from "./resolve-slot-from-offer";
 import {
   beginVoiceV2GraphCollection,
   endVoiceV2GraphCollection,
@@ -57,7 +59,7 @@ function slotOverlapsBusy(
 export async function executeVoiceV2BookOfferedSlot(
   raw: Record<string, unknown>,
   workspaceId: string,
-  options?: { agentId?: string | null },
+  options?: { agentId?: string | null; certifiedPipeline?: boolean },
 ): Promise<
   | {
       status: "BOOKING_CONFIRMED";
@@ -89,13 +91,14 @@ export async function executeVoiceV2BookOfferedSlot(
   const graphSpans: VoiceV2GraphSpan[] = [];
 
   const offerSetId = String(raw.offer_set_id || raw.offerSetId || "").trim();
-  const selectedSlotId = String(raw.selected_slot_id || raw.selectedSlotId || "").trim();
+  let selectedSlotId = String(raw.selected_slot_id || raw.selectedSlotId || "").trim();
   const toolInvocationId = String(
     raw.tool_invocation_id || raw.toolInvocationId || raw.invocation_id || "",
   ).trim();
   const callId = raw.call_id || raw.callId ? String(raw.call_id || raw.callId) : null;
   const agentId = String(options?.agentId || raw.agent_id || raw.agentId || "").trim();
-  if (agentId) {
+  const certifiedPipeline = isVoiceV2CertifiedPipeline(options);
+  if (agentId && !certifiedPipeline) {
     const { resolveSessionKey } = await import("./intake/load-call-context");
     const { getVoiceV2CallContext } = await import("./intake/session-store");
     const sessionKey = resolveSessionKey({
@@ -139,12 +142,54 @@ export async function executeVoiceV2BookOfferedSlot(
     }
   }
 
-  if (!offerSetId || !selectedSlotId) {
+  if (!offerSetId) {
     timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
     marks.RESPONSE_SENT = isoMark();
     return {
       status: "INVALID_OFFER",
-      error: "offer_set_id_and_selected_slot_id_required",
+      error: "offer_set_id_required",
+      timing: marks,
+      timing_ms: timingMs,
+    };
+  }
+
+  const prisma = getPrisma();
+
+  const offerStart = Date.now();
+  const offer = await loadVoiceV2OfferSet(workspaceId, offerSetId);
+  timingMs.OFFER_RESOLUTION_MS = Date.now() - offerStart;
+  marks.OFFER_RESOLVED = isoMark();
+
+  if (!offer) {
+    timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
+    marks.RESPONSE_SENT = isoMark();
+    return {
+      status: "INVALID_OFFER",
+      error: "offer_set_not_found_or_expired",
+      timing: marks,
+      timing_ms: timingMs,
+    };
+  }
+
+  if (!selectedSlotId) {
+    const hint =
+      raw.caller_slot_label ||
+      raw.spoken_label ||
+      raw.selected_time ||
+      raw.slot_label ||
+      raw.time_choice;
+    selectedSlotId =
+      resolveSelectedSlotIdFromOffer(offer.slots, hint) ||
+      resolveSelectedSlotIdFromOffer(offer.slots, raw) ||
+      "";
+  }
+
+  if (!selectedSlotId) {
+    timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
+    marks.RESPONSE_SENT = isoMark();
+    return {
+      status: "INVALID_OFFER",
+      error: "selected_slot_id_required",
       timing: marks,
       timing_ms: timingMs,
     };
@@ -154,7 +199,6 @@ export async function executeVoiceV2BookOfferedSlot(
     ? `v2book:${workspaceId}:${toolInvocationId}`
     : `v2book:${workspaceId}:${offerSetId}:${selectedSlotId}`;
 
-  const prisma = getPrisma();
   const existing = await prisma.voiceV2BookingIdempotency.findUnique({
     where: { idempotencyKey },
   });
@@ -173,22 +217,6 @@ export async function executeVoiceV2BookOfferedSlot(
       timing: marks,
       timing_ms: timingMs,
       graph: { GRAPH_REQUEST_COUNT: 0, GRAPH_REQUESTS: [] },
-    };
-  }
-
-  const offerStart = Date.now();
-  const offer = await loadVoiceV2OfferSet(workspaceId, offerSetId);
-  timingMs.OFFER_RESOLUTION_MS = Date.now() - offerStart;
-  marks.OFFER_RESOLVED = isoMark();
-
-  if (!offer) {
-    timingMs.TOTAL_BACKEND_MS = Date.now() - t0;
-    marks.RESPONSE_SENT = isoMark();
-    return {
-      status: "INVALID_OFFER",
-      error: "offer_set_not_found_or_expired",
-      timing: marks,
-      timing_ms: timingMs,
     };
   }
 
@@ -334,7 +362,7 @@ export async function executeVoiceV2BookOfferedSlot(
     };
   }
 
-  if (agentId) {
+  if (agentId && !certifiedPipeline) {
     const { evaluateBookingIntakeGate } = await import("./intake/booking-gate");
     const gate = await evaluateBookingIntakeGate({
       workspaceId,

@@ -88,12 +88,20 @@ export async function patchWorkflowAfterFind(input: {
   offerSetId: string;
   slotIds: string[];
 }): Promise<void> {
-  const sessionKey = resolveSessionKey({
-    callControlId: input.callControlId,
-    conversationId: input.conversationId,
-  });
-  if (!sessionKey) return;
-  const ctx = getVoiceV2CallContext(sessionKey);
+  const { ensureVoiceV2CallContext } = await import("./intake/load-call-context");
+  const ctx =
+    (await ensureVoiceV2CallContext({
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      callControlId: input.callControlId,
+      conversationId: input.conversationId,
+    }).catch(() => null)) ??
+    getVoiceV2CallContext(
+      resolveSessionKey({
+        callControlId: input.callControlId,
+        conversationId: input.conversationId,
+      }) || "",
+    );
   if (!ctx) return;
   setVoiceV2CallContext(
     transitionAfterFind({

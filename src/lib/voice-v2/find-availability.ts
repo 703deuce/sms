@@ -74,7 +74,11 @@ function emptyTimingMs(): VoiceV2TimingMs {
 export async function executeVoiceV2FindAvailability(
   raw: Record<string, unknown>,
   resolvedWorkspaceId: string,
-  options?: { voiceCallId?: string | null; trustedPrismaCallId?: string | null },
+  options?: {
+    voiceCallId?: string | null;
+    trustedPrismaCallId?: string | null;
+    certifiedPipeline?: boolean;
+  },
 ): Promise<VoiceV2FindAvailabilityResult> {
   const t0 = Date.now();
   const marks: VoiceV2TimingMarks = { REQUEST_RECEIVED: isoMark() };
@@ -89,9 +93,12 @@ export async function executeVoiceV2FindAvailability(
     marks.INPUT_VALIDATED = isoMark();
     timingMs.VALIDATION_MS = Date.now() - vStart;
 
+    const certifiedPipeline = options?.certifiedPipeline === true;
     const agentId = String(raw.agent_id || raw.agentId || "").trim();
     let bookingStrategy: VoiceV2BookingStrategy = "MICROSOFT_365";
-    if (agentId) {
+    if (agentId && !certifiedPipeline) {
+      const { resolveSessionKey } = await import("./intake/load-call-context");
+      const { getVoiceV2CallContext } = await import("./intake/session-store");
       const sessionKey = resolveSessionKey({
         callControlId: options?.voiceCallId || String(raw.call_id || raw.callId || ""),
         conversationId: String(raw.conversation_id || raw.conversationId || ""),
@@ -140,7 +147,7 @@ export async function executeVoiceV2FindAvailability(
       }
     }
 
-    if (bookingStrategy === "CALENDLY") {
+    if (!certifiedPipeline && bookingStrategy === "CALENDLY") {
       return executeVoiceV2FindAvailabilityCalendly(raw, resolvedWorkspaceId, options);
     }
 

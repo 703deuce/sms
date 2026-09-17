@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       call_id: callId,
     },
     workspaceId,
-    { voiceCallId: callId, trustedPrismaCallId },
+    { voiceCallId: callId, trustedPrismaCallId, certifiedPipeline: true },
   );
 
   if (result.status === "AVAILABILITY_FOUND" && callId) {
@@ -73,7 +73,19 @@ export async function POST(request: Request) {
     }).catch(() => undefined);
   }
 
-  const payload = formatVoiceV2TelnyxToolResponse(result);
+  let payload = formatVoiceV2TelnyxToolResponse(result);
+  if (result.status === "AVAILABILITY_FOUND" && result.offer_set_id) {
+    const { certifiedBookingHandoffPayload } = await import(
+      "@/lib/voice-v2/certified-booking-pipeline"
+    );
+    payload = {
+      ...payload,
+      ...certifiedBookingHandoffPayload({
+        offerSetId: result.offer_set_id,
+        slots: result.slots,
+      }),
+    };
+  }
   const httpResponseAtMs = Date.now();
   const { buildVoiceV2PstnTrace } = await import("@/lib/voice-v2/pstn-trace");
   const structuredArgs = {

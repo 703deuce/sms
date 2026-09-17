@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   const result = await executeVoiceV2BookOfferedSlot(
     { ...body, call_id: callId, agent_id: agentId },
     workspaceId,
-    { agentId },
+    { agentId, certifiedPipeline: true },
   );
 
   if (result.status === "BOOKING_CONFIRMED" && callId) {
