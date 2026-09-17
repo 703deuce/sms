@@ -17,8 +17,19 @@ import { REALTIME_SAVE_INTAKE_DEFERRED_OUTPUT } from "./realtime-tools";
 import { logRealtimeBridgeEvent } from "./telemetry";
 import {
   buildOpenAiRealtimeGaGreetingResponse,
+  buildOpenAiRealtimeGaMinimalSessionUpdate,
   buildOpenAiRealtimeGaSessionUpdate,
+  OPENAI_REALTIME_MINIMAL_AMY_INSTRUCTIONS,
 } from "./ga-session";
+import {
+  OPENAI_REALTIME_API_KIND,
+  buildOpenAiRealtimeWebSocketHeaders,
+  buildOpenAiRealtimeWebSocketUrl,
+  isOpenAiRealtimeMinimalSessionEnabled,
+  isOpenAiRealtimeProtocolLoggingEnabled,
+  summarizeOpenAiClientEvent,
+  summarizeOpenAiServerEvent,
+} from "./openai-realtime-protocol";
 
 type TelnyxMediaEvent = {
   event?: string;
@@ -65,18 +76,24 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
     agentId: input.claims.agentId,
   });
 
-  const tools = buildOpenAiRealtimeVoiceV2Tools({
-    config: parsed,
-    transferEnabled: Boolean(handling?.transferEnabled),
-  });
+  const minimalSession = isOpenAiRealtimeMinimalSessionEnabled();
+  const protocolLog = isOpenAiRealtimeProtocolLoggingEnabled();
+  const tools = minimalSession
+    ? []
+    : buildOpenAiRealtimeVoiceV2Tools({
+        config: parsed,
+        transferEnabled: Boolean(handling?.transferEnabled),
+      });
 
   const model = OPENAI_REALTIME_MINI_MODEL_ID;
-  const openAiUrl = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`;
+  const openAiUrl = buildOpenAiRealtimeWebSocketUrl(model);
   const openAi = new WebSocket(openAiUrl, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: buildOpenAiRealtimeWebSocketHeaders(apiKey),
   });
+  const openAiOpenedAt = { ms: 0 };
+  let bridgeTornDown = false;
+  let firstTelnyxMediaLogged = false;
+  let firstAudioToOpenAiLogged = false;
 
   let streamId: string | null = null;
   let toolBusy = false;
@@ -108,6 +125,12 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
 
   const sendOpenAi = (event: Record<string, unknown>) => {
     if (openAi.readyState === WebSocket.OPEN) {
+      if (protocolLog) {
+        logRealtimeBridgeEvent("OPENAI_SEND", {
+          callId: input.claims.callId,
+          ...summarizeOpenAiClientEvent(event),
+        });
+      }
       openAi.send(JSON.stringify(event));
     }
   };
@@ -146,7 +169,7 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
   };
 
   const maybeSendGreeting = () => {
-    if (!greeting || greetingSent || !openAiSessionReady || !streamId) return;
+    if (minimalSession || !greeting || greetingSent || !openAiSessionReady || !streamId) return;
     greetingSent = true;
     logRealtimeBridgeEvent("realtime_greeting_triggered", {
       callId: input.claims.callId,
@@ -172,8 +195,18 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
   };
 
   openAi.on("open", () => {
+    openAiOpenedAt.ms = Date.now();
     if (!openAiSessionLogged) {
       openAiSessionLogged = true;
+      logRealtimeBridgeEvent("OPENAI_WS_OPEN", {
+        callId: input.claims.callId,
+        api_kind: OPENAI_REALTIME_API_KIND,
+        url: openAiUrl,
+        model,
+        voice: OPENAI_REALTIME_BRIDGE_VOICE,
+        minimal_session: minimalSession,
+        protocol_log: protocolLog,
+      });
       logRealtimeBridgeEvent("openai_realtime_session_connected", {
         callId: input.claims.callId,
         model,
@@ -184,16 +217,7 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
         realtime_api: "ga",
       });
     }
-    sendOpenAi(buildOpenAiRealtimeGaSessionUpdate({ instructions, tools }));
-    setTimeout(() => {
-      if (openAiSessionReady) return;
-      openAiSessionReady = true;
-      logRealtimeBridgeEvent("openai_realtime_session_ready", {
-        callId: input.claims.callId,
-        openAiEventType: "session.updated_fallback",
-      });
-      maybeSendGreeting();
-    }, 2500);
+    // session.update is sent after session.created (not on raw WS open).
   });
 
   openAi.on("message", (raw) => {
@@ -211,11 +235,26 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
     }
     const type = String(ev.type || "");
 
+    if (protocolLog) {
+      logRealtimeBridgeEvent("OPENAI_SERVER_EVENT", {
+        callId: input.claims.callId,
+        ...summarizeOpenAiServerEvent(ev),
+      });
+    }
+
     if (type === "error") {
       logRealtimeBridgeEvent("openai_realtime_error", {
         callId: input.claims.callId,
-        error: ev.error ?? ev,
+        ...summarizeOpenAiServerEvent(ev),
       });
+      return;
+    }
+
+    if (type === "session.created") {
+      const sessionPayload = minimalSession
+        ? buildOpenAiRealtimeGaMinimalSessionUpdate(OPENAI_REALTIME_MINIMAL_AMY_INSTRUCTIONS)
+        : buildOpenAiRealtimeGaSessionUpdate({ instructions, tools });
+      sendOpenAi(sessionPayload);
       return;
     }
 
@@ -240,6 +279,12 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
         logRealtimeBridgeEvent("first_amy_audio_delta", {
           callId: input.claims.callId,
           openAiEventType: type,
+        });
+        logRealtimeBridgeEvent("FIRST_OPENAI_AUDIO_DELTA", {
+          callId: input.claims.callId,
+        });
+        logRealtimeBridgeEvent("FIRST_AUDIO_SENT_TO_TELNYX", {
+          callId: input.claims.callId,
         });
       }
       sendTelnyxMedia(audioDelta);
@@ -353,11 +398,27 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       return;
     }
     if (ev.event === "start") {
+      logRealtimeBridgeEvent("TELNYX_START_RECEIVED", {
+        callId: input.claims.callId,
+        stream_id: resolveTelnyxStreamId(ev),
+      });
       const id = resolveTelnyxStreamId(ev);
       if (id) onTelnyxStreamReady(id);
       return;
     }
     if (ev.event === "media" && ev.media?.payload) {
+      if (!firstTelnyxMediaLogged) {
+        firstTelnyxMediaLogged = true;
+        logRealtimeBridgeEvent("FIRST_TELNYX_MEDIA_RECEIVED", {
+          callId: input.claims.callId,
+        });
+      }
+      if (!firstAudioToOpenAiLogged) {
+        firstAudioToOpenAiLogged = true;
+        logRealtimeBridgeEvent("FIRST_AUDIO_SENT_TO_OPENAI", {
+          callId: input.claims.callId,
+        });
+      }
       sendOpenAi({
         type: "input_audio_buffer.append",
         audio: ev.media.payload,
@@ -369,29 +430,56 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
     }
   });
 
-  const closeBoth = () => {
-    logRealtimeBridgeEvent("bridge_session_closed", { callId: input.claims.callId });
+  const teardownBridge = (source: "openai_close" | "telnyx_close" | "telnyx_stop") => {
+    if (bridgeTornDown) return;
+    bridgeTornDown = true;
+    logRealtimeBridgeEvent("bridge_session_closed", {
+      callId: input.claims.callId,
+      teardown_source: source,
+      openai_session_ready: openAiSessionReady,
+    });
     try {
-      openAi.close();
+      if (openAi.readyState === WebSocket.OPEN || openAi.readyState === WebSocket.CONNECTING) {
+        openAi.close();
+      }
     } catch {
       /* ignore */
     }
     try {
-      input.telnyxSocket.close();
+      if (input.telnyxSocket.readyState === WebSocket.OPEN) {
+        input.telnyxSocket.close();
+      }
     } catch {
       /* ignore */
     }
   };
 
   openAi.on("close", (code, reason) => {
+    const timeSinceOpenMs = openAiOpenedAt.ms ? Date.now() - openAiOpenedAt.ms : null;
+    logRealtimeBridgeEvent("OPENAI_WS_CLOSE", {
+      callId: input.claims.callId,
+      code,
+      reason: reason.toString(),
+      time_since_open_ms: timeSinceOpenMs,
+      session_ready: openAiSessionReady,
+    });
     logRealtimeBridgeEvent("openai_realtime_ws_closed", {
       callId: input.claims.callId,
       code,
       reason: reason.toString(),
+      time_since_open_ms: timeSinceOpenMs,
     });
-    closeBoth();
+    teardownBridge("openai_close");
   });
-  input.telnyxSocket.on("close", () => openAi.close());
+  input.telnyxSocket.on("close", () => {
+    if (!bridgeTornDown) {
+      try {
+        openAi.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  });
   openAi.on("error", (err) => {
     console.error("[realtime-bridge] openai ws", err);
     logRealtimeBridgeEvent("openai_realtime_ws_error", {

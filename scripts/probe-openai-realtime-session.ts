@@ -46,14 +46,20 @@ async function main() {
       resolve();
     }, 12000);
 
+    let sentUpdate = false;
+
     ws.on("open", () => {
-      console.log("open");
-      ws.send(JSON.stringify(buildOpenAiRealtimeGaSessionUpdate({ instructions, tools })));
+      console.log("OPENAI_WS_OPEN");
     });
 
     ws.on("message", (raw) => {
       const ev = JSON.parse(String(raw)) as { type?: string; error?: unknown };
       console.log("evt", ev.type, ev.type === "error" ? JSON.stringify(ev) : "");
+      if (ev.type === "session.created" && !sentUpdate) {
+        sentUpdate = true;
+        console.log("OPENAI_SEND session.update");
+        ws.send(JSON.stringify(buildOpenAiRealtimeGaSessionUpdate({ instructions, tools })));
+      }
       if (ev.type === "session.updated") {
         clearTimeout(timer);
         console.log("OK session.updated");
