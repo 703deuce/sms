@@ -42,8 +42,8 @@ BRIDGE_FILES=(
 
 if [[ "$MODE" == "config_only" ]]; then
   tar czf "$TAR" -C "$ROOT" \
-    src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts
-  src/lib/voice/telnyx/openai-realtime-bridge/live-frontend-instructions.ts \
+    src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts \
+    src/lib/voice/telnyx/openai-realtime-bridge/live-frontend-instructions.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
@@ -73,7 +73,7 @@ sleep 30
 ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'curl -sf http://127.0.0.1:3000/api/health; echo'"
 
 if [[ "$MODE" == "config_only" ]]; then
-  echo "Patched Live config + bridge (inbound-only audio + diag trace). Set OPENAI_LIVE_BASELINE=A on container for caller-speaks-first. No master deploy."
+  echo "Patched Live config + bridge. Default OPENAI_LIVE_BASELINE=G (greeting + behavioral frontend). No master deploy."
 elif [[ "$MODE" == "live" ]]; then
   echo "--- Live probe (OpenAI only) ---"
   ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/probe-openai-live.ts'"
