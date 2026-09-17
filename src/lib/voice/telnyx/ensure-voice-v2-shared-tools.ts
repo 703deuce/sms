@@ -214,25 +214,36 @@ export async function ensureVoiceV2SharedToolsForAgent(input: {
     };
   }
 
+  const findBookBase =
+    strategy === "CALENDLY"
+      ? "/api/telnyx/voice-v2/calendly"
+      : "/api/telnyx/voice-v2";
+
   const findId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     displayName: VOICE_V2_TELNYX_TOOL_NAME,
     toolType: VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
-    urlPath: "/api/telnyx/voice-v2/find-availability",
+    urlPath: `${findBookBase}/find-availability`,
     bodyParameters: VOICE_V2_FIND_AVAILABILITY_BODY,
     timeoutMs: 10000,
-    description: "Voice Booking V2: structured FIND_AVAILABILITY only.",
+    description:
+      strategy === "CALENDLY"
+        ? "Voice Booking V2 (Calendly): structured FIND_AVAILABILITY only."
+        : "Voice Booking V2 (Microsoft 365 certified): structured FIND_AVAILABILITY only.",
   });
   const bookId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     displayName: VOICE_V2_BOOK_TELNYX_TOOL_NAME,
     toolType: VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
-    urlPath: "/api/telnyx/voice-v2/book-offered-slot",
+    urlPath: `${findBookBase}/book-offered-slot`,
     bodyParameters: VOICE_V2_BOOK_OFFERED_SLOT_BODY,
     timeoutMs: 15000,
-    description: "Voice Booking V2: book using offer_set_id + selected_slot_id.",
+    description:
+      strategy === "CALENDLY"
+        ? "Voice Booking V2 (Calendly): book using offer_set_id + selected_slot_id."
+        : "Voice Booking V2 (Microsoft 365 certified): book using offer_set_id + selected_slot_id.",
   });
   const findExistingId = await ensureSharedWebhookTool({
     workspaceId: input.workspaceId,

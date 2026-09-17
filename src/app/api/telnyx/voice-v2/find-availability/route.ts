@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { executeVoiceV2FindAvailability } from "@/lib/voice-v2/find-availability";
+import { executeMicrosoft365CertifiedFindAvailability } from "@/lib/voice-v2/pipelines/microsoft-365-certified";
 import { formatVoiceV2TelnyxToolResponse } from "@/lib/voice-v2/telnyx-response";
 import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
-import { resolveTrustedTransovoVoiceCallId } from "@/lib/voice-v2/intake/resolve-trusted-call-id";
 
 /**
- * Isolated Telnyx webhook for Voice Booking V2 (FIND_AVAILABILITY only).
- * Does not use legacy /api/telnyx/voice/tools routing.
+ * Telnyx webhook — Microsoft 365 certified FIND only (06125f5f pipeline).
+ * Other booking strategies use separate tools/pipelines; do not extend this route.
  */
 export async function POST(request: Request) {
   const ingressStarted = Date.now();
@@ -35,57 +34,17 @@ export async function POST(request: Request) {
   const callId =
     String(body.call_id || body.callId || request.headers.get("x-telnyx-call-control-id") || "") ||
     null;
-  const trustedPrismaCallId = resolveTrustedTransovoVoiceCallId({ headers: request.headers, body });
 
-  if (agentId && (callId || trustedPrismaCallId)) {
-    const { ensureVoiceV2CallContext } = await import("@/lib/voice-v2/intake/load-call-context");
-    await ensureVoiceV2CallContext({
-      workspaceId,
-      agentId,
-      callControlId: callId,
-      trustedPrismaCallId,
-      conversationId:
-        typeof body.conversation_id === "string"
-          ? body.conversation_id
-          : request.headers.get("x-telnyx-conversation-id"),
-    }).catch(() => undefined);
-  }
-
-  const result = await executeVoiceV2FindAvailability(
+  const result = await executeMicrosoft365CertifiedFindAvailability(
     {
       ...body,
       call_id: callId,
     },
     workspaceId,
-    { voiceCallId: callId, trustedPrismaCallId, certifiedPipeline: true },
+    { voiceCallId: callId },
   );
 
-  if (result.status === "AVAILABILITY_FOUND" && callId) {
-    const { patchWorkflowAfterFind } = await import("@/lib/voice-v2/booking-workflow-hooks");
-    const requestedDate = String(body.requested_date ?? body.requestedDate ?? "");
-    await patchWorkflowAfterFind({
-      workspaceId,
-      agentId,
-      callControlId: callId,
-      requestedDate,
-      offerSetId: result.offer_set_id,
-      slotIds: result.slots.map((s) => s.slot_id),
-    }).catch(() => undefined);
-  }
-
-  let payload = formatVoiceV2TelnyxToolResponse(result);
-  if (result.status === "AVAILABILITY_FOUND" && result.offer_set_id) {
-    const { certifiedBookingHandoffPayload } = await import(
-      "@/lib/voice-v2/certified-booking-pipeline"
-    );
-    payload = {
-      ...payload,
-      ...certifiedBookingHandoffPayload({
-        offerSetId: result.offer_set_id,
-        slots: result.slots,
-      }),
-    };
-  }
+  const payload = formatVoiceV2TelnyxToolResponse(result);
   const httpResponseAtMs = Date.now();
   const { buildVoiceV2PstnTrace } = await import("@/lib/voice-v2/pstn-trace");
   const structuredArgs = {
@@ -116,6 +75,7 @@ export async function POST(request: Request) {
             callId,
             agentId,
             toolType: toolType || "voice_v2_find_availability",
+            pipeline: "microsoft-365-certified",
             pstnTrace,
             webhookReceivedIso,
           }),
@@ -128,6 +88,7 @@ export async function POST(request: Request) {
     ...payload,
     agent_id: agentId || null,
     call_id: callId,
+    booking_pipeline: "microsoft_365_certified",
     voice_v2_pstn_trace: pstnTrace,
     telnyx_to_transovo_ms: httpResponseAtMs - ingressStarted,
     transovo_total_ms: result.timing_ms.TOTAL_MS,
