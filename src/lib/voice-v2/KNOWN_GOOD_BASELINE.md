@@ -3,6 +3,15 @@
 **Status:** Production-certified after PSTN rollback (~2026-09-15).  
 **Do not weaken this baseline when adding intake, linkage, or CRM.**
 
+## Two layers (whole call vs Microsoft back half)
+
+| Layer | Locked how | Document |
+|-------|------------|----------|
+| **Caller experience (greeting → conversation → intake → scheduling talk)** | **Permanent product law** — non-blocking by default; full transcript; P7 zero-tool booking intent; only FIND/BOOK block claims | `docs/VOICE-V2-CALLER-EXPERIENCE-NON-NEGOTIABLES.md` · `.cursor/rules/voice-v2-caller-experience-first.mdc` |
+| **Microsoft booking truth (FIND/BOOK/Graph)** | **Git + file freeze** at `06125f5f` / `pipelines/microsoft-365-certified/` | This file · `scripts/verify-microsoft-365-certified-pipeline-frozen.ts` |
+
+“This baseline” means the **Microsoft back half** unless a doc explicitly certifies the whole PSTN journey. Never satisfy Microsoft freeze by regressing caller-experience rules.
+
 ## Git anchor
 
 | Field | Value |

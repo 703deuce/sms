@@ -1,0 +1,38 @@
+---
+description: MANDATORY — Voice V2 caller experience (front half). Customer-first, non-blocking conversation from greeting through intake; only FIND/BOOK may block claims. Independent of Microsoft pipeline freeze.
+globs:
+  - src/lib/voice-v2/**
+  - src/lib/voice/**
+  - src/app/api/telnyx/voice-v2/**
+  - src/lib/voice/telnyx/**
+  - docs/VOICE-V2*
+alwaysApply: true
+---
+
+# MANDATORY: Voice V2 caller experience first (front half)
+
+**Source of truth:** `docs/VOICE-V2-CALLER-EXPERIENCE-NON-NEGOTIABLES.md`  
+**Architecture:** `docs/VOICE_V2_CALLER_FIRST_ARCHITECTURE.md` (P6–P11, P14, P7, §15 operation classes)
+
+**Microsoft FIND/BOOK freeze is separate:** `transovo-voice-v2-certified-pipeline-isolation.mdc` · `KNOWN_GOOD_BASELINE.md` — does **not** replace this rule.
+
+## When this rule activates
+
+Before **any** Voice V2 work: PSTN/TeXML ingress, one-Amy workflow, prompts, intake, CallContext/warmup, save-intake tool, scheduling preference, transcript, post-call, or Telnyx tool timeouts — not only booking providers.
+
+## Hard requirements
+
+1. **Greeting and ack never wait on backend** — answer → speak; warmup/config/context concurrent (P10).
+2. **P7 booking intent** — “I need to book” / schedule intent: conversational ack only; **no** tool call solely to enter booking mode; no fake `service_reason` intake saves for intent phrases (`amy-core-static-prompt.ts`, `booking-intent-guard.ts`).
+3. **Full transcript to agent** by default (P14) — do not drop live conversation memory for action state alone.
+4. **MUST_BLOCK only FIND and BOOK claims** — real slots and “you’re booked” require provider truth; all other work **DEFER** or **PRELOAD** per caller-first §15.
+5. **Intake saves** when used: must not force cold `ensureVoiceV2CallContext` on the caller’s first ack if warmup/enroll could have prepared context; Postgres persist stays deferred where already implemented.
+6. **Observers outside hot path** — linkage, CRM, analytics, audit never `await` inside FIND/BOOK handlers.
+
+## On conflict
+
+Caller experience non-negotiables **win** over convenience, DRY, or “quick fixes” that block speech. Microsoft frozen code **wins** over cross-strategy refactors — fix latency via preload/defer/intent handling, not by merging booking engines.
+
+## Prohibited
+
+Blocking the line for config compile, first context create, or save_intake on intent-only turns · second booking agent/handoff on PSTN one-Amy · summarizing away transcript without approved design · synchronous observer work on FIND/BOOK
