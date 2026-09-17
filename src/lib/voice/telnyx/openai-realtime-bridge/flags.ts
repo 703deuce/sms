@@ -32,3 +32,7 @@ export function shouldUseOpenAiRealtimeMediaBridge(
 export function openAiRealtimeBridgeEnabledGlobally(): boolean {
   return process.env.VOICE_V2_OPENAI_REALTIME_BRIDGE !== "0";
 }
+
+export function shouldUseOpenAiLivePrimaryWebSocket(): boolean {
+  return process.env.VOICE_OPENAI_USE_LIVE_WS === "1";
+}

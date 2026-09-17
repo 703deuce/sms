@@ -94,6 +94,33 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
   let bridgeTornDown = false;
   let firstTelnyxMediaLogged = false;
   let firstAudioToOpenAiLogged = false;
+  let telnyxStartReceived = false;
+  let bridgeReadyLogged = false;
+  let lastClientEventSent = "";
+  const inboundAudioBeforeReady: string[] = [];
+  const MAX_INBOUND_AUDIO_BUFFER = 400;
+
+  const isBridgeReady = () => openAiSessionReady && telnyxStartReceived && Boolean(streamId);
+
+  const markBridgeReadyIfNeeded = () => {
+    if (!isBridgeReady() || bridgeReadyLogged) return;
+    bridgeReadyLogged = true;
+    logRealtimeBridgeEvent("BRIDGE_READY", {
+      callId: input.claims.callId,
+      telnyx_start_received: telnyxStartReceived,
+      openai_session_ready: openAiSessionReady,
+      stream_id: streamId,
+      api_kind: OPENAI_REALTIME_API_KIND,
+    });
+    while (inboundAudioBeforeReady.length > 0) {
+      const chunk = inboundAudioBeforeReady.shift()!;
+      sendOpenAi({
+        type: "input_audio_buffer.append",
+        audio: chunk,
+      });
+    }
+    maybeSendGreeting();
+  };
 
   let streamId: string | null = null;
   let toolBusy = false;
@@ -125,6 +152,7 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
 
   const sendOpenAi = (event: Record<string, unknown>) => {
     if (openAi.readyState === WebSocket.OPEN) {
+      lastClientEventSent = String(event.type || "unknown");
       if (protocolLog) {
         logRealtimeBridgeEvent("OPENAI_SEND", {
           callId: input.claims.callId,
@@ -191,7 +219,7 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       streamId: id,
     });
     flushOutboundAudioBuffer();
-    maybeSendGreeting();
+    markBridgeReadyIfNeeded();
   };
 
   openAi.on("open", () => {
@@ -265,7 +293,7 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
           callId: input.claims.callId,
           openAiEventType: type,
         });
-        maybeSendGreeting();
+        markBridgeReadyIfNeeded();
       }
     }
 
@@ -398,12 +426,14 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       return;
     }
     if (ev.event === "start") {
+      telnyxStartReceived = true;
       logRealtimeBridgeEvent("TELNYX_START_RECEIVED", {
         callId: input.claims.callId,
         stream_id: resolveTelnyxStreamId(ev),
       });
       const id = resolveTelnyxStreamId(ev);
       if (id) onTelnyxStreamReady(id);
+      else markBridgeReadyIfNeeded();
       return;
     }
     if (ev.event === "media" && ev.media?.payload) {
@@ -412,6 +442,12 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
         logRealtimeBridgeEvent("FIRST_TELNYX_MEDIA_RECEIVED", {
           callId: input.claims.callId,
         });
+      }
+      if (!isBridgeReady()) {
+        if (inboundAudioBeforeReady.length < MAX_INBOUND_AUDIO_BUFFER) {
+          inboundAudioBeforeReady.push(ev.media.payload);
+        }
+        return;
       }
       if (!firstAudioToOpenAiLogged) {
         firstAudioToOpenAiLogged = true;
@@ -462,6 +498,9 @@ export async function runTelnyxOpenAiRealtimeBridge(input: {
       reason: reason.toString(),
       time_since_open_ms: timeSinceOpenMs,
       session_ready: openAiSessionReady,
+      telnyx_start_received: telnyxStartReceived,
+      bridge_ready: bridgeReadyLogged,
+      last_client_event: lastClientEventSent,
     });
     logRealtimeBridgeEvent("openai_realtime_ws_closed", {
       callId: input.claims.callId,

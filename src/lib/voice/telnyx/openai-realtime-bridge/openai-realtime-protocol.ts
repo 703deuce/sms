@@ -1,10 +1,20 @@
 import { OPENAI_REALTIME_MINI_MODEL_ID } from "./flags";
 
 /**
- * This bridge uses OpenAI Realtime API over WebSocket — NOT the Live API (/v1/live).
- * Live API requires session.start / session.started; Realtime uses session.update / session.updated.
+ * Two OpenAI voice WebSocket protocols (do not mix event names):
+ *
+ * - **Realtime** `wss://api.openai.com/v1/realtime?model=…` — model from VOICE_REALTIME_MODEL env.
+ *   Lifecycle: session.created → session.update → session.updated → input_audio_buffer.append /
+ *   response.output_audio.delta.
+ *
+ * - **Live** `wss://api.openai.com/v1/live/sessions` — model gpt-live-1 (mini is rejected here).
+ *   Lifecycle: session.start → session.started → session.input_audio.append /
+ *   session.output_audio.delta.
  */
 export const OPENAI_REALTIME_API_KIND = "openai_realtime_v1" as const;
+export const OPENAI_LIVE_API_KIND = "openai_live_v1" as const;
+export const OPENAI_LIVE_WS_URL = "wss://api.openai.com/v1/live/sessions";
+export const OPENAI_LIVE_DEFAULT_MODEL = "gpt-live-1";
 
 export const OPENAI_REALTIME_WS_HOST = "api.openai.com";
 export const OPENAI_REALTIME_WS_PATH = "/v1/realtime";
