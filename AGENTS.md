@@ -193,6 +193,16 @@ One Amy, no General→Booking handoff, three V2 tools only, frozen FIND/BOOK/Mic
 
 ---
 
+## OpenAI Live (GPT-Live-1) — isolated PSTN voice-behavior test
+
+**Read for Live transport / hot-patch experiments (not production booking):** `docs/OPENAI-LIVE-PSTN-TEST-PIPELINE.md`
+
+- **Frontend behavioral prompt** (turn-taking, noise, interruptions, backchannels): `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` → `OPENAI_LIVE_FRONTEND_INSTRUCTIONS` on `session.start`.
+- **Do not** put booking rules, required-field intake, Microsoft instructions, or long business logic in that Live frontend prompt during the throwaway test — those belong in Live **delegation** once voice behavior is proven.
+- **Transport:** `openai_live` via `flags.ts` / `prod-voice-bridge-hotpatch.sh --live`. Separate from certified Voice V2 FIND/BOOK path.
+
+---
+
 ## Voice V2 — certified pipeline isolation (mandatory)
 
 **Read before any Voice V2 booking / FIND / BOOK / wizard strategy work:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md` · Cursor rule: `.cursor/rules/voice-v2-certified-pipeline-isolation.mdc`
