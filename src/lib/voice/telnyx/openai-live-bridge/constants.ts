@@ -39,6 +39,15 @@ export function isOpenAiLiveSplitPromptsEnabled(): boolean {
  * Opt out: OPENAI_LIVE_DELEGATION=0 or `echo 0 > /app/.openai_live_delegation`
  * With split prompts (default), delegation defaults ON so booking can reach Voice V2 tools.
  */
+/**
+ * Send minimal session.start on OpenAI WS open; attach delegation via session.update.
+ * Opt in: OPENAI_LIVE_FAST_SESSION_START=1
+ */
+export function isOpenAiLiveFastSessionStartEnabled(): boolean {
+  const env = process.env.OPENAI_LIVE_FAST_SESSION_START?.trim().toLowerCase();
+  return env === "1" || env === "true";
+}
+
 export function isOpenAiLiveDelegationEnabled(): boolean {
   const env = process.env.OPENAI_LIVE_DELEGATION?.trim().toLowerCase();
   if (env === "0" || env === "false") return false;

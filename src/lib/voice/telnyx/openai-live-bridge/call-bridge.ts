@@ -5,9 +5,6 @@ import WebSocket from "ws";
 import { getOpenAiApiKey } from "../openai-realtime-bridge/config";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 import { logRealtimeBridgeEvent } from "../openai-realtime-bridge/telemetry";
-import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
-import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-v2/after-hours-handling-config";
 import {
   OPENAI_LIVE_WEBSOCKET_URL,
   buildOpenAiLiveSessionStartPayload,
@@ -15,12 +12,13 @@ import {
   resolveOpenAiLiveBaseline,
   resolveOpenAiLiveGreetingLine,
 } from "./live-config";
-import { isOpenAiLiveDelegationEnabled } from "./constants";
-import { buildLiveSessionConfig } from "./build-live-session-config";
-import { buildLiveVoiceTools } from "./live-tools";
-import { createLiveToolDispatchContext } from "./live-tool-runtime";
-import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
+import { buildLiveMinimalSessionConfig } from "./build-live-session-config";
+import {
+  isOpenAiLiveDelegationEnabled,
+  isOpenAiLiveFastSessionStartEnabled,
+} from "./constants";
 import { runOpenAiLiveMediaBridge } from "./live-media-bridge";
+import { resolveOpenAiLiveSessionReady } from "./resolve-live-session";
 import { startLiveVoiceV2OnCall } from "./start-on-call";
 
 export async function runTelnyxOpenAiLiveBridge(input: {
@@ -47,47 +45,39 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
   startLiveVoiceV2OnCall(input.claims);
 
+  // Overlap session resolve with OpenAI WS connect (was blocking session.start for ~4s).
+  let sessionReadyPromise: ReturnType<typeof resolveOpenAiLiveSessionReady> | undefined;
+  const beginSessionResolve = () => {
+    if (!sessionReadyPromise) {
+      sessionReadyPromise = resolveOpenAiLiveSessionReady({ claims: input.claims });
+    }
+    return sessionReadyPromise;
+  };
+  beginSessionResolve();
+
+  const fastSessionStart =
+    isOpenAiLiveFastSessionStartEnabled() && isOpenAiLiveDelegationEnabled();
+  const minimalSessionStartPayload = fastSessionStart
+    ? buildOpenAiLiveSessionStartPayload(
+        buildLiveMinimalSessionConfig({ greeting: resolveOpenAiLiveGreetingLine() }),
+      )
+    : undefined;
+
   // Attach Telnyx handlers immediately — Telnyx "start" must not be dropped while config loads.
   runOpenAiLiveMediaBridge({
     telnyxSocket: input.telnyxSocket,
     apiKey,
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
     callId,
+    fastSessionStart,
+    minimalSessionStartPayload,
     resolveSession: async () => {
-      const config = await loadVoiceAgentRuntimeConfig(
-        input.claims.workspaceId,
-        input.claims.agentId,
-      );
-      const parsed = parseVoiceAgentConfig(config);
-      const handling = resolveAfterHoursHandlingFromAgentConfig(parsed);
-      const toolContext = createLiveToolDispatchContext({
-        claims: input.claims,
-        config: parsed,
+      const ready = await beginSessionResolve();
+      logRealtimeBridgeEvent("openai_live_session_resolve_profile", {
+        callId,
+        ...ready.profile,
       });
-
-      if (isOpenAiLiveDelegationEnabled()) {
-        const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
-          input.claims,
-        );
-        const tools = buildLiveVoiceTools({
-          config: parsed,
-          transferEnabled: Boolean(handling?.transferEnabled),
-        });
-        const session = buildLiveSessionConfig({
-          greeting: resolveOpenAiLiveGreetingLine(),
-          bookingContext,
-          runtimeContext,
-          tools,
-        });
-        return {
-          sessionStartPayload: buildOpenAiLiveSessionStartPayload(session),
-          toolContext,
-        };
-      }
-
-      return {
-        sessionStartPayload: buildOpenAiLiveSessionStartPayload(),
-      };
+      return ready;
     },
     onMilestone: (name, msSinceBridge, extra) => {
       logRealtimeBridgeEvent("openai_live_timing", {

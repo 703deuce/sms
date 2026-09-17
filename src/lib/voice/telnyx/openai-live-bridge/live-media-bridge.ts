@@ -63,6 +63,7 @@ function logLiveIn(type: string, extra?: Record<string, unknown>) {
 export type LiveSessionReady = {
   sessionStartPayload: Record<string, unknown>;
   toolContext?: LiveToolDispatchContext;
+  delegationSessionPatch?: Record<string, unknown>;
 };
 
 export type LiveMediaBridgeInput = {
@@ -73,6 +74,9 @@ export type LiveMediaBridgeInput = {
   sessionStartPayload?: Record<string, unknown>;
   /** Async path — attach Telnyx handlers immediately; resolve before OpenAI session.start */
   resolveSession?: () => Promise<LiveSessionReady>;
+  /** When true, send minimal session.start on WS open; attach delegation via session.update */
+  fastSessionStart?: boolean;
+  minimalSessionStartPayload?: Record<string, unknown>;
   callId?: string;
   toolContext?: LiveToolDispatchContext;
   onMilestone?: (name: string, msSinceBridge: number, extra?: Record<string, unknown>) => void;
@@ -109,6 +113,8 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   let lastStatsLogAt = 0;
   let liveGreetingInstrEventId: string | null = null;
   let liveGreetingKickoffSent = false;
+  let delegationAttachPromise: Promise<void> | null = null;
+  let sessionStartedAt = 0;
 
   milestone("telnyx_ws_attached");
 
@@ -151,6 +157,41 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       callContext: toolContext,
       sendLiveOut,
     });
+  };
+
+  const sendSessionUpdate = (sessionPatch: Record<string, unknown>) => {
+    if (!sessionPatch || Object.keys(sessionPatch).length === 0) return;
+    sendLiveOut({
+      type: "session.update",
+      event_id: liveBaselineEventId("session_update_delegation"),
+      session: sessionPatch,
+    });
+    milestone("session_delegation_update_sent");
+  };
+
+  const attachDelegationFromResolved = async (ready: LiveSessionReady) => {
+    if (ready.toolContext) {
+      attachDelegation(ready.toolContext);
+    }
+    if (ready.delegationSessionPatch && Object.keys(ready.delegationSessionPatch).length > 0) {
+      sendSessionUpdate(ready.delegationSessionPatch);
+    }
+    milestone("session_delegation_attached", {
+      ms_since_session_started: sessionStartedAt ? Date.now() - sessionStartedAt : 0,
+    });
+  };
+
+  const ensureDelegationAttached = () => {
+    if (!input.resolveSession || delegationAttachPromise) return delegationAttachPromise;
+    delegationAttachPromise = (async () => {
+      try {
+        const ready = await input.resolveSession!();
+        await attachDelegationFromResolved(ready);
+      } catch (err) {
+        console.error("[live-media] delegation attach failed", err);
+      }
+    })();
+    return delegationAttachPromise;
   };
 
   const appendCallerAudio = (payloadB64: string, track?: string) => {
@@ -207,6 +248,27 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     openAiWs.on("open", () => {
       milestone("openai_ws_open");
       if (sessionStartSent) return;
+
+      const sendSessionStart = (payload: Record<string, unknown>) => {
+        if (sessionStartSent) return;
+        sessionStartSent = true;
+        const startEvent = {
+          ...payload,
+          event_id: (payload.event_id as string) || liveBaselineEventId("session_start"),
+        };
+        sendLiveOut(startEvent);
+        milestone("session_start_sent", {
+          delegation: delegationEnabled,
+          fast_session_start: Boolean(input.fastSessionStart),
+        });
+      };
+
+      if (input.fastSessionStart && input.minimalSessionStartPayload && input.resolveSession) {
+        sendSessionStart(input.minimalSessionStartPayload);
+        void ensureDelegationAttached();
+        return;
+      }
+
       void (async () => {
         try {
           let payload: Record<string, unknown>;
@@ -224,15 +286,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
               attachDelegation(input.toolContext);
             }
           }
-          if (sessionStartSent) return;
-          sessionStartSent = true;
-          const startEvent = {
-            ...payload,
-            event_id:
-              (payload.event_id as string) || liveBaselineEventId("session_start"),
-          };
-          sendLiveOut(startEvent);
-          milestone("session_start_sent", { delegation: delegationEnabled });
+          sendSessionStart(payload);
         } catch (err) {
           console.error("[live-media] session resolve/start failed", err);
           input.telnyxSocket.close(1011, "session_start_failed");
@@ -258,10 +312,14 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
         if (type === "session.started") {
           liveStarted = true;
+          sessionStartedAt = Date.now();
           milestone("session_started", {
             session_id: (event.session as { id?: string })?.id ?? "",
             delegation: delegationEnabled,
           });
+          if (input.fastSessionStart && input.resolveSession) {
+            void ensureDelegationAttached();
+          }
           logLiveIn("session.started", {
             callId,
             session_id: (event.session as { id?: string })?.id ?? "",

@@ -15,6 +15,10 @@ Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-rea
 
 **Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-5-mini`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). Live handles `response.event` → `response.item.create` (function_call_output) → `response.create`. Observability: grep `LIVE_FUNCTION_CALL`, `LIVE_TOOL_DISPATCH`, `LIVE_TOOL_RESULT`.
 
+**Known-good PSTN booking baseline:** `docs/GPT-LIVE-PSTN-BOOKING-KNOWN-GOOD.md` (call `cmu58huys1m0u2z480s656y3j`).
+
+**Startup latency:** Every call logs `openai_live_session_resolve_profile` with per-phase ms (`resolve-live-session.ts`). Opt-in fast start: `OPENAI_LIVE_FAST_SESSION_START=1` sends minimal `session.start` on WS open and attaches delegation via `session.update` (does not change FIND/BOOK executors).
+
 **Frozen Realtime route:** `openai-realtime-bridge/*` is not modified for Live work except `ws-server.ts` routing `openai_live` → `openai-live-bridge/call-bridge`.
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
