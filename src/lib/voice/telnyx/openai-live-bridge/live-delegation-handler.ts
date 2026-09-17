@@ -9,8 +9,6 @@ import {
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { LiveTurnTraceHooks } from "./live-turn-trace";
-import { buildLiveFrontendBookingAuthorityAppend } from "./live-booking-authority";
-import { buildLiveDelegationRuntimeSessionUpdate } from "./live-backend-state-sync";
 import { createLiveDelegationContextTracker } from "./live-delegation-context-tracker";
 import type { LiveConversationTranscript } from "./live-conversation-transcript";
 import {
@@ -20,12 +18,29 @@ import {
 } from "./live-delegation-context";
 import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
+import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
+import { shouldIssueResponseCreateOnDelegation } from "./live-workflow-tool-filter";
+import type { VoiceV2NextStage } from "@/lib/voice-v2/booking-workflow";
 
 type LiveEvent = Record<string, unknown>;
 
 function logLiveObs(event: string, fields: Record<string, unknown>) {
+  console.info(`LIVE_${event} ${JSON.stringify(fields)}`);
+}
+
+function logResponseCreate(
+  callId: string,
+  reason: string,
+  stage: VoiceV2NextStage,
+  allowed: unknown,
+) {
   console.info(
-    `LIVE_${event} ${JSON.stringify(fields)}`,
+    `LIVE_RESPONSE_CREATE ${JSON.stringify({
+      callId,
+      reason,
+      stage,
+      allowed_next_actions: allowed,
+    })}`,
   );
 }
 
@@ -45,21 +60,20 @@ export function createLiveDelegationHandler(input: {
     callId: input.callId,
     onLog: logLiveObs,
   });
+  const controlPlane = input.callContext.controlPlane;
 
-  const syncBookingAuthorityToLive = () => {
-    input.sendLiveOut(
-      buildLiveDelegationRuntimeSessionUpdate(input.callContext.bookingSession),
-    );
-    input.sendLiveOut(
-      buildLiveFrontendBookingAuthorityAppend(input.callContext.bookingSession),
-    );
-    const state = input.callContext.bookingSession;
+  const syncControlPlaneToLive = () => {
+    for (const event of buildLiveControlPlaneSyncEvents(controlPlane)) {
+      input.sendLiveOut(event);
+    }
+    const env = controlPlane.getWorkflowEnvelope();
     logLiveObs("BACKEND_STATE_SYNC", {
       callId: input.callId,
-      offer_set_id: state.currentOfferSet?.offer_set_id ?? null,
-      find_count: state.findInvocationCount,
-      booking_status: state.bookingConfirmed ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
-      booking_confirmed: state.bookingConfirmed,
+      offer_set_id: controlPlane.getCallContext()?.currentOfferSet?.offerSetId ?? null,
+      booking_status: controlPlane.isBookingConfirmed() ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
+      booking_confirmed: controlPlane.isBookingConfirmed(),
+      voice_v2_next_stage: env.voice_v2_next_stage,
+      active_tool_names: controlPlane.getActiveTools().map((t) => t.name),
     });
   };
 
@@ -68,6 +82,7 @@ export function createLiveDelegationHandler(input: {
     if (!hydratePromise) {
       hydratePromise = (async () => {
         const t0 = Date.now();
+        await controlPlane.ensureHydrated();
         const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
           input.claims,
         );
@@ -87,13 +102,28 @@ export function createLiveDelegationHandler(input: {
     return hydratedContext!;
   };
 
+  const issueResponseCreate = (reason: string) => {
+    const env = controlPlane.getWorkflowEnvelope();
+    const stage = controlPlane.getStage();
+    logResponseCreate(input.callId, reason, stage, env.allowed_next_actions);
+    input.sendLiveOut({
+      type: "response.create",
+      event_id: liveBaselineEventId("delegation_ctx_resp"),
+    });
+    input.turnTrace?.onResponseCreateSent();
+  };
+
   const pushDelegationContext = async (delegationId: string | null) => {
     delegationEpisodeCount += 1;
     const isFirstDelegation = delegationEpisodeCount === 1;
+    await controlPlane.ensureHydrated();
+    controlPlane.logStageTransitionIfChanged();
+    syncControlPlaneToLive();
+
     const hydrated = await ensureHydratedContext();
     const developerText = buildDelegationDeveloperText({
       transcript: input.conversationTranscript,
-      bookingSession: input.callContext.bookingSession,
+      controlPlane,
       hydrated,
       isFirstDelegation,
     });
@@ -101,11 +131,12 @@ export function createLiveDelegationHandler(input: {
     const eventId = String(contextItem.event_id || "");
     contextTracker.markSent(eventId, delegationEpisodeCount);
     input.sendLiveOut(contextItem);
-    input.sendLiveOut({
-      type: "response.create",
-      event_id: liveBaselineEventId("delegation_ctx_resp"),
-    });
     input.conversationTranscript.markDelegationCheckpoint();
+
+    const env = controlPlane.getWorkflowEnvelope();
+    const stage = controlPlane.getStage();
+    const allowed = (env.allowed_next_actions as string[]) || [];
+
     logLiveObs("DELEGATION_CONTEXT_ITEM_SENT", {
       callId: input.callId,
       delegation_id: delegationId,
@@ -114,11 +145,18 @@ export function createLiveDelegationHandler(input: {
       developer_text_chars: developerText.length,
       transcript_cursor: input.conversationTranscript.delegationCursorIndex(),
       transcript_segments: input.conversationTranscript.segmentCount(),
+      voice_v2_next_stage: stage,
+      allowed_next_actions: allowed,
     });
+
+    if (shouldIssueResponseCreateOnDelegation(stage, allowed)) {
+      issueResponseCreate("delegation_proactive_scheduling");
+    }
   };
 
   input.callContext.onBookingStateChanged = () => {
-    syncBookingAuthorityToLive();
+    syncControlPlaneToLive();
+    controlPlane.logStageTransitionIfChanged();
   };
 
   const returnLiveToolResult = async (opts: {
@@ -147,16 +185,33 @@ export function createLiveDelegationHandler(input: {
       executor: opts.executor,
       elapsed_ms: opts.elapsedMs,
     });
-    input.sendLiveOut({
-      type: "response.create",
-      event_id: liveBaselineEventId("resp_cont"),
-    });
-    input.turnTrace?.onResponseCreateSent();
-    logLiveObs("RESPONSE_CONTINUED", {
-      callId: input.callId,
-      delegation_id,
-      tool_name: opts.toolName,
-    });
+
+    const stage = controlPlane.getStage();
+    const continueBackend =
+      stage !== "BOOKING_CONFIRMED" &&
+      stage !== "COMPLETE" &&
+      opts.toolName !== VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE;
+
+    const bookJustConfirmed =
+      opts.toolName === VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE &&
+      controlPlane.isBookingConfirmed();
+
+    if (continueBackend && !bookJustConfirmed) {
+      issueResponseCreate("tool_continuation");
+      logLiveObs("RESPONSE_CONTINUED", {
+        callId: input.callId,
+        delegation_id,
+        tool_name: opts.toolName,
+      });
+    } else {
+      logLiveObs("RESPONSE_CREATE_SKIPPED", {
+        callId: input.callId,
+        delegation_id,
+        tool_name: opts.toolName,
+        stage,
+        reason: bookJustConfirmed ? "booking_confirmed_wrap_up" : "stage_complete",
+      });
+    }
   };
 
   const handleLiveFunctionCall = async (opts: {
@@ -307,6 +362,14 @@ export function createLiveDelegationHandler(input: {
         delegation_id: delegationId,
         event_type: type,
       });
+      if (controlPlane.isBookingConfirmed()) {
+        logLiveObs("DELEGATION_SKIPPED_POST_BOOK", {
+          callId: input.callId,
+          delegation_id: delegationId,
+          stage: controlPlane.getStage(),
+        });
+        return;
+      }
       try {
         await pushDelegationContext(delegationId);
       } catch (err) {

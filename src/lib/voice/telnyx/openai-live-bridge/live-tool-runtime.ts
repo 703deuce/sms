@@ -39,15 +39,12 @@ import { executeVoiceV2FindExistingAppointment } from "@/lib/voice-v2/appointmen
 import { executeVoiceV2RescheduleAppointment } from "@/lib/voice-v2/appointment-changes/reschedule";
 import { executeVoiceV2CancelAppointment } from "@/lib/voice-v2/appointment-changes/cancel";
 import {
-  applyBookResultToSessionState,
-  applyFindResultToSessionState,
-  createLiveBookingSessionState,
-  mergeFindArgsWithSessionState,
-  recordFindInvocation,
-  recordLatestFindToolResult,
-  shouldShortCircuitRedundantFind,
-  type LiveBookingSessionState,
-} from "./live-booking-session-state";
+  createLiveControlPlane,
+  enrichLiveToolOutputWithControlPlane,
+  mergeFindArgsWithCallContext,
+  shouldShortCircuitRedundantFindFromCallContext,
+  type LiveControlPlane,
+} from "./live-control-plane";
 import {
   extractFindResultSlots,
   logFindInput,
@@ -55,6 +52,8 @@ import {
   parseFindToolOutput,
 } from "./live-find-trace";
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
+import { loadVoiceV2OfferSet } from "@/lib/voice-v2/offer-set-store";
+import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 
 export type LiveToolDispatchContext = {
   workspaceId: string;
@@ -67,7 +66,7 @@ export type LiveToolDispatchContext = {
   /** Lazy-loaded on first tool dispatch (not at Live session.start). */
   agentConfigHydrated?: boolean;
   _hydratePromise?: Promise<void>;
-  bookingSession: LiveBookingSessionState;
+  controlPlane: LiveControlPlane;
   onBookingStateChanged?: () => void;
 };
 
@@ -148,6 +147,21 @@ function toolUnavailable(speak: string, status: string): { output: string; execu
   };
 }
 
+async function finalizeToolOutput(
+  ctx: LiveToolDispatchContext,
+  toolName: string,
+  formatted: string,
+): Promise<string> {
+  try {
+    const parsed = JSON.parse(formatted) as Record<string, unknown>;
+    ctx.controlPlane.invalidateContextCache();
+    await ctx.controlPlane.ensureHydrated();
+    return enrichLiveToolOutputWithControlPlane(ctx.controlPlane, parsed);
+  } catch {
+    return formatted;
+  }
+}
+
 export async function dispatchLiveVoiceTool(input: {
   toolName: string;
   args: Record<string, unknown>;
@@ -156,6 +170,19 @@ export async function dispatchLiveVoiceTool(input: {
 }): Promise<{ output: string; discard?: boolean; executor: string }> {
   const { toolName, args, openAiFunctionCallId, callContext: ctx } = input;
   await ensureLiveToolDispatchContextHydrated(ctx);
+  await ctx.controlPlane.ensureHydrated();
+  const workflowGate = ctx.controlPlane.gateToolName(toolName);
+  if (!workflowGate.allowed) {
+    return {
+      executor: "workflow_gate",
+      output: JSON.stringify({
+        ok: false,
+        speak: workflowGate.speak,
+        voice_v2_status: workflowGate.status,
+        ...ctx.controlPlane.getWorkflowEnvelope(),
+      }),
+    };
+  }
   const strategy = ctx.capability.bookingStrategy;
   const executor = liveToolExecutorLabel(toolName);
   const body: Record<string, unknown> = {
@@ -172,10 +199,12 @@ export async function dispatchLiveVoiceTool(input: {
         "FIND_DISABLED",
       );
     }
-    const { merged, mergeNotes } = mergeFindArgsWithSessionState(args, ctx.bookingSession);
+    const voiceCtx = ctx.controlPlane.getCallContext();
+    const { merged, mergeNotes } = voiceCtx
+      ? mergeFindArgsWithCallContext(args, voiceCtx)
+      : { merged: { ...args }, mergeNotes: [] as string[] };
     const bookingCfg = await loadMctbAiBookingConfig(ctx.workspaceId);
     const timezone = bookingCfg.timezone?.trim() || "America/New_York";
-    ctx.bookingSession.schedulingPreference.timezone = timezone;
 
     logFindInput({
       callId: ctx.callId,
@@ -183,30 +212,39 @@ export async function dispatchLiveVoiceTool(input: {
       mergedPreference: merged,
       mergeNotes,
       timezone,
-      bookingState: ctx.bookingSession,
+      bookingState: null,
     });
 
-    recordFindInvocation(ctx.bookingSession, merged);
     const requestedDate = String(merged.requested_date || merged.requestedDate || "").trim();
     ctx.onFindStarted?.(requestedDate);
 
-    if (shouldShortCircuitRedundantFind(merged, ctx.bookingSession)) {
-      const offer = ctx.bookingSession.currentOfferSet!;
-      const shortCircuit = formatVoiceV2TelnyxToolResponse({
-        voice_v2_status: "AVAILABILITY_FOUND",
-        offer_set_id: offer.offer_set_id,
-        slots: offer.slots.map((s) => ({
+    if (voiceCtx && shouldShortCircuitRedundantFindFromCallContext(merged, voiceCtx)) {
+      const offerId = voiceCtx.currentOfferSet?.offerSetId;
+      const loaded = offerId
+        ? await loadVoiceV2OfferSet(ctx.workspaceId, offerId)
+        : null;
+      const slots =
+        loaded?.slots?.map((s) => ({
           slot_id: s.slot_id,
-          label: s.spoken_label,
-        })),
+          label: s.label ?? s.slot_id,
+        })) ?? [];
+      const shortCircuit = formatVoiceV2TelnyxToolResponse({
+        status: "AVAILABILITY_FOUND",
+        offer_set_id: offerId || "",
+        slots,
+        timing_ms: {},
+      } as never);
+      const payload = {
+        ...shortCircuit,
         speak:
           "Current offer set is still valid. Do not FIND again. Call voice_v2_book_offered_slot when the caller selects a slot.",
         redundant_find_blocked: true,
-      } as never);
-      const formatted = JSON.stringify(shortCircuit);
-      recordLatestFindToolResult(ctx.bookingSession, "AVAILABILITY_FOUND");
+      };
       ctx.onBookingStateChanged?.();
-      return { executor: "live_find_short_circuit", output: formatted };
+      return {
+        executor: "live_find_short_circuit",
+        output: await finalizeToolOutput(ctx, toolName, JSON.stringify(payload)),
+      };
     }
 
     const findBody: Record<string, unknown> = {
@@ -233,16 +271,25 @@ export async function dispatchLiveVoiceTool(input: {
       slots: extractFindResultSlots(parsed),
       error: parsed.error ? String(parsed.error) : null,
     });
-    applyFindResultToSessionState(ctx.bookingSession, parsed);
-    recordLatestFindToolResult(
-      ctx.bookingSession,
-      String(parsed.voice_v2_status || parsed.status || "ERROR"),
-    );
+    const findStatus = String(parsed.voice_v2_status || parsed.status || "");
+    if (findStatus === "AVAILABILITY_FOUND" && parsed.offer_set_id) {
+      const slotIds = extractFindResultSlots(parsed).map((s) => s.slot_id);
+      await ctx.controlPlane.afterFindSuccess({
+        requestedDate: requestedDate || String(merged.requested_date || ""),
+        offerSetId: String(parsed.offer_set_id),
+        slotIds,
+        slots: extractFindResultSlots(parsed).map((s) => ({
+          slot_id: s.slot_id,
+          label: s.spoken_label,
+          spoken_label: s.spoken_label,
+        })),
+      });
+    }
     ctx.onBookingStateChanged?.();
 
     return {
       executor,
-      output: formatted,
+      output: await finalizeToolOutput(ctx, toolName, formatted),
     };
   }
 
@@ -253,22 +300,19 @@ export async function dispatchLiveVoiceTool(input: {
         "BOOK_DISABLED",
       );
     }
-    const selectedSlotId = String(
-      args.selected_slot_id || args.selectedSlotId || args.slot_id || "",
-    ).trim();
-    if (selectedSlotId) {
-      ctx.bookingSession.selectedSlotId = selectedSlotId;
-    }
     const result = await executeVoiceV2BookOfferedSlot(body, ctx.workspaceId, {
       agentId: ctx.agentId,
       certifiedPipeline: strategy === "MICROSOFT_365",
     });
     const formatted = compactToolResultForModel(toolName, result as Record<string, unknown>);
-    applyBookResultToSessionState(ctx.bookingSession, parseFindToolOutput(formatted));
+    const bookParsed = parseFindToolOutput(formatted);
+    if (String(bookParsed.voice_v2_status || bookParsed.status) === "BOOKING_CONFIRMED") {
+      await ctx.controlPlane.afterBookConfirmed();
+    }
     ctx.onBookingStateChanged?.();
     return {
       executor,
-      output: formatted,
+      output: await finalizeToolOutput(ctx, toolName, formatted),
     };
   }
 
@@ -279,9 +323,17 @@ export async function dispatchLiveVoiceTool(input: {
     const result = await executeVoiceV2SaveIntakeFields(body, ctx.workspaceId, ctx.agentId, {
       trustedPrismaCallId: ctx.callId,
     });
+    ctx.controlPlane.invalidateContextCache();
+    await ctx.controlPlane.ensureHydrated();
+    ctx.controlPlane.logStageTransitionIfChanged();
+    ctx.onBookingStateChanged?.();
     return {
       executor,
-      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
+      output: await finalizeToolOutput(
+        ctx,
+        toolName,
+        compactToolResultForModel(toolName, result as Record<string, unknown>),
+      ),
     };
   }
 
@@ -443,17 +495,13 @@ export function createLiveToolDispatchContext(input: {
 
 /** Stream claims only — agent config loaded on first tool call. */
 export function createLiveToolDispatchContextFromClaims(
-  claims: {
-    workspaceId: string;
-    agentId: string;
-    callId: string;
-    callControlId: string;
-  },
+  claims: RealtimeBridgeStreamClaims,
   config?: VoiceAgentConfig,
 ): LiveToolDispatchContext {
   let lastFindDate = "";
   let lastFindGeneration = 0;
   const capability = buildVoiceV2CallCapabilitySnapshot(config ?? {});
+  const controlPlane = createLiveControlPlane({ claims, initialConfig: config });
   const ctx: LiveToolDispatchContext = {
     workspaceId: claims.workspaceId,
     agentId: claims.agentId,
@@ -461,7 +509,7 @@ export function createLiveToolDispatchContextFromClaims(
     callControlId: claims.callControlId,
     capability,
     schedulingGeneration: 0,
-    bookingSession: createLiveBookingSessionState(),
+    controlPlane,
     agentConfigHydrated: Boolean(config),
     onFindStarted: (requestedDate) => {
       if (requestedDate && requestedDate !== lastFindDate) {

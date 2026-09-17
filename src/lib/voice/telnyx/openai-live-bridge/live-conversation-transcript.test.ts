@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createLiveBookingSessionState } from "./live-booking-session-state";
 import { LiveConversationTranscript } from "./live-conversation-transcript";
 import { buildDelegationDeveloperText } from "./live-delegation-context";
+import type { LiveControlPlane } from "./live-control-plane";
 
 describe("LiveConversationTranscript", () => {
   it("formats transcript since last delegation checkpoint", () => {
@@ -20,13 +20,20 @@ describe("LiveConversationTranscript", () => {
   it("buildDelegationDeveloperText includes transcript and scheduling JSON", () => {
     const t = new LiveConversationTranscript();
     t.appendDelta("caller", "My wife prefers mornings.");
+    const controlPlane = {
+      getWorkflowEnvelope: () => ({
+        voice_v2_next_stage: "COLLECT_REQUIRED_INTAKE",
+        allowed_next_actions: ["voice_v2_save_intake_fields"],
+      }),
+      getCallContext: () => null,
+    } as unknown as LiveControlPlane;
     const text = buildDelegationDeveloperText({
       transcript: t,
-      bookingSession: createLiveBookingSessionState(),
+      controlPlane,
       isFirstDelegation: true,
     });
     expect(text).toContain("wife prefers mornings");
-    expect(text).toContain("Authoritative structured scheduling state");
-    expect(text).toContain("booking_status");
+    expect(text).toContain("workflow control plane");
+    expect(text).toContain("voice_v2_next_stage");
   });
 });

@@ -7,10 +7,10 @@ export function logFindInput(input: {
   mergedPreference: Record<string, unknown>;
   mergeNotes: string[];
   timezone?: string;
-  bookingState: LiveBookingSessionState;
+  bookingState?: LiveBookingSessionState | null;
   findReason?: string;
 }): void {
-  const pref = input.bookingState.schedulingPreference;
+  const pref = input.bookingState?.schedulingPreference ?? {};
   const tw = (input.mergedPreference.time_window || input.mergedPreference.timeWindow) as
     | Record<string, unknown>
     | undefined;
@@ -30,9 +30,9 @@ export function logFindInput(input: {
         timezone: input.timezone ?? pref.timezone ?? null,
       },
       existing_scheduling_preference: pref,
-      current_offer_set_id: input.bookingState.currentOfferSet?.offer_set_id ?? null,
+      current_offer_set_id: input.bookingState?.currentOfferSet?.offer_set_id ?? null,
       merge_notes: input.mergeNotes,
-      find_invocation_index: input.bookingState.findInvocationCount + 1,
+      find_invocation_index: (input.bookingState?.findInvocationCount ?? 0) + 1,
     })}`,
   );
 }

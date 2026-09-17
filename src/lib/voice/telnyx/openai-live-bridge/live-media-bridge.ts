@@ -170,7 +170,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
-  let liveBookingSession: LiveToolDispatchContext["bookingSession"] | null = null;
+  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null = null;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {
     if (!isOpenAiLiveDelegationEnabled() || delegationHandler) return;
@@ -188,7 +188,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       console.error("[live-media] delegation missing stream claims");
       return;
     }
-    liveBookingSession = toolContext.bookingSession;
+    liveControlPlane = toolContext.controlPlane;
     delegationHandler = createLiveDelegationHandler({
       callId,
       claims,
@@ -406,20 +406,20 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
             conversationTranscript.appendDelta("amy", delta);
             amyTranscriptBuffer += delta;
             if (
-              liveBookingSession &&
+              liveControlPlane &&
               detectBookingConfirmationViolation(
                 amyTranscriptBuffer,
-                liveBookingSession.bookingConfirmed,
+                liveControlPlane.isBookingConfirmed(),
               )
             ) {
               console.error(
                 `LIVE_BOOKING_CONFIRMATION_VIOLATION ${JSON.stringify({
                   callId,
-                  booking_confirmed: liveBookingSession.bookingConfirmed,
-                  booking_status: liveBookingSession.bookingConfirmed
+                  booking_confirmed: liveControlPlane.isBookingConfirmed(),
+                  booking_status: liveControlPlane.isBookingConfirmed()
                     ? "BOOKING_CONFIRMED"
                     : "NOT_BOOKED",
-                  latest_tool: liveBookingSession.latestToolResult,
+                  voice_v2_next_stage: liveControlPlane.getWorkflowEnvelope().voice_v2_next_stage,
                   transcript_tail: amyTranscriptBuffer.slice(-240),
                 })}`,
               );

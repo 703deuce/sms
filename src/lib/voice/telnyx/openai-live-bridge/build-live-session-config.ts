@@ -6,7 +6,7 @@ import {
 } from "./constants";
 import { buildLiveFrontendInstructions } from "./live-frontend-instructions";
 import { buildResponsesBackendInstructions } from "./responses-backend-instructions";
-import { LIVE_VOICE_TOOLS, type LiveResponsesFunctionTool } from "./live-tools";
+import type { LiveResponsesFunctionTool } from "./live-tools";
 
 export type BuildLiveSessionConfigArgs = {
   businessContext?: string;
@@ -45,7 +45,7 @@ export function buildLiveStaticDelegationSessionPatch(): Record<string, unknown>
     return {};
   }
   return buildLiveDelegationSessionPatch({
-    tools: [...LIVE_VOICE_TOOLS],
+    tools: [],
   });
 }
 

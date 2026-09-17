@@ -1,16 +1,12 @@
-import { buildLiveDelegationSessionPatch } from "./build-live-session-config";
-import type { LiveBookingSessionState } from "./live-booking-session-state";
-import { buildAuthoritativeBackendStatePayload } from "./live-booking-session-state";
+import type { LiveControlPlane } from "./live-control-plane";
+import { buildLiveFrontendBookingAuthorityAppendFromControlPlane } from "./live-booking-authority";
 
 /**
- * Push authoritative booking state into delegation.responses.instructions (RUNTIME / SESSION STATE).
+ * Push authoritative workflow + booking authority into the Live session (front half only).
  */
-export function buildLiveDelegationRuntimeSessionUpdate(
-  state: LiveBookingSessionState,
-): Record<string, unknown> {
-  const runtimeContext = JSON.stringify(buildAuthoritativeBackendStatePayload(state), null, 2);
-  return {
-    type: "session.update",
-    session: buildLiveDelegationSessionPatch({ runtimeContext }),
-  };
+export function buildLiveControlPlaneSyncEvents(controlPlane: LiveControlPlane): Record<string, unknown>[] {
+  const events: Record<string, unknown>[] = [];
+  events.push(controlPlane.buildDelegationToolsSessionUpdate());
+  events.push(buildLiveFrontendBookingAuthorityAppendFromControlPlane(controlPlane));
+  return events;
 }
