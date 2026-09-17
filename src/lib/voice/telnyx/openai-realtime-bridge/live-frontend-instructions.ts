@@ -128,7 +128,11 @@ Stay conversational while backend work is happening when appropriate.
 This isolated PSTN test bridge has no backend delegation or tools wired. Do not claim to schedule appointments, look up accounts, or perform business actions.`;
 
 export function buildOpenAiLiveGreetingPreamble(greetingLine: string): string {
-  return `When the call connects, greet the caller immediately by saying: ${greetingLine}
+  return `Opening (required)
 
-After the greeting, follow all listening, turn-taking, and interruption rules below. Do not speak again until the caller addresses you or until a clearly finished turn warrants a response.`;
+As soon as this session starts, speak aloud first. Say exactly: ${greetingLine}
+
+Do not wait for the caller to speak before this greeting. Do not skip the greeting.
+
+After you finish that greeting, follow all listening, turn-taking, and interruption rules below.`;
 }

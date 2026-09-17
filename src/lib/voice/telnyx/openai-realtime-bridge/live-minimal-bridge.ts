@@ -75,6 +75,8 @@ export type LiveBaselineBridgeInput = {
   openAiLiveWsUrl: string;
   sessionStartPayload: Record<string, unknown>;
   callId?: string;
+  /** Hold caller audio until Amy begins the opening greeting (baseline G). */
+  holdCallerAudioUntilAmySpeaks?: boolean;
   onMilestone?: (name: string, msSinceBridge: number, extra?: Record<string, unknown>) => void;
 };
 
@@ -104,6 +106,8 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
   let openaiInputAudioFrames = 0;
   let openaiOutputAudioFrames = 0;
   let lastStatsLogAt = 0;
+  let holdCallerAudio = Boolean(input.holdCallerAudioUntilAmySpeaks);
+  let callerAudioHeldFrames = 0;
 
   milestone("telnyx_ws_attached");
 
@@ -136,8 +140,19 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
     openAiWs.send(JSON.stringify(event));
   };
 
+  const releaseCallerAudioHold = (reason: string) => {
+    if (!holdCallerAudio) return;
+    holdCallerAudio = false;
+    milestone("caller_audio_hold_released", { reason, held_frames: callerAudioHeldFrames });
+    flushPendingCallerAudio();
+  };
+
   const appendCallerAudio = (payloadB64: string, track?: string) => {
     if (!liveStarted) return;
+    if (holdCallerAudio) {
+      callerAudioHeldFrames += 1;
+      return;
+    }
     if (!shouldForwardInboundTelnyxTrackToLive(track)) {
       telnyxOutboundFramesDropped += 1;
       maybeLogStats();
@@ -220,7 +235,9 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
           callId,
           session_id: (event.session as { id?: string })?.id ?? "",
         });
-        flushPendingCallerAudio();
+        if (!input.holdCallerAudioUntilAmySpeaks) {
+          flushPendingCallerAudio();
+        }
         return;
       }
 
@@ -229,6 +246,9 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
           firstOutputAudioLogged = true;
           milestone("first_output_audio_delta");
           logLiveIn("output_audio.delta", { callId, first: true });
+          if (input.holdCallerAudioUntilAmySpeaks) {
+            setTimeout(() => releaseCallerAudioHold("after_greeting_start"), 2200);
+          }
         }
         sendAudioToTelnyx(String(event.delta));
         return;

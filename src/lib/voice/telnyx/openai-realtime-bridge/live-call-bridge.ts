@@ -36,12 +36,14 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     return;
   }
 
+  const baseline = resolveOpenAiLiveBaseline();
   runOpenAiLiveBaselineBridge({
     telnyxSocket: input.telnyxSocket,
     apiKey,
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
     sessionStartPayload: buildOpenAiLiveSessionStartPayload(),
     callId,
+    holdCallerAudioUntilAmySpeaks: baseline === "G",
     onMilestone: (name, msSinceBridge, extra) => {
       logRealtimeBridgeEvent("openai_live_timing", {
         callId,

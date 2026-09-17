@@ -330,16 +330,56 @@ async function startAiOnInboundCall(input: {
       },
     }).catch(() => undefined);
 
-    // Inbound-only NS — do not process outbound AI playback.
-    await startInboundNoiseSuppression(input.telnyxCallControlId);
-
     if (agent.telnyxAssistantId) {
       const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
       const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
-      const { isGptLivePstnBridgeActive } = await import(
+      const { isGptLivePstnBridgeActive, shouldUseOpenAiRealtimeMediaBridge } = await import(
         "@/lib/voice/telnyx/openai-realtime-bridge/flags"
       );
       const gptLivePstn = isGptLivePstnBridgeActive();
+
+      if (gptLivePstn && shouldUseOpenAiRealtimeMediaBridge(cfg)) {
+        const bridgeStartAt = Date.now();
+        const { startOpenAiRealtimeMediaBridgeOnCall } = await import(
+          "@/lib/voice/telnyx/openai-realtime-bridge/start-on-call"
+        );
+        const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
+        const bridge = await startOpenAiRealtimeMediaBridgeOnCall({
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          agentId: agent.id,
+          telnyxCallControlId: input.telnyxCallControlId,
+          fromE164: callRow?.fromE164,
+        });
+        await prisma.voiceCallEvent
+          .create({
+            data: {
+              workspaceId: input.workspaceId,
+              callId: input.callId,
+              eventType: "media.live_fast_path_started",
+              payload: {
+                ms_since_answer: bridgeStartAt - answerAt,
+                bridge_started: bridge.started,
+                reason: bridge.reason ?? null,
+              } as object,
+            },
+          })
+          .catch(() => undefined);
+        if (!bridge.started) {
+          await handleAiAssistantStartFailure({
+            workspaceId: input.workspaceId,
+            callId: input.callId,
+            telnyxCallControlId: input.telnyxCallControlId,
+            error: new Error(bridge.reason || "live_bridge_start_failed"),
+          });
+          return { started: false, reason: bridge.reason || "live_bridge_start_failed" };
+        }
+        return { started: true };
+      }
+
+      // Inbound-only NS — do not process outbound AI playback.
+      await startInboundNoiseSuppression(input.telnyxCallControlId);
+
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
@@ -430,7 +470,12 @@ async function startAiOnInboundCall(input: {
           : null;
       // If the caller speaks first, still speak recording disclosure when needed
       // (AI greeting path would otherwise skip it entirely).
-      if (speaksFirst === "caller" && disclosureText && input.telnyxCallControlId) {
+      if (
+        !gptLivePstn &&
+        speaksFirst === "caller" &&
+        disclosureText &&
+        input.telnyxCallControlId
+      ) {
         const { speakOnCallControl } = await import("./startup-greeting-runtime");
         await speakOnCallControl(input.telnyxCallControlId, disclosureText).catch(
           () => undefined,

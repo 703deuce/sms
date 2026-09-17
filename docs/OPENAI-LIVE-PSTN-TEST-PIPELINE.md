@@ -6,7 +6,7 @@
 
 **Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`.
 
-**Speech copy / baselines:** `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` — env **`OPENAI_LIVE_BASELINE`** (default **A**).
+**Speech copy / baselines:** `live-frontend-instructions.ts` + `live-config.ts` — env **`OPENAI_LIVE_BASELINE`** (default **G**).
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
 
@@ -33,7 +33,7 @@ Verify baseline file: `./scripts/verify-live-baseline-forbidden.sh`
 
 | Baseline | `OPENAI_LIVE_BASELINE` | Instructions |
 |----------|------------------------|--------------|
-| **G** (default) | `G` | Amy greets on connect (`OPENAI_LIVE_GREETING_LINE`) then listens |
+| **G** (default) | `G` | Greeting preamble + full behavioral Live frontend (`OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS`) |
 | **A** | `A` | None — caller speaks first (diagnostic) |
 | **B** | `B` | `You are a helpful phone assistant.` (no scripted greet) |
 | **C** | `C` | B + short one-question rule |
@@ -83,15 +83,21 @@ Do **not** ask Live to decide when silence is “too long.”
 
 ---
 
-## Extended matrix (after primary test)
+## Extended matrix (before booking / delegation)
 
 | # | Scenario |
 |---|----------|
-| 1 | Music / TV / dog / cough — no response |
-| 2 | Someone else talks nearby — wait |
-| 3 | Mid-sentence pause 1–2s — keep listening |
-| 4 | Interrupt + self-correct (“Tuesday—no, Wednesday”) |
-| 5 | Several facts in one breath — remember, don’t re-ask |
+| 1 | Music in the room while you talk |
+| 2 | TV running in the background |
+| 3 | Someone else talks near you without addressing Amy |
+| 4 | Talk to another person mid-call, then return to Amy |
+| 5 | Cough while Amy is talking |
+| 6 | Dog barks |
+| 7 | Pause 1–2s mid-sentence — Amy keeps listening |
+| 8 | Interrupt Amy mid-sentence — she yields |
+| 9 | “Tuesday—actually no, Wednesday” while interrupting |
+| 10 | Several details in one breath |
+| 11 | Long silence — one check-in at most, not repeated prompts |
 
 ---
 
