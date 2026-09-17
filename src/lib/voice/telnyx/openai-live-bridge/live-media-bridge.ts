@@ -18,6 +18,7 @@ import { detectBookingConfirmationViolation } from "./live-booking-authority";
 import { createLiveDelegationHandler } from "./live-delegation-handler";
 import { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
+import { disposeLiveCallRuntime } from "./live-call-runtime";
 import { isOpenAiLiveDelegationEnabled } from "./constants";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 
@@ -171,6 +172,8 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
   let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null = null;
+  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null = null;
+  let liveRuntimeDisposed = false;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {
     if (!isOpenAiLiveDelegationEnabled() || delegationHandler) return;
@@ -189,6 +192,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       return;
     }
     liveControlPlane = toolContext.controlPlane;
+    streamClaimsForTeardown = claims;
     delegationHandler = createLiveDelegationHandler({
       callId,
       claims,
@@ -339,8 +343,12 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         if (type === "session.started") {
           liveStarted = true;
           sessionStartedAt = Date.now();
+          const openAiSessionId = String((event.session as { id?: string })?.id ?? "");
+          if (input.immediateLiveStart?.toolContext.controlPlane) {
+            input.immediateLiveStart.toolContext.controlPlane.setLiveSessionId(openAiSessionId);
+          }
           milestone("session_started", {
-            session_id: (event.session as { id?: string })?.id ?? "",
+            session_id: openAiSessionId,
             delegation: delegationEnabled,
           });
           if (input.immediateLiveStart) {
@@ -348,7 +356,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           }
           logLiveIn("session.started", {
             callId,
-            session_id: (event.session as { id?: string })?.id ?? "",
+            session_id: openAiSessionId,
           });
           flushPendingCallerAudio();
           if (shouldSendLiveOpeningGreetingAfterSessionStarted()) {
@@ -474,6 +482,10 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   connectOpenAi();
 
   const closeLiveSession = () => {
+    if (!liveRuntimeDisposed && streamClaimsForTeardown) {
+      liveRuntimeDisposed = true;
+      void disposeLiveCallRuntime(streamClaimsForTeardown);
+    }
     if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) return;
     sendLiveOut({
       type: "session.close",

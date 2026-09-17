@@ -30,6 +30,8 @@ import type { LiveResponsesFunctionTool } from "./live-tools";
 
 export type LiveControlPlane = {
   callId: string;
+  setLiveSessionId(id: string): void;
+  getLiveSessionId(): string | null;
   ensureHydrated(): Promise<VoiceV2CallContext | null>;
   invalidateContextCache(): void;
   getCallContext(): VoiceV2CallContext | null;
@@ -82,6 +84,7 @@ export function createLiveControlPlane(input: {
   let agentConfig: VoiceAgentConfig | null = input.initialConfig ?? null;
   let capability = buildVoiceV2CallCapabilitySnapshot(agentConfig ?? {});
   let lastLoggedStage: VoiceV2NextStage | null = null;
+  let liveSessionId: string | null = null;
   let transferEnabled = false;
 
   const hydrateConfig = async () => {
@@ -121,6 +124,14 @@ export function createLiveControlPlane(input: {
 
   const plane: LiveControlPlane = {
     callId: input.claims.callId,
+
+    setLiveSessionId(id: string) {
+      liveSessionId = id.trim() || null;
+    },
+
+    getLiveSessionId() {
+      return liveSessionId;
+    },
 
     invalidateContextCache() {
       cachedCtx = null;
@@ -283,14 +294,17 @@ export function createLiveControlPlane(input: {
       const tools = this.getActiveTools();
       const prev = lastLoggedStage;
       lastLoggedStage = stage;
+      const ctx = this.getCallContext();
       console.info(
         `LIVE_RUNTIME_STATE_TRANSITION ${JSON.stringify({
-          callId: input.claims.callId,
-          from: prev,
-          to: stage,
+          call_id: input.claims.callId,
+          live_session_id: liveSessionId,
+          from_stage: prev,
+          to_stage: stage,
           allowed_next_actions: env.allowed_next_actions,
           forbidden_actions: env.forbidden_actions,
           active_tool_names: tools.map((t) => t.name),
+          offer_set_id: ctx?.currentOfferSet?.offerSetId ?? null,
           booking_continue_required: env.booking_continue_required,
         })}`,
       );

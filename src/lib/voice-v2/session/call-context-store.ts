@@ -812,6 +812,11 @@ export function setVoiceV2CallContextL1(record: VoiceV2CallContextRecord): void 
   hydrateL1(record);
 }
 
+/** Process-local only — drop L1 after call end to limit memory on concurrent Live sessions. */
+export function dropVoiceV2CallContextL1(sessionKey: string): void {
+  l1.delete(sessionKey);
+}
+
 export function updateVoiceV2CallContextL1Payload(ctx: VoiceV2CallContext): void {
   const entry = l1.get(ctx.sessionKey);
   if (entry) {

@@ -68,7 +68,8 @@ export function createLiveDelegationHandler(input: {
     }
     const env = controlPlane.getWorkflowEnvelope();
     logLiveObs("BACKEND_STATE_SYNC", {
-      callId: input.callId,
+      call_id: input.callId,
+      live_session_id: controlPlane.getLiveSessionId(),
       offer_set_id: controlPlane.getCallContext()?.currentOfferSet?.offerSetId ?? null,
       booking_status: controlPlane.isBookingConfirmed() ? "BOOKING_CONFIRMED" : "NOT_BOOKED",
       booking_confirmed: controlPlane.isBookingConfirmed(),
