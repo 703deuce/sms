@@ -22,6 +22,10 @@ TAR="/tmp/voice-bridge-patch.tgz"
 BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-live-bridge
   src/lib/voice-v2/session/call-context-store.ts
+  src/lib/voice-v2/dialog-goal.ts
+  src/lib/voice-v2/booking-workflow.ts
+  src/lib/voice-v2/booking-workflow-hooks.ts
+  src/lib/voice-v2/intake/types.ts
   src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts
   src/lib/voice/telnyx/openai-realtime-bridge/call-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts
@@ -53,6 +57,10 @@ if [[ "$MODE" == "config_only" ]]; then
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
     src/lib/voice/telnyx/openai-live-bridge \
     src/lib/voice-v2/session/call-context-store.ts \
+    src/lib/voice-v2/dialog-goal.ts \
+    src/lib/voice-v2/booking-workflow.ts \
+    src/lib/voice-v2/booking-workflow-hooks.ts \
+    src/lib/voice-v2/intake/types.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/flags.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/start-on-call.ts \
