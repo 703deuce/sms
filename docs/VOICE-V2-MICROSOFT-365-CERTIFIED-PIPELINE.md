@@ -1,5 +1,7 @@
 # Microsoft 365 certified PSTN booking pipeline (frozen)
 
+**Isolation policy:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md` — this directory is a **sealed box**; do not share booking internals with other strategies.
+
 ## Authority
 
 - Baseline commit: **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
@@ -33,3 +35,7 @@ Publish wiring: `ensureVoiceV2SharedToolsForAgent` in `src/lib/voice/telnyx/ensu
 ## Recert required
 
 Any edit under `pipelines/microsoft-365-certified/` or the Microsoft 365 Telnyx FIND/BOOK routes.
+
+## Target layout (vertical slice)
+
+Over time, all Microsoft-specific booking code (timezone, offer store, validation, Graph calls) should live **under this tree** as copies — not as imports from Calendly or generic `voice-v2` booking engines. Until then, the verify script locks FIND/BOOK logic to `06125f5f`; new coupling into this module is forbidden.

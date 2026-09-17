@@ -14,18 +14,14 @@ export const VOICE_V2_KNOWN_GOOD_BASELINE = {
   referenceFindComputeMs: 135,
 } as const;
 
-/** Paths that must not change without re-running PSTN certification. */
+/** Paths that must not change without re-running PSTN certification (Microsoft sealed box). */
 export const VOICE_V2_FROZEN_PATHS = [
-  "src/lib/voice-v2/find-availability.ts",
-  "src/lib/voice-v2/book-offered-slot.ts",
-  "src/lib/voice-v2/offer-set-store.ts",
-  "src/lib/voice-v2/validate-input.ts",
-  "src/lib/voice-v2/telnyx-response.ts",
-  "src/lib/voice-v2/telnyx-book-response.ts",
-  "src/lib/voice-v2/telnyx-tool-definition.ts",
+  "src/lib/voice-v2/pipelines/microsoft-365-certified/find-availability.ts",
+  "src/lib/voice-v2/pipelines/microsoft-365-certified/book-offered-slot.ts",
+  "src/lib/voice-v2/pipelines/microsoft-365-certified/index.ts",
   "src/app/api/telnyx/voice-v2/find-availability/route.ts",
   "src/app/api/telnyx/voice-v2/book-offered-slot/route.ts",
-  "src/lib/microsoft/graph-datetime-timezone.ts",
+  "scripts/verify-microsoft-365-certified-pipeline-frozen.ts",
 ] as const;
 
 export const VOICE_V2_BASELINE_REGRESSION = [

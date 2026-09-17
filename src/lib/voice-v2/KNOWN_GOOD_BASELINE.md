@@ -31,19 +31,17 @@ Offer: `v2offer_cmu2mi5831b0o066m2k1a4w5l` · Appointment: `cmu2miixz4k103o4b2x2
 
 ## Frozen surface (do not modify without baseline re-certification)
 
-These paths implement the known-good caller-visible path:
+**Architecture:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md` — Microsoft is a sealed vertical slice; dumb selector only above it.
 
-- `src/lib/voice-v2/find-availability.ts`
-- `src/lib/voice-v2/book-offered-slot.ts`
-- `src/lib/voice-v2/offer-set-store.ts`
-- `src/lib/voice-v2/validate-input.ts`
-- `src/lib/voice-v2/telnyx-response.ts`
-- `src/lib/voice-v2/telnyx-book-response.ts`
-- `src/lib/voice-v2/telnyx-tool-definition.ts`
-- `src/app/api/telnyx/voice-v2/find-availability/route.ts`
-- `src/app/api/telnyx/voice-v2/book-offered-slot/route.ts`
-- `src/lib/microsoft/graph-datetime-timezone.ts` (timezone serialization)
-- `src/lib/microsoft/graph-helpers.ts` (event insert using adapter)
+Known-good **Microsoft PSTN** implementation (copy of `06125f5f` FIND/BOOK):
+
+- `src/lib/voice-v2/pipelines/microsoft-365-certified/find-availability.ts`
+- `src/lib/voice-v2/pipelines/microsoft-365-certified/book-offered-slot.ts`
+- `src/app/api/telnyx/voice-v2/find-availability/route.ts` (calls certified module only)
+- `src/app/api/telnyx/voice-v2/book-offered-slot/route.ts` (calls certified module only)
+- `scripts/verify-microsoft-365-certified-pipeline-frozen.ts`
+
+Shared Telnyx response/tool definitions (`telnyx-response.ts`, `telnyx-tool-definition.ts`) are outside the booking box. Legacy `src/lib/voice-v2/find-availability.ts` / `book-offered-slot.ts` are **not** the certified Microsoft path.
 
 Telnyx: shared tools `transovo-voice-v2-find-availability`, `transovo-voice-v2-book-offered-slot`, `transovo-voice-v2-save-intake-fields` — schema and webhook URLs per `scripts/publish-voice-v2-telnyx-tool.ts` / `scripts/enable-amy-voice-v2-pstn-test-mode.ts`.
 

@@ -1,0 +1,37 @@
+---
+description: MANDATORY — Voice V2 certified pipeline isolation. Read before any booking provider, FIND/BOOK, wizard strategy, or Telnyx voice-v2 webhook work.
+globs:
+  - src/lib/voice-v2/**
+  - src/app/api/telnyx/voice-v2/**
+  - src/lib/voice/telnyx/**
+  - docs/VOICE-V2*
+alwaysApply: false
+---
+
+# MANDATORY: Voice V2 certified pipeline isolation
+
+**Source of truth:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md`  
+**Microsoft frozen path:** `docs/VOICE-V2-MICROSOFT-365-CERTIFIED-PIPELINE.md` · `pipelines/microsoft-365-certified/` · verify `scripts/verify-microsoft-365-certified-pipeline-frozen.ts`
+
+## When this rule activates
+
+Before **any** work on Voice V2 **booking**: FIND, BOOK, offer sets, slot selection, provider calendars, wizard `bookingStrategy`, Telnyx FIND/BOOK webhooks, or cross-strategy “shared” booking helpers.
+
+## Hard requirements
+
+1. **Vertical slices** — Each `bookingStrategy` is a sealed box. No imports from another strategy’s pipeline directory. No shared booking engines, offer engines, or provider date/time helpers across strategies.
+2. **Dumb selector only** — Route `MICROSOFT_365` → Microsoft entry; `CALENDLY` → Calendly entry. Selector has **no** booking logic (no normalize/revalidate/map).
+3. **Copy, don’t extract** — New provider needs Microsoft-like behavior → **clone** certified tree, change provider-specific parts. Never refactor Microsoft to be generic.
+4. **Observers outside** — Recovery, analytics, after-hours gating, conversation state integrate **before entry** or **after terminal result** (`BOOKING_CONFIRMED`). Never on Microsoft FIND/BOOK hot path.
+5. **Frozen Microsoft** — Do not “improve” `pipelines/microsoft-365-certified/` except intentional recert. Calendly/feature PRs should not touch Microsoft files.
+
+## Prohibited
+
+- Generic `executeVoiceV2FindAvailability` dispatcher shared by certified Microsoft PSTN
+- `certifiedPipeline` flags that skip gates inside a shared executor for one strategy
+- `patchWorkflowAfterFind` / intake / qualification on Microsoft Telnyx FIND/BOOK routes
+- Extracting shared code from a certified provider pipeline for reuse elsewhere
+
+## Reliability over DRY
+
+Code duplication is **explicitly preferred** over coupling. Line count is not an optimization target.

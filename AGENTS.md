@@ -193,6 +193,12 @@ One Amy, no General→Booking handoff, three V2 tools only, frozen FIND/BOOK/Mic
 
 ---
 
+## Voice V2 — certified pipeline isolation (mandatory)
+
+**Read before any Voice V2 booking / FIND / BOOK / wizard strategy work:** `docs/VOICE-V2-CERTIFIED-PIPELINE-ISOLATION-RULE.md` · Cursor rule: `.cursor/rules/voice-v2-certified-pipeline-isolation.mdc`
+
+Each `bookingStrategy` is a **sealed vertical slice** (copy-don’t-extract; no shared booking engines). Only a **dumb selector** routes into Microsoft vs Calendly vs other modes. Amy observers (recovery, analytics, after-hours) integrate **before entry** or **after terminal results** — never inside Microsoft’s certified FIND/BOOK path.
+
 ## Voice Booking V2 — known-good baseline (locked)
 
 **Authority:** `src/lib/voice-v2/KNOWN_GOOD_BASELINE.md` · commit **`06125f5f`** (`VOICE_V2_KNOWN_GOOD_BASELINE`)
