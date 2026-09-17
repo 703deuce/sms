@@ -2,6 +2,11 @@ import crypto from "node:crypto";
 import { OPENAI_LIVE_API_KIND, OPENAI_LIVE_WS_URL } from "./openai-realtime-protocol";
 import { OPENAI_REALTIME_BRIDGE_VOICE } from "./flags";
 import { OPENAI_LIVE_FRONTEND_BEHAVIOR_INSTRUCTIONS } from "./live-frontend-instructions";
+import { buildLiveSessionConfig } from "../openai-live-bridge/build-live-session-config";
+import {
+  isOpenAiLiveDelegationEnabled,
+  isOpenAiLiveSplitPromptsEnabled,
+} from "../openai-live-bridge/constants";
 
 /** OpenAI Live primary WebSocket — not /v1/realtime. */
 export const OPENAI_LIVE_WEBSOCKET_URL = OPENAI_LIVE_WS_URL;
@@ -81,6 +86,16 @@ export function buildOpenAiLiveSessionInstructions(
 
 export function buildOpenAiLiveSessionStartPayload(): Record<string, unknown> {
   const baseline = resolveOpenAiLiveBaseline();
+
+  if (isOpenAiLiveSplitPromptsEnabled() && baseline === "G") {
+    const session = buildLiveSessionConfig();
+    return {
+      type: "session.start",
+      event_id: `live_start_${crypto.randomUUID()}`,
+      session,
+    };
+  }
+
   const instructions = buildOpenAiLiveSessionInstructions(baseline);
   const session: Record<string, unknown> = {
     model: OPENAI_LIVE_MODEL_ID,
@@ -109,6 +124,8 @@ export function liveBridgeMetadata() {
     pass_through: true,
     live_baseline: resolveOpenAiLiveBaseline(),
     live_greeting_line: resolveOpenAiLiveGreetingLine(),
+    live_split_prompts: isOpenAiLiveSplitPromptsEnabled(),
+    live_delegation: isOpenAiLiveDelegationEnabled(),
   };
 }
 
