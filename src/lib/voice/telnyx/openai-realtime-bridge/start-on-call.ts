@@ -23,6 +23,20 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
     return { started: false, reason: "openai_api_key_missing" };
   }
 
+  const prisma = getPrisma();
+  const existingBridge = await prisma.voiceCall.findFirst({
+    where: { id: input.callId, workspaceId: input.workspaceId },
+    select: { metadata: true },
+  });
+  const existingMeta = (existingBridge?.metadata || {}) as Record<string, unknown>;
+  if (existingMeta.aiStarted && existingMeta.realtimeBridgeStreamUrl) {
+    return {
+      started: true,
+      streamUrl: String(existingMeta.realtimeBridgeStreamUrl),
+      reason: "bridge_already_started",
+    };
+  }
+
   // WSS listener runs in scripts/realtime-bridge-listener.ts (port 3108). Next must not bind it.
 
   const gptLive = isGptLivePstnBridgeActive();
@@ -44,7 +58,6 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
     agentId: input.agentId,
   });
 
-  const prisma = getPrisma();
   const existing = await prisma.voiceCall.findFirst({
     where: { id: input.callId, workspaceId: input.workspaceId },
     select: { metadata: true },

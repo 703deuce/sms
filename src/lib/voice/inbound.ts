@@ -243,6 +243,12 @@ async function speakRecordingDisclosure(
   callControlId: string,
   agentId?: string | null,
 ) {
+  const { isGptLivePstnBridgeActive } = await import(
+    "@/lib/voice/telnyx/openai-realtime-bridge/flags"
+  );
+  if (isGptLivePstnBridgeActive()) {
+    return;
+  }
   const text = await resolveRecordingDisclosure(workspaceId, agentId);
   if (!text?.trim()) return;
   await speakOnCall(callControlId, text.trim());
