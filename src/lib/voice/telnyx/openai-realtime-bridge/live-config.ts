@@ -13,15 +13,21 @@ export const OPENAI_LIVE_VOICE =
 
 /**
  * Progressive GPT-Live frontend copy (one transport: openai_live).
- * A = protocol baseline (no instructions). B/C add lines when baseline A passes.
+ * A = protocol only (caller speaks first). G = PSTN greet on connect (default).
  * @see docs/OPENAI-LIVE-PSTN-TEST-PIPELINE.md
  */
-export type OpenAiLiveBaseline = "A" | "B" | "C" | "D";
+export type OpenAiLiveBaseline = "A" | "B" | "C" | "D" | "G";
 
 export function resolveOpenAiLiveBaseline(): OpenAiLiveBaseline {
-  const raw = (process.env.OPENAI_LIVE_BASELINE || "A").trim().toUpperCase();
-  if (raw === "B" || raw === "C" || raw === "D") return raw;
-  return "A";
+  const raw = (process.env.OPENAI_LIVE_BASELINE || "G").trim().toUpperCase();
+  if (raw === "A" || raw === "B" || raw === "C" || raw === "D" || raw === "G") return raw;
+  return "G";
+}
+
+export function resolveOpenAiLiveGreetingLine(): string {
+  const custom = process.env.OPENAI_LIVE_GREETING_LINE?.trim();
+  if (custom) return custom;
+  return "Thanks for calling. This is Amy. How can I help you?";
 }
 
 /** Baseline D = previous conversational frontend (prompt tuning only after A–C pass). */
@@ -47,16 +53,23 @@ Do not repeatedly check whether the caller is still there.
 
 Use the rhythm of a normal telephone conversation: listen, respond briefly, ask one question if needed, then listen again.
 
-This PSTN test bridge has no backend delegation, tools, booking, or business actions wired. Do not claim to schedule appointments or perform account actions.`;
+This PSTN test bridge has no backend delegation, tools, or business actions wired. Do not claim to schedule appointments or perform account actions.`;
 
 export function buildOpenAiLiveSessionInstructions(
   baseline: OpenAiLiveBaseline,
 ): string | undefined {
+  const greetingLine = resolveOpenAiLiveGreetingLine();
   switch (baseline) {
     case "A":
       return undefined;
     case "B":
       return "You are a helpful phone assistant.";
+    case "G":
+      return [
+        "You are Amy, a helpful phone receptionist.",
+        `When the call connects, greet the caller immediately by saying: ${greetingLine}`,
+        "After the greeting, stop and listen. Do not speak again until the caller speaks.",
+      ].join(" ");
     case "C":
       return [
         "You are Amy, a helpful phone receptionist.",
@@ -68,10 +81,6 @@ export function buildOpenAiLiveSessionInstructions(
       return undefined;
   }
 }
-
-/** @deprecated Baseline A: caller speaks first — no scripted greeting. */
-export const OPENAI_LIVE_GREETING_LINE =
-  "Thanks for calling. This is Amy. How can I help you?";
 
 export function buildOpenAiLiveSessionStartPayload(): Record<string, unknown> {
   const baseline = resolveOpenAiLiveBaseline();
@@ -102,9 +111,11 @@ export function liveBridgeMetadata() {
     audio_format: "audio/pcmu@8000",
     pass_through: true,
     live_baseline: resolveOpenAiLiveBaseline(),
+    live_greeting_line: resolveOpenAiLiveGreetingLine(),
   };
 }
 
 /** @deprecated */
+export const OPENAI_LIVE_GREETING_LINE = resolveOpenAiLiveGreetingLine();
 export const OPENAI_LIVE_FRONTEND_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;
 export const OPENAI_LIVE_MINIMAL_AMY_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;

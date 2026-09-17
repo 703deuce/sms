@@ -336,76 +336,81 @@ async function startAiOnInboundCall(input: {
     if (agent.telnyxAssistantId) {
       const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
       const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
+      const { isGptLivePstnBridgeActive } = await import(
+        "@/lib/voice/telnyx/openai-realtime-bridge/flags"
+      );
+      const gptLivePstn = isGptLivePstnBridgeActive();
       const startup = startupGreetingFromConfig(cfg);
       const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
-      // Play prerecorded connection greeting immediately after answer, then
-      // initialize the AI concurrently (do not wait for the clip to finish).
-      const playMaskFirst =
-        startup.enabled &&
-        startup.mode === "audio_url" &&
-        Boolean(startup.audioUrl);
-      const concurrentMask =
-        playMaskFirst &&
-        (startup.connectionGreeting === "transovo_default" ||
-          (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
-
       let disclosureSpoken = false;
-      if (!playMaskFirst) {
-        await speakRecordingDisclosure(
-          input.workspaceId,
-          input.callId,
-          input.telnyxCallControlId,
-          agent.id,
-        );
-        disclosureSpoken = true;
-      }
+      if (!gptLivePstn) {
+        // Play prerecorded connection greeting immediately after answer, then
+        // initialize the AI concurrently (do not wait for the clip to finish).
+        const playMaskFirst =
+          startup.enabled &&
+          startup.mode === "audio_url" &&
+          Boolean(startup.audioUrl);
+        const concurrentMask =
+          playMaskFirst &&
+          (startup.connectionGreeting === "transovo_default" ||
+            (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
-      // Optional TTS/audio mask — connection greeting returns after a short settle.
-      const maskResult = await playStartupGreetingMask({
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        callControlId: input.telnyxCallControlId,
-        config: cfg,
-        wait: concurrentMask ? false : undefined,
-      });
+        if (!playMaskFirst) {
+          await speakRecordingDisclosure(
+            input.workspaceId,
+            input.callId,
+            input.telnyxCallControlId,
+            agent.id,
+          );
+          disclosureSpoken = true;
+        }
 
-      // Do not inject recording-disclosure speak under a concurrent bed — it
-      // would collide with the prerecorded file and delay AI start.
-      if (playMaskFirst && !concurrentMask) {
-        await speakRecordingDisclosure(
-          input.workspaceId,
-          input.callId,
-          input.telnyxCallControlId,
-          agent.id,
-        ).catch(() => undefined);
-        disclosureSpoken = true;
-      }
+        const maskResult = await playStartupGreetingMask({
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          callControlId: input.telnyxCallControlId,
+          config: cfg,
+          wait: concurrentMask ? false : undefined,
+        });
 
-      // When AI speaks the greeting, wait for media settle so the first syllable isn't static.
-      // Concurrent connection greeting: music first, then ~500ms, then start AI.
-      if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
-        await sleep(AI_MEDIA_SETTLE_MS);
-      } else if (concurrentMask) {
-        const settleMs =
-          typeof startup.delayMs === "number" ? startup.delayMs : 500;
-        await sleep(Math.max(0, Math.min(1000, settleMs)));
+        if (playMaskFirst && !concurrentMask) {
+          await speakRecordingDisclosure(
+            input.workspaceId,
+            input.callId,
+            input.telnyxCallControlId,
+            agent.id,
+          ).catch(() => undefined);
+          disclosureSpoken = true;
+        }
+
+        if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
+          await sleep(AI_MEDIA_SETTLE_MS);
+        } else if (concurrentMask) {
+          const settleMs =
+            typeof startup.delayMs === "number" ? startup.delayMs : 500;
+          await sleep(Math.max(0, Math.min(1000, settleMs)));
+        }
       }
 
       const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
       const { resolveCallDynamicVariables } = await import("./dynamic-variables");
-      const dynamicVariables = await resolveCallDynamicVariables({
-        workspaceId: input.workspaceId,
-        agentId: agent.id,
-        callId: input.callId,
-        contactId: callRow?.contactId,
-        fromE164: callRow?.fromE164,
-        toE164: callRow?.toE164,
-        direction: "INBOUND",
-        overrides: (callRow?.dynamicVariables || null) as Record<string, unknown> | null,
-      });
-      if (input.contactName) dynamicVariables.full_name = input.contactName;
-      dynamicVariables.output_gain_db = String(outputGainDb);
+      const dynamicVariables = gptLivePstn
+        ? { output_gain_db: String(outputGainDb) }
+        : await resolveCallDynamicVariables({
+            workspaceId: input.workspaceId,
+            agentId: agent.id,
+            callId: input.callId,
+            contactId: callRow?.contactId,
+            fromE164: callRow?.fromE164,
+            toE164: callRow?.toE164,
+            direction: "INBOUND",
+            overrides: (callRow?.dynamicVariables || null) as Record<string, unknown> | null,
+          });
+      if (!gptLivePstn) {
+        if (input.contactName) dynamicVariables.full_name = input.contactName;
+        dynamicVariables.output_gain_db = String(outputGainDb);
+      }
 
       const speaksFirst =
         String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"

@@ -33,8 +33,9 @@ Verify baseline file: `./scripts/verify-live-baseline-forbidden.sh`
 
 | Baseline | `OPENAI_LIVE_BASELINE` | Instructions |
 |----------|------------------------|--------------|
-| **A** (default) | `A` | None — caller speaks first |
-| **B** | `B` | `You are a helpful phone assistant.` (first conversational test after A) |
+| **G** (default) | `G` | Amy greets on connect (`OPENAI_LIVE_GREETING_LINE`) then listens |
+| **A** | `A` | None — caller speaks first (diagnostic) |
+| **B** | `B` | `You are a helpful phone assistant.` (no scripted greet) |
 | **C** | `C` | B + short one-question rule |
 | **D** | `D` | Previous long conversational frontend (prompt tuning only after A–C pass) |
 
@@ -64,14 +65,13 @@ The public Live session API does **not** expose Realtime-style VAD knobs (`thres
 
 ## Primary manual test (baseline A first)
 
-With `openai_live` and **`OPENAI_LIVE_BASELINE=A`**:
+With `openai_live` and default **`OPENAI_LIVE_BASELINE=G`**:
 
-1. Call the test DID; **stay silent ~10s** → Amy should **not** speak (no greeting, no echo loop).
-2. Say “Hello” → brief natural reply.
-3. Stay silent again ~10s → **nothing**.
-4. Optional: interrupt while she talks → should yield.
+1. Call the test DID → Amy should greet within a few seconds (no need to say hello first).
+2. Stay silent after the greeting → she should **not** keep talking.
+3. Respond briefly → natural reply, then listen again.
 
-Only after A passes, set `B`, then `C`, then `D` for frontend copy experiments.
+For silence / echo diagnostics, set **`OPENAI_LIVE_BASELINE=A`** (caller speaks first).
 
 ---
 

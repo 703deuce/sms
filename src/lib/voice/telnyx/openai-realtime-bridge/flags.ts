@@ -57,6 +57,11 @@ export function shouldUseOpenAiLivePrimaryWebSocket(): boolean {
   return resolveVoiceAiTransport() === "openai_live";
 }
 
+/** GPT-Live PSTN experiment — skip Realtime session init and startup delays. */
+export function isGptLivePstnBridgeActive(): boolean {
+  return resolveVoiceAiTransport() === "openai_live";
+}
+
 /** Realtime GA bridge vs GPT-Live PSTN experiment (`openai_live`). */
 export function resolveVoiceAiTransport(): "openai_live" | "openai_realtime" {
   const fromFile = readVoiceAiTransportFile();

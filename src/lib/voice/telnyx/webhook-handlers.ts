@@ -1017,47 +1017,57 @@ export async function processVoiceWebhookEvent(input: {
           "../load-agent-config"
         );
         const cfg = await loadCfg(workspaceId, agent.id);
+        const { isGptLivePstnBridgeActive } = await import(
+          "./openai-realtime-bridge/flags"
+        );
+        const gptLivePstn = isGptLivePstnBridgeActive();
         const startup = startupGreetingFromConfig(cfg);
         const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
 
-        await startInboundNoiseSuppression(controlId);
+        if (!gptLivePstn) {
+          await startInboundNoiseSuppression(controlId);
 
-        const concurrentMask =
-          startup.enabled &&
-          startup.mode === "audio_url" &&
-          Boolean(startup.audioUrl) &&
-          (startup.connectionGreeting === "transovo_default" ||
-            (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
+          const concurrentMask =
+            startup.enabled &&
+            startup.mode === "audio_url" &&
+            Boolean(startup.audioUrl) &&
+            (startup.connectionGreeting === "transovo_default" ||
+              (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
 
-        const maskResult = await playStartupGreetingMask({
-          workspaceId,
-          callId: call.id,
-          callControlId: controlId,
-          config: cfg,
-          wait: concurrentMask ? false : undefined,
-        });
-        if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
-          await new Promise((r) => setTimeout(r, AI_MEDIA_SETTLE_MS));
-        } else if (concurrentMask || maskResult.concurrent) {
-          const settleMs =
-            typeof startup.delayMs === "number" ? startup.delayMs : 500;
-          await new Promise((r) =>
-            setTimeout(r, Math.max(0, Math.min(1000, settleMs))),
-          );
+          const maskResult = await playStartupGreetingMask({
+            workspaceId,
+            callId: call.id,
+            callControlId: controlId,
+            config: cfg,
+            wait: concurrentMask ? false : undefined,
+          });
+          if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
+            await new Promise((r) => setTimeout(r, AI_MEDIA_SETTLE_MS));
+          } else if (concurrentMask || maskResult.concurrent) {
+            const settleMs =
+              typeof startup.delayMs === "number" ? startup.delayMs : 500;
+            await new Promise((r) =>
+              setTimeout(r, Math.max(0, Math.min(1000, settleMs))),
+            );
+          }
         }
 
         const storedVars = (call.dynamicVariables || {}) as Record<string, unknown>;
-        const dynamicVariables = await resolveCallDynamicVariables({
-          workspaceId,
-          agentId: agent.id,
-          callId: call.id,
-          contactId: call.contactId,
-          fromE164: call.fromE164,
-          toE164: call.toE164,
-          direction: call.direction,
-          overrides: storedVars,
-        });
-        dynamicVariables.output_gain_db = String(outputGainDb);
+        const dynamicVariables = gptLivePstn
+          ? { output_gain_db: String(outputGainDb) }
+          : await resolveCallDynamicVariables({
+              workspaceId,
+              agentId: agent.id,
+              callId: call.id,
+              contactId: call.contactId,
+              fromE164: call.fromE164,
+              toE164: call.toE164,
+              direction: call.direction,
+              overrides: storedVars,
+            });
+        if (!gptLivePstn) {
+          dynamicVariables.output_gain_db = String(outputGainDb);
+        }
 
         const speaksFirst =
           String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"

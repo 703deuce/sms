@@ -42,5 +42,13 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
     sessionStartPayload: buildOpenAiLiveSessionStartPayload(),
     callId,
+    onMilestone: (name, msSinceBridge, extra) => {
+      logRealtimeBridgeEvent("openai_live_timing", {
+        callId,
+        milestone: name,
+        ms_since_telnyx_ws: msSinceBridge,
+        ...extra,
+      });
+    },
   });
 }

@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
-import { shouldUseOpenAiRealtimeMediaBridge } from "./flags";
+import { isGptLivePstnBridgeActive, shouldUseOpenAiRealtimeMediaBridge } from "./flags";
 import { startTelnyxBidirectionalMediaStream } from "./telnyx-streaming";
 import { getOpenAiApiKey } from "./config";
 import { initializeRealtimeSessionForCall } from "@/lib/voice/realtime-session/init";
@@ -25,14 +25,17 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
 
   // WSS listener runs in scripts/realtime-bridge-listener.ts (port 3108). Next must not bind it.
 
-  await initializeRealtimeSessionForCall({
-    callId: input.callId,
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-    telnyxControlId: input.telnyxCallControlId,
-    telnyxConversationId: input.telnyxCallControlId,
-    fromE164: input.fromE164,
-  });
+  const gptLive = isGptLivePstnBridgeActive();
+  if (!gptLive) {
+    await initializeRealtimeSessionForCall({
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      telnyxControlId: input.telnyxCallControlId,
+      telnyxConversationId: input.telnyxCallControlId,
+      fromE164: input.fromE164,
+    });
+  }
 
   const { streamUrl } = await startTelnyxBidirectionalMediaStream({
     callControlId: input.telnyxCallControlId,
@@ -54,7 +57,7 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
         metadata: {
           ...prevMeta,
           aiStarted: true,
-          voiceTransport: "openai_realtime_media_bridge",
+          voiceTransport: gptLive ? "openai_live" : "openai_realtime_media_bridge",
           realtimeBridgeStreamUrl: streamUrl,
         } as object,
       },

@@ -21,6 +21,7 @@ type TelnyxMediaMessage = {
 };
 
 const MAX_PENDING_CALLER_AUDIO = 50;
+const MAX_PENDING_AMY_AUDIO = 120;
 
 export function liveBaselineEventId(prefix = "evt"): string {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -74,6 +75,7 @@ export type LiveBaselineBridgeInput = {
   openAiLiveWsUrl: string;
   sessionStartPayload: Record<string, unknown>;
   callId?: string;
+  onMilestone?: (name: string, msSinceBridge: number, extra?: Record<string, unknown>) => void;
 };
 
 /**
@@ -82,18 +84,28 @@ export type LiveBaselineBridgeInput = {
  */
 export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): void {
   const callId = input.callId ?? "unknown";
+  const bridgeStartedAt = Date.now();
+  const milestone = (name: string, extra?: Record<string, unknown>) => {
+    const ms = Date.now() - bridgeStartedAt;
+    console.info(`LIVE_TIMING ${name} ms=${ms} callId=${callId}`);
+    input.onMilestone?.(name, ms, extra);
+  };
+
   let openAiWs: WebSocket | null = null;
   let liveStarted = false;
   let sessionStartSent = false;
   let telnyxStreamId: string | null = null;
   let firstOutputAudioLogged = false;
   const pendingCallerAudio: string[] = [];
+  const pendingAmyAudio: string[] = [];
 
   let telnyxInboundFrames = 0;
   let telnyxOutboundFramesDropped = 0;
   let openaiInputAudioFrames = 0;
   let openaiOutputAudioFrames = 0;
   let lastStatsLogAt = 0;
+
+  milestone("telnyx_ws_attached");
 
   const logStats = (reason: string) => {
     console.info(
@@ -106,6 +118,13 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
     if (now - lastStatsLogAt < 5000) return;
     lastStatsLogAt = now;
     logStats("periodic");
+  };
+
+  const flushPendingAmyAudio = () => {
+    if (!telnyxStreamId) return;
+    while (pendingAmyAudio.length > 0) {
+      sendAudioToTelnyx(pendingAmyAudio.shift()!, true);
+    }
   };
 
   const sendLiveOut = (event: Record<string, unknown>) => {
@@ -140,8 +159,13 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
     }
   };
 
-  const sendAudioToTelnyx = (base64Audio: string) => {
-    if (!telnyxStreamId || input.telnyxSocket.readyState !== WebSocket.OPEN) return;
+  const sendAudioToTelnyx = (base64Audio: string, fromFlush = false) => {
+    if (!telnyxStreamId || input.telnyxSocket.readyState !== WebSocket.OPEN) {
+      if (!fromFlush && pendingAmyAudio.length < MAX_PENDING_AMY_AUDIO) {
+        pendingAmyAudio.push(base64Audio);
+      }
+      return;
+    }
     openaiOutputAudioFrames += 1;
     maybeLogStats();
     input.telnyxSocket.send(
@@ -155,6 +179,7 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
 
   const connectOpenAi = () => {
     if (openAiWs) return;
+    milestone("openai_ws_connecting");
     openAiWs = new WebSocket(input.openAiLiveWsUrl, {
       headers: {
         Authorization: `Bearer ${input.apiKey}`,
@@ -163,6 +188,7 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
     });
 
     openAiWs.on("open", () => {
+      milestone("openai_ws_open");
       if (sessionStartSent) return;
       sessionStartSent = true;
       const startEvent = {
@@ -172,6 +198,7 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
           liveBaselineEventId("session_start"),
       };
       sendLiveOut(startEvent);
+      milestone("session_start_sent");
     });
 
     openAiWs.on("message", (raw) => {
@@ -186,6 +213,9 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
 
       if (type === "session.started") {
         liveStarted = true;
+        milestone("session_started", {
+          session_id: (event.session as { id?: string })?.id ?? "",
+        });
         logLiveIn("session.started", {
           callId,
           session_id: (event.session as { id?: string })?.id ?? "",
@@ -197,6 +227,7 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
       if (isLiveOutputAudioDelta(type) && event.delta) {
         if (!firstOutputAudioLogged) {
           firstOutputAudioLogged = true;
+          milestone("first_output_audio_delta");
           logLiveIn("output_audio.delta", { callId, first: true });
         }
         sendAudioToTelnyx(String(event.delta));
@@ -240,6 +271,9 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
     });
   };
 
+  // Overlap OpenAI handshake with Telnyx start/media setup (cuts dead air).
+  connectOpenAi();
+
   const closeLiveSession = () => {
     if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) return;
     sendLiveOut({
@@ -261,8 +295,9 @@ export function runOpenAiLiveBaselineBridge(input: LiveBaselineBridgeInput): voi
 
     if (msg.event === "start") {
       telnyxStreamId = resolveTelnyxStreamId(msg);
+      milestone("telnyx_stream_start", { stream_id: telnyxStreamId });
       console.info(`[telnyx] stream started callId=${callId} stream_id=${telnyxStreamId ?? ""}`);
-      connectOpenAi();
+      flushPendingAmyAudio();
       return;
     }
 
