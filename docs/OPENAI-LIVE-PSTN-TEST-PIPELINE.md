@@ -13,7 +13,7 @@
 
 Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-realtime-bridge/live-frontend-instructions.ts`. Legacy Realtime wizard stack (`instructions.ts`) is unchanged.
 
-**Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-5-mini`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). Live handles `response.event` → `response.item.create` (function_call_output) → `response.create`. Observability: grep `LIVE_FUNCTION_CALL`, `LIVE_TOOL_DISPATCH`, `LIVE_TOOL_RESULT`.
+**Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-6-astra`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). Live handles `response.event` → `response.item.create` (function_call_output) → `response.create`. Observability: grep `LIVE_FUNCTION_CALL`, `LIVE_TOOL_DISPATCH`, `LIVE_TOOL_RESULT`.
 
 **Known-good PSTN booking baseline:** `docs/GPT-LIVE-PSTN-BOOKING-KNOWN-GOOD.md` (call `cmu58huys1m0u2z480s656y3j`).
 

@@ -17,7 +17,7 @@
 | **Transport** | `openai_live` · `openai-live-bridge` |
 | **Delegation** | `live_delegation: true` · `live_split_prompts: true` |
 | **Live model** | `gpt-live-1` · voice `marin` · `audio/pcmu@8000` |
-| **Backend (Responses)** | `OPENAI_LIVE_BACKEND_MODEL` default `gpt-5-mini` |
+| **Backend (Responses)** | `OPENAI_LIVE_BACKEND_MODEL` default `gpt-6-astra` (was `gpt-5-mini` at time of first proof) |
 
 **Full forensic report (latency, transcript, tools):** `docs/call-forensic-cmu58huys1m0u2z480s656y3j.md`
 

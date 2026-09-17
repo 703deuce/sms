@@ -33,6 +33,8 @@ Live per-turn sync: `syncLiveCallerUtteranceIntent` → `applyCallerIntentToCall
 
 ## Live API
 
+**Models (separate roles):** `OPENAI_LIVE_MODEL` → `gpt-live-1` (speech/UX). `OPENAI_LIVE_BACKEND_MODEL` → `gpt-6-astra` (delegated Responses tools/reasoning). Log line: `LIVE_MODEL_CONFIG`.
+
 `response.item.create` for delegation context does **not** include `delegation_id` (correlation lives on inbound `response.event`). Delegation tool lists update via `session.update` when the control plane changes.
 
 ## Regression scripts
