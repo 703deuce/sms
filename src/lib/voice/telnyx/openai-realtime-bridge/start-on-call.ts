@@ -2,7 +2,6 @@ import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { shouldUseOpenAiRealtimeMediaBridge } from "./flags";
 import { startTelnyxBidirectionalMediaStream } from "./telnyx-streaming";
-import { ensureTelnyxRealtimeBridgeServer } from "./ws-server";
 import { getOpenAiApiKey } from "./config";
 import { initializeRealtimeSessionForCall } from "@/lib/voice/realtime-session/init";
 
@@ -24,7 +23,7 @@ export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
     return { started: false, reason: "openai_api_key_missing" };
   }
 
-  await ensureTelnyxRealtimeBridgeServer();
+  // WSS listener runs in scripts/realtime-bridge-listener.ts (port 3108). Next must not bind it.
 
   await initializeRealtimeSessionForCall({
     callId: input.callId,
