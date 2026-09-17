@@ -21,7 +21,7 @@ Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-rea
 
 **Frozen Realtime route:** `openai-realtime-bridge/*` is not modified for Live work except `ws-server.ts` routing `openai_live` → `openai-live-bridge/call-bridge`.
 
-**Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
+**Test-only server update (no master deploy):** `./scripts/test-pstn-before-master.sh` (full interpreter hotpatch + 571 republish). Lighter: `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`. Astra without Coolify env: `echo 1 > /app/.voice_v2_astra_interpreter` on the web container.
 
 **PSTN answer path (`openai_live`):** No recording-disclosure TTS anywhere in inbound. **`runGptLivePstnLeanAnswer`** = claim → answer → `streaming_start` only (no agent config load, no disclosure, no workflow enroll). Telnyx webhooks run from **Next standalone** — after src changes run `./scripts/prod-gpt-live-rebuild-web.sh` (not config-only hotpatch). Baseline **G** greeting: `live-greeting.ts` after `session.started`.
 

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { extractJsonFromLlm } from "@/lib/ai/llm";
 import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
 import type { VoiceDialogGoal } from "./dialog-goal";
@@ -41,8 +42,26 @@ const VALID_GOALS = new Set<VoiceDialogGoal>([
   "UNKNOWN",
 ]);
 
+function readVoiceV2AstraInterpreterFile(): string | null {
+  const candidates = [
+    "/app/.voice_v2_astra_interpreter",
+    process.env.VOICE_V2_ASTRA_INTERPRETER_FILE?.trim(),
+  ].filter(Boolean) as string[];
+  for (const path of candidates) {
+    try {
+      if (!existsSync(path)) continue;
+      const value = readFileSync(path, "utf8").trim().toLowerCase();
+      if (value) return value;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 export function isVoiceV2AstraInterpreterEnabled(): boolean {
-  const v = process.env.VOICE_V2_ASTRA_INTERPRETER?.trim().toLowerCase();
+  const fromFile = readVoiceV2AstraInterpreterFile();
+  const v = (process.env.VOICE_V2_ASTRA_INTERPRETER?.trim() || fromFile || "").toLowerCase();
   if (v === "0" || v === "false" || v === "off") return false;
   if (v === "1" || v === "true" || v === "on") return true;
   return process.env.VOICE_V2_ASTRA_INTERPRETER_DEFAULT === "1";

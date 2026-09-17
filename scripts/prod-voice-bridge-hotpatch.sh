@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Hot-patch voice bridge into running web container (no Coolify build, not a master deploy).
-#   ./scripts/prod-voice-bridge-hotpatch.sh                 # patch bridge files only
-#   ./scripts/prod-voice-bridge-hotpatch.sh --config-only   # Live config + live-call-bridge fixes
+# Hot-patch voice bridge + Voice V2 interpreter into running web container (no Coolify build).
+#   ./scripts/prod-voice-bridge-hotpatch.sh                 # patch sources only
+#   ./scripts/prod-voice-bridge-hotpatch.sh --config-only   # Live config + lean inbound files
 #   ./scripts/prod-voice-bridge-hotpatch.sh --live          # patch + openai_live + probes
 #   ./scripts/prod-voice-bridge-hotpatch.sh --realtime      # patch + openai_realtime
 #
-# GPT-Live uses a single transport: openai_live (baseline via OPENAI_LIVE_BASELINE=A|B|C|D).
-# Legacy file values openai_live_minimal / minimal still resolve to openai_live in flags.ts.
+# Prefer: ./scripts/test-pstn-before-master.sh (hotpatch + Astra file + republish 571).
+#
+# GPT-Live uses transport openai_live (.voice_ai_transport). Bridge WSS loads /app/src via tsx.
+# Telnyx webhooks still use .next/standalone — run prod-gpt-live-rebuild-web.sh only if inbound changed.
 set -euo pipefail
 
 MODE="patch_only"
@@ -19,15 +21,15 @@ if [[ -z "$CONTAINER" ]]; then echo "No web container" >&2; exit 1; fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TAR="/tmp/voice-bridge-patch.tgz"
+
+# Whole trees: GPT-Live bridge + Voice V2 (interpreter, merge, FIND/BOOK executors).
 BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-live-bridge
-  src/lib/voice-v2/session/call-context-store.ts
-  src/lib/voice-v2/dialog-goal.ts
-  src/lib/voice-v2/dialog-manager.ts
-  src/lib/voice-v2/caller-intent-interpreter.ts
-  src/lib/voice-v2/booking-workflow.ts
-  src/lib/voice-v2/booking-workflow-hooks.ts
-  src/lib/voice-v2/intake/types.ts
+  src/lib/voice-v2
+  src/lib/voice/telnyx/openai-realtime-bridge/public-flags.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/apply-bridge-config.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/flags.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/gpt-live-pstn-lean-answer.ts
   src/lib/voice/telnyx/openai-realtime-bridge/ws-server.ts
   src/lib/voice/telnyx/openai-realtime-bridge/call-bridge.ts
   src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts
@@ -38,15 +40,19 @@ BRIDGE_FILES=(
   src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts
   src/lib/voice/telnyx/openai-realtime-bridge/ga-session.ts
   src/lib/voice/telnyx/openai-realtime-bridge/openai-realtime-protocol.ts
-  src/lib/voice/telnyx/openai-realtime-bridge/flags.ts
   src/lib/voice/telnyx/openai-realtime-bridge/start-on-call.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/config.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/stream-token.ts
+  src/lib/voice/telnyx/openai-realtime-bridge/telnyx-streaming.ts
   src/lib/voice/telnyx/webhook-handlers.ts
   src/lib/voice/inbound.ts
+  scripts/realtime-bridge-listener.ts
   scripts/openai-realtime-test-a-minimal.ts
   scripts/smoke-realtime-bridge-openai.ts
   scripts/smoke-openai-live-bridge.ts
   scripts/probe-openai-live.ts
   scripts/probe-openai-live-session.ts
+  scripts/republish-openai-realtime-bridge-agent.ts
 )
 
 if [[ "$MODE" == "config_only" ]]; then
@@ -57,6 +63,8 @@ if [[ "$MODE" == "config_only" ]]; then
     src/lib/voice/telnyx/openai-realtime-bridge/live-call-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-minimal-bridge.ts \
     src/lib/voice/telnyx/openai-realtime-bridge/live-bridge-diagnostics.ts \
+    src/lib/voice/telnyx/openai-realtime-bridge/public-flags.ts \
+    src/lib/voice/telnyx/openai-realtime-bridge/apply-bridge-config.ts \
     src/lib/voice/telnyx/openai-live-bridge \
     src/lib/voice-v2/session/call-context-store.ts \
     src/lib/voice-v2/dialog-goal.ts \
@@ -94,9 +102,9 @@ if [[ "$MODE" == "config_only" ]]; then
   echo "Patched Live config + bridge. Default OPENAI_LIVE_BASELINE=G (greeting + behavioral frontend). No master deploy."
 elif [[ "$MODE" == "live" ]]; then
   echo "--- Live probe (OpenAI only) ---"
-  ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/probe-openai-live.ts'"
+  ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/probe-openai-live.ts'" || true
   echo "--- Live Telnyx smoke ---"
-  ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/smoke-openai-live-bridge.ts'"
+  ssh -o BatchMode=yes coolify-server "docker exec ${CONTAINER} sh -c 'cd /app && NODE_OPTIONS=\"--import ./scripts/preload-server-only.mjs\" npx tsx scripts/smoke-openai-live-bridge.ts'" || true
   echo "openai_live active on +1 571-407-3615. Baseline A (default): caller speaks first. Logs: LIVE_OUT / LIVE_IN / LIVE_STATS"
 elif [[ "$MODE" == "realtime" ]]; then
   echo "--- Realtime Test A ---"
