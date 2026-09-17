@@ -10,6 +10,14 @@ import {
 } from "@/lib/voice-v2/telnyx-tool-definition";
 import type { LiveTurnTraceHooks } from "./live-turn-trace";
 import { buildLiveDelegationRuntimeSessionUpdate } from "./live-backend-state-sync";
+import type { LiveConversationTranscript } from "./live-conversation-transcript";
+import {
+  buildDelegationDeveloperText,
+  buildLiveDelegationContextItem,
+  type LiveDelegationHydratedContext,
+} from "./live-delegation-context";
+import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
+import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 
 type LiveEvent = Record<string, unknown>;
 
@@ -21,11 +29,67 @@ function logLiveObs(event: string, fields: Record<string, unknown>) {
 
 export function createLiveDelegationHandler(input: {
   callId: string;
+  claims: RealtimeBridgeStreamClaims;
   callContext: LiveToolDispatchContext;
+  conversationTranscript: LiveConversationTranscript;
   sendLiveOut: (event: Record<string, unknown>) => void;
   turnTrace?: LiveTurnTraceHooks;
 }) {
   let toolBusy = false;
+  let delegationEpisodeCount = 0;
+  let hydratedContext: LiveDelegationHydratedContext | null = null;
+  let hydratePromise: Promise<void> | null = null;
+
+  const ensureHydratedContext = async (): Promise<LiveDelegationHydratedContext> => {
+    if (hydratedContext) return hydratedContext;
+    if (!hydratePromise) {
+      hydratePromise = (async () => {
+        const t0 = Date.now();
+        const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
+          input.claims,
+        );
+        hydratedContext = {
+          callerStateJson: runtimeContext,
+          bookingConfigJson: bookingContext,
+        };
+        console.info(
+          `LIVE_DELEGATION_HYDRATE ${JSON.stringify({
+            callId: input.callId,
+            elapsed_ms: Date.now() - t0,
+          })}`,
+        );
+      })();
+    }
+    await hydratePromise;
+    return hydratedContext!;
+  };
+
+  const pushDelegationContext = async (delegationId: string | null) => {
+    delegationEpisodeCount += 1;
+    const isFirstDelegation = delegationEpisodeCount === 1;
+    const hydrated = await ensureHydratedContext();
+    const developerText = buildDelegationDeveloperText({
+      transcript: input.conversationTranscript,
+      bookingSession: input.callContext.bookingSession,
+      hydrated,
+      isFirstDelegation,
+    });
+    input.sendLiveOut(
+      buildLiveDelegationContextItem({
+        delegationId,
+        developerText,
+      }),
+    );
+    input.conversationTranscript.markDelegationCheckpoint();
+    logLiveObs("DELEGATION_CONTEXT_PUSHED", {
+      callId: input.callId,
+      delegation_id: delegationId,
+      episode: delegationEpisodeCount,
+      developer_text_chars: developerText.length,
+      transcript_cursor: input.conversationTranscript.delegationCursorIndex(),
+      transcript_segments: input.conversationTranscript.segmentCount(),
+    });
+  };
 
   input.callContext.onBookingStateChanged = () => {
     input.sendLiveOut(
@@ -220,6 +284,11 @@ export function createLiveDelegationHandler(input: {
         delegation_id: delegationId,
         event_type: type,
       });
+      try {
+        await pushDelegationContext(delegationId);
+      } catch (err) {
+        console.error("[live-delegation] context push failed", err);
+      }
       return;
     }
 

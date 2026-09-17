@@ -48,6 +48,15 @@ Use information according to this authority order:
 3. Supplied business context for business-specific facts
 4. Conversation history for conversational understanding
 
+On each delegation episode, the bridge injects a developer context item with:
+
+* transcript since the previous delegation (or full transcript when short / first episode)
+* authoritative structured scheduling state (offer set, preferences, booking flags)
+* Transovo CallContext / business context when hydrated (lazy, on first delegation)
+
+Use the transcript for memory of what was said (including details that may matter later).
+Use structured state for calendar truth — never confuse conversational recall with availability.
+
 Never replace higher-authority information with a lower-authority assumption.
 
 Specific rules:

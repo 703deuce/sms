@@ -58,6 +58,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
             buildLiveMinimalSessionConfig({ greeting }),
           ),
           toolContext,
+          claims: input.claims,
           delegationSessionPatch: buildLiveStaticDelegationSessionPatch(),
         }
       : undefined,

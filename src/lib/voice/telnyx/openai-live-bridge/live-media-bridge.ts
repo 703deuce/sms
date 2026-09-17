@@ -15,8 +15,10 @@ import {
   shouldSendLiveOpeningGreetingAfterSessionStarted,
 } from "./live-greeting";
 import { createLiveDelegationHandler } from "./live-delegation-handler";
+import { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveToolDispatchContext } from "./live-tool-runtime";
 import { isOpenAiLiveDelegationEnabled } from "./constants";
+import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 
 type LiveEvent = {
   type: string;
@@ -68,6 +70,7 @@ export type ImmediateLiveStart = {
   minimalSessionStartPayload: Record<string, unknown>;
   toolContext: LiveToolDispatchContext;
   delegationSessionPatch: Record<string, unknown>;
+  claims: RealtimeBridgeStreamClaims;
 };
 
 export type LiveMediaBridgeInput = {
@@ -82,6 +85,7 @@ export type LiveMediaBridgeInput = {
    */
   immediateLiveStart?: ImmediateLiveStart;
   callId?: string;
+  claims?: RealtimeBridgeStreamClaims;
   toolContext?: LiveToolDispatchContext;
   onMilestone?: (name: string, msSinceBridge: number, extra?: Record<string, unknown>) => void;
 };
@@ -121,6 +125,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   let staticDelegationAttached = false;
   const turnTracer = new LiveTurnTracer(callId);
   const turnTraceHooks = createTurnTraceHooks(turnTracer);
+  const conversationTranscript = new LiveConversationTranscript();
   const callerAudioDetector = new CallerAudioActivityDetector();
 
   milestone("telnyx_ws_attached");
@@ -167,9 +172,24 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {
     if (!isOpenAiLiveDelegationEnabled() || delegationHandler) return;
     delegationEnabled = true;
+    const claims =
+      input.claims ?? input.immediateLiveStart?.claims ?? toolContext
+        ? {
+            workspaceId: toolContext.workspaceId,
+            agentId: toolContext.agentId,
+            callId: toolContext.callId,
+            callControlId: toolContext.callControlId,
+          }
+        : null;
+    if (!claims) {
+      console.error("[live-media] delegation missing stream claims");
+      return;
+    }
     delegationHandler = createLiveDelegationHandler({
       callId,
+      claims,
       callContext: toolContext,
+      conversationTranscript,
       sendLiveOut,
       turnTrace: turnTraceHooks,
     });
@@ -357,6 +377,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         if (isLiveInputTranscriptDelta(type)) {
           const delta = String(event.delta ?? "");
           if (delta) {
+            conversationTranscript.appendDelta("caller", delta);
             turnTracer.onLiveInputTranscriptDelta(delta, event as Record<string, unknown>);
           }
           return;
@@ -377,6 +398,7 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         if (isLiveOutputTranscriptDelta(type)) {
           const delta = String(event.delta ?? "");
           if (delta) {
+            conversationTranscript.appendDelta("amy", delta);
             turnTracer.onLiveOutputTranscriptDelta(delta, event as Record<string, unknown>);
           }
           logLiveIn("output_transcript.delta", {
