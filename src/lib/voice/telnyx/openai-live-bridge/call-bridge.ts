@@ -1,22 +1,29 @@
 /**
- * GPT-Live PSTN entry — split prompts + optional Responses delegation.
- * Realtime wizard path remains in openai-realtime-bridge/call-bridge.ts.
+ * GPT-Live PSTN entry — split prompts, Responses delegation, shared Voice V2 booking engine.
  */
 import WebSocket from "ws";
 import { getOpenAiApiKey } from "../openai-realtime-bridge/config";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 import { logRealtimeBridgeEvent } from "../openai-realtime-bridge/telemetry";
-import { OPENAI_LIVE_WEBSOCKET_URL } from "../openai-realtime-bridge/live-config";
-import { liveBridgeMetadata, resolveOpenAiLiveBaseline } from "../openai-realtime-bridge/live-config";
-import { runOpenAiLiveBaselineBridge } from "../openai-realtime-bridge/live-minimal-bridge";
-import { buildOpenAiLiveSessionStartPayload } from "../openai-realtime-bridge/live-config";
+import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
+import { parseVoiceAgentConfig } from "@/lib/voice/types";
+import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-v2/after-hours-handling-config";
 import {
-  buildOpenAiLiveSessionStartPayloadForCall,
-  shouldUseSplitLiveSessionStart,
-} from "./live-session-start";
+  OPENAI_LIVE_WEBSOCKET_URL,
+  buildOpenAiLiveSessionStartPayload,
+  liveBridgeMetadata,
+  resolveOpenAiLiveBaseline,
+  resolveOpenAiLiveGreetingLine,
+} from "./live-config";
 import { isOpenAiLiveDelegationEnabled } from "./constants";
+import { buildLiveSessionConfig } from "./build-live-session-config";
+import { buildLiveVoiceTools } from "./live-tools";
+import { createLiveToolDispatchContext } from "./live-tool-runtime";
+import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
+import { runOpenAiLiveMediaBridge } from "./live-media-bridge";
+import { startLiveVoiceV2OnCall } from "./start-on-call";
 
-export async function runTelnyxOpenAiLiveSplitBridge(input: {
+export async function runTelnyxOpenAiLiveBridge(input: {
   claims: RealtimeBridgeStreamClaims;
   telnyxSocket: WebSocket;
 }): Promise<void> {
@@ -29,8 +36,6 @@ export async function runTelnyxOpenAiLiveSplitBridge(input: {
     transport: "openai_live",
     live_baseline: resolveOpenAiLiveBaseline(),
     bridge_module: "openai-live-bridge",
-    live_split_prompts: shouldUseSplitLiveSessionStart(),
-    live_delegation: isOpenAiLiveDelegationEnabled(),
     ...meta,
   });
 
@@ -40,17 +45,47 @@ export async function runTelnyxOpenAiLiveSplitBridge(input: {
     return;
   }
 
-  const sessionStartPayload =
-    shouldUseSplitLiveSessionStart() && isOpenAiLiveDelegationEnabled()
-      ? await buildOpenAiLiveSessionStartPayloadForCall(input.claims)
-      : buildOpenAiLiveSessionStartPayload();
+  startLiveVoiceV2OnCall(input.claims);
 
-  runOpenAiLiveBaselineBridge({
+  const config = await loadVoiceAgentRuntimeConfig(
+    input.claims.workspaceId,
+    input.claims.agentId,
+  );
+  const parsed = parseVoiceAgentConfig(config);
+  const handling = resolveAfterHoursHandlingFromAgentConfig(parsed);
+  const toolContext = createLiveToolDispatchContext({
+    claims: input.claims,
+    config: parsed,
+  });
+
+  let sessionStartPayload: Record<string, unknown>;
+
+  if (isOpenAiLiveDelegationEnabled()) {
+    const { runtimeContext, bookingContext } = await buildLiveResponsesRuntimeContext(
+      input.claims,
+    );
+    const tools = buildLiveVoiceTools({
+      config: parsed,
+      transferEnabled: Boolean(handling?.transferEnabled),
+    });
+    const session = buildLiveSessionConfig({
+      greeting: resolveOpenAiLiveGreetingLine(),
+      bookingContext,
+      runtimeContext,
+      tools,
+    });
+    sessionStartPayload = buildOpenAiLiveSessionStartPayload(session);
+  } else {
+    sessionStartPayload = buildOpenAiLiveSessionStartPayload();
+  }
+
+  runOpenAiLiveMediaBridge({
     telnyxSocket: input.telnyxSocket,
     apiKey,
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
     sessionStartPayload,
     callId,
+    toolContext: isOpenAiLiveDelegationEnabled() ? toolContext : undefined,
     onMilestone: (name, msSinceBridge, extra) => {
       logRealtimeBridgeEvent("openai_live_timing", {
         callId,
@@ -61,3 +96,6 @@ export async function runTelnyxOpenAiLiveSplitBridge(input: {
     },
   });
 }
+
+/** @deprecated alias */
+export const runTelnyxOpenAiLiveSplitBridge = runTelnyxOpenAiLiveBridge;

@@ -8,7 +8,7 @@ import {
   OPENAI_LIVE_VOICE,
   OPENAI_LIVE_WEBSOCKET_URL,
   buildOpenAiLiveSessionStartPayload,
-} from "@/lib/voice/telnyx/openai-realtime-bridge/live-config";
+} from "@/lib/voice/telnyx/openai-live-bridge/live-config";
 
 const TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS || "10000");
 

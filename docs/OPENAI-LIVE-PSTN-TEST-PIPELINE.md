@@ -6,7 +6,16 @@
 
 **Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`.
 
-**Speech copy / baselines:** `live-frontend-instructions.ts` + `live-config.ts` — env **`OPENAI_LIVE_BASELINE`** (default **G**).
+**Speech copy / baselines:** env **`OPENAI_LIVE_BASELINE`** (default **G**). Baseline **G** uses split prompts under **`src/lib/voice/telnyx/openai-live-bridge/`**:
+
+- `buildLiveFrontendInstructions()` → `session.instructions` (conversation only)
+- `buildResponsesBackendInstructions()` → `session.delegation.responses.instructions` when **`OPENAI_LIVE_DELEGATION=1`**
+
+Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-realtime-bridge/live-frontend-instructions.ts`. Legacy Realtime wizard stack (`instructions.ts`) is unchanged.
+
+**Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-5-mini`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). Live handles `response.event` → `response.item.create` (function_call_output) → `response.create`. Observability: grep `LIVE_FUNCTION_CALL`, `LIVE_TOOL_DISPATCH`, `LIVE_TOOL_RESULT`.
+
+**Frozen Realtime route:** `openai-realtime-bridge/*` is not modified for Live work except `ws-server.ts` routing `openai_live` → `openai-live-bridge/call-bridge`.
 
 **Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
 

@@ -4,7 +4,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import { getRealtimeBridgeListenPort } from "./config";
 import { verifyRealtimeBridgeStreamToken } from "./stream-token";
 import { runTelnyxOpenAiRealtimeBridge } from "./call-bridge";
-import { runTelnyxOpenAiLiveBridge } from "./live-call-bridge";
+import { runTelnyxOpenAiLiveBridge } from "../openai-live-bridge/call-bridge";
 import { resolveVoiceAiTransport } from "./flags";
 
 let httpServer: HttpServer | null = null;

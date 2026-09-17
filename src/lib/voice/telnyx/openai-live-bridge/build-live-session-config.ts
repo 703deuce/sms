@@ -6,7 +6,7 @@ import {
 } from "./constants";
 import { buildLiveFrontendInstructions } from "./live-frontend-instructions";
 import { buildResponsesBackendInstructions } from "./responses-backend-instructions";
-import type { LiveDelegationFunctionTool } from "./live-tools";
+import type { LiveResponsesFunctionTool } from "./live-tools";
 
 export type BuildLiveSessionConfigArgs = {
   businessContext?: string;
@@ -14,7 +14,7 @@ export type BuildLiveSessionConfigArgs = {
   callerContext?: string;
   bookingContext?: string;
   runtimeContext?: string;
-  tools?: LiveDelegationFunctionTool[];
+  tools?: LiveResponsesFunctionTool[];
 };
 
 /**

@@ -4,7 +4,7 @@
  */
 import WebSocket from "ws";
 import { getOpenAiApiKey } from "@/lib/voice/telnyx/openai-realtime-bridge/config";
-import { OPENAI_LIVE_MODEL_ID, OPENAI_LIVE_VOICE, OPENAI_LIVE_WEBSOCKET_URL, buildOpenAiLiveSessionStartPayload } from "@/lib/voice/telnyx/openai-realtime-bridge/live-config";
+import { OPENAI_LIVE_MODEL_ID, OPENAI_LIVE_VOICE, OPENAI_LIVE_WEBSOCKET_URL, buildOpenAiLiveSessionStartPayload } from "@/lib/voice/telnyx/openai-live-bridge/live-config";
 
 const MODEL = OPENAI_LIVE_MODEL_ID;
 const HOLD_MS = Number(process.env.HOLD_MS || "10000");
