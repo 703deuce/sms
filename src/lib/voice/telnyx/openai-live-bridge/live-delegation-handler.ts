@@ -118,12 +118,23 @@ export function createLiveDelegationHandler(input: {
         callContext: input.callContext,
       });
       const elapsedMs = Date.now() - started;
+      let voiceV2Status: string | null = null;
+      try {
+        voiceV2Status = String(
+          (JSON.parse(output) as Record<string, unknown>).voice_v2_status ||
+            (JSON.parse(output) as Record<string, unknown>).status ||
+            "",
+        );
+      } catch {
+        voiceV2Status = null;
+      }
       logLiveObs("TOOL_RESULT", {
         callId: input.callId,
         tool_name: toolName,
         executor,
         elapsed_ms: elapsedMs,
         output_bytes: output.length,
+        voice_v2_status: voiceV2Status,
         superseded: discard || generationAtStart !== input.callContext.schedulingGeneration,
       });
       if (discard || generationAtStart !== input.callContext.schedulingGeneration) {

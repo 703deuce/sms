@@ -20,6 +20,8 @@ import {
   type VoiceV2CallCapabilitySnapshot,
 } from "@/lib/voice-v2/workflow-capability";
 import { formatVoiceV2TelnyxToolResponse } from "@/lib/voice-v2/telnyx-response";
+import { formatVoiceV2BookTelnyxResponse } from "@/lib/voice-v2/telnyx-book-response";
+import { formatVoiceV2SaveIntakeTelnyxResponse } from "@/lib/voice-v2/telnyx-save-intake-response";
 import { executeMicrosoft365CertifiedFindAvailability } from "@/lib/voice-v2/pipelines/microsoft-365-certified";
 import { executeVoiceV2FindAvailability } from "@/lib/voice-v2/find-availability";
 import { executeVoiceV2BookOfferedSlot } from "@/lib/voice-v2/book-offered-slot";
@@ -58,9 +60,20 @@ function normalizeToolInvocationId(
   return `live_${openAiCallId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)}`;
 }
 
-function compactToolResultForModel(result: Record<string, unknown>): string {
-  const payload = formatVoiceV2TelnyxToolResponse(result as never);
-  return JSON.stringify(payload);
+function compactToolResultForModel(
+  toolName: string,
+  result: Record<string, unknown>,
+): string {
+  if (toolName === VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE) {
+    return JSON.stringify(formatVoiceV2TelnyxToolResponse(result as never));
+  }
+  if (toolName === VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE) {
+    return JSON.stringify(formatVoiceV2BookTelnyxResponse(result as never));
+  }
+  if (toolName === VOICE_V2_SAVE_INTAKE_TOOL_TYPE) {
+    return JSON.stringify(formatVoiceV2SaveIntakeTelnyxResponse(result as never));
+  }
+  return JSON.stringify(result);
 }
 
 const EXECUTOR_LABEL: Record<string, string> = {
@@ -113,7 +126,7 @@ export async function dispatchLiveVoiceTool(input: {
           });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -124,7 +137,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -134,7 +147,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -149,7 +162,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -164,7 +177,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -174,7 +187,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -206,7 +219,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -237,7 +250,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -247,7 +260,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -257,7 +270,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
@@ -267,7 +280,7 @@ export async function dispatchLiveVoiceTool(input: {
     });
     return {
       executor,
-      output: compactToolResultForModel(result as Record<string, unknown>),
+      output: compactToolResultForModel(toolName, result as Record<string, unknown>),
     };
   }
 
