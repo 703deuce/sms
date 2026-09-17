@@ -14,6 +14,7 @@ import {
   persistCallContext,
 } from "@/lib/voice-v2/dialog-manager";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "@/lib/voice-v2/intake/load-call-context";
+import { isTrustedPrismaVoiceCallId } from "@/lib/voice-v2/intake/resolve-trusted-call-id";
 import { getVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
 import { getIntakeReadiness } from "@/lib/voice-v2/intake/readiness";
 import { deriveRequiredActionForStage } from "@/lib/voice-v2/booking-workflow";
@@ -33,6 +34,20 @@ function utteranceTextHash(text: string): string {
   return createHash("sha256").update(text.trim()).digest("hex").slice(0, 16);
 }
 
+export type SyncLiveCallerUtteranceIntentResult = {
+  terminal: "interpreted" | "superseded" | "failed" | "rejected" | "queued";
+  reason?: string;
+  phase?: string;
+};
+
+function logStableUtteranceFailed(fields: Record<string, unknown>) {
+  console.info(`VOICE_STABLE_UTTERANCE_FAILED ${JSON.stringify(fields)}`);
+}
+
+function logStableUtteranceRejected(fields: Record<string, unknown>) {
+  console.info(`VOICE_STABLE_UTTERANCE_REJECTED ${JSON.stringify(fields)}`);
+}
+
 export async function syncLiveCallerUtteranceIntent(input: {
   claims: RealtimeBridgeStreamClaims;
   callerUtterance: string;
@@ -42,11 +57,17 @@ export async function syncLiveCallerUtteranceIntent(input: {
   dispatchContext?: LiveToolDispatchContext;
   autoDispatch?: boolean;
   stableUtterance?: StableCallerUtterance;
-}): Promise<void> {
+}): Promise<SyncLiveCallerUtteranceIntentResult> {
   const utterance = input.callerUtterance.trim();
-  if (!utterance) return;
-
   const callId = input.claims.callId;
+  if (!utterance) {
+    logStableUtteranceRejected({
+      call_id: callId,
+      reason: "empty_utterance",
+    });
+    return { terminal: "rejected", reason: "empty_utterance" };
+  }
+
   const stable =
     input.stableUtterance ??
     ({
@@ -68,7 +89,7 @@ export async function syncLiveCallerUtteranceIntent(input: {
         phase: "begin",
       })}`,
     );
-    return;
+    return { terminal: "superseded", phase: "begin" };
   }
 
   const stageBefore = input.controlPlane.getStage();
@@ -80,24 +101,42 @@ export async function syncLiveCallerUtteranceIntent(input: {
       callControlId: input.claims.callControlId,
       conversationId: input.claims.callControlId,
     });
-    if (!sessionKey) return;
+    if (!sessionKey) {
+      logStableUtteranceFailed({
+        call_id: callId,
+        utterance_id: stable.utterance_id,
+        revision: stable.revision,
+        reason: "missing_session_key",
+      });
+      return { terminal: "failed", reason: "missing_session_key" };
+    }
 
+    const trustedPrisma = isTrustedPrismaVoiceCallId(callId) ? callId : undefined;
     let ctx =
+      getVoiceV2CallContext(sessionKey) ??
       (await loadAuthoritativeCallContextForLive({
         workspaceId: input.claims.workspaceId,
         agentId: input.claims.agentId,
         callControlId: input.claims.callControlId,
-        prismaCallId: input.claims.callId,
+        prismaCallId: callId,
       })) ??
-      getVoiceV2CallContext(sessionKey) ??
       (await ensureVoiceV2CallContext({
         workspaceId: input.claims.workspaceId,
         agentId: input.claims.agentId,
         callControlId: input.claims.callControlId,
         conversationId: input.claims.callControlId,
-        trustedPrismaCallId: input.claims.callId,
+        trustedPrismaCallId: trustedPrisma,
       }));
-    if (!ctx) return;
+    if (!ctx) {
+      logStableUtteranceFailed({
+        call_id: callId,
+        utterance_id: stable.utterance_id,
+        revision: stable.revision,
+        reason: "missing_call_context",
+        session_key: sessionKey,
+      });
+      return { terminal: "failed", reason: "missing_call_context" };
+    }
 
     const interpreterCtx = await buildInterpreterContext({
       stable,
@@ -118,7 +157,7 @@ export async function syncLiveCallerUtteranceIntent(input: {
           phase: "post_interpret",
         })}`,
       );
-      return;
+      return { terminal: "superseded", phase: "post_interpret" };
     }
 
     const turnId = stable.utterance_id;
@@ -144,7 +183,7 @@ export async function syncLiveCallerUtteranceIntent(input: {
           phase: "post_merge",
         })}`,
       );
-      return;
+      return { terminal: "superseded", phase: "post_merge" };
     }
 
     let nextCtx = applied.ctx;
@@ -229,7 +268,17 @@ export async function syncLiveCallerUtteranceIntent(input: {
         active_goal: interpretationResult.meaning.active_goal,
       })}`,
     );
+    return { terminal: "interpreted" };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logStableUtteranceFailed({
+      call_id: callId,
+      utterance_id: stable.utterance_id,
+      revision: stable.revision,
+      reason: "interpreter_sync_exception",
+      error: message,
+    });
     console.error("[live-media] caller intent sync failed", err);
+    return { terminal: "failed", reason: "interpreter_sync_exception" };
   }
 }

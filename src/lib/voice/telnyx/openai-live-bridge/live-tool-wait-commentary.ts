@@ -5,7 +5,10 @@ import {
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
   VOICE_V2_TRANSFER_CALL_TOOL_TYPE,
 } from "@/lib/voice-v2/telnyx-tool-definition";
-import { liveBaselineEventId } from "./live-event-ids";
+import {
+  buildLiveCommentaryAppend,
+  buildLiveThinkingAppend,
+} from "./live-outbound-events";
 
 export type LiveToolWaitProgressController = {
   start(): void;
@@ -57,26 +60,22 @@ function logWait(event: string, fields: Record<string, unknown>) {
 export function buildSessionThinkingAppendEvent(input: {
   content: string;
 }): Record<string, unknown> {
-  return {
-    type: "session.thinking.append",
-    event_id: liveBaselineEventId("tool_wait_thinking"),
+  return buildLiveThinkingAppend({
+    eventIdPrefix: "tool_wait_thinking",
     content: input.content,
-  };
+    delegationId: null,
+  });
 }
 
 export function buildSessionCommentaryAppendEvent(input: {
   delegationId: string | null;
   content: string;
 }): Record<string, unknown> {
-  const event: Record<string, unknown> = {
-    type: "session.commentary.append",
-    event_id: liveBaselineEventId("tool_wait_commentary"),
+  return buildLiveCommentaryAppend({
+    eventIdPrefix: "tool_wait_commentary",
     content: input.content,
-  };
-  if (input.delegationId) {
-    event.delegation_id = input.delegationId;
-  }
-  return event;
+    delegationId: input.delegationId ?? null,
+  });
 }
 
 export function createLiveToolWaitProgressController(input: {

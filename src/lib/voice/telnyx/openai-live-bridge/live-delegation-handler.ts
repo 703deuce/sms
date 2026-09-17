@@ -1,4 +1,3 @@
-import { liveBaselineEventId } from "./live-event-ids";
 import {
   dispatchLiveVoiceTool,
   type LiveToolDispatchContext,
@@ -13,9 +12,13 @@ import { createLiveDelegationContextTracker } from "./live-delegation-context-tr
 import type { LiveConversationTranscript } from "./live-conversation-transcript";
 import {
   buildDelegationDeveloperText,
-  buildLiveDelegationContextItem,
   type LiveDelegationHydratedContext,
 } from "./live-delegation-context";
+import {
+  buildLiveDelegationDeveloperContextItem,
+  buildLiveFunctionCallOutputItem,
+  buildLiveResponseCreate,
+} from "./live-outbound-events";
 import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 import { runLiveControlPlaneTurn } from "./live-control-plane-turn";
@@ -29,6 +32,15 @@ import {
 } from "./live-tool-execution-record";
 
 type LiveEvent = Record<string, unknown>;
+
+function resolveLiveDelegationId(liveEvent: LiveEvent): string | null {
+  const top = liveEvent.delegation_id;
+  if (typeof top === "string" && top.trim()) return top.trim();
+  const delegation = liveEvent.delegation as Record<string, unknown> | undefined;
+  const nested = delegation?.id;
+  if (typeof nested === "string" && nested.trim()) return nested.trim();
+  return null;
+}
 
 function logLiveObs(event: string, fields: Record<string, unknown>) {
   console.info(`LIVE_${event} ${JSON.stringify(fields)}`);
@@ -121,10 +133,7 @@ export function createLiveDelegationHandler(input: {
     const env = controlPlane.getWorkflowEnvelope();
     const stage = controlPlane.getStage();
     logResponseCreate(input.callId, reason, stage, env.allowed_next_actions);
-    input.sendLiveOut({
-      type: "response.create",
-      event_id: liveBaselineEventId("delegation_ctx_resp"),
-    });
+    input.sendLiveOut(buildLiveResponseCreate({ eventIdPrefix: "delegation_ctx_resp" }));
     input.turnTrace?.onResponseCreateSent();
   };
 
@@ -142,7 +151,9 @@ export function createLiveDelegationHandler(input: {
       hydrated,
       isFirstDelegation,
     });
-    const contextItem = buildLiveDelegationContextItem({ developerText });
+    const contextItem = buildLiveDelegationDeveloperContextItem({
+      developerText,
+    });
     const eventId = String(contextItem.event_id || "");
     contextTracker.markSent(eventId, delegationEpisodeCount);
     input.sendLiveOut(contextItem);
@@ -184,16 +195,13 @@ export function createLiveDelegationHandler(input: {
     executor: string;
     elapsedMs: number;
   }) => {
-    const delegation_id = opts.delegationId ?? null;
-    input.sendLiveOut({
-      type: "response.item.create",
-      event_id: liveBaselineEventId("tool_out"),
-      item: {
-        type: "function_call_output",
-        call_id: opts.callId,
+    const delegation_id = opts.delegationId ?? activeDelegationId ?? null;
+    input.sendLiveOut(
+      buildLiveFunctionCallOutputItem({
+        callId: opts.callId,
         output: opts.output,
-      },
-    });
+      }),
+    );
     logLiveObs("FUNCTION_OUTPUT_SENT", {
       callId: input.callId,
       tool_name: opts.toolName,
@@ -432,7 +440,7 @@ export function createLiveDelegationHandler(input: {
       type === "session.delegation.created" ||
       type === "delegation.created"
     ) {
-      const delegationId = (liveEvent.delegation_id as string | null) ?? null;
+      const delegationId = resolveLiveDelegationId(liveEvent);
       if (delegationId) activeDelegationId = delegationId;
       input.turnTrace?.onDelegationCreated(delegationId);
       logLiveObs("DELEGATION_STARTED", {
@@ -460,7 +468,8 @@ export function createLiveDelegationHandler(input: {
       return;
     }
 
-    const delegationId = liveEvent.delegation_id as string | null | undefined;
+    const delegationId = resolveLiveDelegationId(liveEvent);
+    if (delegationId) activeDelegationId = delegationId;
     const responseEvent = liveEvent.event as Record<string, unknown> | undefined;
     const responseType = String(responseEvent?.type || "");
 

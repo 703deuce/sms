@@ -13,7 +13,7 @@
 
 Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-realtime-bridge/live-frontend-instructions.ts`. Legacy Realtime wizard stack (`instructions.ts`) is unchanged.
 
-**Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-6-astra`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). Live handles `response.event` → `response.item.create` (function_call_output) → `response.create`. Observability: grep `LIVE_FUNCTION_CALL`, `LIVE_TOOL_DISPATCH`, `LIVE_TOOL_RESULT`.
+**Delegation (opt-in):** `OPENAI_LIVE_DELEGATION=1` + backend model `OPENAI_LIVE_BACKEND_MODEL` (default `gpt-6-astra`), `parallel_tool_calls: false`, `reasoning.effort: low`. Tool schemas in `live-tools.ts`; dispatch in `live-tool-runtime.ts` calls the **same** Voice V2 executors as Realtime (certified FIND/BOOK unchanged). **Outbound contract (canonical builders in `live-outbound-events.ts`):** `response.item.create` and `response.create` must **not** include `delegation_id`; `session.instructions.append`, `session.thinking.append`, and `session.commentary.append` **must** include `delegation_id` (`null` for session-wide front-half updates). Tool results: `response.item.create` + `function_call_output`, then `response.create` — neither carries `delegation_id`. **Inbound delegation:** handle `type: "response.event"` with outer `delegation_id` and nested `event.type` (e.g. `response.output_item.done` for completed function calls). **Transcript:** only `session.input_transcript.delta` fragments; `input_transcript.done` is a local settle hint only (see `live-media-bridge.ts`). **Early speech:** stable utterances before control-plane hydration are queued (`VOICE_STABLE_UTTERANCE_QUEUED` → `CONTROL_PLANE_READY` → replay). **Astra interpreter** uses Responses API (`POST /v1/responses`) — no `temperature` / `top_p`. Observability: `LIVE_SESSION_STARTED`, `CONTROL_PLANE_READY`, `VOICE_STABLE_UTTERANCE_*`, `LIVE_OUTBOUND_CONTRACT_VIOLATION`, `VOICE_ASTRA_INTERPRETER_FAILED`.
 
 **Known-good PSTN booking baseline:** `docs/GPT-LIVE-PSTN-BOOKING-KNOWN-GOOD.md` (call `cmu58huys1m0u2z480s656y3j`).
 
@@ -21,7 +21,7 @@ Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-rea
 
 **Frozen Realtime route:** `openai-realtime-bridge/*` is not modified for Live work except `ws-server.ts` routing `openai_live` → `openai-live-bridge/call-bridge`.
 
-**Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
+**Test-only server update (no master deploy):** `./scripts/test-pstn-before-master.sh` (full interpreter hotpatch + 571 republish). Lighter: `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`. Astra without Coolify env: `echo 1 > /app/.voice_v2_astra_interpreter` on the web container.
 
 **PSTN answer path (`openai_live`):** No recording-disclosure TTS anywhere in inbound. **`runGptLivePstnLeanAnswer`** = claim → answer → `streaming_start` only (no agent config load, no disclosure, no workflow enroll). Telnyx webhooks run from **Next standalone** — after src changes run `./scripts/prod-gpt-live-rebuild-web.sh` (not config-only hotpatch). Baseline **G** greeting: `live-greeting.ts` after `session.started`.
 

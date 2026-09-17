@@ -9,8 +9,12 @@ import {
   isLiveOutputTranscriptDelta,
   LiveTurnTracer,
 } from "./live-turn-trace";
-import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
-import { LiveCallerUtteranceAssembler } from "./live-caller-utterance-assembler";
+import {
+  LiveCallerUtteranceAssembler,
+  type StableCallerUtterance,
+} from "./live-caller-utterance-assembler";
+import { createLiveStableUtteranceIngress } from "./live-stable-utterance-ingress";
+import { assertLiveOutboundEventContract } from "./live-outbound-events";
 import { clearUtteranceRevisionGuard } from "./live-utterance-revision-guard";
 import {
   buildLiveOpeningGreetingInstructionAppend,
@@ -136,20 +140,41 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const turnTraceHooks = createTurnTraceHooks(turnTracer);
   const conversationTranscript = new LiveConversationTranscript();
   const callerAudioDetector = new CallerAudioActivityDetector();
+  let liveSessionId: string | null = null;
+  let firstInputTranscriptDeltaLogged = false;
+
+  let liveToolDispatchContext: LiveToolDispatchContext | null =
+    input.immediateLiveStart?.toolContext ?? input.toolContext ?? null;
+  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null =
+    liveToolDispatchContext?.controlPlane ?? null;
+  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null =
+    input.immediateLiveStart?.claims ?? input.claims ?? null;
+
+  const stableUtteranceIngress = createLiveStableUtteranceIngress({
+    callId,
+    getDeps: () => {
+      if (!liveControlPlane || !streamClaimsForTeardown || !liveToolDispatchContext) {
+        return null;
+      }
+      return {
+        claims: streamClaimsForTeardown,
+        controlPlane: liveControlPlane,
+        dispatchContext: liveToolDispatchContext,
+        sendLiveOut,
+        fullConversationTranscript: () => conversationTranscript.formatFull(),
+        liveSessionId,
+      };
+    },
+  });
+
+  const markControlPlaneReady = (reason: string) => {
+    stableUtteranceIngress.markControlPlaneReady(reason);
+  };
+
   const callerUtteranceAssembler = new LiveCallerUtteranceAssembler({
     callId,
     onStable: (stable) => {
-      if (!liveControlPlane || !streamClaimsForTeardown) return;
-      void syncLiveCallerUtteranceIntent({
-        claims: streamClaimsForTeardown,
-        callerUtterance: stable.text,
-        fullConversationTranscript: conversationTranscript.formatFull(),
-        stableUtterance: stable,
-        controlPlane: liveControlPlane,
-        sendLiveOut,
-        dispatchContext: liveToolDispatchContext ?? undefined,
-        autoDispatch: Boolean(liveToolDispatchContext),
-      }).catch((err) => {
+      void stableUtteranceIngress.ingestStableUtterance(stable).catch((err) => {
         console.error("[live-media] stable caller utterance intent sync failed", err);
       });
     },
@@ -188,6 +213,29 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const sendLiveOut = (event: Record<string, unknown>) => {
     if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) return;
     const type = String(event.type || "");
+    if (
+      type === "response.item.create" ||
+      type === "response.create" ||
+      type === "session.instructions.append" ||
+      type === "session.thinking.append" ||
+      type === "session.commentary.append"
+    ) {
+      try {
+        assertLiveOutboundEventContract(event);
+      } catch (err) {
+        console.error(
+          `LIVE_OUTBOUND_CONTRACT_VIOLATION ${JSON.stringify({
+            call_id: callId,
+            live_session_id: liveSessionId,
+            type,
+            message: err instanceof Error ? err.message : String(err),
+          })}`,
+        );
+        if (process.env.VOICE_LIVE_OUTBOUND_CONTRACT_STRICT === "1") {
+          return;
+        }
+      }
+    }
     if (type !== "session.input_audio.append") {
       logLiveOut(type, { callId, event_id: event.event_id ?? null });
     }
@@ -196,12 +244,6 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
 
   let delegationHandler: ReturnType<typeof createLiveDelegationHandler> | null = null;
   let amyTranscriptBuffer = "";
-  let liveToolDispatchContext: LiveToolDispatchContext | null =
-    input.immediateLiveStart?.toolContext ?? input.toolContext ?? null;
-  let liveControlPlane: LiveToolDispatchContext["controlPlane"] | null =
-    liveToolDispatchContext?.controlPlane ?? null;
-  let streamClaimsForTeardown: RealtimeBridgeStreamClaims | null =
-    input.immediateLiveStart?.claims ?? input.claims ?? null;
   let liveRuntimeDisposed = false;
 
   const attachDelegation = (toolContext: LiveToolDispatchContext) => {
@@ -230,6 +272,15 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       conversationTranscript,
       sendLiveOut,
       turnTrace: turnTraceHooks,
+    });
+    console.info(
+      `CONTROL_PLANE_HYDRATION_STARTED ${JSON.stringify({
+        call_id: callId,
+        live_session_id: liveSessionId,
+      })}`,
+    );
+    void toolContext.controlPlane.ensureHydrated().then(() => {
+      markControlPlaneReady("delegation_attached");
     });
   };
 
@@ -383,6 +434,13 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           liveStarted = true;
           sessionStartedAt = Date.now();
           const openAiSessionId = String((event.session as { id?: string })?.id ?? "");
+          liveSessionId = openAiSessionId;
+          console.info(
+            `LIVE_SESSION_STARTED ${JSON.stringify({
+              call_id: callId,
+              live_session_id: openAiSessionId,
+            })}`,
+          );
           logLiveModelConfig({
             call_id: callId,
             live_session_id: openAiSessionId,
@@ -435,6 +493,16 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         if (isLiveInputTranscriptDelta(type)) {
           const delta = String(event.delta ?? "");
           if (delta) {
+            if (!firstInputTranscriptDeltaLogged) {
+              firstInputTranscriptDeltaLogged = true;
+              console.info(
+                `LIVE_TRANSCRIPT_DELTA_FIRST ${JSON.stringify({
+                  call_id: callId,
+                  live_session_id: liveSessionId,
+                  delta_chars: delta.length,
+                })}`,
+              );
+            }
             conversationTranscript.appendDelta("caller", delta);
             const contentId = String(
               event.item_id ??

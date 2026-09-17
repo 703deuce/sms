@@ -1,0 +1,35 @@
+{
+  "call_id": "FIXTURE_SLOT_SELECTION",
+  "steps": [
+    {
+      "label": "intake + date",
+      "meaning": {
+        "active_goal": "BOOK_APPOINTMENT",
+        "facts": { "requested_date": "2026-09-25" },
+        "literal_intake_fields": {
+          "name": "Anthony Johnson",
+          "email": "anthony@example.com"
+        },
+        "corrections": [],
+        "explicit_action_requests": ["BOOK_APPOINTMENT"],
+        "ambiguities": [],
+        "confidence": 0.95,
+        "digression": false,
+        "evidence": "full intake"
+      }
+    },
+    {
+      "label": "pick second slot",
+      "meaning": {
+        "active_goal": "BOOK_APPOINTMENT",
+        "facts": { "selected_slot_ordinal": 2 },
+        "corrections": [],
+        "explicit_action_requests": [],
+        "ambiguities": [],
+        "confidence": 0.95,
+        "digression": false,
+        "evidence": "the second one"
+      }
+    }
+  ]
+}

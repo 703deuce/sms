@@ -14,6 +14,23 @@ export function getOpenAiModel() {
   return process.env.OPENAI_MODEL?.trim() || "gpt-5-nano";
 }
 
+/** Newer OpenAI chat models: max_completion_tokens, default temperature only. */
+export function isOpenAiChatCompletionModernModel(model: string): boolean {
+  const m = model.toLowerCase();
+  return (
+    m.includes("gpt-5") ||
+    m.includes("gpt-6") ||
+    m.includes("gpt-live") ||
+    m.startsWith("o1") ||
+    m.startsWith("o3") ||
+    m.includes("astra")
+  );
+}
+
+function chatCompletionUsesMaxCompletionTokens(model: string): boolean {
+  return isOpenAiChatCompletionModernModel(model);
+}
+
 export async function openAiChatCompletion(
   system: string,
   user: string,
@@ -22,6 +39,15 @@ export async function openAiChatCompletion(
   const apiKey = getOpenAiApiKey();
   if (!apiKey) return null;
 
+  const model = options?.model?.trim() || getOpenAiModel();
+  const maxOut = options?.maxTokens ?? 800;
+  const modern = chatCompletionUsesMaxCompletionTokens(model);
+  const tokenLimitField = modern ? { max_completion_tokens: maxOut } : { max_tokens: maxOut };
+  const temperatureField =
+    modern || options?.temperature === undefined
+      ? {}
+      : { temperature: options.temperature };
+
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -29,9 +55,9 @@ export async function openAiChatCompletion(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: options?.model?.trim() || getOpenAiModel(),
-      temperature: options?.temperature ?? 0.4,
-      max_tokens: options?.maxTokens ?? 800,
+      model,
+      ...temperatureField,
+      ...tokenLimitField,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
@@ -48,4 +74,64 @@ export async function openAiChatCompletion(
     choices?: Array<{ message?: { content?: string } }>;
   };
   return json.choices?.[0]?.message?.content?.trim() || null;
+}
+
+/** Reasoning models (e.g. gpt-6-astra) — use Responses API per OpenAI docs, not Chat Completions. */
+export async function openAiResponsesText(input: {
+  model: string;
+  instructions: string;
+  user: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: "low" | "medium" | "high";
+}): Promise<string | null> {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) return null;
+
+  const model = input.model.trim();
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      instructions: input.instructions,
+      reasoning: { effort: input.reasoningEffort ?? "low" },
+      text: { verbosity: "low" },
+      max_output_tokens: input.maxOutputTokens ?? 800,
+      input: input.user,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenAI Responses API ${res.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const json = (await res.json()) as {
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+
+  const direct = json.output_text?.trim();
+  if (direct) return direct;
+
+  for (const item of json.output ?? []) {
+    if (item.type !== "message") continue;
+    for (const part of item.content ?? []) {
+      if (part.type === "output_text" && part.text?.trim()) {
+        return part.text.trim();
+      }
+    }
+  }
+  return null;
+}
+
+export function shouldUseOpenAiResponsesApi(model: string): boolean {
+  const m = model.toLowerCase();
+  return m.includes("gpt-6") || m.includes("astra") || m.startsWith("o1") || m.startsWith("o3");
 }

@@ -6,6 +6,11 @@ import type { VoiceV2Slot } from "./types";
 
 export const VOICE_V2_OFFER_TTL_MS = 30 * 60_000;
 
+function shouldUseTestOfferSetMemory(): boolean {
+  const mode = String(process.env.VOICE_V2_TEST_EXECUTORS || "").trim().toLowerCase();
+  return mode === "fake" || mode === "inject";
+}
+
 export type StoredVoiceV2OfferSet = {
   offerSetId: string;
   workspaceId: string;
@@ -57,10 +62,27 @@ export async function persistVoiceV2OfferSet(input: {
   };
 }
 
+const testOfferSetMemory = new Map<string, StoredVoiceV2OfferSet>();
+
+/** Orchestration / CI only — in-memory offer sets when VOICE_V2_TEST_EXECUTORS=fake. */
+export function seedVoiceV2OfferSetForTest(offer: StoredVoiceV2OfferSet): void {
+  testOfferSetMemory.set(`${offer.workspaceId}:${offer.offerSetId}`, offer);
+}
+
+export function clearVoiceV2OfferSetTestStore(): void {
+  testOfferSetMemory.clear();
+}
+
 export async function loadVoiceV2OfferSet(
   workspaceId: string,
   offerSetId: string,
 ): Promise<StoredVoiceV2OfferSet | null> {
+  const memKey = `${workspaceId}:${offerSetId}`;
+  const mem = testOfferSetMemory.get(memKey);
+  if (mem && shouldUseTestOfferSetMemory()) {
+    if (mem.expiresAt.getTime() <= Date.now()) return null;
+    return mem;
+  }
   const prisma = getPrisma();
   const row = await prisma.voiceV2OfferSet.findFirst({
     where: { id: offerSetId, workspaceId },

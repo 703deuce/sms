@@ -1,8 +1,14 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { extractJsonFromLlm } from "@/lib/ai/llm";
-import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
+import {
+  getOpenAiApiKey,
+  openAiChatCompletion,
+  openAiResponsesText,
+  shouldUseOpenAiResponsesApi,
+} from "@/lib/ai/openai";
 import type { VoiceDialogGoal } from "./dialog-goal";
 import type {
   CallerInterpreter,
@@ -16,6 +22,7 @@ import {
   logInterpreterWorkflowAuthorityViolation,
   shouldFailOnInterpreterSchemaViolation,
 } from "./caller-interpreter-schema";
+import { getVoiceV2TestAstraMode, runVoiceV2TestAstraMock } from "./testing/astra-interpreter-test-hook";
 
 function astraBackendModel(): string {
   return (
@@ -41,8 +48,26 @@ const VALID_GOALS = new Set<VoiceDialogGoal>([
   "UNKNOWN",
 ]);
 
+function readVoiceV2AstraInterpreterFile(): string | null {
+  const candidates = [
+    "/app/.voice_v2_astra_interpreter",
+    process.env.VOICE_V2_ASTRA_INTERPRETER_FILE?.trim(),
+  ].filter(Boolean) as string[];
+  for (const path of candidates) {
+    try {
+      if (!existsSync(path)) continue;
+      const value = readFileSync(path, "utf8").trim().toLowerCase();
+      if (value) return value;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 export function isVoiceV2AstraInterpreterEnabled(): boolean {
-  const v = process.env.VOICE_V2_ASTRA_INTERPRETER?.trim().toLowerCase();
+  const fromFile = readVoiceV2AstraInterpreterFile();
+  const v = (process.env.VOICE_V2_ASTRA_INTERPRETER?.trim() || fromFile || "").toLowerCase();
   if (v === "0" || v === "false" || v === "off") return false;
   if (v === "1" || v === "true" || v === "on") return true;
   return process.env.VOICE_V2_ASTRA_INTERPRETER_DEFAULT === "1";
@@ -168,18 +193,48 @@ export const astraCallerInterpreter: CallerInterpreter = {
   async interpret(ctx: InterpreterContext): Promise<CallerInterpretationResult | null> {
     const started = Date.now();
     const utterance = ctx.stable.text.trim();
-    if (!utterance || !getOpenAiApiKey()) return null;
+    if (!utterance) return null;
+
+    if (getVoiceV2TestAstraMode()) {
+      try {
+        return await runVoiceV2TestAstraMock(ctx);
+      } catch (err) {
+        console.error(
+          `VOICE_ASTRA_INTERPRETER_FAILED ${JSON.stringify({
+            call_id: ctx.callId ?? null,
+            utterance_id: ctx.stable.utterance_id,
+            error: err instanceof Error ? err.message : String(err),
+          })}`,
+        );
+        return null;
+      }
+    }
+
+    if (!getOpenAiApiKey()) return null;
 
     const model = astraBackendModel();
     const user = buildAstraUserPayload(ctx);
 
     try {
-      const raw = await Promise.race([
-        openAiChatCompletion(buildAstraSystemPrompt(), user, {
+      const instructions = buildAstraSystemPrompt();
+      const callModel = async (): Promise<string | null> => {
+        if (shouldUseOpenAiResponsesApi(model)) {
+          return openAiResponsesText({
+            model,
+            instructions,
+            user,
+            maxOutputTokens: 400,
+            reasoningEffort: "low",
+          });
+        }
+        return openAiChatCompletion(instructions, user, {
           model,
-          temperature: 0.1,
           maxTokens: 400,
-        }),
+        });
+      };
+
+      const raw = await Promise.race([
+        callModel(),
         new Promise<null>((_, reject) =>
           setTimeout(() => reject(new Error("astra_interpreter_timeout")), astraTimeoutMs()),
         ),

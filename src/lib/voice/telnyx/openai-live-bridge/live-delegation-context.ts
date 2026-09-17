@@ -1,4 +1,4 @@
-import { liveBaselineEventId } from "./live-event-ids";
+import { buildLiveDelegationDeveloperContextItem } from "./live-outbound-events";
 import type { LiveConversationTranscript } from "./live-conversation-transcript";
 import type { LiveControlPlane } from "./live-control-plane";
 import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
@@ -76,21 +76,12 @@ function summarizeCallContextForDelegation(ctx: VoiceV2CallContext | null): Reco
  * Inject hybrid context into the delegated Responses backend via Live API.
  * @see response.item.create — developer message with input_text
  */
+/** @deprecated Use buildLiveDelegationDeveloperContextItem from live-outbound-events */
 export function buildLiveDelegationContextItem(input: {
   developerText: string;
+  delegationId?: string | null;
 }): Record<string, unknown> {
-  return {
-    type: "response.item.create",
-    event_id: liveBaselineEventId("delegation_ctx"),
-    item: {
-      type: "message",
-      role: "developer",
-      content: [
-        {
-          type: "input_text",
-          text: input.developerText,
-        },
-      ],
-    },
-  };
+  return buildLiveDelegationDeveloperContextItem({
+    developerText: input.developerText,
+  });
 }

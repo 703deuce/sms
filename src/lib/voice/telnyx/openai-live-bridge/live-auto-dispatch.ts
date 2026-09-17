@@ -9,7 +9,10 @@ import {
   getRegistryEntry,
   validateBookArgsAgainstOfferSet,
 } from "@/lib/voice-v2/live-tool-registry";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import {
+  VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+  VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
+} from "@/lib/voice-v2/telnyx-tool-definition";
 import { buildLiveControlPlaneSyncEvents } from "./live-backend-state-sync";
 import { persistCallContext } from "@/lib/voice-v2/dialog-manager";
 import {
