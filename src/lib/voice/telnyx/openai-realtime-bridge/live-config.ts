@@ -11,11 +11,20 @@ export const OPENAI_LIVE_VOICE =
   process.env.OPENAI_LIVE_VOICE?.trim() || OPENAI_REALTIME_BRIDGE_VOICE;
 
 /**
- * Live API frontend instructions — strict when-to-speak policy for receptionist tests.
- * GPT-Live is full-duplex; shape turn-based business dialogue via prompt only (no Realtime VAD knobs).
+ * Progressive GPT-Live frontend copy (one transport: openai_live).
+ * A = protocol baseline (no instructions). B/C add lines when baseline A passes.
  * @see docs/OPENAI-LIVE-PSTN-TEST-PIPELINE.md
  */
-export const OPENAI_LIVE_FRONTEND_INSTRUCTIONS = `You are Amy, a warm, professional phone receptionist.
+export type OpenAiLiveBaseline = "A" | "B" | "C" | "D";
+
+export function resolveOpenAiLiveBaseline(): OpenAiLiveBaseline {
+  const raw = (process.env.OPENAI_LIVE_BASELINE || "A").trim().toUpperCase();
+  if (raw === "B" || raw === "C" || raw === "D") return raw;
+  return "A";
+}
+
+/** Baseline D = previous conversational frontend (prompt tuning only after A–C pass). */
+const OPENAI_LIVE_BASELINE_D_INSTRUCTIONS = `You are Amy, a warm, professional phone receptionist.
 
 Speak naturally and conversationally.
 
@@ -37,29 +46,49 @@ Do not repeatedly check whether the caller is still there.
 
 Use the rhythm of a normal telephone conversation: listen, respond briefly, ask one question if needed, then listen again.
 
-ISOLATED TEST PIPELINE
-
 This PSTN test bridge has no backend delegation, tools, booking, or business actions wired. Do not claim to schedule appointments or perform account actions.`;
 
-/** @deprecated Use OPENAI_LIVE_FRONTEND_INSTRUCTIONS */
-export const OPENAI_LIVE_MINIMAL_AMY_INSTRUCTIONS = OPENAI_LIVE_FRONTEND_INSTRUCTIONS;
+export function buildOpenAiLiveSessionInstructions(
+  baseline: OpenAiLiveBaseline,
+): string | undefined {
+  switch (baseline) {
+    case "A":
+      return undefined;
+    case "B":
+      return "You are Amy, a helpful phone receptionist.";
+    case "C":
+      return [
+        "You are Amy, a helpful phone receptionist.",
+        "Keep responses short and ask one question at a time.",
+      ].join(" ");
+    case "D":
+      return OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;
+    default:
+      return undefined;
+  }
+}
 
-/** Short greeting — avoid long open-ended monologues on GPT-Live. */
+/** @deprecated Baseline A: caller speaks first — no scripted greeting. */
 export const OPENAI_LIVE_GREETING_LINE =
   "Thanks for calling. This is Amy. How can I help you?";
 
 export function buildOpenAiLiveSessionStartPayload(): Record<string, unknown> {
+  const baseline = resolveOpenAiLiveBaseline();
+  const instructions = buildOpenAiLiveSessionInstructions(baseline);
+  const session: Record<string, unknown> = {
+    model: OPENAI_LIVE_MODEL_ID,
+    audio: {
+      format: { type: "audio/pcmu", rate: 8000 },
+      output: { voice: OPENAI_LIVE_VOICE },
+    },
+  };
+  if (instructions) {
+    session.instructions = instructions;
+  }
   return {
     type: "session.start",
     event_id: `live_start_${Date.now()}`,
-    session: {
-      model: OPENAI_LIVE_MODEL_ID,
-      instructions: OPENAI_LIVE_FRONTEND_INSTRUCTIONS,
-      audio: {
-        format: { type: "audio/pcmu", rate: 8000 },
-        output: { voice: OPENAI_LIVE_VOICE },
-      },
-    },
+    session,
   };
 }
 
@@ -71,5 +100,10 @@ export function liveBridgeMetadata() {
     voice: OPENAI_LIVE_VOICE,
     audio_format: "audio/pcmu@8000",
     pass_through: true,
+    live_baseline: resolveOpenAiLiveBaseline(),
   };
 }
+
+/** @deprecated */
+export const OPENAI_LIVE_FRONTEND_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;
+export const OPENAI_LIVE_MINIMAL_AMY_INSTRUCTIONS = OPENAI_LIVE_BASELINE_D_INSTRUCTIONS;

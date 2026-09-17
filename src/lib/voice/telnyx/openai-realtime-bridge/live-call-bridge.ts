@@ -4,10 +4,10 @@ import type { RealtimeBridgeStreamClaims } from "./stream-token";
 import { logRealtimeBridgeEvent } from "./telemetry";
 import { createLiveBridgeDiagnostics } from "./live-bridge-diagnostics";
 import {
-  OPENAI_LIVE_GREETING_LINE,
   OPENAI_LIVE_WEBSOCKET_URL,
   buildOpenAiLiveSessionStartPayload,
   liveBridgeMetadata,
+  resolveOpenAiLiveBaseline,
 } from "./live-config";
 
 type TelnyxMediaEvent = {
@@ -26,15 +26,28 @@ function resolveTelnyxStreamId(ev: TelnyxMediaEvent): string | null {
   return null;
 }
 
-/** Only PSTN caller leg → Live input. Never forward outbound (Amy) track — prevents self-echo loops. */
+/** Only PSTN caller leg → Live input (both_tracks stream; drop outbound / Amy echo). */
 function shouldForwardTelnyxMediaToLive(track: string | undefined): boolean {
-  if (!track) {
-    return true;
-  }
+  if (!track) return true;
   const t = track.toLowerCase();
   if (t === "outbound" || t === "outbound_track") return false;
-  if (t === "inbound" || t === "inbound_track") return true;
   return true;
+}
+
+function logLiveClient(source: string, type: string, extra?: Record<string, unknown>) {
+  console.info(
+    `LIVE_CLIENT_EVENT type=${type} timestamp=${new Date().toISOString()} source=${source}${
+      extra ? ` ${JSON.stringify(extra)}` : ""
+    }`,
+  );
+}
+
+function logLiveServer(type: string, extra?: Record<string, unknown>) {
+  console.info(
+    `LIVE_SERVER_EVENT type=${type} timestamp=${new Date().toISOString()}${
+      extra ? ` ${JSON.stringify(extra)}` : ""
+    }`,
+  );
 }
 
 function summarizeOpenAiLiveError(ev: Record<string, unknown>): Record<string, unknown> {
@@ -50,19 +63,28 @@ function summarizeOpenAiLiveError(ev: Record<string, unknown>): Record<string, u
 }
 
 /**
- * Minimal Telnyx media ↔ OpenAI Live (gpt-live-1) — no booking/tools.
+ * Telnyx media ↔ OpenAI Live (gpt-live-1) — official baseline protocol.
+ * One session.start → session.started → inbound audio in → output_audio.delta out.
+ * No response.create, greeting triggers, tools, or delegation on this path.
  */
 export async function runTelnyxOpenAiLiveBridge(input: {
   claims: RealtimeBridgeStreamClaims;
   telnyxSocket: WebSocket;
 }): Promise<void> {
   const meta = liveBridgeMetadata();
+  const callId = input.claims.callId;
   const bridgeStartedAt = Date.now();
-  const diag = createLiveBridgeDiagnostics(input.claims.callId);
+  const diag = createLiveBridgeDiagnostics(callId);
+  let sessionStartedAt: number | null = null;
+  let unexpectedClientEvents = 0;
+  let telnyxMediaPackets = 0;
+  let lastInputAudioLogAt = 0;
+
   logRealtimeBridgeEvent("telnyx_media_ws_connected", {
-    callId: input.claims.callId,
+    callId,
     workspaceId: input.claims.workspaceId,
     transport: "openai_live",
+    live_baseline: resolveOpenAiLiveBaseline(),
     live_diag_trace: process.env.OPENAI_LIVE_DIAG_TRACE !== "0",
     ...meta,
   });
@@ -77,7 +99,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
   let telnyxStreamId: string | null = null;
   let telnyxStarted = false;
   let openAiSessionStarted = false;
-  let greetingSent = false;
+  let sessionStartSent = false;
   let firstCallerAudioForwarded = false;
   let firstAmyAudioReceived = false;
   let firstAmyAudioToTelnyx = false;
@@ -86,10 +108,24 @@ export async function runTelnyxOpenAiLiveBridge(input: {
   let tornDown = false;
   const pendingCallerAudio: string[] = [];
 
-  const sendOpenAi = (event: Record<string, unknown>, source: string) => {
+  const sendOpenAiControl = (event: Record<string, unknown>, source: string) => {
     if (!openAi || openAi.readyState !== WebSocket.OPEN) return;
-    lastClientEvent = String(event.type || "");
+    const type = String(event.type || "");
+    lastClientEvent = type;
+    logLiveClient(source, type, { callId, event_id: event.event_id ?? null });
     diag.logClientEvent(source, event);
+    if (openAiSessionStarted && type !== "session.close") {
+      unexpectedClientEvents += 1;
+      logRealtimeBridgeEvent("openai_live_unexpected_client_event", {
+        callId,
+        type,
+        source,
+        unexpected_client_events: unexpectedClientEvents,
+      });
+    }
+    if (!openAiSessionStarted && type !== "session.start") {
+      logRealtimeBridgeEvent("openai_live_client_before_started", { callId, type, source });
+    }
     openAi.send(JSON.stringify(event));
   };
 
@@ -103,18 +139,24 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     if (!firstCallerAudioForwarded) {
       firstCallerAudioForwarded = true;
       logRealtimeBridgeEvent("first_caller_audio_forwarded", {
-        callId: input.claims.callId,
+        callId,
         transport: "openai_live",
         track: track ?? "unspecified",
       });
     }
-    sendOpenAi(
-      {
-        type: "session.input_audio.append",
-        audio: payloadB64,
-      },
-      "sendCallerAudioToOpenAi",
-    );
+    const now = Date.now();
+    if (now - lastInputAudioLogAt >= 1000) {
+      lastInputAudioLogAt = now;
+      logLiveClient("sendCallerAudioToOpenAi", "session.input_audio.append", {
+        callId,
+        telnyx_media_packets: telnyxMediaPackets,
+      });
+    }
+    diag.logClientEvent("sendCallerAudioToOpenAi", {
+      type: "session.input_audio.append",
+      audio: payloadB64,
+    });
+    openAi.send(JSON.stringify({ type: "session.input_audio.append", audio: payloadB64 }));
   };
 
   const flushPendingCallerAudio = () => {
@@ -123,39 +165,12 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     }
   };
 
-  const sendAmyGreeting = () => {
-    if (greetingSent || !openAiSessionStarted) return;
-    greetingSent = true;
-    const line = OPENAI_LIVE_GREETING_LINE;
-    sendOpenAi(
-      {
-        type: "session.instructions.append",
-        delegation_id: null,
-        content: `Your first spoken line on this call is, verbatim: "${line}"`,
-      },
-      "sendAmyGreeting:instructions.append",
-    );
-    sendOpenAi(
-      {
-        type: "session.commentary.append",
-        delegation_id: null,
-        content: line,
-      },
-      "sendAmyGreeting:commentary.append",
-    );
-    logRealtimeBridgeEvent("openai_live_greeting_sent", {
-      callId: input.claims.callId,
-      client_events: 2,
-    });
-    diag.flushFirst15sReportHint();
-  };
-
   const sendAudioToTelnyx = (base64Audio: string) => {
     if (!telnyxStreamId || input.telnyxSocket.readyState !== WebSocket.OPEN) return;
     if (!firstAmyAudioToTelnyx) {
       firstAmyAudioToTelnyx = true;
       logRealtimeBridgeEvent("first_amy_audio_sent_to_telnyx", {
-        callId: input.claims.callId,
+        callId,
         transport: "openai_live",
       });
     }
@@ -178,18 +193,18 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     });
 
     openAi.on("open", () => {
+      if (sessionStartSent) return;
+      sessionStartSent = true;
       openAiOpenedAt = Date.now();
-      logRealtimeBridgeEvent("openai_live_ws_connected", {
-        callId: input.claims.callId,
-        ...meta,
-      });
+      logRealtimeBridgeEvent("openai_live_ws_connected", { callId, ...meta });
       const startPayload = buildOpenAiLiveSessionStartPayload();
       logRealtimeBridgeEvent("openai_session_start_sent", {
-        callId: input.claims.callId,
+        callId,
         model: meta.model,
         voice: meta.voice,
+        live_baseline: resolveOpenAiLiveBaseline(),
       });
-      sendOpenAi(startPayload, "connectOpenAiLive:session.start");
+      sendOpenAiControl(startPayload, "connectOpenAiLive:session.start");
     });
 
     openAi.on("message", (raw) => {
@@ -201,10 +216,15 @@ export async function runTelnyxOpenAiLiveBridge(input: {
       }
       const type = String(ev.type || "");
       diag.logServerEvent(ev);
+      logLiveServer(type, {
+        callId,
+        event_id: ev.event_id ?? null,
+        ms_since_session: sessionStartedAt ? Date.now() - sessionStartedAt : null,
+      });
 
       if (type === "error") {
         logRealtimeBridgeEvent("openai_live_error", {
-          callId: input.claims.callId,
+          callId,
           ...summarizeOpenAiLiveError(ev),
         });
         return;
@@ -212,16 +232,18 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
       if (type === "session.started" && !openAiSessionStarted) {
         openAiSessionStarted = true;
+        sessionStartedAt = Date.now();
         diag.markSessionStarted();
         logRealtimeBridgeEvent("openai_session_started", {
-          callId: input.claims.callId,
+          callId,
           session_id: (ev.session as { id?: string })?.id,
           model: (ev.session as { model?: string })?.model ?? meta.model,
           voice: meta.voice,
           ms_since_open: openAiOpenedAt ? Date.now() - openAiOpenedAt : null,
+          caller_speaks_first: true,
         });
         flushPendingCallerAudio();
-        sendAmyGreeting();
+        diag.flushFirst15sReportHint();
         return;
       }
 
@@ -229,7 +251,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
         if (!firstAmyAudioReceived) {
           firstAmyAudioReceived = true;
           logRealtimeBridgeEvent("first_amy_audio_received", {
-            callId: input.claims.callId,
+            callId,
             transport: "openai_live",
             ms_since_bridge_start: Date.now() - bridgeStartedAt,
           });
@@ -240,7 +262,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
       if (type === "session.output_transcript.delta" && ev.delta) {
         logRealtimeBridgeEvent("amy_transcript_delta", {
-          callId: input.claims.callId,
+          callId,
           delta_chars: String(ev.delta).length,
         });
       }
@@ -248,11 +270,12 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
     openAi.on("close", (code, reason) => {
       logRealtimeBridgeEvent("openai_live_ws_closed", {
-        callId: input.claims.callId,
+        callId,
         code,
         reason: reason.toString(),
         session_started: openAiSessionStarted,
         last_client_event: lastClientEvent,
+        unexpected_client_events: unexpectedClientEvents,
         duration_ms: Date.now() - bridgeStartedAt,
       });
       teardown("openai_close");
@@ -260,7 +283,7 @@ export async function runTelnyxOpenAiLiveBridge(input: {
 
     openAi.on("error", (err) => {
       logRealtimeBridgeEvent("openai_live_ws_error", {
-        callId: input.claims.callId,
+        callId,
         message: err instanceof Error ? err.message : String(err),
       });
     });
@@ -270,15 +293,17 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     if (tornDown) return;
     tornDown = true;
     logRealtimeBridgeEvent("live_bridge_session_closed", {
-      callId: input.claims.callId,
+      callId,
       source,
       duration_ms: Date.now() - bridgeStartedAt,
       telnyx_started: telnyxStarted,
       openai_session_started: openAiSessionStarted,
+      telnyx_media_packets: telnyxMediaPackets,
+      unexpected_client_events: unexpectedClientEvents,
     });
     try {
       if (openAi?.readyState === WebSocket.OPEN) {
-        sendOpenAi({ type: "session.close" }, "teardown:session.close");
+        sendOpenAiControl({ type: "session.close" }, "teardown:session.close");
         openAi.close();
       }
     } catch {
@@ -307,15 +332,16 @@ export async function runTelnyxOpenAiLiveBridge(input: {
       telnyxStarted = true;
       telnyxStreamId = resolveTelnyxStreamId(ev);
       logRealtimeBridgeEvent("telnyx_start_received", {
-        callId: input.claims.callId,
+        callId,
         stream_id: telnyxStreamId,
-        note: "streaming uses both_tracks; Live input forwards inbound only",
+        note: "both_tracks; inbound-only to Live input",
       });
       connectOpenAiLive();
       return;
     }
 
     if (ev.event === "media" && ev.media?.payload) {
+      telnyxMediaPackets += 1;
       const track = ev.media.track;
       if (openAiSessionStarted) {
         sendCallerAudioToOpenAi(ev.media.payload, track);
@@ -331,17 +357,14 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     }
 
     if (ev.event === "stop") {
-      logRealtimeBridgeEvent("telnyx_media_ws_stop", {
-        callId: input.claims.callId,
-        transport: "openai_live",
-      });
+      logRealtimeBridgeEvent("telnyx_media_ws_stop", { callId, transport: "openai_live" });
       teardown("telnyx_stop");
     }
   });
 
   input.telnyxSocket.on("close", () => {
     logRealtimeBridgeEvent("telnyx_media_ws_closed", {
-      callId: input.claims.callId,
+      callId,
       transport: "openai_live",
       duration_ms: Date.now() - bridgeStartedAt,
     });

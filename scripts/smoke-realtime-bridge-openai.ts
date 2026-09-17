@@ -35,6 +35,7 @@ async function main() {
     let sawStart = false;
 
     ws.on("open", () => {
+      ws.send(JSON.stringify({ event: "connected" }));
       ws.send(
         JSON.stringify({
           event: "start",

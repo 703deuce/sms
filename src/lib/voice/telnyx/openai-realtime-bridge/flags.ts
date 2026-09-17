@@ -54,25 +54,16 @@ export function openAiRealtimeBridgeEnabledGlobally(): boolean {
 }
 
 export function shouldUseOpenAiLivePrimaryWebSocket(): boolean {
-  const t = resolveVoiceAiTransport();
-  return t === "openai_live" || t === "openai_live_minimal";
+  return resolveVoiceAiTransport() === "openai_live";
 }
 
-export type VoiceAiTransport =
-  | "openai_realtime"
-  | "openai_live"
-  | "openai_live_minimal";
-
-/** Realtime GA bridge vs GPT-Live Amy experiment vs GPT-Live protocol baseline. */
-export function resolveVoiceAiTransport(): VoiceAiTransport {
+/** Realtime GA bridge vs GPT-Live PSTN experiment (`openai_live`). */
+export function resolveVoiceAiTransport(): "openai_live" | "openai_realtime" {
   const fromFile = readVoiceAiTransportFile();
   const raw = (process.env.VOICE_AI_TRANSPORT?.trim() || fromFile || "").toLowerCase();
-  if (
-    raw === "openai_live_minimal" ||
-    raw === "live_minimal" ||
-    raw === "minimal"
-  ) {
-    return "openai_live_minimal";
+  // Legacy aliases — same live-call-bridge as openai_live (no separate minimal transport).
+  if (raw === "openai_live_minimal" || raw === "live_minimal" || raw === "minimal") {
+    return "openai_live";
   }
   if (raw === "openai_live" || raw === "live") return "openai_live";
   if (process.env.VOICE_OPENAI_USE_LIVE_WS === "1") return "openai_live";

@@ -2,11 +2,43 @@
 
 **Purpose:** Tune **when Amy is allowed to speak** on GPT-Live before wiring booking delegation. Not Microsoft FIND/BOOK, not Voice V2 tool orchestration.
 
-**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`. See `flags.ts`.
+**Single transport:** `openai_live` only. There is no separate `openai_live_minimal` bridge — legacy transport file values `openai_live_minimal`, `live_minimal`, and `minimal` are aliases that resolve to the same `live-call-bridge.ts` in `flags.ts`.
 
-**Config source:** `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` (`OPENAI_LIVE_FRONTEND_INSTRUCTIONS`, `OPENAI_LIVE_GREETING_LINE`).
+**Runtime switch:** `VOICE_AI_TRANSPORT=openai_live`, repo `.voice_ai_transport`, or `/app/.voice_ai_transport`.
 
-**Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only`
+**Speech copy / baselines:** `src/lib/voice/telnyx/openai-realtime-bridge/live-config.ts` — env **`OPENAI_LIVE_BASELINE`** (default **A**).
+
+**Test-only server update (no master deploy):** `./scripts/prod-voice-bridge-hotpatch.sh --config-only` or `--live`
+
+---
+
+## Protocol baseline (bridge behavior)
+
+One path in `live-call-bridge.ts`:
+
+1. `session.start` (model + PCMU 8 kHz + optional instructions per baseline)
+2. `session.started`
+3. **Inbound-only** Telnyx media → `session.input_audio.append` (drops outbound track to avoid self-echo loops)
+4. `session.output_audio.delta` → Telnyx
+
+**Not sent after start:** `response.create`, scripted greeting via `session.instructions.append` / `session.commentary.append`, tools, or delegation.
+
+Grep logs: `LIVE_CLIENT_EVENT`, `LIVE_SERVER_EVENT`, `openai_live_unexpected_client_event`, `openai_live_diag_*`.
+
+---
+
+## Baselines A–D (one transport, env only)
+
+| Baseline | `OPENAI_LIVE_BASELINE` | Instructions |
+|----------|------------------------|--------------|
+| **A** (default) | `A` | None — caller speaks first |
+| **B** | `B` | One-line Amy identity |
+| **C** | `C` | B + short one-question rule |
+| **D** | `D` | Previous long conversational frontend (prompt tuning only after A–C pass) |
+
+Do not add a second Live bridge file for “minimal” — change baseline on the container instead.
+
+`OPENAI_LIVE_GREETING_LINE` is **deprecated** for baseline A (no auto-greeting from the app).
 
 ---
 
@@ -14,62 +46,30 @@
 
 GPT-Live **continuously** decides many times per second whether to speak, listen, pause, interrupt, or acknowledge. It is **not** rigid user-turn → assistant-turn.
 
-The public Live session API does **not** expose Realtime-style VAD knobs (`threshold`, `silence_duration_ms`, `semantic_vad` eagerness, etc.). Shape tone, pace, and **when to talk** through **`session.start` instructions** only. Do not invent VAD parameters for Live in the bridge.
-
-Live stays **full-duplex** (good for barge-in, corrections, hesitation). The business dialogue should **feel turn-based**: Amy asks → **stops** → caller answers → Amy responds briefly.
+The public Live session API does **not** expose Realtime-style VAD knobs (`threshold`, `silence_duration_ms`, `semantic_vad` eagerness, etc.). Shape tone, pace, and **when to talk** through **`session.start` instructions** only (baselines B–D). Do not invent VAD parameters for Live in the bridge.
 
 ---
 
-## Frontend prompt design (current baseline)
-
-- **Small and strict** — not the old giant Realtime/V2 system prompt.
-- **Turn-based receptionist policy** — one question per turn; **wait indefinitely** after a question; **never fill silence**.
-- **Minimal acknowledgments** — no mm-hmm / yeah while caller speaks; no “I’m still here”, “take your time”, “no rush”, “whenever you’re ready”.
-- **Yield immediately** if caller speaks over Amy (prefer interrupting Amy over talking over the customer).
-
-**Do not put in the Live frontend (yet):**
-
-- Booking state machine, required fields, Microsoft/Graph, availability logic
-- Wording like: maintain flow, keep engaged, don’t leave awkward silence, reassure the caller, keep conversation moving, make natural acknowledgments
-
-Those phrases push Live toward **KEEP TALKING**.
-
-**Delegation / backend (later):** required fields, FIND/BOOK, validation — `delegation.responses.instructions` once speech behavior passes tests. Current isolated bridge has **no tools**.
-
----
-
-## Technical defaults (boring on purpose)
+## Technical defaults
 
 | Setting | Value |
 |---------|--------|
 | Model | `gpt-live-1` |
 | Audio | `audio/pcmu` @ 8000 Hz (Telnyx μ-law pass-through) |
-| Voice | `marin` (or env `OPENAI_LIVE_VOICE`) — fix one voice while tuning behavior |
+| Voice | `marin` (or env `OPENAI_LIVE_VOICE`) |
 
 ---
 
-## Greeting
+## Primary manual test (baseline A first)
 
-Use a **short** scripted greeting via `OPENAI_LIVE_GREETING_LINE`, then silence:
+With `openai_live` and **`OPENAI_LIVE_BASELINE=A`**:
 
-> Thanks for calling. This is Amy. How can I help you?
+1. Call the test DID; **stay silent ~10s** → Amy should **not** speak (no greeting, no echo loop).
+2. Say “Hello” → brief natural reply.
+3. Stay silent again ~10s → **nothing**.
+4. Optional: interrupt while she talks → should yield.
 
-Avoid long virtual-receptionist monologues before the first question.
-
----
-
-## Primary manual test (do this before booking copy)
-
-With `openai_live` active:
-
-1. Let Amy greet you.
-2. **Do not answer for ~10 seconds** → she should say **nothing**.
-3. Answer her question.
-4. Let her ask the next question.
-5. Stay silent again → she should say **nothing**.
-6. Start speaking while she is talking → she should **yield immediately**.
-
-If that passes, add booking-specific **frontend** snippets (still not the full state machine).
+Only after A passes, set `B`, then `C`, then `D` for frontend copy experiments.
 
 ---
 
@@ -95,6 +95,7 @@ Do **not** ask Live to decide when silence is “too long.”
 
 ## Cursor rules
 
-1. Edit **`OPENAI_LIVE_FRONTEND_INSTRUCTIONS`** in `live-config.ts` for Live speech behavior — not `instructions.ts` (Realtime/V2) unless switching transport.
+1. Edit baselines in **`live-config.ts`** (`buildOpenAiLiveSessionInstructions`) — not `instructions.ts` (Realtime/V2) unless switching transport to `openai_realtime`.
 2. No Realtime VAD env vars for Live.
-3. Hot-patch test container: `--config-only` for prompt/greeting only.
+3. Hot-patch: `--config-only` for Live bridge + config; `--live` sets transport file to `openai_live`.
+4. Do **not** reintroduce `live-minimal-call-bridge.ts` or a third PSTN Live variant.

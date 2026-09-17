@@ -1,4 +1,4 @@
-# Amy Live experiment (greeting + frontend prompt):
-# openai_live
-# Official GPT-Live protocol baseline (caller speaks first, no greeting):
-openai_live_minimal
+# PSTN Voice V2 media bridge transport (one listener on 3108):
+# openai_realtime  — GA Realtime (Microsoft FIND/BOOK)
+# openai_live      — GPT-Live PSTN experiment (baseline OPENAI_LIVE_BASELINE=A|B|C|D)
+openai_live
