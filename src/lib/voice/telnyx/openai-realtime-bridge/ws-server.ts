@@ -4,6 +4,8 @@ import WebSocket, { WebSocketServer } from "ws";
 import { getRealtimeBridgeListenPort } from "./config";
 import { verifyRealtimeBridgeStreamToken } from "./stream-token";
 import { runTelnyxOpenAiRealtimeBridge } from "./call-bridge";
+import { runTelnyxOpenAiLiveBridge } from "./live-call-bridge";
+import { resolveVoiceAiTransport } from "./flags";
 
 let httpServer: HttpServer | null = null;
 let wss: WebSocketServer | null = null;
@@ -86,11 +88,14 @@ export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
   });
 
   wss.on("connection", (ws: WebSocket, _req, claims) => {
-    void runTelnyxOpenAiRealtimeBridge({
-      claims: claims as import("./stream-token").RealtimeBridgeStreamClaims,
-      telnyxSocket: ws,
-    }).catch((err) => {
-      console.error("[realtime-bridge] session failed", err);
+    const typedClaims = claims as import("./stream-token").RealtimeBridgeStreamClaims;
+    const transport = resolveVoiceAiTransport();
+    const run =
+      transport === "openai_live"
+        ? runTelnyxOpenAiLiveBridge({ claims: typedClaims, telnyxSocket: ws })
+        : runTelnyxOpenAiRealtimeBridge({ claims: typedClaims, telnyxSocket: ws });
+    void run.catch((err) => {
+      console.error(`[${transport}-bridge] session failed`, err);
       ws.close(1011, "bridge_failed");
     });
   });
@@ -134,6 +139,7 @@ export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
     JSON.stringify({
       service: "transovo-web",
       event: "telnyx_openai_realtime_bridge_listening",
+      voice_ai_transport: resolveVoiceAiTransport(),
       port,
       timestamp: new Date().toISOString(),
     }),

@@ -4,11 +4,11 @@
  */
 import WebSocket from "ws";
 import { getOpenAiApiKey } from "@/lib/voice/telnyx/openai-realtime-bridge/config";
-import { OPENAI_REALTIME_MINI_MODEL_ID, OPENAI_REALTIME_BRIDGE_VOICE } from "@/lib/voice/telnyx/openai-realtime-bridge/flags";
+import { OPENAI_LIVE_MODEL_ID, OPENAI_LIVE_VOICE, OPENAI_LIVE_WEBSOCKET_URL, buildOpenAiLiveSessionStartPayload } from "@/lib/voice/telnyx/openai-realtime-bridge/live-config";
 
-const MODEL = process.env.OPENAI_LIVE_MODEL?.trim() || OPENAI_REALTIME_MINI_MODEL_ID;
+const MODEL = OPENAI_LIVE_MODEL_ID;
 const HOLD_MS = Number(process.env.HOLD_MS || "10000");
-const LIVE_URL = "wss://api.openai.com/v1/live/sessions";
+const LIVE_URL = OPENAI_LIVE_WEBSOCKET_URL;
 
 function log(msg: string, extra?: Record<string, unknown>) {
   console.log(msg, extra ? JSON.stringify(extra) : "");
@@ -21,7 +21,7 @@ async function main() {
   log("LIVE_PROBE_CONFIG", {
     url: LIVE_URL,
     model: MODEL,
-    voice: OPENAI_REALTIME_BRIDGE_VOICE,
+    voice: OPENAI_LIVE_VOICE,
     hold_ms: HOLD_MS,
   });
 
@@ -50,18 +50,7 @@ async function main() {
     ws.on("open", () => {
       openedAt = Date.now();
       log("OPENAI_WS_OPEN");
-      const startEv = {
-        type: "session.start",
-        event_id: "probe_start_1",
-        session: {
-          model: MODEL,
-          instructions: "You are a test assistant. Stay silent until spoken to.",
-          audio: {
-            format: { type: "audio/pcmu", rate: 8000 },
-            output: { voice: OPENAI_REALTIME_BRIDGE_VOICE },
-          },
-        },
-      };
+      const startEv = buildOpenAiLiveSessionStartPayload();
       lastClientEvent = "session.start";
       log("OPENAI_SEND", { type: startEv.type, model: MODEL });
       ws.send(JSON.stringify(startEv));
