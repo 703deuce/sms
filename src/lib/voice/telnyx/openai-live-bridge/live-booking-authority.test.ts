@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { buildLiveDelegationContextItem } from "./live-delegation-context";
 import { detectBookingConfirmationViolation } from "./live-booking-authority";
 describe("live booking authority", () => {
-  it("buildLiveDelegationContextItem omits delegation_id", () => {
-    const item = buildLiveDelegationContextItem({ developerText: "ctx" });
-    expect(item).not.toHaveProperty("delegation_id");
+  it("buildLiveDelegationContextItem includes delegation_id (GPT-Live API)", () => {
+    const item = buildLiveDelegationContextItem({ developerText: "ctx", delegationId: "item_abc" });
+    expect(item.delegation_id).toBe("item_abc");
     expect(item.type).toBe("response.item.create");
   });
 

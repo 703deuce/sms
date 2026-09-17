@@ -78,10 +78,13 @@ function summarizeCallContextForDelegation(ctx: VoiceV2CallContext | null): Reco
  */
 export function buildLiveDelegationContextItem(input: {
   developerText: string;
+  /** Responses delegation id from Live envelope (required field on response.item.create). */
+  delegationId?: string | null;
 }): Record<string, unknown> {
   return {
     type: "response.item.create",
     event_id: liveBaselineEventId("delegation_ctx"),
+    delegation_id: input.delegationId ?? null,
     item: {
       type: "message",
       role: "developer",

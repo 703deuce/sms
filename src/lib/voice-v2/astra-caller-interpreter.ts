@@ -3,7 +3,12 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { extractJsonFromLlm } from "@/lib/ai/llm";
-import { openAiChatCompletion, getOpenAiApiKey } from "@/lib/ai/openai";
+import {
+  getOpenAiApiKey,
+  openAiChatCompletion,
+  openAiResponsesText,
+  shouldUseOpenAiResponsesApi,
+} from "@/lib/ai/openai";
 import type { VoiceDialogGoal } from "./dialog-goal";
 import type {
   CallerInterpreter,
@@ -193,11 +198,25 @@ export const astraCallerInterpreter: CallerInterpreter = {
     const user = buildAstraUserPayload(ctx);
 
     try {
-      const raw = await Promise.race([
-        openAiChatCompletion(buildAstraSystemPrompt(), user, {
+      const instructions = buildAstraSystemPrompt();
+      const callModel = async (): Promise<string | null> => {
+        if (shouldUseOpenAiResponsesApi(model)) {
+          return openAiResponsesText({
+            model,
+            instructions,
+            user,
+            maxOutputTokens: 400,
+            reasoningEffort: "low",
+          });
+        }
+        return openAiChatCompletion(instructions, user, {
           model,
           maxTokens: 400,
-        }),
+        });
+      };
+
+      const raw = await Promise.race([
+        callModel(),
         new Promise<null>((_, reject) =>
           setTimeout(() => reject(new Error("astra_interpreter_timeout")), astraTimeoutMs()),
         ),

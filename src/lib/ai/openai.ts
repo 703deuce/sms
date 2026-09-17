@@ -75,3 +75,63 @@ export async function openAiChatCompletion(
   };
   return json.choices?.[0]?.message?.content?.trim() || null;
 }
+
+/** Reasoning models (e.g. gpt-6-astra) — use Responses API per OpenAI docs, not Chat Completions. */
+export async function openAiResponsesText(input: {
+  model: string;
+  instructions: string;
+  user: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: "low" | "medium" | "high";
+}): Promise<string | null> {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) return null;
+
+  const model = input.model.trim();
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      instructions: input.instructions,
+      reasoning: { effort: input.reasoningEffort ?? "low" },
+      text: { verbosity: "low" },
+      max_output_tokens: input.maxOutputTokens ?? 800,
+      input: input.user,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenAI Responses API ${res.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const json = (await res.json()) as {
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+
+  const direct = json.output_text?.trim();
+  if (direct) return direct;
+
+  for (const item of json.output ?? []) {
+    if (item.type !== "message") continue;
+    for (const part of item.content ?? []) {
+      if (part.type === "output_text" && part.text?.trim()) {
+        return part.text.trim();
+      }
+    }
+  }
+  return null;
+}
+
+export function shouldUseOpenAiResponsesApi(model: string): boolean {
+  const m = model.toLowerCase();
+  return m.includes("gpt-6") || m.includes("astra") || m.startsWith("o1") || m.startsWith("o3");
+}
