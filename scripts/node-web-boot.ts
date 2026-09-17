@@ -32,7 +32,11 @@ export async function registerNodeWebBoot(): Promise<void> {
     );
   }
 
-  if (process.env.VOICE_V2_OPENAI_REALTIME_BRIDGE !== "0") {
+  // Bridge WS is a long-lived listener — started from start-production.mjs, not this one-shot boot.
+  if (
+    process.env.VOICE_V2_OPENAI_REALTIME_BRIDGE !== "0" &&
+    process.env.NODE_WEB_BOOT_ONE_SHOT !== "1"
+  ) {
     const { startTelnyxRealtimeBridgeServer } = await import(
       "@/lib/voice/telnyx/openai-realtime-bridge/ws-server"
     );
@@ -105,8 +109,12 @@ const isMain =
     process.argv[1].endsWith("node-web-boot.mjs"));
 
 if (isMain) {
-  registerNodeWebBoot().catch((err) => {
-    console.error("[node-web-boot] failed", err);
-    process.exit(1);
-  });
+  registerNodeWebBoot()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error("[node-web-boot] failed", err);
+      process.exit(1);
+    });
 }

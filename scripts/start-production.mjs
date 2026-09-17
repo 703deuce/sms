@@ -73,7 +73,11 @@ function runNodeWebBoot() {
   const result = spawnSync(
     "npx",
     ["tsx", "scripts/node-web-boot.ts"],
-    { cwd: repoRoot, stdio: "inherit", env: { ...baseEnv, NODE_OPTIONS: nodeOpts } },
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+      env: { ...baseEnv, NODE_OPTIONS: nodeOpts, NODE_WEB_BOOT_ONE_SHOT: "1" },
+    },
   );
   if (result.status !== 0) {
     console.error("[start] node-web-boot exited with status", result.status ?? "null");
@@ -82,6 +86,23 @@ function runNodeWebBoot() {
 }
 
 runNodeWebBoot();
+
+function spawnRealtimeBridgeListener() {
+  if (process.env.VOICE_V2_OPENAI_REALTIME_BRIDGE === "0") return;
+  const nodeOpts = [
+    baseEnv.NODE_OPTIONS,
+    "--import ./scripts/preload-server-only.mjs",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  console.log("[start] spawning OpenAI realtime media bridge listener");
+  spawnTracked("realtime-bridge", "npx", ["tsx", "scripts/realtime-bridge-listener.ts"], {
+    cwd: repoRoot,
+    env: { ...baseEnv, NODE_OPTIONS: nodeOpts },
+  });
+}
+
+spawnRealtimeBridgeListener();
 
 const useEmbeddedWorker = embeddedJobWorkerEnabled();
 const webEnv = useEmbeddedWorker
