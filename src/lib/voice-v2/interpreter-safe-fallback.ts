@@ -1,5 +1,7 @@
 import type { VoiceDialogGoal } from "./dialog-goal";
 import { isActiveBookingGoal } from "./dialog-goal";
+import { interpretCallerUtterance } from "./caller-intent-interpreter";
+import type { CallerMeaning } from "./caller-meaning";
 import type { CallerMeaning, InterpreterContext } from "./caller-meaning";
 import { extractIntakeFieldsFromUtterance } from "./intake/extract-intake-from-utterance";
 import { utteranceLooksLikeSchedulingCorrection } from "./scheduling-preference-state";
@@ -34,6 +36,31 @@ function hasSafeSchedulingLiteral(utterance: string, ctx: InterpreterContext): b
   if (!resolved?.ymd) return false;
   const wordCount = utterance.split(/\s+/).filter(Boolean).length;
   return wordCount <= 12;
+}
+
+/** Only for unambiguous explicit intents when Astra is unavailable — not general guessing. */
+export function tryExplicitIntentFallback(ctx: InterpreterContext): CallerMeaning | null {
+  const utterance = ctx.stable.text.trim();
+  if (!utterance) return null;
+  const legacy = interpretCallerUtterance(utterance, { activeGoal: ctx.priorActiveGoal });
+  if (!legacy.explicit || legacy.confidence < 0.9) return null;
+  return {
+    active_goal: legacy.intent,
+    facts: {
+      requested_date: legacy.entities.requested_day ?? null,
+      requested_daypart: legacy.entities.requested_daypart ?? null,
+      requested_time: legacy.entities.requested_time ?? null,
+      selected_slot_spoken_label: null,
+      selected_slot_ordinal: null,
+      selected_slot_id: null,
+    },
+    corrections: [],
+    explicit_action_requests: [legacy.intent],
+    ambiguities: [],
+    confidence: legacy.confidence,
+    digression: legacy.digression,
+    evidence: utterance,
+  };
 }
 
 export function classifyInterpreterSafeFallback(ctx: InterpreterContext): {

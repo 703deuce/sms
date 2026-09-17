@@ -6,6 +6,7 @@ import { deterministicCallerInterpreter } from "./deterministic-caller-interpret
 import {
   classifyInterpreterSafeFallback,
   preserveStateCallerMeaning,
+  tryExplicitIntentFallback,
 } from "./interpreter-safe-fallback";
 
 /**
@@ -32,12 +33,14 @@ export async function interpretStableCallerUtterance(
       };
     }
 
-    const deterministic = await deterministicCallerInterpreter.interpret(ctx);
-    if (deterministic?.meaning) {
+    const explicit = tryExplicitIntentFallback(ctx);
+    if (explicit) {
       return {
-        ...deterministic,
-        mergePolicy: "full",
+        meaning: explicit,
+        implementationId: "explicit_intent_fallback",
+        latencyMs: 0,
         fallbackReason: `astra_failed_${safe.reason}`,
+        mergePolicy: "full",
       };
     }
 

@@ -1,4 +1,4 @@
-import { liveBaselineEventId } from "./live-event-ids";
+import { buildLiveInstructionsAppend } from "./live-outbound-events";
 import type { LiveControlPlane } from "./live-control-plane";
 import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
 
@@ -76,13 +76,11 @@ export function buildLiveFrontendBookingAuthorityInstructionFromContext(input: {
 export function buildLiveFrontendBookingAuthorityAppendFromControlPlane(
   controlPlane: LiveControlPlane,
 ): Record<string, unknown> {
-  return {
-    type: "session.instructions.append",
-    event_id: liveBaselineEventId("booking_auth"),
-    delegation_id: null,
+  return buildLiveInstructionsAppend({
+    eventIdPrefix: "booking_auth",
     content: buildLiveFrontendBookingAuthorityInstructionFromContext({
       ctx: controlPlane.getCallContext(),
       workflowEnvelope: controlPlane.getWorkflowEnvelope(),
     }),
-  };
+  });
 }

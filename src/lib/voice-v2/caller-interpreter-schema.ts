@@ -9,6 +9,8 @@ export const FORBIDDEN_INTERPRETER_WORKFLOW_KEYS = [
   "forbidden_actions",
   "workflow_signal",
   "next_stage",
+  "workflow_cycle_id",
+  "scheduling_generation",
 ] as const;
 
 export type InterpreterSchemaViolation = {

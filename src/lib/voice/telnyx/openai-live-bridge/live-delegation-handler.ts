@@ -1,4 +1,3 @@
-import { liveBaselineEventId } from "./live-event-ids";
 import {
   dispatchLiveVoiceTool,
   type LiveToolDispatchContext,
@@ -13,9 +12,13 @@ import { createLiveDelegationContextTracker } from "./live-delegation-context-tr
 import type { LiveConversationTranscript } from "./live-conversation-transcript";
 import {
   buildDelegationDeveloperText,
-  buildLiveDelegationContextItem,
   type LiveDelegationHydratedContext,
 } from "./live-delegation-context";
+import {
+  buildLiveDelegationDeveloperContextItem,
+  buildLiveFunctionCallOutputItem,
+  buildLiveResponseCreate,
+} from "./live-outbound-events";
 import { buildLiveResponsesRuntimeContext } from "./live-runtime-context";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
 import { runLiveControlPlaneTurn } from "./live-control-plane-turn";
@@ -130,11 +133,7 @@ export function createLiveDelegationHandler(input: {
     const env = controlPlane.getWorkflowEnvelope();
     const stage = controlPlane.getStage();
     logResponseCreate(input.callId, reason, stage, env.allowed_next_actions);
-    input.sendLiveOut({
-      type: "response.create",
-      event_id: liveBaselineEventId("delegation_ctx_resp"),
-      delegation_id: activeDelegationId ?? null,
-    });
+    input.sendLiveOut(buildLiveResponseCreate({ eventIdPrefix: "delegation_ctx_resp" }));
     input.turnTrace?.onResponseCreateSent();
   };
 
@@ -153,9 +152,8 @@ export function createLiveDelegationHandler(input: {
       isFirstDelegation,
     });
     const resolvedDelegationId = delegationId ?? activeDelegationId;
-    const contextItem = buildLiveDelegationContextItem({
+    const contextItem = buildLiveDelegationDeveloperContextItem({
       developerText,
-      delegationId: resolvedDelegationId,
     });
     const eventId = String(contextItem.event_id || "");
     contextTracker.markSent(eventId, delegationEpisodeCount);
@@ -199,16 +197,12 @@ export function createLiveDelegationHandler(input: {
     elapsedMs: number;
   }) => {
     const delegation_id = opts.delegationId ?? activeDelegationId ?? null;
-    input.sendLiveOut({
-      type: "response.item.create",
-      event_id: liveBaselineEventId("tool_out"),
-      delegation_id,
-      item: {
-        type: "function_call_output",
-        call_id: opts.callId,
+    input.sendLiveOut(
+      buildLiveFunctionCallOutputItem({
+        callId: opts.callId,
         output: opts.output,
-      },
-    });
+      }),
+    );
     logLiveObs("FUNCTION_OUTPUT_SENT", {
       callId: input.callId,
       tool_name: opts.toolName,

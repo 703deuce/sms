@@ -10,7 +10,12 @@ import {
   LiveTurnTracer,
 } from "./live-turn-trace";
 import { syncLiveCallerUtteranceIntent } from "./live-caller-intent-sync";
-import { LiveCallerUtteranceAssembler } from "./live-caller-utterance-assembler";
+import {
+  LiveCallerUtteranceAssembler,
+  type StableCallerUtterance,
+} from "./live-caller-utterance-assembler";
+import { createPendingStableUtteranceQueue } from "./live-pending-stable-utterances";
+import { assertLiveOutboundEventContract } from "./live-outbound-events";
 import { clearUtteranceRevisionGuard } from "./live-utterance-revision-guard";
 import {
   buildLiveOpeningGreetingInstructionAppend,
@@ -136,22 +141,82 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const turnTraceHooks = createTurnTraceHooks(turnTracer);
   const conversationTranscript = new LiveConversationTranscript();
   const callerAudioDetector = new CallerAudioActivityDetector();
+  const pendingStableUtterances = createPendingStableUtteranceQueue();
+  let controlPlaneReady = false;
+  let liveSessionId: string | null = null;
+  let firstInputTranscriptDeltaLogged = false;
+
+  const isInterpretationReady = (): boolean =>
+    controlPlaneReady &&
+    Boolean(liveControlPlane && streamClaimsForTeardown && liveToolDispatchContext);
+
+  const interpretAndApplyStableUtterance = (stable: StableCallerUtterance) => {
+    if (!liveControlPlane || !streamClaimsForTeardown || !liveToolDispatchContext) return;
+    void syncLiveCallerUtteranceIntent({
+      claims: streamClaimsForTeardown,
+      callerUtterance: stable.text,
+      fullConversationTranscript: conversationTranscript.formatFull(),
+      stableUtterance: stable,
+      controlPlane: liveControlPlane,
+      sendLiveOut,
+      dispatchContext: liveToolDispatchContext,
+      autoDispatch: true,
+    }).catch((err) => {
+      console.error("[live-media] stable caller utterance intent sync failed", err);
+    });
+  };
+
+  const markControlPlaneReady = (reason: string) => {
+    if (controlPlaneReady) return;
+    controlPlaneReady = true;
+    console.info(
+      `CONTROL_PLANE_READY ${JSON.stringify({
+        call_id: callId,
+        live_session_id: liveSessionId,
+        reason,
+        queued_utterances: pendingStableUtterances.size(),
+      })}`,
+    );
+    const queued = pendingStableUtterances.drain();
+    for (const utterance of queued) {
+      console.info(
+        `VOICE_STABLE_UTTERANCE_REPLAY ${JSON.stringify({
+          call_id: callId,
+          live_session_id: liveSessionId,
+          utterance_id: utterance.utterance_id,
+          revision: utterance.revision,
+        })}`,
+      );
+      interpretAndApplyStableUtterance(utterance);
+    }
+  };
+
   const callerUtteranceAssembler = new LiveCallerUtteranceAssembler({
     callId,
     onStable: (stable) => {
-      if (!liveControlPlane || !streamClaimsForTeardown) return;
-      void syncLiveCallerUtteranceIntent({
-        claims: streamClaimsForTeardown,
-        callerUtterance: stable.text,
-        fullConversationTranscript: conversationTranscript.formatFull(),
-        stableUtterance: stable,
-        controlPlane: liveControlPlane,
-        sendLiveOut,
-        dispatchContext: liveToolDispatchContext ?? undefined,
-        autoDispatch: Boolean(liveToolDispatchContext),
-      }).catch((err) => {
-        console.error("[live-media] stable caller utterance intent sync failed", err);
-      });
+      console.info(
+        `STABLE_UTTERANCE_CREATED ${JSON.stringify({
+          call_id: callId,
+          live_session_id: liveSessionId,
+          utterance_id: stable.utterance_id,
+          revision: stable.revision,
+          text_chars: stable.text.length,
+        })}`,
+      );
+      if (!isInterpretationReady()) {
+        pendingStableUtterances.enqueue(stable);
+        console.info(
+          `VOICE_STABLE_UTTERANCE_QUEUED ${JSON.stringify({
+            call_id: callId,
+            live_session_id: liveSessionId,
+            utterance_id: stable.utterance_id,
+            revision: stable.revision,
+            queue_depth: pendingStableUtterances.size(),
+          })}`,
+        );
+        return;
+      }
+      interpretAndApplyStableUtterance(stable);
     },
   });
 
@@ -188,6 +253,29 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
   const sendLiveOut = (event: Record<string, unknown>) => {
     if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) return;
     const type = String(event.type || "");
+    if (
+      type === "response.item.create" ||
+      type === "response.create" ||
+      type === "session.instructions.append" ||
+      type === "session.thinking.append" ||
+      type === "session.commentary.append"
+    ) {
+      try {
+        assertLiveOutboundEventContract(event);
+      } catch (err) {
+        console.error(
+          `LIVE_OUTBOUND_CONTRACT_VIOLATION ${JSON.stringify({
+            call_id: callId,
+            live_session_id: liveSessionId,
+            type,
+            message: err instanceof Error ? err.message : String(err),
+          })}`,
+        );
+        if (process.env.VOICE_LIVE_OUTBOUND_CONTRACT_STRICT === "1") {
+          return;
+        }
+      }
+    }
     if (type !== "session.input_audio.append") {
       logLiveOut(type, { callId, event_id: event.event_id ?? null });
     }
@@ -231,6 +319,15 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
       sendLiveOut,
       turnTrace: turnTraceHooks,
     });
+    console.info(
+      `CONTROL_PLANE_HYDRATION_STARTED ${JSON.stringify({
+        call_id: callId,
+        live_session_id: liveSessionId,
+      })}`,
+    );
+    void toolContext.controlPlane.ensureHydrated().then(() => {
+      markControlPlaneReady("delegation_attached");
+    });
   };
 
   const sendSessionUpdate = (sessionPatch: Record<string, unknown>) => {
@@ -238,7 +335,6 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
     sendLiveOut({
       type: "session.update",
       event_id: liveBaselineEventId("session_update_delegation"),
-      delegation_id: null,
       session: sessionPatch,
     });
     milestone("session_delegation_update_sent");
@@ -384,6 +480,13 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
           liveStarted = true;
           sessionStartedAt = Date.now();
           const openAiSessionId = String((event.session as { id?: string })?.id ?? "");
+          liveSessionId = openAiSessionId;
+          console.info(
+            `LIVE_SESSION_STARTED ${JSON.stringify({
+              call_id: callId,
+              live_session_id: openAiSessionId,
+            })}`,
+          );
           logLiveModelConfig({
             call_id: callId,
             live_session_id: openAiSessionId,
@@ -436,6 +539,16 @@ export function runOpenAiLiveMediaBridge(input: LiveMediaBridgeInput): void {
         if (isLiveInputTranscriptDelta(type)) {
           const delta = String(event.delta ?? "");
           if (delta) {
+            if (!firstInputTranscriptDeltaLogged) {
+              firstInputTranscriptDeltaLogged = true;
+              console.info(
+                `LIVE_TRANSCRIPT_DELTA_FIRST ${JSON.stringify({
+                  call_id: callId,
+                  live_session_id: liveSessionId,
+                  delta_chars: delta.length,
+                })}`,
+              );
+            }
             conversationTranscript.appendDelta("caller", delta);
             const contentId = String(
               event.item_id ??

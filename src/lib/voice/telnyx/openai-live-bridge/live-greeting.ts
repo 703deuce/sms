@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 import { resolveOpenAiLiveBaseline, resolveOpenAiLiveGreetingLine } from "./live-config";
+import {
+  buildLiveCommentaryAppend,
+  buildLiveInstructionsAppend,
+} from "./live-outbound-events";
 
 function liveGreetingEventId(suffix: string): string {
   return `live_greet_${suffix}_${crypto.randomUUID()}`;
@@ -13,25 +17,27 @@ export function buildLiveOpeningGreetingInstructionAppend(): Record<string, unkn
   const greetingLine = resolveOpenAiLiveGreetingLine();
   const eventId = liveGreetingEventId("instr");
   return {
-    type: "session.instructions.append",
+    ...buildLiveInstructionsAppend({
+      eventIdPrefix: "live_greet_instr",
+      content: [
+        "Speak in English.",
+        "Greet the caller immediately without waiting for them to speak.",
+        `Say exactly: ${greetingLine}`,
+        "Then pause and listen for the caller.",
+        "Do not say any recording or compliance disclosure unless the application sends one later.",
+      ].join(" "),
+    }),
     event_id: eventId,
-    delegation_id: null,
-    content: [
-      "Speak in English.",
-      "Greet the caller immediately without waiting for them to speak.",
-      `Say exactly: ${greetingLine}`,
-      "Then pause and listen for the caller.",
-      "Do not say any recording or compliance disclosure unless the application sends one later.",
-    ].join(" "),
   };
 }
 
 export function buildLiveOpeningGreetingKickoffCommentary(): Record<string, unknown> {
   return {
-    type: "session.commentary.append",
+    ...buildLiveCommentaryAppend({
+      eventIdPrefix: "live_greet_kick",
+      content: "Begin the conversation now, following the instructions provided.",
+    }),
     event_id: liveGreetingEventId("kick"),
-    delegation_id: null,
-    content: "Begin the conversation now, following the instructions provided.",
   };
 }
 
