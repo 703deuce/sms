@@ -7,7 +7,6 @@ import type { VoiceV2BookingStrategy } from "./booking-strategy";
 import { applyDialogAndWorkflowPrecedence, dialogFromContext, isActiveBookingGoal } from "./dialog-goal";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
 import {
-  effectiveRequestedDate,
   syncWorkflowRequestedDateFromScheduling,
   type VoiceV2SchedulingPreference,
 } from "./scheduling-preference-state";
