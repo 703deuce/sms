@@ -51,7 +51,7 @@ export async function syncLiveCallerUtteranceIntent(input: {
 
   const priorGoal = dialogFromContext(ctx).activeGoal;
   const interpretation = interpretCallerUtterance(utterance, { activeGoal: priorGoal });
-  const applied = applyCallerIntentToCallContext(ctx, interpretation);
+  const applied = applyCallerIntentToCallContext(ctx, interpretation, utterance);
 
   const nextCtx = {
     ...applied.ctx,

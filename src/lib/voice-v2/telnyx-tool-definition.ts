@@ -276,7 +276,7 @@ export function buildVoiceV2SaveIntakeFieldsTelnyxWebhook(input: {
     webhook: {
       name: VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
       description:
-        "Save enabled intake field values the caller actually provided (built-in and custom wizard field keys). Do not call this for booking intent alone or for a scheduling date/time by itself — remember scheduling in conversation and use voice_v2_find_availability when intake is complete. If several intake values arrive in one utterance, save them together in one call.",
+        "Save enabled intake field values the caller actually provided (built-in and custom wizard field keys). Scheduling dates heard from the caller are persisted by the runtime — use scheduling_preference on this tool when you also need to correct or supply YYYY-MM-DD explicitly. Do not call for booking intent alone. Batch several new field values from one utterance in one call when possible.",
       url: input.webhookUrl,
       method: "POST",
       timeout_ms: 5000,

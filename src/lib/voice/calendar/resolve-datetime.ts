@@ -189,6 +189,38 @@ function resolveTargetDate(
   return null;
 }
 
+const MONTH_NAMES =
+  "january|february|march|april|may|june|july|august|september|october|november|december";
+
+/** Business-local YYYY-MM-DD from caller scheduling speech (no time required). */
+export function resolveSpokenDateYmd(input: {
+  spoken: string;
+  timezone: string;
+  now?: Date;
+}): { ymd: string; confidence: "high" | "medium" | "low"; note: string } | null {
+  const spoken = (input.spoken || "").trim();
+  if (!spoken) return null;
+  const clock = buildBusinessLocalClock(input.timezone, input.now ?? new Date());
+  const relative = resolveTargetDate(spoken, clock);
+  if (relative) return relative;
+
+  const lower = spoken.toLowerCase();
+  const monthDay = lower.match(
+    new RegExp(`\\b(${MONTH_NAMES})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(20\\d{2}))?\\b`, "i"),
+  );
+  if (monthDay) {
+    const monthIdx =
+      MONTH_NAMES.split("|").indexOf(monthDay[1].toLowerCase()) + 1;
+    const day = Number(monthDay[2]);
+    const year = monthDay[3] ? Number(monthDay[3]) : Number(clock.current_date.slice(0, 4));
+    if (monthIdx >= 1 && day >= 1 && day <= 31) {
+      const ymd = `${year}-${String(monthIdx).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      return { ymd, confidence: "high", note: "Resolved month/day phrase." };
+    }
+  }
+  return null;
+}
+
 function formatLocalLabel(
   ymd: string,
   minuteOfDay: number,

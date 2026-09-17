@@ -14,6 +14,7 @@ import {
   type VoiceV2BookingWorkflow,
 } from "./booking-workflow";
 import { getIntakeReadiness } from "./intake/readiness";
+import { mergeCallerFactsIntoCallContext } from "./merge-caller-facts";
 
 export type VoiceCallerIntentEntities = {
   requested_day?: string | null;
@@ -203,17 +204,22 @@ export type ApplyCallerIntentResult = {
 export function applyCallerIntentToCallContext(
   ctx: VoiceV2CallContext,
   interpretation: VoiceCallerIntentInterpretation,
+  callerUtterance?: string,
 ): ApplyCallerIntentResult {
   const previousActiveGoal = dialogFromContext(ctx).activeGoal;
   let dialog: VoiceV2DialogState = { ...dialogFromContext(ctx) };
   let workflow: VoiceV2BookingWorkflow = { ...workflowFromContext(ctx) };
 
   if (interpretation.digression) {
+    const factMerge = mergeCallerFactsIntoCallContext(ctx, {
+      utterance: (callerUtterance || interpretation.evidence).trim(),
+      interpretation,
+    });
     return {
-      ctx,
+      ctx: factMerge.ctx,
       interpretation,
       previousActiveGoal,
-      resultingActiveGoal: dialog.activeGoal,
+      resultingActiveGoal: dialogFromContext(factMerge.ctx).activeGoal,
     };
   }
 
@@ -273,27 +279,18 @@ export function applyCallerIntentToCallContext(
     workflow,
   });
 
-  const nextCtx = mergeWorkflowIntoContext(dialogApplied.ctx, dialogApplied.workflow);
-  const readiness = getIntakeReadiness(nextCtx.intakeSchema, nextCtx.intakeState);
-  const hasOffer =
-    Boolean(nextCtx.currentOfferSet?.offerSetId) &&
-    (nextCtx.currentOfferSet?.slotIds?.length ?? 0) > 0;
-  const strategy = nextCtx.capabilities?.bookingStrategy ?? "MICROSOFT_365";
-  const stageWorkflow = {
-    ...dialogApplied.workflow,
-    nextStage: deriveVoiceV2NextStage({
-      workflow: dialogApplied.workflow,
-      readiness,
-      hasActiveOfferSet: hasOffer,
-      bookingStrategy: strategy,
-    }),
-  };
+  let mergedCtx = mergeWorkflowIntoContext(dialogApplied.ctx, dialogApplied.workflow);
+  const factMerge = mergeCallerFactsIntoCallContext(mergedCtx, {
+    utterance: (callerUtterance || interpretation.evidence).trim(),
+    interpretation,
+  });
+  mergedCtx = factMerge.ctx;
 
   return {
-    ctx: mergeWorkflowIntoContext(nextCtx, stageWorkflow),
+    ctx: mergedCtx,
     interpretation,
     previousActiveGoal,
-    resultingActiveGoal: dialogFromContext(mergeWorkflowIntoContext(nextCtx, stageWorkflow)).activeGoal,
+    resultingActiveGoal: dialogFromContext(mergedCtx).activeGoal,
   };
 }
 

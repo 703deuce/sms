@@ -31,5 +31,11 @@ export function applySchedulingPreferenceToContext(
     schedulingDateFromSave: requestedDate,
   });
   workflow = { ...workflow, bookingIntentActive: true, requestedDate };
-  return mergeWorkflowIntoContext(ctx, workflow);
+  const schedulingPreference = {
+    ...(ctx.schedulingPreference ?? {}),
+    requestedDate,
+    updatedAt: new Date().toISOString(),
+    evidence: String(raw.intent_evidence || raw.evidence || "scheduling_preference_save").slice(0, 240),
+  };
+  return { ...mergeWorkflowIntoContext(ctx, workflow), schedulingPreference };
 }

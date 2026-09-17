@@ -7,7 +7,17 @@ import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
 import { scheduleIntakePersistence } from "./persist-deferred";
 import { getIntakeReadiness } from "./readiness";
-import { transitionAfterIntakeSave } from "../booking-workflow";
+import {
+  mergeWorkflowIntoContext,
+  transitionAfterIntakeSave,
+  workflowFromContext,
+} from "../booking-workflow";
+import { rederiveWorkflowStageForContext } from "../merge-caller-facts";
+import {
+  mergeSchedulingPreferenceRecord,
+  syncWorkflowRequestedDateFromScheduling,
+} from "../scheduling-preference-state";
+import { extractSchedulingRequestedDate } from "./scheduling-preference";
 import {
   resolveVoiceV2BookingStrategyForContext,
   resolveVoiceV2PstnLiveBookingForContext,
@@ -136,11 +146,28 @@ async function attachBookingWorkflow(
   if (nextCtx.capabilities?.afterHoursHandling) {
     nextCtx = applyAfterHoursEvaluations(nextCtx, nextCtx.capabilities.afterHoursHandling);
   }
-  setVoiceV2CallContext(nextCtx);
+  let hydrated = nextCtx;
+  const schedulingDate = extractSchedulingRequestedDate(raw);
+  if (schedulingDate) {
+    hydrated = {
+      ...hydrated,
+      schedulingPreference: mergeSchedulingPreferenceRecord(hydrated.schedulingPreference, {
+        requestedDate: schedulingDate,
+        updatedAt: new Date().toISOString(),
+        evidence: "save_intake_scheduling_preference",
+      }),
+    };
+    hydrated = mergeWorkflowIntoContext(
+      hydrated,
+      syncWorkflowRequestedDateFromScheduling(workflowFromContext(hydrated), hydrated.schedulingPreference),
+    );
+  }
+  hydrated = rederiveWorkflowStageForContext(hydrated);
+  setVoiceV2CallContext(hydrated);
   trace?.mark("WORKFLOW_TRANSITION_END");
   return {
-    ctx: nextCtx,
-    workflow: workflowPayloadForContext(nextCtx, voiceV2PstnLiveBooking, bookingStrategy),
+    ctx: hydrated,
+    workflow: workflowPayloadForContext(hydrated, voiceV2PstnLiveBooking, bookingStrategy),
     pstnFlagReloaded,
   };
 }

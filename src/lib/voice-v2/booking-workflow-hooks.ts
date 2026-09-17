@@ -69,6 +69,7 @@ export function workflowPayloadForContext(
     readiness,
     hasActiveOfferSet: hasOffer,
     bookingStrategy: strategy,
+    schedulingPreference: ctx.schedulingPreference,
   });
   const payload = buildWorkflowToolPayload({
     voiceV2PstnLiveBooking,

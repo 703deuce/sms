@@ -19,7 +19,7 @@ function speakForWorkflowStage(
   missingBeforeBooking: string[],
 ): string | null {
   if (stage === "COLLECT_REQUIRED_INTAKE" && missingBeforeBooking.length > 0) {
-    return "Got it. Ask only for the missing caller details — do not ask for the day again.";
+    return "Got it. Ask only for the missing caller details — do not ask for the day again if scheduling is already captured.";
   }
   if (!bookingContinue) return null;
   if (stage === "COLLECT_SCHEDULING_PREFERENCE") {

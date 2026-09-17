@@ -7,6 +7,11 @@ import type { VoiceV2BookingStrategy } from "./booking-strategy";
 import { applyDialogAndWorkflowPrecedence, dialogFromContext, isActiveBookingGoal } from "./dialog-goal";
 import type { IntakeFieldKey, IntakeReadinessResult, VoiceV2CallContext } from "./intake/types";
 import {
+  effectiveRequestedDate,
+  syncWorkflowRequestedDateFromScheduling,
+  type VoiceV2SchedulingPreference,
+} from "./scheduling-preference-state";
+import {
   applyQualificationStageOverride,
   qualificationWorkflowExtras,
 } from "./qualification-workflow";
@@ -75,7 +80,10 @@ export function workflowFromContext(ctx: VoiceV2CallContext): VoiceV2BookingWork
 
 /** Align workflow flags with durable dialog goal before stage derivation. */
 export function workflowFromContextWithDialog(ctx: VoiceV2CallContext): VoiceV2BookingWorkflow {
-  let workflow = workflowFromContext(ctx);
+  let workflow = syncWorkflowRequestedDateFromScheduling(
+    workflowFromContext(ctx),
+    ctx.schedulingPreference,
+  );
   const goal = dialogFromContext(ctx).activeGoal;
   if (isActiveBookingGoal(goal)) {
     workflow = { ...workflow, bookingIntentActive: true };
@@ -219,8 +227,14 @@ export function deriveVoiceV2NextStage(input: {
   readiness: IntakeReadinessResult;
   hasActiveOfferSet: boolean;
   bookingStrategy?: VoiceV2BookingStrategy;
+  schedulingPreference?: VoiceV2SchedulingPreference;
 }): VoiceV2NextStage {
-  const w = input.workflow;
+  const w = {
+    ...input.workflow,
+    requestedDate:
+      input.workflow.requestedDate ??
+      normalizeRequestedDate(input.schedulingPreference?.requestedDate),
+  };
   const strategy = input.bookingStrategy ?? "MICROSOFT_365";
   if (w.bookingConfirmed) return "BOOKING_CONFIRMED";
   if (w.callerRequestFinalized) return "COMPLETE";
@@ -258,7 +272,7 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
     case "COLLECT_REQUIRED_INTAKE":
       return ["voice_v2_save_intake_fields"];
     case "COLLECT_SCHEDULING_PREFERENCE":
-      return ["conversational_collect_date", "voice_v2_save_intake_fields", "scheduling_preference"];
+      return ["voice_v2_save_intake_fields"];
     case "FIND_AVAILABILITY":
       return ["voice_v2_find_availability"];
     case "OFFER_SLOTS":
@@ -282,6 +296,22 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
   }
 }
 
+export function deriveRequiredActionForStage(
+  stage: VoiceV2NextStage,
+  workflow: VoiceV2BookingWorkflow,
+  readiness: IntakeReadinessResult,
+  opts: { hasActiveOfferSet: boolean; knownRequestedDate: string | null },
+): string | null {
+  if (workflow.bookingConfirmed) return null;
+  if (stage === "FIND_AVAILABILITY" && opts.knownRequestedDate && readiness.missingBeforeBooking.length === 0) {
+    return "voice_v2_find_availability";
+  }
+  if (stage === "BOOK_SELECTED_SLOT" && opts.hasActiveOfferSet && workflow.requestedDate) {
+    return "voice_v2_book_offered_slot";
+  }
+  return null;
+}
+
 export function runtimeHintForStage(
   stage: VoiceV2NextStage,
   workflow?: VoiceV2BookingWorkflow,
@@ -293,6 +323,9 @@ export function runtimeHintForStage(
       }
       return "";
     case "COLLECT_SCHEDULING_PREFERENCE":
+      if (workflow?.requestedDate) {
+        return `Scheduling date ${workflow.requestedDate} is already captured. Call voice_v2_find_availability when intake is complete.`;
+      }
       return "Intake complete. Ask what day works for the appointment. Do not close with callback or follow-up.";
     case "FIND_AVAILABILITY":
       return "Intake complete and date is known. Acknowledge the date briefly, then call voice_v2_find_availability now. Do not ask for the day again. Do not callback-close.";
@@ -333,6 +366,7 @@ export function buildWorkflowToolPayload(input: {
     readiness: input.readiness,
     hasActiveOfferSet: input.hasActiveOfferSet ?? false,
     bookingStrategy: strategy,
+    schedulingPreference: input.ctx?.schedulingPreference,
   });
   if (input.ctx) {
     nextStage = applyQualificationStageOverride(nextStage, input.ctx, strategy);
@@ -353,9 +387,17 @@ export function buildWorkflowToolPayload(input: {
     active_goal: input.ctx?.dialog?.activeGoal ?? null,
   };
 
-  if (workflow.requestedDate) {
-    payload.known_scheduling_preference = { requested_date: workflow.requestedDate };
+  const knownDate =
+    workflow.requestedDate ??
+    normalizeRequestedDate(input.ctx?.schedulingPreference?.requestedDate);
+  if (knownDate) {
+    payload.known_scheduling_preference = { requested_date: knownDate };
   }
+  const requiredAction = deriveRequiredActionForStage(nextStage, workflow, input.readiness, {
+    hasActiveOfferSet: input.hasActiveOfferSet ?? false,
+    knownRequestedDate: knownDate,
+  });
+  if (requiredAction) payload.required_action = requiredAction;
 
   if (booking_continue_required) {
     payload.forbidden_actions = [...VOICE_V2_FORBIDDEN_WHEN_BOOKING_CONTINUE];
@@ -422,6 +464,7 @@ export function transitionAfterIntakeSave(input: {
     readiness: input.readiness,
     hasActiveOfferSet: hasOffer,
     bookingStrategy: strategy,
+    schedulingPreference: ctx.schedulingPreference,
   });
 
   return mergeWorkflowIntoContext(ctx, workflow);

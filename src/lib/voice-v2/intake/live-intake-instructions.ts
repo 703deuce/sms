@@ -34,7 +34,7 @@ export function buildVoiceV2LiveIntakeInstructions(
           "When the caller volunteers one or more configured field values, remember all of them. Ask only for what is still missing.",
           "Call voice_v2_save_intake_fields only when saving real field values (batch every new value from the turn in one call when possible).",
           "Do not call save after every single word, and never call save solely to enter booking mode.",
-          "Do not call save for scheduling date/time alone — use conversation memory until FIND; scheduling-only saves are handled without blocking intake fields.",
+          "Caller scheduling facts are captured immediately by the runtime when heard; you do not need to delay persisting a day because intake is incomplete. Still call voice_v2_save_intake_fields when saving wizard field values (name, email, etc.).",
           "Do not save booking-intent phrases as service_reason (for example 'book an appointment').",
           "Latest explicit correction wins (for example email corrected mid-call).",
           "Before voice_v2_find_availability: briefly acknowledge naturally (for example 'Let me see what I have open for Tuesday') then call FIND.",
