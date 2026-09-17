@@ -24,6 +24,7 @@ TAR="/tmp/voice-bridge-patch.tgz"
 
 # Whole trees: GPT-Live bridge + Voice V2 (interpreter, merge, FIND/BOOK executors).
 BRIDGE_FILES=(
+  src/lib/ai/openai.ts
   src/lib/voice/telnyx/openai-live-bridge
   src/lib/voice-v2
   src/lib/voice/telnyx/openai-realtime-bridge/public-flags.ts
