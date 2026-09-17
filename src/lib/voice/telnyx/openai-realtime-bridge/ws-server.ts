@@ -40,18 +40,14 @@ export async function isRealtimeBridgePortOpenLocally(): Promise<boolean> {
  * (production: start-production.mjs spawns scripts/realtime-bridge-listener.ts).
  */
 export async function ensureTelnyxRealtimeBridgeServer(): Promise<void> {
+  await startTelnyxRealtimeBridgeServer();
+}
+
+export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
   if (httpServer) return;
 
-  try {
-    await startTelnyxRealtimeBridgeServer();
-  } catch (err) {
-    if (!isAddrInUseError(err)) throw err;
-    const external = await isRealtimeBridgePortOpenLocally();
-    if (!external) {
-      httpServer = null;
-      wss = null;
-      throw err;
-    }
+  const portAlreadyOwned = await isRealtimeBridgePortOpenLocally();
+  if (portAlreadyOwned) {
     console.log(
       JSON.stringify({
         service: "transovo-web",
@@ -60,11 +56,8 @@ export async function ensureTelnyxRealtimeBridgeServer(): Promise<void> {
         timestamp: new Date().toISOString(),
       }),
     );
+    return;
   }
-}
-
-export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
-  if (httpServer) return;
 
   const port = getRealtimeBridgeListenPort();
   httpServer = createHttpServer((_req, res) => {
@@ -102,22 +95,40 @@ export async function startTelnyxRealtimeBridgeServer(): Promise<void> {
     });
   });
 
-  await new Promise<void>((resolve, reject) => {
-    const server = httpServer!;
-    const onError = (err: Error) => {
-      server.off("listening", onListening);
-      httpServer = null;
-      wss = null;
-      reject(err);
-    };
-    const onListening = () => {
-      server.off("error", onError);
-      resolve();
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(port, "0.0.0.0");
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const server = httpServer!;
+      const onError = (err: Error) => {
+        server.off("listening", onListening);
+        httpServer = null;
+        wss = null;
+        reject(err);
+      };
+      const onListening = () => {
+        server.off("error", onError);
+        resolve();
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(port, "0.0.0.0");
+    });
+  } catch (err) {
+    httpServer = null;
+    wss = null;
+    if (isAddrInUseError(err) && (await isRealtimeBridgePortOpenLocally())) {
+      console.log(
+        JSON.stringify({
+          service: "transovo-web",
+          event: "telnyx_openai_realtime_bridge_external_listener",
+          port,
+          reason: "eaddrinuse_sibling_listener",
+          timestamp: new Date().toISOString(),
+        }),
+      );
+      return;
+    }
+    throw err;
+  }
 
   console.log(
     JSON.stringify({
