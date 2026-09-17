@@ -35,7 +35,7 @@ export function deriveBookingStrategyFromWizard(
   if (wizard.bookingStrategy && isStrategy(wizard.bookingStrategy)) {
     return wizard.bookingStrategy;
   }
-  if (!wizard.capabilities.includes("book_appointments")) {
+  if (!wizard.capabilities?.includes("book_appointments")) {
     return "NONE";
   }
   const primary =
