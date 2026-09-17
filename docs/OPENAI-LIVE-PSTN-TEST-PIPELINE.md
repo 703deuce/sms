@@ -17,7 +17,7 @@ Set **`OPENAI_LIVE_SPLIT_PROMPTS=0`** to revert baseline G to legacy `openai-rea
 
 **Known-good PSTN booking baseline:** `docs/GPT-LIVE-PSTN-BOOKING-KNOWN-GOOD.md` (call `cmu58huys1m0u2z480s656y3j`).
 
-**Startup latency:** Every call logs `openai_live_session_resolve_profile` with per-phase ms (`resolve-live-session.ts`). Opt-in fast start: `OPENAI_LIVE_FAST_SESSION_START=1` sends minimal `session.start` on WS open and attaches delegation via `session.update` (does not change FIND/BOOK executors).
+**Startup:** Delegation enabled → minimal `session.start` on OpenAI WS open (no DB). Static tools + backend prompt attach via `session.update` on `session.started`. Agent config / CallContext load on first tool dispatch only.
 
 **Frozen Realtime route:** `openai-realtime-bridge/*` is not modified for Live work except `ws-server.ts` routing `openai_live` → `openai-live-bridge/call-bridge`.
 

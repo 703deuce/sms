@@ -55,6 +55,68 @@ function fnTool(
   };
 }
 
+/**
+ * Static delegation tool list — no DB / agent config at Live startup.
+ * Runtime executors enforce capability (disabled tools return structured errors).
+ */
+export const LIVE_VOICE_TOOLS: readonly LiveResponsesFunctionTool[] = Object.freeze([
+  fnTool(
+    VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
+    "Save enabled intake field values the caller provided. Not for booking intent alone or date/time alone.",
+    VOICE_V2_SAVE_INTAKE_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
+    "Structured FIND_AVAILABILITY — send business-local date and time window. Only state slots returned.",
+    VOICE_V2_FIND_AVAILABILITY_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
+    "Book using offer_set_id and selected_slot_id from FIND. Only say confirmed after BOOKING_CONFIRMED.",
+    VOICE_V2_BOOK_OFFERED_SLOT_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_FIND_EXISTING_TOOL_TYPE,
+    "Find caller's existing appointment for reschedule or cancel.",
+    VOICE_V2_FIND_EXISTING_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_RESCHEDULE_TOOL_TYPE,
+    "Reschedule to a canonical offered slot.",
+    VOICE_V2_RESCHEDULE_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_CANCEL_TOOL_TYPE,
+    "Cancel after caller explicitly confirmed.",
+    VOICE_V2_CANCEL_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_FINALIZE_CALLER_REQUEST_TOOL_TYPE,
+    "Finalize a caller request for the business when not live booking.",
+    VOICE_V2_FINALIZE_CALLER_REQUEST_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_SEND_BOOKING_LINK_TOOL_TYPE,
+    "Text booking link after verbal SMS consent.",
+    VOICE_V2_SEND_BOOKING_LINK_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_SEARCH_KNOWLEDGE_TOOL_TYPE,
+    "Search indexed business documents when answer is not in prompt.",
+    VOICE_V2_SEARCH_KNOWLEDGE_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_TRANSFER_CALL_TOOL_TYPE,
+    "Transfer to a human when caller requests and policy allows.",
+    VOICE_V2_TRANSFER_CALL_BODY as Record<string, unknown>,
+  ),
+  fnTool(
+    VOICE_V2_CREATE_CALLBACK_REQUEST_TOOL_TYPE,
+    "Create a callback request when caller prefers callback.",
+    VOICE_V2_CREATE_CALLBACK_REQUEST_BODY as Record<string, unknown>,
+  ),
+]);
+
 export function buildLiveVoiceTools(input: {
   config: VoiceAgentConfig;
   transferEnabled?: boolean;

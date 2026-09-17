@@ -12,14 +12,13 @@ import {
   resolveOpenAiLiveBaseline,
   resolveOpenAiLiveGreetingLine,
 } from "./live-config";
-import { buildLiveMinimalSessionConfig } from "./build-live-session-config";
 import {
-  isOpenAiLiveDelegationEnabled,
-  isOpenAiLiveFastSessionStartEnabled,
-} from "./constants";
+  buildLiveMinimalSessionConfig,
+  buildLiveStaticDelegationSessionPatch,
+} from "./build-live-session-config";
+import { isOpenAiLiveDelegationEnabled } from "./constants";
 import { runOpenAiLiveMediaBridge } from "./live-media-bridge";
-import { resolveOpenAiLiveSessionReady } from "./resolve-live-session";
-import { startLiveVoiceV2OnCall } from "./start-on-call";
+import { createLiveToolDispatchContextFromClaims } from "./live-tool-runtime";
 
 export async function runTelnyxOpenAiLiveBridge(input: {
   claims: RealtimeBridgeStreamClaims;
@@ -43,25 +42,9 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     return;
   }
 
-  startLiveVoiceV2OnCall(input.claims);
-
-  // Overlap session resolve with OpenAI WS connect (was blocking session.start for ~4s).
-  let sessionReadyPromise: ReturnType<typeof resolveOpenAiLiveSessionReady> | undefined;
-  const beginSessionResolve = () => {
-    if (!sessionReadyPromise) {
-      sessionReadyPromise = resolveOpenAiLiveSessionReady({ claims: input.claims });
-    }
-    return sessionReadyPromise;
-  };
-  beginSessionResolve();
-
-  const fastSessionStart =
-    isOpenAiLiveFastSessionStartEnabled() && isOpenAiLiveDelegationEnabled();
-  const minimalSessionStartPayload = fastSessionStart
-    ? buildOpenAiLiveSessionStartPayload(
-        buildLiveMinimalSessionConfig({ greeting: resolveOpenAiLiveGreetingLine() }),
-      )
-    : undefined;
+  const greeting = resolveOpenAiLiveGreetingLine();
+  const delegationEnabled = isOpenAiLiveDelegationEnabled();
+  const toolContext = createLiveToolDispatchContextFromClaims(input.claims);
 
   // Attach Telnyx handlers immediately — Telnyx "start" must not be dropped while config loads.
   runOpenAiLiveMediaBridge({
@@ -69,16 +52,18 @@ export async function runTelnyxOpenAiLiveBridge(input: {
     apiKey,
     openAiLiveWsUrl: OPENAI_LIVE_WEBSOCKET_URL,
     callId,
-    fastSessionStart,
-    minimalSessionStartPayload,
-    resolveSession: async () => {
-      const ready = await beginSessionResolve();
-      logRealtimeBridgeEvent("openai_live_session_resolve_profile", {
-        callId,
-        ...ready.profile,
-      });
-      return ready;
-    },
+    immediateLiveStart: delegationEnabled
+      ? {
+          minimalSessionStartPayload: buildOpenAiLiveSessionStartPayload(
+            buildLiveMinimalSessionConfig({ greeting }),
+          ),
+          toolContext,
+          delegationSessionPatch: buildLiveStaticDelegationSessionPatch(),
+        }
+      : undefined,
+    sessionStartPayload: delegationEnabled
+      ? undefined
+      : buildOpenAiLiveSessionStartPayload(buildLiveMinimalSessionConfig({ greeting })),
     onMilestone: (name, msSinceBridge, extra) => {
       logRealtimeBridgeEvent("openai_live_timing", {
         callId,

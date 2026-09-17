@@ -47,6 +47,9 @@ export type LiveToolDispatchContext = {
   capability: VoiceV2CallCapabilitySnapshot;
   schedulingGeneration: number;
   onFindStarted?: (requestedDate: string) => void;
+  /** Lazy-loaded on first tool dispatch (not at Live session.start). */
+  agentConfigHydrated?: boolean;
+  _hydratePromise?: Promise<void>;
 };
 
 export type LiveCallRuntimeContext = LiveToolDispatchContext;
@@ -97,6 +100,28 @@ export function liveToolExecutorLabel(toolName: string): string {
 /**
  * Dispatch one Responses function call into the certified Voice V2 runtime.
  */
+export async function ensureLiveToolDispatchContextHydrated(
+  ctx: LiveToolDispatchContext,
+): Promise<void> {
+  if (ctx.agentConfigHydrated) return;
+  if (!ctx._hydratePromise) {
+    ctx._hydratePromise = (async () => {
+      const runtime = await loadVoiceAgentRuntimeConfig(ctx.workspaceId, ctx.agentId);
+      const config = parseVoiceAgentConfig(runtime);
+      ctx.capability = buildVoiceV2CallCapabilitySnapshot(config);
+      ctx.agentConfigHydrated = true;
+    })();
+  }
+  await ctx._hydratePromise;
+}
+
+function toolUnavailable(speak: string, status: string): { output: string; executor: string } {
+  return {
+    executor: "capability_gate",
+    output: JSON.stringify({ ok: false, speak, voice_v2_status: status }),
+  };
+}
+
 export async function dispatchLiveVoiceTool(input: {
   toolName: string;
   args: Record<string, unknown>;
@@ -104,6 +129,7 @@ export async function dispatchLiveVoiceTool(input: {
   callContext: LiveToolDispatchContext;
 }): Promise<{ output: string; discard?: boolean; executor: string }> {
   const { toolName, args, openAiFunctionCallId, callContext: ctx } = input;
+  await ensureLiveToolDispatchContextHydrated(ctx);
   const strategy = ctx.capability.bookingStrategy;
   const executor = liveToolExecutorLabel(toolName);
   const body: Record<string, unknown> = {
@@ -114,6 +140,12 @@ export async function dispatchLiveVoiceTool(input: {
   };
 
   if (toolName === VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE) {
+    if (!ctx.capability.findToolAvailable) {
+      return toolUnavailable(
+        "Live booking is not available on this line right now.",
+        "FIND_DISABLED",
+      );
+    }
     const requestedDate = String(args.requested_date || args.requestedDate || "").trim();
     ctx.onFindStarted?.(requestedDate);
     const result =
@@ -131,6 +163,12 @@ export async function dispatchLiveVoiceTool(input: {
   }
 
   if (toolName === VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE) {
+    if (!ctx.capability.bookToolAvailable) {
+      return toolUnavailable(
+        "I cannot complete a booking on this line right now.",
+        "BOOK_DISABLED",
+      );
+    }
     const result = await executeVoiceV2BookOfferedSlot(body, ctx.workspaceId, {
       agentId: ctx.agentId,
       certifiedPipeline: strategy === "MICROSOFT_365",
@@ -142,6 +180,9 @@ export async function dispatchLiveVoiceTool(input: {
   }
 
   if (toolName === VOICE_V2_SAVE_INTAKE_TOOL_TYPE) {
+    if (!ctx.capability.intakeToolAvailable) {
+      return toolUnavailable("Intake is not enabled for this call.", "INTAKE_DISABLED");
+    }
     const result = await executeVoiceV2SaveIntakeFields(body, ctx.workspaceId, ctx.agentId, {
       trustedPrismaCallId: ctx.callId,
     });
@@ -304,16 +345,30 @@ export function createLiveToolDispatchContext(input: {
   };
   config: VoiceAgentConfig;
 }): LiveToolDispatchContext {
+  return createLiveToolDispatchContextFromClaims(input.claims, input.config);
+}
+
+/** Stream claims only — agent config loaded on first tool call. */
+export function createLiveToolDispatchContextFromClaims(
+  claims: {
+    workspaceId: string;
+    agentId: string;
+    callId: string;
+    callControlId: string;
+  },
+  config?: VoiceAgentConfig,
+): LiveToolDispatchContext {
   let lastFindDate = "";
   let lastFindGeneration = 0;
-  const capability = buildVoiceV2CallCapabilitySnapshot(input.config);
+  const capability = buildVoiceV2CallCapabilitySnapshot(config ?? {});
   const ctx: LiveToolDispatchContext = {
-    workspaceId: input.claims.workspaceId,
-    agentId: input.claims.agentId,
-    callId: input.claims.callId,
-    callControlId: input.claims.callControlId,
+    workspaceId: claims.workspaceId,
+    agentId: claims.agentId,
+    callId: claims.callId,
+    callControlId: claims.callControlId,
     capability,
     schedulingGeneration: 0,
+    agentConfigHydrated: Boolean(config),
     onFindStarted: (requestedDate) => {
       if (requestedDate && requestedDate !== lastFindDate) {
         lastFindDate = requestedDate;

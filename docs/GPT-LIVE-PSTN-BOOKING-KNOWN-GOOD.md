@@ -19,10 +19,7 @@
 | **Live model** | `gpt-live-1` · voice `marin` · `audio/pcmu@8000` |
 | **Backend (Responses)** | `OPENAI_LIVE_BACKEND_MODEL` default `gpt-5-mini` |
 
-**Full forensic report (latency, transcript, tools):**
-
-- Repo artifact: `/opt/cursor/artifacts/call-forensic-cmu58huys1m0u2z480s656y3j.md` (when generated on agent VM)
-- Same content can be regenerated from production logs + DB for this `callId`
+**Full forensic report (latency, transcript, tools):** `docs/call-forensic-cmu58huys1m0u2z480s656y3j.md`
 
 ---
 
@@ -120,7 +117,7 @@ Env flags: `OPENAI_LIVE_DELEGATION`, `OPENAI_LIVE_SPLIT_PROMPTS`, `OPENAI_LIVE_B
 4. Offer fewer slots in speech (e.g. 3 at a time)  
 5. BOOK only after the above  
 
-**Fast session start (opt-in):** `OPENAI_LIVE_FAST_SESSION_START=1` — minimal `session.start` on WS open, delegation via `session.update` (`resolve-live-session.ts`, `live-media-bridge.ts`).
+**Live startup (post-baseline):** minimal `session.start` immediately; static delegation via `session.update`; booking DB work lazy on tool dispatch (`LIVE_VOICE_TOOLS`, `ensureLiveToolDispatchContextHydrated`).
 
 ---
 

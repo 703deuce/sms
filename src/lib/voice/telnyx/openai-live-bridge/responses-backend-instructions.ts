@@ -475,3 +475,8 @@ export function buildResponsesBackendInstructions(params?: {
   out += appendSection("RUNTIME / SESSION STATE", params?.runtimeContext);
   return out;
 }
+
+/** Startup-safe backend prompt — no per-call JSON; dynamic clock/state resolved at tool time. */
+export function buildResponsesBackendInstructionsStatic(): string {
+  return buildResponsesBackendInstructions();
+}

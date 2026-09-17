@@ -6,7 +6,7 @@ import {
 } from "./constants";
 import { buildLiveFrontendInstructions } from "./live-frontend-instructions";
 import { buildResponsesBackendInstructions } from "./responses-backend-instructions";
-import type { LiveResponsesFunctionTool } from "./live-tools";
+import { LIVE_VOICE_TOOLS, type LiveResponsesFunctionTool } from "./live-tools";
 
 export type BuildLiveSessionConfigArgs = {
   businessContext?: string;
@@ -37,6 +37,16 @@ export function buildLiveMinimalSessionConfig(
       callerContext: args.callerContext,
     }),
   };
+}
+
+/** Delegation attach — static tools + static backend prompt (no DB on Live startup). */
+export function buildLiveStaticDelegationSessionPatch(): Record<string, unknown> {
+  if (!isOpenAiLiveDelegationEnabled()) {
+    return {};
+  }
+  return buildLiveDelegationSessionPatch({
+    tools: [...LIVE_VOICE_TOOLS],
+  });
 }
 
 /** Partial session for session.update after fast start. */
