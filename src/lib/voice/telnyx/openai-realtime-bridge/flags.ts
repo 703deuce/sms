@@ -1,5 +1,16 @@
+import { existsSync, readFileSync } from "node:fs";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { isVoiceV2PstnLiveBookingMode } from "@/lib/voice-v2/pstn-workflow-mode";
+
+function readVoiceAiTransportFile(): string | null {
+  const path = process.env.VOICE_AI_TRANSPORT_FILE?.trim() || "/app/.voice_ai_transport";
+  try {
+    if (!existsSync(path)) return null;
+    return readFileSync(path, "utf8").trim().toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 const GPT_REALTIME_FAMILY = ["gpt", "realtime"].join("-");
 const REALTIME_21_MINI_SUFFIX = ["2", ".1", "-", "mini"].join("");
@@ -39,7 +50,8 @@ export function shouldUseOpenAiLivePrimaryWebSocket(): boolean {
 
 /** Isolated GPT-Live-1 PSTN experiment vs existing Realtime bridge. */
 export function resolveVoiceAiTransport(): "openai_live" | "openai_realtime" {
-  const raw = process.env.VOICE_AI_TRANSPORT?.trim().toLowerCase();
+  const fromFile = readVoiceAiTransportFile();
+  const raw = (process.env.VOICE_AI_TRANSPORT?.trim() || fromFile || "").toLowerCase();
   if (raw === "openai_live" || raw === "live") return "openai_live";
   if (process.env.VOICE_OPENAI_USE_LIVE_WS === "1") return "openai_live";
   return "openai_realtime";

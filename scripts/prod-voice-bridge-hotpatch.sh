@@ -30,14 +30,14 @@ tar czf "$TAR" -C "$ROOT" \
 
 scp -o BatchMode=yes "$TAR" "coolify-server:/tmp/voice-bridge-patch.tgz"
 
-TRANSPORT_ENV=""
+TRANSPORT_WRITE=""
 if [[ "$MODE" == "live" ]]; then
-  TRANSPORT_ENV="docker update --env-add VOICE_AI_TRANSPORT=openai_live ${CONTAINER} &&"
+  TRANSPORT_WRITE="echo openai_live > /app/.voice_ai_transport &&"
 elif [[ "$MODE" == "realtime" ]]; then
-  TRANSPORT_ENV="docker update --env-add VOICE_AI_TRANSPORT=openai_realtime ${CONTAINER} &&"
+  TRANSPORT_WRITE="echo openai_realtime > /app/.voice_ai_transport &&"
 fi
 
-ssh -o BatchMode=yes coolify-server "${TRANSPORT_ENV} docker cp /tmp/voice-bridge-patch.tgz ${CONTAINER}:/tmp/voice-bridge-patch.tgz && docker exec ${CONTAINER} sh -c 'cd /app && tar xzf /tmp/voice-bridge-patch.tgz' && docker restart ${CONTAINER}"
+ssh -o BatchMode=yes coolify-server "docker cp /tmp/voice-bridge-patch.tgz ${CONTAINER}:/tmp/voice-bridge-patch.tgz && docker exec ${CONTAINER} sh -c '${TRANSPORT_WRITE} cd /app && tar xzf /tmp/voice-bridge-patch.tgz' && docker restart ${CONTAINER}"
 
 echo "Waiting for container..."
 sleep 30
