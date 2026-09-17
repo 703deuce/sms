@@ -60,6 +60,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith("/api/twilio/")) return true;
   if (pathname.startsWith("/api/webhooks/twilio/")) return true;
   if (pathname.startsWith("/api/telnyx/")) return true;
+  if (pathname.startsWith("/api/openai/")) return true;
   if (pathname === "/api/health") return true;
   if (pathname === "/api/internal/voice-runtime") return true;
   // Covered by /api/telnyx/ prefix — dynamic-variables + voice tools included.
