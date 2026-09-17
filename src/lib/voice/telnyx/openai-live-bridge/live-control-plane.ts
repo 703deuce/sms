@@ -147,6 +147,12 @@ export function createLiveControlPlane(input: {
 
     async ensureHydrated() {
       await hydrateConfig();
+      const key = sessionKeyForClaims(input.claims);
+      const fromStore = key ? getVoiceV2CallContext(key) : null;
+      if (fromStore) {
+        cachedCtx = fromStore;
+        return cachedCtx;
+      }
       if (cachedCtx) return cachedCtx;
       const ctx = await ensureVoiceV2CallContext({
         workspaceId: input.claims.workspaceId,

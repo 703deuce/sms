@@ -116,6 +116,7 @@
     "test:dialog-goal-l1-persistence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-dialog-goal-l1-persistence.ts",
     "test:gpt-live-tool-wait-schedule": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-gpt-live-tool-wait-schedule.ts",
     "verify:voice-v2-caller-experience-law": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/verify-voice-v2-caller-experience-law.ts",
+    "test:voice-v2-orchestration": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v2-orchestration-e2e.ts",
     "watch:cfna-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/watch-cfna-probe.ts",
     "query:cfna-probe-db": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/query-cfna-probe-db.ts",
     "test:cfna-ingress-probe": "tsx scripts/test-cfna-ingress-probe.ts",

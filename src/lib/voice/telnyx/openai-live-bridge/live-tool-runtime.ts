@@ -54,6 +54,11 @@ import {
 import { loadMctbAiBookingConfig } from "@/lib/mctb/ai-booking/config";
 import { loadVoiceV2OfferSet } from "@/lib/voice-v2/offer-set-store";
 import type { RealtimeBridgeStreamClaims } from "../openai-realtime-bridge/stream-token";
+import {
+  getVoiceV2TestExecutorsForCall,
+  shouldUseInjectedVoiceV2Executors,
+  type VoiceV2TestExecutors,
+} from "@/lib/voice-v2/testing/executor-overrides";
 
 export type LiveToolDispatchContext = {
   workspaceId: string;
@@ -70,6 +75,8 @@ export type LiveToolDispatchContext = {
   _hydratePromise?: Promise<void>;
   controlPlane: LiveControlPlane;
   onBookingStateChanged?: () => void;
+  /** Orchestration harness / VOICE_V2_TEST_EXECUTORS=fake — optional executor injection per call. */
+  testExecutors?: VoiceV2TestExecutors;
 };
 
 export type LiveCallRuntimeContext = LiveToolDispatchContext;
@@ -173,7 +180,10 @@ export async function dispatchLiveVoiceTool(input: {
   const { toolName, args, openAiFunctionCallId, callContext: ctx } = input;
   await ensureLiveToolDispatchContextHydrated(ctx);
   await ctx.controlPlane.ensureHydrated();
-  const workflowGate = ctx.controlPlane.gateToolName(toolName);
+  const autoDispatch = Boolean(args.auto_dispatch);
+  const workflowGate = autoDispatch
+    ? { allowed: true as const }
+    : ctx.controlPlane.gateToolName(toolName);
   if (!workflowGate.allowed) {
     return {
       executor: "workflow_gate",
@@ -255,8 +265,14 @@ export async function dispatchLiveVoiceTool(input: {
       requested_date: merged.requested_date ?? merged.requestedDate,
     };
 
-    const result =
-      strategy === "MICROSOFT_365"
+    const injected =
+      ctx.testExecutors?.findAvailability ??
+      (shouldUseInjectedVoiceV2Executors(ctx.callId)
+        ? getVoiceV2TestExecutorsForCall(ctx.callId)?.findAvailability
+        : undefined);
+    const result = injected
+      ? await injected({ args: findBody, ctx })
+      : strategy === "MICROSOFT_365"
         ? await executeMicrosoft365CertifiedFindAvailability(findBody, ctx.workspaceId, {
             voiceCallId: ctx.callId,
           })
@@ -302,10 +318,17 @@ export async function dispatchLiveVoiceTool(input: {
         "BOOK_DISABLED",
       );
     }
-    const result = await executeVoiceV2BookOfferedSlot(body, ctx.workspaceId, {
-      agentId: ctx.agentId,
-      certifiedPipeline: strategy === "MICROSOFT_365",
-    });
+    const bookInjected =
+      ctx.testExecutors?.bookOfferedSlot ??
+      (shouldUseInjectedVoiceV2Executors(ctx.callId)
+        ? getVoiceV2TestExecutorsForCall(ctx.callId)?.bookOfferedSlot
+        : undefined);
+    const result = bookInjected
+      ? await bookInjected({ args: body, ctx })
+      : await executeVoiceV2BookOfferedSlot(body, ctx.workspaceId, {
+          agentId: ctx.agentId,
+          certifiedPipeline: strategy === "MICROSOFT_365",
+        });
     const formatted = compactToolResultForModel(toolName, result as Record<string, unknown>);
     const bookParsed = parseFindToolOutput(formatted);
     if (String(bookParsed.voice_v2_status || bookParsed.status) === "BOOKING_CONFIRMED") {
@@ -499,11 +522,13 @@ export function createLiveToolDispatchContext(input: {
 export function createLiveToolDispatchContextFromClaims(
   claims: RealtimeBridgeStreamClaims,
   config?: VoiceAgentConfig,
+  opts?: { controlPlane?: LiveControlPlane },
 ): LiveToolDispatchContext {
   let lastFindDate = "";
   let lastFindGeneration = 0;
   const capability = buildVoiceV2CallCapabilitySnapshot(config ?? {});
-  const controlPlane = createLiveControlPlane({ claims, initialConfig: config });
+  const controlPlane =
+    opts?.controlPlane ?? createLiveControlPlane({ claims, initialConfig: config });
   const ctx: LiveToolDispatchContext = {
     workspaceId: claims.workspaceId,
     agentId: claims.agentId,

@@ -151,7 +151,6 @@ export function createLiveDelegationHandler(input: {
       hydrated,
       isFirstDelegation,
     });
-    const resolvedDelegationId = delegationId ?? activeDelegationId;
     const contextItem = buildLiveDelegationDeveloperContextItem({
       developerText,
     });

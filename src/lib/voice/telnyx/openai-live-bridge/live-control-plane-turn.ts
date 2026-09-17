@@ -28,7 +28,9 @@ export async function runLiveControlPlaneTurn(
   input.controlPlane.logStageTransitionIfChanged();
 
   let dispatchedTool: string | undefined;
-  if (input.autoDispatch && input.dispatchContext && input.sendLiveOut) {
+  const requiredBeforeDispatch =
+    input.controlPlane.getWorkflowEnvelope().required_action ?? null;
+  if (input.autoDispatch && input.dispatchContext) {
     const first = await tryAutoDispatchRequiredAction({
       controlPlane: input.controlPlane,
       dispatchContext: input.dispatchContext,
@@ -49,11 +51,27 @@ export async function runLiveControlPlaneTurn(
   }
 
   if (dispatchedTool) {
-    await runLiveControlPlaneTurn({
-      ...input,
-      autoDispatch: true,
-      reason: `${input.reason}_after_${dispatchedTool}`,
-    });
+    const requiredAfter =
+      input.controlPlane.getWorkflowEnvelope().required_action ?? null;
+    const stageAfter = input.controlPlane.getStage();
+    const progressed =
+      requiredAfter !== requiredBeforeDispatch || requiredAfter !== dispatchedTool;
+    if (progressed) {
+      await runLiveControlPlaneTurn({
+        ...input,
+        autoDispatch: true,
+        reason: `${input.reason}_after_${dispatchedTool}`,
+      });
+    } else {
+      console.warn(
+        `LIVE_CONTROL_PLANE_TURN_STALLED ${JSON.stringify({
+          call_id: input.controlPlane.callId,
+          tool: dispatchedTool,
+          stage: stageAfter,
+          required_action: requiredAfter,
+        })}`,
+      );
+    }
     return;
   }
 

@@ -9,7 +9,11 @@ import {
   applyCallerIntentToCallContext,
   type ApplyCallerIntentResult,
 } from "./caller-intent-interpreter";
-import { mergeUtteranceIntakeFactsIntoContext } from "./intake/apply-intake-facts";
+import {
+  applyValidatedIntakeFieldsToContext,
+  mergeUtteranceIntakeFactsIntoContext,
+} from "./intake/apply-intake-facts";
+import { validateIntakeFieldPayload } from "./intake/validate-fields";
 import { mergeCallerFactsIntoCallContext } from "./merge-caller-facts";
 import { dialogFromContext } from "./dialog-goal";
 
@@ -99,9 +103,20 @@ export async function applyCallerMeaningToCallContext(
     turnId: opts?.turnId,
     meaningFacts: meaning.facts,
   });
+  let mergedCtx = slotMerge.ctx;
+  if (meaning.literal_intake_fields && Object.keys(meaning.literal_intake_fields).length > 0) {
+    const validation = validateIntakeFieldPayload(
+      mergedCtx.intakeSchema,
+      meaning.literal_intake_fields,
+    );
+    if (validation.ok || Object.keys(validation.normalized).length > 0) {
+      const intakeApplied = applyValidatedIntakeFieldsToContext(mergedCtx, validation.normalized);
+      mergedCtx = intakeApplied.ctx;
+    }
+  }
   return {
     ...applied,
-    ctx: slotMerge.ctx,
+    ctx: mergedCtx,
     schedulingChanged: applied.schedulingChanged || slotMerge.schedulingChanged,
   };
 }

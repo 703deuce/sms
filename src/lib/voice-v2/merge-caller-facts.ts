@@ -13,6 +13,7 @@ import type { VoiceV2CallContext } from "./intake/types";
 import {
   extractSchedulingFromCallerSpeech,
   mergeSchedulingPreferenceRecord,
+  normalizeDaypart,
   syncWorkflowRequestedDateFromScheduling,
   utteranceLooksLikeSchedulingCorrection,
   type VoiceV2SchedulingPreference,
@@ -74,10 +75,45 @@ export async function mergeCallerFactsIntoCallContext(
     entities: input.interpretation.entities,
   });
 
-  if (schedulingPatch && (schedulingPatch.requestedDate || schedulingPatch.requestedDaypart || schedulingPatch.requestedTime)) {
+  const meaningScheduling: Partial<VoiceV2SchedulingPreference> | null =
+    input.meaningFacts?.requested_date ||
+    input.meaningFacts?.requested_daypart ||
+    input.meaningFacts?.requested_time
+      ? {
+          ...(input.meaningFacts.requested_date
+            ? { requestedDate: input.meaningFacts.requested_date }
+            : {}),
+          ...(input.meaningFacts.requested_daypart
+            ? { requestedDaypart: normalizeDaypart(input.meaningFacts.requested_daypart) }
+            : {}),
+          ...(input.meaningFacts.requested_time
+            ? { requestedTime: input.meaningFacts.requested_time }
+            : {}),
+          source: "caller",
+          turnId: input.turnId,
+          updatedAt: new Date().toISOString(),
+          evidence: input.utterance.slice(0, 240),
+        }
+      : null;
+
+  const schedulingToApply =
+    meaningScheduling?.requestedDate ||
+    meaningScheduling?.requestedDaypart ||
+    meaningScheduling?.requestedTime
+      ? { ...(schedulingPatch ?? {}), ...meaningScheduling }
+      : schedulingPatch;
+
+  if (
+    schedulingToApply &&
+    (schedulingToApply.requestedDate ||
+      schedulingToApply.requestedDaypart ||
+      schedulingToApply.requestedTime)
+  ) {
     const prior = next.schedulingPreference;
-    const mergedPref = mergeSchedulingPreferenceRecord(prior, schedulingPatch, {
-      forceReplace: utteranceLooksLikeSchedulingCorrection(input.utterance),
+    const mergedPref = mergeSchedulingPreferenceRecord(prior, schedulingToApply, {
+      forceReplace:
+        utteranceLooksLikeSchedulingCorrection(input.utterance) ||
+        Boolean(input.meaningFacts?.requested_date),
     });
     const priorJson = JSON.stringify(prior ?? {});
     const nextJson = JSON.stringify(mergedPref);
