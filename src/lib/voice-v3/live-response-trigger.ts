@@ -11,6 +11,8 @@ export function requestLiveSpeakContinuation(input: {
   liveSessionId: string;
   reason: string;
   eventId?: string;
+  stateVersion?: number;
+  actionKey?: string;
   allowBeforeDelegation?: boolean;
 }): void {
   const sessionId = input.liveSessionId.trim();
@@ -20,6 +22,8 @@ export function requestLiveSpeakContinuation(input: {
   coordinator.requestResponseCreate({
     reason: input.reason,
     eventId: input.eventId,
+    stateVersion: input.stateVersion,
+    actionKey: input.actionKey,
     allowBeforeDelegation: input.allowBeforeDelegation,
   });
 }

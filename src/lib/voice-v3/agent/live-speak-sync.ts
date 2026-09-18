@@ -131,6 +131,8 @@ export function syncPlannerSpeakToLive(input: {
     liveSessionId: sessionId,
     reason: `planner_${action.type.toLowerCase()}`,
     eventId: `voice_v3_planner_speak_${sessionId}_${speakKey}`,
+    stateVersion: input.snapshot.stateVersion,
+    actionKey: speakKey,
   });
 }
 

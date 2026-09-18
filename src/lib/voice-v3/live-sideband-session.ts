@@ -203,6 +203,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
         trace.mark("caller.speech.ended");
       }
       if (voiceV3IntakePipelineEnabled()) {
+        getVoiceV3LiveResponseCoordinator(sessionId, send).markSessionClosed();
         clearDelegatedMeaningSessionState(sessionId);
         deleteVoiceV3CallRuntime(sessionId);
       }

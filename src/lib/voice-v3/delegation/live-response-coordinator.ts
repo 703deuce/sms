@@ -1,10 +1,29 @@
 import type { LiveSidebandSend } from "../greeting";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
+import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import type { DelegationRuntime, PendingFunctionCall } from "./types";
 
 type ContinuationRequest = {
   reason: string;
   eventId?: string;
+  stateVersion?: number;
+  actionKey?: string;
+};
+
+export type LiveSpeakRequestStatus =
+  | "QUEUED"
+  | "SENT"
+  | "SUPERSEDED"
+  | "CANCELLED"
+  | "FAILED";
+
+type LiveSpeakRequest = {
+  speakRequestId: string;
+  stateVersion?: number;
+  actionKey: string;
+  sessionEpoch: number;
+  status: LiveSpeakRequestStatus;
+  reason: string;
 };
 
 export class VoiceV3LiveResponseCoordinator {
@@ -15,6 +34,10 @@ export class VoiceV3LiveResponseCoordinator {
   private pendingByCallId = new Map<string, PendingFunctionCall>();
   private continuationQueue: ContinuationRequest[] = [];
   private continuationFlushScheduled = false;
+  private sessionEpoch = 1;
+  private sessionClosed = false;
+  private speakRequests = new Map<string, LiveSpeakRequest>();
+  private sentSpeakKeys = new Set<string>();
 
   constructor(liveSessionId: string, send: LiveSidebandSend) {
     this.liveSessionId = liveSessionId.trim();
@@ -44,6 +67,8 @@ export class VoiceV3LiveResponseCoordinator {
       live_session_id: this.liveSessionId,
       delegation_id: delegationId,
     });
+    noteSemanticTimingEvent(this.liveSessionId, "delegationCreatedAt");
+    noteSemanticTimingEvent(this.liveSessionId, "delegationCount");
   }
 
   registerPendingFunctionCall(call: PendingFunctionCall): boolean {
@@ -130,6 +155,7 @@ export class VoiceV3LiveResponseCoordinator {
         live_session_id: this.liveSessionId,
         delegation_id: id,
       });
+      noteSemanticTimingEvent(this.liveSessionId, "delegationCompletedAt");
       this.scheduleContinuationFlush();
       return;
     }
@@ -158,7 +184,11 @@ export class VoiceV3LiveResponseCoordinator {
     }
   }
 
-  submitFunctionCallOutput(callId: string, output: Record<string, unknown>): boolean {
+  submitFunctionCallOutput(
+    callId: string,
+    output: Record<string, unknown>,
+    options?: { skipScheduleContinuation?: boolean },
+  ): boolean {
     const row = this.pendingByCallId.get(callId);
     if (!row || row.outputSubmitted) {
       return false;
@@ -203,19 +233,46 @@ export class VoiceV3LiveResponseCoordinator {
       }
     }
 
-    this.scheduleContinuationFlush();
+    if (!options?.skipScheduleContinuation) {
+      this.scheduleContinuationFlush();
+    }
     return true;
   }
 
   requestResponseCreate(input: {
     reason: string;
     eventId?: string;
+    stateVersion?: number;
+    actionKey?: string;
     /** Initial greeting before any delegation exists */
     allowBeforeDelegation?: boolean;
   }): void {
+    if (this.sessionClosed) {
+      console.log("LIVE_RESPONSE_SUPERSEDED", {
+        live_session_id: this.liveSessionId,
+        reason: input.reason,
+        supersede_reason: "session_closed",
+      });
+      return;
+    }
+
+    const actionKey = input.actionKey ?? input.reason;
+    const speakRequestId = input.eventId ?? `speak_${this.liveSessionId}_${Date.now()}`;
+    const dedupeKey = `${input.stateVersion ?? "na"}:${actionKey}`;
+    if (this.sentSpeakKeys.has(dedupeKey)) {
+      console.log("LIVE_RESPONSE_SUPERSEDED", {
+        live_session_id: this.liveSessionId,
+        reason: input.reason,
+        supersede_reason: "duplicate_action_key",
+        action_key: actionKey,
+      });
+      return;
+    }
+
     const hasDelegation = this.delegations.size > 0 || this.activeDelegationId !== null;
     if (this.hasPendingFunctionOutputs() || this.hasOpenDelegationAwaitingTool()) {
-      this.enqueueContinuation(input);
+      this.registerSpeakRequest(speakRequestId, input, "QUEUED");
+      this.enqueueContinuation({ ...input, eventId: speakRequestId });
       logVoiceV3Pipeline("live_out", "response.create.queued", {
         live_session_id: this.liveSessionId,
         reason: input.reason,
@@ -228,7 +285,62 @@ export class VoiceV3LiveResponseCoordinator {
       // Still safe — no pending outputs
     }
 
-    this.flushContinuation(input);
+    this.registerSpeakRequest(speakRequestId, { ...input, eventId: speakRequestId }, "QUEUED");
+    this.flushContinuation({ ...input, eventId: speakRequestId });
+  }
+
+  markSessionClosed(): void {
+    this.sessionClosed = true;
+    this.continuationQueue = [];
+    for (const req of this.speakRequests.values()) {
+      if (req.status === "QUEUED") {
+        req.status = "CANCELLED";
+      }
+    }
+    console.log("LIVE_SPEAK_CANCELLED_SESSION_CLOSED", {
+      live_session_id: this.liveSessionId,
+      queued_cancelled: this.speakRequests.size,
+    });
+  }
+
+  supersedeStaleSpeaks(input: {
+    minStateVersion: number;
+    exceptActionKeys?: string[];
+  }): void {
+    const except = new Set(input.exceptActionKeys ?? []);
+    this.continuationQueue = this.continuationQueue.filter((req) => {
+      if (req.stateVersion == null) return true;
+      if (req.stateVersion >= input.minStateVersion) return true;
+      if (except.has(req.actionKey ?? req.reason)) return true;
+      console.log("LIVE_RESPONSE_SUPERSEDED", {
+        live_session_id: this.liveSessionId,
+        reason: req.reason,
+        supersede_reason: "stale_state_version",
+        state_version: req.stateVersion,
+      });
+      return false;
+    });
+    for (const req of this.speakRequests.values()) {
+      if (req.status !== "QUEUED") continue;
+      if (req.stateVersion == null || req.stateVersion >= input.minStateVersion) continue;
+      if (except.has(req.actionKey)) continue;
+      req.status = "SUPERSEDED";
+    }
+  }
+
+  private registerSpeakRequest(
+    speakRequestId: string,
+    input: ContinuationRequest,
+    status: LiveSpeakRequestStatus,
+  ): void {
+    this.speakRequests.set(speakRequestId, {
+      speakRequestId,
+      stateVersion: input.stateVersion,
+      actionKey: input.actionKey ?? input.reason,
+      sessionEpoch: this.sessionEpoch,
+      status,
+      reason: input.reason,
+    });
   }
 
   private pendingOutstandingCount(): number {
@@ -266,9 +378,37 @@ export class VoiceV3LiveResponseCoordinator {
   }
 
   private flushContinuation(input: ContinuationRequest): void {
+    if (this.sessionClosed) {
+      console.log("LIVE_RESPONSE_SUPERSEDED", {
+        live_session_id: this.liveSessionId,
+        reason: input.reason,
+        supersede_reason: "session_closed_flush",
+      });
+      return;
+    }
+
     const eventId =
       input.eventId ??
       `voice_v3_speak_${input.reason}_${this.liveSessionId}_${Date.now()}`;
+
+    const actionKey = input.actionKey ?? input.reason;
+    const dedupeKey = `${input.stateVersion ?? "na"}:${actionKey}`;
+    if (this.sentSpeakKeys.has(dedupeKey)) {
+      console.log("LIVE_RESPONSE_SUPERSEDED", {
+        live_session_id: this.liveSessionId,
+        reason: input.reason,
+        supersede_reason: "duplicate_action_key_flush",
+      });
+      return;
+    }
+    this.sentSpeakKeys.add(dedupeKey);
+
+    const row = this.speakRequests.get(eventId);
+    if (row) {
+      row.status = "SENT";
+    } else {
+      this.registerSpeakRequest(eventId, input, "SENT");
+    }
 
     logVoiceV3Pipeline("live_out", "response.create", {
       live_session_id: this.liveSessionId,
@@ -286,6 +426,9 @@ export class VoiceV3LiveResponseCoordinator {
       type: "response.create",
       event_id: eventId,
     });
+    noteSemanticTimingEvent(this.liveSessionId, "responseCreateSentAt");
+    noteSemanticTimingEvent(this.liveSessionId, "responseCreateCount");
+    noteSemanticTimingEvent(this.liveSessionId, "delegatedContinuationAt");
 
     if (this.activeDelegationId) {
       const d = this.delegations.get(this.activeDelegationId);
@@ -296,10 +439,14 @@ export class VoiceV3LiveResponseCoordinator {
   }
 
   clear(): void {
+    this.markSessionClosed();
     this.delegations.clear();
     this.pendingByCallId.clear();
     this.continuationQueue = [];
     this.activeDelegationId = null;
+    this.speakRequests.clear();
+    this.sentSpeakKeys.clear();
+    this.sessionEpoch += 1;
   }
 }
 

@@ -4,7 +4,12 @@ import {
   extractDelegatedAstraResponseId,
   markDelegatedAstraResponseProcessed,
 } from "./delegated-response-dedup";
-import { getCallerEvidenceForSemanticRetry } from "../conversation/caller-turn-manager";
+import {
+  getCallerEvidenceForSemanticRetry,
+  getLatestCommittedCallerTurn,
+} from "../conversation/caller-turn-manager";
+import { getCallerEvidenceCharCount } from "./caller-evidence";
+import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import { applyExtractedCallerMeaning } from "./apply-extracted-meaning";
 import type { CallerMeaning } from "./caller-meaning-schema";
 import { runDirectCallerMeaningExtraction } from "./direct-caller-meaning-extraction";
@@ -104,11 +109,21 @@ export async function attemptSemanticExtractionRetry(input: {
     });
     return { applied: false, attemptId: null };
   }
+  const originalTurnId = getLatestCommittedCallerTurn(input.liveSessionId)?.turnId ?? null;
+  const retryStartedAt = Date.now();
+  noteSemanticTimingEvent(input.liveSessionId, "semanticRetryCount", originalTurnId);
+
   console.log("SEMANTIC_EXTRACTION_RETRY_STARTED", {
     call_id: input.runtime.getSnapshot().callId,
     live_session_id: input.liveSessionId,
     attempt_id: attemptId,
     response_id: responseId,
+    original_turn_id: originalTurnId,
+    original_delegation_id: responseId,
+    reason: "decode_failed_with_caller_evidence",
+    caller_evidence_chars: getCallerEvidenceCharCount(input.liveSessionId),
+    retry_attempt: 1,
+    retry_started_at: retryStartedAt,
     caller_utterance_chars: callerUtterance.length,
     prior_arguments_bytes: input.priorArgumentsJson?.length ?? 0,
   });
@@ -139,6 +154,10 @@ export async function attemptSemanticExtractionRetry(input: {
       call_id: input.runtime.getSnapshot().callId,
       live_session_id: input.liveSessionId,
       attempt_id: attemptId,
+      original_turn_id: originalTurnId,
+      original_delegation_id: responseId,
+      retry_completed_at: Date.now(),
+      retry_duration_ms: Date.now() - retryStartedAt,
       reason: "empty_or_invalid_meaning",
     });
     return { applied: false, attemptId };
@@ -158,6 +177,10 @@ export async function attemptSemanticExtractionRetry(input: {
     call_id: input.runtime.getSnapshot().callId,
     live_session_id: input.liveSessionId,
     attempt_id: attemptId,
+    original_turn_id: originalTurnId,
+    original_delegation_id: responseId,
+    retry_completed_at: Date.now(),
+    retry_duration_ms: Date.now() - retryStartedAt,
     active_goal: meaning.active_goal,
     captured_field_keys: meaning.captured_fields.map((r) => r.key),
   });
