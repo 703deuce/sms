@@ -8,3 +8,5 @@
 Runtime entry: `src/lib/voice-v3-basic/` (webhooks, SIP, accept) + `src/lib/voice-v3/` (prompts, telemetry, call context, intake pipeline).
 
 **Intake:** `TEST_AGENT_CONFIG` + `VoiceV3CallRuntime` + Astra `voice_v3_caller_meaning` Structured Output. Tests: `npm run test:voice-v3-intake`.
+
+**Scheduling (no Graph yet):** authoritative IANA call clock → semantic `scheduling` in Structured Output → `normalizeSchedulingMeaning` → `NormalizedSchedulingPreference` + `toMicrosoftGraphScheduleWindow` adapter only. When `precision=UNRESOLVED`, `scheduling.clarification` + `scheduling_requires_clarification` in rules/thinking block calendar actions until Live asks the deterministic prompt. Tests: `npm run test:voice-v3-datetime`.

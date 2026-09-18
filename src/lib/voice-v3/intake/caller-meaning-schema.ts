@@ -9,6 +9,51 @@ const voiceV3GoalSchema = z.enum([
   "REQUEST_TRANSFER",
 ]);
 
+const schedulingDateRelationSchema = z.enum([
+  "TODAY",
+  "TOMORROW",
+  "DAY_AFTER_TOMORROW",
+  "THIS_WEEKDAY",
+  "NEXT_WEEKDAY",
+  "EXPLICIT_DATE",
+  "UNSPECIFIED",
+]);
+
+const schedulingWeekdaySchema = z.enum([
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY",
+]);
+
+const schedulingTimeKindSchema = z.enum([
+  "EXACT",
+  "AFTER",
+  "BEFORE",
+  "BETWEEN",
+  "DAYPART",
+  "ANYTIME",
+  "UNSPECIFIED",
+]);
+
+const schedulingDaypartSchema = z.enum(["MORNING", "AFTERNOON", "EVENING"]);
+
+export const schedulingMeaningZodObject = z.object({
+  date_expression: z.string().nullable(),
+  date_relation: schedulingDateRelationSchema,
+  weekday: schedulingWeekdaySchema.nullable(),
+  explicit_date: z.string().nullable(),
+  time_expression: z.string().nullable(),
+  time_kind: schedulingTimeKindSchema,
+  exact_time: z.string().nullable(),
+  start_time: z.string().nullable(),
+  end_time: z.string().nullable(),
+  daypart: schedulingDaypartSchema.nullable(),
+});
+
 export const CALLER_MEANING_STRUCTURED_OUTPUT_NAME = "voice_v3_caller_meaning";
 
 function intakeFieldKeySchema(config: VoiceV3AgentConfig) {
@@ -35,11 +80,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
         confidence: z.number(),
       }),
     ),
-    scheduling: z.object({
-      requested_date_expression: z.string().nullable(),
-      requested_time_expression: z.string().nullable(),
-      requested_daypart: z.string().nullable(),
-    }),
+    scheduling: schedulingMeaningZodObject,
     corrections: z.array(
       z.object({
         key: fieldKey,
@@ -57,6 +98,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
 }
 
 export type CallerMeaning = z.infer<ReturnType<typeof buildCallerMeaningZodSchema>>;
+export type SchedulingMeaningFromSchema = z.infer<typeof schedulingMeaningZodObject>;
 
 export function configuredIntakeKeySet(config: VoiceV3AgentConfig): Set<string> {
   return new Set(config.intakeFields.map((f) => f.key));

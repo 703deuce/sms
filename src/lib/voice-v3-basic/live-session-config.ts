@@ -1,5 +1,8 @@
 import type { SessionAcceptParams } from "openai/resources/live/sessions";
-import { buildVoiceV3AstraDelegationResponses } from "@/lib/voice-v3/intake/delegation-config";
+import {
+  assertLiveDelegationAcceptPayloadCompatible,
+  buildVoiceV3AstraDelegationResponses,
+} from "@/lib/voice-v3/intake/delegation-config";
 import {
   buildVoiceV3Prompts,
   resolveVoiceV3DefaultPromptInput,
@@ -29,6 +32,9 @@ export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParam
   logVoiceV3BasicConfigOnce();
   const prompts = buildVoiceV3Prompts(resolveVoiceV3DefaultPromptInput(at));
 
+  const responses = buildVoiceV3AstraDelegationResponses(prompts.astraInstructions);
+  assertLiveDelegationAcceptPayloadCompatible(responses);
+
   return {
     type: "live",
     model: VOICE_V3_BASIC_LIVE_MODEL,
@@ -40,7 +46,7 @@ export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParam
     },
     delegation: {
       type: "responses",
-      responses: buildVoiceV3AstraDelegationResponses(prompts.astraInstructions),
+      responses,
     },
   };
 }
