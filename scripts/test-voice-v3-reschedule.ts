@@ -100,7 +100,7 @@ async function main() {
       values: {
         name: { value: "Anthony", source: "caller", updatedAt: new Date().toISOString() },
         email: { value: "a@b.co", source: "caller", updatedAt: new Date().toISOString() },
-        mothers_name: { value: "x", source: "caller", updatedAt: new Date().toISOString() },
+        phone: { value: "+15551234567", source: "caller", updatedAt: new Date().toISOString() },
       },
     },
     appointmentManagement: {
