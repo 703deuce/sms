@@ -77,6 +77,8 @@ export async function applyExtractedCallerMeaning(input: {
     captured_field_keys: revalidate.meaning.captured_fields.map((r) => r.key),
   });
 
+  registerVoiceV3LiveSend(sessionId, input.send);
+
   const startedAt = Date.now();
   const beforeSelected = runtime.getSnapshot().selection.selected;
   runtime.applyEvent({
@@ -105,8 +107,6 @@ export async function applyExtractedCallerMeaning(input: {
     transport: input.transport,
     source: input.source ?? "delegation",
   });
-
-  registerVoiceV3LiveSend(sessionId, input.send);
 
   const latestTurn = getLatestCommittedCallerTurn(sessionId);
   if (latestTurn) {
@@ -171,6 +171,7 @@ export async function applyExtractedCallerMeaning(input: {
     liveSessionId: sessionId,
     hooks: liveHooks,
     speakReason: "workflow_recovery",
+    skipLiveSpeak: (input.source ?? "delegation") === "delegation",
   });
 
   if (turnIdForTiming) {

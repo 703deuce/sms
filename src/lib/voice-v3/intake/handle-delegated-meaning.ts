@@ -32,6 +32,7 @@ import {
 import { classifySemanticDecodeFailure } from "./semantic-disposition";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import {
+  cancelDirectSemanticDefer,
   drainQueuedSemanticTurns,
   markSemanticInterpretationEnded,
   markSemanticInterpretationStarted,
@@ -179,23 +180,20 @@ async function completeEmitCallerMeaningFunctionCall(input: {
       state_version: snap.runtime.version,
     });
 
-    try {
-      await applyExtractedCallerMeaning({
-        runtime: input.runtime,
-        liveSessionId: sessionId,
-        meaning,
-        transport: "function_tool",
-        send: input.send,
-        source: "delegation",
-      });
-    } catch (err) {
+    cancelDirectSemanticDefer(sessionId);
+    void applyExtractedCallerMeaning({
+      runtime: input.runtime,
+      liveSessionId: sessionId,
+      meaning,
+      transport: "function_tool",
+      send: input.send,
+      source: "delegation",
+    }).catch((err) => {
       console.error("VOICE_V3_POST_MEANING_PIPELINE_ERROR", {
         live_session_id: sessionId,
         err,
       });
-    } finally {
-      markSemanticInterpretationEnded(sessionId);
-    }
+    });
     return;
   }
 
@@ -219,23 +217,29 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     reason: decoded.reason,
   });
 
-  const retry = await attemptSemanticExtractionRetry({
+  markSemanticInterpretationEnded(sessionId);
+  void attemptSemanticExtractionRetry({
     liveSessionId: sessionId,
     nested: input.nested,
     priorArgumentsJson: completed.argumentsJson || null,
     runtime: input.runtime,
     send: input.send,
-  });
-  if (retry.applied) {
-    return;
-  }
-
-  await handleSemanticExtractionFailure({
-    runtime: input.runtime,
-    liveSessionId: sessionId,
-    send: input.send,
-    deferRecoverySpeak: false,
-  });
+  })
+    .then((retry) => {
+      if (retry.applied) return;
+      return handleSemanticExtractionFailure({
+        runtime: input.runtime,
+        liveSessionId: sessionId,
+        send: input.send,
+        deferRecoverySpeak: false,
+      });
+    })
+    .catch((err) => {
+      console.error("VOICE_V3_SEMANTIC_RETRY_PIPELINE_ERROR", {
+        live_session_id: sessionId,
+        err,
+      });
+    });
 }
 
 export function handleDelegatedAstraResponseEvent(input: {

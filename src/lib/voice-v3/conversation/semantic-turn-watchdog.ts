@@ -12,6 +12,7 @@ import {
   markCallerTurnSemanticRunning,
 } from "./caller-turn-manager";
 import { getVoiceV3LiveSend } from "../state/call-runtime";
+import { resolveVoiceV3IntakeTransport } from "../intake/intake-transport";
 
 const STALL_COMMITTED_TURN_THRESHOLD = 2;
 const DIRECT_SEMANTIC_DEFER_MS = 1_200;
@@ -29,6 +30,14 @@ export function markSemanticInterpretationStarted(liveSessionId: string): void {
 
 export function markSemanticInterpretationEnded(liveSessionId: string): void {
   semanticInFlight.delete(liveSessionId.trim());
+}
+
+/** Cancel the insurance direct-extraction timer (e.g. when Live delegation succeeded). */
+export function cancelDirectSemanticDefer(liveSessionId: string): void {
+  const id = liveSessionId.trim();
+  const t = directTimers.get(id);
+  if (t) clearTimeout(t);
+  directTimers.delete(id);
 }
 
 export function onCallerTurnCommitted(input: {
@@ -66,6 +75,15 @@ export function onCallerTurnCommitted(input: {
       committed_turns_since_apply: stalled,
       turn_sequence: input.turn.sequence,
     });
+  }
+
+  if (resolveVoiceV3IntakeTransport() === "function_tool") {
+    console.log("SEMANTIC_DIRECT_DEFER_SKIPPED", {
+      live_session_id: sessionId,
+      turn_id: input.turn.turnId,
+      reason: "function_tool_delegation_primary",
+    });
+    return;
   }
 
   const existing = directTimers.get(sessionId);
@@ -193,9 +211,23 @@ export function drainQueuedSemanticTurns(input: {
   liveSessionId: string;
   send: (event: { type: string; [key: string]: unknown }) => void;
 }): void {
-  const runtime = getVoiceV3CallRuntime(input.liveSessionId);
+  if (resolveVoiceV3IntakeTransport() === "function_tool") {
+    return;
+  }
+
+  const sessionId = input.liveSessionId.trim();
+  const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
+  if (
+    coordinator.hasPendingFunctionOutputs() ||
+    coordinator.hasOpenDelegationAwaitingTool() ||
+    isSemanticInterpretationInFlight(sessionId)
+  ) {
+    return;
+  }
+
+  const runtime = getVoiceV3CallRuntime(sessionId);
   if (!runtime) return;
-  const turn = getLatestCommittedCallerTurn(input.liveSessionId);
+  const turn = getLatestCommittedCallerTurn(sessionId);
   if (!turn || turn.status !== "COMMITTED") return;
   void runDirectSemanticForTurn({
     liveSessionId: input.liveSessionId,

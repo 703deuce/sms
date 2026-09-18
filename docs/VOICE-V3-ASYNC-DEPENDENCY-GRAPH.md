@@ -61,15 +61,43 @@
 - `isStaleSchedulingPreference` on result apply → `AVAILABILITY_RESULT_STALE` / operation `STALE`.
 - New generation may dispatch new FIND without waiting for prior Graph response.
 
+## Critical path: `CALLER_TURN_COMMITTED` → `agent_audio_started`
+
+Classifications: **REQUIRED_PROTOCOL** | **REQUIRED_DATA** | **REQUIRED_MUTATION** | **UNNECESSARY_SERIALIZATION**
+
+| Step | Location | Waits on | Class | Notes |
+|------|----------|----------|-------|-------|
+| Transcript quiet commit | `caller-turn-manager.ts` `COMMIT_QUIET_MS` | 750ms since last delta | REQUIRED_DATA | App turn boundary; **not tuned in async pass** |
+| Turn committed hook | `semantic-turn-watchdog.ts` `onCallerTurnCommitted` | — | — | `function_tool`: **no** 1.2s direct defer (insurance only for `output_text`) |
+| Direct semantic insurance | `semantic-turn-watchdog.ts` `DIRECT_SEMANTIC_DEFER_MS` | 1200ms timer | UNNECESSARY_SERIALIZATION (primary) | Disabled when `VOICE_V3_INTAKE_TRANSPORT=function_tool` |
+| Delegation drain | `semantic-turn-watchdog.ts` `drainQueuedSemanticTurns` | `response.completed` | UNNECESSARY_SERIALIZATION (primary) | No-op on `function_tool`; gated on pending tool outputs / in-flight semantic |
+| Live delegation stream | `handle-delegated-meaning.ts` | nested Astra events | REQUIRED_PROTOCOL | Wait for `response.output_item.done` + tool args |
+| Tool output | `live-response-coordinator.ts` `submitFunctionCallOutput` | — | REQUIRED_PROTOCOL | `response.item.create` before continuation |
+| Continuation flush | `live-response-coordinator.ts` `scheduleContinuationFlush` | microtask; pending outputs cleared | REQUIRED_PROTOCOL | `response.create` after outputs |
+| Runtime meaning apply | `apply-extracted-meaning.ts` | validate + `applyEvent` | REQUIRED_MUTATION | **Not awaited** from delegation handler (background) |
+| Live send registration | `apply-extracted-meaning.ts` | — | REQUIRED_DATA | Register **before** `applyEvent` so `replan` can sync snapshot/speak |
+| Planner + snapshot | `after-state-change.ts` | `planAgentState` | REQUIRED_DATA | `queueMicrotask` → `session.thinking.append` + `syncPlannerSpeakToLive` |
+| FIND | `find-dispatch.ts` | Microsoft Graph | EXECUTION_LANE | Background via `enqueueFindAvailabilityIfRequired` |
+| BOOK | `book-dispatch.ts` | revalidate + Graph create | REQUIRED_MUTATION | Fire-and-forget dispatch; gates inside BOOK unchanged |
+| Recovery speak after meaning | `apply-extracted-meaning.ts` `pushVoiceV3RecoveryToLive` | — | UNNECESSARY_SERIALIZATION (happy path) | `skipLiveSpeak: true` for `source: delegation`; context append only |
+| Semantic retry | `semantic-extraction-retry.ts` | retry runner | RETRY only | Failure path; not awaited from delegation handler |
+| Agent audio | Live model + coordinator | prior barriers | REQUIRED_PROTOCOL | Measured as `responseCreateRequestedAt` → `agent_audio_started` |
+
+### Primary-path defect fixed (production `semantic_retry` / `delegation_drained`)
+
+1. **`response.completed` → `delegation_drained`** re-ran direct extraction while Live `function_tool` delegation was the authoritative path → second semantic cycle (`semantic_retry` source).
+2. **`onCallerTurnCommitted` → 1.2s direct defer** stacked on every turn even when delegation was already in flight.
+3. **`await applyExtractedCallerMeaning`** in the delegation completion microtask extended the handler lifetime (recovery speak duplicated planner `response.create`).
+
 ## Per-await audit (caller-turn hot path)
 
 | File | Function | Await | Classification | Notes |
 |------|----------|-------|----------------|-------|
-| `handle-delegated-meaning.ts` | `completeEmitCallerMeaningFunctionCall` | `applyExtractedCallerMeaning` | DATA_DEPENDENCY | Must finish meaning apply before tool output reflects result |
+| `handle-delegated-meaning.ts` | `completeEmitCallerMeaningFunctionCall` | `applyExtractedCallerMeaning` | ~~UNNECESSARY~~ **void** | Output submitted first; apply on background lane |
 | `apply-extracted-meaning.ts` | `applyExtractedCallerMeaning` | — | — | **No longer awaits FIND** |
 | `find-dispatch.ts` | `completeFindAvailabilityAfterDispatch` | Graph / `fetchBusy` | EXECUTION_LANE | Runs in background unless `awaitCompletion: true` (tests) |
 | `book-dispatch.ts` | `dispatchBookingIfRequired` | Revalidate + create | MUTATION_BARRIER | Enqueued async; internal serialization preserved |
-| `live-response-coordinator.ts` | `submitFunctionCallOutput` | — | PROTOCOL_BARRIER | Then `scheduleContinuationFlush` → `response.create` when queue allows |
+| `live-response-coordinator.ts` | `submitFunctionCallOutput` | — | REQUIRED_PROTOCOL | Then `scheduleContinuationFlush` → `response.create` when queue allows |
 | `semantic-extraction-retry.ts` | retry runner | Astra/direct | RETRY path only | `turn_path: RETRY` |
 
 ## Performance acceptance (post-architecture)
