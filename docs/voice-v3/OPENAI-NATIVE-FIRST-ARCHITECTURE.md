@@ -34,7 +34,7 @@ Do not guess.
 | Silent backend / planner context | `session.thinking.append` | Sideband `send`; see `live.d.ts` `ThinkingAppendEvent` |
 | Caller-communicable progress | `session.commentary.append` | `src/lib/voice-v3/greeting.ts` (greeting); V2 reference: `live-tool-wait-commentary.ts` |
 | Update backend while call is active | `session.update` — **delegation settings only**; type cannot change | `SessionUpdateConfig` in `live.d.ts` |
-| Structured semantic extraction | **Astra Structured Outputs** (`json_schema` on Responses) | Milestone: parse typed JSON → merge into `VoiceV3CallContext` (not a loose transcript parser) |
+| Structured semantic extraction | **Astra Structured Outputs** (`json_schema` on Responses) | `intake/delegation-config.ts` + sideband merge → `VoiceV3CallContext` |
 | Mid-turn steering | Live / delegated Responses steering (per current API) | Prefer API over custom turn detectors |
 
 ### SDK anchors (verified in-repo)
@@ -113,6 +113,13 @@ No giant state machine replacing Live/Astra conversation. Rules **gate** tools a
 - `src/lib/voice-v3/call-context/` — authoritative per-call types + merge
 - `src/lib/voice-v3/intake/` — Structured Output schema + merge (semantic → state)
 
+## Intake pipeline (implemented)
+
+- Accept: `buildVoiceV3AstraDelegationResponses` attaches `zodTextFormat` for `voice_v3_intake_extraction`.
+- Webhook: `bootstrapVoiceV3CallContextForLiveSession` before `sessions.accept` (disable with `VOICE_V3_INTAKE_ENABLED=0`).
+- Sideband: on delegated `response.event`, parse structured JSON → `applyDelegatedIntakeExtraction` → `session.thinking.append` snapshot.
+- Tests: `npm run test:voice-v3-intake-pipeline`, `npm run test:voice-v3-call-context`.
+
 ## Next milestone
 
-**Dynamic intake / state:** wire Astra Structured Outputs for field updates; merge into `VoiceV3CallContext`; feed silent context via `session.thinking.append`; expose readiness to tool gates only — not a new conversational stack.
+**Booking tools:** gate `find_availability` / `book` on `getVoiceV3IntakeReadiness` + stale guards; executors own Microsoft/Calendly truth — still no homemade conversation stack.

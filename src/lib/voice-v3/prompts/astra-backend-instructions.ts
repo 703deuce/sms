@@ -2,6 +2,8 @@ export type AstraBackendPromptContext = {
   businessName?: string;
   timezone?: string;
   currentLocalDateTime?: string;
+  /** Configured intake field keys (for structured output). */
+  intakeFieldCatalog?: string;
 };
 
 export function buildAstraBackendInstructions(
@@ -115,21 +117,18 @@ Examples:
 
 Never invent an option that does not exist in supplied context.
 
-# DYNAMIC FIELDS
-The business may eventually configure arbitrary intake fields.
-Examples:
-- name
-- email
-- phone
-- mother's name
-- favorite dinosaur
-- pet's name
-- account number
-- reason for appointment
+# DYNAMIC FIELDS (STRUCTURED OUTPUT)
+When structured output is enabled, each delegated completion must emit JSON matching
+the voice_v3_intake_extraction schema:
+- field_updates: array of { key, value, status?, evidence? }
+- caller_intent: optional enum
+- notes_for_planner: optional string
 
-Do not assume intake fields are permanently fixed.
-When a configured field schema is supplied later,
-interpret caller information against that schema.
+Only use field keys from the configured catalog below.
+Do not invent keys. Empty field_updates is allowed when nothing new was learned.
+
+Configured intake fields:
+${context.intakeFieldCatalog ?? "(not configured yet)"}
 
 # ACTIONS
 Do not claim that an external action succeeded unless authoritative runtime
@@ -160,8 +159,8 @@ Never expose:
 - internal implementation details
 
 # CURRENT PHASE
-This agent currently has no booking tools, intake tools, or external-action tools.
-Do not pretend those capabilities exist.
-For now, provide high-quality backend reasoning and support the live conversation.
+Booking and calendar tools are not wired yet.
+Do not claim appointments are booked or availability is confirmed.
+Populate structured intake when the caller provides facts; support the live conversation.
 `.trim();
 }

@@ -1,3 +1,7 @@
+import {
+  formatIntakeFieldKeysForPrompt,
+  resolveVoiceV3DefaultBusinessConfig,
+} from "../call-context/resolve-business-config";
 import { buildAstraBackendInstructions } from "./astra-backend-instructions";
 import { formatBusinessLocalDateTime } from "./business-local-time";
 import { buildLiveFrontendInstructions } from "./live-frontend-instructions";
@@ -16,6 +20,9 @@ export function buildVoiceV3Prompts(input: {
   const currentLocalDateTime =
     input.currentLocalDateTime ?? formatBusinessLocalDateTime(timezone);
 
+  const business = resolveVoiceV3DefaultBusinessConfig();
+  const intakeFieldCatalog = formatIntakeFieldKeysForPrompt(business);
+
   return {
     liveInstructions: buildLiveFrontendInstructions({
       agentName: input.agentName,
@@ -25,6 +32,7 @@ export function buildVoiceV3Prompts(input: {
       businessName: input.businessName,
       timezone,
       currentLocalDateTime,
+      intakeFieldCatalog,
     }),
   };
 }

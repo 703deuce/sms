@@ -6,6 +6,8 @@ import {
   VOICE_V3_BASIC_BACKEND_MODEL,
   VOICE_V3_BASIC_LIVE_MODEL,
 } from "./live-session-config";
+import { bootstrapVoiceV3CallContextForLiveSession } from "@/lib/voice-v3/call-context/bootstrap";
+import { voiceV3IntakePipelineEnabled } from "@/lib/voice-v3/call-context/resolve-business-config";
 import { attachVoiceV3LiveSideband } from "@/lib/voice-v3/live-sideband-session";
 import { consumeRecentPstnLeg, VoiceV3CallTrace } from "@/lib/voice-v3/telemetry/call-trace";
 
@@ -145,6 +147,13 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   trace.mark("webhook.verify.completed");
 
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
+
+  if (voiceV3IntakePipelineEnabled()) {
+    bootstrapVoiceV3CallContextForLiveSession({
+      liveSessionId: sessionId,
+      callId: event.data?.call_id,
+    });
+  }
 
   trace.mark("session.accept.request.started");
   await client.live.sessions.accept(sessionId, buildBasicLiveSessionAcceptParams());

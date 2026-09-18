@@ -9,6 +9,12 @@ import {
   logGreetingAudioStarted,
   requestInitialLiveGreeting,
 } from "./greeting";
+import { deleteVoiceV3CallContext } from "./call-context/session-store";
+import { voiceV3IntakePipelineEnabled } from "./call-context/resolve-business-config";
+import {
+  applyDelegatedIntakeExtraction,
+} from "./intake/apply-delegated-extraction";
+import { extractIntakeFromAstraResponseEvent } from "./intake/delegated-response";
 import { VoiceV3CallTrace } from "./telemetry/call-trace";
 
 /**
@@ -68,12 +74,26 @@ async function attachVoiceV3LiveSidebandInner(input: {
     }
 
     if (type === "response.event") {
-      const nested = serverEvent.event as { type?: string } | undefined;
-      trace.onAstraResponseEvent(nested?.type);
+      const nested = serverEvent.event as Record<string, unknown> | undefined;
+      const nestedType = typeof nested?.type === "string" ? nested.type : undefined;
+      trace.onAstraResponseEvent(nestedType);
       console.log("VOICE_V3_BASIC_ASTRA_RESPONSE_EVENT", {
         sessionId,
-        nestedType: nested?.type,
+        nestedType,
       });
+
+      if (voiceV3IntakePipelineEnabled() && nested) {
+        const extraction = extractIntakeFromAstraResponseEvent(nested);
+        if (extraction) {
+          const result = applyDelegatedIntakeExtraction({
+            liveSessionId: sessionId,
+            extraction,
+          });
+          if (result.applied) {
+            send(result.thinkingCommand);
+          }
+        }
+      }
     }
 
     if (type === "session.output_audio.delta") {
@@ -105,6 +125,9 @@ async function attachVoiceV3LiveSidebandInner(input: {
     if (type === "session.closed") {
       if (callerSpeechActive) {
         trace.mark("caller.speech.ended");
+      }
+      if (voiceV3IntakePipelineEnabled()) {
+        deleteVoiceV3CallContext(sessionId);
       }
       trace.finalize("session.closed");
       sideband.close();

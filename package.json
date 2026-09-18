@@ -115,6 +115,7 @@
     "test:voice-v3-telemetry": "tsx scripts/test-voice-v3-call-trace.ts",
     "test:voice-v3-prompts": "tsx scripts/test-voice-v3-prompts.ts",
     "test:voice-v3-call-context": "tsx scripts/test-voice-v3-call-context.ts",
+    "test:voice-v3-intake-pipeline": "tsx scripts/test-voice-v3-intake-pipeline.ts",
     "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "test:gpt-live-booking-intent-precedence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-booking-intent-precedence.ts",
     "test:dialog-goal-l1-persistence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-dialog-goal-l1-persistence.ts",
