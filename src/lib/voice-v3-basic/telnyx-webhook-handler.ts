@@ -1,3 +1,4 @@
+import { noteTelnyxPstnReceived } from "@/lib/voice-v3/telemetry/call-trace";
 import { forwardInboundCallToOpenAiLiveSip } from "./telnyx-sip-forward";
 
 const transferredCallIds = new Set<string>();
@@ -21,6 +22,8 @@ export async function handleVoiceV3BasicTelnyxWebhook(input: {
     }
     transferredCallIds.add(callControlId);
     if (transferredCallIds.size > 5000) transferredCallIds.clear();
+
+    noteTelnyxPstnReceived(callControlId);
 
     console.log("VOICE_V3_BASIC_CALL_INITIATED", {
       callControlId,

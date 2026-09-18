@@ -112,6 +112,7 @@
     "test:openai-live-probe": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/probe-openai-live.ts",
     "test:openai-live-smoke": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/smoke-openai-live-bridge.ts",
     "test:voice-v3-basic-webhook": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-basic-webhook.ts",
+    "test:voice-v3-telemetry": "tsx scripts/test-voice-v3-call-trace.ts",
     "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "test:gpt-live-booking-intent-precedence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-booking-intent-precedence.ts",
     "test:dialog-goal-l1-persistence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-dialog-goal-l1-persistence.ts",

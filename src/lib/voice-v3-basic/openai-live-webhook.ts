@@ -3,7 +3,11 @@ import { getVoiceV3BasicOpenAiClient } from "./openai-client";
 import {
   buildBasicLiveSessionAcceptParams,
   logVoiceV3BasicConfigOnce,
+  VOICE_V3_BASIC_BACKEND_MODEL,
+  VOICE_V3_BASIC_LIVE_MODEL,
 } from "./live-session-config";
+import { attachVoiceV3LiveSideband } from "@/lib/voice-v3/live-sideband-session";
+import { consumeRecentPstnLeg, VoiceV3CallTrace } from "@/lib/voice-v3/telemetry/call-trace";
 
 const DEDUP_TTL_MS = 15 * 60 * 1000;
 const recentWebhookIds = new Map<string, number>();
@@ -91,35 +95,6 @@ export async function unwrapOpenAiWebhook(
   return event as UnknownEvent;
 }
 
-async function attachSidebandObserver(sessionId: string): Promise<void> {
-  if (process.env.VOICE_V3_BASIC_SIDEBAND_OBSERVER === "0") return;
-  try {
-    const { SidebandWS } = await import("openai/resources/live/sideband/ws");
-    const client = getVoiceV3BasicOpenAiClient();
-    const sideband = new SidebandWS(client, { session_id: sessionId });
-    sideband.on("event", (serverEvent: { type?: string; delegation?: unknown; event?: unknown }) => {
-      const type = serverEvent?.type;
-      if (type === "session.delegation.created") {
-        console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
-      } else if (type === "response.event") {
-        const nested = serverEvent.event as { type?: string } | undefined;
-        console.log("VOICE_V3_BASIC_ASTRA_RESPONSE_EVENT", {
-          sessionId,
-          nestedType: nested?.type,
-        });
-      } else if (type === "session.closed") {
-        console.log("VOICE_V3_BASIC_SESSION_CLOSED", { sessionId });
-        sideband.close();
-      }
-    });
-    sideband.on("error", (err: unknown) => {
-      console.error("VOICE_V3_BASIC_SIDEBAND_ERROR", { sessionId, err });
-    });
-  } catch (err) {
-    console.error("VOICE_V3_BASIC_SIDEBAND_ATTACH_FAILED", { sessionId, err });
-  }
-}
-
 export async function handleOpenAiLiveIncomingWebhook(input: {
   rawBody: string;
   headers: Headers;
@@ -156,17 +131,32 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
     return { handled: true, accepted: false, reason: "missing_session_id" };
   }
 
+  const trace = VoiceV3CallTrace.getOrCreate({
+    liveSessionId: sessionId,
+    callId: event.data?.call_id,
+    frontendModel: VOICE_V3_BASIC_LIVE_MODEL,
+    backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
+  });
+  const pstnLeg = consumeRecentPstnLeg();
+  if (pstnLeg) {
+    trace.markAt("pstn.call.received", pstnLeg.atMs, { callControlId: pstnLeg.callControlId });
+  }
+  trace.mark("live.transport.incoming", { webhookType: event.type, webhookId: event.id });
+  trace.mark("webhook.verify.completed");
+
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
 
+  trace.mark("session.accept.request.started");
   await client.live.sessions.accept(sessionId, buildBasicLiveSessionAcceptParams());
+  trace.mark("session.accept.completed", { liveSessionId: sessionId });
 
   console.log("OPENAI_LIVE_CALL_ACCEPTED", {
     sessionId,
-    liveModel: "gpt-live-1",
-    backendModel: "gpt-6-astra",
+    liveModel: VOICE_V3_BASIC_LIVE_MODEL,
+    backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
   });
 
-  void attachSidebandObserver(sessionId);
+  void attachVoiceV3LiveSideband({ sessionId, callId: event.data?.call_id, client });
 
   return { handled: true, sessionId, accepted: true };
 }
