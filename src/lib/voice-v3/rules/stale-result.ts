@@ -1,38 +1,9 @@
-import type { VoiceV3CallContext } from "../call-context/types";
+import type { VoiceV3CallContext } from "../state/call-context";
 
-/** Drop async tool / search results that belong to a superseded generation. */
-export function isStaleToolResult(
+/** Drop availability/scheduling interpretations from a superseded search generation. */
+export function isStaleSchedulingPreference(
   ctx: VoiceV3CallContext,
-  resultToolGeneration: number,
+  resultSchedulingGeneration: number,
 ): boolean {
-  return resultToolGeneration < ctx.generations.tool;
-}
-
-export function isStaleAvailabilityResult(
-  ctx: VoiceV3CallContext,
-  resultSearchGeneration: number,
-): boolean {
-  return resultSearchGeneration < ctx.generations.availabilitySearch;
-}
-
-export function bumpToolGeneration(ctx: VoiceV3CallContext): VoiceV3CallContext {
-  return {
-    ...ctx,
-    generations: {
-      ...ctx.generations,
-      tool: ctx.generations.tool + 1,
-    },
-  };
-}
-
-export function bumpAvailabilitySearchGeneration(ctx: VoiceV3CallContext): VoiceV3CallContext {
-  return {
-    ...ctx,
-    generations: {
-      ...ctx.generations,
-      availabilitySearch: ctx.generations.availabilitySearch + 1,
-    },
-    currentOfferSet: undefined,
-    selectedSlotId: undefined,
-  };
+  return resultSchedulingGeneration < ctx.scheduling.generation;
 }

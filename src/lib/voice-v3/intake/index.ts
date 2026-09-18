@@ -1,14 +1,25 @@
-export { applyDelegatedIntakeExtraction, type ApplyDelegatedIntakeResult } from "./apply-delegated-extraction";
-export { buildVoiceV3AstraDelegationResponses } from "./delegation-config";
-export { extractIntakeFromAstraResponseEvent } from "./delegated-response";
+export { applyCallerMeaningToContext, type ApplyCallerMeaningResult } from "./apply-caller-meaning";
 export {
-  parseVoiceV3IntakeExtraction,
-  voiceV3IntakeExtractionSchema,
-  type VoiceV3IntakeExtraction,
-} from "./extraction-schema";
-export { mergeIntakeExtractionIntoCallContext, type MergeIntakeExtractionResult } from "./merge-extraction";
-export { getVoiceV3IntakeReadiness, type VoiceV3IntakeReadiness } from "./readiness";
+  buildCallerInterpretationContext,
+  formatCallerInterpretationContextJson,
+  type CallerInterpretationContext,
+} from "./caller-meaning";
 export {
-  buildSessionThinkingAppendCommand,
-  buildVoiceV3IntakeThinkingSnapshot,
-} from "./thinking-snapshot";
+  CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
+  callerMeaningZodSchema,
+  parseCallerMeaning,
+  safeParseCallerMeaning,
+  type CallerMeaning,
+} from "./caller-meaning-schema";
+export {
+  buildVoiceV3AstraDelegationResponses,
+  voiceV3CallerMeaningTextFormat,
+} from "./delegation-config";
+export {
+  clearDelegatedMeaningSessionState,
+  handleDelegatedAstraResponseEvent,
+} from "./handle-delegated-meaning";
+export {
+  extractCallerMeaningFromAstraResponseEvent,
+  parseCallerMeaningFromOutputText,
+} from "./parse-astra-meaning-response";

@@ -1,4 +1,4 @@
-import { parseVoiceV3IntakeExtraction, type VoiceV3IntakeExtraction } from "./extraction-schema";
+import { parseCallerMeaning, safeParseCallerMeaning, type CallerMeaning } from "./caller-meaning-schema";
 
 function collectOutputTextFromResponse(response: Record<string, unknown>): string {
   const direct = response.output_text;
@@ -25,13 +25,26 @@ function collectOutputTextFromResponse(response: Record<string, unknown>): strin
   return parts.join("").trim();
 }
 
+function meaningHasSignal(meaning: CallerMeaning): boolean {
+  return (
+    meaning.captured_fields.length > 0 ||
+    meaning.corrections.length > 0 ||
+    meaning.active_goal !== "UNKNOWN" ||
+    Boolean(
+      meaning.scheduling.requested_date_expression ||
+        meaning.scheduling.requested_time_expression ||
+        meaning.scheduling.requested_daypart,
+    ) ||
+    meaning.ambiguities.length > 0
+  );
+}
+
 /**
- * Parse structured intake JSON from nested Live `response.event` payloads.
- * Returns null when the event is not a completed structured extraction.
+ * Parse strict CallerMeaning from nested Live `response.event` (delegated Astra).
  */
-export function extractIntakeFromAstraResponseEvent(
+export function extractCallerMeaningFromAstraResponseEvent(
   nestedEvent: Record<string, unknown> | undefined,
-): VoiceV3IntakeExtraction | null {
+): CallerMeaning | null {
   if (!nestedEvent) return null;
   const type = String(nestedEvent.type || "");
 
@@ -49,15 +62,21 @@ export function extractIntakeFromAstraResponseEvent(
 
   try {
     const raw = JSON.parse(text) as unknown;
-    const parsed = parseVoiceV3IntakeExtraction(raw);
-    if (
-      !parsed.field_updates.length &&
-      parsed.caller_intent == null &&
-      parsed.notes_for_planner == null
-    ) {
-      return null;
-    }
-    return parsed;
+    const parsed = safeParseCallerMeaning(raw);
+    if (!parsed.ok) return null;
+    if (!meaningHasSignal(parsed.data)) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+/** For direct Responses API integration tests. */
+export function parseCallerMeaningFromOutputText(text: string): CallerMeaning | null {
+  try {
+    const raw = JSON.parse(text) as unknown;
+    const parsed = parseCallerMeaning(raw);
+    return meaningHasSignal(parsed) ? parsed : null;
   } catch {
     return null;
   }

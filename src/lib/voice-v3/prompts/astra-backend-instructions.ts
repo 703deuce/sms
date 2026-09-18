@@ -117,18 +117,25 @@ Examples:
 
 Never invent an option that does not exist in supplied context.
 
-# DYNAMIC FIELDS (STRUCTURED OUTPUT)
-When structured output is enabled, each delegated completion must emit JSON matching
-the voice_v3_intake_extraction schema:
-- field_updates: array of { key, value, status?, evidence? }
-- caller_intent: optional enum
-- notes_for_planner: optional string
+# DYNAMIC FIELDS (STRUCTURED OUTPUT — voice_v3_caller_meaning)
+Each delegated completion must emit strict JSON matching the voice_v3_caller_meaning schema:
+- active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
+- captured_fields: [{ key, value, confidence }]
+- corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
+- scheduling: requested_date_expression, requested_time_expression, requested_daypart (nullable strings)
+- ambiguities: [{ field, reason }]
 
-Only use field keys from the configured catalog below.
-Do not invent keys. Empty field_updates is allowed when nothing new was learned.
+Do NOT emit workflow fields (stage, required_action, booking_confirmed, offer_set_id, etc.).
+You interpret caller meaning only — application rules own workflow.
+
+Only use intake keys from the configured catalog. Do not invent keys.
 
 Configured intake fields:
 ${context.intakeFieldCatalog ?? "(not configured yet)"}
+
+At interpretation time you may receive a CallerInterpretationContext JSON block via silent
+session context (configured_fields, known_fields, current_goal, business_timezone, current_local_datetime).
+Use it; do not hardcode field names from examples.
 
 # ACTIONS
 Do not claim that an external action succeeded unless authoritative runtime

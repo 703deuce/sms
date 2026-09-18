@@ -7,4 +7,4 @@
 
 Runtime entry: `src/lib/voice-v3-basic/` (webhooks, SIP, accept) + `src/lib/voice-v3/` (prompts, telemetry, call context, intake pipeline).
 
-**Intake:** enabled by default (`VOICE_V3_INTAKE_ENABLED=0` to disable). Tests: `npm run test:voice-v3-intake-pipeline`.
+**Intake:** `TEST_AGENT_CONFIG` + `VoiceV3CallRuntime` + Astra `voice_v3_caller_meaning` Structured Output. Tests: `npm run test:voice-v3-intake`.
