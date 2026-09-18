@@ -10,6 +10,10 @@ import {
   requestInitialLiveGreeting,
 } from "./greeting";
 import {
+  appendCallerTranscriptDelta,
+  commitCallerTranscript,
+} from "./intake/caller-turn-buffer";
+import {
   clearDelegatedMeaningSessionState,
   handleDelegatedAstraResponseEvent,
 } from "./intake/handle-delegated-meaning";
@@ -99,6 +103,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
     }
 
     if (type === "session.delegation.created") {
+      commitCallerTranscript(sessionId);
       trace.onDelegationCreated();
       console.log("ASTRA_DELEGATION_STARTED", { sessionId, delegation: serverEvent.delegation });
       console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
@@ -153,10 +158,17 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.input_transcript.delta") {
       trace.mark("caller.transcript.activity");
+      const delta = serverEvent as { delta?: string };
+      const text = typeof delta.delta === "string" ? delta.delta : "";
+      if (text) appendCallerTranscriptDelta(sessionId, text);
       if (!callerSpeechActive) {
         callerSpeechActive = true;
         trace.mark("caller.speech.started");
       }
+    }
+
+    if (type === "session.input_transcript.done" || type === "session.input_audio_transcript.completed") {
+      commitCallerTranscript(sessionId);
     }
 
     if (type === "session.closed") {

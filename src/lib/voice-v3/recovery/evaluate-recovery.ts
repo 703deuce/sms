@@ -56,6 +56,7 @@ export function evaluateVoiceV3Recovery(input: {
   const rules = input.rules;
   const config = input.config;
   const at = input.now ?? new Date();
+  const goal = ctx.dialog.activeGoal;
 
   const findStartedAt = ctx.availability.findStartedAt;
   if (
@@ -93,6 +94,117 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
+  if (ctx.booking.lastFailure) {
+    const uncertain = ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
+    return newDirective({
+      ctx,
+      code: uncertain ? "BOOKING_OUTCOME_UNKNOWN" : "MICROSOFT_TEMPORARY_FAILURE",
+      userRecoverable: false,
+      relatedAction: "BOOK_APPOINTMENT",
+      safeAgentMessage:
+        "The booking attempt did not complete successfully. Do not tell the caller they are booked. Explain you need a moment to confirm or try again.",
+      at,
+    });
+  }
+
+  if (ctx.selection.lastResolutionStatus === "AMBIGUOUS") {
+    return newDirective({
+      ctx,
+      code: "SLOT_SELECTION_AMBIGUOUS",
+      userRecoverable: true,
+      relatedAction: "SELECT_SLOT",
+      safeAgentMessage:
+        "The caller's time choice did not map to a single offered slot. Ask which specific time they want from the authoritative options already available.",
+      at,
+    });
+  }
+
+  if (ctx.selection.lastResolutionStatus === "NOT_IN_OFFER_SET") {
+    return newDirective({
+      ctx,
+      code: "SLOT_NOT_AVAILABLE",
+      userRecoverable: true,
+      relatedAction: "FIND_AVAILABILITY",
+      safeAgentMessage:
+        "The requested time is not in the current authoritative offer set. Do not claim it is available. Offer to check other times or present the available options.",
+      at,
+    });
+  }
+
+  if (
+    ctx.availability.status === "empty" &&
+    rules.hasSchedulingPreference &&
+    !ctx.availability.inFlightGeneration &&
+    goal === "BOOK_APPOINTMENT"
+  ) {
+    return newDirective({
+      ctx,
+      code: "SLOT_NOT_AVAILABLE",
+      userRecoverable: true,
+      relatedAction: "FIND_AVAILABILITY",
+      safeAgentMessage:
+        "No availability matched the caller's scheduling preference. Do not invent times. Ask if another day or time would work.",
+      at,
+    });
+  }
+
+  if (goal === "RESCHEDULE_APPOINTMENT" || goal === "CANCEL_APPOINTMENT") {
+    if (ctx.appointmentManagement.candidateSet) {
+      return newDirective({
+        ctx,
+        code: "MULTIPLE_APPOINTMENTS_FOUND",
+        userRecoverable: true,
+        relatedAction: "FIND_EXISTING_APPOINTMENT",
+        safeAgentMessage:
+          "Multiple existing appointments match. Ask which appointment the caller means using the candidate list in authoritative context.",
+        at,
+      });
+    }
+    if (
+      ctx.appointmentManagement.lookupCompleted &&
+      !ctx.appointmentManagement.verifiedExisting &&
+      !ctx.appointmentManagement.candidateSet
+    ) {
+      return newDirective({
+        ctx,
+        code: "APPOINTMENT_NOT_IDENTIFIED",
+        userRecoverable: true,
+        relatedAction: "FIND_EXISTING_APPOINTMENT",
+        safeAgentMessage:
+          "No existing appointment was found for this caller with the information provided. Ask for clarifying details such as date, email, or phone on file.",
+        at,
+      });
+    }
+  }
+
+  if (rules.cancellationPhase === "CANCELLATION_CONFIRMATION_REQUIRED") {
+    return newDirective({
+      ctx,
+      code: "CANCELLATION_CONFIRMATION_REQUIRED",
+      userRecoverable: true,
+      relatedAction: "CANCEL_APPOINTMENT",
+      safeAgentMessage:
+        "Cancellation requires explicit caller confirmation. Ask naturally whether they want to cancel the identified appointment.",
+      at,
+    });
+  }
+
+  if (
+    (goal === "RESCHEDULE_APPOINTMENT" || goal === "CANCEL_APPOINTMENT") &&
+    !ctx.intake.values.phone?.value?.trim() &&
+    !ctx.intake.values.email?.value?.trim()
+  ) {
+    return newDirective({
+      ctx,
+      code: "CALLER_VERIFICATION_REQUIRED",
+      userRecoverable: true,
+      relatedAction: "FIND_EXISTING_APPOINTMENT",
+      safeAgentMessage:
+        "To find an existing appointment, capture phone or email on file before lookup.",
+      at,
+    });
+  }
+
   if (rules.schedulingRequiresClarification && rules.schedulingClarificationPrompt) {
     return newDirective({
       ctx,
@@ -104,11 +216,42 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
+  if (
+    (goal === "BOOK_APPOINTMENT" || goal === "UNKNOWN") &&
+    !rules.hasSchedulingPreference &&
+    !rules.schedulingRequiresClarification &&
+    (rules.requiredAction === "FIND_AVAILABILITY" || rules.mayFindAvailability)
+  ) {
+    const meaning = ctx.scheduling.meaning;
+    const needsTime =
+      meaning?.time_kind === "UNSPECIFIED" && meaning?.date_relation !== "UNSPECIFIED";
+    if (needsTime) {
+      return newDirective({
+        ctx,
+        code: "SCHEDULING_TIME_MISSING",
+        userRecoverable: true,
+        relatedAction: "FIND_AVAILABILITY",
+        safeAgentMessage:
+          "A date preference exists but time of day is still unclear. Ask what time or part of day works; do not block on unrelated intake fields.",
+        at,
+      });
+    }
+    return newDirective({
+      ctx,
+      code: "SCHEDULING_DATE_MISSING",
+      userRecoverable: true,
+      relatedAction: "FIND_AVAILABILITY",
+      safeAgentMessage:
+        "Booking is active but no scheduling date or window is captured yet. Ask what day or timeframe they prefer.",
+      at,
+    });
+  }
+
   const bookBlockedByIntake =
     rules.slotSelected &&
     !rules.bookingReady &&
     rules.missingRequiredFields.length > 0 &&
-    (ctx.dialog.activeGoal === "BOOK_APPOINTMENT" || ctx.dialog.activeGoal === "UNKNOWN");
+    (goal === "BOOK_APPOINTMENT" || goal === "UNKNOWN");
 
   if (bookBlockedByIntake) {
     const key = prioritizeMissingField(rules.missingRequiredFields, config)!;
@@ -125,7 +268,7 @@ export function evaluateVoiceV3Recovery(input: {
   }
 
   if (
-    ctx.dialog.activeGoal === "BOOK_APPOINTMENT" &&
+    goal === "BOOK_APPOINTMENT" &&
     rules.hasSchedulingPreference &&
     !rules.slotSelected &&
     rules.missingRequiredFields.length > 0 &&
@@ -145,14 +288,14 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
-  if (ctx.booking.lastFailure) {
+  if (goal === "UNKNOWN" && !rules.hasSchedulingPreference && rules.missingRequiredFields.length > 0) {
     return newDirective({
       ctx,
-      code: "BOOKING_OUTCOME_UNKNOWN",
-      userRecoverable: false,
-      relatedAction: "BOOK_APPOINTMENT",
+      code: "INTENT_AMBIGUOUS",
+      userRecoverable: true,
+      relatedAction: "CLARIFY_INTENT",
       safeAgentMessage:
-        "The booking attempt did not complete successfully. Do not tell the caller they are booked. Explain you need a moment to confirm or try again.",
+        "Caller intent is unclear. Ask one short question about whether they want to book, reschedule, or something else.",
       at,
     });
   }
@@ -170,7 +313,7 @@ export function buildSemanticExtractionRecovery(
     userRecoverable: true,
     relatedAction: "CALLER_MEANING",
     safeAgentMessage:
-      "The backend could not interpret the caller's last turn. Ask one short clarifying question about what they want to book or when they would like to come in. Do not pretend you are checking availability unless the runtime has actually started a lookup.",
+      "The backend could not interpret the caller's last turn after an automatic retry. Ask one short clarifying question about what they want to book or when they would like to come in. Do not pretend you are checking availability unless the runtime has actually started a lookup.",
     at,
   });
 }

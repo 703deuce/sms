@@ -95,3 +95,14 @@ export function clearDelegatedAstraResponseDedup(liveSessionId: string): void {
   processedBySession.delete(liveSessionId.trim());
   lastMeaningFingerprint.delete(liveSessionId.trim());
 }
+
+/** After semantic retry applies meaning, block duplicate processing of the same delegated response. */
+export function markDelegatedAstraResponseProcessed(
+  liveSessionId: string,
+  responseId: string,
+): void {
+  const sessionId = liveSessionId.trim();
+  const id = responseId.trim();
+  if (!sessionId || !id) return;
+  sessionSet(sessionId).add(id);
+}

@@ -41,6 +41,7 @@ export function invalidateSelectionForSchedulingChange(
       status: "idle",
       inFlightGeneration: null,
       lastDispatchedRequestKey: null,
+      findStartedAt: null,
     },
     presentation: {
       current: null,

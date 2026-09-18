@@ -63,16 +63,24 @@ function assertEquivalentFinal(a: ReturnType<typeof snapshotAfterSequence>, b: R
   assert.equal(a.dialog.activeGoal, b.dialog.activeGoal);
   assert.equal(a.intake.values.name?.value, b.intake.values.name?.value);
   assert.equal(a.intake.values.email?.value, b.intake.values.email?.value);
+  assert.equal(a.intake.values.phone?.value, b.intake.values.phone?.value);
   assert.equal(a.scheduling.meaning?.daypart, b.scheduling.meaning?.daypart);
   assert.equal(a.scheduling.meaning?.weekday, b.scheduling.meaning?.weekday);
   assert.equal(a.scheduling.generation, b.scheduling.generation);
 }
 
+const phoneField = { key: "phone", value: "+15551234567", confidence: 0.9 };
+
 function main() {
   const dateFirst = snapshotAfterSequence([
     meaning({ active_goal: "BOOK_APPOINTMENT", scheduling: fridayAfternoon() }),
     meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.9 }] }),
-    meaning({ captured_fields: [{ key: "email", value: "test@example.com", confidence: 0.9 }] }),
+    meaning({
+      captured_fields: [
+        { key: "email", value: "test@example.com", confidence: 0.9 },
+        phoneField,
+      ],
+    }),
   ]);
 
   assert.equal(dateFirst.dialog.activeGoal, "BOOK_APPOINTMENT");
@@ -84,11 +92,46 @@ function main() {
 
   const intakeFirst = snapshotAfterSequence([
     meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.9 }] }),
-    meaning({ captured_fields: [{ key: "email", value: "test@example.com", confidence: 0.9 }] }),
+    meaning({ captured_fields: [{ key: "email", value: "test@example.com", confidence: 0.9 }, phoneField] }),
     meaning({ active_goal: "BOOK_APPOINTMENT", scheduling: fridayAfternoon() }),
   ]);
 
+  const sequenceC = snapshotAfterSequence([
+    meaning({
+      active_goal: "BOOK_APPOINTMENT",
+      captured_fields: [{ key: "name", value: "Anthony", confidence: 0.9 }],
+      scheduling: fridayAfternoon(),
+    }),
+    meaning({ captured_fields: [{ key: "email", value: "test@example.com", confidence: 0.9 }, phoneField] }),
+  ]);
+
+  const sequenceD = snapshotAfterSequence([
+    meaning({
+      active_goal: "BOOK_APPOINTMENT",
+      captured_fields: [
+        { key: "name", value: "Anthony", confidence: 0.9 },
+        { key: "email", value: "test@example.com", confidence: 0.9 },
+        phoneField,
+      ],
+      scheduling: fridayAfternoon(),
+    }),
+  ]);
+
+  const sequenceE = snapshotAfterSequence([
+    meaning({ active_goal: "BOOK_APPOINTMENT", scheduling: fridayAfternoon() }),
+    meaning({
+      captured_fields: [
+        { key: "name", value: "Anthony", confidence: 0.9 },
+        { key: "email", value: "test@example.com", confidence: 0.9 },
+        phoneField,
+      ],
+    }),
+  ]);
+
   assertEquivalentFinal(dateFirst, intakeFirst);
+  assertEquivalentFinal(dateFirst, sequenceC);
+  assertEquivalentFinal(dateFirst, sequenceD);
+  assertEquivalentFinal(dateFirst, sequenceE);
 
   const mixed = snapshotAfterSequence([
     meaning({
@@ -119,14 +162,16 @@ function main() {
   assert.equal(corrected.scheduling.meaning?.daypart, "MORNING");
   assert.ok(corrected.scheduling.generation > mixed.scheduling.generation);
 
-  const intakeOnlyUnknownGoal = applyCallerMeaningToContext(
-    dateFirst,
-    CONFIG,
-    meaning({ captured_fields: [{ key: "phone", value: "+15551234567", confidence: 0.9 }] }),
-    NOW,
-  ).context;
-  assert.equal(intakeOnlyUnknownGoal.dialog.activeGoal, "BOOK_APPOINTMENT");
-  assert.equal(intakeOnlyUnknownGoal.scheduling.meaning?.daypart, "AFTERNOON");
+  const unknownBetween = snapshotAfterSequence([
+    meaning({ active_goal: "BOOK_APPOINTMENT", scheduling: fridayAfternoon() }),
+    meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.9 }] }),
+    meaning({ active_goal: "UNKNOWN", captured_fields: [] }),
+    meaning({ captured_fields: [{ key: "email", value: "test@example.com", confidence: 0.9 }, phoneField] }),
+  ]);
+  assert.equal(unknownBetween.dialog.activeGoal, "BOOK_APPOINTMENT");
+  assert.equal(unknownBetween.intake.values.name?.value, "Anthony");
+  assert.equal(unknownBetween.scheduling.meaning?.daypart, "AFTERNOON");
+  assert.equal(unknownBetween.intake.values.email?.value, "test@example.com");
 
   console.log("PASS voice-v3 order permutation");
 }

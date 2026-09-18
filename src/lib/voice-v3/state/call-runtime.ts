@@ -7,6 +7,7 @@ import { createInitialVoiceV3CallContext, type VoiceV3CallContext } from "./call
 import type { VoiceV3CallEvent } from "./call-events";
 import { evaluateVoiceV3Rules, type VoiceV3RuleEvaluation } from "./call-rules";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
+import { evaluateSuggestedNextConversationAction } from "../recovery/conversation-need";
 
 const TTL_MS = 2 * 60 * 60 * 1000;
 const runtimes = new Map<
@@ -252,7 +253,15 @@ export function buildAuthoritativeThinkingSnapshot(
     ? `authoritative_offer_set_id=${offer.offerSetId} slot_count=${offer.slots.length}`
     : ctx.availability.status === "failed"
       ? "availability_lookup_failed=true"
-      : "authoritative_offer_set=(none)";
+      : ctx.availability.status === "pending"
+        ? "availability_lookup_in_progress=true"
+        : "authoritative_offer_set=(none)";
+
+  const need = evaluateSuggestedNextConversationAction({ ctx, rules, config: runtime.config });
+  const needLine =
+    need.action === "NONE"
+      ? "suggested_next_conversation_action=NONE"
+      : `suggested_next_conversation_action=${need.action}${need.fieldKey ? `(field=${need.fieldKey})` : ""}`;
 
   return [
     "Authoritative caller state updated (application-owned).",
@@ -264,7 +273,11 @@ export function buildAuthoritativeThinkingSnapshot(
     schedLine,
     clarifyLine,
     `may_run_calendar_action=${rules.mayRunCalendarAction}`,
+    `find_ready=${rules.findReady}`,
+    `booking_ready=${rules.bookingReady}`,
     offerLine,
+    needLine,
+    need.summary,
   ].join("\n");
 }
 
