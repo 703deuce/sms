@@ -4,14 +4,14 @@
  */
 import assert from "node:assert/strict";
 
-import { evaluateAiCallRecovery } from "../src/lib/voice-v2/ai-call-recovery/evaluate";
-import { resolveVoiceV2ResolutionStatus } from "../src/lib/voice-v2/ai-call-recovery/resolution-status";
+import { evaluateAiCallRecovery } from "../src/lib/voice-receptionist-wizard/ai-call-recovery/evaluate";
+import { resolveVoiceV2ResolutionStatus } from "../src/lib/voice-receptionist-wizard/ai-call-recovery/resolution-status";
 import {
   DEFAULT_VOICE_V2_AI_CALL_RECOVERY_CONFIG,
   type VoiceV2RecoveryEvaluationInput,
-} from "../src/lib/voice-v2/ai-call-recovery/types";
-import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-v2/booking-workflow";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/ai-call-recovery/types";
+import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 function baseEligibility(): VoiceV2RecoveryEvaluationInput["messagingEligibility"] {
   return {

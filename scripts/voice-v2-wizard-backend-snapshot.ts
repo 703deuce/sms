@@ -6,8 +6,8 @@
 import { getPrisma } from "../src/lib/db";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { loadAppointmentReceptionistSetup } from "../src/lib/solutions/appointment-receptionist/save-setup";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 
 async function main() {
   const agentId = process.argv[2] || process.env.AGENT_ID || "";

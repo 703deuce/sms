@@ -3,22 +3,22 @@
  * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-finalize-record-headless.ts
  */
 import assert from "node:assert/strict";
-import { transitionAfterBookingConfirmed } from "../src/lib/voice-v2/booking-workflow";
-import { executeVoiceV2FinalizeCallerRequest } from "../src/lib/voice-v2/finalize-caller-request";
-import { applyCallerAniToIntakeState } from "../src/lib/voice-v2/intake/caller-phone";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
+import { transitionAfterBookingConfirmed } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { executeVoiceV2FinalizeCallerRequest } from "../src/lib/voice-receptionist-wizard/finalize-caller-request";
+import { applyCallerAniToIntakeState } from "../src/lib/voice-receptionist-wizard/intake/caller-phone";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
 import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import type { VoiceV2CallContext, VoiceV2IntakeWizardConfig } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import type { VoiceV2CallContext, VoiceV2IntakeWizardConfig } from "../src/lib/voice-receptionist-wizard/intake/types";
 import {
   resolveVoiceV2PrimaryOutcome,
   type VoiceV2PrimaryOutcome,
-} from "../src/lib/voice-v2/primary-outcome";
+} from "../src/lib/voice-receptionist-wizard/primary-outcome";
 
 function check(name: string, ok: boolean, detail = "") {
   console.log(ok ? `PASS ${name}` : `FAIL ${name} ${detail}`);

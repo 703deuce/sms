@@ -7,18 +7,18 @@ import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   applyCallerIntentToCallContext,
   interpretCallerUtterance,
-} from "../src/lib/voice-v2/caller-intent-interpreter";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { saveIntakePublicFields } from "../src/lib/voice-v2/intake/format-save-tool-response";
-import { dialogFromContext } from "../src/lib/voice-v2/dialog-goal";
-import { workflowFromContext } from "../src/lib/voice-v2/booking-workflow";
-import { workflowPayloadForContext } from "../src/lib/voice-v2/booking-workflow-hooks";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/caller-intent-interpreter";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { saveIntakePublicFields } from "../src/lib/voice-receptionist-wizard/intake/format-save-tool-response";
+import { dialogFromContext } from "../src/lib/voice-receptionist-wizard/dialog-goal";
+import { workflowFromContext } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { workflowPayloadForContext } from "../src/lib/voice-receptionist-wizard/booking-workflow-hooks";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

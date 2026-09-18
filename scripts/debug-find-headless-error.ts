@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-import { executeVoiceV2FindAvailability } from "../src/lib/voice-v2/find-availability";
+import { executeVoiceV2FindAvailability } from "../src/lib/voice-receptionist-wizard/find-availability";
 import { localDatePlusDays } from "../src/lib/mctb/ai-booking/local-time-semantics";
 import { loadMctbAiBookingConfig } from "../src/lib/mctb/ai-booking/config";
 

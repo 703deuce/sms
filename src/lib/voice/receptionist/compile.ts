@@ -20,19 +20,19 @@ import { resolveReceptionistElevenLabsTuning } from "@/lib/voice/elevenlabs/rece
 import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 import { buildReceptionistCompiledPrompt } from "./build-receptionist-compiled-prompt";
 import { fieldManifestFromAdvancedRows } from "./field-manifest";
-import { compileVoiceV2IntakeSchema } from "@/lib/voice-v2/intake/compile-schema";
+import { compileVoiceV2IntakeSchema } from "@/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   buildVoiceV2LiveIntakeInstructions,
   useVoiceV2IntakeAuthority,
-} from "@/lib/voice-v2/intake/live-intake-instructions";
-import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-v2/pstn-workflow-mode";
+} from "@/lib/voice-receptionist-wizard/intake/live-intake-instructions";
+import { isVoiceV2PstnOneAmyMode } from "@/lib/voice-receptionist-wizard/pstn-workflow-mode";
 import {
   OPENAI_REALTIME_MINI_MODEL_ID,
   resolveCompiledRealtimeModel,
 } from "@/lib/voice/telnyx/openai-realtime-telnyx-transport";
-import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-v2/knowledge-config";
-import { buildVoiceV2QualificationLayerBInstructions } from "@/lib/voice-v2/qualification-config";
-import { buildVoiceV2AfterHoursLayerBInstructions } from "@/lib/voice-v2/after-hours-handling-prompt";
+import { buildVoiceV2KnowledgeLayerBInstructions } from "@/lib/voice-receptionist-wizard/knowledge-config";
+import { buildVoiceV2QualificationLayerBInstructions } from "@/lib/voice-receptionist-wizard/qualification-config";
+import { buildVoiceV2AfterHoursLayerBInstructions } from "@/lib/voice-receptionist-wizard/after-hours-handling-prompt";
 
 export type ReceptionistDraftInput = {
   agentName: string;

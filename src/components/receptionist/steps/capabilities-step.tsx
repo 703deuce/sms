@@ -28,7 +28,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AgentTemplateSelect } from "@/components/receptionist/agent-template-select";
 import { VoiceV2IntakeWizardSection } from "@/components/receptionist/voice-v2-intake-section";
-import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-v2/intake/wizard-config";
+import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-receptionist-wizard/intake/wizard-config";
 import { ReceptionistIntegrationsPanel } from "../receptionist-integrations-panel";
 import {
   CapabilityCardCompact,

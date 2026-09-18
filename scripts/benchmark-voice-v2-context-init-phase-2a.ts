@@ -4,8 +4,8 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/benchmark-voice-v2-context-init-phase-2a.ts
  */
 import { performance } from "node:perf_hooks";
-import { clearVoiceV2CallSessions } from "../src/lib/voice-v2/intake/session-store";
-import { ensureVoiceV2CallContext } from "../src/lib/voice-v2/intake/load-call-context";
+import { clearVoiceV2CallSessions } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { ensureVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/load-call-context";
 import {
   createVoiceV2CallContext,
   loadVoiceV2CallContextRecord,
@@ -13,14 +13,14 @@ import {
   clearVoiceV2CallContextL1ForTests,
   getVoiceV2CallContextStoreMode,
   InMemoryVoiceV2CallContextStore,
-} from "../src/lib/voice-v2/session/call-context-store";
+} from "../src/lib/voice-receptionist-wizard/session/call-context-store";
 import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import { loadMctbAiBookingConfig } from "../src/lib/mctb/ai-booking/config";
-import { setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
-import { buildVoiceV2EnrollmentSnapshot } from "../src/lib/voice-v2/session/enrollment";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+import { setVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { buildVoiceV2EnrollmentSnapshot } from "../src/lib/voice-receptionist-wizard/session/enrollment";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const WORKSPACE = process.env.WORKSPACE_ID || "ws_1";
 const AGENT = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";
@@ -122,7 +122,7 @@ async function measureColdPathBreakdown(callId: string) {
   resetVoiceV2CallContextStoreForTests(new InMemoryVoiceV2CallContextStore());
   const key = `cc:${callId}`;
   const tAlias0 = performance.now();
-  const { resolveVoiceV2SessionKey } = await import("../src/lib/voice-v2/session/call-context-store");
+  const { resolveVoiceV2SessionKey } = await import("../src/lib/voice-receptionist-wizard/session/call-context-store");
   await resolveVoiceV2SessionKey({ callControlId: callId });
   const l2AliasMs = performance.now() - tAlias0;
 

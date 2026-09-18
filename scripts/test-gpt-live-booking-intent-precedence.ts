@@ -3,11 +3,11 @@
  */
 import assert from "node:assert/strict";
 
-import { transitionAfterIntakeSave } from "@/lib/voice-v2/booking-workflow";
-import { defaultVoiceV2BookingWorkflow } from "@/lib/voice-v2/booking-workflow";
-import { getIntakeReadiness } from "@/lib/voice-v2/intake/readiness";
-import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
-import { defaultVoiceV2DialogState } from "@/lib/voice-v2/dialog-goal";
+import { transitionAfterIntakeSave } from "@/lib/voice-receptionist-wizard/booking-workflow";
+import { defaultVoiceV2BookingWorkflow } from "@/lib/voice-receptionist-wizard/booking-workflow";
+import { getIntakeReadiness } from "@/lib/voice-receptionist-wizard/intake/readiness";
+import type { VoiceV2CallContext } from "@/lib/voice-receptionist-wizard/intake/types";
+import { defaultVoiceV2DialogState } from "@/lib/voice-receptionist-wizard/dialog-goal";
 
 function ctx(): VoiceV2CallContext {
   return {

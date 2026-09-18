@@ -544,7 +544,7 @@ export async function handleTexmlStatusCallback(request: Request) {
         eventPayload.CallSid,
         eventPayload.CallControlId,
       );
-      const { terminateVoiceV2CallSessionOnHangup } = await import("@/lib/voice-v2/call-warmup");
+      const { terminateVoiceV2CallSessionOnHangup } = await import("@/lib/voice-receptionist-wizard/runtime-stubs");
       terminateVoiceV2CallSessionOnHangup({
         callId,
         callControlId: hangupControlId,
@@ -630,7 +630,7 @@ export async function handleTexmlStatusCallback(request: Request) {
       );
       if (controlId) {
         const { scheduleVoiceV2WarmupForEnsuredVoiceCall } = await import(
-          "@/lib/voice-v2/schedule-warmup-for-voice-call"
+          "@/lib/voice-receptionist-wizard/runtime-stubs"
         );
         const warmup = await scheduleVoiceV2WarmupForEnsuredVoiceCall({
           callId,

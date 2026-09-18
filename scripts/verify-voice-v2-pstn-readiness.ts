@@ -13,7 +13,7 @@ import {
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+} from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";

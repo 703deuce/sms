@@ -419,7 +419,7 @@ export async function microsoftGraphFetch(
     // optional
   }
   try {
-    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-v2/graph-instrumentation");
+    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-receptionist-wizard/graph-instrumentation");
     emitVoiceV2GraphSpan({ operation: graphOp, httpMs: firstGraphMs, status: res.status });
   } catch {
     // optional
@@ -460,7 +460,7 @@ export async function microsoftGraphFetch(
     // optional
   }
   try {
-    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-v2/graph-instrumentation");
+    const { emitVoiceV2GraphSpan } = await import("@/lib/voice-receptionist-wizard/graph-instrumentation");
     emitVoiceV2GraphSpan({
       operation: `${graphOp}:retry_after_refresh`,
       httpMs: Date.now() - retryGraphStarted,

@@ -5,7 +5,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-const ROOT = "src/lib/voice-v2/pipelines/microsoft-365-certified";
+const ROOT = "src/lib/voice-receptionist-wizard/pipelines/microsoft-365-certified";
 const ENTRY_FIND = join(ROOT, "find-availability.ts");
 const ENTRY_BOOK = join(ROOT, "book-offered-slot.ts");
 const INTERNAL = join(ROOT, "internal");

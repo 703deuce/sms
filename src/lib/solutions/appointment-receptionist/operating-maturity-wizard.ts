@@ -1,5 +1,5 @@
-import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-v2/operating-maturity/defaults";
-import type { VoiceV2OperatingMaturityPublishedConfig } from "@/lib/voice-v2/operating-maturity/types";
+import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
+import type { VoiceV2OperatingMaturityPublishedConfig } from "@/lib/voice-receptionist-wizard/operating-maturity/types";
 import type { AppointmentReceptionistWizardState } from "./types";
 
 export function ensureWizardOperatingMaturity(

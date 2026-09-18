@@ -15,22 +15,22 @@ import {
   registerVoiceV2SessionTerminated,
   clearVoiceV2SessionTerminatedForTests,
   markVoiceV2CallContextEnded,
-} from "../src/lib/voice-v2/session/call-context-store";
+} from "../src/lib/voice-receptionist-wizard/session/call-context-store";
 import {
   getVoiceV2RedisCreateCount,
   resetVoiceV2SharedRedisForTests,
-} from "../src/lib/voice-v2/session/redis-client";
+} from "../src/lib/voice-receptionist-wizard/session/redis-client";
 import {
   startVoiceV2CallWarmup,
   clearVoiceV2WarmupForTests,
   terminateVoiceV2CallSessionOnHangup,
-} from "../src/lib/voice-v2/call-warmup";
-import { ensureVoiceV2CallContext } from "../src/lib/voice-v2/intake/load-call-context";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { clearIntakeIdempotencyForTests } from "../src/lib/voice-v2/intake/intake-idempotency";
-import { createVoiceV2ContextLookupTrace } from "../src/lib/voice-v2/session/context-lookup-trace";
+} from "../src/lib/voice-receptionist-wizard/call-warmup";
+import { ensureVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/load-call-context";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { clearIntakeIdempotencyForTests } from "../src/lib/voice-receptionist-wizard/intake/intake-idempotency";
+import { createVoiceV2ContextLookupTrace } from "../src/lib/voice-receptionist-wizard/session/context-lookup-trace";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 
 const rows: Array<{ id: string; pass: boolean; detail?: string }> = [];
 function check(id: string, pass: boolean, detail?: string) {

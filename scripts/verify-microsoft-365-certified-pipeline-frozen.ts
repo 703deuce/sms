@@ -11,11 +11,11 @@ import { execSync } from "node:child_process";
 const GRAPH_BASELINE = "06125f5f";
 
 const findCert = readFileSync(
-  "src/lib/voice-v2/pipelines/microsoft-365-certified/find-availability.ts",
+  "src/lib/voice-receptionist-wizard/pipelines/microsoft-365-certified/find-availability.ts",
   "utf8",
 );
 const bookCert = readFileSync(
-  "src/lib/voice-v2/pipelines/microsoft-365-certified/book-offered-slot.ts",
+  "src/lib/voice-receptionist-wizard/pipelines/microsoft-365-certified/book-offered-slot.ts",
   "utf8",
 );
 
@@ -37,7 +37,7 @@ if (bookCert.includes("voiceAppointment.findFirst")) {
 
 const forbiddenEntryImports = [
   "../offer-set-store",
-  "@/lib/voice-v2/find-availability",
+  "@/lib/voice-receptionist-wizard/find-availability",
   "@/lib/voice/calendar/providers",
   "voice-appointment-reconcile",
 ];

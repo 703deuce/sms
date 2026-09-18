@@ -9,7 +9,7 @@ import {
   classifyVoiceAppointmentForAvailability,
   readExplicitBookingHold,
   voiceAppointmentBlocksAvailability,
-} from "../src/lib/voice-v2/pipelines/microsoft-365-certified/internal/microsoft-local-ledger-busy";
+} from "../src/lib/voice-receptionist-wizard/pipelines/microsoft-365-certified/internal/microsoft-local-ledger-busy";
 
 const now = Date.parse("2026-09-16T23:00:00.000Z");
 

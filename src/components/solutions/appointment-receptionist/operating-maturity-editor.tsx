@@ -4,13 +4,13 @@ import type {
   AppointmentReceptionistWizardState,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-receptionist/operating-maturity-wizard";
-import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-v2/operating-maturity/defaults";
+import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "@/lib/voice-receptionist-wizard/operating-maturity/defaults";
 import type {
   VoiceV2DayOfWeek,
   VoiceV2HolidayClosure,
   VoiceV2OnCallScheduleEntry,
   VoiceV2OperatingMaturityPublishedConfig,
-} from "@/lib/voice-v2/operating-maturity/types";
+} from "@/lib/voice-receptionist-wizard/operating-maturity/types";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { InfoCallout } from "./ui";

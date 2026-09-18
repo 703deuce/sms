@@ -2,12 +2,12 @@
 /**
  * Runtime owns auto-dispatchable required_action — model delegation must not see those tools.
  */
-import { buildVoiceV2ControlPlaneEnvelope } from "../src/lib/voice-v2/control-plane-envelope";
-import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-v2/booking-workflow";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-v2/telnyx-tool-definition";
-import { utteranceLooksLikeSchedulingCorrection } from "../src/lib/voice-v2/scheduling-preference-state";
-import { mergeSchedulingPreferenceRecord } from "../src/lib/voice-v2/scheduling-preference-state";
+import { buildVoiceV2ControlPlaneEnvelope } from "../src/lib/voice-receptionist-wizard/control-plane-envelope";
+import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
+import { utteranceLooksLikeSchedulingCorrection } from "../src/lib/voice-receptionist-wizard/scheduling-preference-state";
+import { mergeSchedulingPreferenceRecord } from "../src/lib/voice-receptionist-wizard/scheduling-preference-state";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

@@ -16,14 +16,14 @@ import {
   getVoiceV2CallContextStore,
   DISTRIBUTED_TOKEN_LOCK_PRIMITIVE,
   tryRecoverVoiceV2CallContext,
-} from "../src/lib/voice-v2/session/call-context-store";
+} from "../src/lib/voice-receptionist-wizard/session/call-context-store";
 import {
   VoiceV2SharedSessionUnavailableError,
   isVoiceV2ProductionMemoryL2Blocked,
-} from "../src/lib/voice-v2/session/store-config";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION } from "../src/lib/voice-v2/session/types";
+} from "../src/lib/voice-receptionist-wizard/session/store-config";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { VOICE_V2_CALL_CONTEXT_SCHEMA_VERSION } from "../src/lib/voice-receptionist-wizard/session/types";
 
 type Row = { id: string; pass: boolean; detail?: string };
 const rows: Row[] = [];

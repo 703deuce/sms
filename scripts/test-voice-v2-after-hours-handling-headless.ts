@@ -9,30 +9,30 @@ import {
   afterHoursHandlingFromWizard,
   validateAfterHoursHandlingConfig,
   validateAfterHoursHandlingWizard,
-} from "../src/lib/voice-v2/after-hours-handling-config";
-import { evaluateUrgencyForContext } from "../src/lib/voice-v2/urgency-evaluator";
-import { executeVoiceV2TransferPlan, rejectArbitraryTransferDestination } from "../src/lib/voice-v2/transfer/transfer-executor";
+} from "../src/lib/voice-receptionist-wizard/after-hours-handling-config";
+import { evaluateUrgencyForContext } from "../src/lib/voice-receptionist-wizard/urgency-evaluator";
+import { executeVoiceV2TransferPlan, rejectArbitraryTransferDestination } from "../src/lib/voice-receptionist-wizard/transfer/transfer-executor";
 import {
   MockVoiceV2TransferProvider,
   setMockTransferBehavior,
   clearMockTransferBehaviors,
-} from "../src/lib/voice-v2/transfer/mock-transfer-provider";
-import { executeVoiceV2CreateCallbackRequest } from "../src/lib/voice-v2/callback-request";
-import { applyAfterHoursEvaluations } from "../src/lib/voice-v2/after-hours-orchestrator";
-import { resolveFallbackHandlingAction } from "../src/lib/voice-v2/fallback-resolver";
+} from "../src/lib/voice-receptionist-wizard/transfer/mock-transfer-provider";
+import { executeVoiceV2CreateCallbackRequest } from "../src/lib/voice-receptionist-wizard/callback-request";
+import { applyAfterHoursEvaluations } from "../src/lib/voice-receptionist-wizard/after-hours-orchestrator";
+import { resolveFallbackHandlingAction } from "../src/lib/voice-receptionist-wizard/fallback-resolver";
 import {
   inferCallerClassificationFromTranscriptSnippet,
   blocksCustomerBookingForClassification,
-} from "../src/lib/voice-v2/spam-handling";
-import { buildWarmTransferBriefing } from "../src/lib/voice-v2/transfer/warm-briefing";
+} from "../src/lib/voice-receptionist-wizard/spam-handling";
+import { buildWarmTransferBriefing } from "../src/lib/voice-receptionist-wizard/transfer/warm-briefing";
 import {
   driveMockVoiceV2WarmTransfer,
   startVoiceV2WarmTransfer,
-} from "../src/lib/voice-v2/transfer/warm-transfer-runtime";
-import { clearWarmTransferStoreForTests } from "../src/lib/voice-v2/transfer/warm-transfer-store";
-import { clearVoiceV2CallSessions, getVoiceV2CallContext, setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/transfer/warm-transfer-runtime";
+import { clearWarmTransferStoreForTests } from "../src/lib/voice-receptionist-wizard/transfer/warm-transfer-store";
+import { clearVoiceV2CallSessions, getVoiceV2CallContext, setVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 import { mergeAppointmentWizardAdvanced } from "../src/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
 
 function seedCtx(overrides?: Partial<VoiceV2CallContext>): VoiceV2CallContext {

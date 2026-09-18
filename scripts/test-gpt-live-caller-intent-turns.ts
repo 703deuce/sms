@@ -1,11 +1,11 @@
 /**
  * Regression: per-turn caller intent layer (no CALLBACK from soft signals).
  */
-import { interpretCallerUtterance, applyCallerIntentToCallContext } from "../src/lib/voice-v2/caller-intent-interpreter";
-import { defaultVoiceV2DialogState } from "../src/lib/voice-v2/dialog-goal";
-import { defaultVoiceV2BookingWorkflow, deriveVoiceV2NextStage } from "../src/lib/voice-v2/booking-workflow";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
+import { interpretCallerUtterance, applyCallerIntentToCallContext } from "../src/lib/voice-receptionist-wizard/caller-intent-interpreter";
+import { defaultVoiceV2DialogState } from "../src/lib/voice-receptionist-wizard/dialog-goal";
+import { defaultVoiceV2BookingWorkflow, deriveVoiceV2NextStage } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
 
 function baseCtx(): VoiceV2CallContext {
   return {

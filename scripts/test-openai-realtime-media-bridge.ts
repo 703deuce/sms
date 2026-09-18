@@ -15,7 +15,7 @@ import {
   mintRealtimeBridgeStreamToken,
   verifyRealtimeBridgeStreamToken,
 } from "../src/lib/voice/telnyx/openai-realtime-bridge/stream-token";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-v2/telnyx-tool-definition";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 import { AMY_MINIMUM_SIDE_EFFECT_MODEL } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import {
   buildTelnyxMediaStreamUrl,

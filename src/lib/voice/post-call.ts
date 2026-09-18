@@ -69,13 +69,7 @@ export async function processPostCall(callId: string) {
       ? (call.metadata as Record<string, unknown>)
       : {};
 
-  const { callUsesVoiceV2PostCallPipeline, deepgramApiKeyConfigured } = await import(
-    "@/lib/voice-v2/post-call/transcription-pipeline"
-  );
-  const deferAuthoritativeSummaryToReconciliation =
-    Boolean(insight) &&
-    deepgramApiKeyConfigured() &&
-    (await callUsesVoiceV2PostCallPipeline(call.id));
+  const deferAuthoritativeSummaryToReconciliation = false;
   const callFactStore = callMeta.callFactStore as { facts?: Record<string, unknown> } | undefined;
   const callFacts =
     callFactStore?.facts && typeof callFactStore.facts === "object"
@@ -405,53 +399,6 @@ export async function processPostCall(callId: string) {
     }
   } catch {
     // CRM push is optional
-  }
-
-  const { processVoiceV2PostCallIntake } = await import("@/lib/voice-v2/intake/post-call-hook");
-  await processVoiceV2PostCallIntake(call.id).catch((err) => {
-    console.warn("[post-call] voice v2 intake reconcile failed", call.id, err);
-  });
-
-  try {
-    const { callUsesVoiceV2PostCallPipeline } = await import(
-      "@/lib/voice-v2/post-call/transcription-pipeline"
-    );
-    const { loadVoiceV2AiCallRecoveryConfigForAgent } = await import(
-      "@/lib/voice-v2/ai-call-recovery/config"
-    );
-    const { enqueueVoiceV2AiCallRecoverySettle } = await import(
-      "@/lib/voice-v2/ai-call-recovery/settle-job"
-    );
-    if (await callUsesVoiceV2PostCallPipeline(call.id)) {
-      const recoveryCfg = await loadVoiceV2AiCallRecoveryConfigForAgent({
-        workspaceId: call.workspaceId,
-        agentId: call.agentId,
-        agentVersionId: call.agentVersionId,
-      });
-      if (recoveryCfg.enabled) {
-        await enqueueVoiceV2AiCallRecoverySettle({
-          workspaceId: call.workspaceId,
-          callId: call.id,
-          agentId: call.agentId,
-          agentVersionId: call.agentVersionId,
-          delaySeconds: recoveryCfg.delaySeconds,
-        });
-      }
-    }
-  } catch (err) {
-    console.warn("[post-call] voice v2 ai call recovery enqueue failed", call.id, err);
-  }
-
-  try {
-    const { persistVoiceV2CallQualityOnHangup } = await import(
-      "@/lib/voice-v2/operating-maturity/call-quality-persist"
-    );
-    await persistVoiceV2CallQualityOnHangup({
-      workspaceId: call.workspaceId,
-      callId: call.id,
-    });
-  } catch (err) {
-    console.warn("[post-call] voice v2 quality persist failed", call.id, err);
   }
 
   return { ok: true, callId, missed: isMissed };

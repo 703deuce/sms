@@ -264,15 +264,41 @@ function flushVoiceV3TelemetryAsync(
   });
 }
 
-let lastPstnLeg: { callControlId: string; atMs: number } | null = null;
+export type RecentPstnLegContext = {
+  callControlId: string;
+  atMs: number;
+  callId?: string;
+  workspaceId?: string;
+  agentId?: string;
+};
+
+let lastPstnLeg: RecentPstnLegContext | null = null;
 
 export function noteTelnyxPstnReceived(callControlId: string): void {
   if (!callControlId.trim()) return;
   lastPstnLeg = { callControlId, atMs: Date.now() };
 }
 
+/** Attach wizard agent context before SIP forward so Live accept uses published intake config. */
+export function notePstnLegWizardContext(input: {
+  callControlId: string;
+  callId: string;
+  workspaceId: string;
+  agentId: string;
+}): void {
+  const callControlId = input.callControlId.trim();
+  if (!callControlId) return;
+  lastPstnLeg = {
+    callControlId,
+    atMs: Date.now(),
+    callId: input.callId.trim(),
+    workspaceId: input.workspaceId.trim(),
+    agentId: input.agentId.trim(),
+  };
+}
+
 /** Correlate the most recent PSTN leg with the next Live session (single-line test calls). */
-export function consumeRecentPstnLeg(maxAgeMs = 120_000): { callControlId: string; atMs: number } | null {
+export function consumeRecentPstnLeg(maxAgeMs = 120_000): RecentPstnLegContext | null {
   if (!lastPstnLeg) return null;
   if (Date.now() - lastPstnLeg.atMs > maxAgeMs) {
     lastPstnLeg = null;

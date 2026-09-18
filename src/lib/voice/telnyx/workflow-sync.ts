@@ -11,15 +11,15 @@ import {
   isVoiceV2PstnLiveBookingMode,
   isVoiceV2PstnOneAmyMode,
   resolveVoiceV2BookingStrategy,
-} from "@/lib/voice-v2/pstn-workflow-mode";
+} from "@/lib/voice-receptionist-wizard/pstn-workflow-mode";
 import {
   expectedVoiceV2LiveBooking,
   verifyVoiceV2WorkflowReadBack,
   VOICE_V2_WORKFLOW_CAPABILITY_MISMATCH,
-} from "@/lib/voice-v2/workflow-capability";
+} from "@/lib/voice-receptionist-wizard/workflow-capability";
 import { mergeVoiceV2ToolIds } from "./voice-v2-shared-tools";
 import { ensureVoiceV2SharedToolsForAgent } from "./ensure-voice-v2-shared-tools";
-import { isVoiceV2KnowledgeSearchEnabled } from "@/lib/voice-v2/knowledge-config";
+import { isVoiceV2KnowledgeSearchEnabled } from "@/lib/voice-receptionist-wizard/knowledge-config";
 import { readTelnyxWorkflowState } from "./workflow-readback";
 import type { VoiceV2SharedToolIds } from "./voice-v2-shared-tools";
 
@@ -109,7 +109,7 @@ export async function syncConversationWorkflowToTelnyx(input: {
     const afterHours = (
       input.config?.advanced as Record<string, unknown> | undefined
     )?.voiceV2AfterHoursHandling as
-      | import("@/lib/voice-v2/after-hours-handling-types").VoiceV2PublishedAfterHoursHandlingConfig
+      | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2PublishedAfterHoursHandlingConfig
       | undefined;
     v2Shared = await ensureVoiceV2SharedToolsForAgent({
       workspaceId: input.workspaceId,

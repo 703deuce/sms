@@ -12,18 +12,18 @@ import { buildDesiredTelnyxWorkflowPayload } from "../src/lib/voice/telnyx/workf
 import {
   assertPublishableCalendlyBooking,
   resolveVoiceV2CalendlyBookingConfig,
-} from "../src/lib/voice-v2/calendly-booking-config";
-import { mapCalendlyAvailabilityToVoiceV2Slots } from "../src/lib/voice-v2/calendly-slot-map";
+} from "../src/lib/voice-receptionist-wizard/calendly-booking-config";
+import { mapCalendlyAvailabilityToVoiceV2Slots } from "../src/lib/voice-receptionist-wizard/calendly-slot-map";
 import {
   isVoiceV2PstnLiveBookingMode,
   isVoiceV2PstnOneAmyMode,
   resolveVoiceV2BookingStrategy,
   voiceV2StrategyAllowsFindBook,
-} from "../src/lib/voice-v2/booking-strategy";
-import { deriveVoiceV2NextStage } from "../src/lib/voice-v2/booking-workflow";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
-import { buildVoiceV2CallCapabilitySnapshot } from "../src/lib/voice-v2/workflow-capability";
+} from "../src/lib/voice-receptionist-wizard/booking-strategy";
+import { deriveVoiceV2NextStage } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { buildVoiceV2CallCapabilitySnapshot } from "../src/lib/voice-receptionist-wizard/workflow-capability";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const EVENT_URI = "https://api.calendly.com/event_types/AAAAAAAA";

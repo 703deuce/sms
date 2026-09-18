@@ -161,7 +161,7 @@ export async function buildMctbSemanticConversationContext(input: {
   recoverySmsBusinessE164?: string;
 }): Promise<MctbSemanticConversationContext> {
   const { mergeVoiceContinuationIntoConversationTurns, resolveVoiceV2SmsContinuation } =
-    await import("@/lib/voice-v2/ai-call-recovery/continuation-hydration");
+    await import("@/lib/voice-receptionist-wizard/ai-call-recovery/continuation-hydration");
   const voiceContinuation = await resolveVoiceV2SmsContinuation({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,

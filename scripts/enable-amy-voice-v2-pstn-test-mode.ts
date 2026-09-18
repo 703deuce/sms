@@ -9,12 +9,12 @@ import {
   VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE,
   VOICE_V2_BOOK_OFFERED_SLOT_TOOL_TYPE,
   VOICE_V2_SAVE_INTAKE_TOOL_TYPE,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+} from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 import { restoreAmyTelnyxWorkflowWithV2 } from "./restore-amy-telnyx-tools-with-v2";
 import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
-import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-v2/intake/live-intake-instructions";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-receptionist-wizard/intake/live-intake-instructions";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";

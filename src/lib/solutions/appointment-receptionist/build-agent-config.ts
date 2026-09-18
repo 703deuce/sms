@@ -21,7 +21,7 @@ import {
   elevenLabsVoiceLanguagePublishFields,
   resolveVoiceV2WizardVoiceForPublish,
 } from "./voice-v2-wizard-elevenlabs-catalog";
-import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import { normalizeWizardVoiceToRealtime } from "@/lib/voice/realtime-voice-picker";
 
 export { buildBusinessKnowledgePromptSection };

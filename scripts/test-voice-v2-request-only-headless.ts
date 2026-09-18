@@ -12,22 +12,22 @@ import {
   workflowNodeExpectedTools,
 } from "../src/lib/voice/telnyx/conversation-workflow";
 import { buildDesiredTelnyxWorkflowPayload } from "../src/lib/voice/telnyx/workflow-sync";
-import { deriveVoiceV2NextStage, transitionAfterIntakeSave } from "../src/lib/voice-v2/booking-workflow";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { deriveVoiceV2NextStage, transitionAfterIntakeSave } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 import {
   buildVoiceV2CallCapabilitySnapshot,
   verifyVoiceV2WorkflowReadBack,
-} from "../src/lib/voice-v2/workflow-capability";
+} from "../src/lib/voice-receptionist-wizard/workflow-capability";
 import {
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
   VOICE_V2_FINALIZE_CALLER_REQUEST_TELNYX_TOOL_NAME,
   VOICE_V2_SAVE_INTAKE_TELNYX_TOOL_NAME,
   VOICE_V2_TELNYX_TOOL_NAME,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+} from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 function configForStrategy(
   strategy: "NONE" | "REQUEST_ONLY" | "MICROSOFT_365",

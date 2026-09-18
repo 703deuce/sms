@@ -7,10 +7,10 @@ import { getPrisma } from "../src/lib/db";
 import { publishVoiceAgent } from "../src/lib/voice/agent-service";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { RECEPTIONIST_COMPILED_KEY } from "../src/lib/voice/receptionist/types";
-import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-v2/one-amy/amy-core-static-prompt";
+import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
 import { syncConversationWorkflowToTelnyx } from "../src/lib/voice/telnyx/workflow-sync";
 import { readTelnyxWorkflowState } from "../src/lib/voice/telnyx/workflow-readback";
-import { verifyVoiceV2WorkflowReadBack } from "../src/lib/voice-v2/workflow-capability";
+import { verifyVoiceV2WorkflowReadBack } from "../src/lib/voice-receptionist-wizard/workflow-capability";
 import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config";
 import { syncTelnyxAssistant } from "../src/lib/voice/telnyx/assistant-sync";
 

@@ -8,7 +8,7 @@ import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { syncConversationWorkflowToTelnyx } from "../src/lib/voice/telnyx/workflow-sync";
 import * as ai from "../src/lib/voice/telnyx/ai-client";
 import { mergeVoiceV2ToolIds, resolveVoiceV2SharedToolIds } from "../src/lib/voice/telnyx/voice-v2-shared-tools";
-import { isVoiceV2PstnLiveBookingMode } from "../src/lib/voice-v2/pstn-workflow-mode";
+import { isVoiceV2PstnLiveBookingMode } from "../src/lib/voice-receptionist-wizard/pstn-workflow-mode";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";

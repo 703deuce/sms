@@ -2,8 +2,8 @@
 /**
  * Complete booking for the 2026-09-15 ~13:06 UTC PSTN call after intake gate blocked.
  */
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { executeVoiceV2BookOfferedSlot } from "../src/lib/voice-v2/book-offered-slot";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { executeVoiceV2BookOfferedSlot } from "../src/lib/voice-receptionist-wizard/book-offered-slot";
 import { getPrisma } from "../src/lib/db";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";

@@ -17,9 +17,9 @@ See `docs/voice-v3/BOOKING-PIPELINE-RUNTIME-PATH.md`.
 - V2 booking executors: `book-offered-slot`, `find-availability`, Telnyx tool routes, etc.
 - `ensureVoiceV2SharedToolsForAgent` no longer registers booking webhooks on Telnyx assistants
 
-## What remains under `src/lib/voice-v2/` (temporary)
+## What remains (`src/lib/voice-receptionist-wizard/`)
 
-Wizard / receptionist **configuration types** (intake schema, after-hours rules, operating maturity) still live in `voice-v2` paths until migrated to a neutral `voice-receptionist-config` package. These modules **do not** run booking on calls.
+Wizard / receptionist **configuration only** (intake schema, after-hours rules, operating maturity). PSTN booking runs only through **Voice V3 Basic** (`voiceV3PstnBooking` / `appointment_receptionist` → SIP forward → OpenAI Live + `src/lib/voice-v3/`). Legacy Telnyx Amy assistants and `voice-v2` booking webhooks are not started for those agents.
 
 ## Ops
 

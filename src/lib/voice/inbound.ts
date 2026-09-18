@@ -312,6 +312,44 @@ async function startAiOnInboundCall(input: {
       return { started: false, reason: claim.reason || "ai_start_claimed" };
     }
 
+    const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+    const runtimeCfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
+    const { appointmentReceptionistUsesVoiceV3Runtime } = await import(
+      "@/lib/voice-v3/config/from-published-agent"
+    );
+    if (appointmentReceptionistUsesVoiceV3Runtime(runtimeCfg)) {
+      const { forwardInboundCallToOpenAiLiveSip } = await import(
+        "@/lib/voice-v3-basic/telnyx-sip-forward"
+      );
+      const { notePstnLegWizardContext } = await import("@/lib/voice-v3/telemetry/call-trace");
+      notePstnLegWizardContext({
+        callControlId: input.telnyxCallControlId,
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        agentId: agent.id,
+      });
+      await forwardInboundCallToOpenAiLiveSip(input.telnyxCallControlId);
+      void prisma.voiceCall
+        .update({
+          where: { id: input.callId },
+          data: {
+            metadata: {
+              ...claim.meta,
+              aiStarted: true,
+              voiceTransport: "voice_v3_basic",
+              voiceV3WizardBound: true,
+            } as object,
+          },
+        })
+        .catch(() => undefined);
+      console.log("VOICE_V3_BASIC_INBOUND_SIP_FORWARD", {
+        callId: input.callId,
+        agentId: agent.id,
+        workspaceId: input.workspaceId,
+      });
+      return { started: true, reason: "voice_v3_basic_sip_forward" };
+    }
+
     const answerAt = Date.now();
     await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
       method: "POST",
@@ -330,6 +368,17 @@ async function startAiOnInboundCall(input: {
     if (agent.telnyxAssistantId) {
       const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
       const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
+      const { appointmentReceptionistUsesVoiceV3Runtime: v3Only } = await import(
+        "@/lib/voice-v3/config/from-published-agent"
+      );
+      if (v3Only(cfg)) {
+        console.error("VOICE_V3_LEGACY_AMY_BLOCKED", {
+          callId: input.callId,
+          agentId: agent.id,
+          path: "inbound_ai_start_after_claim",
+        });
+        return { started: false, reason: "voice_v3_only_no_legacy_amy" };
+      }
       const { isGptLivePstnBridgeActive, shouldUseOpenAiRealtimeMediaBridge } = await import(
         "@/lib/voice/telnyx/openai-realtime-bridge/flags"
       );
@@ -453,7 +502,9 @@ async function startAiOnInboundCall(input: {
       }
 
       const assistantStartReturnedAt = Date.now();
-      const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
+      const { scheduleVoiceV2CallWarmup } = await import(
+        "@/lib/voice-receptionist-wizard/runtime-stubs"
+      );
       scheduleVoiceV2CallWarmup({
         workspaceId: input.workspaceId,
         agentId: agent.id,

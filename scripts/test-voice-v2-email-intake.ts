@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-import { normalizeVoiceIntakeEmail } from "../src/lib/voice-v2/intake/normalize-email";
+import { normalizeVoiceIntakeEmail } from "../src/lib/voice-receptionist-wizard/intake/normalize-email";
 
 const failures: string[] = [];
 function check(name: string, cond: boolean) {

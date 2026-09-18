@@ -3,14 +3,14 @@
  * Run: NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-appointment-changes-headless.ts
  */
 import assert from "node:assert/strict";
-import { subtractBusyInterval } from "../src/lib/voice-v2/appointment-changes/busy-exclude";
-import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "../src/lib/voice-v2/intake/session-store";
+import { subtractBusyInterval } from "../src/lib/voice-receptionist-wizard/appointment-changes/busy-exclude";
+import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/session-store";
 import {
   getAppointmentActionState,
   resolveStoredAppointmentRef,
   storeAppointmentRefs,
-} from "../src/lib/voice-v2/appointment-changes/ref-store";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/appointment-changes/ref-store";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 assert.equal(getAppointmentActionState(null), undefined, "null PSTN context must not throw");
 

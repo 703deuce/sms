@@ -8,7 +8,7 @@ import { execSync } from "node:child_process";
 import {
   VOICE_V2_CALLER_EXPERIENCE_LAW_PATHS,
   VOICE_V2_CALLER_EXPERIENCE_RULE_CATALOG,
-} from "../src/lib/voice-v2/caller-experience-law";
+} from "../src/lib/voice-receptionist-wizard/caller-experience-law";
 
 const PRELOAD =
   "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs'";
@@ -35,7 +35,7 @@ if (VOICE_V2_CALLER_EXPERIENCE_RULE_CATALOG.length < 10) {
   fail("caller-experience rule catalog too small — law regression");
 }
 
-const saveIntake = readFileSync("src/lib/voice-v2/intake/save-intake-fields.ts", "utf8");
+const saveIntake = readFileSync("src/lib/voice-receptionist-wizard/intake/save-intake-fields.ts", "utf8");
 if (!saveIntake.includes("isBookingIntentOnlyFields")) {
   fail("save-intake-fields must use isBookingIntentOnlyFields");
 }
@@ -76,7 +76,7 @@ if (warmupIdx < 0 || assistantStartIdx < 0 || warmupIdx < assistantStartIdx) {
   fail("warmup must be scheduled after assistant start returns (P10)");
 }
 
-const amy = readFileSync("src/lib/voice-v2/one-amy/amy-core-static-prompt.ts", "utf8");
+const amy = readFileSync("src/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt.ts", "utf8");
 if (!amy.includes("does not require an external action")) {
   fail("one-amy prompt must include booking-intent conversational rule");
 }

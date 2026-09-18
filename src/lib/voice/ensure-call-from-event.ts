@@ -355,7 +355,7 @@ export async function ensureVoiceCallForTelnyxEvent(input: {
     if (ver?.config) {
       const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
       const { buildVoiceV2CallCapabilitySnapshot } = await import(
-        "@/lib/voice-v2/workflow-capability"
+        "@/lib/voice-receptionist-wizard/workflow-capability"
       );
       voiceConfigFingerprint = {
         ...(voiceConfigFingerprint || {}),

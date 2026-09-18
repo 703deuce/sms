@@ -5,7 +5,7 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
  * WORKSPACE_ID=ws_1 npx tsx scripts/voice-v2-find-availability-baseline.ts
  */
-import { executeVoiceV2FindAvailability } from "../src/lib/voice-v2/find-availability";
+import { executeVoiceV2FindAvailability } from "../src/lib/voice-receptionist-wizard/find-availability";
 import { localDatePlusDays } from "../src/lib/mctb/ai-booking/local-time-semantics";
 import { loadMctbAiBookingConfig } from "../src/lib/mctb/ai-booking/config";
 

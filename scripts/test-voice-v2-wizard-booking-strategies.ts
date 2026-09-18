@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 import { buildWizardAgentConfig } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
-import { buildVoiceV2CallCapabilitySnapshot } from "../src/lib/voice-v2/workflow-capability";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
+import { buildVoiceV2CallCapabilitySnapshot } from "../src/lib/voice-receptionist-wizard/workflow-capability";
 
 type Strat = "NONE" | "REQUEST_ONLY" | "SEND_LINK" | "MICROSOFT_365" | "CALENDLY";
 

@@ -12,20 +12,20 @@ import { buildDesiredTelnyxWorkflowPayload } from "../src/lib/voice/telnyx/workf
 import {
   assertPublishableBookingLink,
   resolvePinnedBookingLink,
-} from "../src/lib/voice-v2/booking-link-config";
-import { deriveVoiceV2NextStage } from "../src/lib/voice-v2/booking-workflow";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+} from "../src/lib/voice-receptionist-wizard/booking-link-config";
+import { deriveVoiceV2NextStage } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   buildVoiceV2CallCapabilitySnapshot,
   verifyVoiceV2WorkflowReadBack,
-} from "../src/lib/voice-v2/workflow-capability";
+} from "../src/lib/voice-receptionist-wizard/workflow-capability";
 import {
   VOICE_V2_SEND_BOOKING_LINK_BODY,
   VOICE_V2_SEND_BOOKING_LINK_TELNYX_TOOL_NAME,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+} from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const TEST_LINK = "https://book.example.com/schedule";

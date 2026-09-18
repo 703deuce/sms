@@ -15,13 +15,13 @@ import {
   getVoiceV2CallContextL1,
   clearVoiceV2CallContextL1ForTests,
   isVoiceV2SessionTerminated,
-} from "../src/lib/voice-v2/session/call-context-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
+} from "../src/lib/voice-receptionist-wizard/session/call-context-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   startVoiceV2CallWarmup,
   clearVoiceV2WarmupForTests,
-} from "../src/lib/voice-v2/call-warmup";
-import { ensureVoiceV2CallContext } from "../src/lib/voice-v2/intake/load-call-context";
+} from "../src/lib/voice-receptionist-wizard/call-warmup";
+import { ensureVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/load-call-context";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const V2_CFG: VoiceAgentConfig = {

@@ -5,9 +5,9 @@
 import assert from "node:assert/strict";
 
 import type { VoiceAgentConfig } from "@/lib/voice/types";
-import { defaultVoiceV2BookingWorkflow } from "@/lib/voice-v2/booking-workflow";
-import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
-import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
+import { defaultVoiceV2BookingWorkflow } from "@/lib/voice-receptionist-wizard/booking-workflow";
+import { clearVoiceV2CallSessions, setVoiceV2CallContext } from "@/lib/voice-receptionist-wizard/intake/session-store";
+import type { VoiceV2CallContext } from "@/lib/voice-receptionist-wizard/intake/types";
 import { createLiveControlPlane } from "@/lib/voice/telnyx/openai-live-bridge/live-control-plane";
 import type { RealtimeBridgeStreamClaims } from "@/lib/voice/telnyx/openai-realtime-bridge/stream-token";
 

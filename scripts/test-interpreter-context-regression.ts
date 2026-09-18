@@ -3,12 +3,12 @@
  * Conversation-history + safe-fallback regressions (no live Astra).
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-interpreter-context-regression.ts
  */
-import { classifyInterpreterSafeFallback } from "../src/lib/voice-v2/interpreter-safe-fallback";
-import type { InterpreterContext } from "../src/lib/voice-v2/caller-meaning";
-import { resolveSlotIdFromOfferReference } from "../src/lib/voice-v2/resolve-slot-from-offer-ordinal";
-import type { VoiceV2Slot } from "../src/lib/voice-v2/types";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+import { classifyInterpreterSafeFallback } from "../src/lib/voice-receptionist-wizard/interpreter-safe-fallback";
+import type { InterpreterContext } from "../src/lib/voice-receptionist-wizard/caller-meaning";
+import { resolveSlotIdFromOfferReference } from "../src/lib/voice-receptionist-wizard/resolve-slot-from-offer-ordinal";
+import type { VoiceV2Slot } from "../src/lib/voice-receptionist-wizard/types";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

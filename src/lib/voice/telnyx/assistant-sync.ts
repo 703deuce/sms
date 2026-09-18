@@ -546,7 +546,7 @@ export async function syncTelnyxAssistant(
         };
       }
       const { isVoiceV2PstnLiveBookingMode, isVoiceV2PstnOneAmyMode } = await import(
-        "@/lib/voice-v2/pstn-workflow-mode"
+        "@/lib/voice-receptionist-wizard/pstn-workflow-mode"
       );
       if (
         isVoiceV2PstnLiveBookingMode(config) ||

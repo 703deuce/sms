@@ -4,7 +4,7 @@
  */
 import { getPrisma } from "../src/lib/db";
 import * as ai from "../src/lib/voice/telnyx/ai-client";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE, VOICE_V2_TELNYX_TOOL_NAME } from "../src/lib/voice-v2/telnyx-tool-definition";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE, VOICE_V2_TELNYX_TOOL_NAME } from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.AGENT_ID || "cmshz2lc25c622c4i58303501";

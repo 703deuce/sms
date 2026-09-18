@@ -4,8 +4,8 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-book-offered-slot-mock-headless.ts
  */
 import assert from "node:assert/strict";
-import { executeVoiceV2BookOfferedSlot } from "../src/lib/voice-v2/book-offered-slot";
-import { persistVoiceV2OfferSet } from "../src/lib/voice-v2/offer-set-store";
+import { executeVoiceV2BookOfferedSlot } from "../src/lib/voice-receptionist-wizard/book-offered-slot";
+import { persistVoiceV2OfferSet } from "../src/lib/voice-receptionist-wizard/offer-set-store";
 
 const WORKSPACE_ID = "ws_test";
 
@@ -39,7 +39,7 @@ async function main() {
   );
   assert.ok(badSlot.status === "INVALID_OFFER" || badSlot.status === "SLOT_UNAVAILABLE");
 
-  const loaded = await import("../src/lib/voice-v2/offer-set-store").then((m) =>
+  const loaded = await import("../src/lib/voice-receptionist-wizard/offer-set-store").then((m) =>
     m.loadVoiceV2OfferSet(WORKSPACE_ID, offer.offerSetId),
   );
   assert.ok(loaded);

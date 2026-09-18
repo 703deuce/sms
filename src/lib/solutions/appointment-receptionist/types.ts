@@ -209,7 +209,7 @@ export type AppointmentReceptionistWizardState = {
     | "SEND_BOOKING_LINK"
     | "CONTINUE_PRIMARY_MODE"
     | null;
-  qualificationRules?: import("@/lib/voice-v2/qualification-types").VoiceV2QualificationRuleRow[];
+  qualificationRules?: import("@/lib/voice-receptionist-wizard/qualification-types").VoiceV2QualificationRuleRow[];
   transferTriggers: string[];
   transferDestinationName: string;
   transferDestinationPhone: string;
@@ -237,20 +237,20 @@ export type AppointmentReceptionistWizardState = {
     timeoutSeconds?: number;
   }>;
   urgencyEnabled?: boolean | null;
-  urgencyRules?: import("@/lib/voice-v2/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
+  urgencyRules?: import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
   callbackRequestsEnabled?: boolean | null;
   callbackUseAniByDefault?: boolean | null;
   callbackAskPreferredTime?: boolean | null;
   callbackConfirmNumber?: boolean | null;
   salesSolicitationEnabled?: boolean | null;
   salesSolicitationAction?:
-    | import("@/lib/voice-v2/after-hours-handling-types").VoiceV2SalesSolicitationAction
+    | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction
     | null;
 
   /** Voice V2 — AI Call Recovery (unresolved AI voice → SMS text-agent continuation). */
   aiCallRecoveryEnabled?: boolean | null;
   aiCallRecoveryConsentMode?:
-    | import("@/lib/voice-v2/ai-call-recovery/types").VoiceV2AiCallRecoveryConsentMode
+    | import("@/lib/voice-receptionist-wizard/ai-call-recovery/types").VoiceV2AiCallRecoveryConsentMode
     | null;
   aiCallRecoverySendingPhoneNumberId?: string | null;
   aiCallRecoveryContinueOverSms?: boolean | null;
@@ -293,7 +293,7 @@ export type AppointmentReceptionistWizardState = {
   timezone: string;
 
   /** Voice V2 operating maturity (hours, on-call, SLA) — pinned at publish. */
-  operatingMaturity?: import("@/lib/voice-v2/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
+  operatingMaturity?: import("@/lib/voice-receptionist-wizard/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
   qualityStudioLastRun?: {
     configHash: string;
     testedAt: string;

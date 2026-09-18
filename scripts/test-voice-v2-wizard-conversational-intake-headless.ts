@@ -8,15 +8,15 @@ import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { compileIntakeSchemaParts } from "../src/lib/voice-v2/intake/compile-schema";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import { evaluateBookingIntakeGate } from "../src/lib/voice-v2/intake/booking-gate";
-import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-v2/intake/live-intake-instructions";
-import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../src/lib/voice-v2/caller-experience-law";
-import { validateIntakeFieldPayload } from "../src/lib/voice-v2/intake/validate-fields";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { compileIntakeSchemaParts } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import { evaluateBookingIntakeGate } from "../src/lib/voice-receptionist-wizard/intake/booking-gate";
+import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-receptionist-wizard/intake/live-intake-instructions";
+import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../src/lib/voice-receptionist-wizard/caller-experience-law";
+import { validateIntakeFieldPayload } from "../src/lib/voice-receptionist-wizard/intake/validate-fields";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 function pass(id: string, cond: boolean, detail?: string) {

@@ -151,9 +151,20 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
 
   if (voiceV3IntakePipelineEnabled()) {
+    let runtimeConfig: import("@/lib/voice-v3/config/agent-config").VoiceV3AgentConfig | undefined;
+    if (pstnLeg?.workspaceId && pstnLeg.agentId) {
+      const { resolveVoiceV3AgentConfigForAgent } = await import(
+        "@/lib/voice-v3/config/from-published-agent"
+      );
+      runtimeConfig = await resolveVoiceV3AgentConfigForAgent({
+        workspaceId: pstnLeg.workspaceId,
+        agentId: pstnLeg.agentId,
+      });
+    }
     createVoiceV3CallRuntime({
       liveSessionId: sessionId,
-      callId: event.data?.call_id,
+      callId: pstnLeg?.callId || event.data?.call_id,
+      config: runtimeConfig,
     });
   }
 

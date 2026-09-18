@@ -391,7 +391,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
               : "inbound",
         }).catch(() => undefined);
         const { enqueueVoiceV2PostCallTranscription } = await import(
-          "@/lib/voice-v2/post-call/transcription-pipeline"
+          "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
         );
         await enqueueVoiceV2PostCallTranscription({
           workspaceId,
@@ -405,13 +405,13 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     }
     case "voice_v2_post_call_transcription": {
       const { executeVoiceV2PostCallTranscriptionJob } = await import(
-        "@/lib/voice-v2/post-call/transcription-pipeline"
+        "@/lib/voice-receptionist-wizard/post-call/transcription-pipeline"
       );
       return executeVoiceV2PostCallTranscriptionJob(payload as Record<string, unknown>);
     }
     case "voice_v2_ai_call_recovery_settle": {
       const { executeVoiceV2AiCallRecoverySettleJob } = await import(
-        "@/lib/voice-v2/ai-call-recovery/settle-job"
+        "@/lib/voice-receptionist-wizard/ai-call-recovery/settle-job"
       );
       return executeVoiceV2AiCallRecoverySettleJob(payload as Record<string, unknown>);
     }
@@ -706,7 +706,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     }
     case "voice_v2_warm_transfer_timeout": {
       const { handleVoiceV2WarmTransferTimeoutJob } = await import(
-        "@/lib/voice-v2/transfer/warm-transfer-runtime"
+        "@/lib/voice-receptionist-wizard/runtime-stubs"
       );
       return handleVoiceV2WarmTransferTimeoutJob({
         warmSessionId: String(payload.warmSessionId || ""),
@@ -1191,7 +1191,7 @@ export async function handleJob(jobType: string, payload: Record<string, unknown
     }
     case "voice_v2_callback_sla_overdue_scan": {
       const { executeVoiceV2CallbackSlaOverdueScan } = await import(
-        "@/lib/voice-v2/operating-maturity/callback-overdue-job"
+        "@/lib/voice-receptionist-wizard/operating-maturity/callback-overdue-job"
       );
       return executeVoiceV2CallbackSlaOverdueScan();
     }

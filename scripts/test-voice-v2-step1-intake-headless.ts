@@ -9,20 +9,20 @@ import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { evaluateBookingIntakeGate } from "../src/lib/voice-v2/intake/booking-gate";
-import { validateIntakeFieldPayload } from "../src/lib/voice-v2/intake/validate-fields";
-import { isBookingIntentOnlyServiceReason } from "../src/lib/voice-v2/intake/booking-intent-guard";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { evaluateBookingIntakeGate } from "../src/lib/voice-receptionist-wizard/intake/booking-gate";
+import { validateIntakeFieldPayload } from "../src/lib/voice-receptionist-wizard/intake/validate-fields";
+import { isBookingIntentOnlyServiceReason } from "../src/lib/voice-receptionist-wizard/intake/booking-intent-guard";
 import {
   extractPostCallIntakeCandidates,
   mergePostCallBackfills,
-} from "../src/lib/voice-v2/intake/postcall-reconcile";
-import type { VoiceV2CallContext, VoiceV2IntakeState } from "../src/lib/voice-v2/intake/types";
-import { saveIntakePublicFields } from "../src/lib/voice-v2/intake/format-save-tool-response";
-import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-v2/intake/live-intake-instructions";
+} from "../src/lib/voice-receptionist-wizard/intake/postcall-reconcile";
+import type { VoiceV2CallContext, VoiceV2IntakeState } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { saveIntakePublicFields } from "../src/lib/voice-receptionist-wizard/intake/format-save-tool-response";
+import { buildVoiceV2LiveIntakeInstructions } from "../src/lib/voice-receptionist-wizard/intake/live-intake-instructions";
 import { buildReceptionistCompiledPrompt } from "../src/lib/voice/receptionist/build-receptionist-compiled-prompt";
 import { buildGeneratedWorkflowRules } from "../src/lib/voice/receptionist/build-generated-workflow-rules";
 import type { ReceptionistCompiledSnapshot } from "../src/lib/voice/receptionist/types";

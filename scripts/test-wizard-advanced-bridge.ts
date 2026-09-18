@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 import { buildWizardAgentConfig } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import { getReceptionistCompiledFromAdvanced } from "../src/lib/voice/receptionist/runtime";
 
 const state = createDefaultWizardState();
@@ -41,11 +41,12 @@ assert.equal(mothers?.enabled, true);
 
 const compiled = getReceptionistCompiledFromAdvanced(advanced);
 assert.ok(compiled?.voiceV2IntakeAuthority, "booking enables voice v2 intake authority");
-assert.ok(
-  String(compiled?.voiceV2IntakeInstructions || "").includes("do not ask again"),
+assert.match(
+  String(compiled?.voiceV2IntakeInstructions || ""),
+  /do not ask again/i,
   "intake instructions include no-reask guidance",
 );
 
-assert.equal(advanced.voiceV2PstnLiveBooking, true);
+assert.equal(advanced.voiceV3PstnBooking, true);
 
 console.log("test-wizard-advanced-bridge: PASS");

@@ -14,11 +14,11 @@ import {
   VOICE_V2_KNOWN_GOOD_BASELINE,
   VOICE_V2_FROZEN_PATHS,
   VOICE_V2_BASELINE_REGRESSION,
-} from "../src/lib/voice-v2/baseline-lock";
+} from "../src/lib/voice-receptionist-wizard/baseline-lock";
 import {
   VOICE_V2_TELNYX_TOOL_NAME,
   VOICE_V2_BOOK_TELNYX_TOOL_NAME,
-} from "../src/lib/voice-v2/telnyx-tool-definition";
+} from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 const REQUIRE_COMMIT = process.env.REQUIRE_BASELINE_COMMIT === "1";
 
@@ -80,7 +80,7 @@ async function main() {
     });
   }
 
-  const mdPath = join(process.cwd(), "src/lib/voice-v2/KNOWN_GOOD_BASELINE.md");
+  const mdPath = join(process.cwd(), "src/lib/voice-receptionist-wizard/KNOWN_GOOD_BASELINE.md");
   checks.push({
     name: "baseline_doc_present",
     pass: existsSync(mdPath),

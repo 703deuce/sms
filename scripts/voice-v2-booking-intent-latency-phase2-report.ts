@@ -6,10 +6,10 @@
 import * as ai from "../src/lib/voice/telnyx/ai-client";
 import {
   analyzeBookingIntentTurnFromMessages,
-} from "../src/lib/voice-v2/pstn-turn-observability";
-import { clearVoiceV2CallSessions } from "../src/lib/voice-v2/intake/session-store";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { SaveIntakeTrace } from "../src/lib/voice-v2/intake/save-intake-trace";
+} from "../src/lib/voice-receptionist-wizard/pstn-turn-observability";
+import { clearVoiceV2CallSessions } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { SaveIntakeTrace } from "../src/lib/voice-receptionist-wizard/intake/save-intake-trace";
 
 const PSTN_CONV = "07844724-0254-4e45-bd5b-00c5b5b21a78";
 const WORKSPACE = process.env.WORKSPACE_ID || "ws_1";

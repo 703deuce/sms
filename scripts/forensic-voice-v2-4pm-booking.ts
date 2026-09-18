@@ -17,7 +17,7 @@ import { zonedDateParts } from "../src/lib/voice/calendar/timezone-slots";
 import { toMicrosoftDateTimeTimeZone } from "../src/lib/microsoft/graph-datetime-timezone";
 import { MICROSOFT_GRAPH_V1 } from "../src/lib/microsoft/graph-helpers";
 import * as ai from "../src/lib/voice/telnyx/ai-client";
-import type { VoiceV2Slot } from "../src/lib/voice-v2/types";
+import type { VoiceV2Slot } from "../src/lib/voice-receptionist-wizard/types";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const DEFAULT_OFFER = "v2offer_cmu23xlu94q0y1p2y632v5u02";

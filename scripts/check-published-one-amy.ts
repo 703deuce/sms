@@ -2,9 +2,9 @@
 import { getPrisma } from "../src/lib/db";
 import { parseVoiceAgentConfig } from "../src/lib/voice/types";
 import { RECEPTIONIST_COMPILED_KEY } from "../src/lib/voice/receptionist/types";
-import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-v2/one-amy/amy-core-static-prompt";
+import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
 import { readTelnyxWorkflowState } from "../src/lib/voice/telnyx/workflow-readback";
-import { verifyVoiceV2WorkflowReadBack } from "../src/lib/voice-v2/workflow-capability";
+import { verifyVoiceV2WorkflowReadBack } from "../src/lib/voice-receptionist-wizard/workflow-capability";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";
 const AGENT_ID = process.env.VOICE_AGENT_ID || "cmshz2lc25c622c4i58303501";

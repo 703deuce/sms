@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 import assert from "node:assert/strict";
-import { resolveSelectedSlotIdFromOffer } from "../src/lib/voice-v2/resolve-slot-from-offer";
+import { resolveSelectedSlotIdFromOffer } from "../src/lib/voice-receptionist-wizard/resolve-slot-from-offer";
 
 const slots = [
   {

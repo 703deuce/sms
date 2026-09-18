@@ -6,18 +6,18 @@
 import {
   clearVoiceV2CallSessions,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { saveIntakePublicFields } from "../src/lib/voice-v2/intake/format-save-tool-response";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { saveIntakePublicFields } from "../src/lib/voice-receptionist-wizard/intake/format-save-tool-response";
 import {
   deriveVoiceV2NextStage,
   evaluateBookingContinueRequired,
   transitionAfterIntakeSave,
   workflowFromContext,
-} from "../src/lib/voice-v2/booking-workflow";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 const metrics: Record<string, number> = {

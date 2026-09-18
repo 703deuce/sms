@@ -1,8 +1,8 @@
 #!/usr/bin/env npx tsx
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolveSelectedSlotIdFromOffer } from "../src/lib/voice-v2/resolve-slot-from-offer";
-import { certifiedBookingHandoffPayload } from "../src/lib/voice-v2/certified-booking-pipeline";
+import { resolveSelectedSlotIdFromOffer } from "../src/lib/voice-receptionist-wizard/resolve-slot-from-offer";
+import { certifiedBookingHandoffPayload } from "../src/lib/voice-receptionist-wizard/certified-booking-pipeline";
 
 const findRoute = readFileSync(
   "src/app/api/telnyx/voice-v2/find-availability/route.ts",

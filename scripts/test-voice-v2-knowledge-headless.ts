@@ -11,16 +11,16 @@ import { buildBusinessKnowledgePromptSection } from "../src/lib/solutions/appoin
 import { applyAmyMinimumSideEffectConfig } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
 import { workflowNodeExpectedTools } from "../src/lib/voice/telnyx/conversation-workflow";
 import { buildDesiredTelnyxWorkflowPayload } from "../src/lib/voice/telnyx/workflow-sync";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
 import {
   buildVoiceV2KnowledgeLayerBInstructions,
   isVoiceV2KnowledgeSearchEnabled,
   knowledgeConfigFromWizard,
   resolveVoiceV2KnowledgeConfig,
-} from "../src/lib/voice-v2/knowledge-config";
-import { executeVoiceV2SearchKnowledge } from "../src/lib/voice-v2/search-knowledge";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+} from "../src/lib/voice-receptionist-wizard/knowledge-config";
+import { executeVoiceV2SearchKnowledge } from "../src/lib/voice-receptionist-wizard/search-knowledge";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const KB_ID = "kb-test-headless-001";

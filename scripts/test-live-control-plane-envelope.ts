@@ -3,11 +3,11 @@
  * Control plane envelope: forbidden_actions + required_action from registry.
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-live-control-plane-envelope.ts
  */
-import { buildVoiceV2ControlPlaneEnvelope } from "../src/lib/voice-v2/control-plane-envelope";
-import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-v2/booking-workflow";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-v2/telnyx-tool-definition";
+import { buildVoiceV2ControlPlaneEnvelope } from "../src/lib/voice-receptionist-wizard/control-plane-envelope";
+import { defaultVoiceV2BookingWorkflow } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "../src/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

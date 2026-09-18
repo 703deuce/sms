@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 
 import { createLiveToolWaitProgressController } from "@/lib/voice/telnyx/openai-live-bridge/live-tool-wait-commentary";
-import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-v2/telnyx-tool-definition";
+import { VOICE_V2_FIND_AVAILABILITY_TOOL_TYPE } from "@/lib/voice-receptionist-wizard/telnyx-tool-definition";
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));

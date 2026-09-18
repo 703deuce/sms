@@ -658,7 +658,7 @@ export async function processVoiceWebhookEvent(input: {
       handleVoiceV2WarmTransferConsultAnswered,
       handleVoiceV2WarmTransferGather,
       handleVoiceV2WarmTransferAmd,
-    } = await import("@/lib/voice-v2/transfer/warm-transfer-runtime");
+    } = await import("@/lib/voice-receptionist-wizard/runtime-stubs");
 
     const consultControlId = String(eventPayload.call_control_id || "");
     if (eventType === "call.answered") {
@@ -838,7 +838,7 @@ export async function processVoiceWebhookEvent(input: {
     const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
     if (controlId) {
       const { handleVoiceV2WarmTransferCallerHangup } = await import(
-        "@/lib/voice-v2/transfer/warm-transfer-runtime"
+        "@/lib/voice-receptionist-wizard/runtime-stubs"
       );
       await handleVoiceV2WarmTransferCallerHangup(controlId).catch(() => undefined);
     }
@@ -874,10 +874,10 @@ export async function processVoiceWebhookEvent(input: {
   if (!isSecondaryVoiceLeg && eventType === "call.bridged") {
     const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
     const { getWarmTransferSessionByCallerControlId } = await import(
-      "@/lib/voice-v2/transfer/warm-transfer-store"
+      "@/lib/voice-receptionist-wizard/runtime-stubs"
     );
     const { markVoiceV2WarmBridgeSucceeded } = await import(
-      "@/lib/voice-v2/transfer/warm-transfer-runtime"
+      "@/lib/voice-receptionist-wizard/runtime-stubs"
     );
     const v2Warm = controlId ? await getWarmTransferSessionByCallerControlId(controlId) : null;
     if (v2Warm && !v2Warm.bridgeCompleted) {
@@ -1017,6 +1017,43 @@ export async function processVoiceWebhookEvent(input: {
           "../load-agent-config"
         );
         const cfg = await loadCfg(workspaceId, agent.id);
+        const { appointmentReceptionistUsesVoiceV3Runtime } = await import(
+          "@/lib/voice-v3/config/from-published-agent"
+        );
+        if (appointmentReceptionistUsesVoiceV3Runtime(cfg)) {
+          const { forwardInboundCallToOpenAiLiveSip } = await import(
+            "@/lib/voice-v3-basic/telnyx-sip-forward"
+          );
+          const { notePstnLegWizardContext } = await import("@/lib/voice-v3/telemetry/call-trace");
+          notePstnLegWizardContext({
+            callControlId: controlId,
+            callId: call.id,
+            workspaceId,
+            agentId: agent.id,
+          });
+          await forwardInboundCallToOpenAiLiveSip(controlId);
+          await prisma.voiceCall
+            .update({
+              where: { id: call.id },
+              data: {
+                metadata: {
+                  ...claim.meta,
+                  aiStarted: true,
+                  aiStartClaimed: true,
+                  voiceTransport: "voice_v3_basic",
+                  voiceV3WizardBound: true,
+                  mediaPipeline: { path: "answered_webhook_voice_v3_sip_forward" },
+                } as object,
+              },
+            })
+            .catch(() => undefined);
+          console.log("VOICE_V3_BASIC_INBOUND_SIP_FORWARD", {
+            callId: call.id,
+            agentId: agent.id,
+            workspaceId,
+            path: "answered_webhook",
+          });
+        } else {
         const { isGptLivePstnBridgeActive } = await import(
           "./openai-realtime-bridge/flags"
         );
@@ -1140,7 +1177,7 @@ export async function processVoiceWebhookEvent(input: {
 
         if (aiStartOk) {
         const assistantStartReturnedAt = Date.now();
-        const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-v2/call-warmup");
+        const { scheduleVoiceV2CallWarmup } = await import("@/lib/voice-receptionist-wizard/runtime-stubs");
         scheduleVoiceV2CallWarmup({
           workspaceId,
           agentId: agent.id,
@@ -1222,6 +1259,7 @@ export async function processVoiceWebhookEvent(input: {
         }
         }
         }
+        }
       }
       }
     }
@@ -1252,7 +1290,7 @@ export async function processVoiceWebhookEvent(input: {
       });
     }
     const { terminateVoiceV2CallSessionOnHangup } = await import(
-      "@/lib/voice-v2/call-warmup"
+      "@/lib/voice-receptionist-wizard/runtime-stubs"
     );
     terminateVoiceV2CallSessionOnHangup({
       workspaceId,

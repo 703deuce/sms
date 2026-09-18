@@ -11,9 +11,9 @@ import {
   clearVoiceV2WarmupForTests,
   getVoiceV2WarmupEntry,
   WARMUP_BLOCKING_TELEMETRY,
-} from "../src/lib/voice-v2/call-warmup";
-import { ensureVoiceV2CallContext } from "../src/lib/voice-v2/intake/load-call-context";
-import { clearVoiceV2CallSessions } from "../src/lib/voice-v2/intake/session-store";
+} from "../src/lib/voice-receptionist-wizard/call-warmup";
+import { ensureVoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/load-call-context";
+import { clearVoiceV2CallSessions } from "../src/lib/voice-receptionist-wizard/intake/session-store";
 import {
   InMemoryVoiceV2CallContextStore,
   resetVoiceV2CallContextStoreForTests,
@@ -22,8 +22,8 @@ import {
   clearVoiceV2CallContextL1ForTests,
   loadVoiceV2CallContext,
   clearVoiceV2SessionTerminatedForTests,
-} from "../src/lib/voice-v2/session/call-context-store";
-import { warmMicrosoftTokenIfNeeded, clearTokenWarmupInFlightForTests } from "../src/lib/voice-v2/session/token-readiness";
+} from "../src/lib/voice-receptionist-wizard/session/call-context-store";
+import { warmMicrosoftTokenIfNeeded, clearTokenWarmupInFlightForTests } from "../src/lib/voice-receptionist-wizard/session/token-readiness";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const rows: Array<{ id: string; pass: boolean; detail?: string }> = [];
@@ -124,7 +124,7 @@ async function main() {
 
   const answerAt = Date.now();
   let greetingReleased = false;
-  const { scheduleVoiceV2CallWarmup } = await import("../src/lib/voice-v2/call-warmup");
+  const { scheduleVoiceV2CallWarmup } = await import("../src/lib/voice-receptionist-wizard/call-warmup");
   scheduleVoiceV2CallWarmup({
     workspaceId: "ws_test",
     agentId: "agent_test",

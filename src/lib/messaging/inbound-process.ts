@@ -656,7 +656,7 @@ export async function processInboundMessage(input: {
 
   try {
     const voiceRecovery = await (
-      await import("@/lib/voice-v2/ai-call-recovery/inbound-reply")
+      await import("@/lib/voice-receptionist-wizard/ai-call-recovery/inbound-reply")
     ).tryHandleVoiceV2AiCallRecoveryInboundSms({
       workspaceId: input.workspaceId,
       conversationId: conversation.id,

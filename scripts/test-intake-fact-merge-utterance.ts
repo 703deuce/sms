@@ -6,9 +6,9 @@
 import {
   applyCallerIntentToCallContext,
   interpretCallerUtterance,
-} from "../src/lib/voice-v2/caller-intent-interpreter";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/caller-intent-interpreter";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

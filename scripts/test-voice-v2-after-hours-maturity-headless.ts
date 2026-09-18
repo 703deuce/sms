@@ -4,19 +4,19 @@
  */
 import assert from "node:assert/strict";
 
-import { DEFAULT_VOICE_V2_BUSINESS_SCHEDULE } from "../src/lib/voice-v2/operating-maturity/defaults";
-import { resolveVoiceV2OperatingState } from "../src/lib/voice-v2/operating-maturity/operating-state";
-import { resolveActiveOnCallTarget } from "../src/lib/voice-v2/operating-maturity/on-call";
-import { gateCapabilitiesForOperatingState } from "../src/lib/voice-v2/operating-maturity/behavior-gating";
-import { normalizeVoiceV2ResolutionAudit } from "../src/lib/voice-v2/operating-maturity/resolution-audit";
-import { detectRealtimeFrictionSignals } from "../src/lib/voice-v2/operating-maturity/friction";
+import { DEFAULT_VOICE_V2_BUSINESS_SCHEDULE } from "../src/lib/voice-receptionist-wizard/operating-maturity/defaults";
+import { resolveVoiceV2OperatingState } from "../src/lib/voice-receptionist-wizard/operating-maturity/operating-state";
+import { resolveActiveOnCallTarget } from "../src/lib/voice-receptionist-wizard/operating-maturity/on-call";
+import { gateCapabilitiesForOperatingState } from "../src/lib/voice-receptionist-wizard/operating-maturity/behavior-gating";
+import { normalizeVoiceV2ResolutionAudit } from "../src/lib/voice-receptionist-wizard/operating-maturity/resolution-audit";
+import { detectRealtimeFrictionSignals } from "../src/lib/voice-receptionist-wizard/operating-maturity/friction";
 import {
   computeCallbackDeadline,
   shouldMarkCallbackOverdue,
-} from "../src/lib/voice-v2/operating-maturity/callback-sla";
-import { runQualityStudioHeadless } from "../src/lib/voice-v2/operating-maturity/quality-studio";
-import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "../src/lib/voice-v2/operating-maturity/defaults";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/operating-maturity/callback-sla";
+import { runQualityStudioHeadless } from "../src/lib/voice-receptionist-wizard/operating-maturity/quality-studio";
+import { DEFAULT_VOICE_V2_OPERATING_MATURITY_CONFIG } from "../src/lib/voice-receptionist-wizard/operating-maturity/defaults";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const schedule = {
   ...DEFAULT_VOICE_V2_BUSINESS_SCHEDULE,

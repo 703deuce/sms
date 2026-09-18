@@ -3,10 +3,10 @@
  * Caller-experience law — runtime contract tests (P7 fast reject).
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-caller-experience-law.ts
  */
-import { clearVoiceV2CallSessions } from "../src/lib/voice-v2/intake/session-store";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../src/lib/voice-v2/caller-experience-law";
-import { isBookingIntentOnlyFields } from "../src/lib/voice-v2/intake/booking-intent-guard";
+import { clearVoiceV2CallSessions } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { VOICE_V2_BOOKING_INTENT_CONVERSATION_ONLY_STATUS } from "../src/lib/voice-receptionist-wizard/caller-experience-law";
+import { isBookingIntentOnlyFields } from "../src/lib/voice-receptionist-wizard/intake/booking-intent-guard";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) {

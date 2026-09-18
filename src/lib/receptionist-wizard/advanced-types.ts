@@ -1,4 +1,4 @@
-import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-v2/intake/wizard-config";
+import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-receptionist-wizard/intake/wizard-config";
 
 /** Advanced receptionist settings — optional tuning beyond the main wizard steps. */
 

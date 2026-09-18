@@ -8,13 +8,13 @@ import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import { validateIntakeFieldPayload } from "../src/lib/voice-v2/intake/validate-fields";
-import { evaluateBookingIntakeGate } from "../src/lib/voice-v2/intake/booking-gate";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import { validateIntakeFieldPayload } from "../src/lib/voice-receptionist-wizard/intake/validate-fields";
+import { evaluateBookingIntakeGate } from "../src/lib/voice-receptionist-wizard/intake/booking-gate";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 
 const failures: string[] = [];
 function pass(name: string, cond: boolean, detail?: string) {

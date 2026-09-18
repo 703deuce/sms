@@ -7,24 +7,24 @@ import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { applyCallerIntentToCallContext } from "../src/lib/voice-v2/caller-intent-interpreter";
-import { callerMeaningToIntentInterpretation } from "../src/lib/voice-v2/caller-meaning-apply";
-import { deterministicCallerInterpreter } from "../src/lib/voice-v2/deterministic-caller-interpreter";
-import type { InterpreterContext } from "../src/lib/voice-v2/caller-meaning";
-import type { VoiceDialogGoal } from "../src/lib/voice-v2/dialog-goal";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { applyCallerIntentToCallContext } from "../src/lib/voice-receptionist-wizard/caller-intent-interpreter";
+import { callerMeaningToIntentInterpretation } from "../src/lib/voice-receptionist-wizard/caller-meaning-apply";
+import { deterministicCallerInterpreter } from "../src/lib/voice-receptionist-wizard/deterministic-caller-interpreter";
+import type { InterpreterContext } from "../src/lib/voice-receptionist-wizard/caller-meaning";
+import type { VoiceDialogGoal } from "../src/lib/voice-receptionist-wizard/dialog-goal";
 import {
   parseCallerMeaningFromModelJson,
-} from "../src/lib/voice-v2/astra-caller-interpreter";
+} from "../src/lib/voice-receptionist-wizard/astra-caller-interpreter";
 import {
   detectInterpreterWorkflowAuthorityViolation,
   shouldFailOnInterpreterSchemaViolation,
-} from "../src/lib/voice-v2/caller-interpreter-schema";
-import { mergeCallerFactsIntoCallContext } from "../src/lib/voice-v2/merge-caller-facts";
-import { dialogFromContext } from "../src/lib/voice-v2/dialog-goal";
-import { utteranceLooksLikeSchedulingCorrection } from "../src/lib/voice-v2/scheduling-preference-state";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/caller-interpreter-schema";
+import { mergeCallerFactsIntoCallContext } from "../src/lib/voice-receptionist-wizard/merge-caller-facts";
+import { dialogFromContext } from "../src/lib/voice-receptionist-wizard/dialog-goal";
+import { utteranceLooksLikeSchedulingCorrection } from "../src/lib/voice-receptionist-wizard/scheduling-preference-state";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 import { LiveCallerUtteranceAssembler } from "../src/lib/voice/telnyx/openai-live-bridge/live-caller-utterance-assembler";
 import {
   beginUtteranceInterpretation,

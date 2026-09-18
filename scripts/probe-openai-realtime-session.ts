@@ -8,7 +8,7 @@ import { buildOpenAiRealtimeGaSessionUpdate } from "@/lib/voice/telnyx/openai-re
 import { buildOpenAiRealtimeVoiceV2Tools } from "@/lib/voice/telnyx/openai-realtime-bridge/realtime-tools";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-v2/after-hours-handling-config";
+import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-receptionist-wizard/after-hours-handling-config";
 import { loadOpenAiRealtimeSessionInstructions } from "@/lib/voice/telnyx/openai-realtime-bridge/instructions";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";

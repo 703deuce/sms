@@ -3,18 +3,18 @@
  */
 import assert from "node:assert/strict";
 
-import { applyCallerIntentToCallContext, interpretCallerUtterance } from "@/lib/voice-v2/caller-intent-interpreter";
-import { dialogFromContext, defaultVoiceV2DialogState } from "@/lib/voice-v2/dialog-goal";
-import { defaultVoiceV2BookingWorkflow, transitionAfterIntakeSave } from "@/lib/voice-v2/booking-workflow";
-import type { VoiceV2CallContext } from "@/lib/voice-v2/intake/types";
+import { applyCallerIntentToCallContext, interpretCallerUtterance } from "@/lib/voice-receptionist-wizard/caller-intent-interpreter";
+import { dialogFromContext, defaultVoiceV2DialogState } from "@/lib/voice-receptionist-wizard/dialog-goal";
+import { defaultVoiceV2BookingWorkflow, transitionAfterIntakeSave } from "@/lib/voice-receptionist-wizard/booking-workflow";
+import type { VoiceV2CallContext } from "@/lib/voice-receptionist-wizard/intake/types";
 import {
   clearVoiceV2CallContextL1ForTests,
   createVoiceV2CallContext,
   getVoiceV2CallContextL1,
   resetVoiceV2CallContextStoreForTests,
-} from "@/lib/voice-v2/session/call-context-store";
-import { setVoiceV2CallContext } from "@/lib/voice-v2/intake/session-store";
-import { getIntakeReadiness } from "@/lib/voice-v2/intake/readiness";
+} from "@/lib/voice-receptionist-wizard/session/call-context-store";
+import { setVoiceV2CallContext } from "@/lib/voice-receptionist-wizard/intake/session-store";
+import { getIntakeReadiness } from "@/lib/voice-receptionist-wizard/intake/readiness";
 
 function basePayload(sessionKey: string): VoiceV2CallContext {
   return {

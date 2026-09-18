@@ -20,7 +20,7 @@ import { buildOpenAiRealtimeVoiceV2Tools } from "@/lib/voice/telnyx/openai-realt
 import { loadOpenAiRealtimeSessionInstructions } from "@/lib/voice/telnyx/openai-realtime-bridge/instructions";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import { parseVoiceAgentConfig } from "@/lib/voice/types";
-import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-v2/after-hours-handling-config";
+import { resolveAfterHoursHandlingFromAgentConfig } from "@/lib/voice-receptionist-wizard/after-hours-handling-config";
 
 const HOLD_MS = Number(process.env.HOLD_MS || "30000");
 const LAYER = process.env.OPENAI_REALTIME_TEST_LAYER || "minimal";

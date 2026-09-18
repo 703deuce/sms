@@ -3,15 +3,15 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-post-call-reconciliation-headless.ts
  */
 import assert from "node:assert/strict";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   buildDynamicExtractionSchema,
   extractionSchemaFieldKeys,
-} from "../src/lib/voice-v2/post-call/extraction-schema";
-import { buildReconciledCallSummaryText } from "../src/lib/voice-v2/post-call/final-summary";
-import { reconcileVoiceV2PostCallRecord } from "../src/lib/voice-v2/post-call/reconciliation";
-import { parseStructuredExtractionJson } from "../src/lib/voice-v2/post-call/structured-extraction";
-import { structuredRowsToPostCallCandidates } from "../src/lib/voice-v2/post-call/structured-extraction-types";
+} from "../src/lib/voice-receptionist-wizard/post-call/extraction-schema";
+import { buildReconciledCallSummaryText } from "../src/lib/voice-receptionist-wizard/post-call/final-summary";
+import { reconcileVoiceV2PostCallRecord } from "../src/lib/voice-receptionist-wizard/post-call/reconciliation";
+import { parseStructuredExtractionJson } from "../src/lib/voice-receptionist-wizard/post-call/structured-extraction";
+import { structuredRowsToPostCallCandidates } from "../src/lib/voice-receptionist-wizard/post-call/structured-extraction-types";
 
 function schemaBuiltinOnly() {
   return intakeSchemaFromWizardOnly(

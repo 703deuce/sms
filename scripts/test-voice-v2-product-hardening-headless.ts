@@ -4,26 +4,26 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-product-hardening-headless.ts
  */
 import assert from "node:assert/strict";
-import { AMY_V2_CORE_STATIC_PROMPT, ONE_AMY_V2_WORKFLOW_APPEND } from "../src/lib/voice-v2/one-amy/amy-core-static-prompt";
-import { buildVoiceV2KnowledgeLayerBInstructions } from "../src/lib/voice-v2/knowledge-config";
-import { buildVoiceV2AfterHoursLayerBInstructions } from "../src/lib/voice-v2/after-hours-handling-prompt";
+import { AMY_V2_CORE_STATIC_PROMPT, ONE_AMY_V2_WORKFLOW_APPEND } from "../src/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
+import { buildVoiceV2KnowledgeLayerBInstructions } from "../src/lib/voice-receptionist-wizard/knowledge-config";
+import { buildVoiceV2AfterHoursLayerBInstructions } from "../src/lib/voice-receptionist-wizard/after-hours-handling-prompt";
 import { applyWizardPreset, createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
-import { afterHoursHandlingFromWizard } from "../src/lib/voice-v2/after-hours-handling-config";
-import { evaluateUrgencyForContext } from "../src/lib/voice-v2/urgency-evaluator";
-import { applyAfterHoursEvaluations } from "../src/lib/voice-v2/after-hours-orchestrator";
+import { afterHoursHandlingFromWizard } from "../src/lib/voice-receptionist-wizard/after-hours-handling-config";
+import { evaluateUrgencyForContext } from "../src/lib/voice-receptionist-wizard/urgency-evaluator";
+import { applyAfterHoursEvaluations } from "../src/lib/voice-receptionist-wizard/after-hours-orchestrator";
 import {
   inferCallerClassificationFromTranscriptSnippet,
   blocksCustomerBookingForClassification,
-} from "../src/lib/voice-v2/spam-handling";
-import { executeVoiceV2TransferPlan } from "../src/lib/voice-v2/transfer/transfer-executor";
+} from "../src/lib/voice-receptionist-wizard/spam-handling";
+import { executeVoiceV2TransferPlan } from "../src/lib/voice-receptionist-wizard/transfer/transfer-executor";
 import {
   MockVoiceV2TransferProvider,
   setMockTransferBehavior,
   clearMockTransferBehaviors,
-} from "../src/lib/voice-v2/transfer/mock-transfer-provider";
-import { setVoiceV2CallContext, clearVoiceV2CallSessions } from "../src/lib/voice-v2/intake/session-store";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/transfer/mock-transfer-provider";
+import { setVoiceV2CallContext, clearVoiceV2CallSessions } from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 import { buildReceptionistCompiledPrompt } from "../src/lib/voice/receptionist/build-receptionist-compiled-prompt";
 
 function check(name: string, ok: boolean, detail = "") {

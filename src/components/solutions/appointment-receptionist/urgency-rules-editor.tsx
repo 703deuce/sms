@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
-import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-v2/after-hours-handling-types";
+import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-receptionist-wizard/after-hours-handling-types";
 import { wizardIntakeFieldOptions } from "@/lib/solutions/appointment-receptionist/wizard-intake-field-options";
 import { Input, Label } from "@/components/ui/input";
 

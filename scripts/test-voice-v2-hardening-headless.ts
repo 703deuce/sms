@@ -11,13 +11,13 @@ import {
   WORKFLOW_NODE_IDS,
   workflowNodeExpectedTools,
 } from "../src/lib/voice/telnyx/conversation-workflow";
-import { resolveVoiceV2KnowledgeConfig } from "../src/lib/voice-v2/knowledge-config";
-import { resolveVoiceV2QualificationConfig } from "../src/lib/voice-v2/qualification-config";
+import { resolveVoiceV2KnowledgeConfig } from "../src/lib/voice-receptionist-wizard/knowledge-config";
+import { resolveVoiceV2QualificationConfig } from "../src/lib/voice-receptionist-wizard/qualification-config";
 import {
   buildRecordFromLegacy,
   syncLegacyFromRecord,
-} from "../src/lib/voice-v2/session/legacy-bridge";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
+} from "../src/lib/voice-receptionist-wizard/session/legacy-bridge";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 const failures: string[] = [];

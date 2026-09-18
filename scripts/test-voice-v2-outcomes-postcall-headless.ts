@@ -4,11 +4,11 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-outcomes-postcall-headless.ts
  */
 import assert from "node:assert/strict";
-import { structuredOutcomeForStrategy } from "../src/lib/voice-v2/booking-strategy";
+import { structuredOutcomeForStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
 import {
   extractPostCallIntakeCandidates,
   mergePostCallBackfills,
-} from "../src/lib/voice-v2/intake/postcall-reconcile";
+} from "../src/lib/voice-receptionist-wizard/intake/postcall-reconcile";
 
 function deliveryKey(outcome: string, channel: string, recipient: string): string {
   return `voiceV2Notify:${outcome}:${channel}:${recipient}`;

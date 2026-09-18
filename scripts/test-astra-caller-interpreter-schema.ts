@@ -1,10 +1,10 @@
 import {
   parseCallerMeaningFromModelJson,
-} from "../src/lib/voice-v2/astra-caller-interpreter";
-import { callerMeaningToIntentInterpretation } from "../src/lib/voice-v2/caller-meaning-apply";
+} from "../src/lib/voice-receptionist-wizard/astra-caller-interpreter";
+import { callerMeaningToIntentInterpretation } from "../src/lib/voice-receptionist-wizard/caller-meaning-apply";
 import {
   detectInterpreterWorkflowAuthorityViolation,
-} from "../src/lib/voice-v2/caller-interpreter-schema";
+} from "../src/lib/voice-receptionist-wizard/caller-interpreter-schema";
 
 function main() {
   const violation = detectInterpreterWorkflowAuthorityViolation({

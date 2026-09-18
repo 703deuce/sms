@@ -9,15 +9,15 @@ import {
   isVoiceV2PstnLiveBookingMode,
   isVoiceV2PstnOneAmyMode,
   resolveVoiceV2BookingStrategy,
-} from "@/lib/voice-v2/pstn-workflow-mode";
-import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-v2/booking-strategy";
+} from "@/lib/voice-receptionist-wizard/pstn-workflow-mode";
+import { voiceV2StrategyAllowsFindBook } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import {
   expressionEdgeCondition,
   exprVarEqualsBool,
   exprVarEqualsString,
   llmEdgeCondition,
 } from "./workflow-expression";
-import { ONE_AMY_V2_WORKFLOW_APPEND } from "@/lib/voice-v2/one-amy/amy-core-static-prompt";
+import { ONE_AMY_V2_WORKFLOW_APPEND } from "@/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
 
 export const WORKFLOW_NODE_IDS = {
   GENERAL: "n_general",

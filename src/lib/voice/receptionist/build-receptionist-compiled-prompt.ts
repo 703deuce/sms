@@ -1,6 +1,6 @@
 import type { ReceptionistCompiledSnapshot } from "./types";
 import { TRANSOVO_RECEPTIONIST_CONSTITUTION } from "./transovo-receptionist-constitution";
-import { AMY_V2_CORE_STATIC_PROMPT } from "@/lib/voice-v2/one-amy/amy-core-static-prompt";
+import { AMY_V2_CORE_STATIC_PROMPT } from "@/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
 import { buildToolFeedbackVocabularyForPrompt } from "@/lib/voice/tool-feedback";
 import { buildGeneratedWorkflowRules } from "./build-generated-workflow-rules";
 import {

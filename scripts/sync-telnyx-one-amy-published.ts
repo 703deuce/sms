@@ -5,7 +5,7 @@ import { loadVoiceAgentRuntimeConfig } from "../src/lib/voice/load-agent-config"
 import { syncTelnyxAssistant } from "../src/lib/voice/telnyx/assistant-sync";
 import { syncConversationWorkflowToTelnyx } from "../src/lib/voice/telnyx/workflow-sync";
 import { getReceptionistCompiledFromAdvanced } from "../src/lib/voice/receptionist/runtime";
-import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-v2/one-amy/amy-core-static-prompt";
+import { AMY_V2_CORE_STATIC_PROMPT } from "../src/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
 import * as ai from "../src/lib/voice/telnyx/ai-client";
 
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "ws_1";

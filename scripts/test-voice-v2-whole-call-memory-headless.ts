@@ -3,23 +3,23 @@
  * NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v2-whole-call-memory-headless.ts
  */
 import assert from "node:assert/strict";
-import { transitionAfterBookingConfirmed } from "../src/lib/voice-v2/booking-workflow";
+import { transitionAfterBookingConfirmed } from "../src/lib/voice-receptionist-wizard/booking-workflow";
 import {
   resolveVoiceV2CallerFieldState,
   resolveVoiceV2KnownCallerState,
-} from "../src/lib/voice-v2/intake/caller-field-state";
-import { executeVoiceV2FinalizeCallerRequest } from "../src/lib/voice-v2/finalize-caller-request";
-import { applyCallerAniToIntakeState } from "../src/lib/voice-v2/intake/caller-phone";
-import { intakeSchemaFromWizardOnly } from "../src/lib/voice-v2/intake/compile-schema";
-import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-v2/intake/save-intake-fields";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
+} from "../src/lib/voice-receptionist-wizard/intake/caller-field-state";
+import { executeVoiceV2FinalizeCallerRequest } from "../src/lib/voice-receptionist-wizard/finalize-caller-request";
+import { applyCallerAniToIntakeState } from "../src/lib/voice-receptionist-wizard/intake/caller-phone";
+import { intakeSchemaFromWizardOnly } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
+import { executeVoiceV2SaveIntakeFields } from "../src/lib/voice-receptionist-wizard/intake/save-intake-fields";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
 import {
   clearVoiceV2CallSessions,
   getVoiceV2CallContext,
   setVoiceV2CallContext,
-} from "../src/lib/voice-v2/intake/session-store";
-import type { VoiceV2CallContext, VoiceV2IntakeWizardConfig } from "../src/lib/voice-v2/intake/types";
-import { reconcileVoiceV2PostCallRecord } from "../src/lib/voice-v2/post-call/reconciliation";
+} from "../src/lib/voice-receptionist-wizard/intake/session-store";
+import type { VoiceV2CallContext, VoiceV2IntakeWizardConfig } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { reconcileVoiceV2PostCallRecord } from "../src/lib/voice-receptionist-wizard/post-call/reconciliation";
 
 function check(name: string, ok: boolean) {
   console.log(ok ? `PASS ${name}` : `FAIL ${name}`);

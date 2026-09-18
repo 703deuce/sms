@@ -10,14 +10,14 @@ import {
   getVoiceV2SmsContinuation,
   mergeVoiceContinuationIntoConversationTurns,
   resolveVoiceV2SmsContinuation,
-} from "../src/lib/voice-v2/ai-call-recovery/continuation-hydration";
-import { buildVoiceV2SmsContinuationBundleFromSession } from "../src/lib/voice-v2/ai-call-recovery/durable-continuation";
+} from "../src/lib/voice-receptionist-wizard/ai-call-recovery/continuation-hydration";
+import { buildVoiceV2SmsContinuationBundleFromSession } from "../src/lib/voice-receptionist-wizard/ai-call-recovery/durable-continuation";
 import {
   setHeadlessRecoverySessionFixture,
   setHeadlessRecoverySessionFixtures,
-} from "../src/lib/voice-v2/ai-call-recovery/session-store";
-import { registerVoiceV2SmsContinuation } from "../src/lib/voice-v2/ai-call-recovery/continuation-hydration";
-import type { VoiceV2RecoveryStructuredState } from "../src/lib/voice-v2/ai-call-recovery/types";
+} from "../src/lib/voice-receptionist-wizard/ai-call-recovery/session-store";
+import { registerVoiceV2SmsContinuation } from "../src/lib/voice-receptionist-wizard/ai-call-recovery/continuation-hydration";
+import type { VoiceV2RecoveryStructuredState } from "../src/lib/voice-receptionist-wizard/ai-call-recovery/types";
 
 process.env.VOICE_V2_ACR_HEADLESS = "1";
 

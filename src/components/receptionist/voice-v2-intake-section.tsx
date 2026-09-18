@@ -1,13 +1,13 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { INTAKE_FIELD_DEFAULTS } from "@/lib/voice-v2/intake/defaults";
+import { INTAKE_FIELD_DEFAULTS } from "@/lib/voice-receptionist-wizard/intake/defaults";
 import type {
   IntakeFieldKey,
   IntakeRequirementLevel,
   VoiceV2IntakeWizardConfig,
-} from "@/lib/voice-v2/intake/wizard-config";
-import { INTAKE_FIELD_KEYS } from "@/lib/voice-v2/intake/wizard-config";
+} from "@/lib/voice-receptionist-wizard/intake/wizard-config";
+import { INTAKE_FIELD_KEYS } from "@/lib/voice-receptionist-wizard/intake/wizard-config";
 
 const REQUIREMENT_OPTIONS: { value: IntakeRequirementLevel; label: string }[] = [
   { value: "OPTIONAL", label: "Optional" },

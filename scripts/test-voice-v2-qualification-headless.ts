@@ -8,21 +8,21 @@ import assert from "node:assert/strict";
 import { applyWizardPreset, createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 import { mergeAppointmentWizardAdvanced } from "../src/lib/solutions/appointment-receptionist/wizard-advanced-bridge";
 import { applyAmyMinimumSideEffectConfig } from "../src/lib/voice/telnyx/amy-minimum-side-effect";
-import { buildWorkflowToolPayload, deriveVoiceV2NextStage } from "../src/lib/voice-v2/booking-workflow";
-import { getIntakeReadiness } from "../src/lib/voice-v2/intake/readiness";
-import type { VoiceV2CallContext } from "../src/lib/voice-v2/intake/types";
-import { compileVoiceV2IntakeSchema } from "../src/lib/voice-v2/intake/compile-schema";
+import { buildWorkflowToolPayload, deriveVoiceV2NextStage } from "../src/lib/voice-receptionist-wizard/booking-workflow";
+import { getIntakeReadiness } from "../src/lib/voice-receptionist-wizard/intake/readiness";
+import type { VoiceV2CallContext } from "../src/lib/voice-receptionist-wizard/intake/types";
+import { compileVoiceV2IntakeSchema } from "../src/lib/voice-receptionist-wizard/intake/compile-schema";
 import {
   isVoiceV2QualificationEnabled,
   qualificationConfigFromWizard,
   resolveVoiceV2QualificationConfig,
-} from "../src/lib/voice-v2/qualification-config";
+} from "../src/lib/voice-receptionist-wizard/qualification-config";
 import {
   applyQualificationToContext,
   evaluateVoiceV2Qualification,
-} from "../src/lib/voice-v2/qualification-evaluator";
-import { evaluateQualificationPrimaryActionGate } from "../src/lib/voice-v2/qualification-gate";
-import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-v2/booking-strategy";
+} from "../src/lib/voice-receptionist-wizard/qualification-evaluator";
+import { evaluateQualificationPrimaryActionGate } from "../src/lib/voice-receptionist-wizard/qualification-gate";
+import { resolveVoiceV2BookingStrategy } from "../src/lib/voice-receptionist-wizard/booking-strategy";
 import type { VoiceAgentConfig } from "../src/lib/voice/types";
 
 let strategy: ReturnType<typeof resolveVoiceV2BookingStrategy> = "MICROSOFT_365";

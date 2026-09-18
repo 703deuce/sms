@@ -1,5 +1,5 @@
 import * as ai from "./ai-client";
-import type { TelnyxWorkflowReadBack } from "@/lib/voice-v2/workflow-capability";
+import type { TelnyxWorkflowReadBack } from "@/lib/voice-receptionist-wizard/workflow-capability";
 
 export async function readTelnyxWorkflowState(assistantId: string): Promise<TelnyxWorkflowReadBack> {
   const listed = await ai.listSharedTools().catch(() => ({ data: [] }));

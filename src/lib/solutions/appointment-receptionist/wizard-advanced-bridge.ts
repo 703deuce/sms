@@ -2,23 +2,23 @@ import "server-only";
 
 import type { CallerFieldRow } from "@/lib/receptionist-wizard/advanced-types";
 import { createDefaultAdvancedSettings } from "@/lib/receptionist-wizard/advanced-defaults";
-import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-v2/intake/wizard-config";
+import type { VoiceV2IntakeWizardConfig } from "@/lib/voice-receptionist-wizard/intake/wizard-config";
 import {
   BUILTIN_INTAKE_FIELD_KEYS,
   type BuiltinIntakeFieldKey,
   type IntakeRequirementLevel,
-} from "@/lib/voice-v2/intake/types";
-import { callerFieldIdToIntakeKey } from "@/lib/voice-v2/intake/compile-schema";
+} from "@/lib/voice-receptionist-wizard/intake/types";
+import { callerFieldIdToIntakeKey } from "@/lib/voice-receptionist-wizard/intake/compile-schema";
 import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
-import { deriveBookingStrategyFromWizard } from "@/lib/voice-v2/booking-strategy";
-import { calendlyConfigFromWizard } from "@/lib/voice-v2/calendly-booking-config";
-import { knowledgeConfigFromWizard } from "@/lib/voice-v2/knowledge-config";
-import { qualificationConfigFromWizard } from "@/lib/voice-v2/qualification-config";
+import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
+import { calendlyConfigFromWizard } from "@/lib/voice-receptionist-wizard/calendly-booking-config";
+import { knowledgeConfigFromWizard } from "@/lib/voice-receptionist-wizard/knowledge-config";
+import { qualificationConfigFromWizard } from "@/lib/voice-receptionist-wizard/qualification-config";
 import {
   afterHoursHandlingFromWizard,
   validateAfterHoursHandlingWizard,
-} from "@/lib/voice-v2/after-hours-handling-config";
-import { DEFAULT_VOICE_V2_AI_CALL_RECOVERY_CONFIG } from "@/lib/voice-v2/ai-call-recovery/types";
+} from "@/lib/voice-receptionist-wizard/after-hours-handling-config";
+import { DEFAULT_VOICE_V2_AI_CALL_RECOVERY_CONFIG } from "@/lib/voice-receptionist-wizard/ai-call-recovery/types";
 import { ensureWizardOperatingMaturity } from "./operating-maturity-wizard";
 import type { AppointmentReceptionistWizardState } from "./types";
 import { wizardCollectFieldIdToCallerRowId } from "./wizard-collect-field-id";
@@ -156,6 +156,7 @@ export function mergeAppointmentWizardAdvanced(
   return {
     ...(existingAdvanced || {}),
     capabilityPack: "appointment_receptionist",
+    voiceV3PstnBooking: bookingStrategy === "MICROSOFT_365",
     voiceV2OperatingMaturity,
     voiceV2AiCallRecovery,
     conversationWorkflowMode: true,
