@@ -10,6 +10,7 @@ import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { requestLiveSpeakContinuation } from "../live-response-trigger";
 import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
+import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";
 import {
   claimCallerMeaningFingerprint,
@@ -107,6 +108,11 @@ export function handleDelegatedAstraResponseEvent(input: {
     return;
   }
 
+  const intakeTransport = resolveVoiceV3IntakeTransport();
+  if (intakeTransport === "function_tool" && nestedType === "response.output_text.done") {
+    return;
+  }
+
   queueMicrotask(() => {
     void (async () => {
       if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
@@ -129,6 +135,31 @@ export function handleDelegatedAstraResponseEvent(input: {
 
       const extracted = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, logCtx);
       if (!extracted) {
+        if (nestedType === "response.output_item.done") {
+          const item = input.nested.item;
+          if (item && typeof item === "object") {
+            const row = item as Record<string, unknown>;
+            if (row.type !== "function_call") {
+              meaningStartedSessions.delete(sessionId);
+              return;
+            }
+          }
+        }
+
+        if (
+          intakeTransport === "function_tool" &&
+          (nestedType === "response.completed" || nestedType === "response.output_text.done")
+        ) {
+          console.log("ASTRA_MEANING_COMPLETION_SKIPPED", {
+            call_id: runtime.getSnapshot().callId,
+            live_session_id: sessionId,
+            reason: "function_tool_no_payload_on_completion_event",
+            nested_type: nestedType,
+          });
+          meaningStartedSessions.delete(sessionId);
+          return;
+        }
+
         if (nestedType === "response.completed" || nestedType === "response.output_item.done") {
           console.log("ASTRA_MEANING_FAILED", {
             call_id: runtime.getSnapshot().callId,

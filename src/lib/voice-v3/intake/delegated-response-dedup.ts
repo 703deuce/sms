@@ -25,11 +25,8 @@ export function extractDelegatedAstraResponseId(
 
   const item = nested.item;
   if (item && typeof item === "object") {
-    const row = item as Record<string, unknown>;
-    const responseId = row.response_id;
+    const responseId = (item as Record<string, unknown>).response_id;
     if (typeof responseId === "string" && responseId.trim()) return responseId.trim();
-    const itemId = row.id;
-    if (typeof itemId === "string" && itemId.trim()) return itemId.trim();
   }
 
   return null;
