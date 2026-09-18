@@ -235,6 +235,7 @@ Static env check: `evaluateVoiceV3ProvisioningEnv()` in `health-check.ts`.
 | Telnyx webhook | `src/lib/voice-v3-basic/telnyx-webhook-handler.ts` |
 | OpenAI webhook | `src/lib/voice-v3-basic/openai-live-webhook.ts` |
 | Accept config | `src/lib/voice-v3-basic/live-session-config.ts` |
+| Frozen prompts | `src/lib/voice-v3/prompts/` (`buildVoiceV3Prompts`) |
 | Provisioning types | `src/lib/voice-v3/provisioning/` |
 | Telemetry | `src/lib/voice-v3/telemetry/call-trace.ts` |
 | Greeting | `src/lib/voice-v3/greeting.ts` |
