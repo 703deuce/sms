@@ -1,4 +1,5 @@
 import type { SessionAcceptParams } from "openai/resources/live/sessions";
+import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
 import {
   assertLiveDelegationAcceptPayloadCompatible,
   buildVoiceV3AstraDelegationResponses,
@@ -8,6 +9,8 @@ import {
   buildVoiceV3Prompts,
   resolveVoiceV3DefaultPromptInput,
 } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
+import { formatBusinessLocalDateTime } from "@/lib/voice-v3/prompts/business-local-time";
+import { resolveVoiceV3AgentConfig } from "@/lib/voice-v3/state/call-runtime";
 
 export const VOICE_V3_BASIC_LIVE_MODEL = "gpt-live-1";
 export const VOICE_V3_BASIC_BACKEND_MODEL = "gpt-6-astra";
@@ -29,11 +32,28 @@ export function logVoiceV3BasicConfigOnce(): void {
  * Prompts: src/lib/voice-v3/prompts/* (SDK SessionAcceptParams.Session).
  * Architecture: docs/voice-v3/OPENAI-NATIVE-FIRST-ARCHITECTURE.md
  */
-export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParams.Session {
+export function buildBasicLiveSession(
+  at: Date = new Date(),
+  agentConfig?: VoiceV3AgentConfig,
+): SessionAcceptParams.Session {
   logVoiceV3BasicConfigOnce();
-  const prompts = buildVoiceV3Prompts(resolveVoiceV3DefaultPromptInput(at));
+  const config = agentConfig ?? resolveVoiceV3AgentConfig();
+  const promptInput = resolveVoiceV3DefaultPromptInput(at);
+  const prompts = buildVoiceV3Prompts({
+    ...promptInput,
+    businessName: promptInput.businessName ?? config.businessName,
+    timezone: config.timezone ?? promptInput.timezone,
+    currentLocalDateTime: formatBusinessLocalDateTime(
+      config.timezone ?? promptInput.timezone,
+      at,
+    ),
+    agentConfig: config,
+  });
 
-  const responses = buildVoiceV3AstraDelegationResponses(prompts.astraInstructions);
+  const responses = buildVoiceV3AstraDelegationResponses(
+    prompts.astraInstructions,
+    config,
+  );
   assertLiveDelegationAcceptPayloadCompatible(responses);
   validateAndLogLiveAcceptDelegationPayload(responses);
 
@@ -53,6 +73,10 @@ export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParam
   };
 }
 
-export function buildBasicLiveSessionAcceptParams(at: Date = new Date()): SessionAcceptParams {
-  return { session: buildBasicLiveSession(at) };
+export function buildBasicLiveSessionAcceptParams(
+  at: Date = new Date(),
+  agentConfig?: VoiceV3AgentConfig,
+): SessionAcceptParams {
+  const config = agentConfig ?? resolveVoiceV3AgentConfig();
+  return { session: buildBasicLiveSession(at, config) };
 }

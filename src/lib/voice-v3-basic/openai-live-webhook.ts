@@ -150,26 +150,28 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
 
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
 
+  const { resolveVoiceV3AgentConfig } = await import("@/lib/voice-v3/state/call-runtime");
+  let acceptAgentConfig = resolveVoiceV3AgentConfig();
+  if (pstnLeg?.workspaceId && pstnLeg.agentId) {
+    const { resolveVoiceV3AgentConfigForAgent } = await import(
+      "@/lib/voice-v3/config/from-published-agent"
+    );
+    acceptAgentConfig = await resolveVoiceV3AgentConfigForAgent({
+      workspaceId: pstnLeg.workspaceId,
+      agentId: pstnLeg.agentId,
+    });
+  }
+
   if (voiceV3IntakePipelineEnabled()) {
-    let runtimeConfig: import("@/lib/voice-v3/config/agent-config").VoiceV3AgentConfig | undefined;
-    if (pstnLeg?.workspaceId && pstnLeg.agentId) {
-      const { resolveVoiceV3AgentConfigForAgent } = await import(
-        "@/lib/voice-v3/config/from-published-agent"
-      );
-      runtimeConfig = await resolveVoiceV3AgentConfigForAgent({
-        workspaceId: pstnLeg.workspaceId,
-        agentId: pstnLeg.agentId,
-      });
-    }
     createVoiceV3CallRuntime({
       liveSessionId: sessionId,
       callId: pstnLeg?.callId || event.data?.call_id,
-      config: runtimeConfig,
+      config: acceptAgentConfig,
     });
   }
 
   trace.mark("session.accept.request.started");
-  const acceptParams = buildBasicLiveSessionAcceptParams();
+  const acceptParams = buildBasicLiveSessionAcceptParams(new Date(), acceptAgentConfig);
   await client.live.sessions.accept(sessionId, acceptParams);
   trace.mark("session.accept.completed", { liveSessionId: sessionId });
 

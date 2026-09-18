@@ -1,3 +1,4 @@
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { resolveVoiceV3IntakeTransport } from "../intake/intake-transport";
 import { resolveVoiceV3AgentConfig } from "../state/call-runtime";
 import { buildAstraBackendInstructions } from "./astra-backend-instructions";
@@ -13,12 +14,13 @@ export function buildVoiceV3Prompts(input: {
   businessName?: string;
   timezone?: string;
   currentLocalDateTime?: string;
+  agentConfig?: VoiceV3AgentConfig;
 }) {
-  const timezone = input.timezone ?? VOICE_V3_DEFAULT_BUSINESS_TIMEZONE;
+  const agentConfig = input.agentConfig ?? resolveVoiceV3AgentConfig();
+  const timezone =
+    input.timezone ?? agentConfig.timezone ?? VOICE_V3_DEFAULT_BUSINESS_TIMEZONE;
   const currentLocalDateTime =
-    input.currentLocalDateTime ?? formatBusinessLocalDateTime(timezone);
-
-  const agentConfig = resolveVoiceV3AgentConfig();
+    input.currentLocalDateTime ?? formatBusinessLocalDateTime(timezone, new Date());
   const intakeFieldCatalog = agentConfig.intakeFields
     .map((f) => `- ${f.key} (${f.label}, type=${f.type}, required=${f.required})`)
     .join("\n");

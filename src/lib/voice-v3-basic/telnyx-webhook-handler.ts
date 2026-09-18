@@ -1,3 +1,4 @@
+import { tryNotePstnWizardBindingFromToE164 } from "@/lib/voice-v3/resolve-pstn-wizard-binding";
 import { noteTelnyxPstnReceived } from "@/lib/voice-v3/telemetry/call-trace";
 import { forwardInboundCallToOpenAiLiveSip } from "./telnyx-sip-forward";
 
@@ -24,6 +25,13 @@ export async function handleVoiceV3BasicTelnyxWebhook(input: {
     if (transferredCallIds.size > 5000) transferredCallIds.clear();
 
     noteTelnyxPstnReceived(callControlId);
+    await tryNotePstnWizardBindingFromToE164({
+      callControlId,
+      toE164: String(input.eventPayload.to || ""),
+      fromE164: String(input.eventPayload.from || ""),
+    }).catch((err) => {
+      console.error("VOICE_V3_PSTN_WIZARD_BIND_FAILED", { callControlId, err });
+    });
 
     console.log("VOICE_V3_BASIC_CALL_INITIATED", {
       callControlId,
