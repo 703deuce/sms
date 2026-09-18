@@ -30,6 +30,8 @@ function main() {
   assert.ok(responses);
   assert.equal(responses.model, VOICE_V3_BASIC_BACKEND_MODEL);
   assert.deepEqual(responses.tools, []);
+  const liveText = responses.text as { format?: unknown } | null | undefined;
+  assert.equal(liveText?.format, undefined, "Live accept must not include text.format");
   assertNoDelegationIdOnOutbound(acceptParams);
 
   const sampleIncoming = parseOpenAiLiveWebhookBody(
