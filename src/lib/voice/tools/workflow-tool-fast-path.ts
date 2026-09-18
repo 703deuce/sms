@@ -66,6 +66,27 @@ export async function handleWorkflowToolFastPath(input: {
     });
   }
 
+  const { loadVoiceAgentRuntimeConfig } = await import("@/lib/voice/load-agent-config");
+  const {
+    logLegacyVoiceRuntimeBlocked,
+    receptionistTelnyxToolWebhookBlockedPayload,
+    shouldBlockTelnyxToolWebhookForReceptionist,
+  } = await import("@/lib/voice-v3/runtime-isolation");
+  const runtimeCfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
+  if (shouldBlockTelnyxToolWebhookForReceptionist(runtimeCfg, input.toolType)) {
+    logLegacyVoiceRuntimeBlocked({
+      path: "workflow-tool-fast-path",
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+      toolType: input.toolType,
+    });
+    return telnyxJson({
+      ...receptionistTelnyxToolWebhookBlockedPayload(input.toolType),
+      fast_path: true,
+      timing_ms: Date.now() - ingressStartedAt,
+    });
+  }
+
   let ctxOrErr: Awaited<ReturnType<typeof resolveToolWebhookContext>>;
   try {
     ctxOrErr = await resolveToolWebhookContext({

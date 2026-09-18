@@ -126,6 +126,24 @@ export async function POST(request: Request) {
       );
       conductorMode = isInternalBookingConductorMode(runtimeAgentConfig);
       const agentConfig = runtimeAgentConfig;
+
+      const {
+        blocksLegacyTelnyxVoiceRuntime,
+        logLegacyVoiceRuntimeBlocked,
+        receptionistTelnyxToolWebhookBlockedPayload,
+        shouldBlockTelnyxToolWebhookForReceptionist,
+      } = await import("@/lib/voice-v3/runtime-isolation");
+      if (
+        shouldBlockTelnyxToolWebhookForReceptionist(agentConfig, toolType || toolId)
+      ) {
+        logLegacyVoiceRuntimeBlocked({
+          path: "api/telnyx/voice/tools",
+          workspaceId,
+          agentId,
+          toolType: toolType || toolId,
+        });
+        return telnyxToolJson(receptionistTelnyxToolWebhookBlockedPayload(toolType || toolId));
+      }
       if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {
         return telnyxToolJson(
           {

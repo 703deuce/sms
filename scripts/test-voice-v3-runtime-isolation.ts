@@ -51,4 +51,16 @@ const workflow = readFileSync(
 );
 assert.match(workflow, /VOICE_V3_PSTN_GENERAL_APPEND/);
 
+const toolsRoute = readFileSync(
+  join(root, "src/app/api/telnyx/voice/tools/route.ts"),
+  "utf8",
+);
+assert.match(toolsRoute, /shouldBlockTelnyxToolWebhookForReceptionist/);
+
+const fastPath = readFileSync(
+  join(root, "src/lib/voice/tools/workflow-tool-fast-path.ts"),
+  "utf8",
+);
+assert.match(fastPath, /shouldBlockTelnyxToolWebhookForReceptionist/);
+
 console.log("PASS voice-v3 runtime isolation");
