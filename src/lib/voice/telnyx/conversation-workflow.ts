@@ -18,6 +18,7 @@ import {
   llmEdgeCondition,
 } from "./workflow-expression";
 import { ONE_AMY_V2_WORKFLOW_APPEND } from "@/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
+import { appointmentReceptionistUsesVoiceV3Runtime } from "@/lib/voice-v3/runtime-isolation";
 
 export const WORKFLOW_NODE_IDS = {
   GENERAL: "n_general",
@@ -148,6 +149,14 @@ const CLOSING_INSTRUCTIONS = [
   "The caller is done. Thank them warmly and use hangup when the conversation is fully finished.",
 ].join(" ");
 
+const VOICE_V3_PSTN_GENERAL_APPEND = [
+  "Microsoft calendar booking on this call is handled by the Transovo Voice V3 backend (OpenAI Live + deterministic runtime) — not Telnyx assistant tools.",
+  "Never call voice_v2_find_availability, voice_v2_book_offered_slot, voice_ai_booking_turn, calendar_availability, continue_workflow, or record_current_field for scheduling.",
+  "Collect information conversationally; FIND, slot offers, selection, revalidation, and BOOK run asynchronously after semantic meaning is applied.",
+  "Never say the caller is booked, confirmed, or scheduled until backend confirmation context states Microsoft confirmed the appointment.",
+  "While scheduling runs, you may acknowledge naturally without claiming success.",
+].join(" ");
+
 function wizardFromConfig(config?: VoiceAgentConfig | null) {
   const advanced = (config?.advanced || {}) as Record<string, unknown>;
   return advanced.appointmentReceptionistWizard as
@@ -160,11 +169,12 @@ export function buildAmyConversationWorkflow(
   config?: VoiceAgentConfig | null,
 ): Record<string, unknown> {
   const wizard = wizardFromConfig(config);
+  const voiceV3Pstn = config ? appointmentReceptionistUsesVoiceV3Runtime(config) : false;
   const afterHours = wizard ? isAfterHoursVoiceProfile(wizard) : false;
-  const canonicalBooking = isVoiceCanonicalAiBookingPublishMode(config);
+  const canonicalBooking = voiceV3Pstn ? false : isVoiceCanonicalAiBookingPublishMode(config);
   const bookingStrategy = resolveVoiceV2BookingStrategy(config);
-  const v2PstnLiveBooking = isVoiceV2PstnLiveBookingMode(config);
-  const v2OneAmy = isVoiceV2PstnOneAmyMode(config);
+  const v2PstnLiveBooking = voiceV3Pstn ? false : isVoiceV2PstnLiveBookingMode(config);
+  const v2OneAmy = voiceV3Pstn ? false : isVoiceV2PstnOneAmyMode(config);
   const v2LiveToolsReady = Boolean(
     toolIds.voiceV2Find && toolIds.voiceV2Book && toolIds.voiceV2SaveIntake,
   );
@@ -184,7 +194,9 @@ export function buildAmyConversationWorkflow(
           : bookingStrategy === "NONE"
             ? V2_MESSAGE_ONLY_GENERAL_APPEND
             : "";
-  const generalInstructions = oneAmyV2
+  const generalInstructions = voiceV3Pstn
+    ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${VOICE_V3_PSTN_GENERAL_APPEND}`
+    : oneAmyV2
     ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${modeAppend} ${ONE_AMY_V2_WORKFLOW_APPEND}`
     : liveBookingPath
     ? `Answer ordinary business questions from the base prompt. Do not call tools for hours, services, service area, or common FAQs. ${V2_PSTN_GENERAL_APPEND}`

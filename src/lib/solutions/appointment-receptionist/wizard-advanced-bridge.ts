@@ -116,8 +116,7 @@ export function mergeAppointmentWizardAdvanced(
   const voiceV2Intake = wizardCollectFieldsToVoiceV2Intake(state.collectFields || []);
 
   const bookingStrategy = deriveBookingStrategyFromWizard(state);
-  const voiceV2PstnLiveBooking =
-    bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY";
+  const voiceV2PstnLiveBooking = false;
   const voiceV2Calendly = calendlyConfigFromWizard(state);
   const draftKbIds = Array.isArray(existingAdvanced?.knowledgeBaseIds)
     ? (existingAdvanced.knowledgeBaseIds as string[]).map(String).filter(Boolean)
@@ -156,7 +155,8 @@ export function mergeAppointmentWizardAdvanced(
   return {
     ...(existingAdvanced || {}),
     capabilityPack: "appointment_receptionist",
-    voiceV3PstnBooking: bookingStrategy === "MICROSOFT_365",
+    voiceV3PstnBooking:
+      bookingStrategy === "MICROSOFT_365" && state.capabilities.includes("book_appointments"),
     voiceV2OperatingMaturity,
     voiceV2AiCallRecovery,
     conversationWorkflowMode: true,

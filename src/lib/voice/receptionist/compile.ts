@@ -378,12 +378,14 @@ export function applyCompiledToVoiceConfig(
     advanced: {
       ...(mergedAdvanced as object),
       voiceV2PstnLiveBooking:
-        mergedAdvanced?.bookingStrategy === "MICROSOFT_365" ||
-        mergedAdvanced?.bookingStrategy === "CALENDLY" ||
-        (mergedAdvanced?.voiceV2PstnLiveBooking === true &&
-          mergedAdvanced?.bookingStrategy !== "REQUEST_ONLY" &&
-          mergedAdvanced?.bookingStrategy !== "NONE" &&
-          mergedAdvanced?.bookingStrategy !== "SEND_LINK"),
+        mergedAdvanced?.voiceV3PstnBooking === true
+          ? false
+          : mergedAdvanced?.bookingStrategy === "MICROSOFT_365" ||
+            mergedAdvanced?.bookingStrategy === "CALENDLY" ||
+            (mergedAdvanced?.voiceV2PstnLiveBooking === true &&
+              mergedAdvanced?.bookingStrategy !== "REQUEST_ONLY" &&
+              mergedAdvanced?.bookingStrategy !== "NONE" &&
+              mergedAdvanced?.bookingStrategy !== "SEND_LINK"),
       bookingStrategy: mergedAdvanced?.bookingStrategy,
       conversationWorkflowMode: mergedAdvanced?.conversationWorkflowMode ?? true,
       livekitProfile: snapshot.livekitProfile,

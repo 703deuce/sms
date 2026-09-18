@@ -38,11 +38,21 @@ async function returnCallerToAi(workspaceId: string, callId: string, reason: str
       method: "POST",
       body: {},
     }).catch(() => undefined);
-    await startAiAssistantOnCall({
-      callControlId: call.telnyxCallControlId,
-      assistantId: agent.telnyxAssistantId,
-      clientState: { workspaceId, callId, agentId: agent.id, transferFallback: true },
-    }).catch(() => undefined);
+    const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
+    const { blocksLegacyTelnyxVoiceRuntime } = await import("@/lib/voice-v3/runtime-isolation");
+    const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
+    if (blocksLegacyTelnyxVoiceRuntime(cfg)) {
+      const { forwardInboundCallToOpenAiLiveSip } = await import(
+        "@/lib/voice-v3-basic/telnyx-sip-forward"
+      );
+      await forwardInboundCallToOpenAiLiveSip(call.telnyxCallControlId).catch(() => undefined);
+    } else {
+      await startAiAssistantOnCall({
+        callControlId: call.telnyxCallControlId,
+        assistantId: agent.telnyxAssistantId,
+        clientState: { workspaceId, callId, agentId: agent.id, transferFallback: true },
+      }).catch(() => undefined);
+    }
   }
 
   await prisma.voiceCall.update({

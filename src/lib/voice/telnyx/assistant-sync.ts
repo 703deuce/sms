@@ -1087,6 +1087,25 @@ export async function startAiAssistantOnCall(input: {
     return { mode: "mock" as const };
   }
 
+  const workspaceId = String(input.clientState?.workspaceId || "").trim();
+  const agentId = String(input.clientState?.agentId || "").trim();
+  if (workspaceId && agentId) {
+    const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
+    const { blocksLegacyTelnyxVoiceRuntime, logLegacyVoiceRuntimeBlocked } = await import(
+      "@/lib/voice-v3/runtime-isolation"
+    );
+    const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agentId);
+    if (blocksLegacyTelnyxVoiceRuntime(cfg)) {
+      logLegacyVoiceRuntimeBlocked({
+        path: "startAiAssistantOnCall",
+        workspaceId,
+        agentId,
+        callId: String(input.clientState?.callId || ""),
+      });
+      throw new Error("VOICE_V3_ONLY_NO_LEGACY_TELNYX_AMY");
+    }
+  }
+
   const assistant: Record<string, unknown> = { id: input.assistantId };
   if (input.dynamicVariables && Object.keys(input.dynamicVariables).length) {
     assistant.dynamic_variables = input.dynamicVariables;
