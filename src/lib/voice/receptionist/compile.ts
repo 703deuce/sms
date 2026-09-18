@@ -378,7 +378,7 @@ export function applyCompiledToVoiceConfig(
     advanced: {
       ...(mergedAdvanced as object),
       voiceV2PstnLiveBooking:
-        mergedAdvanced?.voiceV3PstnBooking === true
+        mergedAdvanced?.capabilityPack === "appointment_receptionist"
           ? false
           : mergedAdvanced?.bookingStrategy === "MICROSOFT_365" ||
             mergedAdvanced?.bookingStrategy === "CALENDLY" ||

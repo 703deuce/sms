@@ -155,8 +155,6 @@ export function mergeAppointmentWizardAdvanced(
   return {
     ...(existingAdvanced || {}),
     capabilityPack: "appointment_receptionist",
-    voiceV3PstnBooking:
-      bookingStrategy === "MICROSOFT_365" && state.capabilities.includes("book_appointments"),
     voiceV2OperatingMaturity,
     voiceV2AiCallRecovery,
     conversationWorkflowMode: true,

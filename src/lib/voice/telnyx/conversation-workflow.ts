@@ -18,7 +18,7 @@ import {
   llmEdgeCondition,
 } from "./workflow-expression";
 import { ONE_AMY_V2_WORKFLOW_APPEND } from "@/lib/voice-receptionist-wizard/one-amy/amy-core-static-prompt";
-import { appointmentReceptionistUsesVoiceV3Runtime } from "@/lib/voice-v3/runtime-isolation";
+import { isAppointmentReceptionistAgent } from "@/lib/voice-v3/runtime-isolation";
 
 export const WORKFLOW_NODE_IDS = {
   GENERAL: "n_general",
@@ -169,7 +169,7 @@ export function buildAmyConversationWorkflow(
   config?: VoiceAgentConfig | null,
 ): Record<string, unknown> {
   const wizard = wizardFromConfig(config);
-  const voiceV3Pstn = config ? appointmentReceptionistUsesVoiceV3Runtime(config) : false;
+  const voiceV3Pstn = config ? isAppointmentReceptionistAgent(config) : false;
   const afterHours = wizard ? isAfterHoursVoiceProfile(wizard) : false;
   const canonicalBooking = voiceV3Pstn ? false : isVoiceCanonicalAiBookingPublishMode(config);
   const bookingStrategy = resolveVoiceV2BookingStrategy(config);

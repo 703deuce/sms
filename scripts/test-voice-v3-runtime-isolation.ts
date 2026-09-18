@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createDefaultWizardState } from "../src/lib/solutions/appointment-receptionist/defaults";
 import { buildWizardAgentConfig } from "../src/lib/solutions/appointment-receptionist/build-agent-config";
-import { appointmentReceptionistUsesVoiceV3Runtime } from "../src/lib/voice-v3/runtime-isolation";
+import { isAppointmentReceptionistAgent } from "../src/lib/voice-v3/runtime-isolation";
 
 const root = process.cwd();
 
@@ -29,8 +29,21 @@ state.bookingStrategy = "MICROSOFT_365";
 state.calendarProvider = "microsoft";
 state.calendarConnected = true;
 const cfg = buildWizardAgentConfig(state);
-assert.ok(appointmentReceptionistUsesVoiceV3Runtime(cfg), "wizard receptionist uses V3 runtime gate");
+assert.ok(isAppointmentReceptionistAgent(cfg), "wizard receptionist is V3-only agent");
 assert.equal((cfg.advanced as Record<string, unknown>).voiceV2PstnLiveBooking, false);
+assert.equal(
+  (cfg.advanced as Record<string, unknown>).voiceV3PstnBooking,
+  undefined,
+  "no voiceV3PstnBooking feature flag",
+);
+
+const inbound = readFileSync(join(root, "src/lib/voice/inbound.ts"), "utf8");
+const leanIdx = inbound.indexOf("isGptLivePstnLeanInbound");
+const receptionistIdx = inbound.indexOf("isAppointmentReceptionistAgent");
+assert.ok(
+  receptionistIdx > 0 && leanIdx > 0 && receptionistIdx < leanIdx,
+  "receptionist V3 SIP path runs before GPT-Live lean inbound",
+);
 
 const workflow = readFileSync(
   join(root, "src/lib/voice/telnyx/conversation-workflow.ts"),

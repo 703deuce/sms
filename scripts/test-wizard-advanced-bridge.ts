@@ -47,6 +47,7 @@ assert.match(
   "intake instructions include no-reask guidance",
 );
 
-assert.equal(advanced.voiceV3PstnBooking, true);
+assert.equal(advanced.capabilityPack, "appointment_receptionist");
+assert.equal(advanced.voiceV2PstnLiveBooking, false);
 
 console.log("test-wizard-advanced-bridge: PASS");

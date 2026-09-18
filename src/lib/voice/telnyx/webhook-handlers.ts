@@ -1017,41 +1017,20 @@ export async function processVoiceWebhookEvent(input: {
           "../load-agent-config"
         );
         const cfg = await loadCfg(workspaceId, agent.id);
-        const { appointmentReceptionistUsesVoiceV3Runtime } = await import(
+        const { isAppointmentReceptionistAgent } = await import(
           "@/lib/voice-v3/config/from-published-agent"
         );
-        if (appointmentReceptionistUsesVoiceV3Runtime(cfg)) {
-          const { forwardInboundCallToOpenAiLiveSip } = await import(
-            "@/lib/voice-v3-basic/telnyx-sip-forward"
+        if (isAppointmentReceptionistAgent(cfg)) {
+          const { startAppointmentReceptionistVoiceV3OnCall } = await import(
+            "@/lib/voice-v3/start-appointment-receptionist-pstn"
           );
-          const { notePstnLegWizardContext } = await import("@/lib/voice-v3/telemetry/call-trace");
-          notePstnLegWizardContext({
-            callControlId: controlId,
-            callId: call.id,
+          await startAppointmentReceptionistVoiceV3OnCall({
             workspaceId,
-            agentId: agent.id,
-          });
-          await forwardInboundCallToOpenAiLiveSip(controlId);
-          await prisma.voiceCall
-            .update({
-              where: { id: call.id },
-              data: {
-                metadata: {
-                  ...claim.meta,
-                  aiStarted: true,
-                  aiStartClaimed: true,
-                  voiceTransport: "voice_v3_basic",
-                  voiceV3WizardBound: true,
-                  mediaPipeline: { path: "answered_webhook_voice_v3_sip_forward" },
-                } as object,
-              },
-            })
-            .catch(() => undefined);
-          console.log("VOICE_V3_BASIC_INBOUND_SIP_FORWARD", {
             callId: call.id,
             agentId: agent.id,
-            workspaceId,
-            path: "answered_webhook",
+            telnyxCallControlId: controlId,
+            claimMeta: claim.meta,
+            path: "answered_webhook_voice_v3_sip_forward",
           });
         } else {
         const { isGptLivePstnBridgeActive } = await import(

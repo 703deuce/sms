@@ -4,7 +4,6 @@ import { getPrisma } from "@/lib/db";
 import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
 import type { VoiceAgentConfig } from "@/lib/voice/types";
 import { compileVoiceV2IntakeSchema } from "@/lib/voice-receptionist-wizard/intake/compile-schema";
-import { resolveVoiceV2BookingStrategy } from "@/lib/voice-receptionist-wizard/booking-strategy";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import type { IntakeFieldType, VoiceV3AgentConfig } from "./agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
@@ -22,12 +21,15 @@ function wizardFromConfig(config: VoiceAgentConfig): AppointmentReceptionistWiza
   return w as AppointmentReceptionistWizardState;
 }
 
-export function appointmentReceptionistUsesVoiceV3Runtime(config: VoiceAgentConfig): boolean {
+/** Appointment receptionist wizard agents use Voice V3 PSTN only — no optional flag. */
+export function isAppointmentReceptionistAgent(config: VoiceAgentConfig): boolean {
   const advanced = (config.advanced || {}) as Record<string, unknown>;
-  if (advanced.voiceV3PstnBooking === true) return true;
-  if (advanced.capabilityPack === "appointment_receptionist") return true;
-  const strategy = resolveVoiceV2BookingStrategy(config);
-  return strategy === "MICROSOFT_365";
+  return advanced.capabilityPack === "appointment_receptionist";
+}
+
+/** @deprecated Use isAppointmentReceptionistAgent — same contract, no feature flag. */
+export function appointmentReceptionistUsesVoiceV3Runtime(config: VoiceAgentConfig): boolean {
+  return isAppointmentReceptionistAgent(config);
 }
 
 export async function resolveVoiceV3AgentConfigForAgent(input: {
