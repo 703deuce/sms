@@ -1,13 +1,13 @@
 /**
  * Live GPT-6 Astra Structured Output integration (requires OPENAI_API_KEY).
- * Uses Responses API: text.format = zodTextFormat(callerMeaningZodSchema, voice_v3_caller_meaning).
+ * Uses Responses API: text.format = zodTextFormat(buildCallerMeaningZodSchema(config), ...).
+ * Typed result: ParsedResponse.output_parsed (openai@^7.17.0 responses.d.ts).
  */
 import assert from "node:assert/strict";
 import OpenAI from "openai";
 import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
 import { buildCallerInterpretationContext } from "../src/lib/voice-v3/intake/caller-meaning";
 import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
-import { parseCallerMeaningFromOutputText } from "../src/lib/voice-v3/intake/parse-astra-meaning-response";
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
 import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-caller-meaning";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
@@ -36,6 +36,8 @@ async function main() {
     clock,
   });
 
+  const textFormat = voiceV3CallerMeaningTextFormat(TEST_AGENT_CONFIG);
+
   for (const phrase of PHRASES) {
     const contextJson = buildCallerInterpretationContext(TEST_AGENT_CONFIG, ctx);
     const response = await client.responses.parse({
@@ -52,14 +54,12 @@ async function main() {
         },
       ],
       text: {
-        format: voiceV3CallerMeaningTextFormat(),
+        format: textFormat,
       },
     });
 
-    const text = response.output_text;
-    assert.ok(text, "expected output_text from responses.parse");
-    const meaning = parseCallerMeaningFromOutputText(text);
-    assert.ok(meaning, `failed to parse meaning for phrase: ${phrase}`);
+    const meaning = response.output_parsed;
+    assert.ok(meaning, "expected response.output_parsed from responses.parse");
 
     const applied = applyCallerMeaningToContext(ctx, TEST_AGENT_CONFIG, meaning);
     ctx = applied.context;
@@ -76,7 +76,7 @@ async function main() {
   const rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
   assert.equal(rules.missingRequiredFields.includes("email"), true);
 
-  console.log("PASS voice-v3 astra structured output integration");
+  console.log("PASS voice-v3 astra structured output integration (output_parsed)");
 }
 
 main().catch((err) => {

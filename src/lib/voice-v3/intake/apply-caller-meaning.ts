@@ -12,6 +12,20 @@ function isConfiguredKey(config: VoiceV3AgentConfig, key: string): boolean {
   return config.intakeFields.some((f) => f.key === key);
 }
 
+function logUnknownIntakeKeyRejected(input: {
+  callId: string;
+  liveSessionId: string;
+  key: string;
+  stateVersion: number;
+}): void {
+  console.log("VOICE_V3_UNKNOWN_INTAKE_KEY_REJECTED", {
+    call_id: input.callId,
+    live_session_id: input.liveSessionId,
+    key: input.key,
+    state_version: input.stateVersion,
+  });
+}
+
 function goalFromMeaning(goal: CallerMeaning["active_goal"]): VoiceV3Goal {
   return goal;
 }
@@ -33,7 +47,16 @@ export function applyCallerMeaningToContext(
   for (const row of meaning.captured_fields) {
     const key = row.key.trim();
     const value = row.value.trim();
-    if (!key || !value || !isConfiguredKey(config, key)) continue;
+    if (!key || !value) continue;
+    if (!isConfiguredKey(config, key)) {
+      logUnknownIntakeKeyRejected({
+        callId: ctx.callId,
+        liveSessionId: ctx.liveSessionId,
+        key,
+        stateVersion: ctx.runtime.version,
+      });
+      continue;
+    }
     values[key] = {
       value,
       source: "caller",
@@ -46,7 +69,16 @@ export function applyCallerMeaningToContext(
   for (const row of meaning.corrections) {
     const key = row.key.trim();
     const value = row.new_value.trim();
-    if (!key || !value || !isConfiguredKey(config, key)) continue;
+    if (!key || !value) continue;
+    if (!isConfiguredKey(config, key)) {
+      logUnknownIntakeKeyRejected({
+        callId: ctx.callId,
+        liveSessionId: ctx.liveSessionId,
+        key,
+        stateVersion: ctx.runtime.version,
+      });
+      continue;
+    }
     values[key] = {
       value,
       source: "caller",

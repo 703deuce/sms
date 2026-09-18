@@ -1,10 +1,11 @@
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponsesDelegationConfig } from "openai/resources/live/live";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { resolveVoiceV3AgentConfig, voiceV3IntakePipelineEnabled } from "../state/call-runtime";
 import {
+  buildCallerMeaningZodSchema,
   CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
-  callerMeaningZodSchema,
 } from "./caller-meaning-schema";
-import { voiceV3IntakePipelineEnabled } from "../state/call-runtime";
 
 const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
 
@@ -12,10 +13,11 @@ const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
  * Live accept: delegated Responses backend (GPT-6 Astra).
  * Structured Outputs: `delegation.responses.text.format` via zodTextFormat
  * (runtime JSON Schema type `json_schema`, name `voice_v3_caller_meaning`).
- * SDK `ResponsesDelegationConfig.Text` only types `verbosity`; `format` is set per API docs.
+ * Field keys are a per-AgentConfig enum in the generated JSON Schema.
  */
 export function buildVoiceV3AstraDelegationResponses(
   astraInstructions: string,
+  agentConfig: VoiceV3AgentConfig = resolveVoiceV3AgentConfig(),
 ): ResponsesDelegationConfig {
   const textBase = { verbosity: "low" as const };
 
@@ -23,7 +25,10 @@ export function buildVoiceV3AstraDelegationResponses(
     voiceV3IntakePipelineEnabled()
       ? {
           ...textBase,
-          format: zodTextFormat(callerMeaningZodSchema, CALLER_MEANING_STRUCTURED_OUTPUT_NAME),
+          format: zodTextFormat(
+            buildCallerMeaningZodSchema(agentConfig),
+            CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
+          ),
         }
       : textBase;
 
@@ -41,6 +46,9 @@ export function buildVoiceV3AstraDelegationResponses(
   };
 }
 
-export function voiceV3CallerMeaningTextFormat() {
-  return zodTextFormat(callerMeaningZodSchema, CALLER_MEANING_STRUCTURED_OUTPUT_NAME);
+export function voiceV3CallerMeaningTextFormat(agentConfig: VoiceV3AgentConfig) {
+  return zodTextFormat(
+    buildCallerMeaningZodSchema(agentConfig),
+    CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
+  );
 }

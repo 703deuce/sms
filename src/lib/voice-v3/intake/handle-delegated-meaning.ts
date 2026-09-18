@@ -51,7 +51,12 @@ export function handleDelegatedAstraResponseEvent(input: {
       return;
     }
 
-    const meaning = extractCallerMeaningFromAstraResponseEvent(input.nested);
+    const snap = runtime.getSnapshot();
+    const meaning = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, {
+      callId: snap.callId,
+      liveSessionId: snap.liveSessionId,
+      stateVersion: snap.runtime.version,
+    });
     if (!meaning) {
       if (nestedType === "response.completed") {
         console.log("ASTRA_MEANING_FAILED", {

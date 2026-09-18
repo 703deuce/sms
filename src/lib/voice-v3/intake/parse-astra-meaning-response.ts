@@ -1,4 +1,7 @@
-import { parseCallerMeaning, safeParseCallerMeaning, type CallerMeaning } from "./caller-meaning-schema";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
+import type { DecodeCallerMeaningLogContext } from "./decode-delegated-caller-meaning";
+import { decodeDelegatedCallerMeaning } from "./decode-delegated-caller-meaning";
+import type { CallerMeaning } from "./caller-meaning-schema";
 
 function collectOutputTextFromResponse(response: Record<string, unknown>): string {
   const direct = response.output_text;
@@ -25,25 +28,13 @@ function collectOutputTextFromResponse(response: Record<string, unknown>): strin
   return parts.join("").trim();
 }
 
-function meaningHasSignal(meaning: CallerMeaning): boolean {
-  return (
-    meaning.captured_fields.length > 0 ||
-    meaning.corrections.length > 0 ||
-    meaning.active_goal !== "UNKNOWN" ||
-    Boolean(
-      meaning.scheduling.requested_date_expression ||
-        meaning.scheduling.requested_time_expression ||
-        meaning.scheduling.requested_daypart,
-    ) ||
-    meaning.ambiguities.length > 0
-  );
-}
-
 /**
  * Parse strict CallerMeaning from nested Live `response.event` (delegated Astra).
  */
 export function extractCallerMeaningFromAstraResponseEvent(
   nestedEvent: Record<string, unknown> | undefined,
+  config: VoiceV3AgentConfig,
+  logCtx?: DecodeCallerMeaningLogContext,
 ): CallerMeaning | null {
   if (!nestedEvent) return null;
   const type = String(nestedEvent.type || "");
@@ -59,25 +50,5 @@ export function extractCallerMeaningFromAstraResponseEvent(
   }
 
   if (!text) return null;
-
-  try {
-    const raw = JSON.parse(text) as unknown;
-    const parsed = safeParseCallerMeaning(raw);
-    if (!parsed.ok) return null;
-    if (!meaningHasSignal(parsed.data)) return null;
-    return parsed.data;
-  } catch {
-    return null;
-  }
-}
-
-/** For direct Responses API integration tests. */
-export function parseCallerMeaningFromOutputText(text: string): CallerMeaning | null {
-  try {
-    const raw = JSON.parse(text) as unknown;
-    const parsed = parseCallerMeaning(raw);
-    return meaningHasSignal(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  return decodeDelegatedCallerMeaning(text, config, logCtx);
 }
