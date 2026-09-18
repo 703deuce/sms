@@ -30,10 +30,7 @@ import {
   hasCommittedCallerEvidenceForSemantic,
 } from "./caller-evidence";
 import { classifySemanticDecodeFailure } from "./semantic-disposition";
-import {
-  noteSemanticTimingEvent,
-  logCallerTurnTimingSummary,
-} from "../telemetry/caller-turn-timing";
+import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import {
   drainQueuedSemanticTurns,
   markSemanticInterpretationEnded,
@@ -197,11 +194,6 @@ async function completeEmitCallerMeaningFunctionCall(input: {
         err,
       });
     } finally {
-      noteSemanticTimingEvent(sessionId, "meaningAppliedAt", getCallerEvidenceTurnId(sessionId));
-      const turnId = getCallerEvidenceTurnId(sessionId);
-      if (turnId) {
-        logCallerTurnTimingSummary(sessionId, turnId);
-      }
       markSemanticInterpretationEnded(sessionId);
     }
     return;
@@ -265,6 +257,7 @@ export function handleDelegatedAstraResponseEvent(input: {
   }
 
   if (nestedType === "response.created" || nestedType === "response.in_progress") {
+    noteSemanticTimingEvent(sessionId, "astraFirstOutputAt", getCallerEvidenceTurnId(sessionId));
     markSemanticInterpretationStarted(sessionId);
     if (!meaningStartedSessions.has(sessionId)) {
       meaningStartedSessions.add(sessionId);

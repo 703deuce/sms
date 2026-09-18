@@ -155,7 +155,7 @@ export class VoiceV3LiveResponseCoordinator {
         live_session_id: this.liveSessionId,
         delegation_id: id,
       });
-      noteSemanticTimingEvent(this.liveSessionId, "delegationCompletedAt");
+      noteSemanticTimingEvent(this.liveSessionId, "delegatedResponseCompletedAt");
       this.scheduleContinuationFlush();
       return;
     }
@@ -426,9 +426,9 @@ export class VoiceV3LiveResponseCoordinator {
       type: "response.create",
       event_id: eventId,
     });
-    noteSemanticTimingEvent(this.liveSessionId, "responseCreateSentAt");
+    noteSemanticTimingEvent(this.liveSessionId, "responseCreateRequestedAt");
     noteSemanticTimingEvent(this.liveSessionId, "responseCreateCount");
-    noteSemanticTimingEvent(this.liveSessionId, "delegatedContinuationAt");
+    noteSemanticTimingEvent(this.liveSessionId, "delegatedContinuationRequestedAt");
 
     if (this.activeDelegationId) {
       const d = this.delegations.get(this.activeDelegationId);

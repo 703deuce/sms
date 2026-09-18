@@ -101,6 +101,9 @@ export function afterVoiceV3StateChange(input: {
   }
 
   noteSemanticTimingEvent(ctx.liveSessionId, "plannerCompletedAt");
+  if (input.send && snapshotMateriallyChanged(prev, snapshot)) {
+    noteSemanticTimingEvent(ctx.liveSessionId, "liveContextSentAt");
+  }
 
   if (input.send && snapshotMateriallyChanged(prev, snapshot)) {
     const event = buildAgentSnapshotLiveAppend(input.runtime, snapshot);

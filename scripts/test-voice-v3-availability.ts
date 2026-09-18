@@ -145,6 +145,7 @@ async function testStaleRace() {
   const sent: string[] = [];
 
   await dispatchFindAvailabilityIfRequired(runtime, {
+    awaitCompletion: true,
     fetchBusy: async () => ({
       ok: true,
       busy: [],
@@ -178,6 +179,7 @@ async function testStaleRace() {
   assert.ok(gen8 > gen7);
 
   await dispatchFindAvailabilityIfRequired(runtime, {
+    awaitCompletion: true,
     fetchBusy: async () => ({
       ok: true,
       busy: [],
@@ -221,6 +223,7 @@ async function testSpeakContinuationAfterFind() {
   const speakReasons: string[] = [];
 
   await dispatchFindAvailabilityIfRequired(runtime, {
+    awaitCompletion: true,
     fetchBusy: async () => ({ ok: true, busy: [], durationMs: 1 }),
     onLiveContext: (e) => {
       assert.ok(e.content.includes("Availability search completed"));
@@ -239,6 +242,7 @@ async function testDuplicateDispatch() {
   let dispatchCount = 0;
 
   await dispatchFindAvailabilityIfRequired(runtime, {
+    awaitCompletion: true,
     fetchBusy: async () => {
       dispatchCount += 1;
       return { ok: true, busy: [], durationMs: 1 };
@@ -246,6 +250,7 @@ async function testDuplicateDispatch() {
     onLiveContext: () => {},
   });
   await dispatchFindAvailabilityIfRequired(runtime, {
+    awaitCompletion: true,
     fetchBusy: async () => {
       dispatchCount += 1;
       return { ok: true, busy: [], durationMs: 1 };

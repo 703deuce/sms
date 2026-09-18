@@ -29,6 +29,10 @@ import {
 import { deleteVoiceV3CallRuntime, voiceV3IntakePipelineEnabled } from "./state/call-runtime";
 import { VoiceV3CallTrace } from "./telemetry/call-trace";
 import {
+  noteCallerSpeechStartedTiming,
+  noteSemanticTimingEvent,
+} from "./telemetry/caller-turn-timing";
+import {
   logVoiceV3Pipeline,
   logVoiceV3SidebandOutbound,
   shouldLogAstraNestedType,
@@ -167,6 +171,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
         logGreetingAudioStarted(sessionId, trace);
       }
       trace.mark("agent.audio.started");
+      noteSemanticTimingEvent(sessionId, "agentAudioStartedAt");
     }
 
     if (type === "session.output_transcript.delta") {
@@ -194,6 +199,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
       if (!callerSpeechActive) {
         callerSpeechActive = true;
         trace.mark("caller.speech.started");
+        noteCallerSpeechStartedTiming(sessionId);
       }
     }
 

@@ -14,6 +14,7 @@ import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
 import { startOperation, transitionOperation } from "../operations/registry";
+import { noteBackendOperationDispatched } from "../telemetry/caller-turn-timing";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -25,6 +26,8 @@ export type FindBusyFetcher = (input: {
 
 type DispatchHooks = VoiceV3LiveRuntimeHooks & {
   fetchBusy?: FindBusyFetcher;
+  /** Test-only: await Microsoft FIND in-process instead of execution lane background. */
+  awaitCompletion?: boolean;
 };
 
 const defaultInFlight = new Map<string, number>();
@@ -167,15 +170,58 @@ export async function dispatchFindAvailabilityIfRequired(
   });
   runtime.replaceContext(marked);
   markFindInFlight(ctx.liveSessionId, request.schedulingGeneration);
+  noteBackendOperationDispatched(ctx.liveSessionId, opId);
 
   console.log("FIND_AVAILABILITY_DISPATCHED", {
     call_id: ctx.callId,
     live_session_id: ctx.liveSessionId,
     scheduling_generation: request.schedulingGeneration,
     request_key: request.requestKey,
+    execution_lane: hooks.awaitCompletion ? "inline" : "background",
   });
 
-  const started = Date.now();
+  const work = completeFindAvailabilityAfterDispatch({
+    runtime,
+    hooks,
+    request,
+    opId,
+    findStartedAt,
+    startedAt: Date.now(),
+    callId: ctx.callId,
+    liveSessionId: ctx.liveSessionId,
+  });
+
+  if (hooks.awaitCompletion) {
+    return work;
+  }
+
+  void work.catch((err) => {
+    console.error("FIND_AVAILABILITY_BACKGROUND_FAILED", {
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+      scheduling_generation: request.schedulingGeneration,
+      err,
+    });
+  });
+}
+
+async function completeFindAvailabilityAfterDispatch(input: {
+  runtime: {
+    getSnapshot: () => VoiceV3CallContext;
+    config: VoiceV3AgentConfig;
+    replaceContext: (ctx: VoiceV3CallContext) => void;
+  };
+  hooks: DispatchHooks;
+  request: NonNullable<ReturnType<typeof buildFindAvailabilityRequest>>;
+  opId: string;
+  findStartedAt: string;
+  startedAt: number;
+  callId: string;
+  liveSessionId: string;
+}): Promise<void> {
+  const { runtime, hooks, request, opId } = input;
+  const ctx = runtime.getSnapshot();
+  const started = input.startedAt;
   console.log("MICROSOFT_AVAILABILITY_REQUEST_STARTED", {
     call_id: ctx.callId,
     scheduling_generation: request.schedulingGeneration,
@@ -381,4 +427,16 @@ export async function dispatchFindAvailabilityIfRequired(
       speakReason: "availability_failed",
     });
   }
+}
+
+/** Fire-and-forget FIND when rules allow; does not block conversation lane. */
+export function enqueueFindAvailabilityIfRequired(
+  runtime: {
+    getSnapshot: () => VoiceV3CallContext;
+    config: VoiceV3AgentConfig;
+    replaceContext: (ctx: VoiceV3CallContext) => void;
+  },
+  hooks: DispatchHooks = {},
+): void {
+  void dispatchFindAvailabilityIfRequired(runtime, hooks);
 }

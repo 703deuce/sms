@@ -1,5 +1,5 @@
 import { evaluateVoiceV3Rules } from "../state/call-rules";
-import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
+import { enqueueFindAvailabilityIfRequired } from "../calendar/find-dispatch";
 import { dispatchBookingIfRequired } from "../calendar/book-dispatch";
 import { dispatchAppointmentManagementIfRequired } from "../calendar/appointment-management-dispatch";
 import { buildLiveSelectedSlotSessionAppend } from "../calendar/live-selected-slot-context";
@@ -21,6 +21,11 @@ import {
   markCallerTurnSemanticApplied,
 } from "../conversation/caller-turn-manager";
 import { markSemanticInterpretationEnded } from "../conversation/semantic-turn-watchdog";
+import {
+  noteRuntimeCommittedForTurn,
+  noteMeaningValidatedForTurn,
+  finalizeCallerTurnTiming,
+} from "../telemetry/caller-turn-timing";
 
 function slotSelectionChanged(
   before: SelectedAvailabilitySlot | null,
@@ -80,6 +85,11 @@ export async function applyExtractedCallerMeaning(input: {
     astraLatencyMs: 0,
   });
   const afterSnap = runtime.getSnapshot();
+  const turnIdForTiming = getLatestCommittedCallerTurn(sessionId)?.turnId;
+  if (turnIdForTiming) {
+    noteMeaningValidatedForTurn(sessionId, turnIdForTiming);
+    noteRuntimeCommittedForTurn(sessionId, turnIdForTiming, afterSnap.runtime.version);
+  }
   const afterSelected = afterSnap.selection.selected;
   const slotChanged = slotSelectionChanged(beforeSelected, afterSelected);
 
@@ -129,9 +139,21 @@ export async function applyExtractedCallerMeaning(input: {
     },
   };
 
-  await dispatchFindAvailabilityIfRequired(runtime, liveHooks);
-  await dispatchBookingIfRequired(runtime, liveHooks);
-  await dispatchAppointmentManagementIfRequired(runtime, liveHooks);
+  enqueueFindAvailabilityIfRequired(runtime, liveHooks);
+  void dispatchBookingIfRequired(runtime, liveHooks).catch((err) => {
+    console.error("BOOK_DISPATCH_BACKGROUND_FAILED", {
+      call_id: runtime.getSnapshot().callId,
+      live_session_id: sessionId,
+      err,
+    });
+  });
+  void dispatchAppointmentManagementIfRequired(runtime, liveHooks).catch((err) => {
+    console.error("APPOINTMENT_MANAGEMENT_DISPATCH_BACKGROUND_FAILED", {
+      call_id: runtime.getSnapshot().callId,
+      live_session_id: sessionId,
+      err,
+    });
+  });
 
   if (!spokeContinuation.value) {
     if (slotChanged && afterSelected) {
@@ -150,4 +172,12 @@ export async function applyExtractedCallerMeaning(input: {
     hooks: liveHooks,
     speakReason: "workflow_recovery",
   });
+
+  if (turnIdForTiming) {
+    finalizeCallerTurnTiming({
+      liveSessionId: sessionId,
+      turnId: turnIdForTiming,
+      source: input.source ?? "delegation",
+    });
+  }
 }

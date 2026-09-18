@@ -9,7 +9,7 @@ import {
   getLatestCommittedCallerTurn,
 } from "../conversation/caller-turn-manager";
 import { getCallerEvidenceCharCount } from "./caller-evidence";
-import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
+import { finalizeCallerTurnTiming, noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import { applyExtractedCallerMeaning } from "./apply-extracted-meaning";
 import type { CallerMeaning } from "./caller-meaning-schema";
 import { runDirectCallerMeaningExtraction } from "./direct-caller-meaning-extraction";
@@ -195,6 +195,14 @@ export async function attemptSemanticExtractionRetry(input: {
     send: input.send,
     source: "semantic_retry",
   });
+
+  if (originalTurnId) {
+    finalizeCallerTurnTiming({
+      liveSessionId: input.liveSessionId,
+      turnId: originalTurnId,
+      source: "semantic_retry",
+    });
+  }
 
   return { applied: true, attemptId };
 }
