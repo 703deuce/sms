@@ -29,8 +29,9 @@ import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { registerDurableBooking } from "./durable-booking-store";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
-import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { finishMutatingOperation } from "../operations/dispatch-mutations";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
+import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;
@@ -355,199 +356,201 @@ export async function dispatchBookingIfRequired(
     });
 
     updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "READY_TO_COMMIT");
-    let creating = applyBookingPhase(latest, "BOOKING_CREATING");
-    creating = beginMutatingOperation(creating, {
+
+    const commitResult = await runAuthoritativeOperation({
+      runtime,
       operationId: attempt.bookingAttemptId,
       type: "BOOK_APPOINTMENT",
       schedulingGeneration: latest.scheduling.generation,
-    });
-    runtime.replaceContext(creating);
+      prepareStart: (c) => applyBookingPhase(c, "BOOKING_CREATING"),
+      isStillAuthoritative: (c) => attemptStillValid(c, attempt),
+      execute: async () => {
+        console.log("BOOKING_COMMIT_STARTED", {
+          call_id: latest.callId,
+          scheduling_generation: latest.scheduling.generation,
+          booking_attempt_id: attempt.bookingAttemptId,
+        });
+        updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "COMMIT_SENT");
+        console.log("BOOKING_COMMIT_SENT", {
+          call_id: latest.callId,
+          scheduling_generation: latest.scheduling.generation,
+          booking_attempt_id: attempt.bookingAttemptId,
+          provider: "microsoft",
+        });
 
-    if (!attemptStillValid(runtime.getSnapshot(), attempt)) {
+        let createResult:
+          | { ok: true; providerEventId: string; providerCalendarId: string; durationMs: number }
+          | { ok: false; failure: BookingFailure; durationMs: number; outcomeUncertain?: boolean };
+
+        if (hooks.createBooking) {
+          createResult = await hooks.createBooking({ request, config: runtime.config });
+        } else {
+          const { executeMicrosoftCreateBooking } = await import("./microsoft/microsoft-create-booking");
+          const { getPrisma } = await import("@/lib/db");
+          const prisma = getPrisma();
+          const connection = await prisma.voiceCalendarConnection.findFirst({
+            where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
+          });
+          if (!connection) {
+            createResult = {
+              ok: false,
+              durationMs: 0,
+              failure: {
+                reason: "configuration_missing",
+                message: "Connection missing",
+                at: new Date().toISOString(),
+                bookingAttemptId: attempt.bookingAttemptId,
+                schedulingGeneration: latest.scheduling.generation,
+              },
+            };
+          } else {
+            const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
+            const ms = await executeMicrosoftCreateBooking({
+              request,
+              connectionId: connection.id,
+              calendarConfig,
+            });
+            if (ms.ok) {
+              createResult = ms;
+            } else {
+              createResult = {
+                ok: false,
+                durationMs: ms.durationMs,
+                outcomeUncertain: ms.outcomeUncertain,
+                failure: {
+                  reason: ms.reason,
+                  message: ms.message,
+                  at: new Date().toISOString(),
+                  bookingAttemptId: attempt.bookingAttemptId,
+                  schedulingGeneration: latest.scheduling.generation,
+                },
+              };
+            }
+          }
+        }
+
+        if (!createResult.ok) {
+          return {
+            ok: false,
+            failureCode: mapProviderFailureToRecoveryCode(createResult.failure.reason),
+            outcomeUncertain: createResult.outcomeUncertain,
+          };
+        }
+        return {
+          ok: true,
+          value: {
+            providerEventId: createResult.providerEventId,
+            providerCalendarId: createResult.providerCalendarId,
+            durationMs: createResult.durationMs,
+          },
+        };
+      },
+      applySuccess: (afterCommit, value) => {
+        console.log("MICROSOFT_EVENT_CREATED", {
+          call_id: afterCommit.callId,
+          scheduling_generation: afterCommit.scheduling.generation,
+          booking_attempt_id: attempt.bookingAttemptId,
+          provider: "microsoft",
+          duration_ms: value.durationMs,
+        });
+
+        const confirmed: ConfirmedBooking = {
+          bookingAttemptId: attempt.bookingAttemptId,
+          provider: "microsoft",
+          providerEventId: value.providerEventId,
+          providerCalendarId: value.providerCalendarId,
+          startUtc: selected.startUtc,
+          endUtc: selected.endUtc,
+          localStart: selected.localStart,
+          localEnd: selected.localEnd,
+          timezone: selected.timezone,
+          customerName: request.customer.name,
+          serviceId: request.service.id,
+          confirmedAt: new Date().toISOString(),
+          offerSetId: selected.offerSetId,
+          slotId: selected.slotId,
+          schedulingGeneration: afterCommit.scheduling.generation,
+        };
+
+        markBookingConfirmed(afterCommit.liveSessionId, slotKey, confirmed);
+        updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "CONFIRMED");
+        registerDurableBooking(confirmed, {
+          name: request.customer.name,
+          email: request.customer.email,
+          phone: request.customer.phone,
+        });
+
+        console.log("BOOKING_CONFIRMED", {
+          call_id: afterCommit.callId,
+          scheduling_generation: afterCommit.scheduling.generation,
+          offer_set_id: selected.offerSetId,
+          slot_id: selected.slotId,
+          booking_attempt_id: attempt.bookingAttemptId,
+          provider: "microsoft",
+          duration_ms: value.durationMs,
+        });
+
+        const append = buildLiveBookingConfirmedSessionAppend(confirmed);
+        pushLiveThinkingEvent(hooks, append, "booking_confirmed");
+        console.log("LIVE_BOOKING_CONFIRMATION_SENT", {
+          call_id: afterCommit.callId,
+          scheduling_generation: afterCommit.scheduling.generation,
+          offer_set_id: selected.offerSetId,
+          slot_id: selected.slotId,
+          booking_attempt_id: attempt.bookingAttemptId,
+        });
+
+        return applyBookingPhase(afterCommit, "BOOKING_CONFIRMED", {
+          confirmed,
+          activeAttempt: null,
+          lastFailure: null,
+        });
+      },
+      applyFailure: (afterCommit, terminal, failureCode) => {
+        if (terminal === "STALE") {
+          return applyBookingPhase(afterCommit, "SLOT_SELECTED", { activeAttempt: null });
+        }
+        if (terminal === "OUTCOME_UNKNOWN") {
+          console.log("BOOKING_OUTCOME_UNKNOWN", {
+            call_id: afterCommit.callId,
+            booking_attempt_id: attempt.bookingAttemptId,
+          });
+          const failure: BookingFailure = {
+            reason: failureCode,
+            message: failureCode,
+            at: new Date().toISOString(),
+            bookingAttemptId: attempt.bookingAttemptId,
+            schedulingGeneration: afterCommit.scheduling.generation,
+          };
+          pushLiveThinkingEvent(hooks, buildLiveBookingFailureSessionAppend(failure), "booking_outcome_unknown");
+          updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "OUTCOME_UNKNOWN");
+          return applyBookingPhase(afterCommit, "BOOKING_OUTCOME_UNKNOWN", {
+            lastFailure: failure,
+            activeAttempt: { ...attempt, commitPhase: "OUTCOME_UNKNOWN" },
+          });
+        }
+        const failure: BookingFailure = {
+          reason: failureCode,
+          message: failureCode,
+          at: new Date().toISOString(),
+          bookingAttemptId: attempt.bookingAttemptId,
+          schedulingGeneration: afterCommit.scheduling.generation,
+        };
+        pushLiveThinkingEvent(hooks, buildLiveBookingFailureSessionAppend(failure), "booking_failed");
+        updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "FAILED");
+        return applyBookingPhase(afterCommit, "BOOKING_FAILED", {
+          lastFailure: failure,
+          activeAttempt: null,
+        });
+      },
+    });
+
+    if (!commitResult.ok && commitResult.failureCode === "stale") {
       console.log("BOOKING_ATTEMPT_STALE", {
         call_id: runtime.getSnapshot().callId,
         booking_attempt_id: attempt.bookingAttemptId,
       });
-      let staleCtx = finishMutatingOperation(
-        runtime.getSnapshot(),
-        attempt.bookingAttemptId,
-        "STALE",
-      );
-      staleCtx = applyBookingPhase(staleCtx, "SLOT_SELECTED", { activeAttempt: null });
-      runtime.replaceContext(staleCtx);
-      return;
     }
-
-    console.log("BOOKING_COMMIT_STARTED", {
-      call_id: latest.callId,
-      scheduling_generation: latest.scheduling.generation,
-      booking_attempt_id: attempt.bookingAttemptId,
-    });
-
-    updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "COMMIT_SENT");
-    console.log("BOOKING_COMMIT_SENT", {
-      call_id: latest.callId,
-      scheduling_generation: latest.scheduling.generation,
-      booking_attempt_id: attempt.bookingAttemptId,
-      provider: "microsoft",
-    });
-
-    let createResult:
-      | { ok: true; providerEventId: string; providerCalendarId: string; durationMs: number }
-      | { ok: false; failure: BookingFailure; durationMs: number; outcomeUncertain?: boolean };
-
-    if (hooks.createBooking) {
-      createResult = await hooks.createBooking({ request, config: runtime.config });
-    } else {
-      const { executeMicrosoftCreateBooking } = await import("./microsoft/microsoft-create-booking");
-      const { getPrisma } = await import("@/lib/db");
-      const prisma = getPrisma();
-      const connection = await prisma.voiceCalendarConnection.findFirst({
-        where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
-      });
-      if (!connection) {
-        createResult = {
-          ok: false,
-          durationMs: 0,
-          failure: {
-            reason: "configuration_missing",
-            message: "Connection missing",
-            at: new Date().toISOString(),
-            bookingAttemptId: attempt.bookingAttemptId,
-            schedulingGeneration: latest.scheduling.generation,
-          },
-        };
-      } else {
-        const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
-        const ms = await executeMicrosoftCreateBooking({
-          request,
-          connectionId: connection.id,
-          calendarConfig,
-        });
-        if (ms.ok) {
-          createResult = ms;
-        } else {
-          createResult = {
-            ok: false,
-            durationMs: ms.durationMs,
-            outcomeUncertain: ms.outcomeUncertain,
-            failure: {
-              reason: ms.reason,
-              message: ms.message,
-              at: new Date().toISOString(),
-              bookingAttemptId: attempt.bookingAttemptId,
-              schedulingGeneration: latest.scheduling.generation,
-            },
-          };
-        }
-      }
-    }
-
-    const afterCommit = runtime.getSnapshot();
-    if (!attemptStillValid(afterCommit, attempt)) {
-      console.log("BOOKING_ATTEMPT_STALE", {
-        call_id: afterCommit.callId,
-        booking_attempt_id: attempt.bookingAttemptId,
-      });
-      let staleCtx = finishMutatingOperation(afterCommit, attempt.bookingAttemptId, "STALE");
-      staleCtx = applyBookingPhase(staleCtx, "SLOT_SELECTED", { activeAttempt: null });
-      runtime.replaceContext(staleCtx);
-      return;
-    }
-
-    if (!createResult.ok) {
-      if (createResult.outcomeUncertain) {
-        console.log("BOOKING_OUTCOME_UNKNOWN", {
-          call_id: afterCommit.callId,
-          booking_attempt_id: attempt.bookingAttemptId,
-          duration_ms: createResult.durationMs,
-        });
-        let unknownCtx = applyBookingPhase(afterCommit, "BOOKING_OUTCOME_UNKNOWN", {
-          lastFailure: createResult.failure,
-          activeAttempt: { ...attempt, commitPhase: "OUTCOME_UNKNOWN" },
-        });
-        unknownCtx = finishMutatingOperation(
-          unknownCtx,
-          attempt.bookingAttemptId,
-          "OUTCOME_UNKNOWN",
-          createResult.failure.reason,
-        );
-        runtime.replaceContext(unknownCtx);
-        pushLiveThinkingEvent(
-          hooks,
-          buildLiveBookingFailureSessionAppend(createResult.failure),
-          "booking_outcome_unknown",
-        );
-        updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "OUTCOME_UNKNOWN");
-        return;
-      }
-      await failBooking(runtime, hooks, createResult.failure, attempt.bookingAttemptId, createResult.durationMs);
-      return;
-    }
-
-    console.log("MICROSOFT_EVENT_CREATED", {
-      call_id: afterCommit.callId,
-      scheduling_generation: afterCommit.scheduling.generation,
-      booking_attempt_id: attempt.bookingAttemptId,
-      provider: "microsoft",
-      duration_ms: createResult.durationMs,
-    });
-
-    const confirmed: ConfirmedBooking = {
-      bookingAttemptId: attempt.bookingAttemptId,
-      provider: "microsoft",
-      providerEventId: createResult.providerEventId,
-      providerCalendarId: createResult.providerCalendarId,
-      startUtc: selected.startUtc,
-      endUtc: selected.endUtc,
-      localStart: selected.localStart,
-      localEnd: selected.localEnd,
-      timezone: selected.timezone,
-      customerName: request.customer.name,
-      serviceId: request.service.id,
-      confirmedAt: new Date().toISOString(),
-      offerSetId: selected.offerSetId,
-      slotId: selected.slotId,
-      schedulingGeneration: afterCommit.scheduling.generation,
-    };
-
-    markBookingConfirmed(afterCommit.liveSessionId, slotKey, confirmed);
-    updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "CONFIRMED");
-
-    registerDurableBooking(confirmed, {
-      name: request.customer.name,
-      email: request.customer.email,
-      phone: request.customer.phone,
-    });
-
-    let confirmedCtx = finishMutatingOperation(afterCommit, attempt.bookingAttemptId, "SUCCEEDED");
-    runtime.replaceContext(
-      applyBookingPhase(confirmedCtx, "BOOKING_CONFIRMED", {
-        confirmed,
-        activeAttempt: null,
-        lastFailure: null,
-      }),
-    );
-
-    console.log("BOOKING_CONFIRMED", {
-      call_id: afterCommit.callId,
-      scheduling_generation: afterCommit.scheduling.generation,
-      offer_set_id: selected.offerSetId,
-      slot_id: selected.slotId,
-      booking_attempt_id: attempt.bookingAttemptId,
-      provider: "microsoft",
-      duration_ms: createResult.durationMs,
-    });
-
-    const append = buildLiveBookingConfirmedSessionAppend(confirmed);
-    pushLiveThinkingEvent(hooks, append, "booking_confirmed");
-    console.log("LIVE_BOOKING_CONFIRMATION_SENT", {
-      call_id: afterCommit.callId,
-      scheduling_generation: afterCommit.scheduling.generation,
-      offer_set_id: selected.offerSetId,
-      slot_id: selected.slotId,
-      booking_attempt_id: attempt.bookingAttemptId,
-    });
   } finally {
     bookingInFlight.delete(ctx.liveSessionId);
   }

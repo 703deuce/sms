@@ -7,7 +7,7 @@ import { buildLiveCancellationConfirmedAppend } from "./live-management-context"
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { CancelBookingRequest } from "./cancel-booking-types";
-import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 export type CancelBookingExecutor = (input: {
@@ -56,32 +56,6 @@ export async function dispatchCancellationIfRequired(
   console.log("CANCELLATION_REQUESTED", { call_id: ctx.callId, attempt_id: attemptId });
 
   try {
-    let committing = runtime.getSnapshot();
-    committing = {
-      ...committing,
-      appointmentManagement: {
-        ...committing.appointmentManagement,
-        cancellation: {
-          ...committing.appointmentManagement.cancellation,
-          phase: "CANCELLATION_COMMITTING",
-          cancellationAttemptId: attemptId,
-          awaitingConfirmation: false,
-        },
-      },
-      runtime: { version: committing.runtime.version + 1 },
-    };
-    committing = beginMutatingOperation(committing, {
-      operationId: attemptId,
-      type: "CANCEL_APPOINTMENT",
-    });
-    runtime.replaceContext(committing);
-
-    console.log("CANCELLATION_COMMIT_SENT", {
-      call_id: ctx.callId,
-      cancellation_attempt_id: attemptId,
-      provider_event_id: existing.providerEventId,
-    });
-
     const request: CancelBookingRequest = {
       callId: ctx.callId,
       cancellationAttemptId: attemptId,
@@ -89,84 +63,91 @@ export async function dispatchCancellationIfRequired(
       providerEventId: existing.providerEventId,
     };
 
-    let ok = false;
-    let providerFailureMessage = "cancel_failed";
-    if (hooks.cancelBooking) {
-      const r = await hooks.cancelBooking({ request, config: runtime.config });
-      ok = r.ok;
-      if (!r.ok) {
-        providerFailureMessage = r.message;
-      }
-      if (!r.ok && r.outcomeUncertain) {
-        let unk = runtime.getSnapshot();
-        unk = finishMutatingOperation(unk, attemptId, "OUTCOME_UNKNOWN", "outcome_unknown");
-        runtime.replaceContext({
-          ...unk,
-          appointmentManagement: {
-            ...unk.appointmentManagement,
-            cancellation: {
-              phase: "CANCELLATION_OUTCOME_UNKNOWN",
-              cancellationAttemptId: attemptId,
-              awaitingConfirmation: false,
-            },
-          },
-        });
-        return;
-      }
-    } else {
-      ok = true;
-    }
-
-    if (!ok) {
-      let failed = runtime.getSnapshot();
-      const code = mapProviderFailureToRecoveryCode(providerFailureMessage);
-      failed = finishMutatingOperation(failed, attemptId, "FAILED", code);
-      runtime.replaceContext({
-        ...failed,
+    const result = await runAuthoritativeOperation({
+      runtime,
+      operationId: attemptId,
+      type: "CANCEL_APPOINTMENT",
+      prepareStart: (c) => ({
+        ...c,
         appointmentManagement: {
-          ...failed.appointmentManagement,
+          ...c.appointmentManagement,
           cancellation: {
-            phase: "CANCELLATION_FAILED",
+            ...c.appointmentManagement.cancellation,
+            phase: "CANCELLATION_COMMITTING",
             cancellationAttemptId: attemptId,
             awaitingConfirmation: false,
           },
         },
-      });
-      return;
-    }
-
-    confirmedAttempts.add(attemptId);
-    markDurableBookingCanceled(existing.internalBookingId);
-
-    let confirmed = runtime.getSnapshot();
-    confirmed = finishMutatingOperation(confirmed, attemptId, "SUCCEEDED");
-    runtime.replaceContext({
-      ...confirmed,
-      appointmentManagement: {
-        ...confirmed.appointmentManagement,
-        verifiedExisting: null,
-        cancellation: {
-          phase: "CANCELLATION_CONFIRMED",
-          cancellationAttemptId: attemptId,
-          awaitingConfirmation: false,
-        },
-      },
-    });
-
-    console.log("CANCELLATION_CONFIRMED", {
-      call_id: ctx.callId,
-      cancellation_attempt_id: attemptId,
-      provider_event_id: existing.providerEventId,
-    });
-
-    pushLiveThinkingEvent(
-      hooks,
-      buildLiveCancellationConfirmedAppend({
-        localStart: existing.localStart,
-        timezone: existing.timezone,
+        runtime: { version: c.runtime.version + 1 },
       }),
-      "cancellation_confirmed",
-    );
+      isStillAuthoritative: (c) =>
+        c.appointmentManagement.verifiedExisting?.providerEventId === existing.providerEventId &&
+        c.dialog.activeGoal === "CANCEL_APPOINTMENT",
+      execute: async () => {
+        console.log("CANCELLATION_COMMIT_SENT", {
+          call_id: ctx.callId,
+          cancellation_attempt_id: attemptId,
+          provider_event_id: existing.providerEventId,
+        });
+        if (!hooks.cancelBooking) {
+          return { ok: true, value: { durationMs: 0 } };
+        }
+        const r = await hooks.cancelBooking({ request, config: runtime.config });
+        if (r.ok) return { ok: true, value: { durationMs: r.durationMs } };
+        return {
+          ok: false,
+          failureCode: mapProviderFailureToRecoveryCode(r.message),
+          outcomeUncertain: r.outcomeUncertain,
+        };
+      },
+      applySuccess: (c) => {
+        confirmedAttempts.add(attemptId);
+        markDurableBookingCanceled(existing.internalBookingId);
+        console.log("CANCELLATION_CONFIRMED", {
+          call_id: ctx.callId,
+          cancellation_attempt_id: attemptId,
+          provider_event_id: existing.providerEventId,
+        });
+        pushLiveThinkingEvent(
+          hooks,
+          buildLiveCancellationConfirmedAppend({
+            localStart: existing.localStart,
+            timezone: existing.timezone,
+          }),
+          "cancellation_confirmed",
+        );
+        return {
+          ...c,
+          appointmentManagement: {
+            ...c.appointmentManagement,
+            verifiedExisting: null,
+            cancellation: {
+              phase: "CANCELLATION_CONFIRMED",
+              cancellationAttemptId: attemptId,
+              awaitingConfirmation: false,
+            },
+          },
+        };
+      },
+      applyFailure: (c, terminal, failureCode) => ({
+        ...c,
+        appointmentManagement: {
+          ...c.appointmentManagement,
+          cancellation: {
+            phase:
+              terminal === "OUTCOME_UNKNOWN"
+                ? "CANCELLATION_OUTCOME_UNKNOWN"
+                : "CANCELLATION_FAILED",
+            cancellationAttemptId: attemptId,
+            awaitingConfirmation: false,
+          },
+        },
+      }),
+    });
+
+    if (!result.ok && result.outcomeUncertain) {
+      console.log("CANCELLATION_OUTCOME_UNKNOWN", { call_id: ctx.callId, attempt_id: attemptId });
+    }
   } finally {
     inFlight.delete(ctx.liveSessionId);
   }

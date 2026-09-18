@@ -9,7 +9,7 @@ import { buildLiveRescheduleConfirmedAppend } from "./live-management-context";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { RevalidateBusyFetcher } from "./book-dispatch";
-import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 export type UpdateBookingExecutor = (input: {
@@ -111,120 +111,104 @@ export async function dispatchRescheduleIfRequired(
       return;
     }
 
-    let committing = runtime.getSnapshot();
-    committing = {
-      ...committing,
-      appointmentManagement: {
-        ...committing.appointmentManagement,
-        reschedule: { phase: "RESCHEDULE_COMMITTING", attemptId },
-      },
-      runtime: { version: committing.runtime.version + 1 },
-    };
-    committing = beginMutatingOperation(committing, {
+    const summary = `${runtime.config.service.name} — ${ctx.intake.values.name?.value ?? "Guest"}`;
+    const slotSnapshot = selected;
+    await runAuthoritativeOperation({
+      runtime,
       operationId: attemptId,
       type: "RESCHEDULE_APPOINTMENT",
-      schedulingGeneration: committing.scheduling.generation,
-    });
-    runtime.replaceContext(committing);
-
-    console.log("RESCHEDULE_COMMIT_SENT", {
-      call_id: ctx.callId,
-      provider_event_id: existing.providerEventId,
-      attempt_id: attemptId,
-    });
-
-    const summary = `${runtime.config.service.name} — ${ctx.intake.values.name?.value ?? "Guest"}`;
-    let updateOk = false;
-    let providerFailureMessage = "reschedule_failed";
-    if (hooks.updateBooking) {
-      const u = await hooks.updateBooking({
-        providerEventId: existing.providerEventId,
-        providerCalendarId: existing.providerCalendarId,
-        startUtc: selected.startUtc,
-        endUtc: selected.endUtc,
-        timezone: selected.timezone,
-        summary,
-        config: runtime.config,
-      });
-      updateOk = u.ok;
-      if (!u.ok) {
-        providerFailureMessage = u.message;
-      }
-      if (!u.ok && u.outcomeUncertain) {
-        let unk = runtime.getSnapshot();
-        unk = finishMutatingOperation(unk, attemptId, "OUTCOME_UNKNOWN", "outcome_unknown");
-        runtime.replaceContext({
-          ...unk,
-          appointmentManagement: {
-            ...unk.appointmentManagement,
-            reschedule: { phase: "RESCHEDULE_OUTCOME_UNKNOWN", attemptId },
-          },
-        });
-        return;
-      }
-    } else {
-      updateOk = true;
-    }
-
-    if (!updateOk) {
-      let failed = runtime.getSnapshot();
-      failed = finishMutatingOperation(
-        failed,
-        attemptId,
-        "FAILED",
-        mapProviderFailureToRecoveryCode(providerFailureMessage),
-      );
-      runtime.replaceContext({
-        ...failed,
+      schedulingGeneration: runtime.getSnapshot().scheduling.generation,
+      prepareStart: (c) => ({
+        ...c,
         appointmentManagement: {
-          ...failed.appointmentManagement,
-          reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
+          ...c.appointmentManagement,
+          reschedule: { phase: "RESCHEDULE_COMMITTING", attemptId },
         },
-      });
-      return;
-    }
-
-    updateDurableBookingTimes(existing.internalBookingId, {
-      startUtc: selected.startUtc,
-      endUtc: selected.endUtc,
-      localStart: selected.localStart,
-      localEnd: selected.localEnd,
-    });
-
-    const updatedExisting = {
-      ...existing,
-      startUtc: selected.startUtc,
-      endUtc: selected.endUtc,
-      localStart: selected.localStart,
-      localEnd: selected.localEnd,
-    };
-
-    let done = runtime.getSnapshot();
-    done = finishMutatingOperation(done, attemptId, "SUCCEEDED");
-    runtime.replaceContext({
-      ...done,
-      appointmentManagement: {
-        ...done.appointmentManagement,
-        verifiedExisting: updatedExisting,
-        reschedule: { phase: "RESCHEDULE_CONFIRMED", attemptId },
-      },
-    });
-
-    console.log("RESCHEDULE_CONFIRMED", {
-      call_id: ctx.callId,
-      provider_event_id: existing.providerEventId,
-      attempt_id: attemptId,
-    });
-
-    pushLiveThinkingEvent(
-      hooks,
-      buildLiveRescheduleConfirmedAppend({
-        fromLocal: existing.localStart,
-        toLocal: selected.localStart,
-        timezone: selected.timezone,
+        runtime: { version: c.runtime.version + 1 },
       }),
-      "reschedule_confirmed",
-    );
+      isStillAuthoritative: (c) => {
+        const sel = c.selection.selected;
+        const ex = c.appointmentManagement.verifiedExisting;
+        if (!sel || !ex || ex.providerEventId !== existing.providerEventId) return false;
+        return isSelectedSlotAuthoritative(sel, {
+          offerSetId: offer.offerSetId,
+          schedulingGeneration: c.scheduling.generation,
+        });
+      },
+      execute: async () => {
+        console.log("RESCHEDULE_COMMIT_SENT", {
+          call_id: ctx.callId,
+          provider_event_id: existing.providerEventId,
+          attempt_id: attemptId,
+        });
+        if (!hooks.updateBooking) {
+          return { ok: true, value: { durationMs: 0 } };
+        }
+        const u = await hooks.updateBooking({
+          providerEventId: existing.providerEventId,
+          providerCalendarId: existing.providerCalendarId,
+          startUtc: slotSnapshot.startUtc,
+          endUtc: slotSnapshot.endUtc,
+          timezone: slotSnapshot.timezone,
+          summary,
+          config: runtime.config,
+        });
+        if (u.ok) return { ok: true, value: { durationMs: u.durationMs } };
+        return {
+          ok: false,
+          failureCode: mapProviderFailureToRecoveryCode(u.message),
+          outcomeUncertain: u.outcomeUncertain,
+        };
+      },
+      applySuccess: (c) => {
+        updateDurableBookingTimes(existing.internalBookingId, {
+          startUtc: slotSnapshot.startUtc,
+          endUtc: slotSnapshot.endUtc,
+          localStart: slotSnapshot.localStart,
+          localEnd: slotSnapshot.localEnd,
+        });
+        const updatedExisting = {
+          ...existing,
+          startUtc: slotSnapshot.startUtc,
+          endUtc: slotSnapshot.endUtc,
+          localStart: slotSnapshot.localStart,
+          localEnd: slotSnapshot.localEnd,
+        };
+        console.log("RESCHEDULE_CONFIRMED", {
+          call_id: ctx.callId,
+          provider_event_id: existing.providerEventId,
+          attempt_id: attemptId,
+        });
+        pushLiveThinkingEvent(
+          hooks,
+          buildLiveRescheduleConfirmedAppend({
+            fromLocal: existing.localStart,
+            toLocal: slotSnapshot.localStart,
+            timezone: slotSnapshot.timezone,
+          }),
+          "reschedule_confirmed",
+        );
+        return {
+          ...c,
+          appointmentManagement: {
+            ...c.appointmentManagement,
+            verifiedExisting: updatedExisting,
+            reschedule: { phase: "RESCHEDULE_CONFIRMED", attemptId },
+          },
+        };
+      },
+      applyFailure: (c, terminal) => ({
+        ...c,
+        appointmentManagement: {
+          ...c.appointmentManagement,
+          reschedule: {
+            phase:
+              terminal === "OUTCOME_UNKNOWN" ? "RESCHEDULE_OUTCOME_UNKNOWN" : "RESCHEDULE_FAILED",
+            attemptId,
+          },
+        },
+      }),
+    });
   } finally {
     inFlight.delete(ctx.liveSessionId);
   }

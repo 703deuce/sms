@@ -65,5 +65,35 @@ export function evaluateAllowedClaims(ctx: VoiceV3CallContext): ClaimsEvaluation
     forbidden = forbidden.filter((c) => c !== "CLAIM_CANCELLED");
   }
 
+  const rescheduleSucceeded = ops.some(
+    (o) => o.type === "RESCHEDULE_APPOINTMENT" && o.status === "SUCCEEDED",
+  );
+  if (
+    ctx.appointmentManagement.reschedule.phase === "RESCHEDULE_CONFIRMED" ||
+    rescheduleSucceeded
+  ) {
+    allowed.push("CLAIM_RESCHEDULED");
+    forbidden = forbidden.filter((c) => c !== "CLAIM_RESCHEDULED");
+  }
+
+  const bookSucceeded = ops.some(
+    (o) => o.type === "BOOK_APPOINTMENT" && o.status === "SUCCEEDED",
+  );
+  if (bookSucceeded && ctx.booking.phase !== "BOOKING_CONFIRMED") {
+    allowed.push("CLAIM_BOOKED");
+    forbidden = forbidden.filter((c) => c !== "CLAIM_BOOKED");
+  }
+
+  const outcomeUnknownBlocksSuccess = ops.some(
+    (o) =>
+      (o.type === "BOOK_APPOINTMENT" ||
+        o.type === "RESCHEDULE_APPOINTMENT" ||
+        o.type === "CANCEL_APPOINTMENT") &&
+      o.status === "OUTCOME_UNKNOWN",
+  );
+  if (outcomeUnknownBlocksSuccess) {
+    forbidden.push("CLAIM_BOOKED", "CLAIM_RESCHEDULED", "CLAIM_CANCELLED");
+  }
+
   return { allowed, forbidden };
 }

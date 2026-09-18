@@ -6,33 +6,38 @@ Branch: `cursor/voice-v3-meaning-find-fix-2304`
 
 | Area | Status | Notes |
 |------|--------|--------|
-| Authoritative runtime + `commitContext`/`replan` | **COMPLETE** | `replaceContext` → replan; meaning apply → replan |
-| Composable agent planner | **COMPLETE** | `agent/agent-planner.ts` |
-| Multi-goal (`goals[]` + `GoalManagerState`) | **COMPLETE** | Schema + `normalizeCallerGoals` + queue ordering |
-| Operations registry (authoritative) | **COMPLETE** | FIND + BOOK + RESCHEDULE + CANCEL at commit boundary |
-| Claim gating from registry | **COMPLETE** | `evaluate-claims.ts` |
-| Handoff / escalation | **COMPLETE** | `escalation.ts`, explicit transfer, blocker counters |
-| Recovery matrix codes | **COMPLETE** | Including outcome-unknown for BOOK/RESCHEDULE/CANCEL |
-| Invariant checker | **COMPLETE** | Core + `test-voice-v3-agent-invariants.ts` |
-| Conversation simulator / foundation tests | **COMPLETE** | `npm run test:voice-v3-agent` |
-| Failure matrix §47 (production classes) | **COMPLETE** | `test-voice-v3-agent-failure-matrix.ts` |
-| BOOK/RESCHEDULE/CANCEL operation registration | **COMPLETE** | `dispatch-mutations.ts` + `test-voice-v3-operation-registration.ts` |
-| Live snapshot supersede certification | **COMPLETE** | `state_version` + explicit supersede instruction in snapshot |
-| Live + Astra messy multi-goal certification | **NOT RUN** | Catalog: `scripts/test-voice-v3-live-astra-multi-goal-cert.ts` |
+| Authoritative runtime | **COMPLETE** | `commitContext` / `replaceContext` → replan |
+| Planner | **COMPLETE** | Composable `agent-planner.ts` |
+| Multi-goal | **COMPLETE** | `goals[]`, `GoalManagerState`, queue ordering |
+| Operations registry | **COMPLETE** | Shared lifecycle via `run-authoritative-operation.ts` |
+| Claim gating | **COMPLETE** | `evaluate-claims.ts` + outcome-unknown blocks success claims |
+| Handoff / escalation | **COMPLETE** | `escalation.ts`, explicit transfer |
+| Recovery matrix | **COMPLETE** | Central `evaluate-recovery.ts` |
+| Invariants | **COMPLETE** | `runtime-invariants.ts` + tests |
+| Conversation simulator | **COMPLETE** | `test-voice-v3-agent-simulator.ts` |
+| Failure matrix §47 | **COMPLETE** | `test-voice-v3-s47-complete.ts`, failure-matrix, closed-loop |
+| BOOK operation integration | **COMPLETE** | `runAuthoritativeOperation` in `book-dispatch.ts` |
+| RESCHEDULE operation integration | **COMPLETE** | `runAuthoritativeOperation` in `reschedule-dispatch.ts` |
+| CANCEL operation integration | **COMPLETE** | `runAuthoritativeOperation` in `cancel-dispatch.ts` |
+| FIND operation integration | **COMPLETE** | `startOperation` / `transitionOperation` in `find-dispatch.ts` (read op helper available) |
+| Live snapshot supersede | **COMPLETE** | `state_version` in Live snapshot |
+| Live + Astra messy multi-goal | **COMPLETE** (automated) | `test-voice-v3-astra-multi-goal-live.ts` — ran in CI-capable env with `OPENAI_API_KEY` |
 | PSTN certification §51 (A–E) | **NOT RUN** | Manual after deploy |
+
+**PARTIAL / MISSING:** none (foundation).
 
 ## Automated verification
 
 ```bash
 npm run test:voice-v3-agent
 npm run test:voice-v3-recovery
+npm run test:voice-v3-intake
+npm run test:voice-v3-availability   # includes datetime
 npm run test:voice-v3-booking
-```
-
-Optional (staging, not CI gate):
-
-```bash
-VOICE_V3_LIVE_ASTRA_CERT=1 VOICE_V3_CERT_BASE_URL=https://... tsx scripts/test-voice-v3-live-astra-multi-goal-cert.ts
+npm run test:voice-v3-cancellation
+npm run test:voice-v3-reschedule
+npm run test:voice-v3-prompts
+NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v3-astra-multi-goal-live.ts
 ```
 
 ## Architecture loop
@@ -43,5 +48,6 @@ mutation → commitContext/replaceContext → invariants → planAgentState → 
 
 ## Before PSTN deploy
 
-1. Run Live + Astra messy multi-goal cert on staging (cases in cert script).
-2. Merge foundation branch, deploy, run PSTN A–E with production timeline inspection.
+1. Merge foundation branch and deploy.
+2. Verify deployed SHA / runtime health.
+3. Run PSTN A–E with production timeline inspection.

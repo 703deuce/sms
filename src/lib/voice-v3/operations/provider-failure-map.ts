@@ -9,6 +9,9 @@ export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3Recover
   if (r.includes("429") || r.includes("throttl")) {
     return "MICROSOFT_THROTTLED";
   }
+  if (r.includes("5xx") || r.includes("500") || r.includes("502") || r.includes("503")) {
+    return "MICROSOFT_TEMPORARY_FAILURE";
+  }
   if (
     r.includes("network") ||
     r.includes("econnreset") ||
@@ -18,11 +21,11 @@ export function mapProviderFailureToRecoveryCode(reason: string): VoiceV3Recover
   ) {
     return "MICROSOFT_TEMPORARY_FAILURE";
   }
+  if (r.includes("504") || r.includes("gateway timeout")) {
+    return "MICROSOFT_TEMPORARY_FAILURE";
+  }
   if (r.includes("timeout") || r.includes("etimedout") || r.includes("microsoft_timeout")) {
     return "PROVIDER_TIMEOUT";
-  }
-  if (r.includes("5xx") || r.includes("500") || r.includes("502") || r.includes("503")) {
-    return "MICROSOFT_TEMPORARY_FAILURE";
   }
   if (r.includes("404") || r.includes("not_found") || r.includes("not found")) {
     return "APPOINTMENT_NOT_FOUND";
