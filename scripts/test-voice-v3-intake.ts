@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
 import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
 import { CALLER_MEANING_STRUCTURED_OUTPUT_NAME } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
@@ -42,10 +43,16 @@ function main() {
       ? accept.session.delegation.responses
       : null;
   assert.ok(responses);
-  const text = responses.text as { format?: { type?: string; name?: string } } | undefined;
-  assert.ok(text?.format, "expected delegation.responses.text.format (Structured Outputs)");
-  assert.equal(text?.format?.type, "json_schema");
-  assert.equal(text?.format?.name, CALLER_MEANING_STRUCTURED_OUTPUT_NAME);
+  const liveText = responses.text as { format?: unknown; verbosity?: string } | undefined;
+  assert.equal(liveText?.format, undefined, "Live accept must not send text.format (API 400)");
+  assert.equal(liveText?.verbosity, "low");
+
+  const integrationFormat = voiceV3CallerMeaningTextFormat(TEST_AGENT_CONFIG) as {
+    type?: string;
+    name?: string;
+  };
+  assert.equal(integrationFormat.type, "json_schema");
+  assert.equal(integrationFormat.name, CALLER_MEANING_STRUCTURED_OUTPUT_NAME);
 
   clearVoiceV3CallRuntimeStore();
   const runtime = createVoiceV3CallRuntime({

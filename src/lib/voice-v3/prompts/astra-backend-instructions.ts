@@ -118,7 +118,7 @@ Examples:
 Never invent an option that does not exist in supplied context.
 
 # DYNAMIC FIELDS (STRUCTURED OUTPUT — voice_v3_caller_meaning)
-Each delegated completion must emit strict JSON matching the voice_v3_caller_meaning schema:
+Each delegated completion must emit a single JSON object (no markdown fences) matching the voice_v3_caller_meaning schema:
 - active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
 - captured_fields: [{ key, value, confidence }]
 - corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
