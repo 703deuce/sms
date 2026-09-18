@@ -1025,8 +1025,10 @@ export async function processVoiceWebhookEvent(input: {
             path: "answered_webhook",
           });
         }
+        }
       }
       }
+    }
     }
   }
 
