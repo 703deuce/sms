@@ -22,6 +22,7 @@ export function logVoiceV3BasicConfigOnce(): void {
  * SIP accept configuration: no audio.format (negotiated by SIP).
  * Native Responses delegation to GPT-6 Astra — no separate Astra loop.
  * Prompts: src/lib/voice-v3/prompts/* (SDK SessionAcceptParams.Session).
+ * Architecture: docs/voice-v3/OPENAI-NATIVE-FIRST-ARCHITECTURE.md
  */
 export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParams.Session {
   logVoiceV3BasicConfigOnce();
