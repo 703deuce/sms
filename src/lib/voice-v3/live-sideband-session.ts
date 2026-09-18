@@ -70,7 +70,11 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.started") {
       trace.mark("live.session.started");
-      requestInitialLiveGreeting({ sessionId, send, trace });
+      try {
+        requestInitialLiveGreeting({ sessionId, send, trace });
+      } catch (err) {
+        console.error("LIVE_GREETING_FAILED", { sessionId, err });
+      }
     }
 
     if (type === "session.delegation.created") {
