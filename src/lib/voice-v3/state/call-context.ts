@@ -1,4 +1,5 @@
 import type { VoiceV3CallClock } from "../time/call-clock";
+import type { SchedulingClarificationRequirement } from "../time/scheduling-clarification";
 import type {
   NormalizedSchedulingPreference,
   SchedulingMeaning,
@@ -38,6 +39,7 @@ export interface VoiceV3CallContext {
     generation: number;
     meaning?: SchedulingMeaning;
     normalized?: NormalizedSchedulingPreference | null;
+    clarification?: SchedulingClarificationRequirement | null;
   };
   runtime: {
     version: number;

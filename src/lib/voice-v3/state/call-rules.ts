@@ -5,6 +5,11 @@ export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
   intakeComplete: boolean;
   hasSchedulingPreference: boolean;
+  schedulingRequiresClarification: boolean;
+  schedulingClarificationReason: string | null;
+  schedulingClarificationPrompt: string | null;
+  /** False while scheduling is UNRESOLVED and clarification is required. */
+  mayRunCalendarAction: boolean;
   mayFindAvailability: boolean;
   mayBook: boolean;
 }
@@ -28,10 +33,21 @@ export function evaluateVoiceV3Rules(
       (normalized.localDate || normalized.localStartDateTime || normalized.localEndDateTime),
   );
 
+  const clarification = ctx.scheduling.clarification;
+  const schedulingRequiresClarification = Boolean(clarification?.required);
+  const schedulingClarificationReason = clarification?.reason ?? null;
+  const schedulingClarificationPrompt = clarification?.prompt ?? null;
+
+  const mayRunCalendarAction = hasSchedulingPreference && !schedulingRequiresClarification;
+
   return {
     missingRequiredFields,
     intakeComplete: missingRequiredFields.length === 0,
     hasSchedulingPreference,
+    schedulingRequiresClarification,
+    schedulingClarificationReason,
+    schedulingClarificationPrompt,
+    mayRunCalendarAction,
     mayFindAvailability: false,
     mayBook: false,
   };

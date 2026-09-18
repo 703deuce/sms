@@ -72,6 +72,8 @@ export class VoiceV3CallRuntime {
       intake_complete: rules.intakeComplete,
       missing_required_fields: rules.missingRequiredFields,
       has_scheduling_preference: rules.hasSchedulingPreference,
+      scheduling_requires_clarification: rules.schedulingRequiresClarification,
+      may_run_calendar_action: rules.mayRunCalendarAction,
     });
 
     void persistSnapshot(this).catch((err) => {
@@ -173,14 +175,31 @@ export function buildAuthoritativeThinkingSnapshot(
     .join(", ");
   const missing = rules.missingRequiredFields.join(", ") || "(none)";
 
-  return [
+  const lines = [
     "Authoritative caller state updated (application-owned).",
     `state_version=${ctx.runtime.version}`,
     `goal=${ctx.dialog.activeGoal}`,
     known ? `captured: ${known}` : "captured: (none)",
     `missing_required: ${missing}`,
     `intake_complete=${rules.intakeComplete}`,
-  ].join("\n");
+    `has_scheduling_preference=${rules.hasSchedulingPreference}`,
+    `scheduling_requires_clarification=${rules.schedulingRequiresClarification}`,
+    `may_find_availability=${rules.mayFindAvailability}`,
+    `may_book=${rules.mayBook}`,
+    `may_run_calendar_action=${rules.mayRunCalendarAction}`,
+  ];
+
+  if (rules.schedulingRequiresClarification && rules.schedulingClarificationPrompt) {
+    lines.push(`scheduling_clarification_reason=${rules.schedulingClarificationReason}`);
+    lines.push(
+      `scheduling_clarification_prompt=${JSON.stringify(rules.schedulingClarificationPrompt)}`,
+    );
+    lines.push(
+      "LIVE_INSTRUCTION: Ask the scheduling_clarification_prompt now in one short question. Do not imply availability is confirmed or a time is booked.",
+    );
+  }
+
+  return lines.join("\n");
 }
 
 export function buildSessionThinkingAppendForRuntime(

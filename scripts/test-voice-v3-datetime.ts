@@ -7,6 +7,8 @@ import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { normalizeSchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-normalizer";
 import type { SchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
+import { deriveSchedulingClarification } from "../src/lib/voice-v3/time/scheduling-clarification";
 
 const FROZEN = new Date("2026-09-17T14:00:00.000Z"); // Thu 10:00 America/New_York (EDT)
 
@@ -358,6 +360,44 @@ function main() {
     }),
   );
   assert.equal(thisThursdayAmbiguous.precision, "UNRESOLVED");
+
+  const thursdayMorningAmbiguous = meaning({
+    date_relation: "THIS_WEEKDAY",
+    date_expression: "Thursday morning",
+    weekday: "THURSDAY",
+    explicit_date: null,
+    time_expression: "morning",
+    time_kind: "DAYPART",
+    exact_time: null,
+    start_time: null,
+    end_time: null,
+    daypart: "MORNING",
+  });
+  const clarify = deriveSchedulingClarification({
+    meaning: thursdayMorningAmbiguous,
+    normalized: thisThursdayAmbiguous,
+    clock: nyClock,
+  });
+  assert.equal(clarify.required, true);
+  assert.equal(clarify.reason, "SAME_WEEKDAY_AMBIGUOUS");
+  assert.equal(clarify.prompt, "Do you mean today, or next Thursday?");
+
+  let clarifyCtx = createInitialVoiceV3CallContext({
+    callId: "clarify",
+    liveSessionId: "live_clarify",
+    timezone: "America/New_York",
+    clock: nyClock,
+  });
+  clarifyCtx = applyCallerMeaningToContext(
+    clarifyCtx,
+    TEST_AGENT_CONFIG,
+    callerMeaning(thursdayMorningAmbiguous),
+  ).context;
+  const clarifyRules = evaluateVoiceV3Rules(clarifyCtx, TEST_AGENT_CONFIG);
+  assert.equal(clarifyRules.schedulingRequiresClarification, true);
+  assert.equal(clarifyRules.mayRunCalendarAction, false);
+  assert.equal(clarifyRules.hasSchedulingPreference, false);
+  assert.equal(clarifyRules.mayFindAvailability, false);
 
   const chicago = createInitialVoiceV3CallContext({
     callId: "c2",

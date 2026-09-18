@@ -1,6 +1,7 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext, VoiceV3Goal } from "../state/call-context";
 import type { CallerMeaning } from "./caller-meaning-schema";
+import { deriveSchedulingClarification } from "../time/scheduling-clarification";
 import {
   normalizeSchedulingMeaning,
   schedulingMeaningHasSignal,
@@ -135,6 +136,22 @@ export function applyCallerMeaningToContext(
 
     scheduling.meaning = schedMeaning;
     scheduling.normalized = normalized;
+    scheduling.clarification = deriveSchedulingClarification({
+      meaning: schedMeaning,
+      normalized,
+      clock: ctx.clock,
+    });
+
+    if (scheduling.clarification.required) {
+      console.log("SCHEDULING_CLARIFICATION_REQUIRED", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        timezone: ctx.clock.timezone,
+        scheduling_generation: scheduling.generation ?? 0,
+        reason: scheduling.clarification.reason,
+        normalization_latency_ms: latency,
+      });
+    }
 
     if (changed) {
       scheduling.generation = (scheduling.generation ?? 0) + 1;
