@@ -16,13 +16,14 @@ export function requireOpenAiProjectId(): string {
 }
 
 export async function forwardInboundCallToOpenAiLiveSip(callControlId: string): Promise<void> {
-  const projectId = requireOpenAiProjectId();
-  const to = resolveOpenAiLiveSipTransferUri(projectId);
-
+  // Answer immediately so PSTN does not ring out while we validate env / transfer.
   await telnyxRequest(`/calls/${encodeURIComponent(callControlId)}/actions/answer`, {
     method: "POST",
     body: {},
   });
+
+  const projectId = requireOpenAiProjectId();
+  const to = resolveOpenAiLiveSipTransferUri(projectId);
 
   await telnyxRequest(`/calls/${encodeURIComponent(callControlId)}/actions/transfer`, {
     method: "POST",

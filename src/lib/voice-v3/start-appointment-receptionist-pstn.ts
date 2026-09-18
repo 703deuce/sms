@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
+import { releaseAiStartClaim } from "@/lib/voice/ai-start-lock";
 import { forwardInboundCallToOpenAiLiveSip } from "@/lib/voice-v3-basic/telnyx-sip-forward";
 import { notePstnLegWizardContext } from "@/lib/voice-v3/telemetry/call-trace";
 
@@ -15,14 +16,31 @@ export async function startAppointmentReceptionistVoiceV3OnCall(input: {
   telnyxCallControlId: string;
   claimMeta?: Record<string, unknown>;
   path: string;
-}): Promise<{ started: true; reason: "voice_v3_basic_sip_forward" }> {
+}): Promise<
+  | { started: true; reason: "voice_v3_basic_sip_forward" }
+  | { started: false; reason: string }
+> {
   notePstnLegWizardContext({
     callControlId: input.telnyxCallControlId,
     callId: input.callId,
     workspaceId: input.workspaceId,
     agentId: input.agentId,
   });
-  await forwardInboundCallToOpenAiLiveSip(input.telnyxCallControlId);
+  try {
+    await forwardInboundCallToOpenAiLiveSip(input.telnyxCallControlId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("VOICE_V3_SIP_FORWARD_FAILED", {
+      callId: input.callId,
+      agentId: input.agentId,
+      workspaceId: input.workspaceId,
+      path: input.path,
+      callControlId: input.telnyxCallControlId,
+      message,
+    });
+    await releaseAiStartClaim(input.callId, message).catch(() => undefined);
+    return { started: false, reason: message };
+  }
 
   const prisma = getPrisma();
   void prisma.voiceCall

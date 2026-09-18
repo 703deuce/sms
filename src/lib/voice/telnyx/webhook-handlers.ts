@@ -921,7 +921,7 @@ export async function processVoiceWebhookEvent(input: {
           },
         })
         .catch(() => undefined);
-    } else if (isAiStartClaimed(meta)) {
+    } else if (meta.aiStarted) {
       await prisma.voiceCallEvent
         .create({
           data: {
@@ -929,13 +929,53 @@ export async function processVoiceWebhookEvent(input: {
             callId: call.id,
             eventType: "media.ai_start_skipped",
             payload: {
-              reason: meta.aiStarted ? "ai_already_started" : "ai_start_claimed",
+              reason: "ai_already_started",
               path: "answered_webhook",
               eventType,
             } as object,
           },
         })
         .catch(() => undefined);
+    } else if (meta.aiStartClaimed) {
+      const agent = await prisma.voiceAgent.findUnique({ where: { id: call.agentId } });
+      const controlId = String(eventPayload.call_control_id || call.telnyxCallControlId || "");
+      if (agent && controlId) {
+        const { startAppointmentReceptionistVoiceV3OnCall } = await import(
+          "@/lib/voice-v3/start-appointment-receptionist-pstn"
+        );
+        const recovered = await startAppointmentReceptionistVoiceV3OnCall({
+          workspaceId,
+          callId: call.id,
+          agentId: agent.id,
+          telnyxCallControlId: controlId,
+          claimMeta: meta,
+          path: "answered_webhook_voice_v3_recover_forward",
+        });
+        if (!recovered.started) {
+          await prisma.voiceCallEvent
+            .create({
+              data: {
+                workspaceId,
+                callId: call.id,
+                eventType: "media.ai_start_failed",
+                payload: {
+                  reason: recovered.reason,
+                  path: "answered_webhook_recover",
+                  eventType,
+                } as object,
+              },
+            })
+            .catch(() => undefined);
+          const { handleAiAssistantStartFailure } = await import("../inbound");
+          await handleAiAssistantStartFailure({
+            workspaceId,
+            callId: call.id,
+            telnyxCallControlId: controlId,
+            fromE164: call.fromE164,
+            error: new Error(recovered.reason),
+          }).catch(() => undefined);
+        }
+      }
     } else {
       const claim = await claimAiStart(call.id);
       if (!claim.claimed) {

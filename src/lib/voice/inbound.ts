@@ -245,7 +245,7 @@ async function startAiOnInboundCall(input: {
   const { startAppointmentReceptionistVoiceV3OnCall } = await import(
     "@/lib/voice-v3/start-appointment-receptionist-pstn"
   );
-  return startAppointmentReceptionistVoiceV3OnCall({
+  const started = await startAppointmentReceptionistVoiceV3OnCall({
     workspaceId: input.workspaceId,
     callId: input.callId,
     agentId: agent.id,
@@ -253,6 +253,15 @@ async function startAiOnInboundCall(input: {
     claimMeta: claim.meta,
     path: "inbound_ai_start",
   });
+  if (!started.started) {
+    await handleAiAssistantStartFailure({
+      workspaceId: input.workspaceId,
+      callId: input.callId,
+      telnyxCallControlId: input.telnyxCallControlId,
+      error: new Error(started.reason),
+    }).catch(() => undefined);
+  }
+  return started;
 }
 
 async function executeHumanFirst(input: {

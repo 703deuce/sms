@@ -1,6 +1,10 @@
+import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { tryNotePstnWizardBindingFromToE164 } from "@/lib/voice-v3/resolve-pstn-wizard-binding";
 import { noteTelnyxPstnReceived } from "@/lib/voice-v3/telemetry/call-trace";
 import { forwardInboundCallToOpenAiLiveSip } from "./telnyx-sip-forward";
+
+const SIP_FORWARD_FAILURE_APOLOGY =
+  "We're sorry, our assistant is temporarily unavailable. Please call back shortly. Goodbye.";
 
 const transferredCallIds = new Set<string>();
 
@@ -39,7 +43,21 @@ export async function handleVoiceV3BasicTelnyxWebhook(input: {
       to: input.eventPayload.to,
     });
 
-    await forwardInboundCallToOpenAiLiveSip(callControlId);
+    try {
+      await forwardInboundCallToOpenAiLiveSip(callControlId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("VOICE_V3_BASIC_SIP_FORWARD_FAILED", { callControlId, message });
+      await telnyxRequest(`/calls/${encodeURIComponent(callControlId)}/actions/speak`, {
+        method: "POST",
+        body: { payload: SIP_FORWARD_FAILURE_APOLOGY, voice: "female", language: "en-US" },
+      }).catch(() => undefined);
+      await telnyxRequest(`/calls/${encodeURIComponent(callControlId)}/actions/hangup`, {
+        method: "POST",
+        body: {},
+      }).catch(() => undefined);
+      return { action: "transfer_failed", detail: message };
+    }
     return { action: "transfer_to_openai_live_sip" };
   }
 

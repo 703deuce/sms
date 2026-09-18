@@ -35,3 +35,19 @@ export function isAiStartClaimed(meta: Record<string, unknown> | null | undefine
   if (!meta) return false;
   return Boolean(meta.aiStarted || meta.aiStartClaimed);
 }
+
+/** Undo claim when SIP forward failed so call.answered can retry. */
+export async function releaseAiStartClaim(callId: string, reason: string): Promise<void> {
+  const prisma = getPrisma();
+  const call = await prisma.voiceCall.findUnique({ where: { id: callId } });
+  if (!call) return;
+  const meta = { ...((call.metadata || {}) as Record<string, unknown>) };
+  if (meta.aiStarted) return;
+  meta.aiStartClaimed = false;
+  meta.aiStartForwardFailedAt = new Date().toISOString();
+  meta.aiStartForwardFailureReason = reason.slice(0, 500);
+  await prisma.voiceCall.update({
+    where: { id: callId },
+    data: { metadata: meta as object },
+  });
+}
