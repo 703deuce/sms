@@ -97,6 +97,8 @@ async function completeEmitCallerMeaningFunctionCall(input: {
 
   noteSemanticTimingEvent(sessionId, "functionCallCompletedAt", getCallerEvidenceTurnId(sessionId));
 
+  markSemanticInterpretationStarted(sessionId);
+
   const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
   const registered = coordinator.registerPendingFunctionCall(completed);
   if (!registered && completed.callId) {
@@ -151,24 +153,14 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     }
   }
 
-  coordinator.submitFunctionCallOutput(completed.callId, {
-    accepted: decoded.ok,
-    reason: decoded.ok ? undefined : decoded.reason,
-    disposition: decoded.ok
-      ? "APPLIED"
-      : classifySemanticDecodeFailure({
-          reason: decoded.reason,
-          hasCallerEvidence: hasCommittedCallerEvidenceForSemantic(sessionId),
-        }),
-  });
-  noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
-
   if (decoded.ok) {
     if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
+      markSemanticInterpretationEnded(sessionId);
       return;
     }
     const { meaning } = decoded;
     if (!claimCallerMeaningFingerprint(sessionId, JSON.stringify(meaning))) {
+      markSemanticInterpretationEnded(sessionId);
       return;
     }
 
@@ -181,21 +173,39 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     });
 
     cancelDirectSemanticDefer(sessionId);
-    void applyExtractedCallerMeaning({
-      runtime: input.runtime,
-      liveSessionId: sessionId,
-      meaning,
-      transport: "function_tool",
-      send: input.send,
-      source: "delegation",
-    }).catch((err) => {
+    try {
+      await applyExtractedCallerMeaning({
+        runtime: input.runtime,
+        liveSessionId: sessionId,
+        meaning,
+        transport: "function_tool",
+        send: input.send,
+        source: "delegation",
+      });
+    } catch (err) {
       console.error("VOICE_V3_POST_MEANING_PIPELINE_ERROR", {
         live_session_id: sessionId,
         err,
       });
+    }
+
+    coordinator.submitFunctionCallOutput(completed.callId, {
+      accepted: true,
+      disposition: "APPLIED",
     });
+    noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
     return;
   }
+
+  coordinator.submitFunctionCallOutput(completed.callId, {
+    accepted: false,
+    reason: decoded.reason,
+    disposition: classifySemanticDecodeFailure({
+      reason: decoded.reason,
+      hasCallerEvidence: hasCommittedCallerEvidenceForSemantic(sessionId),
+    }),
+  });
+  noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
 
   if (!hasCommittedCallerEvidenceForSemantic(sessionId)) {
     markSemanticInterpretationEnded(sessionId);
@@ -258,11 +268,14 @@ export function handleDelegatedAstraResponseEvent(input: {
 
   if (nestedType === "response.completed") {
     drainQueuedSemanticTurns({ liveSessionId: sessionId, send: input.send });
+    const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
+    if (!coordinator.hasPendingFunctionOutputs()) {
+      markSemanticInterpretationEnded(sessionId);
+    }
   }
 
   if (nestedType === "response.created" || nestedType === "response.in_progress") {
     noteSemanticTimingEvent(sessionId, "astraFirstOutputAt", getCallerEvidenceTurnId(sessionId));
-    markSemanticInterpretationStarted(sessionId);
     if (!meaningStartedSessions.has(sessionId)) {
       meaningStartedSessions.add(sessionId);
       const runtime = getVoiceV3CallRuntime(sessionId);
