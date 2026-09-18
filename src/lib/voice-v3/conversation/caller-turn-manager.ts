@@ -6,6 +6,10 @@ import {
   clearTranscriptAccumulator,
 } from "./transcript-accumulator";
 import { onCallerTurnCommitted } from "./semantic-turn-watchdog";
+import {
+  noteCallerTurnTimingCommitted,
+  noteCallerTranscriptFragmentTiming,
+} from "../telemetry/caller-turn-timing";
 
 export type CallerTurnStatus =
   | "CAPTURING"
@@ -65,6 +69,7 @@ export function noteCallerTranscriptDelta(liveSessionId: string, delta: string):
   const s = state(id);
   s.partial += delta;
   appendCallerTranscriptFragment(id, delta);
+  noteCallerTranscriptFragmentTiming(id);
 
   if (s.commitTimer) {
     clearTimeout(s.commitTimer);
@@ -101,12 +106,12 @@ function commitCapturingTurn(liveSessionId: string): CallerTurn | null {
   s.lastCommittedFingerprint = fingerprint;
 
   s.sequence += 1;
-  const committedText = commitCallerTranscriptSegment(liveSessionId, segment);
+  commitCallerTranscriptSegment(liveSessionId, segment);
   const turn: CallerTurn = {
     turnId: `turn_${liveSessionId}_${s.sequence}`,
     sequence: s.sequence,
     status: "COMMITTED",
-    transcript: committedText || segment,
+    transcript: segment,
     startedAt: new Date().toISOString(),
     committedAt: new Date().toISOString(),
     semanticAttempt: 0,
@@ -120,7 +125,14 @@ function commitCapturingTurn(liveSessionId: string): CallerTurn | null {
     live_session_id: liveSessionId,
     turn_id: turn.turnId,
     turn_sequence: turn.sequence,
-    transcript_chars: turn.transcript.length,
+    transcript_chars: segment.length,
+    rolling_transcript_chars: getRollingCallerTranscript(liveSessionId).length,
+  });
+
+  noteCallerTurnTimingCommitted({
+    liveSessionId,
+    turnId: turn.turnId,
+    turnSequence: turn.sequence,
   });
 
   queueMicrotask(() => {

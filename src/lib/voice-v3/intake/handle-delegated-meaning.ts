@@ -24,8 +24,16 @@ import { extractCompletedFunctionCallFromNested } from "../delegation/extract-co
 import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
 import { decodeCallerMeaningAttempt } from "./decode-delegated-caller-meaning";
 import {
-  shouldDeferUnstableGreetingSemanticTurn,
-} from "../greeting/greeting-turn";
+  getCallerEvidenceCharCount,
+  getCallerEvidenceTurnId,
+  greetingPhaseForSemanticLog,
+  hasCommittedCallerEvidenceForSemantic,
+} from "./caller-evidence";
+import { classifySemanticDecodeFailure } from "./semantic-disposition";
+import {
+  noteSemanticTimingEvent,
+  logCallerTurnTimingSummary,
+} from "../telemetry/caller-turn-timing";
 import {
   drainQueuedSemanticTurns,
   markSemanticInterpretationEnded,
@@ -89,6 +97,8 @@ async function completeEmitCallerMeaningFunctionCall(input: {
   const completed = extractCompletedFunctionCallFromNested(input.nested, input.delegationId);
   if (!completed) return;
 
+  noteSemanticTimingEvent(sessionId, "functionCallCompletedAt", getCallerEvidenceTurnId(sessionId));
+
   const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
   const registered = coordinator.registerPendingFunctionCall(completed);
   if (!registered && completed.callId) {
@@ -112,12 +122,48 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     logCtx,
   );
 
-  const deferRecoverySpeak = shouldDeferUnstableGreetingSemanticTurn(sessionId);
+  if (!decoded.ok) {
+    const hasCallerEvidence = hasCommittedCallerEvidenceForSemantic(sessionId);
+    const disposition = classifySemanticDecodeFailure({
+      reason: decoded.reason,
+      hasCallerEvidence,
+    });
+
+    if (disposition === "EMPTY_NO_CALLER_EVIDENCE") {
+      coordinator.submitFunctionCallOutput(
+        completed.callId,
+        {
+          accepted: true,
+          disposition: "EMPTY_NO_CALLER_EVIDENCE",
+        },
+        { skipScheduleContinuation: true },
+      );
+      noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
+      console.log("SEMANTIC_EMPTY_IGNORED", {
+        call_id: snap.callId,
+        live_session_id: sessionId,
+        delegation_id: completed.delegationId ?? null,
+        caller_evidence_chars: getCallerEvidenceCharCount(sessionId),
+        caller_turn_id: getCallerEvidenceTurnId(sessionId),
+        greeting_phase: greetingPhaseForSemanticLog(sessionId),
+        decode_reason: decoded.reason,
+      });
+      markSemanticInterpretationEnded(sessionId);
+      return;
+    }
+  }
 
   coordinator.submitFunctionCallOutput(completed.callId, {
     accepted: decoded.ok,
     reason: decoded.ok ? undefined : decoded.reason,
+    disposition: decoded.ok
+      ? "APPLIED"
+      : classifySemanticDecodeFailure({
+          reason: decoded.reason,
+          hasCallerEvidence: hasCommittedCallerEvidenceForSemantic(sessionId),
+        }),
   });
+  noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
 
   if (decoded.ok) {
     if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
@@ -151,8 +197,18 @@ async function completeEmitCallerMeaningFunctionCall(input: {
         err,
       });
     } finally {
+      noteSemanticTimingEvent(sessionId, "meaningAppliedAt", getCallerEvidenceTurnId(sessionId));
+      const turnId = getCallerEvidenceTurnId(sessionId);
+      if (turnId) {
+        logCallerTurnTimingSummary(sessionId, turnId);
+      }
       markSemanticInterpretationEnded(sessionId);
     }
+    return;
+  }
+
+  if (!hasCommittedCallerEvidenceForSemantic(sessionId)) {
+    markSemanticInterpretationEnded(sessionId);
     return;
   }
 
@@ -186,7 +242,7 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     runtime: input.runtime,
     liveSessionId: sessionId,
     send: input.send,
-    deferRecoverySpeak,
+    deferRecoverySpeak: false,
   });
 }
 
