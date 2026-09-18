@@ -66,4 +66,11 @@ const webhook = readFileSync(
 );
 assert.ok(!webhook.includes("startAiAssistantOnCall"), "answered webhook must not start Telnyx Amy");
 
+const texmlRoute = readFileSync(
+  join(root, "src/lib/voice/telnyx/texml-direct-route.ts"),
+  "utf8",
+);
+assert.match(texmlRoute, /capabilityPack === "appointment_receptionist"/);
+assert.match(texmlRoute, /return "call_control"/);
+
 console.log("PASS voice-v3 runtime isolation");

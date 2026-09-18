@@ -29,6 +29,14 @@ function texmlStatusCallbackBody() {
 
 export type InboundRoutingMode = "texml_direct" | "call_control";
 
+/** Voice V3 PSTN requires Telnyx Call Control → SIP transfer; never TeXML-direct assistant. */
+export function isVoiceV3AppointmentReceptionistConfig(
+  config: VoiceAgentConfig | null | undefined,
+): boolean {
+  const advanced = (config?.advanced || {}) as Record<string, unknown>;
+  return advanced.capabilityPack === "appointment_receptionist";
+}
+
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v)
     ? (v as Record<string, unknown>)
@@ -39,6 +47,9 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 export function getInboundRoutingMode(
   config: VoiceAgentConfig | null | undefined,
 ): InboundRoutingMode {
+  if (isVoiceV3AppointmentReceptionistConfig(config)) {
+    return "call_control";
+  }
   // OpenAI Realtime media bridge requires Call Control answer + streaming_start — never TeXML-direct assistant.
   if (shouldUseOpenAiRealtimeMediaBridge(config)) {
     return "call_control";

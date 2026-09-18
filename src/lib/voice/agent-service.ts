@@ -525,6 +525,10 @@ export async function publishVoiceAgent(
   let telnyxSync: unknown = null;
   let livekitProvision: unknown = null;
   const { isLiveKitVoiceRuntime } = await import("./runtime-provider");
+  const { isAppointmentReceptionistAgent } = await import(
+    "@/lib/voice-v3/config/from-published-agent"
+  );
+  const voiceV3AppointmentReceptionist = isAppointmentReceptionistAgent(config);
 
   try {
     telnyxSync = await syncAssistantToTelnyx(workspaceId, agentId, updated, config);
@@ -532,7 +536,7 @@ export async function publishVoiceAgent(
     const telnyxSyncError = err instanceof Error ? err.message : String(err);
     console.error("[voice] Telnyx assistant sync failed", err);
     const bridgeOn = shouldUseOpenAiRealtimeMediaBridge(config);
-    if (!isLiveKitVoiceRuntime() && !bridgeOn) {
+    if (!isLiveKitVoiceRuntime() && !bridgeOn && !voiceV3AppointmentReceptionist) {
       await rollbackPublish(
         `Telnyx assistant sync failed — deploy rolled back: ${telnyxSyncError}`,
       );
@@ -548,7 +552,11 @@ export async function publishVoiceAgent(
   const refreshedAfterSync =
     (await prisma.voiceAgent.findUnique({ where: { id: agentId } })) || updated;
 
-  if (!isLiveKitVoiceRuntime() && !refreshedAfterSync.telnyxAssistantId) {
+  if (
+    !isLiveKitVoiceRuntime() &&
+    !refreshedAfterSync.telnyxAssistantId &&
+    !voiceV3AppointmentReceptionist
+  ) {
     await rollbackPublish(
       "Telnyx assistant id missing after sync — deploy rolled back",
     );
@@ -615,6 +623,7 @@ export async function publishVoiceAgent(
   const shouldRouteTexmlAssistant =
     Boolean(updated.phoneNumberId && refreshedAfterSync.telnyxAssistantId) &&
     !realtimeMediaBridge &&
+    !voiceV3AppointmentReceptionist &&
     (appointmentWizard ||
       skipLiveKitForMctb ||
       (!isLiveKitVoiceRuntime() && usesTexmlDirectInbound(config)));
@@ -649,6 +658,42 @@ export async function publishVoiceAgent(
       console.error("[voice] Call Control route for realtime bridge failed", err);
       await rollbackPublish(
         `Call Control routing failed (realtime media bridge) — deploy rolled back: ${detail}`,
+      );
+    }
+  } else if (
+    voiceV3AppointmentReceptionist &&
+    updated.phoneNumberId &&
+    !isLiveKitVoiceRuntime()
+  ) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: updated.phoneNumberId, workspaceId },
+      select: { e164: true, providerNumberId: true },
+    });
+    if (!phone?.e164) {
+      await rollbackPublish(
+        "Phone number missing for Voice V3 Call Control route — deploy rolled back",
+      );
+    }
+    try {
+      const ccRoute = await routePhoneToCallControlConnection({
+        e164: phone!.e164,
+        providerNumberId: phone!.providerNumberId,
+      });
+      if (!ccRoute.matched) {
+        await rollbackPublish(
+          `Voice V3 Call Control route did not match live connection — deploy rolled back (${ccRoute.path})`,
+        );
+      }
+      texmlRoute = ccRoute as unknown as typeof texmlRoute;
+      console.log("VOICE_V3_RECEPTIONIST_PHONE_ROUTED_CALL_CONTROL", {
+        e164: phone!.e164,
+        path: ccRoute.path,
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error("[voice] Voice V3 Call Control route failed", err);
+      await rollbackPublish(
+        `Voice V3 Call Control routing failed — deploy rolled back: ${detail}`,
       );
     }
   } else if (shouldRouteTexmlAssistant && updated.phoneNumberId) {
@@ -765,34 +810,47 @@ export async function syncLiveWizardDraftToProvider(
       });
 
       if (appointmentWizard) {
-        const refreshed = await prisma.voiceAgent.findUnique({
-          where: { id: agentId },
-          select: { telnyxAssistantId: true },
+        const phone = await prisma.phoneNumber.findFirst({
+          where: { id: agent.phoneNumberId, workspaceId },
+          select: { e164: true, providerNumberId: true, settingsJson: true },
         });
-        const assistantId = refreshed?.telnyxAssistantId?.trim();
-        if (assistantId) {
-          const phone = await prisma.phoneNumber.findFirst({
-            where: { id: agent.phoneNumberId, workspaceId },
-            select: { e164: true, providerNumberId: true, settingsJson: true },
-          });
-          if (phone?.e164) {
-            const { routePhoneToTexmlAssistant } = await import(
+        if (phone?.e164) {
+          const { isAppointmentReceptionistAgent: isApptReceptionist } = await import(
+            "@/lib/voice-v3/config/from-published-agent"
+          );
+          if (isApptReceptionist(config)) {
+            const { routePhoneToCallControlConnection } = await import(
               "./telnyx/texml-direct-route"
             );
-            const { readMctbInboundBlock } = await import(
-              "@/lib/mctb/inbound-handling/line-config-parse"
-            );
-            const inbound = readMctbInboundBlock(phone.settingsJson);
-            const preferredTexmlAppId =
-              typeof inbound.voiceTexmlAppId === "string"
-                ? inbound.voiceTexmlAppId.trim()
-                : undefined;
-            await routePhoneToTexmlAssistant({
+            await routePhoneToCallControlConnection({
               e164: phone.e164,
-              assistantId,
               providerNumberId: phone.providerNumberId,
-              preferredTexmlAppId,
             });
+          } else {
+            const refreshed = await prisma.voiceAgent.findUnique({
+              where: { id: agentId },
+              select: { telnyxAssistantId: true },
+            });
+            const assistantId = refreshed?.telnyxAssistantId?.trim();
+            if (assistantId) {
+              const { routePhoneToTexmlAssistant } = await import(
+                "./telnyx/texml-direct-route"
+              );
+              const { readMctbInboundBlock } = await import(
+                "@/lib/mctb/inbound-handling/line-config-parse"
+              );
+              const inbound = readMctbInboundBlock(phone.settingsJson);
+              const preferredTexmlAppId =
+                typeof inbound.voiceTexmlAppId === "string"
+                  ? inbound.voiceTexmlAppId.trim()
+                  : undefined;
+              await routePhoneToTexmlAssistant({
+                e164: phone.e164,
+                assistantId,
+                providerNumberId: phone.providerNumberId,
+                preferredTexmlAppId,
+              });
+            }
           }
         }
       }

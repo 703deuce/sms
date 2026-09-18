@@ -353,6 +353,9 @@ export function applyCompiledToVoiceConfig(
     callHandling: {
       ...base.callHandling,
       startupGreeting: { enabled: true, text: snapshot.greeting },
+      ...(mergedAdvanced?.capabilityPack === "appointment_receptionist"
+        ? { inboundRoutingMode: "call_control" as const }
+        : {}),
     },
     voiceLanguage: {
       ...base.voiceLanguage,
