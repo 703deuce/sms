@@ -1,7 +1,16 @@
+import {
+  buildLiveFrontendGreetingLine,
+  resolveVoiceV3DefaultPromptInput,
+} from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
 import type { VoiceV3CallTrace } from "./telemetry/call-trace";
 
-export const VOICE_V3_INITIAL_GREETING_TEXT =
-  "Thank you for calling. This is Amy. How can I help you today?";
+export function resolveVoiceV3InitialGreetingText(): string {
+  const ctx = resolveVoiceV3DefaultPromptInput();
+  return buildLiveFrontendGreetingLine({
+    agentName: ctx.agentName,
+    businessName: ctx.businessName,
+  });
+}
 
 const greetedSessions = new Map<string, number>();
 const GREETING_DEDUP_TTL_MS = 15 * 60 * 1000;
@@ -40,7 +49,7 @@ export function requestInitialLiveGreeting(input: {
 
   input.send({
     type: "session.commentary.append",
-    content: `Speak to the caller now. Say exactly: "${VOICE_V3_INITIAL_GREETING_TEXT}"`,
+    content: `Speak to the caller now. Say exactly: "${resolveVoiceV3InitialGreetingText()}"`,
     delegation_id: null,
   });
   input.send({

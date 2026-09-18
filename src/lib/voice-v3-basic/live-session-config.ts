@@ -1,4 +1,8 @@
 import type { SessionAcceptParams } from "openai/resources/live/sessions";
+import {
+  buildVoiceV3Prompts,
+  resolveVoiceV3DefaultPromptInput,
+} from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
 
 export const VOICE_V3_BASIC_LIVE_MODEL = "gpt-live-1";
 export const VOICE_V3_BASIC_BACKEND_MODEL = "gpt-6-astra";
@@ -17,24 +21,16 @@ export function logVoiceV3BasicConfigOnce(): void {
 /**
  * SIP accept configuration: no audio.format (negotiated by SIP).
  * Native Responses delegation to GPT-6 Astra — no separate Astra loop.
+ * Prompts: src/lib/voice-v3/prompts/* (SDK SessionAcceptParams.Session).
  */
-export function buildBasicLiveSession(): SessionAcceptParams.Session {
+export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParams.Session {
   logVoiceV3BasicConfigOnce();
+  const prompts = buildVoiceV3Prompts(resolveVoiceV3DefaultPromptInput(at));
+
   return {
     type: "live",
     model: VOICE_V3_BASIC_LIVE_MODEL,
-    instructions: `
-You are Amy, a professional after-hours receptionist.
-Talk naturally with the caller.
-Keep responses concise and conversational.
-Ask one question at a time.
-Listen normally and allow the caller to interrupt you.
-You have a backend reasoning agent available.
-Delegate reasoning when useful.
-For this test, do not attempt to book appointments,
-perform external actions, or claim that any external action occurred.
-This session is only testing natural conversation and backend delegation.
-`.trim(),
+    instructions: prompts.liveInstructions,
     audio: {
       output: {
         voice: "marin",
@@ -44,18 +40,7 @@ This session is only testing natural conversation and backend delegation.
       type: "responses",
       responses: {
         model: VOICE_V3_BASIC_BACKEND_MODEL,
-        instructions: `
-You are Amy's backend reasoning model.
-The GPT-Live-1 model is responsible for speaking and listening.
-You provide reasoning and understanding when Live delegates work to you.
-For this initial test:
-- reason about the caller's request
-- help Live understand what the caller means
-- do not perform external actions
-- do not claim anything was booked or completed
-- do not invent business facts
-- return concise useful reasoning to the Live conversation
-`.trim(),
+        instructions: prompts.astraInstructions,
         reasoning: {
           effort: "low",
         },
@@ -71,6 +56,6 @@ For this initial test:
   };
 }
 
-export function buildBasicLiveSessionAcceptParams(): SessionAcceptParams {
-  return { session: buildBasicLiveSession() };
+export function buildBasicLiveSessionAcceptParams(at: Date = new Date()): SessionAcceptParams {
+  return { session: buildBasicLiveSession(at) };
 }

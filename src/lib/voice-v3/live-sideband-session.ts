@@ -12,15 +12,27 @@ import {
 import { VoiceV3CallTrace } from "./telemetry/call-trace";
 
 /**
- * Attach sideband observer: initial greeting, delegation telemetry, hangup summary.
+ * Attach sideband observer (non-blocking). Never await from webhook / accept path.
  */
-export async function attachVoiceV3LiveSideband(input: {
+export function attachVoiceV3LiveSideband(input: {
+  sessionId: string;
+  callId?: string | null;
+  client?: OpenAI;
+}): void {
+  if (process.env.VOICE_V3_BASIC_SIDEBAND_OBSERVER === "0") return;
+  void attachVoiceV3LiveSidebandInner(input).catch((err) => {
+    console.error("VOICE_V3_BASIC_SIDEBAND_ATTACH_FAILED", {
+      sessionId: input.sessionId,
+      err,
+    });
+  });
+}
+
+async function attachVoiceV3LiveSidebandInner(input: {
   sessionId: string;
   callId?: string | null;
   client?: OpenAI;
 }): Promise<void> {
-  if (process.env.VOICE_V3_BASIC_SIDEBAND_OBSERVER === "0") return;
-
   const sessionId = input.sessionId.trim();
   const trace = VoiceV3CallTrace.getOrCreate({
     liveSessionId: sessionId,
@@ -29,83 +41,78 @@ export async function attachVoiceV3LiveSideband(input: {
     backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
   });
 
-  try {
-    const { SidebandWS } = await import("openai/resources/live/sideband/ws");
-    const client = input.client ?? getVoiceV3BasicOpenAiClient();
-    const sideband = new SidebandWS(client, { session_id: sessionId });
+  const { SidebandWS } = await import("openai/resources/live/sideband/ws");
+  const client = input.client ?? getVoiceV3BasicOpenAiClient();
+  const sideband = new SidebandWS(client, { session_id: sessionId });
 
-    let greetingAudioStarted = false;
-    let greetingAudioCompleted = false;
-    let callerSpeechActive = false;
-    let greetingOutputChars = 0;
+  let greetingAudioStarted = false;
+  let greetingAudioCompleted = false;
+  let callerSpeechActive = false;
+  let greetingOutputChars = 0;
 
-    const send = (event: { type: string; [key: string]: unknown }) => {
-      sideband.send(event as Parameters<typeof sideband.send>[0]);
-    };
+  const send = (event: { type: string; [key: string]: unknown }) => {
+    sideband.send(event as Parameters<typeof sideband.send>[0]);
+  };
 
-    sideband.on("event", (serverEvent: { type?: string; delegation?: unknown; event?: unknown }) => {
-      const type = serverEvent?.type;
+  sideband.on("event", (serverEvent: { type?: string; delegation?: unknown; event?: unknown }) => {
+    const type = serverEvent?.type;
 
-      if (type === "session.started") {
-        trace.mark("live.session.started");
-        requestInitialLiveGreeting({ sessionId, send, trace });
+    if (type === "session.started") {
+      trace.mark("live.session.started");
+      requestInitialLiveGreeting({ sessionId, send, trace });
+    }
+
+    if (type === "session.delegation.created") {
+      trace.onDelegationCreated();
+      console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
+    }
+
+    if (type === "response.event") {
+      const nested = serverEvent.event as { type?: string } | undefined;
+      trace.onAstraResponseEvent(nested?.type);
+      console.log("VOICE_V3_BASIC_ASTRA_RESPONSE_EVENT", {
+        sessionId,
+        nestedType: nested?.type,
+      });
+    }
+
+    if (type === "session.output_audio.delta") {
+      if (!greetingAudioStarted) {
+        greetingAudioStarted = true;
+        logGreetingAudioStarted(sessionId, trace);
       }
+      trace.mark("agent.audio.started");
+    }
 
-      if (type === "session.delegation.created") {
-        trace.onDelegationCreated();
-        console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
+    if (type === "session.output_transcript.delta") {
+      const delta = serverEvent as { delta?: string };
+      const text = typeof delta.delta === "string" ? delta.delta : "";
+      greetingOutputChars += text.length;
+      if (greetingAudioStarted && !greetingAudioCompleted && greetingOutputChars > 20) {
+        greetingAudioCompleted = true;
+        logGreetingAudioCompleted(sessionId, trace);
       }
+    }
 
-      if (type === "response.event") {
-        const nested = serverEvent.event as { type?: string } | undefined;
-        trace.onAstraResponseEvent(nested?.type);
-        console.log("VOICE_V3_BASIC_ASTRA_RESPONSE_EVENT", {
-          sessionId,
-          nestedType: nested?.type,
-        });
+    if (type === "session.input_transcript.delta") {
+      trace.mark("caller.transcript.activity");
+      if (!callerSpeechActive) {
+        callerSpeechActive = true;
+        trace.mark("caller.speech.started");
       }
+    }
 
-      if (type === "session.output_audio.delta") {
-        if (!greetingAudioStarted) {
-          greetingAudioStarted = true;
-          logGreetingAudioStarted(sessionId, trace);
-        }
-        trace.mark("agent.audio.started");
+    if (type === "session.closed") {
+      if (callerSpeechActive) {
+        trace.mark("caller.speech.ended");
       }
+      trace.finalize("session.closed");
+      sideband.close();
+    }
+  });
 
-      if (type === "session.output_transcript.delta") {
-        const delta = serverEvent as { delta?: string };
-        const text = typeof delta.delta === "string" ? delta.delta : "";
-        greetingOutputChars += text.length;
-        if (greetingAudioStarted && !greetingAudioCompleted && greetingOutputChars > 20) {
-          greetingAudioCompleted = true;
-          logGreetingAudioCompleted(sessionId, trace);
-        }
-      }
-
-      if (type === "session.input_transcript.delta") {
-        trace.mark("caller.transcript.activity");
-        if (!callerSpeechActive) {
-          callerSpeechActive = true;
-          trace.mark("caller.speech.started");
-        }
-      }
-
-      if (type === "session.closed") {
-        if (callerSpeechActive) {
-          trace.mark("caller.speech.ended");
-        }
-        trace.finalize("session.closed");
-        sideband.close();
-      }
-    });
-
-    sideband.on("error", (err: unknown) => {
-      trace.recordError(err instanceof Error ? err.message : String(err));
-      console.error("VOICE_V3_BASIC_SIDEBAND_ERROR", { sessionId, err });
-    });
-  } catch (err) {
+  sideband.on("error", (err: unknown) => {
     trace.recordError(err instanceof Error ? err.message : String(err));
-    console.error("VOICE_V3_BASIC_SIDEBAND_ATTACH_FAILED", { sessionId, err });
-  }
+    console.error("VOICE_V3_BASIC_SIDEBAND_ERROR", { sessionId, err });
+  });
 }

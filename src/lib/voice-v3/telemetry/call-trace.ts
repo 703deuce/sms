@@ -221,21 +221,47 @@ export class VoiceV3CallTrace {
       errors: [...this.errors],
       metrics,
     };
-    this.printHumanTimeline();
-    console.log("VOICE_V3_CALL_SUMMARY", summary);
-    activeTraces.delete(this.liveSessionId);
+    const sessionId = this.liveSessionId;
+    activeTraces.delete(sessionId);
+    flushVoiceV3TelemetryAsync(summary, this.timeline, this.callId);
     return summary;
   }
 
-  printHumanTimeline(): void {
+  buildHumanTimelineText(): string {
     const lines: string[] = [`VOICE V3 CALL ${this.callId}`];
     const sorted = [...this.timeline].sort((a, b) => a.atMs - b.atMs);
     for (const entry of sorted) {
       const offset = String(entry.atMs - this.t0).padStart(4, "0");
       lines.push(`+${offset}ms  ${entry.mark}`);
     }
-    console.log(lines.join("\n"));
+    return lines.join("\n");
   }
+}
+
+/** Non-blocking: never await in call path. */
+function flushVoiceV3TelemetryAsync(
+  summary: VoiceV3CallSummary,
+  timeline: TimelineEntry[],
+  callId: string,
+): void {
+  const t0 = timeline[0]?.atMs ?? Date.now();
+  queueMicrotask(() => {
+    try {
+      const lines: string[] = [`VOICE V3 CALL ${callId}`];
+      const sorted = [...timeline].sort((a, b) => a.atMs - b.atMs);
+      for (const entry of sorted) {
+        const offset = String(entry.atMs - t0).padStart(4, "0");
+        lines.push(`+${offset}ms  ${entry.mark}`);
+      }
+      console.log(lines.join("\n"));
+      console.log("VOICE_V3_CALL_SUMMARY", summary);
+    } catch (err) {
+      console.error("VOICE_V3_TELEMETRY_FLUSH_FAILED", {
+        callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
 }
 
 let lastPstnLeg: { callControlId: string; atMs: number } | null = null;
