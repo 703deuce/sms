@@ -52,6 +52,7 @@ const providers = readFileSync("src/lib/calendar/providers.ts", "utf8");
 assert.ok(providers.includes("microsoftGraphFetch"));
 assert.ok(providers.includes("getMicrosoftBusyViaGetSchedule"));
 assert.ok(providers.includes("getMicrosoftBusyViaCalendarView"));
+assert.ok(providers.includes('rawCalendarId !== "primary"'));
 assert.ok(providers.includes("transactionId"));
 
 const mctb = readFileSync("src/lib/mctb/ai-booking/providers/microsoft.ts", "utf8");

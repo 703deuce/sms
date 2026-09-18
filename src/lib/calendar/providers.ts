@@ -681,8 +681,13 @@ export async function getMicrosoftBusy(
       ? { connectionId: opts.connectionId, config: opts.config }
       : undefined);
 
-  if (opts?.calendarId) {
-    return getMicrosoftBusyViaCalendarView(accessToken, timeMin, timeMax, opts.calendarId, ctx);
+  const rawCalendarId = opts?.calendarId?.trim();
+  // Voice config uses Google-style "primary"; Graph expects /me/calendar/calendarView or getSchedule.
+  const calendarId =
+    rawCalendarId && rawCalendarId !== "primary" ? rawCalendarId : undefined;
+
+  if (calendarId) {
+    return getMicrosoftBusyViaCalendarView(accessToken, timeMin, timeMax, calendarId, ctx);
   }
 
   const smtp = opts?.smtp || opts?.config?.email;
