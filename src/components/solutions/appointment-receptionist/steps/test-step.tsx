@@ -314,34 +314,8 @@ export function TestStep({
             setQualitySummary(null);
             setQualityResults([]);
             try {
-              const res = await fetch("/api/voice-v2/quality-studio/run", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ agentId: state.agentId }),
-              });
-              const json = await res.json().catch(() => ({}));
-              if (!res.ok) {
-                setQualitySummary(json.error || "Quality run failed");
-                return;
-              }
-              const results = (json.results || []) as Array<{
-                scenarioId: string;
-                status: string;
-                observed: string;
-              }>;
-              setQualityResults(results);
-              const fails = results.filter((r) => r.status === "FAIL");
-              patch({
-                qualityStudioLastRun: {
-                  configHash: json.configHash,
-                  testedAt: new Date().toISOString(),
-                  publishBlockers: json.publishBlockers,
-                },
-              });
               setQualitySummary(
-                fails.length
-                  ? `${fails.length} scenario(s) failed`
-                  : `PASS — ${(json.results || []).length} scenarios`,
+                "Voice V2 Quality Studio was removed with the legacy booking agent. Use Voice V3 Basic PSTN tests and npm run test:voice-v3-booking for booking certification.",
               );
             } finally {
               setQualityBusy(false);

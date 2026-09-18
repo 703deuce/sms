@@ -7,7 +7,7 @@ import {
   formatInstantAsGraphLocalWallDateTime,
   resolveMicrosoftGraphTimeZoneId,
   toMicrosoftDateTimeTimeZone,
-} from "../../../voice-v2/pipelines/microsoft-365-certified/internal/graph-datetime-timezone";
+} from "./microsoft-graph-datetime-timezone";
 import { wallTimeInZoneToUtc } from "../../time/timezone";
 import type { NormalizedSchedulingPreference } from "../../time/scheduling-types";
 

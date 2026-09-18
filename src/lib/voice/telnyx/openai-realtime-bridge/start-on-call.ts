@@ -1,92 +1,14 @@
-import { getPrisma } from "@/lib/db";
-import { loadVoiceAgentRuntimeConfig } from "@/lib/voice/load-agent-config";
-import { isGptLivePstnBridgeActive, shouldUseOpenAiRealtimeMediaBridge } from "./flags";
-import { startTelnyxBidirectionalMediaStream } from "./telnyx-streaming";
-import { getOpenAiApiKey } from "./config";
-import { initializeRealtimeSessionForCall } from "@/lib/voice/realtime-session/init";
+import "server-only";
 
-/**
- * Start PSTN media bridge (Telnyx streaming ↔ OpenAI Realtime). Does not start Telnyx AI Assistant.
- */
-export async function startOpenAiRealtimeMediaBridgeOnCall(input: {
+export async function startOpenAiRealtimeMediaBridgeOnCall(_input: {
   workspaceId: string;
   callId: string;
   agentId: string;
   telnyxCallControlId: string;
   fromE164?: string | null;
-}): Promise<{ started: boolean; reason?: string; streamUrl?: string }> {
-  const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, input.agentId);
-  if (!shouldUseOpenAiRealtimeMediaBridge(cfg)) {
-    return { started: false, reason: "bridge_not_enabled" };
-  }
-  if (!getOpenAiApiKey()) {
-    return { started: false, reason: "openai_api_key_missing" };
-  }
-
-  const prisma = getPrisma();
-  const existingBridge = await prisma.voiceCall.findFirst({
-    where: { id: input.callId, workspaceId: input.workspaceId },
-    select: { metadata: true },
-  });
-  const existingMeta = (existingBridge?.metadata || {}) as Record<string, unknown>;
-  if (existingMeta.aiStarted && existingMeta.realtimeBridgeStreamUrl) {
-    return {
-      started: true,
-      streamUrl: String(existingMeta.realtimeBridgeStreamUrl),
-      reason: "bridge_already_started",
-    };
-  }
-
-  // WSS listener runs in scripts/realtime-bridge-listener.ts (port 3108). Next must not bind it.
-
-  const gptLive = isGptLivePstnBridgeActive();
-  if (!gptLive) {
-    await initializeRealtimeSessionForCall({
-      callId: input.callId,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      telnyxControlId: input.telnyxCallControlId,
-      telnyxConversationId: input.telnyxCallControlId,
-      fromE164: input.fromE164,
-    });
-  }
-
-  const { streamUrl } = await startTelnyxBidirectionalMediaStream({
-    callControlId: input.telnyxCallControlId,
-    callId: input.callId,
-    workspaceId: input.workspaceId,
-    agentId: input.agentId,
-  });
-
-  const existing = await prisma.voiceCall.findFirst({
-    where: { id: input.callId, workspaceId: input.workspaceId },
-    select: { metadata: true },
-  });
-  const prevMeta = (existing?.metadata || {}) as Record<string, unknown>;
-  await prisma.voiceCall
-    .update({
-      where: { id: input.callId },
-      data: {
-        metadata: {
-          ...prevMeta,
-          aiStarted: true,
-          voiceTransport: gptLive ? "openai_live" : "openai_realtime_media_bridge",
-          realtimeBridgeStreamUrl: streamUrl,
-        } as object,
-      },
-    })
-    .catch(() => undefined);
-
-  await prisma.voiceCallEvent
-    .create({
-      data: {
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        eventType: "media.realtime_bridge_started",
-        payload: { streamUrl } as object,
-      },
-    })
-    .catch(() => undefined);
-
-  return { started: true, streamUrl };
+}): Promise<{ started: boolean; reason?: string }> {
+  return {
+    started: false,
+    reason: "voice_v2_realtime_bridge_removed_use_voice_v3_basic",
+  };
 }
