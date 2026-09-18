@@ -114,7 +114,7 @@
     "test:voice-v3-basic-webhook": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-basic-webhook.ts",
     "test:voice-v3-telemetry": "tsx scripts/test-voice-v3-call-trace.ts",
     "test:voice-v3-prompts": "tsx scripts/test-voice-v3-prompts.ts",
-    "test:voice-v3-intake": "tsx scripts/test-voice-v3-pipeline-config.ts && tsx scripts/test-voice-v3-caller-meaning-decoder.ts && tsx scripts/test-voice-v3-intake.ts && tsx scripts/test-voice-v3-intake-transport.ts && tsx scripts/test-voice-v3-astra-meaning-integration.ts && tsx scripts/test-voice-v3-astra-function-tool-integration.ts",
+    "test:voice-v3-intake": "tsx scripts/test-voice-v3-pipeline-boundary.ts && tsx scripts/test-voice-v3-pipeline-config.ts && tsx scripts/test-voice-v3-caller-meaning-decoder.ts && tsx scripts/test-voice-v3-intake.ts && tsx scripts/test-voice-v3-intake-transport.ts && tsx scripts/test-voice-v3-astra-meaning-integration.ts && tsx scripts/test-voice-v3-astra-function-tool-integration.ts",
     "test:voice-v3-availability": "tsx scripts/test-voice-v3-datetime.ts && tsx scripts/test-voice-v3-availability.ts",
     "test:voice-v3-slot-selection": "tsx scripts/test-voice-v3-slot-selection.ts && tsx scripts/test-voice-v3-slot-selection-astra.ts",
     "test:voice-v3-booking": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-booking.ts",

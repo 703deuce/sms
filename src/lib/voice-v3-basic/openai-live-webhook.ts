@@ -150,12 +150,16 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
 
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
 
-  if (voiceV3IntakePipelineEnabled()) {
-    createVoiceV3CallRuntime({
-      liveSessionId: sessionId,
-      callId: event.data?.call_id,
+  if (!voiceV3IntakePipelineEnabled()) {
+    console.error("VOICE_V3_INTAKE_DISABLED", {
+      sessionId,
+      hint: "Booking pipeline requires VOICE_V3_INTAKE_ENABLED; runtime will still be created",
     });
   }
+  createVoiceV3CallRuntime({
+    liveSessionId: sessionId,
+    callId: event.data?.call_id,
+  });
 
   trace.mark("session.accept.request.started");
   const acceptParams = buildBasicLiveSessionAcceptParams();

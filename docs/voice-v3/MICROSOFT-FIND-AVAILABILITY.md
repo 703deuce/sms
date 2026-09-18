@@ -24,7 +24,7 @@ Fallback: `GET /v1.0/me/calendar/calendarView` for explicit `calendarId`.
 ## Reused from V2 (transport only)
 
 - `@/lib/voice/calendar/providers` — `getMicrosoftBusy`, `getValidAccessToken`, `hasOAuthTokens`
-- `src/lib/voice-v2/pipelines/microsoft-365-certified/internal/graph-datetime-timezone.ts` — Graph timezone adapter (via `microsoft-time-adapter.ts`)
+- `src/lib/voice-v3/calendar/microsoft/microsoft-graph-datetime-timezone.ts` — Graph timezone adapter (via `microsoft-time-adapter.ts`)
 
 Not reused: V2 workflow stages, tool gates, offer-set store, FIND orchestrator.
 
