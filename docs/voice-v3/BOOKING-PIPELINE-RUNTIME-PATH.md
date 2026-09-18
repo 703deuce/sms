@@ -46,6 +46,8 @@ Early Voice V3 work added **`TEST_AGENT_CONFIG`** in `src/` to prove dynamic int
 
 **Fix:** Production `src/` has a single config module (`booking-agent-config.ts`). Odd-field tests live under `scripts/fixtures/` only.
 
-## Shared non-booking code
+## Isolation from Voice V2
 
-- `microsoft-time-adapter.ts` imports Graph timezone helpers from `voice-v2/.../graph-datetime-timezone.ts` — **datetime only**, not Voice V2 booking executors or Live tool runtime.
+- `src/lib/voice-v3/pipeline-boundary.ts` lists prohibited import paths; enforced by `npm run test:voice-v3-intake` (`test-voice-v3-pipeline-boundary.ts`).
+- Voice V3 does **not** import `lib/voice-v2/*` booking pipelines, Telnyx voice tools, or Live tool runtime.
+- Graph datetime serialization lives in `calendar/microsoft/microsoft-graph-datetime-timezone.ts` (Voice V3 only).
