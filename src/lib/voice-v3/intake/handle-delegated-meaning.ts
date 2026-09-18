@@ -135,11 +135,6 @@ export function handleDelegatedAstraResponseEvent(input: {
 
   queueMicrotask(() => {
     void (async () => {
-      if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
-        meaningStartedSessions.delete(sessionId);
-        return;
-      }
-
       const runtime = getVoiceV3CallRuntime(sessionId);
       if (!runtime) {
         meaningStartedSessions.delete(sessionId);
@@ -155,45 +150,28 @@ export function handleDelegatedAstraResponseEvent(input: {
 
       const extracted = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, logCtx);
       if (!extracted) {
-        if (
-          nestedType === "response.output_item.done" ||
-          nestedType === "response.function_call_arguments.done"
-        ) {
-          if (nestedType === "response.output_item.done") {
-            const item = input.nested.item;
-            if (item && typeof item === "object") {
-              const row = item as Record<string, unknown>;
-              if (row.type !== "function_call") {
-                meaningStartedSessions.delete(sessionId);
-                return;
-              }
-            }
-          }
-          if (nestedType === "response.function_call_arguments.done") {
-            const fnName = input.nested.name;
-            if (fnName !== EMIT_CALLER_MEANING_TOOL_NAME) {
+        if (nestedType === "response.output_item.done") {
+          const item = input.nested.item;
+          if (item && typeof item === "object") {
+            const row = item as Record<string, unknown>;
+            if (row.type !== "function_call") {
               meaningStartedSessions.delete(sessionId);
               return;
             }
           }
+        }
+
+        if (
+          intakeTransport === "function_tool" &&
+          nestedType === "response.function_call_arguments.done"
+        ) {
+          const fnName = input.nested.name;
           if (
-            intakeTransport === "function_tool" &&
-            (nestedType === "response.output_item.done" ||
-              nestedType === "response.completed")
+            fnName !== EMIT_CALLER_MEANING_TOOL_NAME &&
+            fnName !== undefined &&
+            fnName !== null &&
+            fnName !== ""
           ) {
-            VoiceV3CallTrace.peek(sessionId)?.onMeaningSkipped();
-            logVoiceV3Pipeline("meaning", "completion_skipped", {
-              call_id: runtime.getSnapshot().callId,
-              live_session_id: sessionId,
-              reason: "function_tool_payload_on_arguments_done",
-              nested_type: nestedType,
-            });
-            console.log("ASTRA_MEANING_COMPLETION_SKIPPED", {
-              call_id: runtime.getSnapshot().callId,
-              live_session_id: sessionId,
-              reason: "function_tool_payload_on_arguments_done",
-              nested_type: nestedType,
-            });
             meaningStartedSessions.delete(sessionId);
             return;
           }
@@ -237,8 +215,14 @@ export function handleDelegatedAstraResponseEvent(input: {
             call_id: runtime.getSnapshot().callId,
             live_session_id: sessionId,
             reason: "schema_validation_or_empty",
+            nested_type: nestedType,
           });
         }
+        meaningStartedSessions.delete(sessionId);
+        return;
+      }
+
+      if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
         meaningStartedSessions.delete(sessionId);
         return;
       }

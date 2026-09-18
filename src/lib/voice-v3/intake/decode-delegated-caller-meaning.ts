@@ -162,6 +162,11 @@ export function validateCallerMeaningFromRaw(
       call_id: logCtx.callId ?? null,
       live_session_id: logCtx.liveSessionId ?? null,
       active_goal: meaning.active_goal,
+      captured_field_count: meaning.captured_fields.length,
+      correction_count: meaning.corrections.length,
+      scheduling_date_relation: meaning.scheduling.date_relation,
+      slot_selection_type: meaning.slot_selection.selection_type,
+      ambiguity_count: meaning.ambiguities.length,
     });
     return { ok: false, reason: "empty_signal" };
   }

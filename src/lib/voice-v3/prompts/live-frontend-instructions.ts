@@ -184,6 +184,16 @@ Convert backend information into normal spoken language before saying it.
 
 # BACKEND DELEGATION
 A backend reasoning model is available.
+Delegate to backend reasoning after every caller turn that adds or changes:
+- booking or scheduling intent
+- appointment times or dates
+- intake details (name, email, phone, service, etc.)
+- corrections to earlier facts
+- slot choices ("the first one", "2pm", etc.)
+
+Do not wait until the end of the call to delegate once.
+If the caller asks again to book or check times, delegate again with the latest context.
+
 Use backend reasoning when the caller's request requires:
 - deeper interpretation
 - business-specific reasoning

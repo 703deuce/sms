@@ -179,9 +179,19 @@ Never expose:
 - secrets
 - internal implementation details
 
-# CURRENT PHASE
-Booking and calendar tools are not wired yet.
-Do not claim appointments are booked or availability is confirmed.
-Populate structured intake when the caller provides facts; support the live conversation.
+# BOOKING AND SCHEDULING (application-owned)
+You do not call calendar APIs or book appointments yourself.
+The application runs find-availability and booking after you emit CallerMeaning.
+
+When the caller wants to schedule, reschedule, or check times:
+- set active_goal to BOOK_APPOINTMENT (not UNKNOWN)
+- capture every intake fact they stated in captured_fields
+- populate scheduling (date_relation, weekday, daypart, exact_time, etc.) from their words
+- if they pick from offered times, set slot_selection accordingly
+
+Never emit an all-default CallerMeaning when the caller clearly spoke booking or intake facts.
+UNKNOWN with empty fields is only for silence or unrelated chit-chat.
+
+Do not claim appointments are booked or availability is confirmed — only the runtime confirms that.
 `.trim();
 }

@@ -50,9 +50,16 @@ function collectEmitCallerMeaningArgumentsFromOutput(
   return null;
 }
 
-function extractFunctionCallArgumentsFromItem(item: Record<string, unknown>): string | null {
+function extractFunctionCallArgumentsFromItem(
+  item: Record<string, unknown>,
+  transportMode: "function_tool" | "output_text",
+): string | null {
   if (item.type !== "function_call") return null;
-  if (item.name !== EMIT_CALLER_MEANING_TOOL_NAME) return null;
+  const name = item.name;
+  const nameOk =
+    name === EMIT_CALLER_MEANING_TOOL_NAME ||
+    (transportMode === "function_tool" && (name === undefined || name === null || name === ""));
+  if (!nameOk) return null;
   if (typeof item.arguments === "string" && item.arguments.trim()) {
     return item.arguments.trim();
   }
@@ -78,7 +85,10 @@ export function extractCallerMeaningFromAstraResponseEvent(
 
   if (type === "response.function_call_arguments.done") {
     const name = nestedEvent.name;
-    if (name !== EMIT_CALLER_MEANING_TOOL_NAME) return null;
+    const nameOk =
+      name === EMIT_CALLER_MEANING_TOOL_NAME ||
+      (transportMode === "function_tool" && (name === undefined || name === null || name === ""));
+    if (!nameOk) return null;
     if (typeof nestedEvent.arguments !== "string" || !nestedEvent.arguments.trim()) return null;
     const meaning = decodeCallerMeaningFromFunctionArguments(
       nestedEvent.arguments.trim(),
@@ -91,7 +101,10 @@ export function extractCallerMeaningFromAstraResponseEvent(
   if (type === "response.output_item.done") {
     const item = nestedEvent.item;
     if (item && typeof item === "object") {
-      const args = extractFunctionCallArgumentsFromItem(item as Record<string, unknown>);
+      const args = extractFunctionCallArgumentsFromItem(
+        item as Record<string, unknown>,
+        transportMode,
+      );
       if (args) {
         const meaning = decodeCallerMeaningFromFunctionArguments(args, config, logCtx);
         if (meaning) return { transport: "function_tool", meaning };

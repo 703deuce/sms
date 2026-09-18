@@ -52,6 +52,16 @@ function main() {
   assert.ok(parsed?.transport === "function_tool");
   assert.equal(parsed?.meaning.captured_fields[0]?.value, "Anthony");
 
+  const argumentsDoneNoName = {
+    ...argumentsDone,
+    name: undefined,
+  };
+  const parsedNoName = extractCallerMeaningFromAstraResponseEvent(
+    argumentsDoneNoName,
+    VOICE_V3_BOOKING_TEST_CONFIG,
+  );
+  assert.equal(parsedNoName?.meaning.captured_fields[0]?.value, "Anthony");
+
   assert.equal(extractDelegatedAstraResponseId(argumentsDone), responseId);
   assert.equal(extractDelegatedAstraResponseId(outputItemDone), responseId);
   assert.equal(extractDelegatedAstraResponseId(completed), responseId);
@@ -59,6 +69,20 @@ function main() {
   assert.equal(claimDelegatedAstraResponse(SESSION, argumentsDone), true);
   assert.equal(claimDelegatedAstraResponse(SESSION, outputItemDone), false);
   assert.equal(claimDelegatedAstraResponse(SESSION, completed), false);
+
+  clearDelegatedAstraResponseDedup(SESSION);
+  const outputItemWithArgs = {
+    type: "response.output_item.done",
+    item: {
+      type: "function_call",
+      id: "fc_item_with_args",
+      response_id: responseId,
+      name: EMIT_CALLER_MEANING_TOOL_NAME,
+      arguments: meaningArgs,
+    },
+  };
+  assert.equal(claimDelegatedAstraResponse(SESSION, outputItemWithArgs), true);
+  assert.equal(claimDelegatedAstraResponse(SESSION, argumentsDone), false);
 
   clearDelegatedAstraResponseDedup(SESSION);
   console.log("PASS voice-v3 delegated response dedup");
