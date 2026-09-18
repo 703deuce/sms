@@ -15,6 +15,12 @@ import {
   resolveVoiceV3DefaultPromptInput,
 } from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
 import { buildLiveFrontendInstructions } from "../src/lib/voice-v3/prompts/live-frontend-instructions";
+import {
+  assertLiveDelegationAcceptPayloadCompatible,
+  buildVoiceV3AstraDelegationResponses,
+} from "../src/lib/voice-v3/intake/delegation-config";
+import { resolveVoiceV3AgentConfig } from "../src/lib/voice-v3/state/call-runtime";
+import { EMIT_CALLER_MEANING_TOOL_NAME } from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
 
 function includesAll(haystack: string, needles: string[], label: string): void {
   for (const needle of needles) {
@@ -81,7 +87,38 @@ function main() {
   assert.equal(session.delegation.responses.model, VOICE_V3_BASIC_BACKEND_MODEL);
   assert.equal(session.delegation.responses.instructions, prompts.astraInstructions);
   assert.equal(session.delegation.responses.reasoning?.effort, "low");
-  assert.deepEqual(session.delegation.responses.tools, []);
+
+  const expectedDelegation = buildVoiceV3AstraDelegationResponses(
+    prompts.astraInstructions,
+    resolveVoiceV3AgentConfig(),
+  );
+  assertLiveDelegationAcceptPayloadCompatible(expectedDelegation);
+  assertLiveDelegationAcceptPayloadCompatible(session.delegation.responses);
+  assert.deepEqual(session.delegation.responses.tools, expectedDelegation.tools);
+  assert.deepEqual(session.delegation.responses.tool_choice, expectedDelegation.tool_choice);
+
+  const acceptJson = JSON.stringify(session);
+  assert.ok(
+    !acceptJson.includes('"format"'),
+    "live.sessions.accept must not include delegation text.format",
+  );
+
+  const tools = session.delegation.responses.tools ?? [];
+  const emitTool = tools.find(
+    (t) => t && typeof t === "object" && "name" in t && t.name === EMIT_CALLER_MEANING_TOOL_NAME,
+  );
+  if (emitTool && typeof emitTool === "object" && "strict" in emitTool) {
+    assert.equal(emitTool.strict, true, "emit_caller_meaning must be strict function tool");
+  }
+
+  const webhookSrc = readFileSync(
+    join(process.cwd(), "src/lib/voice-v3-basic/openai-live-webhook.ts"),
+    "utf8",
+  );
+  assert.ok(
+    !webhookSrc.includes("buildLiveFrontendInstructions"),
+    "webhook must not inline Live prompt strings",
+  );
 
   console.log("VOICE_V3_PROMPT_WIRING", {
     acceptPath: "src/lib/voice-v3-basic/live-session-config.ts buildBasicLiveSession",
@@ -91,6 +128,8 @@ function main() {
     frontendModel: VOICE_V3_BASIC_LIVE_MODEL,
     backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
     reasoningEffort: "low",
+    semanticTool: emitTool ? EMIT_CALLER_MEANING_TOOL_NAME : null,
+    hasTextFormatOnAccept: false,
   });
 
   console.log("PASS voice-v3 prompt regression + accept wiring");
