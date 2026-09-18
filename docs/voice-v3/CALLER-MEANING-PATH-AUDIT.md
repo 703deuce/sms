@@ -4,6 +4,8 @@
 **SDK:** `openai@^7.17.0`  
 **Audit date:** 2026-09-18 (pre date/time normalization work)
 
+**Follow-up cleanup (same day):** Dynamic per-`AgentConfig` key enums in `buildCallerMeaningZodSchema`, single decoder `decodeDelegatedCallerMeaning`, unknown-key + duplicate-key logging, integration test uses `response.output_parsed`. See `src/lib/voice-v3/intake/decode-delegated-caller-meaning.ts`.
+
 ---
 
 ## Executive summary

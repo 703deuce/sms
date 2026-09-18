@@ -116,7 +116,7 @@ No giant state machine replacing Live/Astra conversation. Rules **gate** tools a
 
 ## Intake pipeline (implemented)
 
-- Accept: `delegation.responses.text.format` = `zodTextFormat(callerMeaningZodSchema, "voice_v3_caller_meaning")` (`json_schema`).
+- Accept: `delegation.responses.text.format` = `zodTextFormat(buildCallerMeaningZodSchema(agentConfig), "voice_v3_caller_meaning")` (`json_schema`, per-config key enum).
 - Webhook: `createVoiceV3CallRuntime` before `sessions.accept` (`VOICE_V3_INTAKE_ENABLED=0` to disable).
 - Sideband: async `handleDelegatedAstraResponseEvent` → `runtime.applyEvent(CALLER_MEANING_APPLIED)` → `session.thinking.append` (`delegation_id: null`).
 - Tests: `npm run test:voice-v3-intake` (deterministic + optional live Astra via `OPENAI_API_KEY`).
