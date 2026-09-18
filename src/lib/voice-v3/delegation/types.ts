@@ -24,6 +24,9 @@ export interface DelegationRuntime {
   phase: DelegationPhase;
   pendingFunctionCalls: Map<string, PendingFunctionCall>;
   submittedFunctionCallIds: Set<string>;
+  /** Incremented when a protocol continuation is sent for a completed tool barrier. */
+  protocolBarrierGeneration: number;
+  lastContinuationEventId: string | null;
 }
 
 export type EmitCallerMeaningFunctionOutput = {

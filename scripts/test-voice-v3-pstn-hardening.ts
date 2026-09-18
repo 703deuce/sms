@@ -159,7 +159,7 @@ function testInvalidMeaningWithCallerEvidence(): void {
   assert.equal(disposition, "INVALID_WITH_CALLER_EVIDENCE");
 }
 
-function testEmptySemanticSubmitsOutputWithoutResponseCreate(): void {
+function testEmptySemanticSubmitsOutputAndProtocolContinuation(): void {
   const sent: { type: string }[] = [];
   const send = (event: { type: string }) => {
     sent.push(event);
@@ -171,13 +171,19 @@ function testEmptySemanticSubmitsOutputWithoutResponseCreate(): void {
     argumentsJson: emptyMeaningJson(),
     delegationId: "del_empty",
   });
-  coord.submitFunctionCallOutput(
-    "call_empty_sem",
-    { accepted: true, disposition: "EMPTY_NO_CALLER_EVIDENCE" },
-    { skipScheduleContinuation: true },
-  );
-  assert.equal(sent.some((e) => e.type === "response.create"), false);
+  coord.submitDelegatedFunctionCallOutput({
+    callId: "call_empty_sem",
+    delegationId: "del_empty",
+    callerTurnId: null,
+    semanticDisposition: "EMPTY_NO_CALLER_EVIDENCE",
+    output: { accepted: true, disposition: "EMPTY_NO_CALLER_EVIDENCE" },
+  });
   assert.equal(sent.some((e) => e.type === "response.item.create"), true);
+  assert.equal(
+    sent.filter((e) => e.type === "response.create").length,
+    1,
+    "exactly one delegated continuation after all outputs submitted",
+  );
   peekVoiceV3LiveResponseCoordinator(`${SESSION}_empty`)?.clear();
 }
 
@@ -230,7 +236,12 @@ function testStaleSpeakSupersededOnBookingConfirm(): void {
 
   coord.supersedeStaleSpeaks({ minStateVersion: 5 });
   coord.submitFunctionCallOutput("pending_fc_stale", { accepted: true });
-  assert.equal(sent.some((e) => e.type === "response.create"), false);
+  let afterOutput = sent.filter((e) => e.type === "response.create");
+  assert.equal(afterOutput.length, 1, "delegated protocol continuation only");
+  assert.ok(
+    afterOutput[0]?.event_id?.includes("delegated_cont"),
+    "must not flush superseded planner speak before protocol continuation",
+  );
 
   coord.requestResponseCreate({
     reason: "planner_inform_result",
@@ -240,8 +251,8 @@ function testStaleSpeakSupersededOnBookingConfirm(): void {
     allowBeforeDelegation: true,
   });
   const creates = sent.filter((e) => e.type === "response.create");
-  assert.equal(creates.length, 1);
-  assert.equal(creates[0]?.event_id, "booking_confirm_speak");
+  assert.equal(creates.length, 2);
+  assert.equal(creates[1]?.event_id, "booking_confirm_speak");
   peekVoiceV3LiveResponseCoordinator(sid)?.clear();
 }
 
@@ -260,7 +271,7 @@ function testSessionCloseBlocksResponseCreate(): void {
 async function main(): Promise<void> {
   testPhantomGreetingDisposition();
   testInvalidMeaningWithCallerEvidence();
-  testEmptySemanticSubmitsOutputWithoutResponseCreate();
+  testEmptySemanticSubmitsOutputAndProtocolContinuation();
   testDuplicateResponseCreateSuppressed();
   testStaleSpeakSupersededOnBookingConfirm();
   await testPerTurnTranscriptIsolation();

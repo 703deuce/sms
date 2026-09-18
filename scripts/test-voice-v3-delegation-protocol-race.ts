@@ -83,8 +83,8 @@ async function main() {
   assert.equal(itemCreatesPhantom.length, 1, "must submit function_call_output for empty ignore");
   assert.equal(
     outbound.filter((e) => e.type === "response.create").length,
-    0,
-    "no response.create when empty meaning has no caller evidence",
+    1,
+    "delegated protocol requires exactly one continuation response.create after empty ignore",
   );
   assert.notEqual(
     runtime.getSnapshot().recovery.active?.code,
@@ -162,10 +162,10 @@ async function main() {
   );
   coord.submitFunctionCallOutput("call_block", { accepted: false, reason: "test" });
   await new Promise((r) => setTimeout(r, 5));
-  assert.equal(
-    outbound.filter((e) => e.type === "response.create").length,
-    1,
-    "continuation after output",
+  assert.equal(coord.delegatedProtocolContinuationCount(), 1, "one protocol continuation barrier");
+  assert.ok(
+    outbound.filter((e) => e.type === "response.create").length >= 1,
+    "continuation after output (may flush queued planner speak)",
   );
 
   setSemanticExtractionRetryRunnerForTests(null);

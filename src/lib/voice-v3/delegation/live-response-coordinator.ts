@@ -1,4 +1,5 @@
 import type { LiveSidebandSend } from "../greeting";
+import { noteTurnDelegationContinued } from "../conversation/caller-turn-semantic-progress";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import type { DelegationRuntime, PendingFunctionCall } from "./types";
@@ -38,6 +39,10 @@ export class VoiceV3LiveResponseCoordinator {
   private sessionClosed = false;
   private speakRequests = new Map<string, LiveSpeakRequest>();
   private sentSpeakKeys = new Set<string>();
+  /** One delegated protocol continuation per tool-output barrier (delegationId + generation). */
+  private delegatedProtocolContinuationSent = new Set<string>();
+  /** When Live omits delegation_id, correlate barriers per session. */
+  private protocolBarrierGenerationGlobal = 0;
 
   constructor(liveSessionId: string, send: LiveSidebandSend) {
     this.liveSessionId = liveSessionId.trim();
@@ -61,6 +66,8 @@ export class VoiceV3LiveResponseCoordinator {
         phase: "STARTED",
         pendingFunctionCalls: new Map(),
         submittedFunctionCallIds: new Set(),
+        protocolBarrierGeneration: 0,
+        lastContinuationEventId: null,
       });
     }
     logVoiceV3Pipeline("live_out", "delegation.registered", {
@@ -87,6 +94,8 @@ export class VoiceV3LiveResponseCoordinator {
           phase: "AWAITING_TOOL_OUTPUT",
           pendingFunctionCalls: new Map(),
           submittedFunctionCallIds: new Set(),
+          protocolBarrierGeneration: 0,
+          lastContinuationEventId: null,
         } satisfies DelegationRuntime);
       d.phase = "AWAITING_TOOL_OUTPUT";
       d.pendingFunctionCalls.set(call.callId, enriched);
@@ -147,6 +156,7 @@ export class VoiceV3LiveResponseCoordinator {
         const d = this.delegations.get(id);
         if (d) d.phase = "COMPLETED";
       }
+      this.protocolBarrierGenerationGlobal += 1;
       logVoiceV3Pipeline("live_out", "delegation.completed", {
         live_session_id: this.liveSessionId,
         delegation_id: id,
@@ -154,6 +164,12 @@ export class VoiceV3LiveResponseCoordinator {
       console.log("ASTRA_DELEGATION_COMPLETED", {
         live_session_id: this.liveSessionId,
         delegation_id: id,
+      });
+      console.log("DELEGATED_CONTINUATION_COMPLETED", {
+        live_session_id: this.liveSessionId,
+        delegation_id: id,
+        response_id: this.delegations.get(id ?? "")?.responseId ?? null,
+        continuation_event_id: this.delegations.get(id ?? "")?.lastContinuationEventId ?? null,
       });
       noteSemanticTimingEvent(this.liveSessionId, "delegatedResponseCompletedAt");
       this.scheduleContinuationFlush();
@@ -184,48 +200,67 @@ export class VoiceV3LiveResponseCoordinator {
     }
   }
 
-  submitFunctionCallOutput(
-    callId: string,
-    output: Record<string, unknown>,
-    options?: { skipScheduleContinuation?: boolean },
-  ): boolean {
-    const row = this.pendingByCallId.get(callId);
+  submitDelegatedFunctionCallOutput(input: {
+    callId: string;
+    delegationId: string | null;
+    callerTurnId: string | null;
+    semanticDisposition: string;
+    output: Record<string, unknown>;
+    startedAtMs?: number;
+  }): boolean {
+    const row = this.pendingByCallId.get(input.callId);
     if (!row || row.outputSubmitted) {
       return false;
     }
 
+    const startedAt = input.startedAtMs ?? Date.now();
+    const pendingBeforeSubmit = this.pendingOutstandingCount();
     row.outputSubmitted = true;
-    const eventId = `voice_v3_fn_out_${this.liveSessionId}_${callId}_${Date.now()}`;
+    const eventId = `voice_v3_fn_out_${this.liveSessionId}_${input.callId}_${Date.now()}`;
     const payload = {
       type: "response.item.create",
       event_id: eventId,
       item: {
         type: "function_call_output",
-        call_id: callId,
-        output: JSON.stringify(output),
+        call_id: input.callId,
+        output: JSON.stringify(input.output),
       },
     };
 
     logVoiceV3Pipeline("live_out", "response.item.create", {
       live_session_id: this.liveSessionId,
-      call_id: callId,
+      call_id: input.callId,
       event_id: eventId,
       name: row.name,
     });
 
+    console.log("DELEGATED_FUNCTION_OUTPUT_SUBMITTED", {
+      live_session_id: this.liveSessionId,
+      call_id: input.callId,
+      function_call_id: input.callId,
+      name: row.name,
+      delegation_id: input.delegationId ?? row.delegationId,
+      caller_turn_id: input.callerTurnId,
+      semantic_disposition: input.semanticDisposition,
+      pending_output_count: Math.max(0, pendingBeforeSubmit - 1),
+      event_id: eventId,
+      elapsed_ms: Date.now() - startedAt,
+    });
+
     console.log("LIVE_FUNCTION_CALL_OUTPUT_SUBMITTED", {
       live_session_id: this.liveSessionId,
-      call_id: callId,
+      call_id: input.callId,
       name: row.name,
       delegation_id: row.delegationId,
     });
 
     this.send(payload);
 
-    if (row.delegationId) {
-      const d = this.delegations.get(row.delegationId);
+    const delegationId = input.delegationId ?? row.delegationId;
+    if (delegationId) {
+      const d = this.delegations.get(delegationId);
       if (d) {
-        d.submittedFunctionCallIds.add(callId);
+        d.submittedFunctionCallIds.add(input.callId);
         const pendingLeft = [...d.pendingFunctionCalls.values()].some((c) => !c.outputSubmitted);
         if (!pendingLeft) {
           d.phase = "TOOL_OUTPUT_SUBMITTED";
@@ -233,10 +268,95 @@ export class VoiceV3LiveResponseCoordinator {
       }
     }
 
-    if (!options?.skipScheduleContinuation) {
+    if (!this.hasPendingFunctionOutputs()) {
+      this.requestDelegatedProtocolContinuation({
+        delegationId,
+        triggerCallId: input.callId,
+        callerTurnId: input.callerTurnId,
+        semanticDisposition: input.semanticDisposition,
+        startedAtMs: startedAt,
+      });
       this.scheduleContinuationFlush();
     }
     return true;
+  }
+
+  /** @deprecated Use submitDelegatedFunctionCallOutput */
+  submitFunctionCallOutput(
+    callId: string,
+    output: Record<string, unknown>,
+    _options?: { skipScheduleContinuation?: boolean },
+  ): boolean {
+    return this.submitDelegatedFunctionCallOutput({
+      callId,
+      delegationId: this.pendingByCallId.get(callId)?.delegationId ?? null,
+      callerTurnId: null,
+      semanticDisposition: "UNKNOWN",
+      output,
+    });
+  }
+
+  requestDelegatedProtocolContinuation(input: {
+    delegationId: string | null;
+    triggerCallId: string;
+    callerTurnId: string | null;
+    semanticDisposition: string;
+    startedAtMs?: number;
+  }): void {
+    if (this.sessionClosed) return;
+    if (this.hasPendingFunctionOutputs()) return;
+
+    const delegationId = input.delegationId ?? this.activeDelegationId;
+    const d = delegationId ? this.delegations.get(delegationId) : null;
+    const barrierGen = d?.protocolBarrierGeneration ?? this.protocolBarrierGenerationGlobal;
+    const barrierKey = `${delegationId ?? "none"}:${barrierGen}`;
+    if (this.delegatedProtocolContinuationSent.has(barrierKey)) {
+      return;
+    }
+    this.delegatedProtocolContinuationSent.add(barrierKey);
+    if (d) {
+      d.protocolBarrierGeneration += 1;
+    } else {
+      this.protocolBarrierGenerationGlobal += 1;
+    }
+
+    const eventId = `voice_v3_delegated_cont_${this.liveSessionId}_${input.triggerCallId}_${Date.now()}`;
+    if (d) {
+      d.lastContinuationEventId = eventId;
+      if (d.phase === "TOOL_OUTPUT_SUBMITTED") {
+        d.phase = "CONTINUING";
+      }
+    }
+
+    console.log("DELEGATED_CONTINUATION_REQUESTED", {
+      live_session_id: this.liveSessionId,
+      call_id: input.triggerCallId,
+      function_call_id: input.triggerCallId,
+      delegation_id: delegationId,
+      caller_turn_id: input.callerTurnId,
+      semantic_disposition: input.semanticDisposition,
+      pending_output_count: 0,
+      event_id: eventId,
+      elapsed_ms: input.startedAtMs ? Date.now() - input.startedAtMs : null,
+    });
+
+    logVoiceV3Pipeline("live_out", "response.create", {
+      live_session_id: this.liveSessionId,
+      reason: "delegated_protocol_continuation",
+      event_id: eventId,
+      delegation_id: delegationId,
+    });
+
+    this.send({
+      type: "response.create",
+      event_id: eventId,
+    });
+    if (input.callerTurnId) {
+      noteTurnDelegationContinued(this.liveSessionId, input.callerTurnId);
+    }
+    noteSemanticTimingEvent(this.liveSessionId, "responseCreateRequestedAt");
+    noteSemanticTimingEvent(this.liveSessionId, "responseCreateCount");
+    noteSemanticTimingEvent(this.liveSessionId, "delegatedContinuationRequestedAt");
   }
 
   requestResponseCreate(input: {
@@ -446,7 +566,13 @@ export class VoiceV3LiveResponseCoordinator {
     this.activeDelegationId = null;
     this.speakRequests.clear();
     this.sentSpeakKeys.clear();
+    this.delegatedProtocolContinuationSent.clear();
     this.sessionEpoch += 1;
+  }
+
+  /** Test-only: count protocol continuations sent. */
+  delegatedProtocolContinuationCount(): number {
+    return this.delegatedProtocolContinuationSent.size;
   }
 }
 

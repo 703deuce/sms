@@ -6,6 +6,7 @@ import {
   clearTranscriptAccumulator,
 } from "./transcript-accumulator";
 import { onCallerTurnCommitted } from "./semantic-turn-watchdog";
+import { ensureTurnProgressCommitted } from "./caller-turn-semantic-progress";
 import {
   mergeCapturingTranscriptTimingIntoTurn,
   noteCallerTurnTimingCommitted,
@@ -136,6 +137,7 @@ function commitCapturingTurn(liveSessionId: string): CallerTurn | null {
     turnSequence: turn.sequence,
   });
   mergeCapturingTranscriptTimingIntoTurn(liveSessionId, turn.turnId);
+  ensureTurnProgressCommitted(liveSessionId, turn);
 
   queueMicrotask(() => {
     onCallerTurnCommitted({

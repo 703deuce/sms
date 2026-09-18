@@ -22,6 +22,14 @@ import { clearGreetingTurnState } from "../greeting/greeting-turn";
 import { clearVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
 import { extractCompletedFunctionCallFromNested } from "../delegation/extract-completed-function-call";
 import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
+import { completeDelegatedFunctionCall } from "../delegation/complete-delegated-function-call";
+import {
+  noteTurnDelegationContinued,
+  noteTurnDelegationObserved,
+  noteTurnFunctionCallObserved,
+  noteTurnFunctionOutputSubmitted,
+  noteTurnMeaningApplied,
+} from "../conversation/caller-turn-semantic-progress";
 import { decodeCallerMeaningAttempt } from "./decode-delegated-caller-meaning";
 import {
   getCallerEvidenceCharCount,
@@ -33,11 +41,16 @@ import { classifySemanticDecodeFailure } from "./semantic-disposition";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import {
   cancelDirectSemanticDefer,
+  cancelSemanticStallBreakerForTurn,
   drainQueuedSemanticTurns,
   markSemanticInterpretationEnded,
   markSemanticInterpretationStarted,
 } from "../conversation/semantic-turn-watchdog";
-import { clearCallerTurnManager } from "../conversation/caller-turn-manager";
+import {
+  clearCallerTurnManager,
+  getCallerTurns,
+} from "../conversation/caller-turn-manager";
+import { clearCallerTurnSemanticProgress } from "../conversation/caller-turn-semantic-progress";
 import { clearSemanticTurnWatchdog } from "../conversation/semantic-turn-watchdog";
 import { clearLiveSpeakSync } from "../agent/live-speak-sync";
 
@@ -100,6 +113,10 @@ async function completeEmitCallerMeaningFunctionCall(input: {
   markSemanticInterpretationStarted(sessionId);
 
   const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
+  const turnIdAtCall = getCallerEvidenceTurnId(sessionId);
+  if (turnIdAtCall) {
+    noteTurnFunctionCallObserved(sessionId, turnIdAtCall, completed.callId);
+  }
   const registered = coordinator.registerPendingFunctionCall(completed);
   if (!registered && completed.callId) {
     logVoiceV3Pipeline("meaning", "duplicate_function_call_ignored", {
@@ -130,15 +147,24 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     });
 
     if (disposition === "EMPTY_NO_CALLER_EVIDENCE") {
-      coordinator.submitFunctionCallOutput(
-        completed.callId,
-        {
+      const callerTurnId = getCallerEvidenceTurnId(sessionId);
+      const startedAt = Date.now();
+      completeDelegatedFunctionCall({
+        coordinator,
+        callId: completed.callId,
+        delegationId: completed.delegationId ?? null,
+        callerTurnId,
+        semanticDisposition: "EMPTY_NO_CALLER_EVIDENCE",
+        output: {
           accepted: true,
           disposition: "EMPTY_NO_CALLER_EVIDENCE",
         },
-        { skipScheduleContinuation: true },
-      );
-      noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
+        startedAtMs: startedAt,
+      });
+      if (callerTurnId) {
+        noteTurnFunctionOutputSubmitted(sessionId, callerTurnId);
+      }
+      noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", callerTurnId);
       console.log("SEMANTIC_EMPTY_IGNORED", {
         call_id: snap.callId,
         live_session_id: sessionId,
@@ -148,6 +174,7 @@ async function completeEmitCallerMeaningFunctionCall(input: {
         greeting_phase: greetingPhaseForSemanticLog(sessionId),
         decode_reason: decoded.reason,
       });
+      if (callerTurnId) cancelSemanticStallBreakerForTurn(callerTurnId);
       markSemanticInterpretationEnded(sessionId);
       return;
     }
@@ -173,6 +200,31 @@ async function completeEmitCallerMeaningFunctionCall(input: {
     });
 
     cancelDirectSemanticDefer(sessionId);
+    const callerTurnIdForApply = getCallerEvidenceTurnId(sessionId);
+    const turnRow =
+      callerTurnIdForApply
+        ? getCallerTurns(sessionId).find((t) => t.turnId === callerTurnIdForApply)
+        : null;
+    if (turnRow?.status === "SEMANTIC_APPLIED") {
+      console.log("DELEGATED_MEANING_STALE_DUPLICATE", {
+        live_session_id: sessionId,
+        caller_turn_id: callerTurnIdForApply,
+        call_id: completed.callId,
+      });
+      completeDelegatedFunctionCall({
+        coordinator,
+        callId: completed.callId,
+        delegationId: completed.delegationId ?? null,
+        callerTurnId: callerTurnIdForApply,
+        semanticDisposition: "DUPLICATE_IGNORED",
+        output: {
+          accepted: true,
+          disposition: "DUPLICATE_IGNORED",
+        },
+      });
+      markSemanticInterpretationEnded(sessionId);
+      return;
+    }
     try {
       await applyExtractedCallerMeaning({
         runtime: input.runtime,
@@ -189,23 +241,51 @@ async function completeEmitCallerMeaningFunctionCall(input: {
       });
     }
 
-    coordinator.submitFunctionCallOutput(completed.callId, {
-      accepted: true,
-      disposition: "APPLIED",
+    const callerTurnId = getCallerEvidenceTurnId(sessionId);
+    completeDelegatedFunctionCall({
+      coordinator,
+      callId: completed.callId,
+      delegationId: completed.delegationId ?? null,
+      callerTurnId,
+      semanticDisposition: "APPLIED",
+      output: {
+        accepted: true,
+        disposition: "APPLIED",
+      },
     });
-    noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
+    if (callerTurnId) {
+      noteTurnFunctionOutputSubmitted(sessionId, callerTurnId);
+      noteTurnMeaningApplied(sessionId, callerTurnId);
+      cancelSemanticStallBreakerForTurn(callerTurnId);
+    }
+    noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", callerTurnId);
     return;
   }
 
-  coordinator.submitFunctionCallOutput(completed.callId, {
-    accepted: false,
+  const failDisposition = classifySemanticDecodeFailure({
     reason: decoded.reason,
-    disposition: classifySemanticDecodeFailure({
-      reason: decoded.reason,
-      hasCallerEvidence: hasCommittedCallerEvidenceForSemantic(sessionId),
-    }),
+    hasCallerEvidence: hasCommittedCallerEvidenceForSemantic(sessionId),
   });
-  noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", getCallerEvidenceTurnId(sessionId));
+  const callerTurnIdFail = getCallerEvidenceTurnId(sessionId);
+  completeDelegatedFunctionCall({
+    coordinator,
+    callId: completed.callId,
+    delegationId: completed.delegationId ?? null,
+    callerTurnId: callerTurnIdFail,
+    semanticDisposition:
+      failDisposition === "INVALID_WITH_CALLER_EVIDENCE"
+        ? "INVALID_WITH_CALLER_EVIDENCE"
+        : "DECODE_FAILED",
+    output: {
+      accepted: false,
+      reason: decoded.reason,
+      disposition: failDisposition,
+    },
+  });
+  if (callerTurnIdFail) {
+    noteTurnFunctionOutputSubmitted(sessionId, callerTurnIdFail);
+  }
+  noteSemanticTimingEvent(sessionId, "functionOutputSubmittedAt", callerTurnIdFail);
 
   if (!hasCommittedCallerEvidenceForSemantic(sessionId)) {
     markSemanticInterpretationEnded(sessionId);
@@ -269,13 +349,21 @@ export function handleDelegatedAstraResponseEvent(input: {
   if (nestedType === "response.completed") {
     drainQueuedSemanticTurns({ liveSessionId: sessionId, send: input.send });
     const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
+    const turnId = getCallerEvidenceTurnId(sessionId);
+    if (turnId) {
+      noteTurnDelegationContinued(sessionId, turnId);
+    }
     if (!coordinator.hasPendingFunctionOutputs()) {
       markSemanticInterpretationEnded(sessionId);
     }
   }
 
   if (nestedType === "response.created" || nestedType === "response.in_progress") {
-    noteSemanticTimingEvent(sessionId, "astraFirstOutputAt", getCallerEvidenceTurnId(sessionId));
+    const turnId = getCallerEvidenceTurnId(sessionId);
+    noteSemanticTimingEvent(sessionId, "astraFirstOutputAt", turnId);
+    if (turnId) {
+      noteTurnDelegationObserved(sessionId, turnId, input.delegationId ?? null);
+    }
     if (!meaningStartedSessions.has(sessionId)) {
       meaningStartedSessions.add(sessionId);
       const runtime = getVoiceV3CallRuntime(sessionId);
@@ -373,6 +461,7 @@ export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
   clearCallerTurnBuffer(liveSessionId);
   clearCallerTurnManager(liveSessionId);
   clearSemanticTurnWatchdog(liveSessionId);
+  clearCallerTurnSemanticProgress(liveSessionId);
   clearLiveSpeakSync(liveSessionId);
   clearGreetingTurnState(liveSessionId);
   clearVoiceV3LiveResponseCoordinator(liveSessionId);
