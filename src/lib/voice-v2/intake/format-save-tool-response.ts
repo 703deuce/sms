@@ -58,14 +58,7 @@ export function saveIntakePublicFields(
         : "Saved."
       : "No changes.";
     if (invalid.length) {
-      if (invalid.includes("email")) {
-        speak =
-          missingBeforeBooking.length === 0
-            ? "Got the other details. I still need your email — say it like name at domain dot com, or spell the part before the at sign."
-            : "Saved what I could. For email, say it like name at gmail dot com so I can save it.";
-      } else {
-        speak = "Saved what I could. Could you repeat the part I didn't catch?";
-      }
+      speak = "Saved what I could. Continue with the remaining details.";
     }
     const wf = result.workflow;
     const stage = wf?.voice_v2_next_stage as VoiceV2NextStage | undefined;
@@ -167,17 +160,22 @@ export function saveIntakePublicFields(
   }
 
   if (result.status === "INTAKE_VALIDATION_ERROR") {
+    const noFields =
+      result.invalid_fields.length === 0 && result.disabled_fields.length === 0;
     return {
       ok: false,
       status: "INTAKE_VALIDATION_ERROR",
       voice_v2_status: "INTAKE_VALIDATION_ERROR",
       invalid_fields: result.invalid_fields,
       disabled_fields: result.disabled_fields,
-      continue: false,
+      continue: true,
       timing_ms: result.timing_ms,
-      speak: result.invalid_fields.includes("email")
-        ? "I didn't get the email in a format I can save. Try name at domain dot com — for example, alex at company dot com."
-        : "I didn't catch that correctly. Could you repeat it?",
+      runtime_hint: noFields
+        ? "Tool payload was empty — include fields.email (and any other values the caller just gave) on voice_v2_save_intake_fields."
+        : undefined,
+      speak: noFields
+        ? "Include what the caller just said in fields on save_intake (for example fields.email), then continue."
+        : "I didn't get a value to save — include the caller's answer in fields on save_intake.",
     };
   }
 

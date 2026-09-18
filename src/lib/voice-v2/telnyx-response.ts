@@ -1,3 +1,4 @@
+import { certifiedBookingHandoffPayload } from "./certified-booking-pipeline";
 import type { VoiceV2FindAvailabilityResult } from "./types";
 
 export function formatVoiceV2TelnyxToolResponse(
@@ -5,6 +6,14 @@ export function formatVoiceV2TelnyxToolResponse(
 ): Record<string, unknown> {
   if (result.status === "AVAILABILITY_FOUND") {
     const labels = result.slots.map((s) => s.label).join(", ");
+    const handoff = certifiedBookingHandoffPayload({
+      offerSetId: result.offer_set_id,
+      slots: result.slots.map((s) => ({
+        slot_id: s.slot_id,
+        label: s.label,
+        spoken_label: s.label,
+      })),
+    });
     return {
       ok: true,
       status: "AVAILABILITY_FOUND",
@@ -14,6 +23,7 @@ export function formatVoiceV2TelnyxToolResponse(
       slots: result.slots,
       timing_ms: result.timing_ms,
       graph: result.graph,
+      ...handoff,
     };
   }
   if (result.status === "NO_AVAILABILITY") {

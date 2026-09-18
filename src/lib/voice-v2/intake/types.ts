@@ -21,7 +21,10 @@ export type IntakeFieldStatus =
 export type IntakeFieldSource = "CALLER" | "CALLER_ID" | "TRANSCRIPT_RECOVERY" | "SYSTEM";
 
 export interface IntakeFieldValue {
+  /** Caller-spoken / transcript value — authoritative for live-call presence. */
   value: string;
+  /** Optional best-effort normalization (email E.164, etc.); never required for KNOWN state. */
+  normalizedValue?: string;
   status: IntakeFieldStatus;
   source: IntakeFieldSource;
   updatedAt: string;

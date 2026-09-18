@@ -1,9 +1,22 @@
 /** Shared email normalization for PSTN/LLM intake (no server-only — safe for tests). */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOOSE_EMAIL_RE = /^[^\s@]+@[^\s@]+$/;
 
 const EMAIL_PREFIX_RE =
   /^(?:my\s+)?(?:e\s*-?\s*mail(?:\s+address)?\s+is|email\s+is|it's|it is|the email is)\s+/i;
+
+/** Collapse STT like "l o n g h p" → "longhp" while keeping "g mail" as two tokens until dot/at rules run. */
+function collapseSpelledToken(part: string): string {
+  let p = part.trim();
+  if (!p) return "";
+  if (p.includes("@")) return p.replace(/\s+/g, "");
+  const tokens = p.split(/\s+/).filter(Boolean);
+  if (tokens.length <= 1) return p.replace(/\s+/g, "");
+  const allShort = tokens.every((t) => t.length === 1 && /[a-z0-9]/i.test(t));
+  if (allShort) return tokens.join("");
+  return tokens.join("");
+}
 
 /**
  * Turn spoken or messy STT email into a deliverable address when possible.
@@ -29,14 +42,14 @@ export function normalizeVoiceIntakeEmail(raw: string): string | null {
     }
     if (s.includes("@")) {
       const at = s.indexOf("@");
-      const local = s.slice(0, at).replace(/\s+/g, "");
-      const domain = s.slice(at + 1).replace(/\s+/g, "");
+      const local = collapseSpelledToken(s.slice(0, at));
+      const domain = collapseSpelledToken(s.slice(at + 1));
       s = `${local}@${domain}`;
     } else {
-      s = s.replace(/\s+/g, "");
+      s = collapseSpelledToken(s);
     }
   } else {
-    s = s.replace(/\s+/g, "");
+    s = collapseSpelledToken(s);
   }
 
   s = s.toLowerCase();
@@ -45,8 +58,43 @@ export function normalizeVoiceIntakeEmail(raw: string): string | null {
   return s;
 }
 
+/** Post-call / CRM helpers — not a live-call acceptance gate. */
 export function isValidIntakeEmail(raw: string): boolean {
+  return String(raw ?? "").trim().length > 0;
+}
+
+/**
+ * Optional spoken-email normalization for companion values — never rejects raw capture.
+ * @deprecated for live gates — use captureIntakeFieldPayload presence rules instead.
+ */
+export function acceptVoiceIntakeEmail(raw: string): string | null {
   const trimmed = String(raw ?? "").trim();
-  if (EMAIL_RE.test(trimmed)) return true;
-  return normalizeVoiceIntakeEmail(trimmed) !== null;
+  if (!trimmed) return null;
+
+  const strict = normalizeVoiceIntakeEmail(trimmed);
+  if (strict) return strict;
+
+  let s = trimmed.replace(EMAIL_PREFIX_RE, "").trim();
+  s = s.replace(/[.,;!?]+$/g, "").trim();
+  s = s
+    .replace(/\s+at\s+/gi, "@")
+    .replace(/\s*@\s*/g, "@")
+    .replace(/\s+dot\s+/gi, ".");
+  s = s.replace(/\s+/g, "");
+  if (s.includes("@")) {
+    const at = s.indexOf("@");
+    const local = s.slice(0, at);
+    const domain = s.slice(at + 1);
+    if (local && domain) {
+      const out = `${local.toLowerCase()}@${domain.toLowerCase()}`;
+      if (LOOSE_EMAIL_RE.test(out)) return out;
+    }
+  }
+
+  const compact = trimmed.replace(EMAIL_PREFIX_RE, "").replace(/\s+/g, "").toLowerCase();
+  if (compact.includes("@") && LOOSE_EMAIL_RE.test(compact) && compact.length >= 5) {
+    return compact;
+  }
+
+  return null;
 }

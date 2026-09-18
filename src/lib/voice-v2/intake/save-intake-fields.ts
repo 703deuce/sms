@@ -1,7 +1,32 @@
 import "server-only";
 
 import type { IntakeFieldKey, IntakeFieldStatus } from "./types";
-import { validateIntakeFieldPayload } from "./validate-fields";
+import {
+  captureIntakeFieldPayload,
+  type IntakeFieldCapture,
+} from "./validate-fields";
+
+function coalesceSaveIntakeFieldsRaw(raw: Record<string, unknown>): Record<string, unknown> | undefined {
+  const base = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
+  const out: Record<string, unknown> =
+    base && typeof base === "object" ? { ...base } : {};
+  const topLevel: Array<[string, string]> = [
+    ["email", "email"],
+    ["name", "name"],
+    ["phone", "phone"],
+    ["address", "address"],
+    ["service_reason", "service_reason"],
+  ];
+  for (const [rawKey, intakeKey] of topLevel) {
+    const v = raw[rawKey];
+    if (v != null && String(v).trim() && !String(out[intakeKey] ?? "").trim()) {
+      out[intakeKey] = v;
+    }
+  }
+  if (base && typeof base === "object") return out;
+  if (!Object.keys(out).length) return undefined;
+  return out;
+}
 import { applyCallerAniToIntakeState, redirectPhoneSaveAwayFromAni } from "./caller-phone";
 import { ensureVoiceV2CallContext, resolveSessionKey } from "./load-call-context";
 import { getVoiceV2CallContext, setVoiceV2CallContext } from "./session-store";
@@ -195,9 +220,9 @@ function nextStatus(
   return "CAPTURED";
 }
 
-function commitNormalizedFields(
+function commitCapturedFields(
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>,
-  normalized: Partial<Record<IntakeFieldKey, string>>,
+  captures: Partial<Record<IntakeFieldKey, IntakeFieldCapture>>,
   timing: { validationMs: number; t0: number },
 ): {
   ctx: NonNullable<ReturnType<typeof getVoiceV2CallContext>>;
@@ -210,19 +235,22 @@ function commitNormalizedFields(
   const now = new Date().toISOString();
   const nextState = { ...ctx.intakeState };
 
-  for (const [key, value] of Object.entries(normalized)) {
+  for (const [key, capture] of Object.entries(captures)) {
     const k = key as IntakeFieldKey;
+    const raw = capture?.raw ?? "";
+    if (!raw.trim()) continue;
     const prev = nextState[k];
-    const unchanged = prev?.value === value;
+    const unchanged = prev?.value === raw;
     if (unchanged && prev?.status !== "MISSING") continue;
 
     const isCorrection =
       Boolean(prev?.value?.trim()) &&
-      prev!.value.trim() !== value!.trim() &&
+      prev!.value.trim() !== raw.trim() &&
       prev!.status !== "PREFILLED" &&
       prev!.status !== "MISSING";
     nextState[k] = {
-      value: value!,
+      value: raw,
+      normalizedValue: capture?.normalizedValue,
       status: nextStatus(k, prev?.status, isCorrection),
       source: "CALLER",
       updatedAt: now,
@@ -335,7 +363,7 @@ export async function executeVoiceV2SaveIntakeFields(
     return result;
   }
 
-  const fieldsRaw = (raw.fields || raw.intake_fields) as Record<string, unknown> | undefined;
+  const fieldsRaw = coalesceSaveIntakeFieldsRaw(raw);
   if (!fieldsRaw || typeof fieldsRaw !== "object") {
     return {
       status: "INTAKE_VALIDATION_ERROR",
@@ -377,23 +405,50 @@ export async function executeVoiceV2SaveIntakeFields(
 
   trace.mark("VALIDATION_START");
   const vStart = Date.now();
-  const validationRaw = validateIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
-  let normalized = stripBookingIntentOnlyServiceReason(validationRaw.normalized);
-  normalized = redirectPhoneSaveAwayFromAni(ctx, normalized);
-  let validation = validationRaw;
-  if (normalized !== validationRaw.normalized) {
-    if (validationRaw.ok && Object.keys(normalized).length === 0) {
-      validation = {
-        ok: false,
-        normalized,
-        invalidFields: ["service_reason"],
-        disabledFields: validationRaw.disabledFields,
-      };
-    } else if (validationRaw.ok) {
-      validation = { ...validationRaw, normalized };
-    } else {
-      validation = { ...validationRaw, normalized };
+  const validationRaw = captureIntakeFieldPayload(ctx.intakeSchema, fieldsRaw);
+  let captures = { ...validationRaw.captures };
+  const stripped = stripBookingIntentOnlyServiceReason(
+    Object.fromEntries(
+      Object.entries(captures).map(([k, c]) => [k, c?.raw ?? ""]),
+    ) as Partial<Record<IntakeFieldKey, string>>,
+  );
+  if (Object.keys(stripped).length !== Object.keys(captures).length) {
+    for (const k of Object.keys(captures) as IntakeFieldKey[]) {
+      if (!(k in stripped)) delete captures[k];
     }
+  }
+  const redirected = redirectPhoneSaveAwayFromAni(
+    ctx,
+    Object.fromEntries(
+      Object.entries(captures).map(([k, c]) => [k, c?.raw ?? ""]),
+    ) as Partial<Record<IntakeFieldKey, string>>,
+  );
+  for (const [k, v] of Object.entries(redirected)) {
+    const key = k as IntakeFieldKey;
+    const cap = captures[key];
+    if (cap && cap.raw !== v) {
+      captures[key] = { ...cap, raw: v! };
+    }
+  }
+  let validation = validationRaw;
+  if (validationRaw.ok && Object.keys(captures).length === 0) {
+    validation = {
+      ok: false,
+      normalized: {},
+      captures: {},
+      invalidFields: validationRaw.invalidFields.length
+        ? validationRaw.invalidFields
+        : ["service_reason"],
+      disabledFields: validationRaw.disabledFields,
+    };
+  } else if (validationRaw.ok) {
+    validation = {
+      ...validationRaw,
+      captures,
+      normalized: Object.fromEntries(
+        Object.entries(captures).map(([k, c]) => [k, c?.raw ?? ""]),
+      ) as Partial<Record<IntakeFieldKey, string>>,
+    };
   }
   const validationMs = Date.now() - vStart;
   trace.mark("VALIDATION_END", { ms: validationMs });
@@ -418,7 +473,7 @@ export async function executeVoiceV2SaveIntakeFields(
         },
       });
     }
-    const partial = commitNormalizedFields(ctx, validation.normalized, {
+    const partial = commitCapturedFields(ctx, validation.captures, {
       validationMs,
       t0,
     });
@@ -466,7 +521,7 @@ export async function executeVoiceV2SaveIntakeFields(
     };
   }
 
-  const committed = commitNormalizedFields(ctx, validation.normalized, { validationMs, t0 });
+  const committed = commitCapturedFields(ctx, validation.captures, { validationMs, t0 });
   ctx = committed.ctx;
 
   void scheduleIntakePersistence({

@@ -281,7 +281,7 @@ export function allowedNextActionsForStage(stage: VoiceV2NextStage): string[] {
     case "FIND_AVAILABILITY":
       return ["voice_v2_find_availability"];
     case "OFFER_SLOTS":
-      return ["voice_v2_book_offered_slot", "voice_v2_find_availability"];
+      return ["voice_v2_book_offered_slot"];
     case "BOOK_SELECTED_SLOT":
       return ["voice_v2_book_offered_slot"];
     case "BOOKING_CONFIRMED":
@@ -341,7 +341,7 @@ export function runtimeHintForStage(
     case "SEND_BOOKING_LINK":
       return "Offer to text the configured booking link. After the caller agrees to SMS, call voice_v2_send_booking_link with verbal_sms_consent true. Do not say they are booked or confirmed.";
     case "OFFER_SLOTS":
-      return "Offer returned slots only. When caller picks one, call voice_v2_book_offered_slot.";
+      return "Open times are already on the table. When the caller picks one (for example three PM), call voice_v2_book_offered_slot with offer_set_id and matching selected_slot_id. Do not call find again or re-ask the day unless they want a different date.";
     case "CALLBACK_REQUESTED":
       return "Caller requested callback. Callback path allowed.";
     case "COMPLETE":

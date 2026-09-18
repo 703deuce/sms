@@ -39,6 +39,7 @@ export function buildVoiceV2LiveIntakeInstructions(
           "Latest explicit correction wins (for example email corrected mid-call).",
           "Before voice_v2_find_availability: briefly acknowledge naturally (for example 'Let me see what I have open for Tuesday') then call FIND.",
           "Before voice_v2_book_offered_slot: briefly acknowledge (for example 'Give me a moment while I lock in that time') then call BOOK.",
+          "After FIND returns slots, do not call FIND again or re-ask the day when the caller picks a time — map their choice (for example three PM) to selected_slot_id and call BOOK.",
           "Never say booked/confirmed/reserved until BOOK returns BOOKING_CONFIRMED.",
           "REQUIRED_FOR_RECORD and OPTIONAL fields must not delay FIND or BOOK.",
         ]
@@ -47,7 +48,8 @@ export function buildVoiceV2LiveIntakeInstructions(
     "Use voice_v2_save_intake_fields with wizard field keys (including custom keys) when persisting caller-provided values.",
     "FIELD_NOT_ENABLED means the field is disabled — continue booking; not failure, not callback.",
     "Once missingBeforeBooking is empty, follow voice_v2_next_stage from the save tool (scheduling vs FIND).",
-    "For email: normalize speech to user@domain.tld before save (at→@, dot→., no filler phrases).",
+    "Live intake is conversation capture, not web-form validation: any non-empty caller value for an enabled field is KNOWN — never re-ask because of punctuation or format.",
+    "Put what they said in fields.* on save_intake (email, name, custom fields). Optional normalization may run later; format never blocks save or BOOK gates (presence only for REQUIRED_BEFORE_BOOKING).",
   ];
 
   if (schema.fields.length) {
