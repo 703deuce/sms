@@ -2,6 +2,7 @@ import {
   buildSessionThinkingAppendForRuntime,
   getVoiceV3CallRuntime,
 } from "../state/call-runtime";
+import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
 import { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";
 
 const meaningStartedSessions = new Set<string>();
@@ -37,10 +38,13 @@ export function handleDelegatedAstraResponseEvent(input: {
     return;
   }
 
-  if (
-    nestedType !== "response.completed" &&
-    nestedType !== "response.output_text.done"
-  ) {
+  const completionTypes = new Set([
+    "response.completed",
+    "response.output_text.done",
+    "response.output_item.done",
+  ]);
+
+  if (!completionTypes.has(nestedType)) {
     return;
   }
 
@@ -52,13 +56,15 @@ export function handleDelegatedAstraResponseEvent(input: {
     }
 
     const snap = runtime.getSnapshot();
-    const meaning = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, {
+    const logCtx = {
       callId: snap.callId,
       liveSessionId: snap.liveSessionId,
       stateVersion: snap.runtime.version,
-    });
-    if (!meaning) {
-      if (nestedType === "response.completed") {
+    };
+
+    const extracted = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, logCtx);
+    if (!extracted) {
+      if (nestedType === "response.completed" || nestedType === "response.output_item.done") {
         console.log("ASTRA_MEANING_FAILED", {
           call_id: runtime.getSnapshot().callId,
           live_session_id: sessionId,
@@ -69,10 +75,37 @@ export function handleDelegatedAstraResponseEvent(input: {
       return;
     }
 
+    const { meaning, transport } = extracted;
+    console.log("ASTRA_MEANING_RECEIVED", {
+      call_id: snap.callId,
+      live_session_id: sessionId,
+      transport,
+      state_version: snap.runtime.version,
+    });
+
+    const revalidate = validateCallerMeaningFromRaw(meaning, runtime.config, logCtx);
+    if (!revalidate.ok) {
+      console.log("ASTRA_MEANING_SCHEMA_INVALID", {
+        call_id: snap.callId,
+        live_session_id: sessionId,
+        reason: revalidate.reason,
+        state_version: snap.runtime.version,
+      });
+      meaningStartedSessions.delete(sessionId);
+      return;
+    }
+
+    console.log("ASTRA_MEANING_SCHEMA_VALID", {
+      call_id: snap.callId,
+      live_session_id: sessionId,
+      transport,
+      state_version: snap.runtime.version,
+    });
+
     const startedAt = Date.now();
     runtime.applyEvent({
       type: "CALLER_MEANING_APPLIED",
-      meaning,
+      meaning: revalidate.meaning,
       astraLatencyMs: 0,
     });
 
@@ -81,6 +114,7 @@ export function handleDelegatedAstraResponseEvent(input: {
       live_session_id: sessionId,
       state_version: runtime.getSnapshot().runtime.version,
       astra_latency_ms: Date.now() - startedAt,
+      transport,
     });
 
     input.send(buildSessionThinkingAppendForRuntime(runtime));

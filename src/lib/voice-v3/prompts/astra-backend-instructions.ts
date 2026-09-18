@@ -4,6 +4,8 @@ export type AstraBackendPromptContext = {
   currentLocalDateTime?: string;
   /** Configured intake field keys (for structured output). */
   intakeFieldCatalog?: string;
+  /** Primary semantic transport: strict emit_caller_meaning function tool. */
+  intakeTransport?: "function_tool" | "output_text";
 };
 
 export function buildAstraBackendInstructions(
@@ -117,13 +119,21 @@ Examples:
 
 Never invent an option that does not exist in supplied context.
 
-# DYNAMIC FIELDS (STRUCTURED OUTPUT — voice_v3_caller_meaning)
-Each delegated completion must emit a single JSON object (no markdown fences) matching the voice_v3_caller_meaning schema:
+# DYNAMIC FIELDS (CallerMeaning contract)
+Transport mode: ${context.intakeTransport === "output_text" ? "output_text JSON" : "strict function tool emit_caller_meaning only"}.
+
+${
+  context.intakeTransport === "output_text"
+    ? `Each delegated completion must emit a single JSON object (no markdown fences) matching the CallerMeaning schema:
 - active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
 - captured_fields: [{ key, value, confidence }]
 - corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
 - scheduling: requested_date_expression, requested_time_expression, requested_daypart (nullable strings)
-- ambiguities: [{ field, reason }]
+- ambiguities: [{ field, reason }]`
+    : `Each delegated interpretation must call the function tool emit_caller_meaning exactly once with arguments matching the CallerMeaning schema (same fields as above).
+Do not put CallerMeaning in assistant text or output_text when using function transport.
+The tool is semantic-only — it does not book, transfer, or call external systems.`
+}
 
 Do NOT emit workflow fields (stage, required_action, booking_confirmed, offer_set_id, etc.).
 You interpret caller meaning only — application rules own workflow.

@@ -1,6 +1,11 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { DecodeCallerMeaningLogContext } from "./decode-delegated-caller-meaning";
-import { decodeDelegatedCallerMeaning } from "./decode-delegated-caller-meaning";
+import {
+  decodeCallerMeaningFromFunctionArguments,
+  decodeDelegatedCallerMeaning,
+} from "./decode-delegated-caller-meaning";
+import { EMIT_CALLER_MEANING_TOOL_NAME } from "./emit-caller-meaning-tool";
+import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import type { CallerMeaning } from "./caller-meaning-schema";
 
 function collectOutputTextFromResponse(response: Record<string, unknown>): string {
@@ -28,16 +33,79 @@ function collectOutputTextFromResponse(response: Record<string, unknown>): strin
   return parts.join("").trim();
 }
 
+function collectEmitCallerMeaningArgumentsFromOutput(
+  output: unknown,
+): string | null {
+  if (!Array.isArray(output)) return null;
+
+  for (const item of output) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (row.type !== "function_call") continue;
+    if (row.name !== EMIT_CALLER_MEANING_TOOL_NAME) continue;
+    if (typeof row.arguments === "string" && row.arguments.trim()) {
+      return row.arguments.trim();
+    }
+  }
+  return null;
+}
+
+function extractFunctionCallArgumentsFromItem(item: Record<string, unknown>): string | null {
+  if (item.type !== "function_call") return null;
+  if (item.name !== EMIT_CALLER_MEANING_TOOL_NAME) return null;
+  if (typeof item.arguments === "string" && item.arguments.trim()) {
+    return item.arguments.trim();
+  }
+  return null;
+}
+
+export type ExtractCallerMeaningResult =
+  | { transport: "function_tool"; meaning: CallerMeaning }
+  | { transport: "output_text"; meaning: CallerMeaning }
+  | null;
+
 /**
- * Parse strict CallerMeaning from nested Live `response.event` (delegated Astra).
+ * Parse CallerMeaning from nested Live `response.event` (delegated Astra).
  */
 export function extractCallerMeaningFromAstraResponseEvent(
   nestedEvent: Record<string, unknown> | undefined,
   config: VoiceV3AgentConfig,
   logCtx?: DecodeCallerMeaningLogContext,
-): CallerMeaning | null {
+): ExtractCallerMeaningResult {
   if (!nestedEvent) return null;
   const type = String(nestedEvent.type || "");
+  const transportMode = resolveVoiceV3IntakeTransport();
+
+  if (type === "response.output_item.done") {
+    const item = nestedEvent.item;
+    if (item && typeof item === "object") {
+      const args = extractFunctionCallArgumentsFromItem(item as Record<string, unknown>);
+      if (args) {
+        const meaning = decodeCallerMeaningFromFunctionArguments(args, config, logCtx);
+        if (meaning) return { transport: "function_tool", meaning };
+      }
+    }
+    return null;
+  }
+
+  if (type !== "response.completed" && type !== "response.output_text.done") {
+    return null;
+  }
+
+  if (transportMode === "function_tool") {
+    if (type === "response.completed") {
+      const response = nestedEvent.response;
+      if (response && typeof response === "object") {
+        const responseObj = response as Record<string, unknown>;
+        const args = collectEmitCallerMeaningArgumentsFromOutput(responseObj.output);
+        if (args) {
+          const meaning = decodeCallerMeaningFromFunctionArguments(args, config, logCtx);
+          if (meaning) return { transport: "function_tool", meaning };
+        }
+      }
+    }
+    return null;
+  }
 
   let text = "";
   if (type === "response.completed") {
@@ -50,5 +118,6 @@ export function extractCallerMeaningFromAstraResponseEvent(
   }
 
   if (!text) return null;
-  return decodeDelegatedCallerMeaning(text, config, logCtx);
+  const meaning = decodeDelegatedCallerMeaning(text, config, logCtx);
+  return meaning ? { transport: "output_text", meaning } : null;
 }

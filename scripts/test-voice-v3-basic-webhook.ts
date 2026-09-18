@@ -29,7 +29,11 @@ function main() {
       : null;
   assert.ok(responses);
   assert.equal(responses.model, VOICE_V3_BASIC_BACKEND_MODEL);
-  assert.deepEqual(responses.tools, []);
+  const emitTool = responses.tools?.find(
+    (t) => t && typeof t === "object" && "name" in t && t.name === "emit_caller_meaning",
+  );
+  assert.ok(emitTool, "Live accept should include emit_caller_meaning when intake pipeline enabled");
+  assert.equal((emitTool as { strict?: boolean })?.strict, true);
   const liveText = responses.text as { format?: unknown } | null | undefined;
   assert.equal(liveText?.format, undefined, "Live accept must not include text.format");
   assertNoDelegationIdOnOutbound(acceptParams);

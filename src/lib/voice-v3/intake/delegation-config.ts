@@ -6,6 +6,11 @@ import {
   buildCallerMeaningZodSchema,
   CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
 } from "./caller-meaning-schema";
+import {
+  buildEmitCallerMeaningLiveFunctionTool,
+  EMIT_CALLER_MEANING_TOOL_NAME,
+} from "./emit-caller-meaning-tool";
+import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 
 const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
 
@@ -17,15 +22,23 @@ const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
  * `Unknown parameter: session.delegation.responses.text.format` and the call
  * stays silent because accept never completes.
  *
- * Strict JSON schema is applied on `responses.parse` integration tests via
- * `voiceV3CallerMeaningTextFormat`. Live delegated output is still parsed with
- * the same Zod schema in `decodeDelegatedCallerMeaning`.
+ * Primary semantic transport: strict `emit_caller_meaning` function tool on
+ * delegated Responses (`strict: true` + JSON Schema parameters).
+ *
+ * Fallback: `VOICE_V3_INTAKE_TRANSPORT=output_text` — output_text JSON + Zod.
+ *
+ * Strict JSON schema via `text.format` is only for standalone `responses.parse`
+ * integration tests (`voiceV3CallerMeaningTextFormat`).
  */
 export function buildVoiceV3AstraDelegationResponses(
   astraInstructions: string,
   agentConfig: VoiceV3AgentConfig = resolveVoiceV3AgentConfig(),
 ): ResponsesDelegationConfig {
   const intakeEnabled = voiceV3IntakePipelineEnabled();
+  const transport = resolveVoiceV3IntakeTransport();
+  const useFunctionTool = intakeEnabled && transport === "function_tool";
+
+  const tools = useFunctionTool ? [buildEmitCallerMeaningLiveFunctionTool(agentConfig)] : [];
 
   return {
     model: VOICE_V3_ASTRA_MODEL,
@@ -37,9 +50,11 @@ export function buildVoiceV3AstraDelegationResponses(
       verbosity: "low",
     },
     parallel_tool_calls: false,
-    tool_choice: "auto",
+    tool_choice: useFunctionTool
+      ? { type: "function", name: EMIT_CALLER_MEANING_TOOL_NAME }
+      : "auto",
     max_output_tokens: intakeEnabled ? 768 : 200,
-    tools: [],
+    tools,
   };
 }
 
@@ -51,14 +66,45 @@ export function voiceV3CallerMeaningTextFormat(agentConfig: VoiceV3AgentConfig) 
   );
 }
 
-/** Guardrail test: Live accept payload must not include unsupported keys. */
+function delegationTextHasFormat(text: unknown): boolean {
+  if (!text || typeof text !== "object") return false;
+  const row = text as { format?: unknown };
+  return "format" in row && row.format !== undefined;
+}
+
+/** Guardrail: Live accept payload must not include unsupported keys. */
 export function assertLiveDelegationAcceptPayloadCompatible(
   responses: ResponsesDelegationConfig,
 ): void {
-  const text = responses.text as { format?: unknown; verbosity?: string } | null | undefined;
-  if (text && "format" in text && text.format !== undefined) {
+  if (delegationTextHasFormat(responses.text)) {
     throw new Error(
       "Live delegation must not set text.format on sessions.accept (use voiceV3CallerMeaningTextFormat only on responses.parse)",
     );
   }
+
+  const serialized = JSON.stringify(responses);
+  if (serialized.includes('"format"')) {
+    throw new Error(
+      "Live delegation accept payload must not serialize text.format (unsupported on sessions.accept)",
+    );
+  }
+}
+
+/** Log + validate accept delegation slice (no network). */
+export function validateAndLogLiveAcceptDelegationPayload(
+  responses: ResponsesDelegationConfig,
+): void {
+  assertLiveDelegationAcceptPayloadCompatible(responses);
+  const transport = resolveVoiceV3IntakeTransport();
+  const toolNames = (responses.tools ?? [])
+    .map((t) => (t && typeof t === "object" && "name" in t ? String(t.name) : ""))
+    .filter(Boolean);
+
+  console.log("VOICE_V3_LIVE_ACCEPT_PAYLOAD_VALIDATED", {
+    transport,
+    tool_names: toolNames,
+    tool_choice: responses.tool_choice ?? null,
+    has_text_format: false,
+    serialized_bytes: JSON.stringify(responses).length,
+  });
 }

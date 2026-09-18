@@ -2,6 +2,7 @@ import type { SessionAcceptParams } from "openai/resources/live/sessions";
 import {
   assertLiveDelegationAcceptPayloadCompatible,
   buildVoiceV3AstraDelegationResponses,
+  validateAndLogLiveAcceptDelegationPayload,
 } from "@/lib/voice-v3/intake/delegation-config";
 import {
   buildVoiceV3Prompts,
@@ -34,6 +35,7 @@ export function buildBasicLiveSession(at: Date = new Date()): SessionAcceptParam
 
   const responses = buildVoiceV3AstraDelegationResponses(prompts.astraInstructions);
   assertLiveDelegationAcceptPayloadCompatible(responses);
+  validateAndLogLiveAcceptDelegationPayload(responses);
 
   return {
     type: "live",

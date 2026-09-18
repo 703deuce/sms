@@ -49,6 +49,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
   const { SidebandWS } = await import("openai/resources/live/sideband/ws");
   const client = input.client ?? getVoiceV3BasicOpenAiClient();
   const sideband = new SidebandWS(client, { session_id: sessionId });
+  let sidebandConnectedLogged = false;
 
   let greetingAudioStarted = false;
   let greetingAudioCompleted = false;
@@ -62,6 +63,11 @@ async function attachVoiceV3LiveSidebandInner(input: {
   sideband.on("event", (serverEvent: { type?: string; delegation?: unknown; event?: unknown }) => {
     const type = serverEvent?.type;
 
+    if (!sidebandConnectedLogged && type) {
+      sidebandConnectedLogged = true;
+      console.log("VOICE_V3_SIDEBAND_CONNECTED", { sessionId, first_event_type: type });
+    }
+
     if (type === "session.started") {
       trace.mark("live.session.started");
       requestInitialLiveGreeting({ sessionId, send, trace });
@@ -69,6 +75,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.delegation.created") {
       trace.onDelegationCreated();
+      console.log("ASTRA_DELEGATION_STARTED", { sessionId, delegation: serverEvent.delegation });
       console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
     }
 

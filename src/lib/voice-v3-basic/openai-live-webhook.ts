@@ -158,8 +158,15 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   }
 
   trace.mark("session.accept.request.started");
-  await client.live.sessions.accept(sessionId, buildBasicLiveSessionAcceptParams());
+  const acceptParams = buildBasicLiveSessionAcceptParams();
+  await client.live.sessions.accept(sessionId, acceptParams);
   trace.mark("session.accept.completed", { liveSessionId: sessionId });
+
+  console.log("VOICE_V3_LIVE_ACCEPTED", {
+    sessionId,
+    liveModel: VOICE_V3_BASIC_LIVE_MODEL,
+    backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
+  });
 
   console.log("OPENAI_LIVE_CALL_ACCEPTED", {
     sessionId,

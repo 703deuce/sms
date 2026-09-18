@@ -1,3 +1,4 @@
+import { resolveVoiceV3IntakeTransport } from "../intake/intake-transport";
 import { resolveVoiceV3AgentConfig } from "../state/call-runtime";
 import { buildAstraBackendInstructions } from "./astra-backend-instructions";
 import { formatBusinessLocalDateTime } from "./business-local-time";
@@ -32,6 +33,7 @@ export function buildVoiceV3Prompts(input: {
       timezone,
       currentLocalDateTime,
       intakeFieldCatalog,
+      intakeTransport: resolveVoiceV3IntakeTransport(),
     }),
   };
 }

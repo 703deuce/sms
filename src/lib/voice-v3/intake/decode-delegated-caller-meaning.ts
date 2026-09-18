@@ -112,8 +112,64 @@ function meaningHasSignal(meaning: CallerMeaning): boolean {
 }
 
 /**
- * Single authority: Live delegated structured JSON text → CallerMeaning.
- * JSON.parse is only used here for schema-constrained output_text.
+ * Application validation after transport decode (Zod + key normalization).
+ */
+export function validateCallerMeaningFromRaw(
+  raw: unknown,
+  config: VoiceV3AgentConfig,
+  logCtx: DecodeCallerMeaningLogContext = {},
+): { ok: true; meaning: CallerMeaning } | { ok: false; reason: string } {
+  const schema = buildCallerMeaningZodSchema(config);
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, reason: "schema_validation_failed" };
+  }
+
+  const allowedKeys = configuredIntakeKeySet(config);
+  const captured_fields = normalizeCapturedFieldRows(
+    parsed.data.captured_fields,
+    logCtx,
+    allowedKeys,
+  );
+  const corrections = normalizeCorrectionRows(parsed.data.corrections, logCtx, allowedKeys);
+
+  const meaning: CallerMeaning = {
+    ...parsed.data,
+    captured_fields,
+    corrections,
+  };
+
+  if (!meaningHasSignal(meaning)) {
+    return { ok: false, reason: "empty_signal" };
+  }
+
+  return { ok: true, meaning };
+}
+
+/**
+ * Strict function-call transport: decode API `arguments` JSON string only.
+ */
+export function decodeCallerMeaningFromFunctionArguments(
+  argumentsJson: string,
+  config: VoiceV3AgentConfig,
+  logCtx: DecodeCallerMeaningLogContext = {},
+): CallerMeaning | null {
+  const trimmed = argumentsJson.trim();
+  if (!trimmed) return null;
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+
+  const result = validateCallerMeaningFromRaw(raw, config, logCtx);
+  return result.ok ? result.meaning : null;
+}
+
+/**
+ * output_text fallback transport: JSON.parse on model text, then same Zod path.
  */
 export function decodeDelegatedCallerMeaning(
   text: string,
@@ -130,24 +186,6 @@ export function decodeDelegatedCallerMeaning(
     return null;
   }
 
-  const schema = buildCallerMeaningZodSchema(config);
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) return null;
-
-  const allowedKeys = configuredIntakeKeySet(config);
-  const captured_fields = normalizeCapturedFieldRows(
-    parsed.data.captured_fields,
-    logCtx,
-    allowedKeys,
-  );
-  const corrections = normalizeCorrectionRows(parsed.data.corrections, logCtx, allowedKeys);
-
-  const meaning: CallerMeaning = {
-    ...parsed.data,
-    captured_fields,
-    corrections,
-  };
-
-  if (!meaningHasSignal(meaning)) return null;
-  return meaning;
+  const result = validateCallerMeaningFromRaw(raw, config, logCtx);
+  return result.ok ? result.meaning : null;
 }
