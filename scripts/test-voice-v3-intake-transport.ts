@@ -1,6 +1,8 @@
 /**
  * Voice V3 semantic transport tests (no Live network required).
  */
+process.env.VOICE_V3_AGENT_CONFIG_PROFILE = "test";
+
 import assert from "node:assert/strict";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
 import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
