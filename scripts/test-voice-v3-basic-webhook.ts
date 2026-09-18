@@ -9,6 +9,7 @@ import {
 } from "../src/lib/voice-v3-basic/live-session-config";
 import {
   extractLiveSessionIdFromWebhookEvent,
+  isIncomingOpenAiSipWebhookEvent,
   parseOpenAiLiveWebhookBody,
 } from "../src/lib/voice-v3-basic/openai-live-webhook";
 
@@ -44,6 +45,16 @@ function main() {
     }),
   );
   assert.equal(extractLiveSessionIdFromWebhookEvent(sampleIncoming), "live_test_session_123");
+
+  const realtimeIncoming = parseOpenAiLiveWebhookBody(
+    JSON.stringify({
+      id: "evt_rtc",
+      type: "realtime.call.incoming",
+      data: { call_id: "rtc_abc123def" },
+    }),
+  );
+  assert.equal(isIncomingOpenAiSipWebhookEvent(realtimeIncoming), true);
+  assert.equal(extractLiveSessionIdFromWebhookEvent(realtimeIncoming), "live_abc123def");
 
   const toolResultOutbound = {
     type: "response.item.create",

@@ -48,7 +48,23 @@ export function extractLiveSessionIdFromWebhookEvent(event: UnknownEvent): strin
   if (direct) return direct;
   const nested = data.session?.id?.trim();
   if (nested) return nested;
+  const callId = data.call_id?.trim();
+  if (callId?.startsWith("rtc_")) {
+    return `live_${callId.slice(4)}`;
+  }
+  if (callId?.startsWith("live_")) return callId;
   return null;
+}
+
+const INCOMING_SIP_EVENT_TYPES = new Set([
+  "live.transport.incoming",
+  "live.call.incoming",
+  "realtime.call.incoming",
+]);
+
+export function isIncomingOpenAiSipWebhookEvent(event: UnknownEvent): boolean {
+  if (!event.type) return false;
+  return INCOMING_SIP_EVENT_TYPES.has(event.type);
 }
 
 export function parseOpenAiLiveWebhookBody(raw: string): UnknownEvent {
@@ -58,11 +74,11 @@ export function parseOpenAiLiveWebhookBody(raw: string): UnknownEvent {
 /**
  * Verify signature when OPENAI_WEBHOOK_SECRET is set; otherwise parse JSON only (dev).
  */
-export function unwrapOpenAiWebhook(
+export async function unwrapOpenAiWebhook(
   client: OpenAI,
   rawBody: string,
   headers: Headers,
-): UnknownEvent {
+): Promise<UnknownEvent> {
   const secret = process.env.OPENAI_WEBHOOK_SECRET?.trim();
   if (!secret) {
     return parseOpenAiLiveWebhookBody(rawBody);
@@ -71,7 +87,7 @@ export function unwrapOpenAiWebhook(
   headers.forEach((value, key) => {
     headerRecord[key] = value;
   });
-  const event = client.webhooks.unwrap(rawBody, headerRecord);
+  const event = await client.webhooks.unwrap(rawBody, headerRecord);
   return event as UnknownEvent;
 }
 
@@ -118,7 +134,7 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   const client = getVoiceV3BasicOpenAiClient();
   let event: UnknownEvent;
   try {
-    event = unwrapOpenAiWebhook(client, input.rawBody, input.headers);
+    event = await unwrapOpenAiWebhook(client, input.rawBody, input.headers);
   } catch (err) {
     console.error("OPENAI_LIVE_WEBHOOK_UNWRAP_FAILED", err);
     throw err;
@@ -127,17 +143,10 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   console.log("OPENAI_LIVE_WEBHOOK", {
     type: event.type,
     id: event.id,
+    callId: event.data?.call_id,
   });
 
-  if (event.type === "realtime.call.incoming") {
-    console.log("OPENAI_LIVE_WEBHOOK_IGNORED_REALTIME_INCOMING", {
-      reason: "voice_v3_basic_uses_live_transport_only",
-      callId: event.data?.call_id,
-    });
-    return { handled: true, accepted: false, reason: "ignored_realtime_call_incoming" };
-  }
-
-  if (event.type !== "live.transport.incoming" && event.type !== "live.call.incoming") {
+  if (!isIncomingOpenAiSipWebhookEvent(event)) {
     return { handled: false, reason: `ignored_event_type:${event.type ?? "unknown"}` };
   }
 
