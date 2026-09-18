@@ -88,7 +88,12 @@ export function chooseNextConversationAction(input: {
       case "SEMANTIC_EXTRACTION_FAILED":
       case "OPENAI_DELEGATION_FAILURE":
         return { type: "INFORM_TEMPORARY_FAILURE", failureCode: code };
+      case "INTENT_AMBIGUOUS":
+        return { type: "CLARIFY_INTENT" };
       default:
+        if (recovery.blocker?.userRecoverable) {
+          return { type: "INFORM_TEMPORARY_FAILURE", failureCode: code };
+        }
         return { type: "NONE" };
     }
   }

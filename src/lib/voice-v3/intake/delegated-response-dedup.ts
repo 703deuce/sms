@@ -31,8 +31,13 @@ export function extractDelegatedAstraResponseId(
 
   const item = nested.item;
   if (item && typeof item === "object") {
-    const responseId = (item as Record<string, unknown>).response_id;
+    const row = item as Record<string, unknown>;
+    const responseId = row.response_id;
     if (typeof responseId === "string" && responseId.trim()) return responseId.trim();
+    const callId = row.call_id;
+    if (typeof callId === "string" && callId.trim()) return `function_call:${callId.trim()}`;
+    const itemId = row.id;
+    if (typeof itemId === "string" && itemId.trim()) return `function_item:${itemId.trim()}`;
   }
 
   return null;
@@ -49,7 +54,9 @@ export function claimDelegatedAstraResponse(
   if (!sessionId) return false;
 
   const responseId = extractDelegatedAstraResponseId(nested);
-  const dedupKey = responseId ?? `event:${String(nested.type || "")}:${String(nested.event_id || nested.id || "")}`;
+  const dedupKey =
+    responseId ??
+    `event:${String(nested.type || "")}:${String(nested.event_id || nested.id || "")}`;
   if (!dedupKey) return true;
 
   const set = sessionSet(sessionId);

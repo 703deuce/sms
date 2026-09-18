@@ -182,18 +182,28 @@ export function decodeCallerMeaningFromFunctionArguments(
   config: VoiceV3AgentConfig,
   logCtx: DecodeCallerMeaningLogContext = {},
 ): CallerMeaning | null {
+  const attempt = decodeCallerMeaningAttempt(argumentsJson, config, logCtx);
+  return attempt.ok ? attempt.meaning : null;
+}
+
+export function decodeCallerMeaningAttempt(
+  argumentsJson: string,
+  config: VoiceV3AgentConfig,
+  logCtx: DecodeCallerMeaningLogContext = {},
+): { ok: true; meaning: CallerMeaning } | { ok: false; reason: string } {
   const trimmed = argumentsJson.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return { ok: false, reason: "empty_arguments" };
+  }
 
   let raw: unknown;
   try {
     raw = JSON.parse(trimmed) as unknown;
   } catch {
-    return null;
+    return { ok: false, reason: "invalid_json" };
   }
 
-  const result = validateCallerMeaningFromRaw(raw, config, logCtx);
-  return result.ok ? result.meaning : null;
+  return validateCallerMeaningFromRaw(raw, config, logCtx);
 }
 
 /**

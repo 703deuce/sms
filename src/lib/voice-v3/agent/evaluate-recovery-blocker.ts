@@ -53,7 +53,11 @@ export function evaluateRecoveryBlocker(input: {
   config: VoiceV3AgentConfig;
   now?: Date;
 }): RecoveryEvaluation {
-  const directive = evaluateVoiceV3Recovery(input);
+  const active = input.ctx.recovery.active;
+  const directive =
+    active && active.status === "ACTIVE"
+      ? active
+      : evaluateVoiceV3Recovery(input);
   if (!directive) {
     return { directive: null, blocker: null };
   }

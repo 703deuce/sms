@@ -23,8 +23,13 @@ Branch: `cursor/voice-v3-meaning-find-fix-2304`
 | Live snapshot supersede | **COMPLETE** | `state_version` in Live snapshot |
 | Live + Astra messy multi-goal | **COMPLETE** (automated) | `test-voice-v3-astra-multi-goal-live.ts` — ran in CI-capable env with `OPENAI_API_KEY` |
 | PSTN certification §51 (A–E) | **NOT RUN** | Manual after deploy |
+| Live delegation protocol (production regression) | **COMPLETE** (automated) | `test-voice-v3-delegation-protocol-race.ts` — 2026-09-18 PSTN `live_u7_EPUw0p3oNCWpJREgASWvqW2QrPIdZXdG` race |
 
 **PARTIAL / MISSING:** none (foundation).
+
+### Production regression (2026-09-18)
+
+PSTN call hit `Submit the pending function call outputs before response.create` when semantic recovery issued `response.create` before `emit_caller_meaning` was closed. Fixed with per-session delegation coordinator (`response.item.create` function_call_output before any gated `response.create`), authoritative `response.output_item.done` handling, active-recovery planner precedence, and greeting barge-in telemetry (overlap vs interruption).
 
 ## Automated verification
 

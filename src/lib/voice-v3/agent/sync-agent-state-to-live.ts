@@ -15,6 +15,8 @@ function formatConversationAction(action: ConversationAction): string {
       return `INFORM_TEMPORARY_FAILURE(${action.failureCode})`;
     case "CLARIFY_SCHEDULING":
       return `CLARIFY_SCHEDULING(${action.reason})`;
+    case "CLARIFY_INTENT":
+      return "CLARIFY_INTENT";
     default:
       return action.type;
   }

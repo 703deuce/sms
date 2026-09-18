@@ -5,7 +5,6 @@ import { VoiceV3CallTrace } from "../telemetry/call-trace";
 import { logVoiceV3Pipeline, summarizeAstraNestedEvent } from "../telemetry/pipeline-log";
 import { EMIT_CALLER_MEANING_TOOL_NAME } from "./emit-caller-meaning-tool";
 import { resolveVoiceV3IntakeTransport } from "./intake-transport";
-import { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";
 import {
   claimCallerMeaningFingerprint,
   claimDelegatedAstraResponse,
@@ -14,12 +13,19 @@ import {
 import { buildSemanticExtractionRecovery } from "../recovery/evaluate-recovery";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import { applyExtractedCallerMeaning } from "./apply-extracted-meaning";
-import { extractRawMeaningArgumentsFromNested } from "./extract-raw-meaning-arguments";
 import {
   attemptSemanticExtractionRetry,
   clearSemanticExtractionRetryState,
 } from "./semantic-extraction-retry";
 import { clearCallerTurnBuffer } from "./caller-turn-buffer";
+import { clearGreetingTurnState } from "../greeting/greeting-turn";
+import { clearVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
+import { extractCompletedFunctionCallFromNested } from "../delegation/extract-completed-function-call";
+import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
+import { decodeCallerMeaningAttempt } from "./decode-delegated-caller-meaning";
+import {
+  shouldDeferUnstableGreetingSemanticTurn,
+} from "../greeting/greeting-turn";
 
 const meaningStartedSessions = new Set<string>();
 
@@ -41,29 +47,10 @@ function buildLiveHooks(
 async function handleSemanticExtractionFailure(input: {
   runtime: NonNullable<ReturnType<typeof getVoiceV3CallRuntime>>;
   liveSessionId: string;
-  nested: Record<string, unknown>;
-  nestedType: string;
   send: (event: { type: string; [key: string]: unknown }) => void;
+  deferRecoverySpeak: boolean;
 }): Promise<void> {
   const sessionId = input.liveSessionId;
-  const priorArgumentsJson = extractRawMeaningArgumentsFromNested(input.nested);
-
-  const retryEligible =
-    input.nestedType === "response.output_item.done" ||
-    input.nestedType === "response.function_call_arguments.done";
-
-  if (retryEligible) {
-    const retry = await attemptSemanticExtractionRetry({
-      liveSessionId: sessionId,
-      nested: input.nested,
-      priorArgumentsJson,
-      runtime: input.runtime,
-      send: input.send,
-    });
-    if (retry.applied) {
-      return;
-    }
-  }
 
   const semanticRecovery = buildSemanticExtractionRecovery(input.runtime.getSnapshot());
   pushVoiceV3RecoveryToLive({
@@ -71,7 +58,124 @@ async function handleSemanticExtractionFailure(input: {
     liveSessionId: sessionId,
     forced: semanticRecovery,
     hooks: buildLiveHooks(sessionId, input.send),
+    skipLiveSpeak: input.deferRecoverySpeak,
     speakReason: "semantic_extraction_failed",
+  });
+
+  if (input.deferRecoverySpeak) {
+    console.log("SEMANTIC_RECOVERY_DEFERRED_GREETING_BOUNDARY", {
+      call_id: input.runtime.getSnapshot().callId,
+      live_session_id: sessionId,
+    });
+  }
+}
+
+async function completeEmitCallerMeaningFunctionCall(input: {
+  runtime: NonNullable<ReturnType<typeof getVoiceV3CallRuntime>>;
+  liveSessionId: string;
+  nested: Record<string, unknown>;
+  send: (event: { type: string; [key: string]: unknown }) => void;
+}): Promise<void> {
+  const sessionId = input.liveSessionId;
+  const completed = extractCompletedFunctionCallFromNested(input.nested);
+  if (!completed) return;
+
+  const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
+  const registered = coordinator.registerPendingFunctionCall(completed);
+  if (!registered && completed.callId) {
+    logVoiceV3Pipeline("meaning", "duplicate_function_call_ignored", {
+      live_session_id: sessionId,
+      call_id: completed.callId,
+    });
+    return;
+  }
+
+  const snap = input.runtime.getSnapshot();
+  const logCtx = {
+    callId: snap.callId,
+    liveSessionId: snap.liveSessionId,
+    stateVersion: snap.runtime.version,
+  };
+
+  const decoded = decodeCallerMeaningAttempt(
+    completed.argumentsJson,
+    input.runtime.config,
+    logCtx,
+  );
+
+  const deferRecoverySpeak = shouldDeferUnstableGreetingSemanticTurn(sessionId);
+
+  coordinator.submitFunctionCallOutput(completed.callId, {
+    accepted: decoded.ok,
+    reason: decoded.ok ? undefined : decoded.reason,
+  });
+
+  if (decoded.ok) {
+    if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
+      return;
+    }
+    const { meaning } = decoded;
+    if (!claimCallerMeaningFingerprint(sessionId, JSON.stringify(meaning))) {
+      return;
+    }
+
+    VoiceV3CallTrace.peek(sessionId)?.onMeaningReceived();
+    console.log("ASTRA_MEANING_RECEIVED", {
+      call_id: snap.callId,
+      live_session_id: sessionId,
+      transport: "function_tool",
+      state_version: snap.runtime.version,
+    });
+
+    try {
+      await applyExtractedCallerMeaning({
+        runtime: input.runtime,
+        liveSessionId: sessionId,
+        meaning,
+        transport: "function_tool",
+        send: input.send,
+        source: "delegation",
+      });
+    } catch (err) {
+      console.error("VOICE_V3_POST_MEANING_PIPELINE_ERROR", {
+        live_session_id: sessionId,
+        err,
+      });
+    }
+    return;
+  }
+
+  VoiceV3CallTrace.peek(sessionId)?.onMeaningFailed();
+  logVoiceV3Pipeline("meaning", "extract_failed", {
+    call_id: snap.callId,
+    live_session_id: sessionId,
+    reason: decoded.reason,
+    nested_type: "response.output_item.done",
+    ...summarizeAstraNestedEvent(input.nested),
+  });
+  console.log("SEMANTIC_EXTRACTION_FAILED", {
+    call_id: snap.callId,
+    live_session_id: sessionId,
+    nested_type: "response.output_item.done",
+    reason: decoded.reason,
+  });
+
+  const retry = await attemptSemanticExtractionRetry({
+    liveSessionId: sessionId,
+    nested: input.nested,
+    priorArgumentsJson: completed.argumentsJson || null,
+    runtime: input.runtime,
+    send: input.send,
+  });
+  if (retry.applied) {
+    return;
+  }
+
+  await handleSemanticExtractionFailure({
+    runtime: input.runtime,
+    liveSessionId: sessionId,
+    send: input.send,
+    deferRecoverySpeak,
   });
 }
 
@@ -93,6 +197,7 @@ export function handleDelegatedAstraResponseEvent(input: {
         response_type: nestedType,
       });
     }
+    return;
   }
 
   if (nestedType === "response.failed") {
@@ -112,148 +217,64 @@ export function handleDelegatedAstraResponseEvent(input: {
     return;
   }
 
-  const completionTypes = new Set([
-    "response.function_call_arguments.done",
-    "response.completed",
-    "response.output_text.done",
-    "response.output_item.done",
-  ]);
-
-  if (!completionTypes.has(nestedType)) {
-    return;
-  }
-
   const intakeTransport = resolveVoiceV3IntakeTransport();
-  if (intakeTransport === "function_tool" && nestedType === "response.output_text.done") {
+
+  if (intakeTransport === "function_tool" && nestedType === "response.function_call_arguments.done") {
+    logVoiceV3Pipeline("meaning", "arguments_stream_done", {
+      live_session_id: sessionId,
+      name: input.nested.name,
+      note: "non_authoritative_wait_for_output_item_done",
+    });
     return;
   }
 
-  queueMicrotask(() => {
-    void (async () => {
-      const runtime = getVoiceV3CallRuntime(sessionId);
-      if (!runtime) {
-        meaningStartedSessions.delete(sessionId);
-        return;
-      }
-
-      const snap = runtime.getSnapshot();
-      const logCtx = {
-        callId: snap.callId,
-        liveSessionId: snap.liveSessionId,
-        stateVersion: snap.runtime.version,
-      };
-
-      const extracted = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, logCtx);
-      if (!extracted) {
-        if (nestedType === "response.output_item.done") {
-          const item = input.nested.item;
-          if (item && typeof item === "object") {
-            const row = item as Record<string, unknown>;
-            if (row.type !== "function_call") {
+  if (nestedType === "response.output_item.done") {
+    const item = input.nested.item;
+    if (item && typeof item === "object") {
+      const row = item as Record<string, unknown>;
+      if (row.type === "function_call") {
+        const name = row.name;
+        if (
+          name === EMIT_CALLER_MEANING_TOOL_NAME ||
+          name === undefined ||
+          name === null ||
+          name === ""
+        ) {
+          queueMicrotask(() => {
+            void (async () => {
+              const runtime = getVoiceV3CallRuntime(sessionId);
+              if (!runtime) {
+                meaningStartedSessions.delete(sessionId);
+                return;
+              }
+              await completeEmitCallerMeaningFunctionCall({
+                runtime,
+                liveSessionId: sessionId,
+                nested: input.nested,
+                send: input.send,
+              });
               meaningStartedSessions.delete(sessionId);
-              return;
-            }
-          }
-        }
-
-        if (
-          intakeTransport === "function_tool" &&
-          nestedType === "response.function_call_arguments.done"
-        ) {
-          const fnName = input.nested.name;
-          if (
-            fnName !== EMIT_CALLER_MEANING_TOOL_NAME &&
-            fnName !== undefined &&
-            fnName !== null &&
-            fnName !== ""
-          ) {
-            meaningStartedSessions.delete(sessionId);
-            return;
-          }
-        }
-
-        if (
-          intakeTransport === "function_tool" &&
-          (nestedType === "response.completed" || nestedType === "response.output_text.done")
-        ) {
-          VoiceV3CallTrace.peek(sessionId)?.onMeaningSkipped();
-          logVoiceV3Pipeline("meaning", "completion_skipped", {
-            call_id: runtime.getSnapshot().callId,
-            live_session_id: sessionId,
-            reason: "function_tool_no_payload_on_completion_event",
-            nested_type: nestedType,
+            })();
           });
-          meaningStartedSessions.delete(sessionId);
           return;
         }
-
-        if (
-          nestedType === "response.completed" ||
-          nestedType === "response.output_item.done" ||
-          nestedType === "response.function_call_arguments.done"
-        ) {
-          VoiceV3CallTrace.peek(sessionId)?.onMeaningFailed();
-          logVoiceV3Pipeline("meaning", "extract_failed", {
-            call_id: runtime.getSnapshot().callId,
-            live_session_id: sessionId,
-            reason: "schema_validation_or_empty",
-            nested_type: nestedType,
-            ...summarizeAstraNestedEvent(input.nested),
-          });
-          console.log("SEMANTIC_EXTRACTION_FAILED", {
-            call_id: runtime.getSnapshot().callId,
-            live_session_id: sessionId,
-            nested_type: nestedType,
-          });
-          await handleSemanticExtractionFailure({
-            runtime,
-            liveSessionId: sessionId,
-            nested: input.nested,
-            nestedType,
-            send: input.send,
-          });
-        }
-        meaningStartedSessions.delete(sessionId);
-        return;
       }
+    }
+    return;
+  }
 
-      if (!claimDelegatedAstraResponse(sessionId, input.nested)) {
-        meaningStartedSessions.delete(sessionId);
-        return;
-      }
-
-      const { meaning, transport } = extracted;
-      if (!claimCallerMeaningFingerprint(sessionId, JSON.stringify(meaning))) {
-        meaningStartedSessions.delete(sessionId);
-        return;
-      }
-
-      console.log("ASTRA_MEANING_RECEIVED", {
-        call_id: snap.callId,
-        live_session_id: sessionId,
-        transport,
-        state_version: snap.runtime.version,
-      });
-
-      try {
-        await applyExtractedCallerMeaning({
-          runtime,
-          liveSessionId: sessionId,
-          meaning,
-          transport,
-          send: input.send,
-          source: "delegation",
-        });
-      } catch (err) {
-        console.error("VOICE_V3_POST_MEANING_PIPELINE_ERROR", {
-          live_session_id: sessionId,
-          err,
-        });
-      }
-
-      meaningStartedSessions.delete(sessionId);
-    })();
-  });
+  if (
+    intakeTransport === "function_tool" &&
+    (nestedType === "response.completed" || nestedType === "response.output_text.done")
+  ) {
+    VoiceV3CallTrace.peek(sessionId)?.onMeaningSkipped();
+    logVoiceV3Pipeline("meaning", "completion_skipped", {
+      live_session_id: sessionId,
+      reason: "function_tool_no_payload_on_completion_event",
+      nested_type: nestedType,
+    });
+    meaningStartedSessions.delete(sessionId);
+  }
 }
 
 export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
@@ -261,4 +282,6 @@ export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
   clearDelegatedAstraResponseDedup(liveSessionId);
   clearSemanticExtractionRetryState(liveSessionId);
   clearCallerTurnBuffer(liveSessionId);
+  clearGreetingTurnState(liveSessionId);
+  clearVoiceV3LiveResponseCoordinator(liveSessionId);
 }

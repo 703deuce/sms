@@ -9,6 +9,13 @@ import {
   logGreetingAudioStarted,
   requestInitialLiveGreeting,
 } from "./greeting";
+import { getVoiceV3LiveResponseCoordinator } from "./delegation/live-response-coordinator";
+import {
+  markGreetingCompleted,
+  markGreetingSpeaking,
+  noteCallerSpeechDuringGreeting,
+} from "./greeting/greeting-turn";
+import { maybeRequestDeferredRecoverySpeak } from "./greeting/deferred-recovery-speak";
 import {
   appendCallerTranscriptDelta,
   commitCallerTranscript,
@@ -68,9 +75,11 @@ async function attachVoiceV3LiveSidebandInner(input: {
   let callerSpeechActive = false;
   let greetingOutputChars = 0;
 
-  const send = (event: { type: string; [key: string]: unknown }) => {
+  let send: (event: { type: string; [key: string]: unknown }) => void;
+  send = (event: { type: string; [key: string]: unknown }) => {
     trace.onSidebandOutbound();
     logVoiceV3SidebandOutbound({ liveSessionId: sessionId, event });
+    getVoiceV3LiveResponseCoordinator(sessionId, send);
     sideband.send(event as Parameters<typeof sideband.send>[0]);
   };
 
@@ -104,6 +113,10 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.delegation.created") {
       commitCallerTranscript(sessionId);
+      const delegation = serverEvent.delegation as { id?: string; response_id?: string } | undefined;
+      if (delegation) {
+        getVoiceV3LiveResponseCoordinator(sessionId, send).onDelegationCreated(delegation);
+      }
       trace.onDelegationCreated();
       console.log("ASTRA_DELEGATION_STARTED", { sessionId, delegation: serverEvent.delegation });
       console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
@@ -141,6 +154,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
     if (type === "session.output_audio.delta") {
       if (!greetingAudioStarted) {
         greetingAudioStarted = true;
+        markGreetingSpeaking(sessionId);
         logGreetingAudioStarted(sessionId, trace);
       }
       trace.mark("agent.audio.started");
@@ -152,7 +166,9 @@ async function attachVoiceV3LiveSidebandInner(input: {
       greetingOutputChars += text.length;
       if (greetingAudioStarted && !greetingAudioCompleted && greetingOutputChars > 20) {
         greetingAudioCompleted = true;
+        markGreetingCompleted(sessionId);
         logGreetingAudioCompleted(sessionId, trace);
+        maybeRequestDeferredRecoverySpeak({ liveSessionId: sessionId, send });
       }
     }
 
@@ -161,6 +177,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
       const delta = serverEvent as { delta?: string };
       const text = typeof delta.delta === "string" ? delta.delta : "";
       if (text) appendCallerTranscriptDelta(sessionId, text);
+      noteCallerSpeechDuringGreeting(sessionId);
       if (!callerSpeechActive) {
         callerSpeechActive = true;
         trace.mark("caller.speech.started");

@@ -110,9 +110,22 @@ export function evaluateSuggestedNextConversationAction(input: {
           recoveryCode: recovery.code,
           summary: recovery.safeAgentMessage,
         };
+      case "INTENT_AMBIGUOUS":
+        return {
+          action: "CLARIFY_APPOINTMENT",
+          recoveryCode: recovery.code,
+          summary: recovery.safeAgentMessage,
+        };
+      case "SEMANTIC_EXTRACTION_FAILED":
+      case "OPENAI_DELEGATION_FAILURE":
+        return {
+          action: "INFORM_TEMPORARY_FAILURE",
+          recoveryCode: recovery.code,
+          summary: recovery.safeAgentMessage,
+        };
       default:
         return {
-          action: "NONE",
+          action: recovery.userRecoverable ? "INFORM_TEMPORARY_FAILURE" : "NONE",
           recoveryCode: recovery.code,
           summary: recovery.safeAgentMessage,
         };

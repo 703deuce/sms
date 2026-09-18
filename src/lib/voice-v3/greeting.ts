@@ -1,5 +1,6 @@
 import { buildLiveFrontendGreetingLine } from "@/lib/voice-v3/prompts/live-frontend-instructions";
 import { resolveVoiceV3DefaultPromptInput } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
+import { getVoiceV3LiveResponseCoordinator } from "./delegation/live-response-coordinator";
 import type { VoiceV3CallTrace } from "./telemetry/call-trace";
 
 export function resolveVoiceV3InitialGreetingText(): string {
@@ -50,9 +51,11 @@ export function requestInitialLiveGreeting(input: {
     content: `Speak to the caller now. Say exactly: "${resolveVoiceV3InitialGreetingText()}"`,
     delegation_id: null,
   });
-  input.send({
-    type: "response.create",
-    event_id: `voice_v3_greeting_${input.sessionId}`,
+  const coordinator = getVoiceV3LiveResponseCoordinator(input.sessionId, input.send);
+  coordinator.requestResponseCreate({
+    reason: "initial_greeting",
+    eventId: `voice_v3_greeting_${input.sessionId}`,
+    allowBeforeDelegation: true,
   });
 }
 

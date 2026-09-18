@@ -31,6 +31,8 @@ export function pushVoiceV3RecoveryToLive(input: {
   liveSessionId: string;
   forced?: VoiceV3RecoveryDirective | null;
   speakReason?: string;
+  /** When true, sync recovery context only — no response.create */
+  skipLiveSpeak?: boolean;
 }): VoiceV3RecoveryDirective | null {
   const snap = input.runtime.getSnapshot();
   const rules = evaluateVoiceV3Rules(snap, input.runtime.config);
@@ -57,9 +59,11 @@ export function pushVoiceV3RecoveryToLive(input: {
     scheduling_generation: synced.ctx.scheduling.generation,
   });
 
-  input.hooks.requestSpeak?.(
-    input.speakReason ?? `recovery_${directive.code.toLowerCase()}`,
-  );
+  if (!input.skipLiveSpeak) {
+    input.hooks.requestSpeak?.(
+      input.speakReason ?? `recovery_${directive.code.toLowerCase()}`,
+    );
+  }
 
   return directive;
 }

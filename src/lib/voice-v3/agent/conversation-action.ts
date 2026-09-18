@@ -4,6 +4,7 @@ export type ConversationAction =
   | { type: "ASK_SCHEDULING_DATE" }
   | { type: "ASK_SCHEDULING_TIME" }
   | { type: "CLARIFY_SCHEDULING"; reason: string }
+  | { type: "CLARIFY_INTENT" }
   | { type: "PRESENT_AVAILABILITY"; offerSetId: string }
   | { type: "CLARIFY_SLOT_SELECTION" }
   | { type: "CONFIRM_CANCELLATION"; attemptId?: string }
