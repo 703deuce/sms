@@ -12,7 +12,10 @@ export type RecoverySyncOutcome =
   | "superseded";
 
 function directiveKey(d: VoiceV3RecoveryDirective): string {
-  return `${d.code}:${d.missingFieldKey ?? ""}:${d.relatedAction ?? ""}`;
+  const gen =
+    d.schedulingGeneration != null ? String(d.schedulingGeneration) : "";
+  const offer = d.offerSetId ?? "";
+  return `${d.code}:${d.missingFieldKey ?? ""}:${d.relatedAction ?? ""}:${gen}:${offer}`;
 }
 
 export function syncVoiceV3RecoveryOnContext(input: {

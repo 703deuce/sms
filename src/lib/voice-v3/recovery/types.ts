@@ -38,4 +38,6 @@ export interface VoiceV3RecoveryDirective {
   safeAgentMessage: string;
   createdAt: string;
   resolvedAt?: string;
+  schedulingGeneration?: number;
+  offerSetId?: string;
 }

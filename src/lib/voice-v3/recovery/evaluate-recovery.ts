@@ -13,6 +13,8 @@ function newDirective(input: {
   safeAgentMessage: string;
   missingFieldKey?: string;
   relatedAction?: string;
+  schedulingGeneration?: number;
+  offerSetId?: string;
   at: Date;
 }): VoiceV3RecoveryDirective {
   return {
@@ -25,6 +27,10 @@ function newDirective(input: {
     relatedAction: input.relatedAction,
     safeAgentMessage: input.safeAgentMessage,
     createdAt: input.at.toISOString(),
+    schedulingGeneration:
+      input.schedulingGeneration ?? input.ctx.scheduling.generation,
+    offerSetId:
+      input.offerSetId ?? input.ctx.availability.activeOfferSet?.offerSetId,
   };
 }
 
@@ -173,7 +179,12 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
+  const hasAuthoritativeOfferSlots =
+    ctx.availability.status === "ready" &&
+    (ctx.availability.activeOfferSet?.slots.length ?? 0) > 0;
+
   if (
+    !hasAuthoritativeOfferSlots &&
     ctx.availability.status === "empty" &&
     rules.hasSchedulingPreference &&
     !ctx.availability.inFlightGeneration &&

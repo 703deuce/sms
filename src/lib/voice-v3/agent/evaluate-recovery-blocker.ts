@@ -47,6 +47,14 @@ export interface RecoveryEvaluation {
   blocker: AgentBlocker | null;
 }
 
+function isAvailabilityRecoveryCode(code: VoiceV3RecoveryCode): boolean {
+  return (
+    code === "NO_AVAILABILITY" ||
+    code === "SLOT_NOT_AVAILABLE" ||
+    code === "MICROSOFT_TEMPORARY_FAILURE"
+  );
+}
+
 function activeRecoveryStillValid(
   ctx: VoiceV3CallContext,
   active: NonNullable<VoiceV3CallContext["recovery"]["active"]>,
@@ -58,6 +66,20 @@ function activeRecoveryStillValid(
     active.code === "REQUIRED_FIELD_MISSING" &&
     active.missingFieldKey &&
     ctx.intake.values[active.missingFieldKey]?.value
+  ) {
+    return false;
+  }
+  if (
+    active.schedulingGeneration != null &&
+    active.schedulingGeneration !== ctx.scheduling.generation &&
+    isAvailabilityRecoveryCode(active.code)
+  ) {
+    return false;
+  }
+  if (
+    isAvailabilityRecoveryCode(active.code) &&
+    ctx.availability.status === "ready" &&
+    (ctx.availability.activeOfferSet?.slots.length ?? 0) > 0
   ) {
     return false;
   }

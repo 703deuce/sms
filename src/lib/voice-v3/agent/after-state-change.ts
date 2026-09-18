@@ -5,6 +5,10 @@ import { assertVoiceV3RuntimeInvariants } from "./runtime-invariants";
 import { buildAgentSnapshotLiveAppend } from "./sync-agent-state-to-live";
 import type { AgentStateSnapshot } from "./agent-state-snapshot";
 import { syncPlannerSpeakToLive } from "./live-speak-sync";
+import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
+import {
+  noteSemanticTimingEvent,
+} from "../telemetry/caller-turn-timing";
 
 export type LiveSendFn = (event: { type: string; [key: string]: unknown }) => void;
 
@@ -89,6 +93,14 @@ export function afterVoiceV3StateChange(input: {
       action: snapshot.nextConversationAction.type,
     });
   }
+
+  if (ctx.booking.phase === "BOOKING_CONFIRMED" && input.send) {
+    getVoiceV3LiveResponseCoordinator(ctx.liveSessionId, input.send).supersedeStaleSpeaks({
+      minStateVersion: snapshot.stateVersion,
+    });
+  }
+
+  noteSemanticTimingEvent(ctx.liveSessionId, "plannerCompletedAt");
 
   if (input.send && snapshotMateriallyChanged(prev, snapshot)) {
     const event = buildAgentSnapshotLiveAppend(input.runtime, snapshot);
