@@ -13,6 +13,8 @@ export interface CallerInterpretationContext {
   current_goal: string;
   business_timezone: string;
   current_local_datetime: string;
+  current_local_date: string;
+  current_local_weekday: string;
 }
 
 export function buildCallerInterpretationContext(
@@ -34,8 +36,10 @@ export function buildCallerInterpretationContext(
     })),
     known_fields,
     current_goal: ctx.dialog.activeGoal,
-    business_timezone: config.timezone,
-    current_local_datetime: ctx.clock.nowLocal,
+    business_timezone: ctx.clock.timezone,
+    current_local_datetime: ctx.clock.nowLocalDateTime,
+    current_local_date: ctx.clock.localDate,
+    current_local_weekday: ctx.clock.localWeekday,
   };
 }
 

@@ -1,4 +1,8 @@
 import type { VoiceV3CallClock } from "../time/call-clock";
+import type {
+  NormalizedSchedulingPreference,
+  SchedulingMeaning,
+} from "../time/scheduling-types";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -31,10 +35,9 @@ export interface VoiceV3CallContext {
     values: Record<string, CapturedField>;
   };
   scheduling: {
-    requestedDateExpression?: string;
-    requestedTimeExpression?: string;
-    requestedDaypart?: string;
     generation: number;
+    meaning?: SchedulingMeaning;
+    normalized?: NormalizedSchedulingPreference | null;
   };
   runtime: {
     version: number;
@@ -58,7 +61,7 @@ export function createInitialVoiceV3CallContext(input: {
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     intake: { values: {} },
-    scheduling: { generation: 0 },
+    scheduling: { generation: 0, normalized: null },
     runtime: { version: 0 },
   };
 }

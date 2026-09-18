@@ -114,6 +114,7 @@
     "test:voice-v3-basic-webhook": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-voice-v3-basic-webhook.ts",
     "test:voice-v3-telemetry": "tsx scripts/test-voice-v3-call-trace.ts",
     "test:voice-v3-prompts": "tsx scripts/test-voice-v3-prompts.ts",
+    "test:voice-v3-datetime": "tsx scripts/test-voice-v3-datetime.ts",
     "test:voice-v3-intake": "tsx scripts/test-voice-v3-caller-meaning-decoder.ts && tsx scripts/test-voice-v3-intake.ts && tsx scripts/test-voice-v3-astra-meaning-integration.ts",
     "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "test:gpt-live-booking-intent-precedence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-booking-intent-precedence.ts",

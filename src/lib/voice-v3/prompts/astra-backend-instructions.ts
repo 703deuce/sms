@@ -122,7 +122,10 @@ Each delegated completion must emit strict JSON matching the voice_v3_caller_mea
 - active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
 - captured_fields: [{ key, value, confidence }]
 - corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
-- scheduling: requested_date_expression, requested_time_expression, requested_daypart (nullable strings)
+- scheduling: semantic only — date_expression, date_relation (TODAY|TOMORROW|...), weekday, explicit_date,
+  time_expression, time_kind (EXACT|AFTER|BEFORE|BETWEEN|DAYPART|ANYTIME|UNSPECIFIED),
+  exact_time / start_time / end_time as 24h HH:mm when confident, daypart (MORNING|AFTERNOON|EVENING)
+- Do NOT return graphStartTime, graphEndTime, utcStart, utcEnd, bookingConfirmed, or requiredAction
 - ambiguities: [{ field, reason }]
 
 Do NOT emit workflow fields (stage, required_action, booking_confirmed, offer_set_id, etc.).

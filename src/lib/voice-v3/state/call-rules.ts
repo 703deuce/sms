@@ -21,14 +21,17 @@ export function evaluateVoiceV3Rules(
     })
     .map((field) => field.key);
 
+  const normalized = ctx.scheduling.normalized;
+  const hasSchedulingPreference = Boolean(
+    normalized &&
+      normalized.precision !== "UNRESOLVED" &&
+      (normalized.localDate || normalized.localStartDateTime || normalized.localEndDateTime),
+  );
+
   return {
     missingRequiredFields,
     intakeComplete: missingRequiredFields.length === 0,
-    hasSchedulingPreference: Boolean(
-      ctx.scheduling.requestedDateExpression ||
-        ctx.scheduling.requestedTimeExpression ||
-        ctx.scheduling.requestedDaypart,
-    ),
+    hasSchedulingPreference,
     mayFindAvailability: false,
     mayBook: false,
   };
