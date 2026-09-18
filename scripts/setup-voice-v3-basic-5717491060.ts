@@ -14,6 +14,7 @@
 import { getPrisma } from "../src/lib/db";
 import { telnyxRequest } from "../src/lib/messaging/telnyx/client";
 import { getAppBaseUrl } from "../src/lib/messaging/telnyx/config";
+import { ensureTelnyxOutboundVoiceReady } from "../src/lib/phone/telnyx-outbound-voice";
 import {
   findOrCreateVoiceV3BasicCallControlApp,
   resolveOpenAiLiveSipTransferUri,
@@ -41,6 +42,22 @@ async function main() {
   });
 
   const callControlAppId = await findOrCreateVoiceV3BasicCallControlApp(telnyxWebhookUrl);
+
+  const outbound = await ensureTelnyxOutboundVoiceReady({
+    connectionId: callControlAppId,
+    callerIdE164: E164,
+  });
+  if (!outbound.ready) {
+    console.warn("VOICE_V3_BASIC_OUTBOUND_NOT_READY", {
+      issues: outbound.issues,
+      outboundVoiceProfileId: outbound.outboundVoiceProfileId,
+    });
+  } else {
+    console.log("VOICE_V3_BASIC_OUTBOUND_READY", {
+      outboundVoiceProfileId: outbound.outboundVoiceProfileId,
+      attachedConnection: outbound.attachedConnection,
+    });
+  }
 
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
