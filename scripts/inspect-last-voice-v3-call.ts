@@ -37,8 +37,10 @@ async function main() {
 
     const events = await prisma.providerWebhookEvent.findMany({
       where: {
-        createdAt: { gte: call.startedAt ?? since },
-        ...(call.endedAt ? { createdAt: { lte: call.endedAt } } } : {}),
+        createdAt: {
+          gte: call.startedAt ?? since,
+          ...(call.endedAt ? { lte: call.endedAt } : {}),
+        },
       },
       orderBy: { createdAt: "asc" },
       take: 80,
