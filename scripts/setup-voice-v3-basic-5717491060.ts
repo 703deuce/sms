@@ -123,18 +123,20 @@ async function main() {
     string,
     unknown
   >;
-  await prisma.phoneNumber.update({
-    where: { id: phone.id },
-    data: {
-      metadata: {
-        ...prevMeta,
-        voiceV3Basic: true,
-        voiceV3BasicSip: openAiSipUri(OPENAI_PROJECT_ID),
-        voiceV3BasicTelnyxConnectionId: connectionId,
-        voiceV3BasicConfiguredAt: new Date().toISOString(),
-      } as object,
-    },
-  });
+  await prisma.phoneNumber
+    .updateMany({
+      where: { id: phone.id, workspaceId: phone.workspaceId },
+      data: {
+        metadata: {
+          ...prevMeta,
+          voiceV3Basic: true,
+          voiceV3BasicSip: openAiSipUri(OPENAI_PROJECT_ID),
+          voiceV3BasicTelnyxConnectionId: connectionId,
+          voiceV3BasicConfiguredAt: new Date().toISOString(),
+        } as object,
+      },
+    })
+    .catch(() => undefined);
 
   console.log("VOICE_V3_BASIC_TELNYX_READY", {
     e164: E164,
