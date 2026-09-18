@@ -132,6 +132,7 @@ ${
 - slot_selection: { selection_type, spoken_time, ordinal } — semantic only; NEVER slotId, offerSetId, bookingConfirmed
   selection_type: EXACT_TIME | ORDINAL | EARLIEST | LATEST | ACCEPT_SINGLE_OFFER | NONE
   spoken_time: HH:mm 24h when EXACT_TIME (e.g. 14:30 for 2:30 PM); ordinal: 1-based for ORDINAL ("second one" → 2)
+- post_book_intent: NONE | CHANGE_CONFIRMED_APPOINTMENT (when caller wants to change an already-confirmed appointment — detect only, do not book)
 - ambiguities: [{ field, reason }]`
     : `Each delegated interpretation must call the function tool emit_caller_meaning exactly once with arguments matching the CallerMeaning schema (same fields as above).
 Do not put CallerMeaning in assistant text or output_text when using function transport.
