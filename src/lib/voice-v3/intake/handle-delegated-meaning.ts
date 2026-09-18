@@ -1,5 +1,6 @@
 import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
 import { dispatchBookingIfRequired } from "../calendar/book-dispatch";
+import { dispatchAppointmentManagementIfRequired } from "../calendar/appointment-management-dispatch";
 import { buildLiveSelectedSlotSessionAppend } from "../calendar/live-selected-slot-context";
 import {
   buildSessionThinkingAppendForRuntime,
@@ -151,6 +152,13 @@ export function handleDelegatedAstraResponseEvent(input: {
 
     void dispatchBookingIfRequired(runtime, liveHooks).catch((err) => {
       console.error("BOOKING_DISPATCH_ERROR", {
+        live_session_id: sessionId,
+        err,
+      });
+    });
+
+    void dispatchAppointmentManagementIfRequired(runtime, liveHooks).catch((err) => {
+      console.error("APPOINTMENT_MANAGEMENT_DISPATCH_ERROR", {
         live_session_id: sessionId,
         err,
       });

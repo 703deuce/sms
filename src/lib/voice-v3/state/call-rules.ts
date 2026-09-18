@@ -4,6 +4,7 @@ import { shouldDispatchFindAvailability } from "../calendar/find-availability";
 import { isSelectedSlotAuthoritative } from "../calendar/selected-slot";
 import type { VoiceV3CallContext } from "./call-context";
 import type { BookingPhase } from "../calendar/booking-types";
+import type { CancellationPhase } from "../calendar/appointment-management-types";
 
 export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
@@ -19,6 +20,8 @@ export interface VoiceV3RuleEvaluation {
   bookingPhase: BookingPhase;
   bookingReady: boolean;
   mayBook: boolean;
+  rescheduleReady: boolean;
+  cancellationPhase: CancellationPhase;
 }
 
 export function evaluateVoiceV3Rules(
@@ -51,11 +54,15 @@ export function evaluateVoiceV3Rules(
   const durationKnown = config.service.durationMinutes > 0;
   const serviceKnown = Boolean(config.service.id?.trim() && config.service.name?.trim());
 
+  const goal = ctx.dialog.activeGoal;
+
   const mayFindAvailability =
     mayRunCalendarAction &&
     durationKnown &&
     calendarConfigured &&
-    (ctx.dialog.activeGoal === "BOOK_APPOINTMENT" || hasSchedulingPreference);
+    (goal === "BOOK_APPOINTMENT" ||
+      goal === "RESCHEDULE_APPOINTMENT" ||
+      hasSchedulingPreference);
 
   const selected = ctx.selection.selected;
   const offer = ctx.availability.activeOfferSet;
@@ -75,7 +82,9 @@ export function evaluateVoiceV3Rules(
     ctx.booking.phase === "BOOKING_CREATING" ||
     ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
 
+  const isBookGoal = goal === "BOOK_APPOINTMENT" || goal === "UNKNOWN";
   const bookingReady =
+    isBookGoal &&
     slotSelected &&
     intakeComplete &&
     durationKnown &&
@@ -86,15 +95,66 @@ export function evaluateVoiceV3Rules(
     !bookingInProgress;
 
   let bookingPhase: BookingPhase = ctx.booking.phase;
-  if (bookingPhase === "NONE" && slotSelected) {
+  if (bookingPhase === "NONE" && slotSelected && isBookGoal) {
     bookingPhase = "SLOT_SELECTED";
   }
 
+  const verifiedExisting = ctx.appointmentManagement.verifiedExisting;
+  const rescheduleConfirmed =
+    ctx.appointmentManagement.reschedule.phase === "RESCHEDULE_CONFIRMED";
+  const rescheduleReady =
+    goal === "RESCHEDULE_APPOINTMENT" &&
+    Boolean(verifiedExisting) &&
+    slotSelected &&
+    intakeComplete &&
+    !schedulingRequiresClarification &&
+    !rescheduleConfirmed &&
+    ctx.appointmentManagement.reschedule.phase !== "RESCHEDULE_REVALIDATING" &&
+    ctx.appointmentManagement.reschedule.phase !== "RESCHEDULE_COMMITTING";
+
+  let cancellationPhase = ctx.appointmentManagement.cancellation.phase;
+  const cancelGoal = goal === "CANCEL_APPOINTMENT";
+  const cancelConfirmed = cancellationPhase === "CANCELLATION_CONFIRMED";
+
+  if (
+    cancelGoal &&
+    verifiedExisting &&
+    cancellationPhase === "NONE" &&
+    !ctx.appointmentManagement.cancellation.awaitingConfirmation
+  ) {
+    cancellationPhase = "CANCELLATION_CONFIRMATION_REQUIRED";
+  }
+
+  const cancelReady =
+    cancelGoal &&
+    Boolean(verifiedExisting) &&
+    ctx.appointmentManagement.lastCancellationConfirmation === "CONFIRM" &&
+    ctx.appointmentManagement.cancellation.awaitingConfirmation &&
+    verifiedExisting.providerEventId ===
+      ctx.appointmentManagement.cancellation.boundProviderEventId &&
+    !cancelConfirmed;
+
   let requiredAction: RequiredRuntimeAction = null;
 
-  if (bookingReady) {
+  if (cancelGoal) {
+    if (!verifiedExisting && !ctx.appointmentManagement.lookupCompleted) {
+      requiredAction = "FIND_EXISTING_APPOINTMENT";
+    } else if (cancelReady) {
+      requiredAction = "CANCEL_APPOINTMENT";
+    }
+  } else if (goal === "RESCHEDULE_APPOINTMENT") {
+    if (!verifiedExisting && !ctx.appointmentManagement.lookupCompleted) {
+      requiredAction = "FIND_EXISTING_APPOINTMENT";
+    } else if (rescheduleReady) {
+      requiredAction = "RESCHEDULE_APPOINTMENT";
+    } else if (verifiedExisting && !slotSelected && mayFindAvailability) {
+      requiredAction = shouldDispatchFindAvailability(ctx, config, mayFindAvailability)
+        ? "FIND_AVAILABILITY"
+        : null;
+    }
+  } else if (bookingReady) {
     requiredAction = "BOOK_APPOINTMENT";
-  } else if (!slotSelected && !bookingConfirmed) {
+  } else if (!slotSelected && !bookingConfirmed && isBookGoal) {
     requiredAction = shouldDispatchFindAvailability(ctx, config, mayFindAvailability)
       ? "FIND_AVAILABILITY"
       : null;
@@ -114,5 +174,7 @@ export function evaluateVoiceV3Rules(
     bookingPhase,
     bookingReady,
     mayBook: bookingReady,
+    rescheduleReady,
+    cancellationPhase,
   };
 }

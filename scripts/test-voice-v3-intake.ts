@@ -20,6 +20,8 @@ function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured
     scheduling: partial.scheduling ?? emptySchedulingMeaning(),
     slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
     post_book_intent: partial.post_book_intent ?? "NONE",
+    appointment_selection: partial.appointment_selection ?? { selection_type: "NONE", ordinal: null },
+    cancellation_confirmation: partial.cancellation_confirmation ?? "NONE",
     corrections: partial.corrections ?? [],
     ambiguities: partial.ambiguities ?? [],
   };

@@ -15,10 +15,21 @@ import type {
   SchedulingMeaning,
 } from "../time/scheduling-types";
 
+import type {
+  CancellationPhase,
+  ExistingAppointment,
+  ExistingAppointmentCandidateSet,
+  ReschedulePhase,
+} from "../calendar/appointment-management-types";
+import type { AppointmentSelectionMeaning } from "../intake/appointment-selection-schema";
+import type { CancellationConfirmation } from "../intake/cancellation-confirmation-schema";
+
 export type VoiceV3Goal =
   | "UNKNOWN"
   | "GENERAL"
   | "BOOK_APPOINTMENT"
+  | "RESCHEDULE_APPOINTMENT"
+  | "CANCEL_APPOINTMENT"
   | "REQUEST_CALLBACK"
   | "REQUEST_TRANSFER";
 
@@ -72,6 +83,23 @@ export interface VoiceV3CallContext {
     lastFailure: BookingFailure | null;
     postBookChangeRequested: boolean;
   };
+  appointmentManagement: {
+    verifiedExisting: ExistingAppointment | null;
+    candidateSet: ExistingAppointmentCandidateSet | null;
+    pendingSelection: AppointmentSelectionMeaning | null;
+    lookupCompleted: boolean;
+    reschedule: {
+      phase: ReschedulePhase;
+      attemptId: string | null;
+    };
+    cancellation: {
+      phase: CancellationPhase;
+      cancellationAttemptId: string | null;
+      awaitingConfirmation: boolean;
+      boundProviderEventId: string | null;
+    };
+    lastCancellationConfirmation: CancellationConfirmation;
+  };
   runtime: {
     version: number;
   };
@@ -110,6 +138,20 @@ export function createInitialVoiceV3CallContext(input: {
       confirmed: null,
       lastFailure: null,
       postBookChangeRequested: false,
+    },
+    appointmentManagement: {
+      verifiedExisting: null,
+      candidateSet: null,
+      pendingSelection: null,
+      lookupCompleted: false,
+      reschedule: { phase: "NONE", attemptId: null },
+      cancellation: {
+        phase: "NONE",
+        cancellationAttemptId: null,
+        awaitingConfirmation: false,
+        boundProviderEventId: null,
+      },
+      lastCancellationConfirmation: "NONE",
     },
     runtime: { version: 0 },
   };

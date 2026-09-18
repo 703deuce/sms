@@ -2,6 +2,8 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { slotSelectionMeaningHasSignal } from "./slot-selection-schema";
 import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
 import { emptySlotSelectionMeaning } from "./slot-selection-schema";
+import { emptyAppointmentSelectionMeaning } from "./appointment-selection-schema";
+import { emptyCancellationConfirmation } from "./cancellation-confirmation-schema";
 import {
   buildCallerMeaningZodSchema,
   configuredIntakeKeySet,
@@ -140,6 +142,8 @@ export function validateCallerMeaningFromRaw(
     corrections,
     slot_selection: parsed.data.slot_selection ?? emptySlotSelectionMeaning(),
     post_book_intent: parsed.data.post_book_intent ?? "NONE",
+    appointment_selection: parsed.data.appointment_selection ?? emptyAppointmentSelectionMeaning(),
+    cancellation_confirmation: parsed.data.cancellation_confirmation ?? emptyCancellationConfirmation(),
   };
 
   if (!meaningHasSignal(meaning)) {

@@ -1,0 +1,121 @@
+import type { NormalizedSchedulingPreference } from "../time/scheduling-types";
+import type { ConfirmedBooking } from "./booking-types";
+
+export type AppointmentManagementMode = "NONE" | "RESCHEDULE" | "CANCEL";
+
+export type ReschedulePhase =
+  | "NONE"
+  | "RESCHEDULE_READY"
+  | "RESCHEDULE_REVALIDATING"
+  | "RESCHEDULE_COMMITTING"
+  | "RESCHEDULE_CONFIRMED"
+  | "RESCHEDULE_FAILED"
+  | "RESCHEDULE_OUTCOME_UNKNOWN";
+
+export type CancellationPhase =
+  | "NONE"
+  | "CANCELLATION_CONFIRMATION_REQUIRED"
+  | "CANCELLATION_READY"
+  | "CANCELLATION_COMMITTING"
+  | "CANCELLATION_CONFIRMED"
+  | "CANCELLATION_FAILED"
+  | "CANCELLATION_OUTCOME_UNKNOWN";
+
+export interface ExistingAppointmentCustomerIdentity {
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface ExistingAppointment {
+  internalBookingId: string;
+  provider: "microsoft";
+  providerEventId: string;
+  providerCalendarId: string;
+  startUtc: string;
+  endUtc: string;
+  localStart: string;
+  localEnd: string;
+  timezone: string;
+  customerIdentity: ExistingAppointmentCustomerIdentity;
+  serviceId?: string;
+  durationMinutes: number;
+  status: "ACTIVE";
+}
+
+export interface ExistingAppointmentCandidate {
+  candidateId: string;
+  appointment: ExistingAppointment;
+}
+
+export interface ExistingAppointmentCandidateSet {
+  candidateSetId: string;
+  candidates: ExistingAppointmentCandidate[];
+  createdAt: string;
+}
+
+export interface FindExistingAppointmentRequest {
+  callId: string;
+  phone?: string;
+  email?: string;
+  customerName?: string;
+  dateHint?: NormalizedSchedulingPreference | null;
+}
+
+export type FindExistingAppointmentResult =
+  | { status: "FOUND"; appointment: ExistingAppointment }
+  | { status: "MULTIPLE"; candidateSet: ExistingAppointmentCandidateSet }
+  | { status: "NONE" }
+  | { status: "VERIFICATION_FAILED"; reason: string };
+
+export interface RescheduleAttemptSnapshot {
+  attemptId: string;
+  providerEventId: string;
+  schedulingGeneration: number;
+  offerSetId: string;
+  slotId: string;
+  commitPhase:
+    | "PREPARING"
+    | "REVALIDATING"
+    | "READY_TO_COMMIT"
+    | "COMMIT_SENT"
+    | "CONFIRMED"
+    | "FAILED"
+    | "OUTCOME_UNKNOWN";
+  createdAt: string;
+}
+
+export interface CancellationAttemptSnapshot {
+  cancellationAttemptId: string;
+  providerEventId: string;
+  providerCalendarId: string;
+  commitPhase:
+    | "AWAITING_CONFIRMATION"
+    | "READY"
+    | "COMMIT_SENT"
+    | "CONFIRMED"
+    | "FAILED"
+    | "OUTCOME_UNKNOWN";
+  createdAt: string;
+}
+
+export function existingAppointmentFromConfirmed(booking: ConfirmedBooking, identity: ExistingAppointmentCustomerIdentity): ExistingAppointment {
+  const start = new Date(booking.startUtc);
+  const end = new Date(booking.endUtc);
+  const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
+  return {
+    internalBookingId: booking.bookingAttemptId,
+    provider: "microsoft",
+    providerEventId: booking.providerEventId,
+    providerCalendarId: booking.providerCalendarId,
+    startUtc: booking.startUtc,
+    endUtc: booking.endUtc,
+    localStart: booking.localStart,
+    localEnd: booking.localEnd,
+    timezone: booking.timezone,
+    customerIdentity: identity,
+    serviceId: booking.serviceId,
+    durationMinutes,
+    status: "ACTIVE",
+  };
+}

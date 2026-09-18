@@ -210,6 +210,7 @@ export async function dispatchFindAvailabilityIfRequired(
 
   let offerSet = null;
   if (!failure) {
+    const existing = latest.appointmentManagement?.verifiedExisting;
     const slots = generateAvailabilitySlots({
       timezone: request.timezone,
       rangeStartUtc: request.rangeStartUtc,
@@ -218,6 +219,9 @@ export async function dispatchFindAvailabilityIfRequired(
       slotStepMinutes: runtime.config.service.slotStepMinutes,
       businessHours: runtime.config.businessHours,
       busyIntervals: busy,
+      freeBusyOverrides: existing
+        ? [{ startUtc: existing.startUtc, endUtc: existing.endUtc }]
+        : undefined,
     });
     offerSet = buildAvailabilityOfferSet({
       schedulingGeneration: request.schedulingGeneration,

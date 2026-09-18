@@ -25,6 +25,7 @@ import {
 } from "./live-booking-context";
 import { invalidateSelectionForSchedulingChange } from "./apply-slot-selection";
 import { dispatchFindAvailabilityIfRequired } from "./find-dispatch";
+import { registerDurableBooking } from "./durable-booking-store";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;
@@ -463,6 +464,12 @@ export async function dispatchBookingIfRequired(
 
     markBookingConfirmed(afterCommit.liveSessionId, slotKey, confirmed);
     updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "CONFIRMED");
+
+    registerDurableBooking(confirmed, {
+      name: request.customer.name,
+      email: request.customer.email,
+      phone: request.customer.phone,
+    });
 
     runtime.replaceContext(
       applyBookingPhase(afterCommit, "BOOKING_CONFIRMED", {

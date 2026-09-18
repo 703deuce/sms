@@ -15,6 +15,10 @@ import {
   invalidateSelectionForSchedulingChange,
 } from "../calendar/apply-slot-selection";
 import { emptySlotSelectionMeaning } from "./slot-selection-schema";
+import {
+  appointmentSelectionHasSignal,
+  emptyAppointmentSelectionMeaning,
+} from "./appointment-selection-schema";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
@@ -217,6 +221,58 @@ export function applyCallerMeaningToContext(
     at,
   );
   context = slotApply.context;
+
+  if (appointmentSelectionHasSignal(meaning.appointment_selection ?? emptyAppointmentSelectionMeaning())) {
+    context = {
+      ...context,
+      appointmentManagement: {
+        ...context.appointmentManagement,
+        pendingSelection: meaning.appointment_selection ?? emptyAppointmentSelectionMeaning(),
+      },
+      runtime: { version: context.runtime.version + 1 },
+    };
+  }
+
+  const cancelConfirm = meaning.cancellation_confirmation ?? "NONE";
+  if (cancelConfirm !== "NONE" && context.appointmentManagement.verifiedExisting) {
+    const bound = context.appointmentManagement.verifiedExisting.providerEventId;
+    if (cancelConfirm === "CONFIRM") {
+      console.log("CANCELLATION_CONFIRMED_BY_CALLER", { call_id: context.callId, provider_event_id: bound });
+      context = {
+        ...context,
+        appointmentManagement: {
+          ...context.appointmentManagement,
+          lastCancellationConfirmation: "CONFIRM",
+          cancellation: {
+            ...context.appointmentManagement.cancellation,
+            awaitingConfirmation: true,
+            boundProviderEventId: bound,
+            phase: "CANCELLATION_READY",
+          },
+        },
+        runtime: { version: context.runtime.version + 1 },
+      };
+    } else if (cancelConfirm === "DECLINE") {
+      console.log("CANCELLATION_DECLINED", { call_id: context.callId });
+      context = {
+        ...context,
+        appointmentManagement: {
+          ...context.appointmentManagement,
+          lastCancellationConfirmation: "DECLINE",
+          cancellation: {
+            phase: "NONE",
+            cancellationAttemptId: null,
+            awaitingConfirmation: false,
+            boundProviderEventId: null,
+          },
+          candidateSet: null,
+          verifiedExisting: null,
+          lookupCompleted: false,
+        },
+        runtime: { version: context.runtime.version + 1 },
+      };
+    }
+  }
 
   if (
     meaning.post_book_intent === "CHANGE_CONFIRMED_APPOINTMENT" &&

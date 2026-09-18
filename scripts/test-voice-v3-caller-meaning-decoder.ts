@@ -33,6 +33,8 @@ function basePayload(overrides: Record<string, unknown> = {}) {
     scheduling: emptySchedulingMeaning(),
     slot_selection: emptySlotSelectionMeaning(),
     post_book_intent: "NONE",
+    appointment_selection: { selection_type: "NONE", ordinal: null },
+    cancellation_confirmation: "NONE",
     corrections: [],
     ambiguities: [],
     ...overrides,

@@ -1,11 +1,15 @@
 import { z } from "zod";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { slotSelectionMeaningZodObject } from "./slot-selection-schema";
+import { appointmentSelectionMeaningZodObject } from "./appointment-selection-schema";
+import { cancellationConfirmationSchema } from "./cancellation-confirmation-schema";
 
 const voiceV3GoalSchema = z.enum([
   "UNKNOWN",
   "GENERAL",
   "BOOK_APPOINTMENT",
+  "RESCHEDULE_APPOINTMENT",
+  "CANCEL_APPOINTMENT",
   "REQUEST_CALLBACK",
   "REQUEST_TRANSFER",
 ]);
@@ -99,6 +103,8 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
     ),
     slot_selection: slotSelectionMeaningZodObject,
     post_book_intent: postBookIntentSchema,
+    appointment_selection: appointmentSelectionMeaningZodObject,
+    cancellation_confirmation: cancellationConfirmationSchema,
   });
 }
 

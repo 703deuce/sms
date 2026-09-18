@@ -18,7 +18,24 @@ export interface SlotGenerationInput {
   slotStepMinutes: number;
   businessHours: BusinessHoursWindow;
   busyIntervals: CalendarBusyInterval[];
+  /** Busy intervals to ignore (e.g. appointment being rescheduled). */
+  freeBusyOverrides?: Array<{ startUtc: string; endUtc: string }>;
   maxSlots?: number;
+}
+
+export function filterBusyForReschedule(
+  busy: CalendarBusyInterval[],
+  existing: { startUtc: string; endUtc: string },
+): CalendarBusyInterval[] {
+  const eStart = new Date(existing.startUtc).getTime();
+  const eEnd = new Date(existing.endUtc).getTime();
+  return busy.filter((b) => {
+    const bStart = new Date(b.startUtc).getTime();
+    const bEnd = new Date(b.endUtc).getTime();
+    if (bStart === eStart && bEnd === eEnd) return false;
+    if (bStart <= eStart && bEnd >= eEnd) return false;
+    return true;
+  });
 }
 
 function formatLocalIso(timezone: string, at: Date): string {
@@ -112,6 +129,13 @@ export function generateAvailabilitySlots(input: SlotGenerationInput): Availabil
   const stepMs = input.slotStepMinutes * 60_000;
   const durationMs = input.durationMinutes * 60_000;
 
+  let busyIntervals = input.busyIntervals;
+  if (input.freeBusyOverrides?.length) {
+    for (const free of input.freeBusyOverrides) {
+      busyIntervals = filterBusyForReschedule(busyIntervals, free);
+    }
+  }
+
   const slots: AvailabilitySlot[] = [];
   let cursor = rangeStart.getTime();
 
@@ -121,7 +145,7 @@ export function generateAvailabilitySlots(input: SlotGenerationInput): Availabil
 
     if (
       withinBusinessHours(start, end, input.timezone, input.businessHours) &&
-      !intersectsBusy(start, end, input.busyIntervals)
+      !intersectsBusy(start, end, busyIntervals)
     ) {
       const slotIndex = slots.length + 1;
       slots.push({
