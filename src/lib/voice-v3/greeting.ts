@@ -1,7 +1,5 @@
-import {
-  buildLiveFrontendGreetingLine,
-  resolveVoiceV3DefaultPromptInput,
-} from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
+import { buildLiveFrontendGreetingLine } from "@/lib/voice-v3/prompts/live-frontend-instructions";
+import { resolveVoiceV3DefaultPromptInput } from "@/lib/voice-v3/prompts/build-voice-v3-prompts";
 import type { VoiceV3CallTrace } from "./telemetry/call-trace";
 
 export function resolveVoiceV3InitialGreetingText(): string {
