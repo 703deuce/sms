@@ -115,6 +115,11 @@ function main() {
     ctx,
     CONFIG,
     meaning({
+      captured_fields: [
+        { key: "name", value: "Anthony", confidence: 0.9 },
+        { key: "email", value: "a@b.co", confidence: 0.9 },
+        { key: "phone", value: "+15551234567", confidence: 0.9 },
+      ],
       scheduling: {
         ...emptySchedulingMeaning(),
         date_relation: "UNSPECIFIED",

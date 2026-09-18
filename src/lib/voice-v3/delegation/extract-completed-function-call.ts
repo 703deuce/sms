@@ -6,6 +6,7 @@ import type { PendingFunctionCall } from "./types";
  */
 export function extractCompletedFunctionCallFromNested(
   nested: Record<string, unknown>,
+  delegationId?: string | null,
 ): PendingFunctionCall | null {
   if (String(nested.type || "") !== "response.output_item.done") {
     return null;
@@ -41,7 +42,7 @@ export function extractCompletedFunctionCallFromNested(
     name: name || EMIT_CALLER_MEANING_TOOL_NAME,
     argumentsJson,
     itemId: typeof row.id === "string" ? row.id : undefined,
-    delegationId: null,
+    delegationId: delegationId ?? null,
     responseId,
     outputSubmitted: false,
   };

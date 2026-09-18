@@ -47,17 +47,35 @@ export interface RecoveryEvaluation {
   blocker: AgentBlocker | null;
 }
 
+function activeRecoveryStillValid(
+  ctx: VoiceV3CallContext,
+  active: NonNullable<VoiceV3CallContext["recovery"]["active"]>,
+): boolean {
+  if (active.code === "INTENT_AMBIGUOUS" && ctx.dialog.activeGoal !== "UNKNOWN") {
+    return false;
+  }
+  if (
+    active.code === "REQUIRED_FIELD_MISSING" &&
+    active.missingFieldKey &&
+    ctx.intake.values[active.missingFieldKey]?.value
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function evaluateRecoveryBlocker(input: {
   ctx: VoiceV3CallContext;
   rules: VoiceV3RuleEvaluation;
   config: VoiceV3AgentConfig;
   now?: Date;
 }): RecoveryEvaluation {
+  const fresh = evaluateVoiceV3Recovery(input);
   const active = input.ctx.recovery.active;
   const directive =
-    active && active.status === "ACTIVE"
+    active && active.status === "ACTIVE" && activeRecoveryStillValid(input.ctx, active)
       ? active
-      : evaluateVoiceV3Recovery(input);
+      : fresh;
   if (!directive) {
     return { directive: null, blocker: null };
   }

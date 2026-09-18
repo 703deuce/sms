@@ -23,6 +23,10 @@ export function clearVoiceV3LiveSend(liveSessionId: string): void {
   liveSendBySession.delete(liveSessionId.trim());
 }
 
+export function getVoiceV3LiveSend(liveSessionId: string): LiveSendFn | undefined {
+  return liveSendBySession.get(liveSessionId.trim());
+}
+
 const TTL_MS = 2 * 60 * 60 * 1000;
 const runtimes = new Map<
   string,

@@ -96,7 +96,7 @@ async function main() {
 
   const planned = planAgentState(snap, CONFIG);
   assert.notEqual(planned.nextConversationAction.type, "NONE");
-  assert.equal(planned.nextConversationAction.type, "INFORM_TEMPORARY_FAILURE");
+  assert.equal(planned.nextConversationAction.type, "CLARIFY_INTENT");
 
   // Second successful cycle
   outbound.length = 0;
@@ -110,6 +110,9 @@ async function main() {
   await new Promise((r) => setTimeout(r, 50));
 
   assert.equal(runtime.getSnapshot().dialog.activeGoal, "BOOK_APPOINTMENT");
+
+  await new Promise((r) => setTimeout(r, 25));
+  outbound.length = 0;
 
   // Coordinator: pending blocks response.create
   clearVoiceV3LiveResponseCoordinator(SESSION);

@@ -26,6 +26,14 @@ import { decodeCallerMeaningAttempt } from "./decode-delegated-caller-meaning";
 import {
   shouldDeferUnstableGreetingSemanticTurn,
 } from "../greeting/greeting-turn";
+import {
+  drainQueuedSemanticTurns,
+  markSemanticInterpretationEnded,
+  markSemanticInterpretationStarted,
+} from "../conversation/semantic-turn-watchdog";
+import { clearCallerTurnManager } from "../conversation/caller-turn-manager";
+import { clearSemanticTurnWatchdog } from "../conversation/semantic-turn-watchdog";
+import { clearLiveSpeakSync } from "../agent/live-speak-sync";
 
 const meaningStartedSessions = new Set<string>();
 
@@ -75,9 +83,10 @@ async function completeEmitCallerMeaningFunctionCall(input: {
   liveSessionId: string;
   nested: Record<string, unknown>;
   send: (event: { type: string; [key: string]: unknown }) => void;
+  delegationId?: string | null;
 }): Promise<void> {
   const sessionId = input.liveSessionId;
-  const completed = extractCompletedFunctionCallFromNested(input.nested);
+  const completed = extractCompletedFunctionCallFromNested(input.nested, input.delegationId);
   if (!completed) return;
 
   const coordinator = getVoiceV3LiveResponseCoordinator(sessionId, input.send);
@@ -141,6 +150,8 @@ async function completeEmitCallerMeaningFunctionCall(input: {
         live_session_id: sessionId,
         err,
       });
+    } finally {
+      markSemanticInterpretationEnded(sessionId);
     }
     return;
   }
@@ -183,11 +194,22 @@ export function handleDelegatedAstraResponseEvent(input: {
   liveSessionId: string;
   nested: Record<string, unknown>;
   send: (event: { type: string; [key: string]: unknown }) => void;
+  delegationId?: string | null;
 }): void {
   const nestedType = String(input.nested.type || "");
   const sessionId = input.liveSessionId;
 
+  getVoiceV3LiveResponseCoordinator(sessionId, input.send).onDelegatedNestedResponseEvent(
+    input.delegationId,
+    input.nested,
+  );
+
+  if (nestedType === "response.completed") {
+    drainQueuedSemanticTurns({ liveSessionId: sessionId, send: input.send });
+  }
+
   if (nestedType === "response.created" || nestedType === "response.in_progress") {
+    markSemanticInterpretationStarted(sessionId);
     if (!meaningStartedSessions.has(sessionId)) {
       meaningStartedSessions.add(sessionId);
       const runtime = getVoiceV3CallRuntime(sessionId);
@@ -252,6 +274,7 @@ export function handleDelegatedAstraResponseEvent(input: {
                 liveSessionId: sessionId,
                 nested: input.nested,
                 send: input.send,
+                delegationId: input.delegationId,
               });
               meaningStartedSessions.delete(sessionId);
             })();
@@ -282,6 +305,9 @@ export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
   clearDelegatedAstraResponseDedup(liveSessionId);
   clearSemanticExtractionRetryState(liveSessionId);
   clearCallerTurnBuffer(liveSessionId);
+  clearCallerTurnManager(liveSessionId);
+  clearSemanticTurnWatchdog(liveSessionId);
+  clearLiveSpeakSync(liveSessionId);
   clearGreetingTurnState(liveSessionId);
   clearVoiceV3LiveResponseCoordinator(liveSessionId);
 }

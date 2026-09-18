@@ -87,7 +87,7 @@ export function chooseNextConversationAction(input: {
         return { type: "ASK_SCHEDULING_TIME" };
       case "SEMANTIC_EXTRACTION_FAILED":
       case "OPENAI_DELEGATION_FAILURE":
-        return { type: "INFORM_TEMPORARY_FAILURE", failureCode: code };
+        return { type: "CLARIFY_INTENT" };
       case "INTENT_AMBIGUOUS":
         return { type: "CLARIFY_INTENT" };
       default:
@@ -117,6 +117,11 @@ export function chooseNextConversationAction(input: {
     }
   }
 
+  const missing = prioritizeMissingField(rules.missingRequiredFields, config);
+  if (missing && !rules.slotSelected && ctx.dialog.activeGoal === "BOOK_APPOINTMENT") {
+    return { type: "ASK_REQUIRED_FIELD", fieldKey: missing };
+  }
+
   if (
     ctx.dialog.activeGoal === "BOOK_APPOINTMENT" &&
     !rules.hasSchedulingPreference &&
@@ -125,7 +130,6 @@ export function chooseNextConversationAction(input: {
     return { type: "ASK_SCHEDULING_DATE" };
   }
 
-  const missing = prioritizeMissingField(rules.missingRequiredFields, config);
   if (missing && !rules.slotSelected) {
     return { type: "ASK_REQUIRED_FIELD", fieldKey: missing };
   }

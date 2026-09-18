@@ -84,6 +84,80 @@ export class VoiceV3LiveResponseCoordinator {
     return false;
   }
 
+  hasOpenDelegationAwaitingTool(): boolean {
+    if (this.hasPendingFunctionOutputs()) return true;
+    for (const d of this.delegations.values()) {
+      if (d.phase === "AWAITING_TOOL_OUTPUT") return true;
+    }
+    return false;
+  }
+
+  onDelegatedNestedResponseEvent(
+    delegationId: string | null | undefined,
+    nested: Record<string, unknown>,
+  ): void {
+    const id =
+      typeof delegationId === "string" && delegationId.trim()
+        ? delegationId.trim()
+        : this.activeDelegationId;
+    if (id) {
+      this.onDelegationCreated({ id });
+      const d = this.delegations.get(id);
+      if (d && d.phase === "STARTED") {
+        d.phase = "STREAMING";
+      }
+    }
+
+    const nestedType = String(nested.type || "");
+    if (nestedType === "response.created" || nestedType === "response.in_progress") {
+      if (id) {
+        const d = this.delegations.get(id);
+        if (d) d.phase = "STREAMING";
+      }
+      return;
+    }
+
+    if (nestedType === "response.completed") {
+      if (id) {
+        const d = this.delegations.get(id);
+        if (d) d.phase = "COMPLETED";
+      }
+      logVoiceV3Pipeline("live_out", "delegation.completed", {
+        live_session_id: this.liveSessionId,
+        delegation_id: id,
+      });
+      console.log("ASTRA_DELEGATION_COMPLETED", {
+        live_session_id: this.liveSessionId,
+        delegation_id: id,
+      });
+      this.scheduleContinuationFlush();
+      return;
+    }
+
+    if (nestedType === "response.failed") {
+      if (id) {
+        const d = this.delegations.get(id);
+        if (d) d.phase = "FAILED";
+      }
+      console.log("ASTRA_DELEGATION_FAILED", {
+        live_session_id: this.liveSessionId,
+        delegation_id: id,
+      });
+      return;
+    }
+
+    if (nestedType === "response.incomplete") {
+      if (id) {
+        const d = this.delegations.get(id);
+        if (d) d.phase = "INCOMPLETE";
+      }
+      console.log("ASTRA_DELEGATION_INCOMPLETE", {
+        live_session_id: this.liveSessionId,
+        delegation_id: id,
+      });
+    }
+  }
+
   submitFunctionCallOutput(callId: string, output: Record<string, unknown>): boolean {
     const row = this.pendingByCallId.get(callId);
     if (!row || row.outputSubmitted) {
@@ -140,7 +214,7 @@ export class VoiceV3LiveResponseCoordinator {
     allowBeforeDelegation?: boolean;
   }): void {
     const hasDelegation = this.delegations.size > 0 || this.activeDelegationId !== null;
-    if (this.hasPendingFunctionOutputs()) {
+    if (this.hasPendingFunctionOutputs() || this.hasOpenDelegationAwaitingTool()) {
       this.enqueueContinuation(input);
       logVoiceV3Pipeline("live_out", "response.create.queued", {
         live_session_id: this.liveSessionId,

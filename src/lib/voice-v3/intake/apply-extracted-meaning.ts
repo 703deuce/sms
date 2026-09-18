@@ -16,6 +16,11 @@ import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning"
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import { registerVoiceV3LiveSend } from "../state/call-runtime";
+import {
+  getLatestCommittedCallerTurn,
+  markCallerTurnSemanticApplied,
+} from "../conversation/caller-turn-manager";
+import { markSemanticInterpretationEnded } from "../conversation/semantic-turn-watchdog";
 
 function slotSelectionChanged(
   before: SelectedAvailabilitySlot | null,
@@ -92,6 +97,12 @@ export async function applyExtractedCallerMeaning(input: {
   });
 
   registerVoiceV3LiveSend(sessionId, input.send);
+
+  const latestTurn = getLatestCommittedCallerTurn(sessionId);
+  if (latestTurn) {
+    markCallerTurnSemanticApplied(sessionId, latestTurn.turnId);
+  }
+  markSemanticInterpretationEnded(sessionId);
 
   const snapBefore = runtime.getSnapshot();
   const rulesBefore = evaluateVoiceV3Rules(snapBefore, runtime.config);

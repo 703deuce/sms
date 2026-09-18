@@ -5,7 +5,8 @@ export type DelegationPhase =
   | "TOOL_OUTPUT_SUBMITTED"
   | "CONTINUING"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  | "INCOMPLETE";
 
 export interface PendingFunctionCall {
   callId: string;

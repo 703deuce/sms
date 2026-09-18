@@ -1,18 +1,13 @@
-import type OpenAI from "openai";
-import { getVoiceV3BasicOpenAiClient } from "@/lib/voice-v3-basic/openai-client";
-import { buildVoiceV3Prompts } from "../prompts/build-voice-v3-prompts";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
-import { buildCallerInterpretationContext, formatCallerInterpretationContextJson } from "./caller-meaning";
-import { decodeCallerMeaningFromFunctionArguments } from "./decode-delegated-caller-meaning";
-import { buildEmitCallerMeaningLiveFunctionTool, EMIT_CALLER_MEANING_TOOL_NAME } from "./emit-caller-meaning-tool";
 import {
   claimCallerMeaningFingerprint,
   extractDelegatedAstraResponseId,
   markDelegatedAstraResponseProcessed,
 } from "./delegated-response-dedup";
-import { getLastCommittedCallerUtterance } from "./caller-turn-buffer";
+import { getCallerEvidenceForSemanticRetry } from "../conversation/caller-turn-manager";
 import { applyExtractedCallerMeaning } from "./apply-extracted-meaning";
 import type { CallerMeaning } from "./caller-meaning-schema";
+import { runDirectCallerMeaningExtraction } from "./direct-caller-meaning-extraction";
 
 const MAX_SEMANTIC_RETRIES_PER_RESPONSE = 1;
 
@@ -66,64 +61,15 @@ async function defaultSemanticExtractionRetryRunner(input: {
   priorArgumentsJson: string | null;
   attemptId: string;
 }): Promise<CallerMeaning | null> {
-  if (!process.env.OPENAI_API_KEY?.trim()) {
+  if (!input.callerUtterance.trim()) {
     return null;
   }
-  const client = getVoiceV3BasicOpenAiClient();
-  const config = input.runtime.config;
-  const ctx = input.runtime.getSnapshot();
-  const prompts = buildVoiceV3Prompts({ agentConfig: config });
-  const interpretation = formatCallerInterpretationContextJson(
-    buildCallerInterpretationContext(config, ctx),
-  );
-
-  const userLines = [
-    "Re-interpret the caller's last turn for emit_caller_meaning.",
-    `Caller utterance: ${input.callerUtterance || "(not available — use interpretation context only)"}`,
-    `Authoritative interpretation context JSON:\n${interpretation}`,
-  ];
-  if (input.priorArgumentsJson) {
-    userLines.push(
-      `Prior delegated tool output was malformed or empty. Do not repeat the mistake. Prior raw arguments (for diagnosis only):\n${input.priorArgumentsJson.slice(0, 2000)}`,
-    );
-  }
-
-  const tool = buildEmitCallerMeaningLiveFunctionTool(config);
-  const response = await client.responses.create({
-    model: "gpt-6-astra",
-    instructions: prompts.astraInstructions,
-    input: [
-      {
-        role: "user",
-        content: userLines.join("\n\n"),
-      },
-    ],
-    tools: [
-      {
-        type: "function",
-        name: tool.name,
-        description: tool.description ?? undefined,
-        parameters: tool.parameters ?? {},
-        strict: tool.strict ?? true,
-      },
-    ],
-    tool_choice: { type: "function", name: EMIT_CALLER_MEANING_TOOL_NAME },
-    parallel_tool_calls: false,
-    max_output_tokens: 768,
-  });
-
-  const output = response.output ?? [];
-  const fnCall = output.find(
-    (item) => item.type === "function_call" && item.name === EMIT_CALLER_MEANING_TOOL_NAME,
-  );
-  if (!fnCall || fnCall.type !== "function_call" || typeof fnCall.arguments !== "string") {
-    return null;
-  }
-
-  return decodeCallerMeaningFromFunctionArguments(fnCall.arguments, config, {
-    callId: ctx.callId,
+  return runDirectCallerMeaningExtraction({
+    runtime: input.runtime,
     liveSessionId: input.liveSessionId,
-    stateVersion: ctx.runtime.version,
+    callerUtterance: input.callerUtterance,
+    priorArgumentsJson: input.priorArgumentsJson,
+    attemptId: input.attemptId,
   });
 }
 
@@ -148,7 +94,16 @@ export async function attemptSemanticExtractionRetry(input: {
     return { applied: false, attemptId: null };
   }
 
-  const callerUtterance = getLastCommittedCallerUtterance(input.liveSessionId);
+  const callerUtterance = getCallerEvidenceForSemanticRetry(input.liveSessionId);
+  if (!callerUtterance.trim()) {
+    console.log("SEMANTIC_EXTRACTION_RETRY_SKIPPED", {
+      call_id: input.runtime.getSnapshot().callId,
+      live_session_id: input.liveSessionId,
+      reason: "empty_caller_evidence",
+      response_id: responseId,
+    });
+    return { applied: false, attemptId: null };
+  }
   console.log("SEMANTIC_EXTRACTION_RETRY_STARTED", {
     call_id: input.runtime.getSnapshot().callId,
     live_session_id: input.liveSessionId,
