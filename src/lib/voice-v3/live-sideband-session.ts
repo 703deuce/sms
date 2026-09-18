@@ -46,6 +46,8 @@ async function attachVoiceV3LiveSidebandInner(input: {
     backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
   });
 
+  // Load from node_modules (see serverExternalPackages) — Next must not webpack-bundle `ws`.
+  await import("ws");
   const { SidebandWS } = await import("openai/resources/live/sideband/ws");
   const client = input.client ?? getVoiceV3BasicOpenAiClient();
   const sideband = new SidebandWS(client, { session_id: sessionId });

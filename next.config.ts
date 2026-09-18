@@ -75,6 +75,11 @@ const nextConfig: NextConfig = {
     "@livekit/agents",
     "@livekit/rtc-node",
     "@livekit/protocol",
+    // OpenAI Live sideband uses `ws`; bundling breaks mask/buffer-util (prod: b.mask is not a function).
+    "openai",
+    "ws",
+    "bufferutil",
+    "utf-8-validate",
   ],
 };
 

@@ -47,6 +47,10 @@ Dedicated test line (`+15717491060`) may use `/api/telnyx/voice/v3-basic` → sa
 - Voice V2 Telnyx tool webhooks handling booking
 - `texml_direct_inbound` skip without subsequent V3 SIP forward
 
+## Sideband WebSocket (booking / intake)
+
+If logs show `VOICE_V3_BASIC_SIDEBAND_ERROR` / `could not send data` / `b.mask is not a function`, the Next bundle inlined `ws` incorrectly. Fix: `serverExternalPackages` includes `ws`, `bufferutil`, `utf-8-validate`, `openai` (`next.config.ts`). After deploy, call summary `errors` should be empty and `LIVE_RESPONSE_CREATE_REQUESTED` should not be followed by sideband send failures.
+
 ## Container start (Coolify)
 
 | Env | Default | Note |
