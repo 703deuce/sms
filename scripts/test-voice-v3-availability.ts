@@ -272,8 +272,35 @@ function testNormalizationFriday() {
   assert.ok(normalized.utcStart && normalized.utcEnd);
 }
 
+function testExactTimeSearchWindow() {
+  let base = ctx(new Date("2026-09-18T14:00:00.000Z"));
+  const applied = applyCallerMeaningToContext(
+    base,
+    config(),
+    meaning({
+      scheduling: {
+        ...emptySchedulingMeaning(),
+        date_relation: "TOMORROW",
+        time_kind: "EXACT",
+        exact_time: "12:00",
+        time_expression: "12 PM",
+        date_expression: "tomorrow",
+      },
+    }),
+    new Date("2026-09-18T14:00:00.000Z"),
+  );
+  base = { ...applied.context, dialog: { activeGoal: "BOOK_APPOINTMENT" } };
+  const req = buildFindAvailabilityRequest(base, config());
+  assert.ok(req, "exact-time booking should build FIND request");
+  assert.notEqual(req!.rangeStartUtc, req!.rangeEndUtc, "exact time must expand to a non-zero window");
+  const start = new Date(req!.rangeStartUtc).getTime();
+  const end = new Date(req!.rangeEndUtc).getTime();
+  assert.ok(end - start >= 60 * 60_000, "window must fit at least one 60m slot");
+}
+
 async function main() {
   testNormalizationFriday();
+  testExactTimeSearchWindow();
   await testSlotGeneration();
   testRulesDispatch();
   await testStaleRace();

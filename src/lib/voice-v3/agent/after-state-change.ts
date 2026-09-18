@@ -102,6 +102,7 @@ export function afterVoiceV3StateChange(input: {
         syncPlannerSpeakToLive({
           liveSessionId: ctx.liveSessionId,
           snapshot,
+          prevSnapshot: prev,
           send: input.send,
         });
       } catch (err) {

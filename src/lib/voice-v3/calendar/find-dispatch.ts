@@ -290,6 +290,9 @@ export async function dispatchFindAvailabilityIfRequired(
       call_id: latest.callId,
       scheduling_generation: request.schedulingGeneration,
       reason: failure.reason,
+      message: failure.message,
+      range_start_utc: request.rangeStartUtc,
+      range_end_utc: request.rangeEndUtc,
       duration_ms: Date.now() - started,
     });
   }

@@ -19,10 +19,21 @@ export function buildFindAvailabilityRequestKey(req: FindAvailabilityRequest): s
 export function resolveSearchWindowFromNormalized(
   normalized: NormalizedSchedulingPreference,
   timezone: string,
+  durationMinutes = 60,
 ): { rangeStartUtc: string; rangeEndUtc: string } | null {
   if (normalized.precision === "UNRESOLVED") return null;
 
   if (normalized.utcStart && normalized.utcEnd) {
+    const startMs = new Date(normalized.utcStart).getTime();
+    const endMs = new Date(normalized.utcEnd).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+    if (endMs <= startMs) {
+      const durationMs = Math.max(15, durationMinutes) * 60_000;
+      return {
+        rangeStartUtc: new Date(startMs).toISOString(),
+        rangeEndUtc: new Date(startMs + durationMs).toISOString(),
+      };
+    }
     return { rangeStartUtc: normalized.utcStart, rangeEndUtc: normalized.utcEnd };
   }
 
@@ -57,7 +68,11 @@ export function buildFindAvailabilityRequest(
   const normalized = ctx.scheduling.normalized;
   if (!normalized) return null;
 
-  const window = resolveSearchWindowFromNormalized(normalized, ctx.business.timezone);
+  const window = resolveSearchWindowFromNormalized(
+    normalized,
+    ctx.business.timezone,
+    config.service.durationMinutes,
+  );
   if (!window) return null;
 
   const calendar = config.calendar;

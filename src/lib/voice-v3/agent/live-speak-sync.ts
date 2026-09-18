@@ -77,6 +77,7 @@ function buildCommentaryForAction(action: ConversationAction): string | null {
 export function syncPlannerSpeakToLive(input: {
   liveSessionId: string;
   snapshot: AgentStateSnapshot;
+  prevSnapshot?: AgentStateSnapshot | null;
   send?: LiveSendFn;
 }): void {
   const sessionId = input.liveSessionId.trim();
@@ -86,7 +87,18 @@ export function syncPlannerSpeakToLive(input: {
   const disposition = conversationActionDisposition(action);
   if (disposition !== "SPEAK") return;
 
-  const speakKey = `${input.snapshot.stateVersion}:${actionIdentity(action)}`;
+  const prevAction = input.prevSnapshot?.nextConversationAction;
+  if (
+    prevAction &&
+    JSON.stringify(prevAction) === JSON.stringify(action)
+  ) {
+    return;
+  }
+
+  const speakKey =
+    action.type === "INFORM_TEMPORARY_FAILURE"
+      ? `failure:${actionIdentity(action)}`
+      : `${input.snapshot.stateVersion}:${actionIdentity(action)}`;
   const prev = lastSpeakKeyBySession.get(sessionId);
   if (prev === speakKey) return;
   lastSpeakKeyBySession.set(sessionId, speakKey);
