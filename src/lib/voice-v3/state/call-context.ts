@@ -23,6 +23,7 @@ import type {
 } from "../calendar/appointment-management-types";
 import type { AppointmentSelectionMeaning } from "../intake/appointment-selection-schema";
 import type { CancellationConfirmation } from "../intake/cancellation-confirmation-schema";
+import type { VoiceV3RecoveryDirective } from "../recovery/types";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -68,6 +69,11 @@ export interface VoiceV3CallContext {
     lastFailure: FindAvailabilityFailure | null;
     inFlightGeneration: number | null;
     lastDispatchedRequestKey: string | null;
+    findStartedAt: string | null;
+  };
+  recovery: {
+    active: VoiceV3RecoveryDirective | null;
+    lastResolved?: VoiceV3RecoveryDirective | null;
   };
   presentation: {
     current: PresentedOffer | null;
@@ -129,7 +135,9 @@ export function createInitialVoiceV3CallContext(input: {
       lastFailure: null,
       inFlightGeneration: null,
       lastDispatchedRequestKey: null,
+      findStartedAt: null,
     },
+    recovery: { active: null, lastResolved: null },
     presentation: { current: null },
     selection: { selected: null, lastResolutionStatus: null },
     booking: {

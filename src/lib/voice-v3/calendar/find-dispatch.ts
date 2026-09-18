@@ -11,6 +11,8 @@ import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentat
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
+import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
+import type { VoiceV3CallRuntime } from "../state/call-runtime";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -63,12 +65,13 @@ export function applyFindAvailabilityResult(
         status: "failed",
         activeOfferSet: null,
         lastFailure: input.failure,
-        inFlightGeneration: null,
-        lastDispatchedRequestKey: input.requestKey,
-      },
-      runtime: { version: ctx.runtime.version + 1 },
-    };
-  }
+      inFlightGeneration: null,
+      lastDispatchedRequestKey: input.requestKey,
+      findStartedAt: null,
+    },
+    runtime: { version: ctx.runtime.version + 1 },
+  };
+}
 
   const slots = input.offerSet?.slots ?? [];
   return {
@@ -81,6 +84,7 @@ export function applyFindAvailabilityResult(
       lastFailure: null,
       inFlightGeneration: null,
       lastDispatchedRequestKey: input.requestKey,
+      findStartedAt: null,
     },
     runtime: { version: ctx.runtime.version + 1 },
   };
@@ -134,6 +138,15 @@ export async function dispatchFindAvailabilityIfRequired(
     scheduling_generation: request.schedulingGeneration,
   });
 
+  const findStartedAt = new Date().toISOString();
+  console.log("ASYNC_ACTION_STARTED", {
+    call_id: ctx.callId,
+    live_session_id: ctx.liveSessionId,
+    action: "FIND_AVAILABILITY",
+    scheduling_generation: request.schedulingGeneration,
+    attempt_id: request.requestKey,
+  });
+
   const marked = {
     ...ctx,
     availability: {
@@ -141,6 +154,7 @@ export async function dispatchFindAvailabilityIfRequired(
       status: "pending" as const,
       inFlightGeneration: request.schedulingGeneration,
       lastDispatchedRequestKey: request.requestKey,
+      findStartedAt,
     },
   };
   runtime.replaceContext(marked);
@@ -295,6 +309,24 @@ export async function dispatchFindAvailabilityIfRequired(
 
   runtime.replaceContext(updated);
 
+  if (failure) {
+    console.log("ASYNC_ACTION_FAILED", {
+      call_id: latest.callId,
+      live_session_id: latest.liveSessionId,
+      action: "FIND_AVAILABILITY",
+      scheduling_generation: request.schedulingGeneration,
+      reason: failure.reason,
+    });
+  } else {
+    console.log("ASYNC_ACTION_SUCCEEDED", {
+      call_id: latest.callId,
+      live_session_id: latest.liveSessionId,
+      action: "FIND_AVAILABILITY",
+      scheduling_generation: request.schedulingGeneration,
+      slot_count: offerSet?.slots.length ?? 0,
+    });
+  }
+
   const append = buildLiveAvailabilitySessionAppend(
     offerSet,
     failure,
@@ -313,4 +345,13 @@ export async function dispatchFindAvailabilityIfRequired(
     slot_count: offerSet?.slots.length ?? 0,
     failed: Boolean(failure),
   });
+
+  if (failure) {
+    pushVoiceV3RecoveryToLive({
+      runtime: runtime as VoiceV3CallRuntime,
+      liveSessionId: latest.liveSessionId,
+      hooks,
+      speakReason: "availability_failed",
+    });
+  }
 }

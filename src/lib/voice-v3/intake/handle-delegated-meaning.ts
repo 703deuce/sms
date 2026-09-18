@@ -21,6 +21,8 @@ import {
   clearDelegatedAstraResponseDedup,
 } from "./delegated-response-dedup";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
+import { buildSemanticExtractionRecovery } from "../recovery/evaluate-recovery";
+import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 
 const meaningStartedSessions = new Set<string>();
 
@@ -217,6 +219,27 @@ export function handleDelegatedAstraResponseEvent(input: {
             reason: "schema_validation_or_empty",
             nested_type: nestedType,
           });
+          console.log("SEMANTIC_EXTRACTION_FAILED", {
+            call_id: runtime.getSnapshot().callId,
+            live_session_id: sessionId,
+            nested_type: nestedType,
+          });
+          const semanticRecovery = buildSemanticExtractionRecovery(runtime.getSnapshot());
+          pushVoiceV3RecoveryToLive({
+            runtime,
+            liveSessionId: sessionId,
+            forced: semanticRecovery,
+            hooks: {
+              onLiveContext: (event) => input.send(event),
+              requestSpeak: (reason) =>
+                requestLiveSpeakContinuation({
+                  send: input.send,
+                  liveSessionId: sessionId,
+                  reason,
+                }),
+            },
+            speakReason: "semantic_extraction_failed",
+          });
         }
         meaningStartedSessions.delete(sessionId);
         return;
@@ -324,6 +347,12 @@ export function handleDelegatedAstraResponseEvent(input: {
           liveSessionId: sessionId,
           slotChanged,
           spokeContinuation,
+        });
+        pushVoiceV3RecoveryToLive({
+          runtime,
+          liveSessionId: sessionId,
+          hooks: liveHooks,
+          speakReason: "workflow_recovery",
         });
       } catch (err) {
         console.error("VOICE_V3_POST_MEANING_PIPELINE_ERROR", {

@@ -1,5 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import type { CapturedField, VoiceV3CallContext, VoiceV3Goal } from "../state/call-context";
+import type { CapturedField, VoiceV3CallContext } from "../state/call-context";
 import type { CallerMeaning } from "./caller-meaning-schema";
 import { deriveSchedulingClarification } from "../time/scheduling-clarification";
 import {
@@ -19,6 +19,7 @@ import {
   appointmentSelectionHasSignal,
   emptyAppointmentSelectionMeaning,
 } from "./appointment-selection-schema";
+import { mergeActiveGoalFromMeaning } from "./merge-active-goal";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
@@ -45,10 +46,6 @@ function logUnknownIntakeKeyRejected(input: {
     key: input.key,
     state_version: input.stateVersion,
   });
-}
-
-function goalFromMeaning(goal: CallerMeaning["active_goal"]): VoiceV3Goal {
-  return goal;
 }
 
 function toSchedulingMeaning(sched: CallerMeaning["scheduling"]): SchedulingMeaning {
@@ -209,7 +206,7 @@ export function applyCallerMeaningToContext(
   let context: VoiceV3CallContext = {
     ...workingCtx,
     updatedAt,
-    dialog: { activeGoal: goalFromMeaning(meaning.active_goal) },
+    dialog: { activeGoal: mergeActiveGoalFromMeaning(workingCtx.dialog.activeGoal, meaning) },
     intake: { values },
     scheduling,
     runtime: { version: workingCtx.runtime.version + 1 },

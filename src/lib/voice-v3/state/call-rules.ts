@@ -20,6 +20,7 @@ export interface VoiceV3RuleEvaluation {
   bookingPhase: BookingPhase;
   bookingReady: boolean;
   mayBook: boolean;
+  findReady: boolean;
   rescheduleReady: boolean;
   cancellationPhase: CancellationPhase;
 }
@@ -160,6 +161,8 @@ export function evaluateVoiceV3Rules(
       : null;
   }
 
+  const findReady = requiredAction === "FIND_AVAILABILITY";
+
   return {
     missingRequiredFields,
     intakeComplete,
@@ -174,6 +177,7 @@ export function evaluateVoiceV3Rules(
     bookingPhase,
     bookingReady,
     mayBook: bookingReady,
+    findReady,
     rescheduleReady,
     cancellationPhase,
   };

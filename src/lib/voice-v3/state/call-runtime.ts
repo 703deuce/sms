@@ -54,14 +54,26 @@ export class VoiceV3CallRuntime {
     const rules = evaluateVoiceV3Rules(this.context, this.config);
     const latency = event.astraLatencyMs ?? Date.now() - started;
 
+    const sched = this.context.scheduling.normalized;
     console.log("CALLER_MEANING_APPLIED", {
       call_id: this.context.callId,
       live_session_id: this.context.liveSessionId,
       state_version: this.context.runtime.version,
       astra_latency_ms: latency,
+      active_goal: this.context.dialog.activeGoal,
+      captured_field_keys: Object.keys(this.context.intake.values).filter((k) =>
+        Boolean(this.context.intake.values[k]?.value?.trim()),
+      ),
       fields_changed: applied.fieldsChanged,
       correction_count: applied.correctionCount,
-      missing_required_fields: rules.missingRequiredFields,
+      scheduling_generation: this.context.scheduling.generation,
+      scheduling_precision: sched?.precision ?? null,
+      scheduling_local_date: sched?.localDate ?? null,
+      scheduling_daypart: this.context.scheduling.meaning?.daypart ?? null,
+      scheduling_time_kind: this.context.scheduling.meaning?.time_kind ?? null,
+      missing_required_field_keys: rules.missingRequiredFields,
+      find_ready: rules.findReady,
+      booking_ready: rules.bookingReady,
     });
 
     console.log("CALL_STATE_VERSION_CHANGED", {
