@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { VOICE_V3_BOOKING_AGENT_CONFIG } from "../config/booking-agent-config";
 import { TEST_AGENT_CONFIG } from "../config/test-agent-config";
 import { applyCallerMeaningToContext } from "../intake/apply-caller-meaning";
 import type { CallerMeaning } from "../intake/caller-meaning-schema";
@@ -114,8 +115,16 @@ export function voiceV3IntakePipelineEnabled(): boolean {
   return true;
 }
 
+/**
+ * Runtime + Live accept use the Voice V3 booking pipeline config by default.
+ * Odd-field test harness: set VOICE_V3_AGENT_CONFIG_PROFILE=test (unit scripts only).
+ */
 export function resolveVoiceV3AgentConfig(): VoiceV3AgentConfig {
-  return TEST_AGENT_CONFIG;
+  const profile = process.env.VOICE_V3_AGENT_CONFIG_PROFILE?.trim().toLowerCase();
+  if (profile === "test" || profile === "harness") {
+    return TEST_AGENT_CONFIG;
+  }
+  return VOICE_V3_BOOKING_AGENT_CONFIG;
 }
 
 export function createVoiceV3CallRuntime(input: {
@@ -139,6 +148,15 @@ export function createVoiceV3CallRuntime(input: {
   const runtime = new VoiceV3CallRuntime({ config, context });
   const expiresAt = Date.now() + TTL_MS;
   runtimes.set(input.liveSessionId.trim(), { runtime, expiresAt });
+
+  const connectionId = config.calendar?.connectionId?.trim();
+  if (!connectionId) {
+    console.error("VOICE_V3_CALENDAR_CONFIG_MISSING", {
+      live_session_id: input.liveSessionId,
+      hint: "Set VOICE_V3_MICROSOFT_CONNECTION_ID for the booking pipeline Microsoft calendar connection",
+    });
+  }
+
   return runtime;
 }
 

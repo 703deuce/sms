@@ -1,0 +1,32 @@
+import type { VoiceV3AgentConfig } from "./agent-config";
+
+/**
+ * Canonical Voice V3 PSTN booking pipeline — GPT-Live + Astra + FIND/SELECT/BOOK.
+ * Not the legacy Voice V2 book flow or odd-field intake test harness.
+ */
+export const VOICE_V3_BOOKING_AGENT_CONFIG: VoiceV3AgentConfig = {
+  businessName: process.env.VOICE_V3_BUSINESS_NAME?.trim() || "Transovo",
+  timezone: process.env.VOICE_V3_BUSINESS_TIMEZONE?.trim() || "America/New_York",
+  intakeFields: [
+    { key: "name", label: "Name", type: "text", required: true },
+    { key: "email", label: "Email", type: "email", required: true },
+    { key: "phone", label: "Phone", type: "phone", required: true },
+  ],
+  service: {
+    id: process.env.VOICE_V3_SERVICE_ID?.trim() || "consultation",
+    name: process.env.VOICE_V3_SERVICE_NAME?.trim() || "Consultation",
+    durationMinutes: Number(process.env.VOICE_V3_SERVICE_DURATION_MINUTES || "60"),
+    slotStepMinutes: Number(process.env.VOICE_V3_SERVICE_SLOT_STEP_MINUTES || "30"),
+  },
+  businessHours: {
+    weekdays: [1, 2, 3, 4, 5],
+    startLocal: process.env.VOICE_V3_BUSINESS_HOURS_START?.trim() || "09:00",
+    endLocal: process.env.VOICE_V3_BUSINESS_HOURS_END?.trim() || "17:00",
+  },
+  calendar: {
+    provider: "microsoft",
+    connectionId: process.env.VOICE_V3_MICROSOFT_CONNECTION_ID?.trim() || "",
+    calendarIds: [process.env.VOICE_V3_CALENDAR_ID?.trim() || "primary"],
+    smtp: process.env.VOICE_V3_MICROSOFT_SMTP?.trim() || null,
+  },
+};

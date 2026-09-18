@@ -5,7 +5,7 @@ import { formatBusinessLocalDateTime } from "./business-local-time";
 import { buildLiveFrontendInstructions } from "./live-frontend-instructions";
 
 export const VOICE_V3_DEFAULT_AGENT_NAME = "Amy";
-export const VOICE_V3_DEFAULT_BUSINESS_NAME = "Transovo Test";
+export const VOICE_V3_DEFAULT_BUSINESS_NAME = "Transovo";
 export const VOICE_V3_DEFAULT_BUSINESS_TIMEZONE = "America/New_York";
 
 export function buildVoiceV3Prompts(input: {

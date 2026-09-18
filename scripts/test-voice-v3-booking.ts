@@ -2,7 +2,7 @@
  * Voice V3 booking scene — deterministic + mocked Microsoft (no live Graph required).
  */
 import assert from "node:assert/strict";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_AGENT_CONFIG } from "../src/lib/voice-v3/config/booking-agent-config";
 import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-caller-meaning";
 import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
@@ -23,6 +23,14 @@ import type { CalendarBusyInterval } from "../src/lib/voice-v3/calendar/types";
 import { slotIntervalOverlapsBusy } from "../src/lib/voice-v3/calendar/revalidate-selected-slot";
 
 const TZ = "America/New_York";
+
+const BOOKING_TEST_CONFIG = {
+  ...VOICE_V3_BOOKING_AGENT_CONFIG,
+  calendar: {
+    ...VOICE_V3_BOOKING_AGENT_CONFIG.calendar!,
+    connectionId: "booking_test_connection",
+  },
+};
 
 function offer(): AvailabilityOfferSet {
   const slots = [
@@ -70,7 +78,7 @@ function baseCtx() {
       values: {
         name: { value: "Anthony", source: "caller", updatedAt: new Date().toISOString() },
         email: { value: "a@b.co", source: "caller", updatedAt: new Date().toISOString() },
-        mothers_name: { value: "Mom", source: "caller", updatedAt: new Date().toISOString() },
+        phone: { value: "+15551234567", source: "caller", updatedAt: new Date().toISOString() },
       },
     },
   };
@@ -89,7 +97,7 @@ function runtimeFrom(ctx: ReturnType<typeof baseCtx>) {
     replaceContext: (c: typeof current) => {
       current = c;
     },
-    config: TEST_AGENT_CONFIG,
+    config: BOOKING_TEST_CONFIG,
   };
 }
 
@@ -97,7 +105,7 @@ async function main() {
   clearBookingAttemptRegistry();
 
   let ctx = baseCtx();
-  let rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  let rules = evaluateVoiceV3Rules(ctx, BOOKING_TEST_CONFIG);
   assert.equal(rules.bookingReady, true);
   assert.equal(rules.requiredAction, "BOOK_APPOINTMENT");
 
@@ -110,7 +118,7 @@ async function main() {
       },
     },
   };
-  rules = evaluateVoiceV3Rules(missingEmail, TEST_AGENT_CONFIG);
+  rules = evaluateVoiceV3Rules(missingEmail, BOOKING_TEST_CONFIG);
   assert.equal(rules.bookingReady, false);
   assert.notEqual(rules.requiredAction, "BOOK_APPOINTMENT");
 
@@ -254,7 +262,7 @@ async function main() {
   });
 
   let confirmedCtx = rt.getSnapshot();
-  const post = applyCallerMeaningToContext(confirmedCtx, TEST_AGENT_CONFIG, meaning({}));
+  const post = applyCallerMeaningToContext(confirmedCtx, BOOKING_TEST_CONFIG, meaning({}));
   assert.equal(post.context.booking.postBookChangeRequested, true);
   assert.equal(post.context.booking.confirmed?.providerEventId, "evt_ms_1");
 

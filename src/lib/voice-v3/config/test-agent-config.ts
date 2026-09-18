@@ -1,6 +1,9 @@
 import type { VoiceV3AgentConfig } from "./agent-config";
 
-/** Intentionally odd fields — proves dynamic capture without special-case code. */
+/**
+ * Unit-test harness only (odd intake fields). Not used on PSTN / Live accept unless
+ * VOICE_V3_AGENT_CONFIG_PROFILE=test. Production path: booking-agent-config.ts.
+ */
 export const TEST_AGENT_CONFIG: VoiceV3AgentConfig = {
   businessName: "Transovo Test",
   timezone: "America/New_York",
