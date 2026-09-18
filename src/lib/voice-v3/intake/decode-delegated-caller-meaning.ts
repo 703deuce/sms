@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
 import {
   buildCallerMeaningZodSchema,
   configuredIntakeKeySet,
@@ -102,11 +103,7 @@ function meaningHasSignal(meaning: CallerMeaning): boolean {
     meaning.captured_fields.length > 0 ||
     meaning.corrections.length > 0 ||
     meaning.active_goal !== "UNKNOWN" ||
-    Boolean(
-      meaning.scheduling.requested_date_expression ||
-        meaning.scheduling.requested_time_expression ||
-        meaning.scheduling.requested_daypart,
-    ) ||
+    schedulingMeaningHasSignal(meaning.scheduling) ||
     meaning.ambiguities.length > 0
   );
 }

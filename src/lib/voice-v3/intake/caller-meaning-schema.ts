@@ -11,6 +11,51 @@ const voiceV3GoalSchema = z.enum([
 
 export const CALLER_MEANING_STRUCTURED_OUTPUT_NAME = "voice_v3_caller_meaning";
 
+const schedulingDateRelationSchema = z.enum([
+  "TODAY",
+  "TOMORROW",
+  "DAY_AFTER_TOMORROW",
+  "THIS_WEEKDAY",
+  "NEXT_WEEKDAY",
+  "EXPLICIT_DATE",
+  "UNSPECIFIED",
+]);
+
+const schedulingWeekdaySchema = z.enum([
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY",
+  "SUNDAY",
+]);
+
+const schedulingTimeKindSchema = z.enum([
+  "EXACT",
+  "AFTER",
+  "BEFORE",
+  "BETWEEN",
+  "DAYPART",
+  "ANYTIME",
+  "UNSPECIFIED",
+]);
+
+const schedulingDaypartSchema = z.enum(["MORNING", "AFTERNOON", "EVENING"]);
+
+export const schedulingMeaningZodObject = z.object({
+  date_expression: z.string().nullable(),
+  date_relation: schedulingDateRelationSchema,
+  weekday: schedulingWeekdaySchema.nullable(),
+  explicit_date: z.string().nullable(),
+  time_expression: z.string().nullable(),
+  time_kind: schedulingTimeKindSchema,
+  exact_time: z.string().nullable(),
+  start_time: z.string().nullable(),
+  end_time: z.string().nullable(),
+  daypart: schedulingDaypartSchema.nullable(),
+});
+
 function intakeFieldKeySchema(config: VoiceV3AgentConfig) {
   const keys = config.intakeFields.map((f) => f.key).filter(Boolean);
   if (keys.length === 0) {
@@ -35,11 +80,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
         confidence: z.number(),
       }),
     ),
-    scheduling: z.object({
-      requested_date_expression: z.string().nullable(),
-      requested_time_expression: z.string().nullable(),
-      requested_daypart: z.string().nullable(),
-    }),
+    scheduling: schedulingMeaningZodObject,
     corrections: z.array(
       z.object({
         key: fieldKey,

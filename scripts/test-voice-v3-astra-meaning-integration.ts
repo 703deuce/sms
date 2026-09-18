@@ -69,8 +69,9 @@ async function main() {
   assert.equal(ctx.intake.values.mothers_name?.value, "Maria");
   assert.ok(ctx.intake.values.favorite_dinosaur?.value?.toLowerCase().includes("velociraptor"));
   assert.ok(
-    ctx.scheduling.requestedDateExpression?.toLowerCase().includes("friday") ||
-      ctx.scheduling.requestedDaypart?.toLowerCase().includes("afternoon"),
+    ctx.scheduling.meaning?.weekday === "FRIDAY" ||
+      ctx.scheduling.meaning?.daypart === "AFTERNOON" ||
+      ctx.scheduling.normalized?.localDate?.includes("-"),
   );
 
   const rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);

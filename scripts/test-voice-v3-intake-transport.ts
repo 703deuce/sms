@@ -25,16 +25,13 @@ import {
   createVoiceV3CallRuntime,
   getVoiceV3CallRuntime,
 } from "../src/lib/voice-v3/state/call-runtime";
+import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 
 function basePayload(overrides: Record<string, unknown> = {}) {
   return {
     active_goal: "GENERAL",
     captured_fields: [],
-    scheduling: {
-      requested_date_expression: null,
-      requested_time_expression: null,
-      requested_daypart: null,
-    },
+    scheduling: emptySchedulingMeaning(),
     corrections: [],
     ambiguities: [],
     ...overrides,
@@ -45,11 +42,7 @@ function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured
   return {
     active_goal: partial.active_goal ?? "GENERAL",
     captured_fields: partial.captured_fields,
-    scheduling: partial.scheduling ?? {
-      requested_date_expression: null,
-      requested_time_expression: null,
-      requested_daypart: null,
-    },
+    scheduling: partial.scheduling ?? emptySchedulingMeaning(),
     corrections: partial.corrections ?? [],
     ambiguities: partial.ambiguities ?? [],
   };
@@ -95,15 +88,19 @@ function main() {
   const argsPayload = basePayload({
     captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }],
     scheduling: {
-      requested_date_expression: "next Friday",
-      requested_time_expression: "afternoon",
-      requested_daypart: "afternoon",
+      ...emptySchedulingMeaning(),
+      date_relation: "NEXT_WEEKDAY",
+      weekday: "FRIDAY",
+      time_kind: "DAYPART",
+      daypart: "AFTERNOON",
+      date_expression: "next Friday",
+      time_expression: "afternoon",
     },
   });
   const argsJson = JSON.stringify(argsPayload);
   const fromFn = decodeCallerMeaningFromFunctionArguments(argsJson, TEST_AGENT_CONFIG);
   assert.ok(fromFn);
-  assert.equal(fromFn!.scheduling.requested_date_expression, "next Friday");
+  assert.equal(fromFn!.scheduling.weekday, "FRIDAY");
 
   const nestedCompleted = {
     type: "response.completed",

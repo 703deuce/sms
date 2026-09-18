@@ -29,6 +29,10 @@ export class VoiceV3CallRuntime {
     return this.context;
   }
 
+  replaceContext(context: VoiceV3CallContext): void {
+    this.context = context;
+  }
+
   applyEvent(event: VoiceV3CallEvent): {
     rules: VoiceV3RuleEvaluation;
     fieldsChanged: string[];
@@ -72,6 +76,10 @@ export class VoiceV3CallRuntime {
       intake_complete: rules.intakeComplete,
       missing_required_fields: rules.missingRequiredFields,
       has_scheduling_preference: rules.hasSchedulingPreference,
+      scheduling_requires_clarification: rules.schedulingRequiresClarification,
+      required_action: rules.requiredAction,
+      may_find_availability: rules.mayFindAvailability,
+      scheduling_generation: this.context.scheduling.generation,
     });
 
     void persistSnapshot(this).catch((err) => {
@@ -173,6 +181,23 @@ export function buildAuthoritativeThinkingSnapshot(
     .join(", ");
   const missing = rules.missingRequiredFields.join(", ") || "(none)";
 
+  const sched = ctx.scheduling.normalized;
+  const schedLine = sched
+    ? `scheduling_generation=${ctx.scheduling.generation} precision=${sched.precision} local_date=${sched.localDate ?? "(none)"}`
+    : `scheduling_generation=${ctx.scheduling.generation}`;
+
+  const clarifyLine =
+    rules.schedulingRequiresClarification && rules.schedulingClarificationPrompt
+      ? `scheduling_clarification_required: ${rules.schedulingClarificationPrompt}`
+      : "scheduling_clarification_required=false";
+
+  const offer = ctx.availability.activeOfferSet;
+  const offerLine = offer
+    ? `authoritative_offer_set_id=${offer.offerSetId} slot_count=${offer.slots.length}`
+    : ctx.availability.status === "failed"
+      ? "availability_lookup_failed=true"
+      : "authoritative_offer_set=(none)";
+
   return [
     "Authoritative caller state updated (application-owned).",
     `state_version=${ctx.runtime.version}`,
@@ -180,6 +205,10 @@ export function buildAuthoritativeThinkingSnapshot(
     known ? `captured: ${known}` : "captured: (none)",
     `missing_required: ${missing}`,
     `intake_complete=${rules.intakeComplete}`,
+    schedLine,
+    clarifyLine,
+    `may_run_calendar_action=${rules.mayRunCalendarAction}`,
+    offerLine,
   ].join("\n");
 }
 

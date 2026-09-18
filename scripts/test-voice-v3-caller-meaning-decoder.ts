@@ -7,12 +7,13 @@ import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/deleg
 import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-caller-meaning";
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
+import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 
 const AGENT_A: VoiceV3AgentConfig = TEST_AGENT_CONFIG;
 
 const AGENT_B: VoiceV3AgentConfig = {
+  ...TEST_AGENT_CONFIG,
   businessName: "Agent B",
-  timezone: "America/New_York",
   intakeFields: [
     { key: "name", label: "Name", type: "text", required: true },
     { key: "phone", label: "Phone", type: "phone", required: true },
@@ -28,11 +29,7 @@ function basePayload(overrides: Record<string, unknown> = {}) {
   return {
     active_goal: "GENERAL",
     captured_fields: [],
-    scheduling: {
-      requested_date_expression: null,
-      requested_time_expression: null,
-      requested_daypart: null,
-    },
+    scheduling: emptySchedulingMeaning(),
     corrections: [],
     ambiguities: [],
     ...overrides,

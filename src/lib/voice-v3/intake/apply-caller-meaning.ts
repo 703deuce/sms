@@ -1,11 +1,21 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext, VoiceV3Goal } from "../state/call-context";
 import type { CallerMeaning } from "./caller-meaning-schema";
+import { deriveSchedulingClarification } from "../time/scheduling-clarification";
+import {
+  normalizeSchedulingMeaning,
+  schedulingMeaningHasSignal,
+} from "../time/scheduling-normalizer";
+import {
+  normalizedSchedulingEquals,
+  type SchedulingMeaning,
+} from "../time/scheduling-types";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
   fieldsChanged: string[];
   correctionCount: number;
+  schedulingGenerationChanged: boolean;
 }
 
 function isConfiguredKey(config: VoiceV3AgentConfig, key: string): boolean {
@@ -28,6 +38,10 @@ function logUnknownIntakeKeyRejected(input: {
 
 function goalFromMeaning(goal: CallerMeaning["active_goal"]): VoiceV3Goal {
   return goal;
+}
+
+function toSchedulingMeaning(sched: CallerMeaning["scheduling"]): SchedulingMeaning {
+  return { ...sched };
 }
 
 /**
@@ -90,22 +104,85 @@ export function applyCallerMeaningToContext(
   }
 
   const scheduling = { ...ctx.scheduling };
-  let schedulingChanged = false;
-  const sched = meaning.scheduling;
-  if (sched.requested_date_expression?.trim()) {
-    scheduling.requestedDateExpression = sched.requested_date_expression.trim();
-    schedulingChanged = true;
-  }
-  if (sched.requested_time_expression?.trim()) {
-    scheduling.requestedTimeExpression = sched.requested_time_expression.trim();
-    schedulingChanged = true;
-  }
-  if (sched.requested_daypart?.trim()) {
-    scheduling.requestedDaypart = sched.requested_daypart.trim();
-    schedulingChanged = true;
-  }
-  if (schedulingChanged) {
-    scheduling.generation = (scheduling.generation ?? 0) + 1;
+  let schedulingGenerationChanged = false;
+  const schedMeaning = toSchedulingMeaning(meaning.scheduling);
+
+  if (schedulingMeaningHasSignal(schedMeaning)) {
+    const normStarted = Date.now();
+    console.log("SCHEDULING_MEANING_RECEIVED", {
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+      timezone: ctx.clock.timezone,
+      scheduling_generation: scheduling.generation ?? 0,
+      date_relation: schedMeaning.date_relation,
+      time_kind: schedMeaning.time_kind,
+    });
+
+    const normalized = normalizeSchedulingMeaning(schedMeaning, ctx.clock);
+    const latency = Date.now() - normStarted;
+
+    if (normalized.precision === "UNRESOLVED" && schedMeaning.date_relation !== "UNSPECIFIED") {
+      console.log("SCHEDULING_AMBIGUOUS", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        timezone: ctx.clock.timezone,
+        scheduling_generation: scheduling.generation ?? 0,
+        normalization_latency_ms: latency,
+      });
+    }
+
+    const priorNormalized = scheduling.normalized;
+    const changed = !normalizedSchedulingEquals(priorNormalized, normalized);
+
+    scheduling.meaning = schedMeaning;
+    scheduling.normalized = normalized;
+    scheduling.clarification = deriveSchedulingClarification({
+      meaning: schedMeaning,
+      normalized,
+      clock: ctx.clock,
+    });
+
+    if (scheduling.clarification.required) {
+      console.log("SCHEDULING_CLARIFICATION_REQUIRED", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        timezone: ctx.clock.timezone,
+        scheduling_generation: scheduling.generation ?? 0,
+        reason: scheduling.clarification.reason,
+        normalization_latency_ms: latency,
+      });
+    }
+
+    if (changed) {
+      scheduling.generation = (scheduling.generation ?? 0) + 1;
+      schedulingGenerationChanged = true;
+      if (correctionCount > 0 || priorNormalized) {
+        console.log("SCHEDULING_CORRECTED", {
+          call_id: ctx.callId,
+          live_session_id: ctx.liveSessionId,
+          timezone: ctx.clock.timezone,
+          scheduling_generation: scheduling.generation,
+          normalization_latency_ms: latency,
+        });
+      }
+      console.log("SCHEDULING_GENERATION_CHANGED", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        timezone: ctx.clock.timezone,
+        scheduling_generation: scheduling.generation,
+        normalization_latency_ms: latency,
+      });
+    }
+
+    console.log("SCHEDULING_NORMALIZED", {
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+      timezone: ctx.clock.timezone,
+      scheduling_generation: scheduling.generation ?? 0,
+      precision: normalized.precision,
+      local_date: normalized.localDate,
+      normalization_latency_ms: latency,
+    });
   }
 
   const context: VoiceV3CallContext = {
@@ -121,5 +198,6 @@ export function applyCallerMeaningToContext(
     context,
     fieldsChanged: [...fieldsChanged],
     correctionCount,
+    schedulingGenerationChanged,
   };
 }

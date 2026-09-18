@@ -1,11 +1,18 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import type { RequiredRuntimeAction } from "../calendar/types";
+import { shouldDispatchFindAvailability } from "../calendar/find-availability";
 import type { VoiceV3CallContext } from "./call-context";
 
 export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
   intakeComplete: boolean;
   hasSchedulingPreference: boolean;
+  schedulingRequiresClarification: boolean;
+  schedulingClarificationReason: string | null;
+  schedulingClarificationPrompt: string | null;
+  mayRunCalendarAction: boolean;
   mayFindAvailability: boolean;
+  requiredAction: RequiredRuntimeAction;
   mayBook: boolean;
 }
 
@@ -21,15 +28,42 @@ export function evaluateVoiceV3Rules(
     })
     .map((field) => field.key);
 
+  const normalized = ctx.scheduling.normalized;
+  const hasSchedulingPreference = Boolean(
+    normalized &&
+      normalized.precision !== "UNRESOLVED" &&
+      (normalized.localDate || normalized.localStartDateTime || normalized.localEndDateTime),
+  );
+
+  const clarification = ctx.scheduling.clarification;
+  const schedulingRequiresClarification = Boolean(clarification?.required);
+  const schedulingClarificationReason = clarification?.reason ?? null;
+  const schedulingClarificationPrompt = clarification?.prompt ?? null;
+
+  const mayRunCalendarAction = hasSchedulingPreference && !schedulingRequiresClarification;
+
+  const calendarConfigured = Boolean(config.calendar?.connectionId && config.calendar.calendarIds.length);
+  const durationKnown = config.service.durationMinutes > 0;
+
+  const mayFindAvailability =
+    mayRunCalendarAction &&
+    durationKnown &&
+    calendarConfigured &&
+    (ctx.dialog.activeGoal === "BOOK_APPOINTMENT" || hasSchedulingPreference);
+
+  const requiredAction: RequiredRuntimeAction =
+    shouldDispatchFindAvailability(ctx, config, mayFindAvailability) ? "FIND_AVAILABILITY" : null;
+
   return {
     missingRequiredFields,
     intakeComplete: missingRequiredFields.length === 0,
-    hasSchedulingPreference: Boolean(
-      ctx.scheduling.requestedDateExpression ||
-        ctx.scheduling.requestedTimeExpression ||
-        ctx.scheduling.requestedDaypart,
-    ),
-    mayFindAvailability: false,
+    hasSchedulingPreference,
+    schedulingRequiresClarification,
+    schedulingClarificationReason,
+    schedulingClarificationPrompt,
+    mayRunCalendarAction,
+    mayFindAvailability,
+    requiredAction,
     mayBook: false,
   };
 }

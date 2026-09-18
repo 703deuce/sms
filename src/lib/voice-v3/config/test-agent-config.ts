@@ -30,4 +30,19 @@ export const TEST_AGENT_CONFIG: VoiceV3AgentConfig = {
       required: false,
     },
   ],
+  service: {
+    durationMinutes: 60,
+    slotStepMinutes: 30,
+  },
+  businessHours: {
+    weekdays: [1, 2, 3, 4, 5],
+    startLocal: "09:00",
+    endLocal: "17:00",
+  },
+  calendar: {
+    provider: "microsoft",
+    connectionId: process.env.VOICE_V3_TEST_MICROSOFT_CONNECTION_ID?.trim() || "test_connection",
+    calendarIds: [process.env.VOICE_V3_TEST_CALENDAR_ID?.trim() || "primary"],
+    smtp: process.env.VOICE_V3_TEST_MICROSOFT_SMTP?.trim() || null,
+  },
 };

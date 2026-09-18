@@ -1,3 +1,4 @@
+import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
 import {
   buildSessionThinkingAppendForRuntime,
   getVoiceV3CallRuntime,
@@ -118,6 +119,16 @@ export function handleDelegatedAstraResponseEvent(input: {
     });
 
     input.send(buildSessionThinkingAppendForRuntime(runtime));
+
+    void dispatchFindAvailabilityIfRequired(runtime, {
+      onLiveContext: (event) => input.send(event),
+    }).catch((err) => {
+      console.error("FIND_AVAILABILITY_DISPATCH_ERROR", {
+        live_session_id: sessionId,
+        err,
+      });
+    });
+
     meaningStartedSessions.delete(sessionId);
   });
 }

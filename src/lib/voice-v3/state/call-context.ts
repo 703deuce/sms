@@ -1,4 +1,11 @@
 import type { VoiceV3CallClock } from "../time/call-clock";
+import type { AvailabilityOfferSet } from "../calendar/offer-set";
+import type { FindAvailabilityFailure, FindAvailabilityStatus } from "../calendar/types";
+import type { SchedulingClarificationRequirement } from "../time/scheduling-clarification";
+import type {
+  NormalizedSchedulingPreference,
+  SchedulingMeaning,
+} from "../time/scheduling-types";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -31,10 +38,17 @@ export interface VoiceV3CallContext {
     values: Record<string, CapturedField>;
   };
   scheduling: {
-    requestedDateExpression?: string;
-    requestedTimeExpression?: string;
-    requestedDaypart?: string;
     generation: number;
+    meaning?: SchedulingMeaning;
+    normalized?: NormalizedSchedulingPreference | null;
+    clarification?: SchedulingClarificationRequirement | null;
+  };
+  availability: {
+    status: FindAvailabilityStatus;
+    activeOfferSet: AvailabilityOfferSet | null;
+    lastFailure: FindAvailabilityFailure | null;
+    inFlightGeneration: number | null;
+    lastDispatchedRequestKey: string | null;
   };
   runtime: {
     version: number;
@@ -58,7 +72,14 @@ export function createInitialVoiceV3CallContext(input: {
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     intake: { values: {} },
-    scheduling: { generation: 0 },
+    scheduling: { generation: 0, normalized: null },
+    availability: {
+      status: "idle",
+      activeOfferSet: null,
+      lastFailure: null,
+      inFlightGeneration: null,
+      lastDispatchedRequestKey: null,
+    },
     runtime: { version: 0 },
   };
 }
