@@ -7,6 +7,8 @@ import { resolveAppointmentCandidate } from "./resolve-appointment-candidate";
 import { dispatchRescheduleIfRequired } from "./reschedule-dispatch";
 import { dispatchCancellationIfRequired } from "./cancel-dispatch";
 import { buildLiveManagementCandidatesAppend } from "./live-management-context";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 
 export function applyVerifiedExisting(
   ctx: VoiceV3CallContext,
@@ -30,8 +32,7 @@ export async function dispatchAppointmentManagementIfRequired(
     config: VoiceV3AgentConfig;
     replaceContext: (ctx: VoiceV3CallContext) => void;
   },
-  hooks: {
-    onLiveContext?: (event: { type: string; thinking?: string }) => void;
+  hooks: VoiceV3LiveRuntimeHooks & {
     fetchRevalidateBusy?: import("./book-dispatch").RevalidateBusyFetcher;
     updateBooking?: import("./reschedule-dispatch").UpdateBookingExecutor;
     cancelBooking?: import("./cancel-dispatch").CancelBookingExecutor;
@@ -109,7 +110,11 @@ export async function dispatchAppointmentManagementIfRequired(
             lookupCompleted: true,
           },
         });
-        hooks.onLiveContext?.(buildLiveManagementCandidatesAppend(result.candidateSet));
+        pushLiveThinkingEvent(
+          hooks,
+          buildLiveManagementCandidatesAppend(result.candidateSet),
+          "appointment_candidates",
+        );
       } else {
         runtime.replaceContext({
           ...ctx,

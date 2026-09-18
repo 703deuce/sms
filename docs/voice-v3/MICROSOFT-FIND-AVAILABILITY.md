@@ -9,7 +9,7 @@ CallerMeaning → VoiceV3CallContext → scheduling normalizer
 → Microsoft Graph busy intervals
 → generateAvailabilitySlots (business hours ∩ free time ∩ duration)
 → AvailabilityOfferSet in CallContext
-→ session.thinking.append (authoritative slots for GPT-Live)
+→ session.thinking.append (authoritative slots for GPT-Live) → response.create (speak continuation)
 ```
 
 Astra and GPT-Live do **not** decide when FIND runs.

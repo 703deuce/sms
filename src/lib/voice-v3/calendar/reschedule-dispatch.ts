@@ -6,6 +6,8 @@ import { isSelectedSlotAuthoritative } from "./selected-slot";
 import { evaluateSlotRevalidation, revalidationBusyWindow } from "./revalidate-selected-slot";
 import { updateDurableBookingTimes } from "./durable-booking-store";
 import { buildLiveRescheduleConfirmedAppend } from "./live-management-context";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { RevalidateBusyFetcher } from "./book-dispatch";
 
 export type UpdateBookingExecutor = (input: {
@@ -29,8 +31,7 @@ export async function dispatchRescheduleIfRequired(
     config: VoiceV3AgentConfig;
     replaceContext: (ctx: VoiceV3CallContext) => void;
   },
-  hooks: {
-    onLiveContext?: (event: { type: string; thinking?: string }) => void;
+  hooks: VoiceV3LiveRuntimeHooks & {
     fetchRevalidateBusy?: RevalidateBusyFetcher;
     updateBooking?: UpdateBookingExecutor;
   } = {},
@@ -182,12 +183,14 @@ export async function dispatchRescheduleIfRequired(
       attempt_id: attemptId,
     });
 
-    hooks.onLiveContext?.(
+    pushLiveThinkingEvent(
+      hooks,
       buildLiveRescheduleConfirmedAppend({
         fromLocal: existing.localStart,
         toLocal: selected.localStart,
         timezone: selected.timezone,
       }),
+      "reschedule_confirmed",
     );
   } finally {
     inFlight.delete(ctx.liveSessionId);

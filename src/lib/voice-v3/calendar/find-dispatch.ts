@@ -8,6 +8,8 @@ import { generateAvailabilitySlots } from "./slot-generator";
 import type { CalendarBusyInterval, FindAvailabilityFailure } from "./types";
 import { buildLiveAvailabilitySessionAppend } from "./live-availability-context";
 import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -17,8 +19,7 @@ export type FindBusyFetcher = (input: {
   | { ok: false; failure: FindAvailabilityFailure; durationMs: number }
 >;
 
-type DispatchHooks = {
-  onLiveContext?: (event: ReturnType<typeof buildLiveAvailabilitySessionAppend>) => void;
+type DispatchHooks = VoiceV3LiveRuntimeHooks & {
   fetchBusy?: FindBusyFetcher;
 };
 
@@ -100,7 +101,15 @@ export async function dispatchFindAvailabilityIfRequired(
   }
 
   const request = buildFindAvailabilityRequest(ctx, runtime.config);
-  if (!request) return;
+  if (!request) {
+    console.log("FIND_AVAILABILITY_REQUEST_NOT_BUILDABLE", {
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+      scheduling_generation: ctx.scheduling.generation,
+      has_normalized: Boolean(ctx.scheduling.normalized),
+    });
+    return;
+  }
 
   console.log("FIND_AVAILABILITY_REQUIRED", {
     call_id: ctx.callId,
@@ -275,7 +284,11 @@ export async function dispatchFindAvailabilityIfRequired(
     request.schedulingGeneration,
     presentedSlotIds,
   );
-  hooks.onLiveContext?.(append);
+  pushLiveThinkingEvent(
+    hooks,
+    append,
+    failure ? "availability_failed" : offerSet?.slots.length ? "availability_ready" : "availability_empty",
+  );
   console.log("LIVE_AVAILABILITY_CONTEXT_SENT", {
     call_id: latest.callId,
     scheduling_generation: request.schedulingGeneration,

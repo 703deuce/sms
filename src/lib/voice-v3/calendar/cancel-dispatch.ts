@@ -4,6 +4,8 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import { markDurableBookingCanceled } from "./durable-booking-store";
 import { buildLiveCancellationConfirmedAppend } from "./live-management-context";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { CancelBookingRequest } from "./cancel-booking-types";
 
 export type CancelBookingExecutor = (input: {
@@ -20,8 +22,7 @@ export async function dispatchCancellationIfRequired(
     config: VoiceV3AgentConfig;
     replaceContext: (ctx: VoiceV3CallContext) => void;
   },
-  hooks: {
-    onLiveContext?: (event: { type: string; thinking?: string }) => void;
+  hooks: VoiceV3LiveRuntimeHooks & {
     cancelBooking?: CancelBookingExecutor;
   } = {},
 ): Promise<void> {
@@ -125,11 +126,13 @@ export async function dispatchCancellationIfRequired(
       provider_event_id: existing.providerEventId,
     });
 
-    hooks.onLiveContext?.(
+    pushLiveThinkingEvent(
+      hooks,
       buildLiveCancellationConfirmedAppend({
         localStart: existing.localStart,
         timezone: existing.timezone,
       }),
+      "cancellation_confirmed",
     );
   } finally {
     inFlight.delete(ctx.liveSessionId);

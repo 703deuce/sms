@@ -213,6 +213,24 @@ async function testStaleRace() {
   );
 }
 
+async function testSpeakContinuationAfterFind() {
+  let context = ctx();
+  context = applyCallerMeaningToContext(context, config(), fridayAfternoonMeaning(), FROZEN).context;
+  context = { ...context, dialog: { activeGoal: "BOOK_APPOINTMENT" } };
+  const runtime = new VoiceV3CallRuntime({ config: config(), context });
+  const speakReasons: string[] = [];
+
+  await dispatchFindAvailabilityIfRequired(runtime, {
+    fetchBusy: async () => ({ ok: true, busy: [], durationMs: 1 }),
+    onLiveContext: (e) => {
+      assert.ok(e.content.includes("Availability search completed"));
+    },
+    requestSpeak: (reason) => speakReasons.push(reason),
+  });
+
+  assert.deepEqual(speakReasons, ["availability_ready"]);
+}
+
 async function testDuplicateDispatch() {
   let context = ctx();
   context = applyCallerMeaningToContext(context, config(), fridayAfternoonMeaning(), FROZEN).context;
@@ -259,6 +277,7 @@ async function main() {
   await testSlotGeneration();
   testRulesDispatch();
   await testStaleRace();
+  await testSpeakContinuationAfterFind();
   await testDuplicateDispatch();
   console.log("PASS voice-v3 availability");
 }

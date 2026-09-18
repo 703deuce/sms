@@ -26,6 +26,8 @@ import {
 import { invalidateSelectionForSchedulingChange } from "./apply-slot-selection";
 import { dispatchFindAvailabilityIfRequired } from "./find-dispatch";
 import { registerDurableBooking } from "./durable-booking-store";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;
@@ -91,8 +93,7 @@ export async function dispatchBookingIfRequired(
     config: VoiceV3AgentConfig;
     replaceContext: (ctx: VoiceV3CallContext) => void;
   },
-  hooks: {
-    onLiveContext?: (event: { type: string; thinking: string }) => void;
+  hooks: VoiceV3LiveRuntimeHooks & {
     fetchRevalidateBusy?: RevalidateBusyFetcher;
     createBooking?: CreateBookingExecutor;
   } = {},
@@ -162,7 +163,7 @@ export async function dispatchBookingIfRequired(
       lastFailure: null,
     }),
   );
-  hooks.onLiveContext?.(buildLiveBookingInProgressSessionAppend());
+  pushLiveThinkingEvent(hooks, buildLiveBookingInProgressSessionAppend(), "booking_in_progress");
 
   try {
     updateBookingAttemptPhase(ctx.liveSessionId, attempt.bookingAttemptId, "REVALIDATING");
@@ -266,11 +267,13 @@ export async function dispatchBookingIfRequired(
         duration_ms: revalDuration,
         reason: reval.reason,
       });
-      hooks.onLiveContext?.(
+      pushLiveThinkingEvent(
+        hooks,
         buildLiveSlotUnavailableSessionAppend({
           localStart: selected.localStart,
           timezone: selected.timezone,
         }),
+        "slot_unavailable",
       );
       let cleared = invalidateSelectionForSchedulingChange(latest, "slot_no_longer_available");
       cleared = {
@@ -428,7 +431,11 @@ export async function dispatchBookingIfRequired(
             activeAttempt: { ...attempt, commitPhase: "OUTCOME_UNKNOWN" },
           }),
         );
-        hooks.onLiveContext?.(buildLiveBookingFailureSessionAppend(createResult.failure));
+        pushLiveThinkingEvent(
+          hooks,
+          buildLiveBookingFailureSessionAppend(createResult.failure),
+          "booking_outcome_unknown",
+        );
         updateBookingAttemptPhase(afterCommit.liveSessionId, attempt.bookingAttemptId, "OUTCOME_UNKNOWN");
         return;
       }
@@ -490,7 +497,7 @@ export async function dispatchBookingIfRequired(
     });
 
     const append = buildLiveBookingConfirmedSessionAppend(confirmed);
-    hooks.onLiveContext?.(append);
+    pushLiveThinkingEvent(hooks, append, "booking_confirmed");
     console.log("LIVE_BOOKING_CONFIRMATION_SENT", {
       call_id: afterCommit.callId,
       scheduling_generation: afterCommit.scheduling.generation,
@@ -508,7 +515,7 @@ async function failBooking(
     getSnapshot: () => VoiceV3CallContext;
     replaceContext: (ctx: VoiceV3CallContext) => void;
   },
-  hooks: { onLiveContext?: (event: { type: string; thinking: string }) => void },
+  hooks: VoiceV3LiveRuntimeHooks,
   failure: BookingFailure,
   bookingAttemptId: string,
   durationMs?: number,
@@ -527,6 +534,6 @@ async function failBooking(
       activeAttempt: null,
     }),
   );
-  hooks.onLiveContext?.(buildLiveBookingFailureSessionAppend(failure));
+  pushLiveThinkingEvent(hooks, buildLiveBookingFailureSessionAppend(failure), "booking_failed");
   updateBookingAttemptPhase(ctx.liveSessionId, bookingAttemptId, "FAILED");
 }

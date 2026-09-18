@@ -6,6 +6,8 @@ import {
   buildSessionThinkingAppendForRuntime,
   getVoiceV3CallRuntime,
 } from "../state/call-runtime";
+import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
+import { requestLiveSpeakContinuation } from "../live-response-trigger";
 import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
 import { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";
 
@@ -141,7 +143,15 @@ export function handleDelegatedAstraResponseEvent(input: {
 
     input.send(buildSessionThinkingAppendForRuntime(runtime));
 
-    const liveHooks = { onLiveContext: (event: { type: string; thinking?: string }) => input.send(event) };
+    const liveHooks: VoiceV3LiveRuntimeHooks = {
+      onLiveContext: (event) => input.send(event),
+      requestSpeak: (reason) =>
+        requestLiveSpeakContinuation({
+          send: input.send,
+          liveSessionId: sessionId,
+          reason,
+        }),
+    };
 
     void dispatchFindAvailabilityIfRequired(runtime, liveHooks).catch((err) => {
       console.error("FIND_AVAILABILITY_DISPATCH_ERROR", {
