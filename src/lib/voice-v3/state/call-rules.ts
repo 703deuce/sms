@@ -13,6 +13,8 @@ export interface VoiceV3RuleEvaluation {
   mayRunCalendarAction: boolean;
   mayFindAvailability: boolean;
   requiredAction: RequiredRuntimeAction;
+  slotSelected: boolean;
+  bookingPhase: "SLOT_SELECTED" | null;
   mayBook: boolean;
 }
 
@@ -51,8 +53,14 @@ export function evaluateVoiceV3Rules(
     calendarConfigured &&
     (ctx.dialog.activeGoal === "BOOK_APPOINTMENT" || hasSchedulingPreference);
 
-  const requiredAction: RequiredRuntimeAction =
-    shouldDispatchFindAvailability(ctx, config, mayFindAvailability) ? "FIND_AVAILABILITY" : null;
+  const slotSelected = Boolean(ctx.selection.selected);
+  const bookingPhase = slotSelected ? "SLOT_SELECTED" : null;
+
+  const requiredAction: RequiredRuntimeAction = slotSelected
+    ? null
+    : shouldDispatchFindAvailability(ctx, config, mayFindAvailability)
+      ? "FIND_AVAILABILITY"
+      : null;
 
   return {
     missingRequiredFields,
@@ -64,6 +72,8 @@ export function evaluateVoiceV3Rules(
     mayRunCalendarAction,
     mayFindAvailability,
     requiredAction,
+    slotSelected,
+    bookingPhase,
     mayBook: false,
   };
 }

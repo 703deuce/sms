@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { slotSelectionMeaningZodObject } from "./slot-selection-schema";
 
 const voiceV3GoalSchema = z.enum([
   "UNKNOWN",
@@ -94,6 +95,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
         reason: z.string(),
       }),
     ),
+    slot_selection: slotSelectionMeaningZodObject,
   });
 }
 

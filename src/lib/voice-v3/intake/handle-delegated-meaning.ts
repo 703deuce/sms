@@ -1,4 +1,5 @@
 import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
+import { buildLiveSelectedSlotSessionAppend } from "../calendar/live-selected-slot-context";
 import {
   buildSessionThinkingAppendForRuntime,
   getVoiceV3CallRuntime,
@@ -104,11 +105,29 @@ export function handleDelegatedAstraResponseEvent(input: {
     });
 
     const startedAt = Date.now();
+    const beforeSelected = runtime.getSnapshot().selection.selected;
     runtime.applyEvent({
       type: "CALLER_MEANING_APPLIED",
       meaning: revalidate.meaning,
       astraLatencyMs: 0,
     });
+    const afterSnap = runtime.getSnapshot();
+    const afterSelected = afterSnap.selection.selected;
+    if (
+      afterSelected &&
+      (!beforeSelected ||
+        beforeSelected.slotId !== afterSelected.slotId ||
+        beforeSelected.offerSetId !== afterSelected.offerSetId)
+    ) {
+      input.send(buildLiveSelectedSlotSessionAppend(afterSelected));
+      console.log("LIVE_SELECTED_SLOT_CONTEXT_SENT", {
+        call_id: afterSnap.callId,
+        live_session_id: sessionId,
+        scheduling_generation: afterSnap.scheduling.generation,
+        offer_set_id: afterSelected.offerSetId,
+        slot_id: afterSelected.slotId,
+      });
+    }
 
     console.log("ASTRA_MEANING_COMPLETED", {
       call_id: runtime.getSnapshot().callId,

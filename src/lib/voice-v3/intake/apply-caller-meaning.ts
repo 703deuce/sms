@@ -10,12 +10,19 @@ import {
   normalizedSchedulingEquals,
   type SchedulingMeaning,
 } from "../time/scheduling-types";
+import {
+  applySlotSelectionFromMeaning,
+  invalidateSelectionForSchedulingChange,
+} from "../calendar/apply-slot-selection";
+import { emptySlotSelectionMeaning } from "./slot-selection-schema";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
   fieldsChanged: string[];
   correctionCount: number;
   schedulingGenerationChanged: boolean;
+  slotSelectionChanged: boolean;
+  slotSelectionResolved: boolean;
 }
 
 function isConfiguredKey(config: VoiceV3AgentConfig, key: string): boolean {
@@ -103,6 +110,7 @@ export function applyCallerMeaningToContext(
     correctionCount += 1;
   }
 
+  let workingCtx = ctx;
   const scheduling = { ...ctx.scheduling };
   let schedulingGenerationChanged = false;
   const schedMeaning = toSchedulingMeaning(meaning.scheduling);
@@ -156,6 +164,15 @@ export function applyCallerMeaningToContext(
     if (changed) {
       scheduling.generation = (scheduling.generation ?? 0) + 1;
       schedulingGenerationChanged = true;
+      workingCtx = {
+        ...workingCtx,
+        scheduling: { ...scheduling },
+      };
+      workingCtx = invalidateSelectionForSchedulingChange(
+        workingCtx,
+        "scheduling_generation_changed",
+      );
+      scheduling.generation = workingCtx.scheduling.generation;
       if (correctionCount > 0 || priorNormalized) {
         console.log("SCHEDULING_CORRECTED", {
           call_id: ctx.callId,
@@ -185,19 +202,28 @@ export function applyCallerMeaningToContext(
     });
   }
 
-  const context: VoiceV3CallContext = {
-    ...ctx,
+  let context: VoiceV3CallContext = {
+    ...workingCtx,
     updatedAt,
     dialog: { activeGoal: goalFromMeaning(meaning.active_goal) },
     intake: { values },
     scheduling,
-    runtime: { version: ctx.runtime.version + 1 },
+    runtime: { version: workingCtx.runtime.version + 1 },
   };
+
+  const slotApply = applySlotSelectionFromMeaning(
+    context,
+    meaning.slot_selection ?? emptySlotSelectionMeaning(),
+    at,
+  );
+  context = slotApply.context;
 
   return {
     context,
     fieldsChanged: [...fieldsChanged],
     correctionCount,
     schedulingGenerationChanged,
+    slotSelectionChanged: slotApply.selectionChanged,
+    slotSelectionResolved: slotApply.resolution?.status === "RESOLVED",
   };
 }

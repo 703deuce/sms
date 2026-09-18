@@ -11,12 +11,14 @@ import {
   getVoiceV3CallRuntime,
 } from "../src/lib/voice-v3/state/call-runtime";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
+import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 
 function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured_fields">): CallerMeaning {
   return {
     active_goal: partial.active_goal ?? "GENERAL",
     captured_fields: partial.captured_fields,
     scheduling: partial.scheduling ?? emptySchedulingMeaning(),
+    slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
     corrections: partial.corrections ?? [],
     ambiguities: partial.ambiguities ?? [],
   };

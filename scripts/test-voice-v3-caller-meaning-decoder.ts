@@ -8,6 +8,7 @@ import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-ca
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
+import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 
 const AGENT_A: VoiceV3AgentConfig = TEST_AGENT_CONFIG;
 
@@ -30,6 +31,7 @@ function basePayload(overrides: Record<string, unknown> = {}) {
     active_goal: "GENERAL",
     captured_fields: [],
     scheduling: emptySchedulingMeaning(),
+    slot_selection: emptySlotSelectionMeaning(),
     corrections: [],
     ambiguities: [],
     ...overrides,

@@ -128,15 +128,18 @@ ${
 - active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
 - captured_fields: [{ key, value, confidence }]
 - corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
-- scheduling: requested_date_expression, requested_time_expression, requested_daypart (nullable strings)
+- scheduling: date_relation, weekday, time_kind, daypart, exact_time, etc. (semantic scheduling — not calendar IDs)
+- slot_selection: { selection_type, spoken_time, ordinal } — semantic only; NEVER slotId, offerSetId, bookingConfirmed
+  selection_type: EXACT_TIME | ORDINAL | EARLIEST | LATEST | ACCEPT_SINGLE_OFFER | NONE
+  spoken_time: HH:mm 24h when EXACT_TIME (e.g. 14:30 for 2:30 PM); ordinal: 1-based for ORDINAL ("second one" → 2)
 - ambiguities: [{ field, reason }]`
     : `Each delegated interpretation must call the function tool emit_caller_meaning exactly once with arguments matching the CallerMeaning schema (same fields as above).
 Do not put CallerMeaning in assistant text or output_text when using function transport.
 The tool is semantic-only — it does not book, transfer, or call external systems.`
 }
 
-Do NOT emit workflow fields (stage, required_action, booking_confirmed, offer_set_id, etc.).
-You interpret caller meaning only — application rules own workflow.
+Do NOT emit workflow fields (stage, required_action, booking_confirmed, offer_set_id, slot_id, selectedSlotIsValid, etc.).
+You interpret caller meaning only — application rules own workflow and resolve slots against the authoritative OfferSet.
 
 Only use intake keys from the configured catalog. Do not invent keys.
 

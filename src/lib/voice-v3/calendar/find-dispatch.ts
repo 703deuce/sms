@@ -7,6 +7,7 @@ import { buildAvailabilityOfferSet } from "./offer-set";
 import { generateAvailabilitySlots } from "./slot-generator";
 import type { CalendarBusyInterval, FindAvailabilityFailure } from "./types";
 import { buildLiveAvailabilitySessionAppend } from "./live-availability-context";
+import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -239,18 +240,36 @@ export async function dispatchFindAvailabilityIfRequired(
     });
   }
 
-  const updated = applyFindAvailabilityResult(latest, {
+  let updated = applyFindAvailabilityResult(latest, {
     schedulingGeneration: request.schedulingGeneration,
     offerSet,
     failure,
     requestKey: request.requestKey,
   });
+
+  let presentedSlotIds: string[] | undefined;
+  if (offerSet) {
+    presentedSlotIds = deriveDefaultPresentedSlotIds(offerSet);
+    const presented = recordPresentedOffer({ offerSet, presentedSlotIds });
+    updated = {
+      ...updated,
+      presentation: { current: presented },
+    };
+    console.log("PRESENTED_OFFER_RECORDED", {
+      call_id: latest.callId,
+      scheduling_generation: request.schedulingGeneration,
+      offer_set_id: offerSet.offerSetId,
+      presented_slot_ids: presentedSlotIds,
+    });
+  }
+
   runtime.replaceContext(updated);
 
   const append = buildLiveAvailabilitySessionAppend(
     offerSet,
     failure,
     request.schedulingGeneration,
+    presentedSlotIds,
   );
   hooks.onLiveContext?.(append);
   console.log("LIVE_AVAILABILITY_CONTEXT_SENT", {

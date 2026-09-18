@@ -6,6 +6,8 @@ export interface AvailabilityOfferSet {
   schedulingGeneration: number;
   createdAt: string;
   timezone: string;
+  /** Deterministic slot order for ordinals (slot_1, slot_2, …). */
+  presentationOrder: string[];
   slots: AvailabilitySlot[];
 }
 
@@ -19,11 +21,13 @@ export function buildAvailabilityOfferSet(input: {
   slots: AvailabilitySlot[];
   at?: Date;
 }): AvailabilityOfferSet {
+  const presentationOrder = input.slots.map((s) => s.slotId);
   return {
     offerSetId: createOfferSetId(),
     schedulingGeneration: input.schedulingGeneration,
     createdAt: (input.at ?? new Date()).toISOString(),
     timezone: input.timezone,
+    presentationOrder,
     slots: input.slots,
   };
 }

@@ -1,5 +1,7 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { slotSelectionMeaningHasSignal } from "./slot-selection-schema";
 import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
+import { emptySlotSelectionMeaning } from "./slot-selection-schema";
 import {
   buildCallerMeaningZodSchema,
   configuredIntakeKeySet,
@@ -104,6 +106,7 @@ function meaningHasSignal(meaning: CallerMeaning): boolean {
     meaning.corrections.length > 0 ||
     meaning.active_goal !== "UNKNOWN" ||
     schedulingMeaningHasSignal(meaning.scheduling) ||
+    slotSelectionMeaningHasSignal(meaning.slot_selection) ||
     meaning.ambiguities.length > 0
   );
 }
@@ -134,6 +137,7 @@ export function validateCallerMeaningFromRaw(
     ...parsed.data,
     captured_fields,
     corrections,
+    slot_selection: parsed.data.slot_selection ?? emptySlotSelectionMeaning(),
   };
 
   if (!meaningHasSignal(meaning)) {

@@ -1,6 +1,8 @@
 import type { VoiceV3CallClock } from "../time/call-clock";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
+import type { PresentedOffer, SelectedAvailabilitySlot } from "../calendar/selected-slot";
 import type { FindAvailabilityFailure, FindAvailabilityStatus } from "../calendar/types";
+import type { SlotSelectionResolution } from "../calendar/resolve-slot-selection";
 import type { SchedulingClarificationRequirement } from "../time/scheduling-clarification";
 import type {
   NormalizedSchedulingPreference,
@@ -50,6 +52,13 @@ export interface VoiceV3CallContext {
     inFlightGeneration: number | null;
     lastDispatchedRequestKey: string | null;
   };
+  presentation: {
+    current: PresentedOffer | null;
+  };
+  selection: {
+    selected: SelectedAvailabilitySlot | null;
+    lastResolutionStatus: SlotSelectionResolution["status"] | null;
+  };
   runtime: {
     version: number;
   };
@@ -80,6 +89,8 @@ export function createInitialVoiceV3CallContext(input: {
       inFlightGeneration: null,
       lastDispatchedRequestKey: null,
     },
+    presentation: { current: null },
+    selection: { selected: null, lastResolutionStatus: null },
     runtime: { version: 0 },
   };
 }

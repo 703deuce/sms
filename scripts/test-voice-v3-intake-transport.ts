@@ -26,12 +26,14 @@ import {
   getVoiceV3CallRuntime,
 } from "../src/lib/voice-v3/state/call-runtime";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
+import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 
 function basePayload(overrides: Record<string, unknown> = {}) {
   return {
     active_goal: "GENERAL",
     captured_fields: [],
     scheduling: emptySchedulingMeaning(),
+    slot_selection: emptySlotSelectionMeaning(),
     corrections: [],
     ambiguities: [],
     ...overrides,
@@ -43,6 +45,7 @@ function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured
     active_goal: partial.active_goal ?? "GENERAL",
     captured_fields: partial.captured_fields,
     scheduling: partial.scheduling ?? emptySchedulingMeaning(),
+    slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
     corrections: partial.corrections ?? [],
     ambiguities: partial.ambiguities ?? [],
   };
