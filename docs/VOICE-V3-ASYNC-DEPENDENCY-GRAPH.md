@@ -20,7 +20,7 @@
 | Delegated `function_call` completes | Wait for nested `response.output_item.done` | Live delegation |
 | Submit outputs | `response.item.create` with `function_call_output` for each pending `call_id` | Live API |
 | Continue delegation | `response.create` only after **all** required outputs submitted | Live API; error if pending |
-| Empty semantic, no caller evidence (#428) | Submit output; **skip** delegated `response.create` when ignoring | Product + protocol close |
+| Empty semantic, no caller evidence | Submit output; **then** delegated `response.create` (protocol) — application ignore only | See `fd9f0ca7`; speech orchestration audit: `VOICE-V3-CONVERSATION-OWNERSHIP-AUDIT.md` |
 
 ## DATA_DEPENDENCY / MUTATION_BARRIER (application)
 
