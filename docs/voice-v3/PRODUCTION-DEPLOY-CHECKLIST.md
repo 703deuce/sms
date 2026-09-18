@@ -47,6 +47,12 @@ Dedicated test line (`+15717491060`) may use `/api/telnyx/voice/v3-basic` → sa
 - Voice V2 Telnyx tool webhooks handling booking
 - `texml_direct_inbound` skip without subsequent V3 SIP forward
 
+## Container start (Coolify)
+
+| Env | Default | Note |
+|-----|---------|------|
+| `VOICE_V2_OPENAI_REALTIME_BRIDGE` | **unset / not `1`** | Legacy Telnyx↔OpenAI WSS bridge is **off**. Do **not** set unless restoring `ws-server.ts`. Wrong setting caused crash-loop: `Cannot find module .../ws-server`. |
+
 ## After deploy
 
 1. Republish appointment receptionist agent (or run phone resync) so DID is on Call Control.
