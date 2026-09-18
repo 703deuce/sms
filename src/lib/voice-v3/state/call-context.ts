@@ -24,6 +24,7 @@ import type {
 import type { AppointmentSelectionMeaning } from "../intake/appointment-selection-schema";
 import type { CancellationConfirmation } from "../intake/cancellation-confirmation-schema";
 import type { VoiceV3RecoveryDirective } from "../recovery/types";
+import type { VoiceV3ConversationGoals } from "../agent/goal-manager";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -53,6 +54,10 @@ export interface VoiceV3CallContext {
   clock: VoiceV3CallClock;
   dialog: {
     activeGoal: VoiceV3Goal;
+  };
+  conversation?: {
+    goals: VoiceV3ConversationGoals;
+    closingOffered?: boolean;
   };
   intake: {
     values: Record<string, CapturedField>;
@@ -127,6 +132,10 @@ export function createInitialVoiceV3CallContext(input: {
     business: { timezone: input.timezone },
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
+    conversation: {
+      goals: { activeInstanceId: null, instances: [], pendingTypes: [] },
+      closingOffered: false,
+    },
     intake: { values: {} },
     scheduling: { generation: 0, normalized: null },
     availability: {

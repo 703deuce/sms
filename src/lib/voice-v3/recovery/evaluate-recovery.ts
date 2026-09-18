@@ -107,6 +107,25 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
+  if (
+    goal === "BOOK_APPOINTMENT" &&
+    ctx.availability.status === "ready" &&
+    ctx.availability.activeOfferSet?.slots.length &&
+    !rules.slotSelected &&
+    ctx.selection.lastResolutionStatus !== "AMBIGUOUS" &&
+    ctx.selection.lastResolutionStatus !== "NOT_IN_OFFER_SET"
+  ) {
+    return newDirective({
+      ctx,
+      code: "SLOT_SELECTION_REQUIRED",
+      userRecoverable: true,
+      relatedAction: "SELECT_SLOT",
+      safeAgentMessage:
+        "Availability is ready but the caller has not selected a slot from the authoritative offer set. Present or clarify the available times; do not claim booking is complete.",
+      at,
+    });
+  }
+
   if (ctx.selection.lastResolutionStatus === "AMBIGUOUS") {
     return newDirective({
       ctx,
@@ -139,7 +158,7 @@ export function evaluateVoiceV3Recovery(input: {
   ) {
     return newDirective({
       ctx,
-      code: "SLOT_NOT_AVAILABLE",
+      code: "NO_AVAILABILITY",
       userRecoverable: true,
       relatedAction: "FIND_AVAILABILITY",
       safeAgentMessage:

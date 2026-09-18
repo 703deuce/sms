@@ -13,6 +13,7 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
+import { afterVoiceV3StateChange } from "../agent/after-state-change";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -308,6 +309,7 @@ export async function dispatchFindAvailabilityIfRequired(
   }
 
   runtime.replaceContext(updated);
+  afterVoiceV3StateChange({ runtime, reason: "find_availability_completed" });
 
   if (failure) {
     console.log("ASYNC_ACTION_FAILED", {

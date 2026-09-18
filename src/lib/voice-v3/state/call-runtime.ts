@@ -7,7 +7,8 @@ import { createInitialVoiceV3CallContext, type VoiceV3CallContext } from "./call
 import type { VoiceV3CallEvent } from "./call-events";
 import { evaluateVoiceV3Rules, type VoiceV3RuleEvaluation } from "./call-rules";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
-import { evaluateSuggestedNextConversationAction } from "../recovery/conversation-need";
+import { planAgentState } from "../agent/agent-planner";
+import { formatConversationActionForSnapshot } from "../agent/snapshot-format";
 
 const TTL_MS = 2 * 60 * 60 * 1000;
 const runtimes = new Map<
@@ -257,11 +258,10 @@ export function buildAuthoritativeThinkingSnapshot(
         ? "availability_lookup_in_progress=true"
         : "authoritative_offer_set=(none)";
 
-  const need = evaluateSuggestedNextConversationAction({ ctx, rules, config: runtime.config });
-  const needLine =
-    need.action === "NONE"
-      ? "suggested_next_conversation_action=NONE"
-      : `suggested_next_conversation_action=${need.action}${need.fieldKey ? `(field=${need.fieldKey})` : ""}`;
+  const agent = planAgentState(ctx, runtime.config);
+  const needLine = `next_conversation_need=${formatConversationActionForSnapshot(agent.nextConversationAction)}`;
+  const claimsLine = `allowed_claims=${agent.allowedClaims.join(",") || "(none)"}`;
+  const forbidLine = `forbidden_claims=${agent.forbiddenClaims.join(",") || "(none)"}`;
 
   return [
     "Authoritative caller state updated (application-owned).",
@@ -277,8 +277,12 @@ export function buildAuthoritativeThinkingSnapshot(
     `booking_ready=${rules.bookingReady}`,
     offerLine,
     needLine,
-    need.summary,
-  ].join("\n");
+    claimsLine,
+    forbidLine,
+    agent.blocker ? `blocker=${agent.blocker.code}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function buildSessionThinkingAppendForRuntime(

@@ -19,7 +19,7 @@ import {
   appointmentSelectionHasSignal,
   emptyAppointmentSelectionMeaning,
 } from "./appointment-selection-schema";
-import { mergeActiveGoalFromMeaning } from "./merge-active-goal";
+import { applyGoalLifecycleFromMeaning } from "../agent/goal-manager";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
@@ -203,14 +203,17 @@ export function applyCallerMeaningToContext(
     });
   }
 
-  let context: VoiceV3CallContext = {
-    ...workingCtx,
-    updatedAt,
-    dialog: { activeGoal: mergeActiveGoalFromMeaning(workingCtx.dialog.activeGoal, meaning) },
-    intake: { values },
-    scheduling,
-    runtime: { version: workingCtx.runtime.version + 1 },
-  };
+  let context: VoiceV3CallContext = applyGoalLifecycleFromMeaning({
+    ctx: {
+      ...workingCtx,
+      updatedAt,
+      intake: { values },
+      scheduling,
+      runtime: { version: workingCtx.runtime.version + 1 },
+    },
+    meaning,
+    at,
+  });
 
   const slotApply = applySlotSelectionFromMeaning(
     context,

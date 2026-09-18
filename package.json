@@ -121,6 +121,7 @@
     "test:voice-v3-reschedule": "tsx scripts/test-voice-v3-reschedule.ts",
     "test:voice-v3-cancellation": "tsx scripts/test-voice-v3-cancellation.ts",
     "test:voice-v3-recovery": "tsx scripts/test-voice-v3-order-permutation.ts && tsx scripts/test-voice-v3-recovery.ts && tsx scripts/test-voice-v3-semantic-retry.ts",
+    "test:voice-v3-agent": "tsx scripts/test-voice-v3-agent-simulator.ts && tsx scripts/test-voice-v3-agent-claims.ts",
     "test:gpt-live-control-plane-concurrency": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-control-plane-concurrency.ts",
     "test:gpt-live-booking-intent-precedence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-gpt-live-booking-intent-precedence.ts",
     "test:dialog-goal-l1-persistence": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/test-dialog-goal-l1-persistence.ts",
