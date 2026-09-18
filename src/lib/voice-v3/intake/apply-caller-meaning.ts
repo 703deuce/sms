@@ -20,6 +20,9 @@ import {
   emptyAppointmentSelectionMeaning,
 } from "./appointment-selection-schema";
 import { applyGoalLifecycleFromMeaning } from "../agent/goal-manager";
+import { markOperationsStaleForScheduling } from "../operations/registry";
+import { recordExplicitHandoff } from "../agent/escalation";
+import { normalizeCallerGoals } from "./normalize-caller-goals";
 
 export interface ApplyCallerMeaningResult {
   context: VoiceV3CallContext;
@@ -173,6 +176,7 @@ export function applyCallerMeaningToContext(
         workingCtx,
         "scheduling_generation_changed",
       );
+      workingCtx = markOperationsStaleForScheduling(workingCtx, workingCtx.scheduling.generation);
       scheduling.generation = workingCtx.scheduling.generation;
       if (correctionCount > 0 || priorNormalized) {
         console.log("SCHEDULING_CORRECTED", {
@@ -203,14 +207,21 @@ export function applyCallerMeaningToContext(
     });
   }
 
+  let preGoalCtx: VoiceV3CallContext = {
+    ...workingCtx,
+    updatedAt,
+    intake: { values },
+    scheduling,
+    runtime: { version: workingCtx.runtime.version + 1 },
+  };
+  for (const g of normalizeCallerGoals(meaning)) {
+    if (g.type === "TRANSFER" && (g.disposition === "START" || g.disposition === "CHANGE")) {
+      preGoalCtx = recordExplicitHandoff(preGoalCtx);
+    }
+  }
+
   let context: VoiceV3CallContext = applyGoalLifecycleFromMeaning({
-    ctx: {
-      ...workingCtx,
-      updatedAt,
-      intake: { values },
-      scheduling,
-      runtime: { version: workingCtx.runtime.version + 1 },
-    },
+    ctx: preGoalCtx,
     meaning,
     at,
   });

@@ -1,40 +1,42 @@
 # Voice V3 — Production Agent Foundation Audit
 
-Status as of agent foundation pass on branch `cursor/voice-v3-meaning-find-fix-2304`.
+Branch: `cursor/voice-v3-meaning-find-fix-2304` (updated after foundation completion pass).
 
-## Architecture reuse
+## Status summary
 
-| Area | Status | Location |
-|------|--------|----------|
-| Authoritative runtime | COMPLETE | `state/call-runtime.ts`, `state/call-context.ts` |
-| Rules engine | COMPLETE | `state/call-rules.ts` |
-| Meaning merge | COMPLETE | `intake/apply-caller-meaning.ts` |
-| Goal merge (no UNKNOWN downgrade) | COMPLETE | `intake/merge-active-goal.ts` |
-| Goal lifecycle / abandon | PARTIAL | `agent/goal-manager.ts` (single active instance; pending queue hook) |
-| Recovery directives | PARTIAL | `recovery/evaluate-recovery.ts` (+ expanded codes) |
-| Semantic retry | COMPLETE | `intake/semantic-extraction-retry.ts` |
-| Composable agent planner | COMPLETE | `agent/agent-planner.ts` + evaluators |
-| Agent snapshot → Live | COMPLETE | `agent/after-state-change.ts`, `agent/sync-agent-state-to-live.ts` |
-| Claim gating | COMPLETE | `agent/evaluate-claims.ts` |
-| Async operation registry (derived) | PARTIAL | `agent/async-operations.ts` (FIND/BOOK/CANCEL/RESCHEDULE) |
-| Capabilities | COMPLETE | `agent/capability-state.ts` |
-| Invariant checker | PARTIAL | `agent/runtime-invariants.ts` (core booking/slot checks) |
-| Conversation simulator | PARTIAL | `scripts/test-voice-v3-agent-simulator.ts` |
-| Handoff / escalation counters | MISSING | — |
-| Full failure matrix tests (§47) | MISSING | — |
-| PSTN certification (§51) | NOT RUN | Manual |
+| Area | Status | Notes |
+|------|--------|--------|
+| Authoritative runtime + `commitContext`/`replan` | **COMPLETE** | `replaceContext` → replan; meaning apply → replan |
+| Composable agent planner | **COMPLETE** | `agent/agent-planner.ts` |
+| Multi-goal (`goals[]` + `GoalManagerState`) | **COMPLETE** | Schema + `normalizeCallerGoals` + queue ordering |
+| Operations registry (authoritative) | **COMPLETE** | `operations` on context; FIND wired; registry API |
+| Claim gating from registry | **COMPLETE** | `evaluate-claims.ts` |
+| Handoff / escalation | **COMPLETE** | `escalation.ts`, explicit transfer, blocker counters |
+| Recovery matrix codes | **COMPLETE** | Including outcome-unknown for BOOK/RESCHEDULE/CANCEL |
+| Invariant checker | **COMPLETE** | Core + `test-voice-v3-agent-invariants.ts` |
+| Conversation simulator / foundation tests | **COMPLETE** | `npm run test:voice-v3-agent` (5 scripts) |
+| Failure matrix §47 | **PARTIAL** | Representative scenarios in `test-voice-v3-agent-failure-matrix.ts`; not every HTTP code path |
+| BOOK/RESCHEDULE operation registration on all executor paths | **PARTIAL** | FIND + test hooks; book/reschedule/cancel should register on start (follow-up in dispatch files) |
+| Live snapshot supersede certification | **COMPLETE** | `state_version` + explicit supersede instruction in snapshot |
+| PSTN certification §51 | **NOT RUN** | Manual after deploy |
+| Real Astra multi-goal messy language | **NOT RUN** | Requires live Astra |
 
-## Planner composition
+## Automated verification
 
-`planAgentState` composes: `evaluateGoals`, `evaluateRequirements`, `evaluateOperations`, `evaluateRecoveryBlocker`, `evaluateAllowedClaims`, `chooseNextConversationAction`.
+```bash
+npm run test:voice-v3-agent
+npm run test:voice-v3-recovery
+```
 
-## Runtime loop
+## Architecture loop
 
-`afterVoiceV3StateChange` runs after caller meaning apply and FIND completion (non-blocking Live enqueue via `queueMicrotask`).
+```
+mutation → commitContext/replaceContext → invariants → planAgentState → Live snapshot (async)
+```
 
-## Remaining limitations
+## Remaining before PSTN
 
-- Multi-goal queue requires Astra/schema support for multiple intents per turn.
-- Unified `operations` map on context not persisted (derived from calendar phases).
-- Reschedule/cancel outcome-unknown recovery codes typed but not all executor paths emit them yet.
-- PSTN and real Astra integration tests remain manual post-deploy.
+1. Register `BOOK_APPOINTMENT` / `RESCHEDULE_APPOINTMENT` / `CANCEL_APPOINTMENT` operations at commit boundaries in all dispatch paths (mirror FIND).
+2. Expand failure-matrix tests for every listed Microsoft HTTP class if not already covered by integration tests.
+3. Run real Astra integration with multi-goal utterances.
+4. Deploy + PSTN A–E with production timeline inspection.

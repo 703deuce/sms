@@ -29,6 +29,7 @@ import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { registerDurableBooking } from "./durable-booking-store";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
+import { startOperation, transitionOperation } from "../operations/registry";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;

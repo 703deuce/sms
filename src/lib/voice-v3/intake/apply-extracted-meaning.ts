@@ -15,7 +15,7 @@ import type { CallerMeaning } from "./caller-meaning-schema";
 import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
-import { afterVoiceV3StateChange } from "../agent/after-state-change";
+import { registerVoiceV3LiveSend } from "../state/call-runtime";
 
 function slotSelectionChanged(
   before: SelectedAvailabilitySlot | null,
@@ -91,11 +91,7 @@ export async function applyExtractedCallerMeaning(input: {
     source: input.source ?? "delegation",
   });
 
-  afterVoiceV3StateChange({
-    runtime,
-    reason: "caller_meaning_applied",
-    send: input.send,
-  });
+  registerVoiceV3LiveSend(sessionId, input.send);
 
   const snapBefore = runtime.getSnapshot();
   const rulesBefore = evaluateVoiceV3Rules(snapBefore, runtime.config);

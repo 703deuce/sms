@@ -54,7 +54,9 @@ export function buildAgentSnapshotLiveAppend(
     `forbidden_claims=${forbidden}`,
     `find_ready=${evaluateFindReadyHint(ctx)}`,
     `booking_ready_hint=${evaluateBookingReadyHint(ctx)}`,
-    "Live: phrase naturally; obey allowed/forbidden claims; never use stale needs from earlier state_version.",
+    `authoritative_state_version=${snapshot.stateVersion}`,
+    "Live: phrase naturally; obey allowed/forbidden claims.",
+    "If an earlier snapshot had a lower state_version, ignore its conversational need — only this state_version is authoritative.",
   ].join("\n");
 
   return {

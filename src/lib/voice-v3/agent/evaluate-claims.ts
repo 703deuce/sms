@@ -1,6 +1,7 @@
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { AgentClaim } from "./conversation-action";
-import { deriveAsyncOperations, findRunningOperation } from "./async-operations";
+import { findRunningOperation } from "./async-operations";
+import { getOperations } from "../operations/registry";
 
 export interface ClaimsEvaluation {
   allowed: AgentClaim[];
@@ -8,7 +9,7 @@ export interface ClaimsEvaluation {
 }
 
 export function evaluateAllowedClaims(ctx: VoiceV3CallContext): ClaimsEvaluation {
-  const ops = deriveAsyncOperations(ctx);
+  const ops = Object.values(getOperations(ctx));
   const allowed: AgentClaim[] = [];
   let forbidden: AgentClaim[] = [
     "CLAIM_BOOKED",
@@ -16,7 +17,7 @@ export function evaluateAllowedClaims(ctx: VoiceV3CallContext): ClaimsEvaluation
     "CLAIM_CANCELLED",
   ];
 
-  const findRunning = findRunningOperation(ops, "FIND_AVAILABILITY");
+  const findRunning = findRunningOperation(ctx, "FIND_AVAILABILITY");
   if (findRunning) {
     allowed.push("CLAIM_CHECKING_AVAILABILITY");
   } else {

@@ -13,7 +13,7 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
-import { afterVoiceV3StateChange } from "../agent/after-state-change";
+import { startOperation, transitionOperation } from "../operations/registry";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -148,7 +148,8 @@ export async function dispatchFindAvailabilityIfRequired(
     attempt_id: request.requestKey,
   });
 
-  const marked = {
+  const opId = `find_${ctx.callId}_${request.schedulingGeneration}_${request.requestKey}`;
+  let marked = {
     ...ctx,
     availability: {
       ...ctx.availability,
@@ -158,6 +159,12 @@ export async function dispatchFindAvailabilityIfRequired(
       findStartedAt,
     },
   };
+  marked = startOperation(marked, {
+    operationId: opId,
+    type: "FIND_AVAILABILITY",
+    schedulingGeneration: request.schedulingGeneration,
+    at: new Date(findStartedAt),
+  });
   runtime.replaceContext(marked);
   markFindInFlight(ctx.liveSessionId, request.schedulingGeneration);
 
@@ -239,6 +246,7 @@ export async function dispatchFindAvailabilityIfRequired(
   clearFindInFlight(ctx.liveSessionId);
 
   const latest = runtime.getSnapshot();
+  const staleOpId = `find_${latest.callId}_${request.schedulingGeneration}_${request.requestKey}`;
   if (isStaleSchedulingPreference(latest, request.schedulingGeneration)) {
     console.log("AVAILABILITY_RESULT_STALE", {
       call_id: latest.callId,
@@ -246,6 +254,7 @@ export async function dispatchFindAvailabilityIfRequired(
       result_scheduling_generation: request.schedulingGeneration,
       current_scheduling_generation: latest.scheduling.generation,
     });
+    runtime.replaceContext(transitionOperation(latest, staleOpId, "STALE"));
     return;
   }
 
@@ -308,8 +317,21 @@ export async function dispatchFindAvailabilityIfRequired(
     });
   }
 
-  runtime.replaceContext(updated);
-  afterVoiceV3StateChange({ runtime, reason: "find_availability_completed" });
+  const current = runtime.getSnapshot();
+  if (current.scheduling.generation !== request.schedulingGeneration) {
+    const staleCtx = transitionOperation(current, staleOpId, "STALE");
+    runtime.replaceContext(staleCtx);
+    return;
+  }
+  let finalCtx = updated;
+  if (failure) {
+    finalCtx = transitionOperation(finalCtx, staleOpId, "FAILED", {
+      failureCode: failure.reason,
+    });
+  } else {
+    finalCtx = transitionOperation(finalCtx, staleOpId, "SUCCEEDED");
+  }
+  runtime.replaceContext(finalCtx);
 
   if (failure) {
     console.log("ASYNC_ACTION_FAILED", {

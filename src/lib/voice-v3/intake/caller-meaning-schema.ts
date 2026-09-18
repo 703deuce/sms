@@ -3,6 +3,7 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { slotSelectionMeaningZodObject } from "./slot-selection-schema";
 import { appointmentSelectionMeaningZodObject } from "./appointment-selection-schema";
 import { cancellationConfirmationSchema } from "./cancellation-confirmation-schema";
+import { callerGoalsZodArray } from "./caller-goal-meaning";
 
 const voiceV3GoalSchema = z.enum([
   "UNKNOWN",
@@ -80,6 +81,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
 
   return z.object({
     active_goal: voiceV3GoalSchema,
+    goals: callerGoalsZodArray.optional().default([]),
     captured_fields: z.array(
       z.object({
         key: fieldKey,

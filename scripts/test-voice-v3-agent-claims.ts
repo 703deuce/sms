@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { planAgentState } from "../src/lib/voice-v3/agent/agent-planner";
+import { startOperation } from "../src/lib/voice-v3/operations/registry";
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 
 const NOW = new Date("2026-09-17T15:00:00.000Z");
@@ -17,7 +18,7 @@ function main() {
     now: NOW,
   });
 
-  const pending = {
+  let pending = {
     ...ctx,
     availability: {
       ...ctx.availability,
@@ -26,6 +27,11 @@ function main() {
       inFlightGeneration: 1,
     },
   };
+  pending = startOperation(pending, {
+    operationId: "find_claims_test",
+    type: "FIND_AVAILABILITY",
+    schedulingGeneration: 1,
+  });
 
   const snap = planAgentState(pending, CONFIG);
   assert.ok(snap.allowedClaims.includes("CLAIM_CHECKING_AVAILABILITY"));

@@ -125,7 +125,8 @@ Transport mode: ${context.intakeTransport === "output_text" ? "output_text JSON"
 ${
   context.intakeTransport === "output_text"
     ? `Each delegated completion must emit a single JSON object (no markdown fences) matching the CallerMeaning schema:
-- active_goal (UNKNOWN | GENERAL | BOOK_APPOINTMENT | REQUEST_CALLBACK | REQUEST_TRANSFER)
+- active_goal (legacy single goal — keep in sync with goals[])
+- goals: [{ type: BOOK_APPOINTMENT | RESCHEDULE_APPOINTMENT | CANCEL_APPOINTMENT | CALLBACK | TRANSFER | GENERAL_INFORMATION, disposition: START | CONTINUE | CHANGE | ABANDON }] — use for multiple intents in one utterance (e.g. cancel + book)
 - captured_fields: [{ key, value, confidence }]
 - corrections: [{ key, new_value, confidence }] — latest correction wins for that key only
 - scheduling: date_relation, weekday, time_kind, daypart, exact_time, etc. (semantic scheduling — not calendar IDs)

@@ -3,6 +3,7 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
 import { evaluateVoiceV3Recovery } from "./evaluate-recovery";
 import type { VoiceV3RecoveryDirective } from "./types";
+import { recordBlockerSeen } from "../agent/escalation";
 
 export type RecoverySyncOutcome =
   | "unchanged"
@@ -102,12 +103,16 @@ export function syncVoiceV3RecoveryOnContext(input: {
     });
   }
 
+  let ctxOut = {
+    ...input.ctx,
+    recovery: { active: next, lastResolved: input.ctx.recovery.lastResolved },
+    runtime: { version: input.ctx.runtime.version + 1 },
+  };
+  if (next) {
+    ctxOut = recordBlockerSeen(ctxOut, next.code);
+  }
   return {
-    ctx: {
-      ...input.ctx,
-      recovery: { active: next, lastResolved: input.ctx.recovery.lastResolved },
-      runtime: { version: input.ctx.runtime.version + 1 },
-    },
+    ctx: ctxOut,
     directive: next,
     outcome: next && prev ? "superseded" : "created",
   };

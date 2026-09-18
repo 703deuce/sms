@@ -6,6 +6,7 @@ import type { RecoveryEvaluation } from "./evaluate-recovery-blocker";
 import type { RequirementsEvaluation } from "./evaluate-requirements";
 import type { OperationsEvaluation } from "./evaluate-operations";
 import type { GoalsEvaluation } from "./evaluate-goals";
+import { shouldOfferHandoff } from "./escalation";
 
 function prioritizeMissingField(missing: string[], config: VoiceV3AgentConfig): string | null {
   if (missing.length === 0) return null;
@@ -25,6 +26,15 @@ export function chooseNextConversationAction(input: {
   recovery: RecoveryEvaluation;
 }): ConversationAction {
   const { ctx, rules, config, recovery, operations } = input;
+
+  const handoff = shouldOfferHandoff(ctx);
+  if (handoff.required && handoff.fallback) {
+    return { type: "OFFER_HANDOFF", reason: handoff.reason };
+  }
+
+  if (ctx.dialog.activeGoal === "REQUEST_TRANSFER" && input.goals.active === "REQUEST_TRANSFER") {
+    return { type: "OFFER_HANDOFF", reason: "caller_requested_human" };
+  }
 
   const findRunning = operations.active.some(
     (o) => o.type === "FIND_AVAILABILITY" && o.status === "RUNNING",

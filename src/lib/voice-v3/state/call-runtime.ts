@@ -9,6 +9,19 @@ import { evaluateVoiceV3Rules, type VoiceV3RuleEvaluation } from "./call-rules";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { planAgentState } from "../agent/agent-planner";
 import { formatConversationActionForSnapshot } from "../agent/snapshot-format";
+import { afterVoiceV3StateChange, type LiveSendFn } from "../agent/after-state-change";
+import { deriveVoiceV3Capabilities } from "../agent/capability-state";
+import { DEFAULT_VOICE_V3_ESCALATION_POLICY, initialEscalationCounters } from "../agent/escalation";
+
+const liveSendBySession = new Map<string, LiveSendFn>();
+
+export function registerVoiceV3LiveSend(liveSessionId: string, send: LiveSendFn): void {
+  liveSendBySession.set(liveSessionId.trim(), send);
+}
+
+export function clearVoiceV3LiveSend(liveSessionId: string): void {
+  liveSendBySession.delete(liveSessionId.trim());
+}
 
 const TTL_MS = 2 * 60 * 60 * 1000;
 const runtimes = new Map<
@@ -32,8 +45,30 @@ export class VoiceV3CallRuntime {
     return this.context;
   }
 
+  commitContext(context: VoiceV3CallContext, reason: string, send?: LiveSendFn): void {
+    this.context = this.ensureAgentFields(context);
+    const liveSend = send ?? liveSendBySession.get(this.context.liveSessionId);
+    afterVoiceV3StateChange({ runtime: this, reason, send: liveSend });
+  }
+
   replaceContext(context: VoiceV3CallContext): void {
-    this.context = context;
+    this.commitContext(context, "replace_context");
+  }
+
+  replan(reason: string, send?: LiveSendFn): void {
+    afterVoiceV3StateChange({ runtime: this, reason, send: send ?? liveSendBySession.get(this.context.liveSessionId) });
+  }
+
+  private ensureAgentFields(context: VoiceV3CallContext): VoiceV3CallContext {
+    return {
+      ...context,
+      operations: context.operations ?? {},
+      capabilities: context.capabilities ?? deriveVoiceV3Capabilities(this.config),
+      escalation: context.escalation ?? {
+        policy: DEFAULT_VOICE_V3_ESCALATION_POLICY,
+        counters: initialEscalationCounters(),
+      },
+    };
   }
 
   applyEvent(event: VoiceV3CallEvent): {
@@ -119,6 +154,8 @@ export class VoiceV3CallRuntime {
         err,
       });
     });
+
+    this.replan("caller_meaning_applied");
 
     return {
       rules,

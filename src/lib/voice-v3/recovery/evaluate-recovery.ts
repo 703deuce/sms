@@ -94,6 +94,30 @@ export function evaluateVoiceV3Recovery(input: {
     });
   }
 
+  if (ctx.appointmentManagement.cancellation.phase === "CANCELLATION_OUTCOME_UNKNOWN") {
+    return newDirective({
+      ctx,
+      code: "CANCELLATION_OUTCOME_UNKNOWN",
+      userRecoverable: false,
+      relatedAction: "CANCEL_APPOINTMENT",
+      safeAgentMessage:
+        "Cancellation may or may not have completed. Do not tell the caller it failed or succeeded until reconciled. Explain you are confirming with the schedule system.",
+      at,
+    });
+  }
+
+  if (ctx.appointmentManagement.reschedule.phase === "RESCHEDULE_OUTCOME_UNKNOWN") {
+    return newDirective({
+      ctx,
+      code: "RESCHEDULE_OUTCOME_UNKNOWN",
+      userRecoverable: false,
+      relatedAction: "RESCHEDULE_APPOINTMENT",
+      safeAgentMessage:
+        "Reschedule may or may not have completed. Do not claim success or failure until reconciled with the calendar.",
+      at,
+    });
+  }
+
   if (ctx.booking.lastFailure) {
     const uncertain = ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
     return newDirective({
@@ -186,7 +210,7 @@ export function evaluateVoiceV3Recovery(input: {
     ) {
       return newDirective({
         ctx,
-        code: "APPOINTMENT_NOT_IDENTIFIED",
+        code: "APPOINTMENT_NOT_FOUND",
         userRecoverable: true,
         relatedAction: "FIND_EXISTING_APPOINTMENT",
         safeAgentMessage:

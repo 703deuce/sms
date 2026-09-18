@@ -25,6 +25,7 @@ function baseCtx() {
 function meaning(partial: Partial<CallerMeaning>): CallerMeaning {
   return {
     active_goal: partial.active_goal ?? "UNKNOWN",
+    goals: partial.goals ?? [],
     captured_fields: partial.captured_fields ?? [],
     scheduling: partial.scheduling ?? emptySchedulingMeaning(),
     slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),

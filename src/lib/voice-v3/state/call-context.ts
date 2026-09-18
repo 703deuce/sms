@@ -24,7 +24,10 @@ import type {
 import type { AppointmentSelectionMeaning } from "../intake/appointment-selection-schema";
 import type { CancellationConfirmation } from "../intake/cancellation-confirmation-schema";
 import type { VoiceV3RecoveryDirective } from "../recovery/types";
-import type { VoiceV3ConversationGoals } from "../agent/goal-manager";
+import type { GoalManagerState } from "../agent/goal-manager";
+import type { VoiceV3OperationsMap } from "../operations/types";
+import type { EscalationCounters, VoiceV3EscalationPolicy } from "../agent/escalation";
+import type { VoiceV3Capabilities } from "../agent/capability-state";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -56,8 +59,23 @@ export interface VoiceV3CallContext {
     activeGoal: VoiceV3Goal;
   };
   conversation?: {
-    goals: VoiceV3ConversationGoals;
+    goalManager: GoalManagerState;
     closingOffered?: boolean;
+    callEnding?: boolean;
+  };
+  operations: VoiceV3OperationsMap;
+  escalation?: {
+    policy: VoiceV3EscalationPolicy;
+    counters: EscalationCounters;
+  };
+  handoff?: {
+    requested: boolean;
+    reason?: string;
+    fallback?: string;
+  };
+  capabilities?: VoiceV3Capabilities;
+  agent?: {
+    lastSyncedStateVersion: number;
   };
   intake: {
     values: Record<string, CapturedField>;
@@ -133,9 +151,17 @@ export function createInitialVoiceV3CallContext(input: {
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     conversation: {
-      goals: { activeInstanceId: null, instances: [], pendingTypes: [] },
+      goalManager: {
+        activeGoalId: null,
+        pendingGoalIds: [],
+        completedGoalIds: [],
+        abandonedGoalIds: [],
+        goals: {},
+      },
       closingOffered: false,
+      callEnding: false,
     },
+    operations: {},
     intake: { values: {} },
     scheduling: { generation: 0, normalized: null },
     availability: {
