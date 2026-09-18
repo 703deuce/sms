@@ -60,7 +60,7 @@ export async function fetchMicrosoftBusyIntervals(input: {
     }
 
     const token = await Promise.race([
-      getValidAccessToken(input.connectionId, input.calendarConfig),
+      getValidAccessToken(input.connectionId, "microsoft", input.calendarConfig),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Microsoft token timeout")), timeoutMs),
       ),

@@ -144,25 +144,33 @@ export async function dispatchFindAvailabilityIfRequired(
     } else {
       failure = result.failure;
     }
+  } else if (!runtime.config.calendar?.connectionId) {
+    failure = {
+      reason: "configuration_missing",
+      message: "Calendar not configured on agent",
+      at: new Date().toISOString(),
+      schedulingGeneration: request.schedulingGeneration,
+    };
   } else {
     const { fetchMicrosoftBusyIntervals } = await import("./microsoft/microsoft-find-availability");
     const { getPrisma } = await import("@/lib/db");
     const prisma = getPrisma();
-    const connection = await prisma.calendarConnection.findUnique({
-      where: { id: runtime.config.calendar!.connectionId },
+    const connection = await prisma.voiceCalendarConnection.findFirst({
+      where: { id: runtime.config.calendar!.connectionId, provider: "microsoft" },
     });
-    if (!connection) {
+    if (!connection || connection.status !== "connected") {
       failure = {
         reason: "configuration_missing",
-        message: "Calendar connection not found",
+        message: "Microsoft calendar connection not found or not connected",
         at: new Date().toISOString(),
         schedulingGeneration: request.schedulingGeneration,
       };
     } else {
+      const calendarConfig = (connection.config || {}) as import("@/lib/voice/calendar/providers").CalendarConfig;
       const graphResult = await fetchMicrosoftBusyIntervals({
         request,
         connectionId: connection.id,
-        calendarConfig: connection as unknown as import("@/lib/voice/calendar/providers").CalendarConfig,
+        calendarConfig,
       });
       graphDurationMs = graphResult.durationMs;
       if (graphResult.ok) {
