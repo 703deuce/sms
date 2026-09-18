@@ -22,7 +22,7 @@ const assistantSync = readFileSync(
   join(root, "src/lib/voice/telnyx/assistant-sync.ts"),
   "utf8",
 );
-assert.match(assistantSync, /VOICE_V3_ONLY_NO_LEGACY_TELNYX_AMY/);
+assert.match(assistantSync, /LEGACY_TELNYX_AI_REMOVED_USE_VOICE_V3/);
 
 const state = createDefaultWizardState();
 state.bookingStrategy = "MICROSOFT_365";
@@ -38,12 +38,9 @@ assert.equal(
 );
 
 const inbound = readFileSync(join(root, "src/lib/voice/inbound.ts"), "utf8");
-const leanIdx = inbound.indexOf("isGptLivePstnLeanInbound");
-const receptionistIdx = inbound.indexOf("isAppointmentReceptionistAgent");
-assert.ok(
-  receptionistIdx > 0 && leanIdx > 0 && receptionistIdx < leanIdx,
-  "receptionist V3 SIP path runs before GPT-Live lean inbound",
-);
+assert.ok(!inbound.includes("startAiAssistantOnCall"), "inbound must not start Telnyx Amy");
+assert.ok(!inbound.includes("runGptLivePstnLeanAnswer"), "inbound must not use GPT-Live lean");
+assert.match(inbound, /handleUnsupportedVoiceAgentRuntime/);
 
 const workflow = readFileSync(
   join(root, "src/lib/voice/telnyx/conversation-workflow.ts"),
@@ -55,12 +52,18 @@ const toolsRoute = readFileSync(
   join(root, "src/app/api/telnyx/voice/tools/route.ts"),
   "utf8",
 );
-assert.match(toolsRoute, /shouldBlockTelnyxToolWebhookForReceptionist/);
+assert.match(toolsRoute, /isSupportedVoiceRuntimeAgent/);
 
 const fastPath = readFileSync(
   join(root, "src/lib/voice/tools/workflow-tool-fast-path.ts"),
   "utf8",
 );
-assert.match(fastPath, /shouldBlockTelnyxToolWebhookForReceptionist/);
+assert.match(fastPath, /isSupportedVoiceRuntimeAgent/);
+
+const webhook = readFileSync(
+  join(root, "src/lib/voice/telnyx/webhook-handlers.ts"),
+  "utf8",
+);
+assert.ok(!webhook.includes("startAiAssistantOnCall"), "answered webhook must not start Telnyx Amy");
 
 console.log("PASS voice-v3 runtime isolation");

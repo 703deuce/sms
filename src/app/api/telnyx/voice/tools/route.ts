@@ -127,21 +127,21 @@ export async function POST(request: Request) {
       conductorMode = isInternalBookingConductorMode(runtimeAgentConfig);
       const agentConfig = runtimeAgentConfig;
 
-      const {
-        blocksLegacyTelnyxVoiceRuntime,
-        logLegacyVoiceRuntimeBlocked,
-        receptionistTelnyxToolWebhookBlockedPayload,
-        shouldBlockTelnyxToolWebhookForReceptionist,
-      } = await import("@/lib/voice-v3/runtime-isolation");
-      if (
-        shouldBlockTelnyxToolWebhookForReceptionist(agentConfig, toolType || toolId)
-      ) {
-        logLegacyVoiceRuntimeBlocked({
-          path: "api/telnyx/voice/tools",
-          workspaceId,
-          agentId,
-          toolType: toolType || toolId,
+      const { isSupportedVoiceRuntimeAgent } = await import(
+        "@/lib/voice-v3/unsupported-voice-agent"
+      );
+      const { receptionistTelnyxToolWebhookBlockedPayload } = await import(
+        "@/lib/voice-v3/runtime-isolation"
+      );
+      if (!isSupportedVoiceRuntimeAgent(agentConfig)) {
+        return telnyxToolJson({
+          ok: false,
+          error: "voice_runtime_v3_receptionist_only",
+          error_code: "voice_runtime_v3_receptionist_only",
+          speak: "This line is not configured for our assistant.",
         });
+      }
+      if (toolType || toolId) {
         return telnyxToolJson(receptionistTelnyxToolWebhookBlockedPayload(toolType || toolId));
       }
       if (requiresLiveKitVoiceRuntime({ ...agentConfig, agentType: agent.agentType })) {

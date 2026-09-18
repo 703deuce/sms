@@ -10,45 +10,8 @@ import {
   applyActionTimezone,
   resolveRingTimeoutSeconds,
 } from "./routing-action-resolve";
-import {
-  isTelnyxVoiceConfigured,
-  startAiAssistantOnCall,
-  startCallRecording,
-  startCallTranscription,
-} from "./telnyx/assistant-sync";
-import { parseVoiceAgentConfig } from "./types";
+import { isTelnyxVoiceConfigured } from "./telnyx/assistant-sync";
 import { claimAiStart } from "./ai-start-lock";
-import {
-  AI_MEDIA_SETTLE_MS,
-  DEFAULT_AI_GREETING,
-  startupGreetingFromConfig,
-} from "./startup-greeting";
-import { playStartupGreetingMask } from "./startup-greeting-runtime";
-import {
-  buildPstnAudioDiagnostics,
-  normalizeOutputGainDb,
-  startInboundNoiseSuppression,
-} from "./pstn-audio";
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function resolveAiGreeting(input: {
-  config: ReturnType<typeof parseVoiceAgentConfig>;
-  agentName: string;
-  contactName?: string;
-}) {
-  const configured =
-    (input.config.callHandling?.greeting as string | undefined)?.trim() ||
-    DEFAULT_AI_GREETING;
-  let greeting = configured;
-  if (!input.contactName) return greeting;
-  if (/^hi[, ]/i.test(greeting) || greeting.includes(input.contactName)) {
-    return greeting;
-  }
-  return `Hi ${input.contactName}. ${greeting}`;
-}
 
 /** Honor draftConfig.callHandling.callRecording: off | inbound_only | all. */
 export function shouldStartCallRecording(
@@ -228,102 +191,39 @@ async function startAiOnInboundCall(input: {
   );
   const agentRuntimeCfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
 
-  if (
-    isAppointmentReceptionistAgent(agentRuntimeCfg) &&
-    isTelnyxVoiceConfigured() &&
-    input.telnyxCallControlId
-  ) {
-    const { usesTexmlDirectInbound } = await import("./telnyx/texml-direct-route");
-    if (usesTexmlDirectInbound(agentRuntimeCfg)) {
-      await prisma.voiceCallEvent
-        .create({
-          data: {
-            workspaceId: input.workspaceId,
-            callId: input.callId,
-            eventType: "media.ai_start_skipped",
-            payload: {
-              reason: "texml_direct_inbound",
-              path: "inbound_ai_start_receptionist",
-            } as object,
-          },
-        })
-        .catch(() => undefined);
-      return { started: false, reason: "texml_direct_inbound" };
-    }
-
-    const { assertAiCallAdmission } = await import("./platform/admission");
-    const admission = await assertAiCallAdmission({
-      workspaceId: input.workspaceId,
-      agentId: agent.id,
-      direction: "INBOUND",
-      callId: input.callId,
-    });
-    if (!admission.ok) {
-      return { started: false, reason: admission.code };
-    }
-
-    const claim = await claimAiStart(input.callId);
-    if (!claim.claimed) {
-      return { started: false, reason: claim.reason || "ai_start_claimed" };
-    }
-
-    const { startAppointmentReceptionistVoiceV3OnCall } = await import(
-      "@/lib/voice-v3/start-appointment-receptionist-pstn"
+  if (!isAppointmentReceptionistAgent(agentRuntimeCfg)) {
+    const { handleUnsupportedVoiceAgentRuntime } = await import(
+      "@/lib/voice-v3/unsupported-voice-agent"
     );
-    return startAppointmentReceptionistVoiceV3OnCall({
+    return handleUnsupportedVoiceAgentRuntime({
       workspaceId: input.workspaceId,
       callId: input.callId,
       agentId: agent.id,
       telnyxCallControlId: input.telnyxCallControlId,
-      claimMeta: claim.meta,
       path: "inbound_ai_start",
     });
   }
 
-  const { isGptLivePstnLeanInbound } = await import(
-    "@/lib/voice/telnyx/openai-realtime-bridge/flags"
-  );
-  if (
-    isGptLivePstnLeanInbound() &&
-    isTelnyxVoiceConfigured() &&
-    input.telnyxCallControlId
-  ) {
-    const claim = await claimAiStart(input.callId);
-    if (!claim.claimed) {
-      return { started: false, reason: claim.reason || "ai_start_claimed" };
-    }
-    const { runGptLivePstnLeanAnswer } = await import(
-      "@/lib/voice/telnyx/openai-realtime-bridge/gpt-live-pstn-lean-answer"
-    );
-    const lean = await runGptLivePstnLeanAnswer({
-      workspaceId: input.workspaceId,
-      callId: input.callId,
-      agentId: agent.id,
-      telnyxCallControlId: input.telnyxCallControlId,
-    });
-    if (!lean.ok) {
-      await handleAiAssistantStartFailure({
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        telnyxCallControlId: input.telnyxCallControlId,
-        error: new Error(lean.reason || "gpt_live_lean_answer_failed"),
-      });
-      return { started: false, reason: lean.reason || "gpt_live_lean_answer_failed" };
-    }
-    void prisma.voiceCall
-      .update({
-        where: { id: input.callId },
+  if (!isTelnyxVoiceConfigured() || !input.telnyxCallControlId) {
+    return { started: false, reason: "telnyx_not_configured" };
+  }
+
+  const { usesTexmlDirectInbound } = await import("./telnyx/texml-direct-route");
+  if (usesTexmlDirectInbound(agentRuntimeCfg)) {
+    await prisma.voiceCallEvent
+      .create({
         data: {
-          metadata: {
-            ...claim.meta,
-            aiStarted: true,
-            voiceTransport: "openai_live",
-            gptLiveLeanPath: true,
+          workspaceId: input.workspaceId,
+          callId: input.callId,
+          eventType: "media.ai_start_skipped",
+          payload: {
+            reason: "texml_direct_inbound",
+            path: "inbound_ai_start_receptionist",
           } as object,
         },
       })
       .catch(() => undefined);
-    return { started: true };
+    return { started: false, reason: "texml_direct_inbound" };
   }
 
   const { assertAiCallAdmission } = await import("./platform/admission");
@@ -337,270 +237,22 @@ async function startAiOnInboundCall(input: {
     return { started: false, reason: admission.code };
   }
 
-  if (isTelnyxVoiceConfigured() && input.telnyxCallControlId) {
-    // TeXML-direct agents never start AI via Call Control (already on assistant).
-    {
-      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
-      const { usesTexmlDirectInbound } = await import("./telnyx/texml-direct-route");
-      const cfgPeek = await loadVoiceAgentRuntimeConfig(
-        input.workspaceId,
-        agent.id,
-      );
-      if (usesTexmlDirectInbound(cfgPeek)) {
-        await prisma.voiceCallEvent
-          .create({
-            data: {
-              workspaceId: input.workspaceId,
-              callId: input.callId,
-              eventType: "media.ai_start_skipped",
-              payload: {
-                reason: "texml_direct_inbound",
-                path: "inbound_ai_start",
-              } as object,
-            },
-          })
-          .catch(() => undefined);
-        return { started: false, reason: "texml_direct_inbound" };
-      }
-    }
-
-    // Claim BEFORE answer/speak so call.answered cannot start a second mask/AI.
-    const claim = await claimAiStart(input.callId);
-    if (!claim.claimed) {
-      return { started: false, reason: claim.reason || "ai_start_claimed" };
-    }
-
-    const answerAt = Date.now();
-    await telnyxRequest(`/calls/${input.telnyxCallControlId}/actions/answer`, {
-      method: "POST",
-      body: {},
-    }).catch(() => undefined);
-
-    await prisma.voiceCallEvent.create({
-      data: {
-        workspaceId: input.workspaceId,
-        callId: input.callId,
-        eventType: "media.answer_sent",
-        payload: { at: answerAt } as object,
-      },
-    }).catch(() => undefined);
-
-    if (agent.telnyxAssistantId) {
-      const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
-      const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
-      const { isGptLivePstnBridgeActive, shouldUseOpenAiRealtimeMediaBridge } = await import(
-        "@/lib/voice/telnyx/openai-realtime-bridge/flags"
-      );
-      const gptLivePstn = isGptLivePstnBridgeActive();
-
-      // Inbound-only NS — do not process outbound AI playback.
-      await startInboundNoiseSuppression(input.telnyxCallControlId);
-
-      const startup = startupGreetingFromConfig(cfg);
-      const outputGainDb = normalizeOutputGainDb(cfg.voiceLanguage?.outputGainDb);
-
-      let maskResult = { played: false, concurrent: false };
-      if (!gptLivePstn) {
-        const playMaskFirst =
-          startup.enabled &&
-          startup.mode === "audio_url" &&
-          Boolean(startup.audioUrl);
-        const concurrentMask =
-          playMaskFirst &&
-          (startup.connectionGreeting === "transovo_default" ||
-            (typeof startup.delayMs === "number" && startup.delayMs <= 1000));
-
-        maskResult = await playStartupGreetingMask({
-          workspaceId: input.workspaceId,
-          callId: input.callId,
-          callControlId: input.telnyxCallControlId,
-          config: cfg,
-          wait: concurrentMask ? false : undefined,
-        });
-
-        if (startup.mode === "ai" || startup.mode === "none" || !maskResult.played) {
-          await sleep(AI_MEDIA_SETTLE_MS);
-        } else if (concurrentMask) {
-          const settleMs =
-            typeof startup.delayMs === "number" ? startup.delayMs : 500;
-          await sleep(Math.max(0, Math.min(1000, settleMs)));
-        }
-      }
-
-      const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
-      const { resolveCallDynamicVariables } = await import("./dynamic-variables");
-      const dynamicVariables = gptLivePstn
-        ? { output_gain_db: String(outputGainDb) }
-        : await resolveCallDynamicVariables({
-            workspaceId: input.workspaceId,
-            agentId: agent.id,
-            callId: input.callId,
-            contactId: callRow?.contactId,
-            fromE164: callRow?.fromE164,
-            toE164: callRow?.toE164,
-            direction: "INBOUND",
-            overrides: (callRow?.dynamicVariables || null) as Record<string, unknown> | null,
-          });
-      if (!gptLivePstn) {
-        if (input.contactName) dynamicVariables.full_name = input.contactName;
-        dynamicVariables.output_gain_db = String(outputGainDb);
-      }
-
-      const speaksFirst =
-        String(cfg.callHandling?.speaksFirst || "ai").toLowerCase() === "caller"
-          ? "caller"
-          : "ai";
-      const greeting =
-        speaksFirst === "caller"
-          ? null
-          : resolveAiGreeting({
-              config: cfg,
-              agentName: agent.name || "our assistant",
-              contactName: input.contactName,
-            });
-
-      const aiHandoffAt = Date.now();
-      let aiStartOk = false;
-      const useRealtimeBridge = shouldUseOpenAiRealtimeMediaBridge(cfg);
-      try {
-        if (useRealtimeBridge) {
-          const { startOpenAiRealtimeMediaBridgeOnCall } = await import(
-            "@/lib/voice/telnyx/openai-realtime-bridge/start-on-call"
-          );
-          const callRow = await prisma.voiceCall.findUnique({ where: { id: input.callId } });
-          const bridge = await startOpenAiRealtimeMediaBridgeOnCall({
-            workspaceId: input.workspaceId,
-            callId: input.callId,
-            agentId: agent.id,
-            telnyxCallControlId: input.telnyxCallControlId,
-            fromE164: callRow?.fromE164,
-          });
-          if (!bridge.started) {
-            throw new Error(bridge.reason || "realtime_bridge_start_failed");
-          }
-        } else {
-          await startAiAssistantOnCall({
-            callControlId: input.telnyxCallControlId,
-            assistantId: agent.telnyxAssistantId,
-            greeting: greeting || undefined,
-            dynamicVariables,
-            clientState: {
-              workspaceId: input.workspaceId,
-              callId: input.callId,
-              agentId: agent.id,
-              connectionGreetingPlaying: Boolean(concurrentMask || maskResult.concurrent),
-            },
-          });
-        }
-        aiStartOk = true;
-      } catch (err) {
-        await handleAiAssistantStartFailure({
-          workspaceId: input.workspaceId,
-          callId: input.callId,
-          telnyxCallControlId: input.telnyxCallControlId,
-          error: err,
-        });
-        return {
-          started: false,
-          reason: useRealtimeBridge ? "realtime_bridge_start_failed" : "ai_assistant_start_failed",
-        };
-      }
-
-      if (!aiStartOk) {
-        return { started: false, reason: "ai_assistant_start_failed" };
-      }
-
-      const assistantStartReturnedAt = Date.now();
-      const { scheduleVoiceV2CallWarmup } = await import(
-        "@/lib/voice-receptionist-wizard/runtime-stubs"
-      );
-      scheduleVoiceV2CallWarmup({
-        workspaceId: input.workspaceId,
-        agentId: agent.id,
-        callId: input.callId,
-        callControlId: input.telnyxCallControlId,
-        fromE164: callRow?.fromE164,
-        agentConfig: cfg,
-        assistantStartReturnedAt,
-        warmupScheduledAt: Date.now(),
-      });
-
-      const pstnDiag = buildPstnAudioDiagnostics({
-        callControlId: input.telnyxCallControlId,
-        outputGainDb,
-        startupGreetingMode: startup.mode,
-        noiseSuppressionInbound: true,
-      });
-
-      await prisma.voiceCallEvent.create({
-        data: {
-          workspaceId: input.workspaceId,
-          callId: input.callId,
-          eventType: "media.ai_assistant_start",
-          payload: {
-            at: aiHandoffAt,
-            ASSISTANT_START_RETURNED_AT: assistantStartReturnedAt,
-            answerToAiMs: aiHandoffAt - answerAt,
-            startupMask: maskResult,
-            greetingPreview: (greeting || "").slice(0, 160),
-            speaksFirst,
-            path: "inbound_initiated",
-            pstnAudio: pstnDiag,
-            transcodesEstimate: 1,
-          } as object,
-        },
-      }).catch(() => undefined);
-
-      if (shouldStartCallRecording(cfg.callHandling?.callRecording, "INBOUND")) {
-        void startCallRecording(input.telnyxCallControlId);
-      }
-      void startCallTranscription(input.telnyxCallControlId);
-
-      const { resolveAiVersionStamp } = await import("./platform/admission");
-      const versionStamp = await resolveAiVersionStamp({
-        workspaceId: input.workspaceId,
-        agentId: agent.id,
-        publishedVersionId: agent.publishedVersionId,
-      });
-
-      await prisma.voiceCall.update({
-        where: { id: input.callId },
-        data: {
-          status: "IN_PROGRESS",
-          answeredAt: new Date(),
-          agentVersionId: versionStamp.agentVersionId,
-          dynamicVariables: dynamicVariables as object,
-          metadata: {
-            ...claim.meta,
-            routing: input.routing,
-            payload: input.payload,
-            aiStarted: true,
-            aiStartClaimed: true,
-            assistantId: agent.telnyxAssistantId,
-            transcriptionStarted: true,
-            assistantVersionId: versionStamp.assistantVersionId,
-            canaryVersionId: versionStamp.canaryVersionId,
-            canaryActive: versionStamp.canaryActive,
-            mediaPipeline: {
-              answerAt,
-              aiHandoffAt,
-              answerToAiMs: aiHandoffAt - answerAt,
-              startupMask: maskResult,
-              settleMs: AI_MEDIA_SETTLE_MS,
-              greetingPreview: (greeting || "").slice(0, 160),
-              speaksFirst,
-              path: "inbound_initiated",
-              transcodesEstimate: 1,
-            },
-            pstnAudio: pstnDiag,
-          } as object,
-        },
-      });
-      return { started: true, assistantId: agent.telnyxAssistantId };
-    }
+  const claim = await claimAiStart(input.callId);
+  if (!claim.claimed) {
+    return { started: false, reason: claim.reason || "ai_start_claimed" };
   }
 
-  return { started: false, reason: "telnyx_not_configured_or_no_assistant" };
+  const { startAppointmentReceptionistVoiceV3OnCall } = await import(
+    "@/lib/voice-v3/start-appointment-receptionist-pstn"
+  );
+  return startAppointmentReceptionistVoiceV3OnCall({
+    workspaceId: input.workspaceId,
+    callId: input.callId,
+    agentId: agent.id,
+    telnyxCallControlId: input.telnyxCallControlId,
+    claimMeta: claim.meta,
+    path: "inbound_ai_start",
+  });
 }
 
 async function executeHumanFirst(input: {

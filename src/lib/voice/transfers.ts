@@ -1,7 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import { normalizeE164 } from "@/lib/messaging/twilio-mappings";
-import { isTelnyxVoiceConfigured, startAiAssistantOnCall } from "./telnyx/assistant-sync";
+import { isTelnyxVoiceConfigured } from "./telnyx/assistant-sync";
 
 function encodeClientState(data: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(data)).toString("base64");
@@ -39,19 +39,15 @@ async function returnCallerToAi(workspaceId: string, callId: string, reason: str
       body: {},
     }).catch(() => undefined);
     const { loadVoiceAgentRuntimeConfig } = await import("./load-agent-config");
-    const { blocksLegacyTelnyxVoiceRuntime } = await import("@/lib/voice-v3/runtime-isolation");
+    const { isSupportedVoiceRuntimeAgent } = await import(
+      "@/lib/voice-v3/unsupported-voice-agent"
+    );
     const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agent.id);
-    if (blocksLegacyTelnyxVoiceRuntime(cfg)) {
+    if (isSupportedVoiceRuntimeAgent(cfg)) {
       const { forwardInboundCallToOpenAiLiveSip } = await import(
         "@/lib/voice-v3-basic/telnyx-sip-forward"
       );
       await forwardInboundCallToOpenAiLiveSip(call.telnyxCallControlId).catch(() => undefined);
-    } else {
-      await startAiAssistantOnCall({
-        callControlId: call.telnyxCallControlId,
-        assistantId: agent.telnyxAssistantId,
-        clientState: { workspaceId, callId, agentId: agent.id, transferFallback: true },
-      }).catch(() => undefined);
     }
   }
 

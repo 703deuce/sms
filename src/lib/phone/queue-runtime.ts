@@ -250,7 +250,7 @@ async function overflowQueue(
     const agent = await prisma.voiceAgent.findFirst({
       where: { id: queue.overflowTarget, workspaceId: input.workspaceId },
     });
-    if (agent?.telnyxAssistantId && isTelnyxPhoneConfigured()) {
+    if (agent && isTelnyxPhoneConfigured()) {
       const { assertAiCallAdmission, canStartMultiPartyAi } = await import(
         "@/lib/voice/platform/admission"
       );
@@ -275,25 +275,17 @@ async function overflowQueue(
           };
         }
       }
-      const { parseVoiceAgentConfig } = await import("@/lib/voice/types");
-      const cfg = parseVoiceAgentConfig(agent.draftConfig);
-      const multiPartyMode = cfg.multiParty?.mode || "assist";
-      const { startAiAssistantOnCall } = await import("@/lib/voice/telnyx/assistant-sync");
-      await startAiAssistantOnCall({
-        callControlId: input.telnyxCallControlId,
-        assistantId: agent.telnyxAssistantId,
-        greeting:
-          multiPartyMode === "silent" || multiPartyMode === "listen_until_asked"
-            ? ""
-            : undefined,
-        clientState: {
-          workspaceId: input.workspaceId,
-          agentId: agent.id,
-          multiParty: Boolean(human?.conferenceId),
-          multiPartyMode,
-          identifyAsAi: cfg.multiParty?.identifyAsAi !== false,
-        },
-      }).catch(() => undefined);
+      const { loadVoiceAgentRuntimeConfig } = await import("@/lib/voice/load-agent-config");
+      const { isSupportedVoiceRuntimeAgent } = await import(
+        "@/lib/voice-v3/unsupported-voice-agent"
+      );
+      const cfg = await loadVoiceAgentRuntimeConfig(input.workspaceId, agent.id);
+      if (isSupportedVoiceRuntimeAgent(cfg)) {
+        const { forwardInboundCallToOpenAiLiveSip } = await import(
+          "@/lib/voice-v3-basic/telnyx-sip-forward"
+        );
+        await forwardInboundCallToOpenAiLiveSip(input.telnyxCallControlId).catch(() => undefined);
+      }
       await prisma.humanCall.update({
         where: { id: input.humanCallId },
         data: { status: "ai_fallback", disposition: `ai:${agent.id}` },

@@ -1,43 +1,44 @@
 # Voice V3 runtime isolation
 
-Appointment receptionist PSTN uses **one** booking pipeline:
+The **only** supported PSTN voice product runtime is the wizard **appointment receptionist** (`advanced.capabilityPack === "appointment_receptionist"`).
+
+Legacy Telnyx Amy, GPT-Live lean inbound, OpenAI realtime media bridge, Voice V2 HTTP tools, and generic AI receptionist agents are **removed from the call path** — not feature-flagged.
 
 ```
 Caller → Telnyx Call Control → SIP forward → OpenAI Live
-  → Astra `emit_caller_meaning` → VoiceV3CallContext
-  → evaluateVoiceV3Rules → FIND / BOOK / RESCHEDULE / CANCEL dispatch
-  → Microsoft Graph (certified executors under `src/lib/voice-v3/calendar/microsoft/`)
-  → authoritative Live context → Amy may confirm only after provider success
+  → Astra emit_caller_meaning → VoiceV3CallContext
+  → evaluateVoiceV3Rules → FIND / BOOK / RESCHEDULE / CANCEL
+  → Microsoft Graph (certified executors)
+  → authoritative Live context → Amy confirms only after provider success
 ```
 
-## Hard blocks (no legacy path, no feature flag)
+## Supported vs unsupported agents
 
-Receptionist agents are identified only by `advanced.capabilityPack === "appointment_receptionist"`. There is no `voiceV3PstnBooking` toggle.
+| Agent | PSTN |
+|-------|------|
+| Appointment receptionist (Voice V3) | `startAppointmentReceptionistVoiceV3OnCall` |
+| Any other voice agent / AI receptionist | `handleUnsupportedVoiceAgentRuntime` — spoken decline, no legacy fallback |
+
+## Entry points (single path)
 
 | Layer | Behavior |
 |-------|----------|
-| Inbound | **First** path after agent load: `startAppointmentReceptionistVoiceV3OnCall` (before GPT-Live lean or Telnyx Amy) |
-| `call.answered` | Same helper — SIP forward only |
-| Safety net | `startAiAssistantOnCall` throws if client state includes a receptionist agent |
-| Tool webhooks | `/api/telnyx/voice/tools` and workflow fast-path reject **any** Telnyx tool for receptionist agents (`VOICE_V3_ONLY_NO_LEGACY_PIPELINE`) |
-| Telnyx publish | `ensureVoiceV2SharedToolsForAgent` returns null tool IDs (no voice-v2 webhooks) |
-| Workflow graph | `VOICE_V3_PSTN_GENERAL_APPEND` — no voice_v2 / voice_ai_booking_turn scheduling tools |
-| HTTP | `/api/telnyx/voice-v2/*` routes removed |
+| `inbound.ts` `startAiOnInboundCall` | Receptionist → V3 SIP forward; else unsupported handler |
+| `webhook-handlers` `call.answered` | Same |
+| `startAiAssistantOnCall` | Always throws `LEGACY_TELNYX_AI_REMOVED_USE_VOICE_V3` |
+| `/api/telnyx/voice/tools` | Receptionist only; Telnyx mid-call tools disabled (scheduling is OpenAI Live + rules) |
+| Transfer return-to-AI | SIP forward when agent is supported receptionist |
+| Queue overflow to AI | SIP forward when supported; no Telnyx Amy |
 
-Wizard config compiles in `src/lib/voice-receptionist-wizard/`; runtime resolves via `resolveVoiceV3AgentConfigForAgent()`.
+## Booking scene
 
-## Booking scene (deterministic only)
-
-FIND → OfferSet → SELECT → **revalidate** → BOOK → `BOOKING_CONFIRMED` → Live context. Reschedule/cancel reuse the same FIND/SELECT/revalidate machinery.
-
-Static checks: `scripts/test-voice-v3-booking-scene-invariant.ts` (runs inside `npm run test:voice-v3-booking`).
+FIND → OfferSet → SELECT → **revalidate** → BOOK → `BOOKING_CONFIRMED`. Reschedule/cancel reuse the same machinery.
 
 ## Regression
 
-- `tsx scripts/test-voice-v3-runtime-isolation.ts`
-- `npm run test:voice-v3-intake` (includes pipeline boundary + isolation)
-- `npm run test:voice-v3-booking` / `test:voice-v3-reschedule` / `test:voice-v3-cancellation`
+- `tsx scripts/test-voice-v3-runtime-isolation.ts` (in `test:voice-v3-intake`)
+- `npm run test:voice-v3-booking` / `reschedule` / `cancellation`
 
-## PSTN + Microsoft certification
+## Manual certification
 
-After automated suites pass: BOOK → verify in Microsoft → RESCHEDULE → verify → CANCEL → verify, plus one PSTN call. Cloud agents cannot complete PSTN; run manually per `docs/V1-PRODUCTION-CERTIFICATION.md`.
+Microsoft lifecycle + PSTN on staging/production — see `docs/V1-PRODUCTION-CERTIFICATION.md`.

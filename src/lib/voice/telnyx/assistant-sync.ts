@@ -1073,67 +1073,14 @@ export async function dialOutboundCall(input: {
  * Attach a published Telnyx AI Assistant to an active Call Control leg.
  * This is the critical runtime step — dial/answer alone does not talk.
  */
-export async function startAiAssistantOnCall(input: {
+export async function startAiAssistantOnCall(_input: {
   callControlId: string;
   assistantId: string;
   greeting?: string | null;
   clientState?: Record<string, unknown>;
   dynamicVariables?: Record<string, string> | null;
 }) {
-  if (!input.callControlId || input.callControlId.startsWith("mock_")) {
-    return { mode: "mock" as const };
-  }
-  if (!isTelnyxVoiceConfigured()) {
-    return { mode: "mock" as const };
-  }
-
-  const workspaceId = String(input.clientState?.workspaceId || "").trim();
-  const agentId = String(input.clientState?.agentId || "").trim();
-  if (workspaceId && agentId) {
-    const { loadVoiceAgentRuntimeConfig } = await import("../load-agent-config");
-    const { blocksLegacyTelnyxVoiceRuntime, logLegacyVoiceRuntimeBlocked } = await import(
-      "@/lib/voice-v3/runtime-isolation"
-    );
-    const cfg = await loadVoiceAgentRuntimeConfig(workspaceId, agentId);
-    if (blocksLegacyTelnyxVoiceRuntime(cfg)) {
-      logLegacyVoiceRuntimeBlocked({
-        path: "startAiAssistantOnCall",
-        workspaceId,
-        agentId,
-        callId: String(input.clientState?.callId || ""),
-      });
-      throw new Error("VOICE_V3_ONLY_NO_LEGACY_TELNYX_AMY");
-    }
-  }
-
-  const assistant: Record<string, unknown> = { id: input.assistantId };
-  if (input.dynamicVariables && Object.keys(input.dynamicVariables).length) {
-    assistant.dynamic_variables = input.dynamicVariables;
-  }
-  const body: Record<string, unknown> = { assistant };
-  if (input.greeting) body.greeting = input.greeting;
-  if (input.clientState) {
-    body.client_state = Buffer.from(JSON.stringify(input.clientState)).toString("base64");
-  }
-
-  try {
-    await telnyxRequest(`/calls/${input.callControlId}/actions/ai_assistant_start`, {
-      method: "POST",
-      body,
-    });
-    return { mode: "telnyx" as const };
-  } catch (err) {
-    try {
-      await telnyxRequest(`/calls/${input.callControlId}/actions/start_ai_assistant`, {
-        method: "POST",
-        body,
-      });
-      return { mode: "telnyx" as const };
-    } catch {
-      console.error("[voice] ai_assistant_start failed", err);
-      throw err;
-    }
-  }
+  throw new Error("LEGACY_TELNYX_AI_REMOVED_USE_VOICE_V3");
 }
 
 /** Best-effort: start recording on a voice call leg. */
