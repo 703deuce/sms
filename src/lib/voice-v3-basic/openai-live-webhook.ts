@@ -12,6 +12,7 @@ import {
 } from "@/lib/voice-v3/state/call-runtime";
 import { attachVoiceV3LiveSideband } from "@/lib/voice-v3/live-sideband-session";
 import { consumeRecentPstnLeg, VoiceV3CallTrace } from "@/lib/voice-v3/telemetry/call-trace";
+import { logVoiceV3Pipeline } from "@/lib/voice-v3/telemetry/pipeline-log";
 
 const DEDUP_TTL_MS = 15 * 60 * 1000;
 const recentWebhookIds = new Map<string, number>();
@@ -149,6 +150,13 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
   trace.mark("webhook.verify.completed");
 
   console.log("OPENAI_LIVE_INCOMING", { sessionId });
+  logVoiceV3Pipeline("webhook", "live.incoming", {
+    live_session_id: sessionId,
+    webhook_id: event.id,
+    pstn_call_control_id: pstnLeg?.callControlId ?? null,
+    workspace_id: pstnLeg?.workspaceId ?? null,
+    agent_id: pstnLeg?.agentId ?? null,
+  });
 
   const { resolveVoiceV3AgentConfig } = await import("@/lib/voice-v3/state/call-runtime");
   let acceptAgentConfig = resolveVoiceV3AgentConfig();

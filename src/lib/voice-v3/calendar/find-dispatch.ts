@@ -10,6 +10,7 @@ import { buildLiveAvailabilitySessionAppend } from "./live-availability-context"
 import { deriveDefaultPresentedSlotIds, recordPresentedOffer } from "./presentation";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
+import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -97,6 +98,15 @@ export async function dispatchFindAvailabilityIfRequired(
   const rules = evaluateVoiceV3Rules(ctx, runtime.config);
 
   if (rules.requiredAction !== "FIND_AVAILABILITY") {
+    if (rules.mayFindAvailability || rules.hasSchedulingPreference) {
+      logVoiceV3Pipeline("calendar", "find_not_dispatched", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        required_action: rules.requiredAction,
+        may_find_availability: rules.mayFindAvailability,
+        scheduling_requires_clarification: rules.schedulingRequiresClarification,
+      });
+    }
     return;
   }
 
@@ -110,6 +120,13 @@ export async function dispatchFindAvailabilityIfRequired(
     });
     return;
   }
+
+  logVoiceV3Pipeline("calendar", "find_required", {
+    call_id: ctx.callId,
+    live_session_id: ctx.liveSessionId,
+    scheduling_generation: request.schedulingGeneration,
+    request_key: request.requestKey,
+  });
 
   console.log("FIND_AVAILABILITY_REQUIRED", {
     call_id: ctx.callId,

@@ -6,6 +6,7 @@ import { buildVoiceV3CallClock } from "../time/call-clock";
 import { createInitialVoiceV3CallContext, type VoiceV3CallContext } from "./call-context";
 import type { VoiceV3CallEvent } from "./call-events";
 import { evaluateVoiceV3Rules, type VoiceV3RuleEvaluation } from "./call-rules";
+import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 
 const TTL_MS = 2 * 60 * 60 * 1000;
 const runtimes = new Map<
@@ -67,6 +68,22 @@ export class VoiceV3CallRuntime {
       call_id: this.context.callId,
       live_session_id: this.context.liveSessionId,
       state_version: this.context.runtime.version,
+    });
+
+    logVoiceV3Pipeline("rules", "evaluated", {
+      call_id: this.context.callId,
+      live_session_id: this.context.liveSessionId,
+      state_version: this.context.runtime.version,
+      intake_complete: rules.intakeComplete,
+      missing_required_fields: rules.missingRequiredFields,
+      has_scheduling_preference: rules.hasSchedulingPreference,
+      scheduling_requires_clarification: rules.schedulingRequiresClarification,
+      scheduling_clarification_reason: rules.schedulingClarificationReason,
+      required_action: rules.requiredAction,
+      may_find_availability: rules.mayFindAvailability,
+      booking_ready: rules.bookingReady,
+      slot_selected: rules.slotSelected,
+      scheduling_generation: this.context.scheduling.generation,
     });
 
     console.log("RULES_EVALUATED", {
@@ -143,6 +160,15 @@ export function createVoiceV3CallRuntime(input: {
 
   const connectionId = config.calendar?.connectionId?.trim();
   const intakeKeys = config.intakeFields.map((f) => f.key);
+  logVoiceV3Pipeline("runtime", "created", {
+    live_session_id: input.liveSessionId,
+    call_id: callId,
+    intake_field_keys: intakeKeys,
+    calendar_connection_configured: Boolean(connectionId),
+    service_id: config.service.id,
+    timezone: config.timezone,
+  });
+
   console.log("VOICE_V3_BOOKING_PIPELINE_ACTIVE", {
     live_session_id: input.liveSessionId,
     call_id: callId,

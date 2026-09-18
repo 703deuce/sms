@@ -1,4 +1,5 @@
 import type { LiveSidebandSend } from "./greeting";
+import { logVoiceV3Pipeline } from "./telemetry/pipeline-log";
 
 /**
  * GPT-Live does not speak after session.thinking.append alone.
@@ -13,6 +14,12 @@ export function requestLiveSpeakContinuation(input: {
   if (!sessionId) return;
 
   const eventId = `voice_v3_speak_${input.reason}_${sessionId}_${Date.now()}`;
+  logVoiceV3Pipeline("live_out", "response.create", {
+    live_session_id: sessionId,
+    reason: input.reason,
+    event_id: eventId,
+  });
+
   console.log("LIVE_RESPONSE_CREATE_REQUESTED", {
     live_session_id: sessionId,
     reason: input.reason,

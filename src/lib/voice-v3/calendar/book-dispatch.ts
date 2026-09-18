@@ -25,6 +25,7 @@ import {
 } from "./live-booking-context";
 import { invalidateSelectionForSchedulingChange } from "./apply-slot-selection";
 import { dispatchFindAvailabilityIfRequired } from "./find-dispatch";
+import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { registerDurableBooking } from "./durable-booking-store";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
@@ -102,6 +103,15 @@ export async function dispatchBookingIfRequired(
   const rules = evaluateVoiceV3Rules(ctx, runtime.config);
 
   if (!rules.bookingReady || rules.requiredAction !== "BOOK_APPOINTMENT") {
+    if (rules.slotSelected || ctx.booking.phase === "SLOT_SELECTED") {
+      logVoiceV3Pipeline("calendar", "book_not_ready", {
+        call_id: ctx.callId,
+        live_session_id: ctx.liveSessionId,
+        booking_ready: rules.bookingReady,
+        required_action: rules.requiredAction,
+        missing_required_fields: rules.missingRequiredFields,
+      });
+    }
     return;
   }
 
@@ -139,6 +149,15 @@ export async function dispatchBookingIfRequired(
   if (!request) {
     return;
   }
+
+  logVoiceV3Pipeline("calendar", "book_ready", {
+    call_id: ctx.callId,
+    live_session_id: ctx.liveSessionId,
+    scheduling_generation: ctx.scheduling.generation,
+    offer_set_id: selected.offerSetId,
+    slot_id: selected.slotId,
+    booking_attempt_id: attempt.bookingAttemptId,
+  });
 
   console.log("BOOKING_READY", {
     call_id: ctx.callId,

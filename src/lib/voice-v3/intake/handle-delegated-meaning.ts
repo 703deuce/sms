@@ -9,6 +9,8 @@ import {
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { requestLiveSpeakContinuation } from "../live-response-trigger";
+import { VoiceV3CallTrace } from "../telemetry/call-trace";
+import { logVoiceV3Pipeline, summarizeAstraNestedEvent } from "../telemetry/pipeline-log";
 import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
 import { EMIT_CALLER_MEANING_TOOL_NAME } from "./emit-caller-meaning-tool";
 import { resolveVoiceV3IntakeTransport } from "./intake-transport";
@@ -39,6 +41,16 @@ async function runPostMeaningCalendarPipeline(input: {
   slotChanged: boolean;
   spokeContinuation: { value: boolean };
 }): Promise<void> {
+  const snapBefore = input.runtime.getSnapshot();
+  const rulesBefore = evaluateVoiceV3Rules(snapBefore, input.runtime.config);
+  logVoiceV3Pipeline("calendar", "post_meaning_pipeline_start", {
+    call_id: snapBefore.callId,
+    live_session_id: input.liveSessionId,
+    required_action: rulesBefore.requiredAction,
+    may_find_availability: rulesBefore.mayFindAvailability,
+    booking_ready: rulesBefore.bookingReady,
+  });
+
   await dispatchFindAvailabilityIfRequired(input.runtime, input.liveHooks);
   await dispatchBookingIfRequired(input.runtime, input.liveHooks);
   await dispatchAppointmentManagementIfRequired(input.runtime, input.liveHooks);
@@ -90,6 +102,12 @@ export function handleDelegatedAstraResponseEvent(input: {
 
   if (nestedType === "response.failed") {
     const runtime = getVoiceV3CallRuntime(sessionId);
+    VoiceV3CallTrace.peek(sessionId)?.onMeaningFailed();
+    logVoiceV3Pipeline("meaning", "astra.response.failed", {
+      call_id: runtime?.getSnapshot().callId ?? null,
+      live_session_id: sessionId,
+      nested: input.nested,
+    });
     console.log("ASTRA_MEANING_FAILED", {
       call_id: runtime?.getSnapshot().callId ?? null,
       live_session_id: sessionId,
@@ -163,6 +181,13 @@ export function handleDelegatedAstraResponseEvent(input: {
             (nestedType === "response.output_item.done" ||
               nestedType === "response.completed")
           ) {
+            VoiceV3CallTrace.peek(sessionId)?.onMeaningSkipped();
+            logVoiceV3Pipeline("meaning", "completion_skipped", {
+              call_id: runtime.getSnapshot().callId,
+              live_session_id: sessionId,
+              reason: "function_tool_payload_on_arguments_done",
+              nested_type: nestedType,
+            });
             console.log("ASTRA_MEANING_COMPLETION_SKIPPED", {
               call_id: runtime.getSnapshot().callId,
               live_session_id: sessionId,
@@ -178,6 +203,13 @@ export function handleDelegatedAstraResponseEvent(input: {
           intakeTransport === "function_tool" &&
           (nestedType === "response.completed" || nestedType === "response.output_text.done")
         ) {
+          VoiceV3CallTrace.peek(sessionId)?.onMeaningSkipped();
+          logVoiceV3Pipeline("meaning", "completion_skipped", {
+            call_id: runtime.getSnapshot().callId,
+            live_session_id: sessionId,
+            reason: "function_tool_no_payload_on_completion_event",
+            nested_type: nestedType,
+          });
           console.log("ASTRA_MEANING_COMPLETION_SKIPPED", {
             call_id: runtime.getSnapshot().callId,
             live_session_id: sessionId,
@@ -193,6 +225,14 @@ export function handleDelegatedAstraResponseEvent(input: {
           nestedType === "response.output_item.done" ||
           nestedType === "response.function_call_arguments.done"
         ) {
+          VoiceV3CallTrace.peek(sessionId)?.onMeaningFailed();
+          logVoiceV3Pipeline("meaning", "extract_failed", {
+            call_id: runtime.getSnapshot().callId,
+            live_session_id: sessionId,
+            reason: "schema_validation_or_empty",
+            nested_type: nestedType,
+            ...summarizeAstraNestedEvent(input.nested),
+          });
           console.log("ASTRA_MEANING_FAILED", {
             call_id: runtime.getSnapshot().callId,
             live_session_id: sessionId,
@@ -208,6 +248,18 @@ export function handleDelegatedAstraResponseEvent(input: {
         meaningStartedSessions.delete(sessionId);
         return;
       }
+
+      VoiceV3CallTrace.peek(sessionId)?.onMeaningReceived();
+      logVoiceV3Pipeline("meaning", "received", {
+        call_id: snap.callId,
+        live_session_id: sessionId,
+        transport,
+        state_version: snap.runtime.version,
+        active_goal: meaning.active_goal,
+        captured_field_keys: meaning.captured_fields.map((r) => r.key),
+        scheduling_date_relation: meaning.scheduling.date_relation,
+        slot_selection_type: meaning.slot_selection.selection_type,
+      });
 
       console.log("ASTRA_MEANING_RECEIVED", {
         call_id: snap.callId,

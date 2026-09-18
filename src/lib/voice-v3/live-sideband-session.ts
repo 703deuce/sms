@@ -15,6 +15,12 @@ import {
 } from "./intake/handle-delegated-meaning";
 import { deleteVoiceV3CallRuntime, voiceV3IntakePipelineEnabled } from "./state/call-runtime";
 import { VoiceV3CallTrace } from "./telemetry/call-trace";
+import {
+  logVoiceV3Pipeline,
+  logVoiceV3SidebandOutbound,
+  shouldLogAstraNestedType,
+  summarizeAstraNestedEvent,
+} from "./telemetry/pipeline-log";
 
 /**
  * Attach sideband observer (non-blocking). Never await from webhook / accept path.
@@ -59,15 +65,28 @@ async function attachVoiceV3LiveSidebandInner(input: {
   let greetingOutputChars = 0;
 
   const send = (event: { type: string; [key: string]: unknown }) => {
+    trace.onSidebandOutbound();
+    logVoiceV3SidebandOutbound({ liveSessionId: sessionId, event });
     sideband.send(event as Parameters<typeof sideband.send>[0]);
   };
 
   sideband.on("event", (serverEvent: { type?: string; delegation?: unknown; event?: unknown }) => {
     const type = serverEvent?.type;
 
+    if (type && type !== "session.output_audio.delta" && type !== "session.output_transcript.delta") {
+      logVoiceV3Pipeline("sideband", type, {
+        live_session_id: sessionId,
+        has_delegation: Boolean(serverEvent.delegation),
+      });
+    }
+
     if (!sidebandConnectedLogged && type) {
       sidebandConnectedLogged = true;
       console.log("VOICE_V3_SIDEBAND_CONNECTED", { sessionId, first_event_type: type });
+      logVoiceV3Pipeline("sideband", "connected", {
+        live_session_id: sessionId,
+        first_event_type: type,
+      });
     }
 
     if (type === "session.started") {
@@ -83,12 +102,23 @@ async function attachVoiceV3LiveSidebandInner(input: {
       trace.onDelegationCreated();
       console.log("ASTRA_DELEGATION_STARTED", { sessionId, delegation: serverEvent.delegation });
       console.log("VOICE_V3_BASIC_DELEGATION_CREATED", { sessionId, delegation: serverEvent.delegation });
+      logVoiceV3Pipeline("astra", "delegation.created", {
+        live_session_id: sessionId,
+        delegation: serverEvent.delegation,
+      });
     }
 
     if (type === "response.event") {
       const nested = serverEvent.event as Record<string, unknown> | undefined;
       const nestedType = typeof nested?.type === "string" ? nested.type : undefined;
       trace.onAstraResponseEvent(nestedType);
+      if (nested && nestedType && shouldLogAstraNestedType(nestedType)) {
+        trace.onAstraNestedEventLogged();
+        logVoiceV3Pipeline("astra", "nested", {
+          live_session_id: sessionId,
+          ...summarizeAstraNestedEvent(nested),
+        });
+      }
       console.log("VOICE_V3_BASIC_ASTRA_RESPONSE_EVENT", {
         sessionId,
         nestedType,
@@ -130,6 +160,7 @@ async function attachVoiceV3LiveSidebandInner(input: {
     }
 
     if (type === "session.closed") {
+      logVoiceV3Pipeline("sideband", "session.closed", { live_session_id: sessionId });
       if (callerSpeechActive) {
         trace.mark("caller.speech.ended");
       }
@@ -143,7 +174,12 @@ async function attachVoiceV3LiveSidebandInner(input: {
   });
 
   sideband.on("error", (err: unknown) => {
-    trace.recordError(err instanceof Error ? err.message : String(err));
+    const message = err instanceof Error ? err.message : String(err);
+    trace.recordError(message);
     console.error("VOICE_V3_BASIC_SIDEBAND_ERROR", { sessionId, err });
+    logVoiceV3Pipeline("sideband", "error", {
+      live_session_id: sessionId,
+      message,
+    });
   });
 }

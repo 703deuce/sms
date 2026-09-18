@@ -9,6 +9,7 @@ import {
   configuredIntakeKeySet,
   type CallerMeaning,
 } from "./caller-meaning-schema";
+import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 
 export type DecodeCallerMeaningLogContext = {
   callId?: string | null;
@@ -125,6 +126,16 @@ export function validateCallerMeaningFromRaw(
   const schema = buildCallerMeaningZodSchema(config);
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
+    logVoiceV3Pipeline("meaning", "schema_validation_failed", {
+      call_id: logCtx.callId ?? null,
+      live_session_id: logCtx.liveSessionId ?? null,
+      state_version: logCtx.stateVersion ?? null,
+      issues: parsed.error.issues.slice(0, 8).map((issue) => ({
+        path: issue.path.join("."),
+        code: issue.code,
+        message: issue.message,
+      })),
+    });
     return { ok: false, reason: "schema_validation_failed" };
   }
 
@@ -147,6 +158,11 @@ export function validateCallerMeaningFromRaw(
   };
 
   if (!meaningHasSignal(meaning)) {
+    logVoiceV3Pipeline("meaning", "empty_signal", {
+      call_id: logCtx.callId ?? null,
+      live_session_id: logCtx.liveSessionId ?? null,
+      active_goal: meaning.active_goal,
+    });
     return { ok: false, reason: "empty_signal" };
   }
 

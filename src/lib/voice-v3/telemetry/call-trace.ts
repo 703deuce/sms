@@ -37,6 +37,13 @@ export type VoiceV3CallSummary = {
   delegation_count: number;
   interruption_count: number;
   errors: string[];
+  pipeline: {
+    astra_nested_events: number;
+    meaning_received: number;
+    meaning_failed: number;
+    meaning_skipped: number;
+    sideband_outbound: number;
+  };
   metrics: Record<string, number | null>;
 };
 
@@ -60,6 +67,11 @@ export class VoiceV3CallTrace {
   private readonly errors: string[] = [];
   private turnLatenciesMs: number[] = [];
   private astraStartMs: number | null = null;
+  private astraNestedEvents = 0;
+  private meaningReceived = 0;
+  private meaningFailed = 0;
+  private meaningSkipped = 0;
+  private sidebandOutbound = 0;
 
   constructor(input: {
     callId: string;
@@ -115,6 +127,26 @@ export class VoiceV3CallTrace {
     this.errors.push(message);
   }
 
+  onAstraNestedEventLogged(): void {
+    this.astraNestedEvents += 1;
+  }
+
+  onMeaningReceived(): void {
+    this.meaningReceived += 1;
+  }
+
+  onMeaningFailed(): void {
+    this.meaningFailed += 1;
+  }
+
+  onMeaningSkipped(): void {
+    this.meaningSkipped += 1;
+  }
+
+  onSidebandOutbound(): void {
+    this.sidebandOutbound += 1;
+  }
+
   onDelegationCreated(): void {
     this.delegationCount += 1;
     this.mark("delegation.created");
@@ -130,7 +162,8 @@ export class VoiceV3CallTrace {
     if (
       nestedType === "response.completed" ||
       nestedType === "response.done" ||
-      nestedType === "response.output_item.done"
+      nestedType === "response.output_item.done" ||
+      nestedType === "response.function_call_arguments.done"
     ) {
       if (this.astraStartMs !== null) {
         this.turnLatenciesMs.push(Date.now() - this.astraStartMs);
@@ -219,6 +252,13 @@ export class VoiceV3CallTrace {
       delegation_count: this.delegationCount,
       interruption_count: this.interruptionCount,
       errors: [...this.errors],
+      pipeline: {
+        astra_nested_events: this.astraNestedEvents,
+        meaning_received: this.meaningReceived,
+        meaning_failed: this.meaningFailed,
+        meaning_skipped: this.meaningSkipped,
+        sideband_outbound: this.sidebandOutbound,
+      },
       metrics,
     };
     const sessionId = this.liveSessionId;
