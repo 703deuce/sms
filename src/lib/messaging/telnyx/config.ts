@@ -64,6 +64,8 @@ export function getTelnyxWebhookUrls() {
     mctbTexmlVoicemail: `${base}/api/telnyx/voice/mctb-texml-voicemail`,
     /** MCTB platform 571 Call Control diagnostic (separate app — do not mix with TeXML) */
     mctbCallControlDiagnostic: `${base}/api/telnyx/voice/mctb-call-control`,
+    /** Voice V3 Basic: PSTN → transfer to OpenAI Live SIP */
+    voiceV3Basic: `${base}/api/telnyx/voice/v3-basic`,
   };
 }
 
