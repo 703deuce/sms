@@ -29,7 +29,8 @@ import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { registerDurableBooking } from "./durable-booking-store";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
-import { startOperation, transitionOperation } from "../operations/registry";
+import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;
@@ -354,13 +355,26 @@ export async function dispatchBookingIfRequired(
     });
 
     updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "READY_TO_COMMIT");
-    runtime.replaceContext(applyBookingPhase(latest, "BOOKING_CREATING"));
+    let creating = applyBookingPhase(latest, "BOOKING_CREATING");
+    creating = beginMutatingOperation(creating, {
+      operationId: attempt.bookingAttemptId,
+      type: "BOOK_APPOINTMENT",
+      schedulingGeneration: latest.scheduling.generation,
+    });
+    runtime.replaceContext(creating);
 
     if (!attemptStillValid(runtime.getSnapshot(), attempt)) {
       console.log("BOOKING_ATTEMPT_STALE", {
         call_id: runtime.getSnapshot().callId,
         booking_attempt_id: attempt.bookingAttemptId,
       });
+      let staleCtx = finishMutatingOperation(
+        runtime.getSnapshot(),
+        attempt.bookingAttemptId,
+        "STALE",
+      );
+      staleCtx = applyBookingPhase(staleCtx, "SLOT_SELECTED", { activeAttempt: null });
+      runtime.replaceContext(staleCtx);
       return;
     }
 
@@ -435,6 +449,9 @@ export async function dispatchBookingIfRequired(
         call_id: afterCommit.callId,
         booking_attempt_id: attempt.bookingAttemptId,
       });
+      let staleCtx = finishMutatingOperation(afterCommit, attempt.bookingAttemptId, "STALE");
+      staleCtx = applyBookingPhase(staleCtx, "SLOT_SELECTED", { activeAttempt: null });
+      runtime.replaceContext(staleCtx);
       return;
     }
 
@@ -445,12 +462,17 @@ export async function dispatchBookingIfRequired(
           booking_attempt_id: attempt.bookingAttemptId,
           duration_ms: createResult.durationMs,
         });
-        runtime.replaceContext(
-          applyBookingPhase(afterCommit, "BOOKING_OUTCOME_UNKNOWN", {
-            lastFailure: createResult.failure,
-            activeAttempt: { ...attempt, commitPhase: "OUTCOME_UNKNOWN" },
-          }),
+        let unknownCtx = applyBookingPhase(afterCommit, "BOOKING_OUTCOME_UNKNOWN", {
+          lastFailure: createResult.failure,
+          activeAttempt: { ...attempt, commitPhase: "OUTCOME_UNKNOWN" },
+        });
+        unknownCtx = finishMutatingOperation(
+          unknownCtx,
+          attempt.bookingAttemptId,
+          "OUTCOME_UNKNOWN",
+          createResult.failure.reason,
         );
+        runtime.replaceContext(unknownCtx);
         pushLiveThinkingEvent(
           hooks,
           buildLiveBookingFailureSessionAppend(createResult.failure),
@@ -498,8 +520,9 @@ export async function dispatchBookingIfRequired(
       phone: request.customer.phone,
     });
 
+    let confirmedCtx = finishMutatingOperation(afterCommit, attempt.bookingAttemptId, "SUCCEEDED");
     runtime.replaceContext(
-      applyBookingPhase(afterCommit, "BOOKING_CONFIRMED", {
+      applyBookingPhase(confirmedCtx, "BOOKING_CONFIRMED", {
         confirmed,
         activeAttempt: null,
         lastFailure: null,
@@ -548,8 +571,10 @@ async function failBooking(
     reason: failure.reason,
     duration_ms: durationMs ?? null,
   });
+  const failureCode = mapProviderFailureToRecoveryCode(failure.reason);
+  let failedCtx = finishMutatingOperation(ctx, bookingAttemptId, "FAILED", failureCode);
   runtime.replaceContext(
-    applyBookingPhase(ctx, "BOOKING_FAILED", {
+    applyBookingPhase(failedCtx, "BOOKING_FAILED", {
       lastFailure: failure,
       activeAttempt: null,
     }),

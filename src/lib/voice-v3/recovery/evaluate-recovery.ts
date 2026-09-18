@@ -2,6 +2,7 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
 import type { VoiceV3RecoveryCode, VoiceV3RecoveryDirective } from "./types";
+import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 const FIND_PENDING_TIMEOUT_MS = 45_000;
 
@@ -78,11 +79,9 @@ export function evaluateVoiceV3Recovery(input: {
   if (ctx.availability.status === "failed" && ctx.availability.lastFailure) {
     const reason = ctx.availability.lastFailure.reason;
     const code: VoiceV3RecoveryCode =
-      reason === "auth_failed" || reason === "configuration_missing"
+      reason === "configuration_missing"
         ? "MICROSOFT_AUTH_FAILED"
-        : reason === "timeout"
-          ? "PROVIDER_TIMEOUT"
-          : "MICROSOFT_TEMPORARY_FAILURE";
+        : mapProviderFailureToRecoveryCode(reason);
     return newDirective({
       ctx,
       code,

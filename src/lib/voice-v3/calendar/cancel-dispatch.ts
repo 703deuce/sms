@@ -7,6 +7,8 @@ import { buildLiveCancellationConfirmedAppend } from "./live-management-context"
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { CancelBookingRequest } from "./cancel-booking-types";
+import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 export type CancelBookingExecutor = (input: {
   request: CancelBookingRequest;
@@ -54,6 +56,26 @@ export async function dispatchCancellationIfRequired(
   console.log("CANCELLATION_REQUESTED", { call_id: ctx.callId, attempt_id: attemptId });
 
   try {
+    let committing = runtime.getSnapshot();
+    committing = {
+      ...committing,
+      appointmentManagement: {
+        ...committing.appointmentManagement,
+        cancellation: {
+          ...committing.appointmentManagement.cancellation,
+          phase: "CANCELLATION_COMMITTING",
+          cancellationAttemptId: attemptId,
+          awaitingConfirmation: false,
+        },
+      },
+      runtime: { version: committing.runtime.version + 1 },
+    };
+    committing = beginMutatingOperation(committing, {
+      operationId: attemptId,
+      type: "CANCEL_APPOINTMENT",
+    });
+    runtime.replaceContext(committing);
+
     console.log("CANCELLATION_COMMIT_SENT", {
       call_id: ctx.callId,
       cancellation_attempt_id: attemptId,
@@ -68,14 +90,20 @@ export async function dispatchCancellationIfRequired(
     };
 
     let ok = false;
+    let providerFailureMessage = "cancel_failed";
     if (hooks.cancelBooking) {
       const r = await hooks.cancelBooking({ request, config: runtime.config });
       ok = r.ok;
+      if (!r.ok) {
+        providerFailureMessage = r.message;
+      }
       if (!r.ok && r.outcomeUncertain) {
+        let unk = runtime.getSnapshot();
+        unk = finishMutatingOperation(unk, attemptId, "OUTCOME_UNKNOWN", "outcome_unknown");
         runtime.replaceContext({
-          ...runtime.getSnapshot(),
+          ...unk,
           appointmentManagement: {
-            ...runtime.getSnapshot().appointmentManagement,
+            ...unk.appointmentManagement,
             cancellation: {
               phase: "CANCELLATION_OUTCOME_UNKNOWN",
               cancellationAttemptId: attemptId,
@@ -90,10 +118,13 @@ export async function dispatchCancellationIfRequired(
     }
 
     if (!ok) {
+      let failed = runtime.getSnapshot();
+      const code = mapProviderFailureToRecoveryCode(providerFailureMessage);
+      failed = finishMutatingOperation(failed, attemptId, "FAILED", code);
       runtime.replaceContext({
-        ...runtime.getSnapshot(),
+        ...failed,
         appointmentManagement: {
-          ...runtime.getSnapshot().appointmentManagement,
+          ...failed.appointmentManagement,
           cancellation: {
             phase: "CANCELLATION_FAILED",
             cancellationAttemptId: attemptId,
@@ -107,10 +138,12 @@ export async function dispatchCancellationIfRequired(
     confirmedAttempts.add(attemptId);
     markDurableBookingCanceled(existing.internalBookingId);
 
+    let confirmed = runtime.getSnapshot();
+    confirmed = finishMutatingOperation(confirmed, attemptId, "SUCCEEDED");
     runtime.replaceContext({
-      ...runtime.getSnapshot(),
+      ...confirmed,
       appointmentManagement: {
-        ...runtime.getSnapshot().appointmentManagement,
+        ...confirmed.appointmentManagement,
         verifiedExisting: null,
         cancellation: {
           phase: "CANCELLATION_CONFIRMED",

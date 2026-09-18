@@ -9,6 +9,8 @@ import { buildLiveRescheduleConfirmedAppend } from "./live-management-context";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { RevalidateBusyFetcher } from "./book-dispatch";
+import { beginMutatingOperation, finishMutatingOperation } from "../operations/dispatch-mutations";
+import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 
 export type UpdateBookingExecutor = (input: {
   providerEventId: string;
@@ -109,6 +111,22 @@ export async function dispatchRescheduleIfRequired(
       return;
     }
 
+    let committing = runtime.getSnapshot();
+    committing = {
+      ...committing,
+      appointmentManagement: {
+        ...committing.appointmentManagement,
+        reschedule: { phase: "RESCHEDULE_COMMITTING", attemptId },
+      },
+      runtime: { version: committing.runtime.version + 1 },
+    };
+    committing = beginMutatingOperation(committing, {
+      operationId: attemptId,
+      type: "RESCHEDULE_APPOINTMENT",
+      schedulingGeneration: committing.scheduling.generation,
+    });
+    runtime.replaceContext(committing);
+
     console.log("RESCHEDULE_COMMIT_SENT", {
       call_id: ctx.callId,
       provider_event_id: existing.providerEventId,
@@ -117,6 +135,7 @@ export async function dispatchRescheduleIfRequired(
 
     const summary = `${runtime.config.service.name} — ${ctx.intake.values.name?.value ?? "Guest"}`;
     let updateOk = false;
+    let providerFailureMessage = "reschedule_failed";
     if (hooks.updateBooking) {
       const u = await hooks.updateBooking({
         providerEventId: existing.providerEventId,
@@ -128,11 +147,16 @@ export async function dispatchRescheduleIfRequired(
         config: runtime.config,
       });
       updateOk = u.ok;
+      if (!u.ok) {
+        providerFailureMessage = u.message;
+      }
       if (!u.ok && u.outcomeUncertain) {
+        let unk = runtime.getSnapshot();
+        unk = finishMutatingOperation(unk, attemptId, "OUTCOME_UNKNOWN", "outcome_unknown");
         runtime.replaceContext({
-          ...runtime.getSnapshot(),
+          ...unk,
           appointmentManagement: {
-            ...runtime.getSnapshot().appointmentManagement,
+            ...unk.appointmentManagement,
             reschedule: { phase: "RESCHEDULE_OUTCOME_UNKNOWN", attemptId },
           },
         });
@@ -143,10 +167,17 @@ export async function dispatchRescheduleIfRequired(
     }
 
     if (!updateOk) {
+      let failed = runtime.getSnapshot();
+      failed = finishMutatingOperation(
+        failed,
+        attemptId,
+        "FAILED",
+        mapProviderFailureToRecoveryCode(providerFailureMessage),
+      );
       runtime.replaceContext({
-        ...runtime.getSnapshot(),
+        ...failed,
         appointmentManagement: {
-          ...runtime.getSnapshot().appointmentManagement,
+          ...failed.appointmentManagement,
           reschedule: { phase: "RESCHEDULE_FAILED", attemptId },
         },
       });
@@ -168,10 +199,12 @@ export async function dispatchRescheduleIfRequired(
       localEnd: selected.localEnd,
     };
 
+    let done = runtime.getSnapshot();
+    done = finishMutatingOperation(done, attemptId, "SUCCEEDED");
     runtime.replaceContext({
-      ...runtime.getSnapshot(),
+      ...done,
       appointmentManagement: {
-        ...runtime.getSnapshot().appointmentManagement,
+        ...done.appointmentManagement,
         verifiedExisting: updatedExisting,
         reschedule: { phase: "RESCHEDULE_CONFIRMED", attemptId },
       },
