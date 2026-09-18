@@ -675,17 +675,22 @@ export async function publishVoiceAgent(
       );
     }
     try {
-      const ccRoute = await routePhoneToCallControlConnection({
+      const { routePhoneToVoiceV3BasicCallControl } = await import(
+        "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic"
+      );
+      const ccRoute = await routePhoneToVoiceV3BasicCallControl({
         e164: phone!.e164,
         providerNumberId: phone!.providerNumberId,
+        workspaceId,
+        phoneNumberId: updated.phoneNumberId,
       });
       if (!ccRoute.matched) {
         await rollbackPublish(
-          `Voice V3 Call Control route did not match live connection — deploy rolled back (${ccRoute.path})`,
+          `Voice V3 Basic Call Control route did not match live connection — deploy rolled back (${ccRoute.path})`,
         );
       }
       texmlRoute = ccRoute as unknown as typeof texmlRoute;
-      console.log("VOICE_V3_RECEPTIONIST_PHONE_ROUTED_CALL_CONTROL", {
+      console.log("VOICE_V3_RECEPTIONIST_PHONE_ROUTED_V3_BASIC", {
         e164: phone!.e164,
         path: ccRoute.path,
       });
@@ -819,12 +824,14 @@ export async function syncLiveWizardDraftToProvider(
             "@/lib/voice-v3/config/from-published-agent"
           );
           if (isApptReceptionist(config)) {
-            const { routePhoneToCallControlConnection } = await import(
-              "./telnyx/texml-direct-route"
+            const { routePhoneToVoiceV3BasicCallControl } = await import(
+              "@/lib/voice-v3/provisioning/route-phone-to-voice-v3-basic"
             );
-            await routePhoneToCallControlConnection({
+            await routePhoneToVoiceV3BasicCallControl({
               e164: phone.e164,
               providerNumberId: phone.providerNumberId,
+              workspaceId,
+              phoneNumberId: agent.phoneNumberId,
             });
           } else {
             const refreshed = await prisma.voiceAgent.findUnique({

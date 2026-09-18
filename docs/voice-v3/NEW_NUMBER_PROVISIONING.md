@@ -237,5 +237,6 @@ Static env check: `evaluateVoiceV3ProvisioningEnv()` in `health-check.ts`.
 | Accept config | `src/lib/voice-v3-basic/live-session-config.ts` |
 | Frozen prompts | `src/lib/voice-v3/prompts/` (`buildVoiceV3Prompts`) |
 | Provisioning types | `src/lib/voice-v3/provisioning/` |
+| Publish / resync route | `routePhoneToVoiceV3BasicCallControl()` — same wiring as setup script; **do not** use generic `TELNYX_CONNECTION_ID` for appointment receptionist DIDs |
 | Telemetry | `src/lib/voice-v3/telemetry/call-trace.ts` |
 | Greeting | `src/lib/voice-v3/greeting.ts` |

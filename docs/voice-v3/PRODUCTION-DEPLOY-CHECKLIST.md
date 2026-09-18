@@ -6,8 +6,9 @@ Use this before certifying a build with a real phone call. **Only the Voice V3 p
 
 | Check | Expected |
 |-------|----------|
-| DID `connection_id` | Transovo **Call Control** app (`TELNYX_CONNECTION_ID` or workspace voice connection) |
-| **Not** TeXML → Telnyx Amy | Appointment receptionist publish routes **Call Control** (`VOICE_V3_RECEPTIONIST_PHONE_ROUTED_CALL_CONTROL` in publish logs) |
+| DID `connection_id` | **Voice V3 Basic** Call Control app (`Transovo Voice V3 Basic OpenAI SIP`) — webhook `/api/telnyx/voice/v3-basic` |
+| **Not** generic `TELNYX_CONNECTION_ID` alone | Publish/resync must log `VOICE_V3_RECEPTIONIST_PHONE_ROUTED_V3_BASIC` / `VOICE_V3_BASIC_PHONE_ROUTED` (see `NEW_NUMBER_PROVISIONING.md`) |
+| **Not** TeXML → Telnyx Amy | Appointment receptionist never TeXML-direct for PSTN |
 | Inbound mode in agent config | `callHandling.inboundRoutingMode` = `call_control` for `capabilityPack: appointment_receptionist` |
 
 Dedicated test line (`+15717491060`) may use `/api/telnyx/voice/v3-basic` → same OpenAI SIP accept path.

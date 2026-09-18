@@ -13,6 +13,7 @@ export {
   type VoiceNumberProvisioningStatus,
 } from "./status";
 export { evaluateVoiceV3ProvisioningEnv, type VoiceV3ProvisioningHealthResult } from "./health-check";
+export { routePhoneToVoiceV3BasicCallControl } from "./route-phone-to-voice-v3-basic";
 export {
   VOICE_V3_FAILED_FQDN_CONNECTION_ID,
   VOICE_V3_KNOWN_GOOD_REFERENCE_E164,
