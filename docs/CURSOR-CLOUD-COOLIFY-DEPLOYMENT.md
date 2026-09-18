@@ -25,7 +25,7 @@
 | Scheduler ID / UUID | `2` / `tgjridm6vrmrgljkfrr0rpjn` |
 | Scheduler URL | `http://tgjridm6vrmrgljkfrr0rpjn.128.140.102.51.sslip.io` |
 
-Both apps build from **`703deuce/sms` @ `master`**. A single push typically triggers **two** Coolify deployments (web + scheduler). Verify **both** when the change affects shared build/runtime or background jobs.
+Both apps build from **`703deuce/sms` @ `master`**. A push to `master` **auto-deploys the web app only**; the scheduler (`application_id` `2`) has auto-deploy **off** — redeploy it manually when `worker:sms` / shared deps change. Scheduler builds set **`COOLIFY_SKIP_NEXT_BUILD=1`** (build-time) so Nixpacks runs `prisma generate` only, not `next build`. Configure via `scripts/coolify-configure-scheduler-build.sh` on the Coolify host.
 
 Coolify project: `my-first-project` · Platform: Coolify `4.3.19` on host `sms` (`128.140.102.51`).
 

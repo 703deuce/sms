@@ -1,4 +1,6 @@
-# Coolify/Nixpacks: transovo-web only (Next.js + BullMQ). Voice worker is a separate image.
+# Coolify/Nixpacks: transovo-web (Next.js + BullMQ). Voice worker is a separate image.
+# Web app: full next build. Scheduler (trransovo-smscheduler): set COOLIFY_SKIP_NEXT_BUILD=1
+# on that Coolify application (build-time env) — see scripts/coolify-configure-scheduler-build.sh.
 # NODE_OPTIONS heap is applied only during next build (see coolify-build script).
 
 [variables]
