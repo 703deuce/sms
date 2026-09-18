@@ -1,4 +1,5 @@
 import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
+import { dispatchBookingIfRequired } from "../calendar/book-dispatch";
 import { buildLiveSelectedSlotSessionAppend } from "../calendar/live-selected-slot-context";
 import {
   buildSessionThinkingAppendForRuntime,
@@ -139,10 +140,17 @@ export function handleDelegatedAstraResponseEvent(input: {
 
     input.send(buildSessionThinkingAppendForRuntime(runtime));
 
-    void dispatchFindAvailabilityIfRequired(runtime, {
-      onLiveContext: (event) => input.send(event),
-    }).catch((err) => {
+    const liveHooks = { onLiveContext: (event: { type: string; thinking?: string }) => input.send(event) };
+
+    void dispatchFindAvailabilityIfRequired(runtime, liveHooks).catch((err) => {
       console.error("FIND_AVAILABILITY_DISPATCH_ERROR", {
+        live_session_id: sessionId,
+        err,
+      });
+    });
+
+    void dispatchBookingIfRequired(runtime, liveHooks).catch((err) => {
+      console.error("BOOKING_DISPATCH_ERROR", {
         live_session_id: sessionId,
         err,
       });

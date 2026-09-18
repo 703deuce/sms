@@ -107,7 +107,8 @@ function meaningHasSignal(meaning: CallerMeaning): boolean {
     meaning.active_goal !== "UNKNOWN" ||
     schedulingMeaningHasSignal(meaning.scheduling) ||
     slotSelectionMeaningHasSignal(meaning.slot_selection) ||
-    meaning.ambiguities.length > 0
+    meaning.ambiguities.length > 0 ||
+    meaning.post_book_intent === "CHANGE_CONFIRMED_APPOINTMENT"
   );
 }
 
@@ -138,6 +139,7 @@ export function validateCallerMeaningFromRaw(
     captured_fields,
     corrections,
     slot_selection: parsed.data.slot_selection ?? emptySlotSelectionMeaning(),
+    post_book_intent: parsed.data.post_book_intent ?? "NONE",
   };
 
   if (!meaningHasSignal(meaning)) {

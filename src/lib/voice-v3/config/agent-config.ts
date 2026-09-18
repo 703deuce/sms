@@ -17,6 +17,8 @@ export interface IntakeFieldDefinition {
 }
 
 export interface VoiceV3ServiceConfig {
+  id: string;
+  name: string;
   durationMinutes: number;
   slotStepMinutes: number;
 }

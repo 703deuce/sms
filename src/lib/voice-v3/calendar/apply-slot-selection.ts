@@ -28,6 +28,7 @@ export function invalidateSelectionForSchedulingChange(
     prior_slot_id: ctx.selection.selected?.slotId ?? null,
   });
 
+  const preserveConfirmed = Boolean(ctx.booking.confirmed);
   return {
     ...ctx,
     selection: {
@@ -44,6 +45,17 @@ export function invalidateSelectionForSchedulingChange(
     presentation: {
       current: null,
     },
+    booking: preserveConfirmed
+      ? {
+          ...ctx.booking,
+          phase: "BOOKING_CONFIRMED",
+          activeAttempt: null,
+        }
+      : {
+          ...ctx.booking,
+          phase: ctx.booking.phase === "BOOKING_CONFIRMED" ? "BOOKING_CONFIRMED" : "NONE",
+          activeAttempt: null,
+        },
   };
 }
 

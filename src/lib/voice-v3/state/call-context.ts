@@ -3,6 +3,12 @@ import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { PresentedOffer, SelectedAvailabilitySlot } from "../calendar/selected-slot";
 import type { FindAvailabilityFailure, FindAvailabilityStatus } from "../calendar/types";
 import type { SlotSelectionResolution } from "../calendar/resolve-slot-selection";
+import type {
+  BookingAttemptSnapshot,
+  BookingFailure,
+  BookingPhase,
+  ConfirmedBooking,
+} from "../calendar/booking-types";
 import type { SchedulingClarificationRequirement } from "../time/scheduling-clarification";
 import type {
   NormalizedSchedulingPreference,
@@ -59,6 +65,13 @@ export interface VoiceV3CallContext {
     selected: SelectedAvailabilitySlot | null;
     lastResolutionStatus: SlotSelectionResolution["status"] | null;
   };
+  booking: {
+    phase: BookingPhase;
+    activeAttempt: BookingAttemptSnapshot | null;
+    confirmed: ConfirmedBooking | null;
+    lastFailure: BookingFailure | null;
+    postBookChangeRequested: boolean;
+  };
   runtime: {
     version: number;
   };
@@ -91,6 +104,13 @@ export function createInitialVoiceV3CallContext(input: {
     },
     presentation: { current: null },
     selection: { selected: null, lastResolutionStatus: null },
+    booking: {
+      phase: "NONE",
+      activeAttempt: null,
+      confirmed: null,
+      lastFailure: null,
+      postBookChangeRequested: false,
+    },
     runtime: { version: 0 },
   };
 }

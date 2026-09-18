@@ -44,6 +44,8 @@ const schedulingTimeKindSchema = z.enum([
 
 const schedulingDaypartSchema = z.enum(["MORNING", "AFTERNOON", "EVENING"]);
 
+const postBookIntentSchema = z.enum(["NONE", "CHANGE_CONFIRMED_APPOINTMENT"]);
+
 export const schedulingMeaningZodObject = z.object({
   date_expression: z.string().nullable(),
   date_relation: schedulingDateRelationSchema,
@@ -96,6 +98,7 @@ export function buildCallerMeaningZodSchema(config: VoiceV3AgentConfig) {
       }),
     ),
     slot_selection: slotSelectionMeaningZodObject,
+    post_book_intent: postBookIntentSchema,
   });
 }
 

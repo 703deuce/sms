@@ -1,7 +1,9 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { RequiredRuntimeAction } from "../calendar/types";
 import { shouldDispatchFindAvailability } from "../calendar/find-availability";
+import { isSelectedSlotAuthoritative } from "../calendar/selected-slot";
 import type { VoiceV3CallContext } from "./call-context";
+import type { BookingPhase } from "../calendar/booking-types";
 
 export interface VoiceV3RuleEvaluation {
   missingRequiredFields: string[];
@@ -14,7 +16,8 @@ export interface VoiceV3RuleEvaluation {
   mayFindAvailability: boolean;
   requiredAction: RequiredRuntimeAction;
   slotSelected: boolean;
-  bookingPhase: "SLOT_SELECTED" | null;
+  bookingPhase: BookingPhase;
+  bookingReady: boolean;
   mayBook: boolean;
 }
 
@@ -46,6 +49,7 @@ export function evaluateVoiceV3Rules(
 
   const calendarConfigured = Boolean(config.calendar?.connectionId && config.calendar.calendarIds.length);
   const durationKnown = config.service.durationMinutes > 0;
+  const serviceKnown = Boolean(config.service.id?.trim() && config.service.name?.trim());
 
   const mayFindAvailability =
     mayRunCalendarAction &&
@@ -53,18 +57,52 @@ export function evaluateVoiceV3Rules(
     calendarConfigured &&
     (ctx.dialog.activeGoal === "BOOK_APPOINTMENT" || hasSchedulingPreference);
 
-  const slotSelected = Boolean(ctx.selection.selected);
-  const bookingPhase = slotSelected ? "SLOT_SELECTED" : null;
+  const selected = ctx.selection.selected;
+  const offer = ctx.availability.activeOfferSet;
+  const slotSelected = Boolean(
+    selected &&
+      offer &&
+      isSelectedSlotAuthoritative(selected, {
+        offerSetId: offer.offerSetId,
+        schedulingGeneration: ctx.scheduling.generation,
+      }),
+  );
 
-  const requiredAction: RequiredRuntimeAction = slotSelected
-    ? null
-    : shouldDispatchFindAvailability(ctx, config, mayFindAvailability)
+  const intakeComplete = missingRequiredFields.length === 0;
+  const bookingConfirmed = ctx.booking.phase === "BOOKING_CONFIRMED" && Boolean(ctx.booking.confirmed);
+  const bookingInProgress =
+    ctx.booking.phase === "BOOKING_REVALIDATING" ||
+    ctx.booking.phase === "BOOKING_CREATING" ||
+    ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
+
+  const bookingReady =
+    slotSelected &&
+    intakeComplete &&
+    durationKnown &&
+    serviceKnown &&
+    calendarConfigured &&
+    !schedulingRequiresClarification &&
+    !bookingConfirmed &&
+    !bookingInProgress;
+
+  let bookingPhase: BookingPhase = ctx.booking.phase;
+  if (bookingPhase === "NONE" && slotSelected) {
+    bookingPhase = "SLOT_SELECTED";
+  }
+
+  let requiredAction: RequiredRuntimeAction = null;
+
+  if (bookingReady) {
+    requiredAction = "BOOK_APPOINTMENT";
+  } else if (!slotSelected && !bookingConfirmed) {
+    requiredAction = shouldDispatchFindAvailability(ctx, config, mayFindAvailability)
       ? "FIND_AVAILABILITY"
       : null;
+  }
 
   return {
     missingRequiredFields,
-    intakeComplete: missingRequiredFields.length === 0,
+    intakeComplete,
     hasSchedulingPreference,
     schedulingRequiresClarification,
     schedulingClarificationReason,
@@ -74,6 +112,7 @@ export function evaluateVoiceV3Rules(
     requiredAction,
     slotSelected,
     bookingPhase,
-    mayBook: false,
+    bookingReady,
+    mayBook: bookingReady,
   };
 }

@@ -5,7 +5,7 @@ export type FindAvailabilityStatus =
   | "empty"
   | "failed";
 
-export type RequiredRuntimeAction = "FIND_AVAILABILITY" | null;
+export type RequiredRuntimeAction = "FIND_AVAILABILITY" | "BOOK_APPOINTMENT" | null;
 
 export interface FindAvailabilityRequest {
   callId: string;

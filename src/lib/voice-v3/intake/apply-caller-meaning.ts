@@ -218,6 +218,25 @@ export function applyCallerMeaningToContext(
   );
   context = slotApply.context;
 
+  if (
+    meaning.post_book_intent === "CHANGE_CONFIRMED_APPOINTMENT" &&
+    context.booking.confirmed
+  ) {
+    console.log("POST_BOOK_CHANGE_REQUESTED", {
+      call_id: context.callId,
+      live_session_id: context.liveSessionId,
+      booking_attempt_id: context.booking.confirmed?.bookingAttemptId ?? null,
+    });
+    context = {
+      ...context,
+      booking: {
+        ...context.booking,
+        postBookChangeRequested: true,
+      },
+      runtime: { version: context.runtime.version + 1 },
+    };
+  }
+
   return {
     context,
     fieldsChanged: [...fieldsChanged],

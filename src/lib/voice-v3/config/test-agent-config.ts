@@ -31,6 +31,8 @@ export const TEST_AGENT_CONFIG: VoiceV3AgentConfig = {
     },
   ],
   service: {
+    id: "consultation",
+    name: "Consultation",
     durationMinutes: 60,
     slotStepMinutes: 30,
   },

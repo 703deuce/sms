@@ -34,6 +34,7 @@ function basePayload(overrides: Record<string, unknown> = {}) {
     captured_fields: [],
     scheduling: emptySchedulingMeaning(),
     slot_selection: emptySlotSelectionMeaning(),
+    post_book_intent: "NONE",
     corrections: [],
     ambiguities: [],
     ...overrides,
@@ -46,6 +47,7 @@ function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured
     captured_fields: partial.captured_fields,
     scheduling: partial.scheduling ?? emptySchedulingMeaning(),
     slot_selection: partial.slot_selection ?? emptySlotSelectionMeaning(),
+    post_book_intent: partial.post_book_intent ?? "NONE",
     corrections: partial.corrections ?? [],
     ambiguities: partial.ambiguities ?? [],
   };
