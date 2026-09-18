@@ -76,6 +76,18 @@ export function extractCallerMeaningFromAstraResponseEvent(
   const type = String(nestedEvent.type || "");
   const transportMode = resolveVoiceV3IntakeTransport();
 
+  if (type === "response.function_call_arguments.done") {
+    const name = nestedEvent.name;
+    if (name !== EMIT_CALLER_MEANING_TOOL_NAME) return null;
+    if (typeof nestedEvent.arguments !== "string" || !nestedEvent.arguments.trim()) return null;
+    const meaning = decodeCallerMeaningFromFunctionArguments(
+      nestedEvent.arguments.trim(),
+      config,
+      logCtx,
+    );
+    return meaning ? { transport: "function_tool", meaning } : null;
+  }
+
   if (type === "response.output_item.done") {
     const item = nestedEvent.item;
     if (item && typeof item === "object") {

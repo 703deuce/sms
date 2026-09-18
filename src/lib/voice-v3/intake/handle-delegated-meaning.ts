@@ -10,6 +10,7 @@ import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { requestLiveSpeakContinuation } from "../live-response-trigger";
 import { validateCallerMeaningFromRaw } from "./decode-delegated-caller-meaning";
+import { EMIT_CALLER_MEANING_TOOL_NAME } from "./emit-caller-meaning-tool";
 import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { extractCallerMeaningFromAstraResponseEvent } from "./parse-astra-meaning-response";
 import {
@@ -99,6 +100,7 @@ export function handleDelegatedAstraResponseEvent(input: {
   }
 
   const completionTypes = new Set([
+    "response.function_call_arguments.done",
     "response.completed",
     "response.output_text.done",
     "response.output_item.done",
@@ -135,14 +137,40 @@ export function handleDelegatedAstraResponseEvent(input: {
 
       const extracted = extractCallerMeaningFromAstraResponseEvent(input.nested, runtime.config, logCtx);
       if (!extracted) {
-        if (nestedType === "response.output_item.done") {
-          const item = input.nested.item;
-          if (item && typeof item === "object") {
-            const row = item as Record<string, unknown>;
-            if (row.type !== "function_call") {
+        if (
+          nestedType === "response.output_item.done" ||
+          nestedType === "response.function_call_arguments.done"
+        ) {
+          if (nestedType === "response.output_item.done") {
+            const item = input.nested.item;
+            if (item && typeof item === "object") {
+              const row = item as Record<string, unknown>;
+              if (row.type !== "function_call") {
+                meaningStartedSessions.delete(sessionId);
+                return;
+              }
+            }
+          }
+          if (nestedType === "response.function_call_arguments.done") {
+            const fnName = input.nested.name;
+            if (fnName !== EMIT_CALLER_MEANING_TOOL_NAME) {
               meaningStartedSessions.delete(sessionId);
               return;
             }
+          }
+          if (
+            intakeTransport === "function_tool" &&
+            (nestedType === "response.output_item.done" ||
+              nestedType === "response.completed")
+          ) {
+            console.log("ASTRA_MEANING_COMPLETION_SKIPPED", {
+              call_id: runtime.getSnapshot().callId,
+              live_session_id: sessionId,
+              reason: "function_tool_payload_on_arguments_done",
+              nested_type: nestedType,
+            });
+            meaningStartedSessions.delete(sessionId);
+            return;
           }
         }
 
@@ -160,7 +188,11 @@ export function handleDelegatedAstraResponseEvent(input: {
           return;
         }
 
-        if (nestedType === "response.completed" || nestedType === "response.output_item.done") {
+        if (
+          nestedType === "response.completed" ||
+          nestedType === "response.output_item.done" ||
+          nestedType === "response.function_call_arguments.done"
+        ) {
           console.log("ASTRA_MEANING_FAILED", {
             call_id: runtime.getSnapshot().callId,
             live_session_id: sessionId,

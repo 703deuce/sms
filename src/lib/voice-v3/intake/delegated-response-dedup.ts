@@ -17,6 +17,12 @@ function sessionSet(sessionId: string): Set<string> {
 export function extractDelegatedAstraResponseId(
   nested: Record<string, unknown>,
 ): string | null {
+  const nestedType = String(nested.type || "");
+  if (nestedType === "response.function_call_arguments.done") {
+    const responseId = nested.response_id;
+    if (typeof responseId === "string" && responseId.trim()) return responseId.trim();
+  }
+
   const response = nested.response;
   if (response && typeof response === "object") {
     const id = (response as Record<string, unknown>).id;
