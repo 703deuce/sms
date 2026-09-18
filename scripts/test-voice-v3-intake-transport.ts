@@ -1,11 +1,9 @@
 /**
  * Voice V3 semantic transport tests (no Live network required).
  */
-process.env.VOICE_V3_AGENT_CONFIG_PROFILE = "test";
-
 import assert from "node:assert/strict";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_AGENT_CONFIG } from "../src/lib/voice-v3/config/booking-agent-config";
 import {
   decodeCallerMeaningFromFunctionArguments,
   decodeDelegatedCallerMeaning,
@@ -84,8 +82,8 @@ function main() {
     name: EMIT_CALLER_MEANING_TOOL_NAME,
   });
 
-  const liveTool = buildEmitCallerMeaningLiveFunctionTool(TEST_AGENT_CONFIG);
-  const format = voiceV3CallerMeaningTextFormat(TEST_AGENT_CONFIG) as {
+  const liveTool = buildEmitCallerMeaningLiveFunctionTool(VOICE_V3_BOOKING_AGENT_CONFIG);
+  const format = voiceV3CallerMeaningTextFormat(VOICE_V3_BOOKING_AGENT_CONFIG) as {
     schema?: { properties?: { captured_fields?: { items?: { properties?: { key?: { enum?: string[] } } } } } };
   };
   const keyEnum = format.schema?.properties?.captured_fields?.items?.properties?.key?.enum;
@@ -109,7 +107,7 @@ function main() {
     },
   });
   const argsJson = JSON.stringify(argsPayload);
-  const fromFn = decodeCallerMeaningFromFunctionArguments(argsJson, TEST_AGENT_CONFIG);
+  const fromFn = decodeCallerMeaningFromFunctionArguments(argsJson, VOICE_V3_BOOKING_AGENT_CONFIG);
   assert.ok(fromFn);
   assert.equal(fromFn!.scheduling.weekday, "FRIDAY");
 
@@ -126,14 +124,14 @@ function main() {
       ],
     },
   };
-  const extracted = extractCallerMeaningFromAstraResponseEvent(nestedCompleted, TEST_AGENT_CONFIG);
+  const extracted = extractCallerMeaningFromAstraResponseEvent(nestedCompleted, VOICE_V3_BOOKING_AGENT_CONFIG);
   assert.ok(extracted);
   assert.equal(extracted!.transport, "function_tool");
   assert.equal(extracted!.meaning.captured_fields[0]?.value, "Anthony");
 
   const malformed = validateCallerMeaningFromRaw(
     { ...basePayload(), active_goal: "NOT_VALID" },
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_AGENT_CONFIG,
   );
   assert.equal(malformed.ok, false);
 
@@ -142,7 +140,7 @@ function main() {
   const versionBefore = runtime.getSnapshot().runtime.version;
   const bad = decodeCallerMeaningFromFunctionArguments(
     JSON.stringify(basePayload({ captured_fields: [{ key: "not_a_key", value: "x", confidence: 1 }] })),
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_AGENT_CONFIG,
   );
   assert.equal(bad, null);
   assert.equal(runtime.getSnapshot().runtime.version, versionBefore);
@@ -168,11 +166,11 @@ function main() {
   assert.equal(getVoiceV3CallRuntime("iso_b")!.getSnapshot().intake.values.name?.value, "Bob");
 
   process.env.VOICE_V3_INTAKE_TRANSPORT = "output_text";
-  const textDelegation = buildVoiceV3AstraDelegationResponses("test", TEST_AGENT_CONFIG);
+  const textDelegation = buildVoiceV3AstraDelegationResponses("test", VOICE_V3_BOOKING_AGENT_CONFIG);
   assert.equal(textDelegation.tools?.length ?? 0, 0);
   const textMeaning = decodeDelegatedCallerMeaning(
     JSON.stringify(basePayload({ captured_fields: [{ key: "email", value: "a@b.co", confidence: 1 }] })),
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_AGENT_CONFIG,
   );
   assert.ok(textMeaning);
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import {
   clearDurableBookingStore,
   registerDurableBooking,
@@ -76,7 +76,7 @@ async function main() {
     },
   };
 
-  let rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  let rules = evaluateVoiceV3Rules(ctx, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.equal(rules.requiredAction, "CANCEL_APPOINTMENT");
 
   const rt = {
@@ -84,7 +84,7 @@ async function main() {
     replaceContext: (c: typeof ctx) => {
       ctx = c;
     },
-    config: TEST_AGENT_CONFIG,
+    config: VOICE_V3_BOOKING_TEST_CONFIG,
   };
 
   let cancelCount = 0;

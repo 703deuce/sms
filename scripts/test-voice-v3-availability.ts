@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { VoiceV3AgentConfig } from "../src/lib/voice-v3/config/agent-config";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import {
   applyFindAvailabilityResult,
   dispatchFindAvailabilityIfRequired,
@@ -20,7 +20,7 @@ const TZ = "America/New_York";
 const FROZEN = new Date("2026-09-17T14:00:00.000Z"); // Thursday afternoon UTC
 
 function config(overrides: Partial<VoiceV3AgentConfig> = {}): VoiceV3AgentConfig {
-  return { ...TEST_AGENT_CONFIG, ...overrides };
+  return { ...VOICE_V3_BOOKING_TEST_CONFIG, ...overrides };
 }
 
 function ctx(at = FROZEN) {

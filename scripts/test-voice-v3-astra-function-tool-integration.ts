@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import OpenAI from "openai";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { decodeCallerMeaningFromFunctionArguments } from "../src/lib/voice-v3/intake/decode-delegated-caller-meaning";
 import { buildEmitCallerMeaningLiveFunctionTool } from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
 import { EMIT_CALLER_MEANING_TOOL_NAME } from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
@@ -16,7 +16,7 @@ async function main() {
   }
 
   const client = new OpenAI();
-  const tool = buildEmitCallerMeaningLiveFunctionTool(TEST_AGENT_CONFIG);
+  const tool = buildEmitCallerMeaningLiveFunctionTool(VOICE_V3_BOOKING_TEST_CONFIG);
 
   const response = await client.responses.create({
     model: "gpt-6-astra",
@@ -51,7 +51,7 @@ async function main() {
   assert.ok(fnCall && fnCall.type === "function_call", "expected function_call in response.output");
   assert.equal(typeof fnCall.arguments, "string");
 
-  const meaning = decodeCallerMeaningFromFunctionArguments(fnCall.arguments, TEST_AGENT_CONFIG);
+  const meaning = decodeCallerMeaningFromFunctionArguments(fnCall.arguments, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.ok(meaning);
   assert.equal(meaning!.captured_fields.find((r) => r.key === "name")?.value, "Anthony");
 

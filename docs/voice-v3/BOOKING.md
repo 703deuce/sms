@@ -32,4 +32,4 @@ Network timeout after `COMMIT_SENT` → `BOOKING_OUTCOME_UNKNOWN` (no blind retr
 npm run test:voice-v3-booking
 ```
 
-Runtime config: `src/lib/voice-v3/config/booking-agent-config.ts` (name, email, phone intake). Env: `VOICE_V3_MICROSOFT_CONNECTION_ID`, `VOICE_V3_CALENDAR_ID`. Odd-field test harness: `VOICE_V3_AGENT_CONFIG_PROFILE=test` only in unit scripts.
+Runtime config: `src/lib/voice-v3/config/booking-agent-config.ts` only (see `BOOKING-PIPELINE-RUNTIME-PATH.md`). Env: `VOICE_V3_MICROSOFT_CONNECTION_ID`, `VOICE_V3_CALENDAR_ID`.

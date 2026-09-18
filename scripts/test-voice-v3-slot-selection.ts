@@ -11,7 +11,7 @@ import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-sc
 import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 
@@ -193,7 +193,7 @@ function testSchedulingClearsSelection() {
   const withClock = { ...ctx, clock };
   const next = applyCallerMeaningToContext(
     withClock,
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_TEST_CONFIG,
     meaning({
       scheduling: {
         ...emptySchedulingMeaning(),
@@ -217,7 +217,7 @@ function testRulesSlotSelected() {
     spoken_time: null,
     ordinal: 2,
   }).context;
-  const rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  const rules = evaluateVoiceV3Rules(ctx, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.equal(rules.slotSelected, true);
   assert.equal(rules.bookingPhase, "SLOT_SELECTED");
   assert.equal(rules.requiredAction, null);

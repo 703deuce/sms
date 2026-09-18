@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import OpenAI from "openai";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { buildCallerInterpretationContext } from "../src/lib/voice-v3/intake/caller-meaning";
 import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
 import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-context";
@@ -15,9 +15,8 @@ import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 
 const PHRASES = [
   "My name is Anthony.",
-  "My mother's name is Mary.",
-  "Favorite dinosaur? Probably a velociraptor.",
-  "Actually, her name is Maria.",
+  "Email is anthony@example.com.",
+  "My phone number is 555-123-4567.",
   "I need an appointment next Friday afternoon.",
 ];
 
@@ -28,18 +27,18 @@ async function main() {
   }
 
   const client = new OpenAI();
-  const clock = buildVoiceV3CallClock(TEST_AGENT_CONFIG.timezone);
+  const clock = buildVoiceV3CallClock(VOICE_V3_BOOKING_TEST_CONFIG.timezone);
   let ctx = createInitialVoiceV3CallContext({
     callId: "integration_call",
     liveSessionId: "live_integration",
-    timezone: TEST_AGENT_CONFIG.timezone,
+    timezone: VOICE_V3_BOOKING_TEST_CONFIG.timezone,
     clock,
   });
 
-  const textFormat = voiceV3CallerMeaningTextFormat(TEST_AGENT_CONFIG);
+  const textFormat = voiceV3CallerMeaningTextFormat(VOICE_V3_BOOKING_TEST_CONFIG);
 
   for (const phrase of PHRASES) {
-    const contextJson = buildCallerInterpretationContext(TEST_AGENT_CONFIG, ctx);
+    const contextJson = buildCallerInterpretationContext(VOICE_V3_BOOKING_TEST_CONFIG, ctx);
     const response = await client.responses.parse({
       model: "gpt-6-astra",
       input: [
@@ -61,21 +60,21 @@ async function main() {
     const meaning = response.output_parsed;
     assert.ok(meaning, "expected response.output_parsed from responses.parse");
 
-    const applied = applyCallerMeaningToContext(ctx, TEST_AGENT_CONFIG, meaning);
+    const applied = applyCallerMeaningToContext(ctx, VOICE_V3_BOOKING_TEST_CONFIG, meaning);
     ctx = applied.context;
   }
 
   assert.equal(ctx.intake.values.name?.value, "Anthony");
-  assert.equal(ctx.intake.values.mothers_name?.value, "Maria");
-  assert.ok(ctx.intake.values.favorite_dinosaur?.value?.toLowerCase().includes("velociraptor"));
+  assert.ok(ctx.intake.values.email?.value?.includes("anthony"));
+  assert.ok(ctx.intake.values.phone?.value?.replace(/\D/g, "").includes("5551234567"));
   assert.ok(
     ctx.scheduling.meaning?.weekday === "FRIDAY" ||
       ctx.scheduling.meaning?.daypart === "AFTERNOON" ||
       ctx.scheduling.normalized?.localDate?.includes("-"),
   );
 
-  const rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
-  assert.equal(rules.missingRequiredFields.includes("email"), true);
+  const rules = evaluateVoiceV3Rules(ctx, VOICE_V3_BOOKING_TEST_CONFIG);
+  assert.equal(rules.missingRequiredFields.length, 0);
 
   console.log("PASS voice-v3 astra structured output integration (output_parsed)");
 }

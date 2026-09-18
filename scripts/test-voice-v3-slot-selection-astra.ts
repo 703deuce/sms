@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict";
 import OpenAI from "openai";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { buildEmitCallerMeaningLiveFunctionTool } from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
 import { decodeCallerMeaningFromFunctionArguments } from "../src/lib/voice-v3/intake/decode-delegated-caller-meaning";
 import { applySlotSelectionFromMeaning } from "../src/lib/voice-v3/calendar/apply-slot-selection";
@@ -51,7 +51,7 @@ function miniOffer(): AvailabilityOfferSet {
 }
 
 async function interpret(client: OpenAI, phrase: string) {
-  const tool = buildEmitCallerMeaningLiveFunctionTool(TEST_AGENT_CONFIG);
+  const tool = buildEmitCallerMeaningLiveFunctionTool(VOICE_V3_BOOKING_TEST_CONFIG);
   const response = await client.responses.create({
     model: "gpt-6-astra",
     input: [
@@ -76,7 +76,7 @@ async function interpret(client: OpenAI, phrase: string) {
   });
   const fn = response.output?.find((o) => o.type === "function_call");
   assert.ok(fn && fn.type === "function_call");
-  const meaning = decodeCallerMeaningFromFunctionArguments(fn.arguments, TEST_AGENT_CONFIG);
+  const meaning = decodeCallerMeaningFromFunctionArguments(fn.arguments, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.ok(meaning);
   return meaning!;
 }

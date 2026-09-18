@@ -1,9 +1,6 @@
-/** Odd-field harness tests — not the PSTN booking pipeline default config. */
-process.env.VOICE_V3_AGENT_CONFIG_PROFILE = "test";
-
 import assert from "node:assert/strict";
 import { buildBasicLiveSessionAcceptParams } from "../src/lib/voice-v3-basic/live-session-config";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { ODD_INTAKE_HARNESS_AGENT_CONFIG } from "./fixtures/voice-v3-odd-intake-harness-config";
 import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
 import { CALLER_MEANING_STRUCTURED_OUTPUT_NAME } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
@@ -45,7 +42,7 @@ function main() {
   assert.equal(liveText?.format, undefined, "Live accept must not send text.format (API 400)");
   assert.equal(liveText?.verbosity, "low");
 
-  const integrationFormat = voiceV3CallerMeaningTextFormat(TEST_AGENT_CONFIG) as {
+  const integrationFormat = voiceV3CallerMeaningTextFormat(ODD_INTAKE_HARNESS_AGENT_CONFIG) as {
     type?: string;
     name?: string;
   };
@@ -56,13 +53,13 @@ function main() {
   const runtime = createVoiceV3CallRuntime({
     liveSessionId: "live_seq_test",
     callId: "call_seq",
-    config: TEST_AGENT_CONFIG,
+    config: ODD_INTAKE_HARNESS_AGENT_CONFIG,
   });
 
   apply(runtime, meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }] }));
   let ctx = runtime.getSnapshot();
   assert.equal(ctx.intake.values.name?.value, "Anthony");
-  let rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  let rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);
   assert.equal(rules.intakeComplete, false);
   assert.deepEqual(rules.missingRequiredFields.sort(), ["email", "mothers_name"].sort());
 
@@ -71,7 +68,7 @@ function main() {
     meaning({ captured_fields: [{ key: "email", value: "anthony@example.com", confidence: 0.9 }] }),
   );
   ctx = runtime.getSnapshot();
-  rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);
   assert.equal(rules.intakeComplete, false);
 
   apply(
@@ -79,7 +76,7 @@ function main() {
     meaning({ captured_fields: [{ key: "mothers_name", value: "Mary", confidence: 0.92 }] }),
   );
   ctx = runtime.getSnapshot();
-  rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);
   assert.equal(rules.intakeComplete, true);
 
   apply(
@@ -102,8 +99,16 @@ function main() {
   assert.equal(ctx.intake.values.favorite_dinosaur?.value, "T-Rex");
 
   clearVoiceV3CallRuntimeStore();
-  const runtimeA = createVoiceV3CallRuntime({ liveSessionId: "live_a", callId: "call_a" });
-  const runtimeB = createVoiceV3CallRuntime({ liveSessionId: "live_b", callId: "call_b" });
+  const runtimeA = createVoiceV3CallRuntime({
+    liveSessionId: "live_a",
+    callId: "call_a",
+    config: ODD_INTAKE_HARNESS_AGENT_CONFIG,
+  });
+  const runtimeB = createVoiceV3CallRuntime({
+    liveSessionId: "live_b",
+    callId: "call_b",
+    config: ODD_INTAKE_HARNESS_AGENT_CONFIG,
+  });
   apply(
     runtimeA,
     meaning({

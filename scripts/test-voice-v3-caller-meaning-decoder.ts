@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import type { VoiceV3AgentConfig } from "../src/lib/voice-v3/config/agent-config";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { ODD_INTAKE_HARNESS_AGENT_CONFIG } from "./fixtures/voice-v3-odd-intake-harness-config";
 import { buildCallerMeaningZodSchema } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import { decodeDelegatedCallerMeaning } from "../src/lib/voice-v3/intake/decode-delegated-caller-meaning";
 import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
@@ -10,10 +10,10 @@ import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
 import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 
-const AGENT_A: VoiceV3AgentConfig = TEST_AGENT_CONFIG;
+const AGENT_A: VoiceV3AgentConfig = ODD_INTAKE_HARNESS_AGENT_CONFIG;
 
 const AGENT_B: VoiceV3AgentConfig = {
-  ...TEST_AGENT_CONFIG,
+  ...ODD_INTAKE_HARNESS_AGENT_CONFIG,
   businessName: "Agent B",
   intakeFields: [
     { key: "name", label: "Name", type: "text", required: true },

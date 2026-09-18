@@ -6,7 +6,7 @@ import { createInitialVoiceV3CallContext } from "../src/lib/voice-v3/state/call-
 import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 import { normalizeSchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-normalizer";
 import type { SchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
 import { deriveSchedulingClarification } from "../src/lib/voice-v3/time/scheduling-clarification";
 
@@ -290,7 +290,7 @@ function main() {
 
   let applied = applyCallerMeaningToContext(
     ctx,
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_TEST_CONFIG,
     callerMeaning({
       date_relation: "THIS_WEEKDAY",
       date_expression: "Friday afternoon",
@@ -309,7 +309,7 @@ function main() {
 
   applied = applyCallerMeaningToContext(
     ctx,
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_TEST_CONFIG,
     callerMeaning({
       date_relation: "TODAY",
       date_expression: "Actually Thursday morning",
@@ -329,7 +329,7 @@ function main() {
 
   applied = applyCallerMeaningToContext(
     ctx,
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_TEST_CONFIG,
     callerMeaning({
       date_relation: "TODAY",
       date_expression: "Thursday morning",
@@ -390,10 +390,10 @@ function main() {
   });
   clarifyCtx = applyCallerMeaningToContext(
     clarifyCtx,
-    TEST_AGENT_CONFIG,
+    VOICE_V3_BOOKING_TEST_CONFIG,
     callerMeaning(thursdayMorningAmbiguous),
   ).context;
-  const clarifyRules = evaluateVoiceV3Rules(clarifyCtx, TEST_AGENT_CONFIG);
+  const clarifyRules = evaluateVoiceV3Rules(clarifyCtx, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.equal(clarifyRules.schedulingRequiresClarification, true);
   assert.equal(clarifyRules.mayRunCalendarAction, false);
   assert.equal(clarifyRules.hasSchedulingPreference, false);

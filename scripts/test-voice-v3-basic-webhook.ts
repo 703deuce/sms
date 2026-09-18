@@ -7,6 +7,8 @@ import {
   VOICE_V3_BASIC_BACKEND_MODEL,
   VOICE_V3_BASIC_LIVE_MODEL,
 } from "../src/lib/voice-v3-basic/live-session-config";
+import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
+import { resolveVoiceV3AgentConfig } from "../src/lib/voice-v3/state/call-runtime";
 import {
   extractLiveSessionIdFromWebhookEvent,
   isIncomingOpenAiSipWebhookEvent,
@@ -34,6 +36,14 @@ function main() {
   );
   assert.ok(emitTool, "Live accept should include emit_caller_meaning when intake pipeline enabled");
   assert.equal((emitTool as { strict?: boolean })?.strict, true);
+  const bookingConfig = resolveVoiceV3AgentConfig();
+  const format = voiceV3CallerMeaningTextFormat(bookingConfig) as {
+    schema?: { properties?: { captured_fields?: { items?: { properties?: { key?: { enum?: string[] } } } } } };
+  };
+  const intakeKeys =
+    format.schema?.properties?.captured_fields?.items?.properties?.key?.enum?.sort() ?? [];
+  assert.deepEqual(intakeKeys, ["email", "name", "phone"]);
+  assert.equal(intakeKeys.includes("mothers_name"), false);
   const liveText = responses.text as { format?: unknown } | null | undefined;
   assert.equal(liveText?.format, undefined, "Live accept must not include text.format");
   assertNoDelegationIdOnOutbound(acceptParams);

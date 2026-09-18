@@ -7,4 +7,4 @@
 
 Runtime entry: `src/lib/voice-v3-basic/` (webhooks, SIP, accept) + `src/lib/voice-v3/` (prompts, telemetry, call context, intake pipeline).
 
-**Intake:** `TEST_AGENT_CONFIG` + `VoiceV3CallRuntime` + Astra `voice_v3_caller_meaning` Structured Output. Tests: `npm run test:voice-v3-intake`.
+**Intake:** `VOICE_V3_BOOKING_AGENT_CONFIG` + `VoiceV3CallRuntime` + Astra `emit_caller_meaning` / `voice_v3_caller_meaning`. Tests: `npm run test:voice-v3-intake`. Odd-field harness: `scripts/fixtures/` only (not in `src/`).

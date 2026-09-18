@@ -106,7 +106,7 @@ Deterministic unit tests build `CallerMeaning` objects directly (`scripts/test-v
 
 ### 8. Field identity: stable keys vs labels?
 
-**Config** uses stable **`key`** (e.g. `mothers_name`, `favorite_dinosaur`) in `src/lib/voice-v3/config/test-agent-config.ts`.
+**Production config** uses stable **`key`** enums from `src/lib/voice-v3/config/booking-agent-config.ts` (`name`, `email`, `phone`). Odd keys are tested only via `scripts/fixtures/voice-v3-odd-intake-harness-config.ts`.
 
 **Merge** matches **`captured_fields[].key`** to **`config.intakeFields[].key`** only in `src/lib/voice-v3/intake/apply-caller-meaning.ts` (`isConfiguredKey`). Labels are **not** used for identity.
 

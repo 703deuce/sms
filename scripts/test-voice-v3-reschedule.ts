@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { TEST_AGENT_CONFIG } from "../src/lib/voice-v3/config/test-agent-config";
+import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
 import { registerDurableBooking } from "../src/lib/voice-v3/calendar/durable-booking-store";
 import { clearDurableBookingStore } from "../src/lib/voice-v3/calendar/durable-booking-store";
 import type { ConfirmedBooking } from "../src/lib/voice-v3/calendar/booking-types";
@@ -116,7 +116,7 @@ async function main() {
     ordinal: 1,
   }).context;
 
-  const rules = evaluateVoiceV3Rules(ctx, TEST_AGENT_CONFIG);
+  const rules = evaluateVoiceV3Rules(ctx, VOICE_V3_BOOKING_TEST_CONFIG);
   assert.equal(rules.rescheduleReady, true);
 
   const rt = {
@@ -124,7 +124,7 @@ async function main() {
     replaceContext: (c: typeof ctx) => {
       ctx = c;
     },
-    config: TEST_AGENT_CONFIG,
+    config: VOICE_V3_BOOKING_TEST_CONFIG,
   };
 
   await dispatchRescheduleIfRequired(rt, {
