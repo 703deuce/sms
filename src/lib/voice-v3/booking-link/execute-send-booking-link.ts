@@ -2,7 +2,7 @@ import "server-only";
 
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { sendAppointmentSms } from "@/lib/appointments/sms-sender";
+import { sendQuickSms } from "@/lib/sms/send-quick";
 import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { voiceToolError, toolOk, type VoiceToolResult } from "../tools/types";
@@ -291,12 +291,22 @@ export async function executeSendBookingLink(input: {
   const sendFn =
     input.deps?.sendSms ??
     (async (sms) => {
-      const res = await sendAppointmentSms({
+      const phoneNumberId = config.telephony?.outboundSmsPhoneNumberId?.trim() || null;
+      const res = await sendQuickSms({
         workspaceId: sms.workspaceId,
         to: sms.to,
         from: sms.from,
         body: sms.body,
         idempotencyKey: sms.idempotencyKey,
+        ...(phoneNumberId
+          ? {
+              senderRoute: {
+                sendWorkspaceId: sms.workspaceId,
+                fromE164: sms.from,
+                phoneNumberId,
+              },
+            }
+          : {}),
       });
       return {
         providerMessageId: String(res.sid || res.messageId || "unknown"),

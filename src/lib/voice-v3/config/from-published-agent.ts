@@ -104,14 +104,20 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
       source,
     });
 
+    const withTenant: VoiceV3AgentConfig = {
+      ...compiled,
+      workspaceId: input.workspaceId,
+      agentId: input.agentId,
+    };
+
     logVoiceV3AgentConfigResolved({
       workspaceId: input.workspaceId,
       agentId: input.agentId,
       publishedVersionId: input.publishedVersionId,
-      config: compiled,
+      config: withTenant,
     });
 
-    return compiled;
+    return withTenant;
   } catch (err) {
     console.error("VOICE_V3_RESOLVE_AGENT_CONFIG_FAILED", {
       workspaceId: input.workspaceId,

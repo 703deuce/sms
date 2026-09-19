@@ -50,8 +50,10 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
     if (denied) return denied;
 
     const snap = ctx.runtime.getSnapshot();
+    const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
     const { result, nextContext } = await executeSendBookingLink({
-      workspaceId: ctx.tenantId,
+      workspaceId,
+      agentId: config.agentId ?? null,
       config,
       context: snap,
       args,

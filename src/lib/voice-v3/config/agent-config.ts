@@ -271,4 +271,8 @@ export interface VoiceV3AgentConfig {
   /** Hash / version for observability at accept time. */
   configVersion?: string;
   source?: "wizard_published" | "env_fallback" | "wizard_draft_test";
+
+  /** PSTN wizard binding — required for workspace-scoped tools (SMS, consent ledger). */
+  workspaceId?: string;
+  agentId?: string;
 }

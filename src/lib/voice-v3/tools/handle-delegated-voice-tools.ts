@@ -65,6 +65,15 @@ export async function handleDelegatedVoiceToolCall(input: {
     ? (JSON.parse(completed.argumentsJson) as unknown)
     : {};
 
+  const workspaceId = runtime.config.workspaceId?.trim();
+  if (!workspaceId) {
+    console.error("VOICE_TOOL_MISSING_WORKSPACE_ID", {
+      live_session_id: input.liveSessionId,
+      call_id: snap.callId,
+      tool_name: completed.name,
+    });
+  }
+
   const result = isKnownTool
     ? await executeVoiceTool(
         {
@@ -73,7 +82,7 @@ export async function handleDelegatedVoiceToolCall(input: {
           delegationId: completed.delegationId ?? null,
           functionCallId: completed.callId,
           runtime,
-          tenantId: snap.callId,
+          tenantId: workspaceId || snap.callId,
           sendContext: input.send,
         },
         completed.name,
