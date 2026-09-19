@@ -5,7 +5,7 @@ import type {
   TestScenarioId,
 } from "@/lib/solutions/appointment-receptionist/types";
 import { testScenariosForCapabilities } from "@/lib/solutions/appointment-receptionist/wizard-presets";
-import { AgentBrowserCall } from "@/components/voice/agent-browser-call";
+import { VoiceV3BrowserCall } from "@/components/voice/voice-v3-browser-call";
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle2,
@@ -29,7 +29,7 @@ export function TestStep({
 }: {
   state: AppointmentReceptionistWizardState;
   patch: (p: Partial<AppointmentReceptionistWizardState>) => void;
-  /** Persist draft + build_for_test so WebRTC can talk to the real assistant. */
+  /** Persist draft before OpenAI Live V3 browser test. */
   onEnsureAgent?: () => Promise<{ agentId: string; telnyxAssistantId?: string | null } | null>;
   presentation?: "legacy" | "mctb";
 }) {
@@ -44,9 +44,7 @@ export function TestStep({
   const [preparing, setPreparing] = useState(false);
   const [prepareError, setPrepareError] = useState("");
   const [tools, setTools] = useState<ToolLog[]>([]);
-  const [assistantId, setAssistantId] = useState<string | null>(
-    state.telnyxAssistantId || null,
-  );
+  const [liveProbeSource, setLiveProbeSource] = useState<string | null>(null);
   const [qualityBusy, setQualityBusy] = useState(false);
   const [qualitySummary, setQualitySummary] = useState<string | null>(null);
   const [qualityResults, setQualityResults] = useState<
@@ -59,13 +57,9 @@ export function TestStep({
     }
   }, [scenarios, state.testScenario, patch]);
 
-  useEffect(() => {
-    setAssistantId(state.telnyxAssistantId || null);
-  }, [state.telnyxAssistantId]);
-
   async function prepareLiveTest() {
     if (!onEnsureAgent) {
-      setPrepareError("Save the draft first so we can build a live test assistant.");
+      setPrepareError("Save the draft first so we can start a Voice V3 live test.");
       return null;
     }
     setPreparing(true);
@@ -76,27 +70,8 @@ export function TestStep({
         setPrepareError("Could not create or update the draft agent.");
         return null;
       }
-      patch({ agentId: result.agentId, telnyxAssistantId: result.telnyxAssistantId });
-      setAssistantId(result.telnyxAssistantId || null);
-
-      const build = await fetch(`/api/voice/agents/${result.agentId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "build_for_test" }),
-      });
-      const buildJson = await build.json();
-      if (!build.ok) {
-        setPrepareError(buildJson.error || "Build & test failed");
-        return result;
-      }
-      const nextAssistant =
-        buildJson.telnyxAssistantId ||
-        buildJson.data?.telnyxAssistantId ||
-        result.telnyxAssistantId ||
-        null;
-      setAssistantId(nextAssistant);
-      patch({ telnyxAssistantId: nextAssistant });
-      return { ...result, telnyxAssistantId: nextAssistant };
+      patch({ agentId: result.agentId });
+      return result;
     } catch (err) {
       setPrepareError(err instanceof Error ? err.message : "Prepare failed");
       return null;
@@ -125,7 +100,7 @@ export function TestStep({
       setTools([{ name: "Search knowledge", system: "Knowledge", status: "pending" }]);
     }
     // Mark checked only after a live assistant is available for talk-back.
-    patch({ lastTestPassed: Boolean(prepared?.telnyxAssistantId || assistantId) });
+    patch({ lastTestPassed: Boolean(prepared?.agentId || liveProbeSource === "wizard_draft_test") });
   }
 
   return (
@@ -138,7 +113,7 @@ export function TestStep({
           <p className="mt-1 text-sm text-muted-foreground">
             {isMctb
               ? "Try real scenarios before the agent answers customer calls."
-              : "Talk back and forth with the real Telnyx assistant — same voice and tools as after you activate. Guided scenarios below help you know what to try."}
+              : "Talk back with OpenAI GPT-Live using your draft Voice V3 configuration — same compiler path as production PSTN. Guided scenarios below help you know what to try."}
           </p>
         </div>
 
@@ -206,7 +181,7 @@ export function TestStep({
                     disabled={preparing}
                     onClick={() => void prepareLiveTest()}
                   >
-                    {preparing ? "Building…" : "Build & ready test"}
+                    {preparing ? "Saving…" : "Save draft for test"}
                   </Button>
                   <Button size="sm" onClick={() => void runGuidedScenario()} disabled={preparing}>
                     <Play className="h-3.5 w-3.5" />
@@ -224,24 +199,22 @@ export function TestStep({
               <div className="p-4">
                 {mode === "browser" ? (
                   state.agentId ? (
-                    <AgentBrowserCall
+                    <VoiceV3BrowserCall
                       agentId={state.agentId}
-                      telnyxAssistantId={assistantId}
                       voiceLabel={state.voiceLabel}
-                      status={assistantId ? "TESTING" : "DRAFT"}
-                      onNeedBuild={() => void prepareLiveTest()}
-                      onSaveDraft={async () => {
-                        await prepareLiveTest();
+                      onNeedSave={() => prepareLiveTest().then(() => undefined)}
+                      onSessionSuccess={(probe) => {
+                        setLiveProbeSource(probe.source);
+                        patch({ lastTestPassed: true });
                       }}
-                      onSessionSuccess={() => patch({ lastTestPassed: true })}
                       onSessionFailure={() => patch({ lastTestPassed: false })}
                     />
                   ) : (
                     <div className="rounded-xl border border-dashed border-border p-6 text-center">
-                      <p className="text-sm font-medium">Prepare a live test assistant</p>
+                      <p className="text-sm font-medium">Prepare a Voice V3 live test</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        We&apos;ll save your wizard answers, sync the selected voice (
-                        {state.voiceLabel}), and open a real mic conversation.
+                        We&apos;ll save your wizard draft and connect OpenAI GPT-Live using voice{" "}
+                        {state.voiceLabel} ({state.voiceId}) — not the legacy Telnyx assistant.
                       </p>
                       <Button
                         className="mt-4"
@@ -359,9 +332,13 @@ export function TestStep({
             <p className="mt-1 text-sm font-semibold">{state.voiceLabel}</p>
           </div>
           <div className="rounded-xl border border-border p-3">
-            <p className="text-xs text-muted-foreground">Live assistant</p>
+            <p className="text-xs text-muted-foreground">V3 live test</p>
             <p className="mt-1 text-sm font-semibold">
-              {assistantId ? "Synced for WebRTC" : "Not built yet"}
+              {liveProbeSource === "wizard_draft_test"
+                ? "OpenAI Live (draft)"
+                : state.agentId
+                  ? "Ready — start browser test"
+                  : "Save draft first"}
             </p>
           </div>
           <div className="rounded-xl border border-border p-3">

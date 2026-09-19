@@ -1,8 +1,7 @@
 import type { AppointmentReceptionistWizardState } from "./types";
 import {
-  DEFAULT_VOICE_V2_WIZARD_CATALOG_ID,
-  VOICE_V2_WIZARD_ELEVENLABS_VOICES,
-} from "./voice-v2-wizard-elevenlabs-catalog";
+  VOICE_V3_WIZARD_LIVE_VOICES,
+} from "@/lib/voice-v3/config/voice-v3-live-built-in-voices";
 
 export const DEFAULT_CONNECTION_GREETING =
   "Thank you for calling. One moment, please, while I connect you with our receptionist.";
@@ -88,14 +87,17 @@ export const ANSWER_WHEN_OPTIONS = [
   },
 ];
 
-export const WIZARD_VOICES = VOICE_V2_WIZARD_ELEVENLABS_VOICES.map((v) => ({
-  id: v.catalogId,
+/** Appointment Receptionist Voice V3 — GPT-Live built-in voices only. */
+export const WIZARD_VOICES = VOICE_V3_WIZARD_LIVE_VOICES.map((v) => ({
+  id: v.id,
   label: v.label,
-  badge: v.badge || "ElevenLabs",
+  badge: v.badge,
   description: v.description,
   gender: v.gender,
-  recommendedSpeed: v.recommendedSpeed ?? 1.08,
+  recommendedSpeed: v.recommendedSpeed ?? 1,
 }));
+
+export const DEFAULT_VOICE_V3_WIZARD_VOICE_ID = "marin";
 
 export const WIZARD_VOICE_BACKUPS: typeof WIZARD_VOICES = [];
 
@@ -443,8 +445,8 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
       "Never provide medical, legal, or financial conclusions",
     ],
 
-    voiceId: DEFAULT_VOICE_V2_WIZARD_CATALOG_ID,
-    voiceLabel: "Jessica",
+    voiceId: DEFAULT_VOICE_V3_WIZARD_VOICE_ID,
+    voiceLabel: "Marin",
     speakingSpeed: 1.08,
     responsiveness: 0.8,
     interruptionSensitivity: 0.75,

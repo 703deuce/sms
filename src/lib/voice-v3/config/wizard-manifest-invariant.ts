@@ -1,55 +1,45 @@
-import { createDefaultWizardState } from "@/lib/solutions/appointment-receptionist/defaults";
 import { WIZARD_V3_FIELD_MANIFEST } from "./wizard-v3-field-manifest";
-import { WIZARD_REQUIRED_CONTROL_PATHS } from "./wizard-required-control-paths";
+import { WIZARD_CUSTOMER_EDITABLE_CONTROL_PATHS } from "./wizard-control-inventory";
 
-function manifestCoversStatePath(statePath: string, manifestPath: string): boolean {
-  if (manifestPath === statePath) return true;
-  const mp = manifestPath.replace(/\[\]/g, "");
-  const sp = statePath.replace(/\[\]/g, "");
-  if (mp === sp) return true;
-  if (sp.startsWith(`${mp}.`)) return true;
-  if (manifestPath.endsWith("[]") && statePath.startsWith(manifestPath.replace("[]", ""))) {
-    return true;
-  }
-  const base = manifestPath.split("[")[0].split(".")[0];
-  return statePath === base || statePath.startsWith(`${base}.`) || statePath.startsWith(`${base}[`);
-}
-
-/**
- * Every top-level wizard state key must be represented in the V3 manifest.
- */
-export function findUnmappedWizardStateKeys(): string[] {
-  const defaultKeys = Object.keys(createDefaultWizardState());
-  const unmapped: string[] = [];
-
-  for (const key of defaultKeys) {
-    const covered = WIZARD_V3_FIELD_MANIFEST.some((row) =>
-      manifestCoversStatePath(key, row.statePath),
-    );
-    if (!covered) unmapped.push(key);
-  }
-
-  return unmapped;
-}
-
-/** Nested customer-editable paths must have an exact manifest row. */
-export function findUnmappedRequiredControlPaths(): string[] {
+/** Every customer-editable leaf control must have an exact manifest `statePath` row. */
+export function findUnmappedCustomerEditableControlPaths(): string[] {
   const manifestPaths = new Set(WIZARD_V3_FIELD_MANIFEST.map((r) => r.statePath));
-  return WIZARD_REQUIRED_CONTROL_PATHS.filter((p) => !manifestPaths.has(p));
+  return WIZARD_CUSTOMER_EDITABLE_CONTROL_PATHS.filter((p) => !manifestPaths.has(p));
+}
+
+/** @deprecated Use findUnmappedCustomerEditableControlPaths — parent coverage is not sufficient. */
+export function findUnmappedRequiredControlPaths(): string[] {
+  return findUnmappedCustomerEditableControlPaths();
+}
+
+/** @deprecated Top-level parent rows do not satisfy leaf-level certification. */
+export function findUnmappedWizardStateKeys(): string[] {
+  return [];
 }
 
 export function assertWizardManifestComplete(): void {
-  const topUnmapped = findUnmappedWizardStateKeys();
-  if (topUnmapped.length > 0) {
+  const unmapped = findUnmappedCustomerEditableControlPaths();
+  if (unmapped.length > 0) {
     throw new Error(
-      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped top-level keys: ${topUnmapped.join(", ")}`,
+      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped customer-editable controls: ${unmapped.slice(0, 12).join(", ")}${unmapped.length > 12 ? ` (+${unmapped.length - 12} more)` : ""}`,
     );
   }
+}
 
-  const nestedUnmapped = findUnmappedRequiredControlPaths();
-  if (nestedUnmapped.length > 0) {
-    throw new Error(
-      `WIZARD_V3_MANIFEST_INCOMPLETE: unmapped nested controls: ${nestedUnmapped.slice(0, 8).join(", ")}${nestedUnmapped.length > 8 ? ` (+${nestedUnmapped.length - 8} more)` : ""}`,
-    );
+export function countWizardManifestCoverage(): {
+  totalEditableLeafControls: number;
+  totalV3MappedLeafControls: number;
+  unmapped: number;
+} {
+  const manifestPaths = new Set(WIZARD_V3_FIELD_MANIFEST.map((r) => r.statePath));
+  const totalEditable = WIZARD_CUSTOMER_EDITABLE_CONTROL_PATHS.length;
+  let mapped = 0;
+  for (const path of WIZARD_CUSTOMER_EDITABLE_CONTROL_PATHS) {
+    if (manifestPaths.has(path)) mapped += 1;
   }
+  return {
+    totalEditableLeafControls: totalEditable,
+    totalV3MappedLeafControls: mapped,
+    unmapped: totalEditable - mapped,
+  };
 }

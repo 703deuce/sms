@@ -1,4 +1,8 @@
 import type { CapabilityId } from "@/lib/solutions/appointment-receptionist/types";
+import {
+  WIZARD_QUALIFICATION_RULE_CONTROL_PATHS,
+  WIZARD_URGENCY_RULE_CONTROL_PATHS,
+} from "./wizard-control-inventory";
 import type { WizardV3ExecutionStatus } from "./wizard-execution-status";
 
 export type WizardV3Destination =
@@ -428,19 +432,54 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       republishBehavior: "next_call",
     }),
   );
-  for (const field of ["id", "label", "phoneE164"] as const) {
+  const onCallEntryFields = [
+    "id",
+    "name",
+    "dayOfWeek",
+    "date",
+    "startTime",
+    "endTime",
+    "destination.label",
+    "destination.phoneE164",
+    "priority",
+    "enabled",
+  ] as const;
+  for (const field of onCallEntryFields) {
     rows.push(
       row({
         step: 3,
         uiLabel: `On-call entry ${field}`,
         statePath: `operatingMaturity.onCallSchedule.entries[].${field}`,
         valueType: "varies",
-        v3ConfigPath: "callHandling (future)",
+        v3ConfigPath: "callHandling.onCallSchedule (future)",
         destinations: ["DETERMINISTIC_CONFIG"],
         executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
         scope: "YES_GENERAL",
         compilerFunction: "ensureWizardOperatingMaturity",
         runtimeConsumer: "future on-call routing",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
+  for (const field of [
+    "normalTarget",
+    "normalCustomMinutes",
+    "urgentTarget",
+    "urgentCustomMinutes",
+  ] as const) {
+    rows.push(
+      row({
+        step: 3,
+        uiLabel: `Callback SLA ${field}`,
+        statePath: `operatingMaturity.callbackSla.${field}`,
+        valueType: "varies",
+        v3ConfigPath: "callHandling.callbackSla (future)",
+        destinations: ["DETERMINISTIC_CONFIG"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "ensureWizardOperatingMaturity",
+        runtimeConsumer: "future callback SLA",
         republishBehavior: "next_call",
       }),
     );
@@ -653,11 +692,9 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     "qualificationEnabled",
     "qualificationRequiredBeforePrimaryAction",
     "qualificationRevision",
-    "qualificationSupportedZipCodes",
     "qualificationRulesMatchMode",
     "qualificationNotQualifiedFallback",
     "qualificationNeedsReviewFallback",
-    "qualificationRules",
   ] as const;
   for (const path of qualFields) {
     rows.push(
@@ -677,8 +714,93 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     );
   }
 
+  rows.push(
+    row({
+      step: 5,
+      uiLabel: "Qualification supported zip codes",
+      statePath: "qualificationSupportedZipCodes[]",
+      valueType: "string[]",
+      v3ConfigPath: "qualification.supportedZipCodes[]",
+      destinations: ["DETERMINISTIC_CONFIG", "ASTRA_BACKEND_CONTEXT"],
+      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      scope: "YES_GENERAL",
+      compilerFunction: "qualificationFromWizard",
+      runtimeConsumer: "future qualification executor",
+      republishBehavior: "next_call",
+    }),
+  );
+
+  for (const path of WIZARD_QUALIFICATION_RULE_CONTROL_PATHS) {
+    const field = path.replace("qualificationRules[].", "");
+    rows.push(
+      row({
+        step: 5,
+        uiLabel: `Qualification rule ${field}`,
+        statePath: path,
+        valueType: "varies",
+        v3ConfigPath: `qualification.rules[].${field}`,
+        destinations: ["DETERMINISTIC_CONFIG", "ASTRA_BACKEND_CONTEXT"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "qualificationFromWizard",
+        runtimeConsumer: "future qualification executor",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
+  for (const path of WIZARD_URGENCY_RULE_CONTROL_PATHS) {
+    const field = path.replace("urgencyRules[].", "");
+    rows.push(
+      row({
+        step: 5,
+        uiLabel: `Urgency rule ${field}`,
+        statePath: path,
+        valueType: "varies",
+        v3ConfigPath: `callHandling.urgencyRules[].${field}`,
+        destinations: ["DETERMINISTIC_CONFIG", "ASTRA_BACKEND_CONTEXT"],
+        executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+        scope: "YES_GENERAL",
+        compilerFunction: "compileVoiceV3AgentConfig.callHandling",
+        runtimeConsumer: "future urgency executor",
+        republishBehavior: "next_call",
+      }),
+    );
+  }
+
+  rows.push(
+    row({
+      step: 4,
+      uiLabel: "Appointment type required intake keys",
+      statePath: "appointmentTypes[].requiredFields[]",
+      valueType: "string[]",
+      v3ConfigPath: "services[].requiredIntakeKeys[] (future)",
+      destinations: ["DETERMINISTIC_CONFIG"],
+      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
+      scope: "YES_MICROSOFT_BOOKING",
+      compilerFunction: "wizardServices",
+      runtimeConsumer: "per-service intake (future)",
+      republishBehavior: "next_call",
+    }),
+  );
+
+  rows.push(
+    row({
+      step: 5,
+      uiLabel: "Transfer trigger phrases",
+      statePath: "transferTriggers[]",
+      valueType: "string[]",
+      v3ConfigPath: "callHandling.transferTriggers[]",
+      destinations: ["LIVE_FRONTEND_CONTEXT", "ASTRA_BACKEND_CONTEXT", "DETERMINISTIC_CONFIG"],
+      executionStatus: "ACTIVE_EXECUTION",
+      scope: "YES_GENERAL",
+      compilerFunction: "compileVoiceV3AgentConfig.callHandling",
+      runtimeConsumer: "Amy + transfer_call policy",
+      republishBehavior: "next_call",
+    }),
+  );
+
   const callHandlingScalars: Array<[string, string]> = [
-    ["transferTriggers", "Transfer triggers"],
     ["transferDestinationName", "Legacy transfer destination name"],
     ["transferDestinationPhone", "Legacy transfer destination phone"],
     ["transferRingSeconds", "Transfer ring seconds"],
@@ -690,7 +812,6 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["transferRouting", "Transfer routing mode"],
     ["defaultTransferPlanId", "Default transfer plan id"],
     ["urgencyEnabled", "Urgency rules enabled"],
-    ["urgencyRules", "Urgency rules"],
     ["callbackRequestsEnabled", "Callback requests enabled"],
     ["callbackUseAniByDefault", "Callback use ANI"],
     ["callbackAskPreferredTime", "Callback ask preferred time"],
@@ -840,7 +961,7 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       step: 6,
       uiLabel: "Guardrails",
       statePath: "guardrails[]",
-      valueType: "string[]",
+      valueType: "string (repeatable item)",
       v3ConfigPath: "conversation.guardrails[]",
       destinations: ["LIVE_FRONTEND_CONTEXT"],
       executionStatus: "ACTIVE_EXECUTION",

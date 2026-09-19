@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-receptionist/operating-maturity-wizard";
 import { deriveBookingStrategyFromWizard } from "@/lib/voice-receptionist-wizard/booking-strategy";
-import { normalizeRealtimeNativeVoice } from "@/lib/voice/outbound/realtime-native-voices";
+import { tryNormalizeVoiceV3LiveBuiltInVoice } from "./voice-v3-live-built-in-voices";
 import type { VoiceV3AgentConfig, VoiceV3ServiceConfig } from "./agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "./booking-agent-config";
 import { compileBusinessHoursAmyDisplay } from "./business-hours-display";
@@ -420,13 +420,9 @@ export function compileVoiceV3AgentConfig(input: {
 
 function safeLiveVoice(wizardVoiceId: string | undefined, fallback: string): string {
   const raw = wizardVoiceId?.trim() || fallback;
-  try {
-    return normalizeRealtimeNativeVoice(raw, "wizard.voiceId");
-  } catch {
-    try {
-      return normalizeRealtimeNativeVoice(fallback, "fallback.liveVoiceId");
-    } catch {
-      return "marin";
-    }
-  }
+  const fromWizard = tryNormalizeVoiceV3LiveBuiltInVoice(raw);
+  if (fromWizard) return fromWizard;
+  const fromFallback = tryNormalizeVoiceV3LiveBuiltInVoice(fallback);
+  if (fromFallback) return fromFallback;
+  return "marin";
 }

@@ -77,8 +77,6 @@ export function VoiceStep({
   }
 
   const behaviors = state.conversationBehaviors;
-  const females = WIZARD_VOICES.filter((v) => v.gender === "female");
-  const males = WIZARD_VOICES.filter((v) => v.gender === "male");
 
   return (
     <div className="flex gap-6">
@@ -254,20 +252,17 @@ export function VoiceStep({
             <div>
               <h3 className="text-sm font-semibold">Choose a voice</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Top 10 shortlist from live phone tests + Telnyx NaturalHD / Ultra evidence.
-                Press play to hear each one.
+                All {WIZARD_VOICES.length} GPT-Live built-in voices. Step 7 browser test uses the
+                exact voice you select. Clip preview may not match GPT-Live audio until you test live.
               </p>
               {previewError ? (
                 <p className="mt-2 text-xs text-warning-foreground">{previewError}</p>
               ) : null}
             </div>
 
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Female finalists
-              </p>
+            <div className="max-h-[min(28rem,50vh)] overflow-y-auto pr-1">
               <div className="grid gap-2 sm:grid-cols-2">
-                {females.map((v) => (
+                {WIZARD_VOICES.map((v) => (
                   <VoicePickCard
                     key={v.id}
                     voice={v}
@@ -277,32 +272,6 @@ export function VoiceStep({
                     onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
                   />
                 ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Male finalists
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {males.map((v) => (
-                  <VoicePickCard
-                    key={v.id}
-                    voice={v}
-                    selected={state.voiceId === v.id}
-                    previewing={previewing === v.id}
-                    onSelect={() => selectVoice(v.id, v.label, v.recommendedSpeed)}
-                    onPreview={() => void previewVoice(v.id, v.recommendedSpeed)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Backups
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
                 {WIZARD_VOICE_BACKUPS.map((v) => (
                   <VoicePickCard
                     key={v.id}

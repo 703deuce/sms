@@ -1,3 +1,4 @@
+import type { MediaSessionConfig } from "openai/resources/live/live";
 import type { SessionAcceptParams } from "openai/resources/live/sessions";
 import type { VoiceV3AgentConfig } from "@/lib/voice-v3/config/agent-config";
 import {
@@ -83,4 +84,14 @@ export function buildBasicLiveSessionAcceptParams(
 ): SessionAcceptParams {
   const config = agentConfig ?? resolveVoiceV3AgentConfig();
   return { session: buildBasicLiveSession(at, config) };
+}
+
+/** WebRTC `client.live.create` startup config (no SIP `type: live` wrapper). */
+export function buildBasicLiveMediaSession(
+  at: Date = new Date(),
+  agentConfig?: VoiceV3AgentConfig,
+): MediaSessionConfig {
+  const acceptSession = buildBasicLiveSession(at, agentConfig);
+  const { type: _type, ...media } = acceptSession;
+  return media as MediaSessionConfig;
 }

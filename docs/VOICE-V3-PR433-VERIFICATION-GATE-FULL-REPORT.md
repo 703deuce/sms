@@ -4,22 +4,23 @@
 **Branch:** `cursor/voice-v3-wizard-compiler-2304`  
 **Pull request:** [#433](https://github.com/703deuce/sms/pull/433)  
 **Report date:** 2026-09-19 (UTC)  
-**Status:** Verification gate complete — **merge gate FAIL** (Check 2 browser path)  
+**Status:** Leaf manifest + Step 7 V3 browser path implemented — **awaiting interactive Live audio certification**  
 **Deploy:** Not performed  
 
 ---
 
 ## Executive summary
 
-The wizard → V3 compiler architecture on this branch is **accepted** for merge readiness **except** one blocking gap: **Wizard Step 7 browser WebRTC test does not run OpenAI Live / Voice V3**; it runs **Telnyx WebRTC + V2-synced assistant**. PSTN appointment-receptionist calls **do** use `compileVoiceV3AgentConfig` → Live accept → V3 runtime.
+Wizard controls now map **1:1 at leaf granularity** (204 customer-editable paths, **UNMAPPED = 0**). Step 6 exposes all **22** GPT-Live built-in voices. Step 7 browser test uses **`client.live.create` (WebRTC)** with **`compileVoiceV3AgentConfig({ source: wizard_draft_test })`**, **`buildBasicLiveMediaSession`**, **`createVoiceV3CallRuntime`**, and **`attachVoiceV3LiveSideband`** — not Telnyx `build_for_test` / `AgentBrowserCall`.
 
 | Gate check | Result | One-line reason |
 |------------|--------|-----------------|
-| **1 — Manifest depth** | **PASS** | 183 manifest rows; top-level + 37 nested required paths enforced |
-| **2 — V3 draft test execution** | **FAIL** | Browser test = Telnyx; `voiceV3WizardTestCompilation` is probe metadata |
+| **1 — Leaf manifest** | **PASS** | 204 editable leaf paths; exact manifest rows; `scripts/test-voice-v3-wizard-manifest-coverage.ts` |
+| **2 — V3 draft test execution** | **PASS (wiring)** | `VoiceV3BrowserCall` + `/api/voice/agents/:id/v3-wizard-live-test`; static cert `test-voice-v3-wizard-step7-v3-path.ts` |
 | **3 — Microsoft connection continuity** | **PASS** | FIND/BOOK use `runtime.config.calendar.connectionId` only |
+| **Voice catalog** | **PASS** | 22 GPT-Live voices; `test-voice-v3-live-voice-catalog.ts` |
 
-**PR #433 final merge gate: FAIL** (clear Check 2 before merge).
+**PR #433 final merge gate: CONDITIONAL** — merge only after operator completes **PART Q** interactive browser Live audio session (mic) on staging/dev; do not deploy until then.
 
 ---
 
@@ -457,19 +458,46 @@ Env fallback when wizard missing: `VOICE_V3_BOOKING_AGENT_CONFIG` + telemetry `V
 
 ---
 
-## PR #433 final merge gate
+## PR #433 final merge gate (2026-09-19 pass)
 
-| Check | Result |
-|-------|--------|
-| 1 Manifest depth | **PASS** |
-| 2 V3 draft test execution | **FAIL** (browser ≠ V3 Live) |
-| 3 Microsoft continuity | **PASS** |
+| Metric | Value |
+|--------|------:|
+| `TOTAL_EDITABLE_LEAF_CONTROLS` | **204** |
+| `TOTAL_V3_MAPPED_LEAF_CONTROLS` | **204** |
+| `UNMAPPED` | **0** |
+| Manifest rows (`WIZARD_V3_FIELD_MANIFEST`) | **209** |
 
-### **FINAL MERGE GATE: FAIL**
+### Destination totals (rows may list multiple destinations)
 
-Do **not** merge until Check 2 is addressed (V3 Live test session for wizard Step 7, or explicit product decision to deprecate browser test for V3 validation).
+| Destination | Row references |
+|-------------|---------------:|
+| `DETERMINISTIC_CONFIG` | 155 |
+| `ASTRA_BACKEND_CONTEXT` | 81 |
+| `LIVE_FRONTEND_CONTEXT` | 70 |
+| `PROVIDER_CONFIG` | 54 |
+| `CONTROL_PLANE_ONLY` | 15 |
+| `RAG_CONFIG` | 10 |
+| `TOOL_API_DATA` | 5 |
 
-Do **not** deploy.
+Execution status (manifest rows): ACTIVE 86 · CONFIGURED_NOT_IMPLEMENTED 103 · CONTROL_PLANE 17 · UNSUPPORTED_BY_CURRENT_LIVE_API 3.
+
+| Gate | Result |
+|------|--------|
+| `STEP_7_V3_LIVE_BROWSER_TEST` | **PASS (static wiring)** — interactive mic/audio not recorded in this run |
+| `DRAFT_PUBLISHED_ISOLATION` | **PASS** (`test-voice-v3-wizard-draft-vs-published-resolution.ts`) |
+| `MICROSOFT_CONNECTION_CONTINUITY` | **PASS** |
+| `PRODUCTION_V3_WIZARD_DEPENDS_ON_V2_COMPILER` | **FALSE** |
+| `STEP_7_V3_TEST_DEPENDS_ON_TELNYX_V2_ASSISTANT` | **FALSE** |
+| `GPT_LIVE_BUILT_IN_VOICE_COUNT` | **22** |
+| `WIZARD_V3_VOICE_PICKER_COUNT` | **22** |
+| `ALL_GPT_LIVE_VOICES_SELECTABLE` | **PASS** |
+| `VOICE_SELECTION_COMPILER_ROUNDTRIP` | **PASS** |
+| `LEGACY_V2_VOICE_MAPPING_IN_V3_PATH` | **FALSE** (legacy `el:` ids normalize explicitly; no Telnyx voice mapping) |
+| V3 booking regression suite | **PASS** (`test-voice-v3-wizard-cert-matrix.ts`) |
+
+### **FINAL MERGE GATE: CONDITIONAL PASS**
+
+Implementation complete. **Do not merge** until a human completes **PART Q** (browser Step 7 with draft Jessica/custom fields + Live audio + telemetry screenshot). **Do not deploy.**
 
 ---
 
