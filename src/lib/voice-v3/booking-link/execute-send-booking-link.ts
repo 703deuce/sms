@@ -2,7 +2,7 @@ import "server-only";
 
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { sendQuickSms } from "@/lib/sms/send-quick";
+import { sendVoiceV3BookingLinkSms } from "./send-voice-v3-booking-link-sms";
 import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { voiceToolError, toolOk, type VoiceToolResult } from "../tools/types";
@@ -288,29 +288,35 @@ export async function executeSendBookingLink(input: {
     });
   }
 
+  const phoneNumberId = config.telephony?.outboundSmsPhoneNumberId?.trim() || null;
+  if (!phoneNumberId && !input.deps?.sendSms) {
+    return {
+      result: voiceToolError(
+        "SMS_SENDER_NOT_AUTHORIZED",
+        "Outbound SMS sender phone is not configured for this agent.",
+        {},
+        "not_configured",
+      ),
+      nextContext: ctx,
+    };
+  }
+
   const sendFn =
     input.deps?.sendSms ??
     (async (sms) => {
-      const phoneNumberId = config.telephony?.outboundSmsPhoneNumberId?.trim() || null;
-      const res = await sendQuickSms({
+      const res = await sendVoiceV3BookingLinkSms({
         workspaceId: sms.workspaceId,
-        to: sms.to,
-        from: sms.from,
+        agentId: input.agentId,
+        callId: ctx.callId,
+        toE164: sms.to,
+        fromE164: sms.from,
+        phoneNumberId: phoneNumberId!,
         body: sms.body,
         idempotencyKey: sms.idempotencyKey,
-        ...(phoneNumberId
-          ? {
-              senderRoute: {
-                sendWorkspaceId: sms.workspaceId,
-                fromE164: sms.from,
-                phoneNumberId,
-              },
-            }
-          : {}),
       });
       return {
-        providerMessageId: String(res.sid || res.messageId || "unknown"),
-        status: String(res.status || "queued"),
+        providerMessageId: res.providerMessageId,
+        status: res.status,
       };
     });
 

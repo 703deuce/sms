@@ -78,7 +78,7 @@ Script: `scripts/inspect-telnyx-voice-v3-sms-number.ts`
 |-------|--------|
 | DEFAULT_DESTINATION_SOURCE | `telephony.inboundCallerE164` (ANI) |
 | IDEMPOTENCY | Per-call attempt id: call + destination + config version + URL |
-| TELNYX_SEND_ENDPOINT | Via `sendAppointmentSms` → Telnyx `POST /v2/messages` |
+| TELNYX_SEND_ENDPOINT | `sendVoiceV3BookingLinkSms` → `sendViaRegistration` (authorized wizard number only; no `sendQuickSms` / appointment HP route) |
 | PROVIDER_ACCEPTANCE_GATES_SUCCESS | **YES** (mock matrix + executor) |
 
 ## Isolation
