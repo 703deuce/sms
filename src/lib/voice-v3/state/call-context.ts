@@ -16,6 +16,7 @@ import type {
 } from "../time/scheduling-types";
 
 import type {
+  AppointmentLookupState,
   CancellationPhase,
   ExistingAppointment,
   ExistingAppointmentCandidateSet,
@@ -124,6 +125,7 @@ export interface VoiceV3CallContext {
     verifiedExisting: ExistingAppointment | null;
     candidateSet: ExistingAppointmentCandidateSet | null;
     pendingSelection: AppointmentSelectionMeaning | null;
+    lookupState: AppointmentLookupState | null;
     lookupCompleted: boolean;
     reschedule: {
       phase: ReschedulePhase;
@@ -194,6 +196,7 @@ export function createInitialVoiceV3CallContext(input: {
       verifiedExisting: null,
       candidateSet: null,
       pendingSelection: null,
+      lookupState: null,
       lookupCompleted: false,
       reschedule: { phase: "NONE", attemptId: null },
       cancellation: {

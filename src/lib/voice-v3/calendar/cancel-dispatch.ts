@@ -137,6 +137,18 @@ export async function dispatchCancellationIfRequired(
 
         const r = await runCancel();
         if (r.ok) return { ok: true, value: { durationMs: r.durationMs } };
+        if (r.outcomeUncertain) {
+          const { reconcileMicrosoftCancelOutcome } = await import(
+            "./microsoft/microsoft-reconcile-mutation-outcome"
+          );
+          const verdict = await reconcileMicrosoftCancelOutcome({
+            appointment: existing,
+            config: runtime.config,
+          });
+          if (verdict === "CANCELLED") {
+            return { ok: true, value: { durationMs: r.durationMs } };
+          }
+        }
         return {
           ok: false,
           failureCode: mapProviderFailureToRecoveryCode(r.message),

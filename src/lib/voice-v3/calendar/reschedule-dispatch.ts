@@ -243,6 +243,20 @@ export async function dispatchRescheduleIfRequired(
 
         const u = await runUpdate();
         if (u.ok) return { ok: true, value: { durationMs: u.durationMs } };
+        if (u.outcomeUncertain) {
+          const { reconcileMicrosoftRescheduleOutcome } = await import(
+            "./microsoft/microsoft-reconcile-mutation-outcome"
+          );
+          const verdict = await reconcileMicrosoftRescheduleOutcome({
+            appointment: existing,
+            requestedStartUtc: slotSnapshot.startUtc,
+            requestedEndUtc: slotSnapshot.endUtc,
+            config: runtime.config,
+          });
+          if (verdict === "NEW_TIME") {
+            return { ok: true, value: { durationMs: u.durationMs } };
+          }
+        }
         return {
           ok: false,
           failureCode: mapProviderFailureToRecoveryCode(u.message),

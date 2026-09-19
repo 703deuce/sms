@@ -1,7 +1,10 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
-import { findExistingAppointment } from "./find-existing-appointment";
+import {
+  buildSingleAppointmentCandidateSet,
+  findExistingAppointment,
+} from "./find-existing-appointment";
 import type { ExistingAppointment } from "./appointment-management-types";
 import { resolveAppointmentCandidate } from "./resolve-appointment-candidate";
 import { dispatchRescheduleIfRequired } from "./reschedule-dispatch";
@@ -76,6 +79,7 @@ export async function dispatchAppointmentManagementIfRequired(
           dateHint: ctx.scheduling.normalized,
           timezone: ctx.business.timezone,
           microsoftLookup: true,
+          lookupState: ctx.appointmentManagement.lookupState,
         },
         runtime.config,
       );
@@ -85,23 +89,34 @@ export async function dispatchAppointmentManagementIfRequired(
           call_id: ctx.callId,
           provider_event_id: result.appointment.providerEventId,
         });
-        const verified = applyVerifiedExisting(ctx, result.appointment);
-        runtime.replaceContext({
-          ...verified,
-          appointmentManagement: {
-            ...verified.appointmentManagement,
-            lookupCompleted: true,
-            cancellation:
-              goal === "CANCEL_APPOINTMENT"
-                ? {
-                    phase: "CANCELLATION_CONFIRMATION_REQUIRED",
-                    cancellationAttemptId: null,
-                    awaitingConfirmation: true,
-                    boundProviderEventId: result.appointment.providerEventId,
-                  }
-                : verified.appointmentManagement.cancellation,
-          },
-        });
+        if (result.needsConfirmation) {
+          runtime.replaceContext({
+            ...ctx,
+            appointmentManagement: {
+              ...ctx.appointmentManagement,
+              candidateSet: buildSingleAppointmentCandidateSet(result.appointment),
+              lookupCompleted: true,
+            },
+          });
+        } else {
+          const verified = applyVerifiedExisting(ctx, result.appointment);
+          runtime.replaceContext({
+            ...verified,
+            appointmentManagement: {
+              ...verified.appointmentManagement,
+              lookupCompleted: true,
+              cancellation:
+                goal === "CANCEL_APPOINTMENT"
+                  ? {
+                      phase: "CANCELLATION_CONFIRMATION_REQUIRED",
+                      cancellationAttemptId: null,
+                      awaitingConfirmation: true,
+                      boundProviderEventId: result.appointment.providerEventId,
+                    }
+                  : verified.appointmentManagement.cancellation,
+            },
+          });
+        }
       } else if (result.status === "MULTIPLE") {
         console.log("EXISTING_APPOINTMENT_MULTIPLE", {
           call_id: ctx.callId,

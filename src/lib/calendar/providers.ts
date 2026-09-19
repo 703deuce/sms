@@ -778,6 +778,8 @@ export type ProviderCalendarEvent = {
   id: string;
   summary: string;
   description?: string;
+  locationDisplay?: string;
+  showAs?: string;
   start: Date;
   end: Date;
   timezone?: string;
@@ -979,6 +981,69 @@ export async function listMicrosoftCalendarEvents(
     .filter((item) => !item["@removed"])
     .filter((item) => isMicrosoftBusyShowAs(item.showAs) || item.isCancelled)
     .map((item) => mapMicrosoftGraphEvent(item));
+}
+
+/**
+ * Appointment management discovery — all non-cancelled events in range (not busy-filtered).
+ * Availability/free-busy continues to use listMicrosoftCalendarEvents.
+ */
+export async function listMicrosoftCalendarEventsForAppointmentDiscovery(
+  accessToken: string,
+  timeMin: Date,
+  timeMax: Date,
+  calendarId?: string,
+  ctx?: MicrosoftGraphContext,
+): Promise<ProviderCalendarEvent[]> {
+  const url = new URL(microsoftCalendarViewUrl(calendarId));
+  url.searchParams.set("startDateTime", timeMin.toISOString());
+  url.searchParams.set("endDateTime", timeMax.toISOString());
+  url.searchParams.set(
+    "$select",
+    "id,subject,bodyPreview,body,start,end,isCancelled,showAs,attendees,organizer,lastModifiedDateTime,isAllDay,seriesMasterId,type,recurrence,originalStart,transactionId,location",
+  );
+  url.searchParams.set("$top", "250");
+
+  const res = await callMicrosoftGraph(accessToken, url.toString(), {
+    headers: { Prefer: GRAPH_PREFER_OUTLOOK_UTC },
+  }, ctx);
+  if (!res.ok) throw new Error(`Microsoft events.list.discovery ${res.status}`);
+
+  const { items } = await collectMicrosoftGraphCollection<{
+    id: string;
+    subject?: string;
+    bodyPreview?: string;
+    body?: { content?: string };
+    start: { dateTime?: string; date?: string; timeZone?: string };
+    end: { dateTime?: string; date?: string; timeZone?: string };
+    isCancelled?: boolean;
+    showAs?: string;
+    isAllDay?: boolean;
+    lastModifiedDateTime?: string;
+    seriesMasterId?: string;
+    type?: string;
+    recurrence?: unknown;
+    originalStart?: { dateTime?: string; date?: string; timeZone?: string };
+    location?: { displayName?: string };
+    attendees?: Array<{ emailAddress?: { address?: string; name?: string }; status?: { response?: string } }>;
+    organizer?: { emailAddress?: { address?: string } };
+    transactionId?: string;
+    "@removed"?: { reason?: string };
+  }>(res, accessToken, ctx);
+
+  return items
+    .filter((item) => !item["@removed"])
+    .filter((item) => !item.isCancelled)
+    .map((item) => {
+      const base = mapMicrosoftGraphEvent(item);
+      const bodyContent = item.body?.content?.trim();
+      const description = bodyContent || item.bodyPreview;
+      return {
+        ...base,
+        description,
+        locationDisplay: item.location?.displayName?.trim() || undefined,
+        showAs: item.showAs,
+      };
+    });
 }
 
 export function mapMicrosoftGraphEvent(item: {

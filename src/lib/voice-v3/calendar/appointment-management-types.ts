@@ -56,22 +56,60 @@ export interface ExistingAppointmentCandidateSet {
   createdAt: string;
 }
 
+export type AppointmentDiscriminator =
+  | "name"
+  | "phone"
+  | "email"
+  | "appointment_date"
+  | "appointment_time"
+  | "service"
+  | "location"
+  | "candidate_selection";
+
+export interface AppointmentLookupState {
+  generation: number;
+  name?: string;
+  phone?: string;
+  email?: string;
+  localDate?: string;
+  service?: string;
+  location?: string;
+  ani?: string;
+  lastUsefulDiscriminators: AppointmentDiscriminator[];
+}
+
 export interface FindExistingAppointmentRequest {
   callId: string;
   phone?: string;
   email?: string;
   customerName?: string;
+  service?: string;
+  location?: string;
+  ani?: string;
   dateHint?: NormalizedSchedulingPreference | null;
   /** Raw YYYY-MM-DD from tool when provided. */
   dateExpression?: string | null;
   timezone?: string;
   /** When set, also searches configured Microsoft calendar (same connection as BOOK). */
   microsoftLookup?: boolean;
+  /** Prior lookup constraints accumulated on this call. */
+  lookupState?: AppointmentLookupState | null;
 }
 
 export type FindExistingAppointmentResult =
-  | { status: "FOUND"; appointment: ExistingAppointment }
-  | { status: "MULTIPLE"; candidateSet: ExistingAppointmentCandidateSet }
+  | {
+      status: "FOUND";
+      appointment: ExistingAppointment;
+      safeDisplay: string;
+      /** True until caller confirms this is the appointment they mean. */
+      needsConfirmation: boolean;
+    }
+  | {
+      status: "MULTIPLE";
+      candidateSet: ExistingAppointmentCandidateSet;
+      usefulDiscriminators: AppointmentDiscriminator[];
+    }
+  | { status: "NEEDS_MORE_INFORMATION"; usefulDiscriminators: AppointmentDiscriminator[] }
   | { status: "NONE" }
   | { status: "VERIFICATION_FAILED"; reason: string };
 
