@@ -1,0 +1,30 @@
+---
+description: Voice V3 GPT-Live + Astra + Transovo tool architecture (intake, scheduling, BOOK/FIND)
+globs:
+  - src/lib/voice-v3/**
+  - src/lib/voice-v3-basic/**
+  - scripts/test-voice-v3-*
+alwaysApply: false
+---
+
+# MANDATORY: Voice V3 Agent Architecture
+
+**Read first:** `docs/VOICE-V3-DRIVE-THROUGH-ARCHITECTURE-LESSONS.md` then `docs/VOICE-V3-INTAKE-OBJECTIVE-REPORT.md`.
+
+## Stack (locked)
+
+Caller ↔ GPT-Live/Amy → Astra → Transovo tools/state. No LiveKit runtime. No CallerMeaning → GoalManager → planner → forced Amy speech on healthy PSTN path.
+
+## Non-negotiables
+
+1. **Persistent intake** → `update_intake` → CallContext. **Temporary scheduling/slot args** → conversation until tool-ready; not every phrase → permanent state.
+2. **Objective describes facts** — known/missing intake; no `getNextIntakeQuestion`, no intake-triggered conversational `response.create`.
+3. **Model readiness + code preconditions** — Amy may clarify; executors enforce BOOK/FIND/cancel/reschedule independently.
+4. **One utterance → 0..N tools** — e.g. `update_intake` + `find_availability` from one caller span when appropriate.
+5. **Read before mutate** when authoritative ID unknown (`find_appointment` before cancel/reschedule).
+6. **Tool schemas constrained** from AgentConfig (enum intake fields, transfer destinations) where possible.
+7. **Field lifecycles minimal** — standard fields: missing/collected; voice email: candidate/verified when configured.
+
+## Prohibited in intake-objective / update_intake
+
+IntakePlanner, GoalManager orchestration, semantic router, nextQuestion, shouldSpeak, scheduling on update_intake, active_goal on update_intake.

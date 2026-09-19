@@ -70,8 +70,15 @@ export function validateAndNormalizeIntakeValue(
     case "date":
     case "time":
     case "text":
-    default:
+    default: {
+      if (field.enumValues?.length && !field.enumValues.includes(trimmed)) {
+        return {
+          ok: false,
+          rejection: reject(field.key, "INVALID_ENUM", "Value is not an allowed option."),
+        };
+      }
       return { ok: true, value: trimmed };
+    }
   }
 }
 
@@ -115,6 +122,21 @@ export function intakeFieldStatusFromCapture(
     return "CANDIDATE";
   }
   return "COLLECTED";
+}
+
+/** User-facing objective label — simple for standard fields; rich only when verification applies. */
+export function intakeFieldObjectiveLabel(
+  field: IntakeFieldDefinition,
+  captured: CapturedField | undefined,
+): string {
+  const status = intakeFieldStatusFromCapture(field, captured);
+  if (status === "MISSING" || status === "DECLINED") return "missing";
+  if (verificationRequiredForField(field)) {
+    if (status === "VERIFIED") return "verified";
+    if (status === "CANDIDATE") return "candidate (needs confirmation)";
+    return "collected";
+  }
+  return "collected";
 }
 
 export function fieldSatisfiesObjectiveRequirement(

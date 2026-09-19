@@ -24,6 +24,14 @@ export interface IntakeFieldDefinition {
   description: string;
   collectionStrategy?: IntakeCollectionStrategy;
   verificationRequired?: boolean;
+  /** When set, update_intake schema uses enum constraint (drive-through pattern). */
+  enumValues?: string[];
+}
+
+export interface VoiceV3TransferDestination {
+  id: string;
+  label: string;
+  description?: string;
 }
 
 export interface VoiceV3IntakeConfig {
@@ -51,6 +59,8 @@ export interface VoiceV3AgentConfig {
   intake?: VoiceV3IntakeConfig;
   intakeFields: IntakeFieldDefinition[];
   operationRequirements?: Partial<Record<VoiceOperationRequirementKey, string[]>>;
+  /** When set, transfer_call.destination is constrained to these ids. */
+  transferDestinations?: VoiceV3TransferDestination[];
   service: VoiceV3ServiceConfig;
   businessHours: BusinessHoursWindow;
   calendar?: VoiceV3CalendarConfig | null;

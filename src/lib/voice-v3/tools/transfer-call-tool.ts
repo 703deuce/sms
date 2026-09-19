@@ -6,20 +6,38 @@ import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { TRANSFER_CALL_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
-const transferArgsSchema = z.object({
-  destination: z
-    .string()
-    .nullable()
-    .describe(
-      "Configured transfer destination identifier (e.g. front_desk). Null when only one destination is configured. Never invent a number or destination.",
-    ),
-  reason: z.string().nullable().describe("Brief internal reason for transfer. Null if none."),
+function buildTransferArgsSchema(config: VoiceV3AgentConfig) {
+  const ids = config.transferDestinations?.map((d) => d.id).filter(Boolean) ?? [];
+  const destinationSchema =
+    ids.length > 0
+      ? z
+          .enum(ids as [string, ...string[]])
+          .nullable()
+          .describe(
+            `Configured transfer destination id. Allowed: ${ids.join(", ")}. Null when only one destination applies.`,
+          )
+      : z
+          .string()
+          .nullable()
+          .describe(
+            "Configured transfer destination identifier (e.g. front_desk). Null when only one destination is configured. Never invent a number or destination.",
+          );
+
+  return z.object({
+    destination: destinationSchema,
+    reason: z.string().nullable().describe("Brief internal reason for transfer. Null if none."),
+  });
+}
+
+const looseTransferArgsSchema = z.object({
+  destination: z.string().nullable(),
+  reason: z.string().nullable(),
 });
 
-export function buildTransferCallOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
+export function buildTransferCallOpenAiTool(config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "transfer_call",
-    parameters: transferArgsSchema,
+    parameters: buildTransferArgsSchema(config),
     description: TRANSFER_CALL_TOOL_DESCRIPTION,
   });
   return {
@@ -31,18 +49,46 @@ export function buildTransferCallOpenAiTool(_config: VoiceV3AgentConfig): Functi
   };
 }
 
-export const transferCallTool: VoiceToolDefinition<{ reason?: string | null }> = {
+export const transferCallTool: VoiceToolDefinition<{
+  destination?: string | null;
+  reason?: string | null;
+}> = {
   name: "transfer_call",
   description: "transfer_call",
   parameters: {},
-  validate: (raw) => transferArgsSchema.parse(raw),
+  validate: (raw) => looseTransferArgsSchema.parse(raw),
   execute: async (ctx, args) => {
+    const config = ctx.runtime.config;
+    const strict = buildTransferArgsSchema(config).safeParse(args);
+    if (!strict.success) {
+      return voiceToolError(
+        "INVALID_ARGUMENTS",
+        "Transfer arguments are invalid.",
+        { issues: strict.error.issues.map((i) => i.message) },
+      );
+    }
+    const parsed = strict.data;
+
     let destination = process.env.VOICE_V3_TRANSFER_DESTINATION?.trim() || null;
     const mapRaw = process.env.VOICE_V3_TRANSFER_DESTINATIONS?.trim();
-    if (args.destination?.trim() && mapRaw) {
+    const destId = parsed.destination?.trim();
+
+    if (destId && config.transferDestinations?.length) {
+      const row = config.transferDestinations.find((d) => d.id === destId);
+      if (!row) {
+        return voiceToolError(
+          "INVALID_DESTINATION",
+          "Transfer destination is not configured.",
+          { destination: destId },
+          "error",
+        );
+      }
+    }
+
+    if (destId && mapRaw) {
       try {
         const map = JSON.parse(mapRaw) as Record<string, string>;
-        destination = map[args.destination.trim()] ?? destination;
+        destination = map[destId] ?? destination;
       } catch {
         /* ignore */
       }
@@ -58,11 +104,13 @@ export const transferCallTool: VoiceToolDefinition<{ reason?: string | null }> =
     console.log("VOICE_TRANSFER_REQUESTED", {
       call_id: ctx.callId,
       live_session_id: ctx.liveSessionId,
-      reason: args.reason ?? null,
+      reason: parsed.reason ?? null,
       destination,
+      destination_id: destId ?? null,
     });
     return toolOk("transfer_requested", {
       destination,
+      destination_id: destId ?? null,
       note: "Telnyx transfer must be executed by voice transport integration.",
     });
   },

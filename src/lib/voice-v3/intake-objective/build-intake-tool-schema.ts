@@ -13,13 +13,25 @@ export function intakeFieldSchemaDescription(field: VoiceV3AgentConfig["intakeFi
     field.description?.trim() ||
     SEMANTIC_HINTS[field.key] ||
     `${field.label} (${field.type})`;
-  return `${field.required ? "Configured intake" : "Optional intake"}: ${hint} Null if caller did not provide or correct this field in this turn.`;
+  const enumNote =
+    field.enumValues?.length
+      ? ` Allowed values: ${field.enumValues.join(", ")}.`
+      : "";
+  return `${field.required ? "Configured intake" : "Optional intake"}: ${hint}${enumNote} Null if caller did not provide or correct this field in this turn.`;
+}
+
+function zodNullableFieldSchema(field: VoiceV3AgentConfig["intakeFields"][number]): z.ZodNullable<z.ZodType<string>> {
+  const desc = intakeFieldSchemaDescription(field);
+  if (field.enumValues && field.enumValues.length > 0) {
+    return z.enum(field.enumValues as [string, ...string[]]).nullable().describe(desc);
+  }
+  return z.string().nullable().describe(desc);
 }
 
 export function buildUpdateIntakeZodSchema(config: VoiceV3AgentConfig) {
-  const fieldShape: Record<string, z.ZodNullable<z.ZodString>> = {};
+  const fieldShape: Record<string, z.ZodNullable<z.ZodType<string>>> = {};
   for (const f of config.intakeFields) {
-    fieldShape[f.key] = z.string().nullable().describe(intakeFieldSchemaDescription(f));
+    fieldShape[f.key] = zodNullableFieldSchema(f);
   }
   return z.object(fieldShape);
 }

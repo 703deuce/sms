@@ -1,25 +1,8 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { deriveIntakeObjective } from "./derive-intake-objective";
-import { intakeFieldStatusFromCapture } from "./validate-intake-value";
+import { intakeFieldObjectiveLabel } from "./validate-intake-value";
 import { fieldDefinitionByKey } from "./types";
-
-function statusLabel(status: string): string {
-  switch (status) {
-    case "MISSING":
-      return "missing";
-    case "CANDIDATE":
-      return "candidate (needs confirmation)";
-    case "COLLECTED":
-      return "collected";
-    case "VERIFIED":
-      return "verified";
-    case "DECLINED":
-      return "declined";
-    default:
-      return status;
-  }
-}
 
 /** Compact objective projection for Astra/Live thinking context — not conversational commands. */
 export function buildIntakeObjectiveContext(
@@ -35,16 +18,14 @@ export function buildIntakeObjectiveContext(
     .filter((f) => f.required)
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
-      const st = intakeFieldStatusFromCapture(def, context.intake.values[f.key]);
-      return `- ${f.label}: ${statusLabel(st)}`;
+      return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
     });
 
   const optionalLines = config.intakeFields
     .filter((f) => !f.required)
     .map((f) => {
       const def = fieldDefinitionByKey(config, f.key)!;
-      const st = intakeFieldStatusFromCapture(def, context.intake.values[f.key]);
-      return `- ${f.label}: ${statusLabel(st)}`;
+      return `- ${f.label}: ${intakeFieldObjectiveLabel(def, context.intake.values[f.key])}`;
     });
 
   return `
@@ -56,10 +37,11 @@ ${requiredLines.join("\n") || "(none configured)"}
 Optional information:
 ${optionalLines.join("\n") || "(none configured)"}
 Rules:
+- Persistent caller facts belong in intake state; incomplete scheduling preferences may stay conversational until find_availability has enough to search.
 - Preserve already collected information.
-- Collect missing required information naturally.
-- The caller may provide multiple fields at once.
+- Collect missing required information naturally (model decides how to ask — no scripted next question from Transovo).
+- The caller may provide multiple fields at once; one caller utterance may require multiple tools when appropriate.
 - Do not unnecessarily ask again for information already collected or verified.
-- Candidate email values need natural confirmation before booking when verification is required.
+- Email fields marked for voice verification may show as candidate until confirmed.
 `.trim();
 }

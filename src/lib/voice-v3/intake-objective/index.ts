@@ -13,6 +13,7 @@ export {
   fieldSatisfiesObjectiveRequirement,
   intakeFieldStatusFromCapture,
   verificationRequiredForField,
+  intakeFieldObjectiveLabel,
 } from "./validate-intake-value";
 export {
   getMissingFieldsForOperation,

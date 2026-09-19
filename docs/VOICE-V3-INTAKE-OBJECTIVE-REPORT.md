@@ -1,7 +1,9 @@
 # Voice V3 — Intake Objective Architecture Report
 
-**Branch:** `cursor/voice-v3-tool-architecture-2304`  
-**Status:** Architecture replacement implemented — review before PSTN certification.
+**Branch:** merged to `master` (`fa4065a8`+)  
+**Status:** Intake Objective on production path — review before PSTN certification.
+
+**Amendment (drive-through lessons):** See `docs/VOICE-V3-DRIVE-THROUGH-ARCHITECTURE-LESSONS.md` — simplified field lifecycles (standard = missing/collected only), persistent vs temporary operation args, one-utterance/multi-tool invariant, dynamic schema constraints, full-chain certification target.
 
 ## 1. Old intake path (before)
 

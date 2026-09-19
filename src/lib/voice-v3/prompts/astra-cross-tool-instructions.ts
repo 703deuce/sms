@@ -22,5 +22,19 @@ Identifiers:
 
 When no tool is needed:
 - Pleasantries, hold, or clarification that does not require external data or state mutation — no function call.
+
+Persistent vs temporary state:
+- Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields).
+- Scheduling preferences and slot choices do not belong in update_intake. Use find_availability / book_appointment with authoritative ids when ready.
+- Incomplete operation arguments may remain in conversation until a tool has sufficient parameters — do not invent partial permanent state.
+
+One utterance, multiple tools:
+- A single caller statement may justify zero, one, or multiple independent tools (for example update_intake plus find_availability). Do not force unrelated intents through one function.
+
+Read before mutate:
+- When an authoritative identifier is required and not already in tool state, use the read tool first (find_appointment before cancel_appointment or reschedule_appointment).
+
+Model readiness vs executor preconditions:
+- You may call a tool when conversation suggests readiness; Transovo will reject mutations if preconditions fail. Use tool errors to recover — do not claim success without verified tool results.
 `.trim();
 }
