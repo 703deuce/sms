@@ -9,11 +9,20 @@ import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { RESCHEDULE_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const rescheduleArgsSchema = z.object({
-  offer_set_id: z.string().min(1),
-  slot_id: z.string().min(1),
-  provider_event_id: z.string().nullable(),
+  offer_set_id: z
+    .string()
+    .min(1)
+    .describe("offer_set_id from latest find_availability for the new time."),
+  slot_id: z.string().min(1).describe("Chosen slot_id from that offer set."),
+  provider_event_id: z
+    .string()
+    .nullable()
+    .describe(
+      "Verified provider_event_id from find_appointment. Null to use the appointment already verified in call state.",
+    ),
 });
 
 export type RescheduleAppointmentArgs = z.infer<typeof rescheduleArgsSchema>;
@@ -47,8 +56,7 @@ export function buildRescheduleAppointmentOpenAiTool(_config: VoiceV3AgentConfig
   const zodTool = zodResponsesFunction({
     name: "reschedule_appointment",
     parameters: rescheduleArgsSchema,
-    description:
-      "Move an existing verified appointment to a new offered slot. Requires find_appointment and find_availability first. Success only when tool result confirms reschedule.",
+    description: RESCHEDULE_APPOINTMENT_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

@@ -6,11 +6,23 @@ import { findExistingAppointment } from "../calendar/find-existing-appointment";
 import { applyVerifiedExisting } from "../calendar/appointment-management-dispatch";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { FIND_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const findApptArgsSchema = z.object({
-  phone: z.string().nullable(),
-  email: z.string().nullable(),
-  date_hint: z.string().nullable(),
+  phone: z
+    .string()
+    .nullable()
+    .describe("Caller phone (E.164 or spoken). Null to use intake phone already saved."),
+  email: z
+    .string()
+    .nullable()
+    .describe("Caller email. Null to use intake email already saved."),
+  date_hint: z
+    .string()
+    .nullable()
+    .describe(
+      "Optional local date hint for the existing appointment (YYYY-MM-DD or natural language). Null if unknown.",
+    ),
 });
 
 export type FindAppointmentArgs = z.infer<typeof findApptArgsSchema>;
@@ -19,8 +31,7 @@ export function buildFindAppointmentOpenAiTool(_config: VoiceV3AgentConfig): Fun
   const zodTool = zodResponsesFunction({
     name: "find_appointment",
     parameters: findApptArgsSchema,
-    description:
-      "Use when the caller wants to reschedule, cancel, or change an existing appointment. Call this first to locate the appointment in Microsoft calendar. Provide phone or email when known. Does not mutate calendar.",
+    description: FIND_APPOINTMENT_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

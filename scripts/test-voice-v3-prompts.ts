@@ -61,14 +61,14 @@ function main() {
   });
   includesAll(astra, [
     "reasoning and tool-use backend",
-    "Choose tools directly",
     "function call is a request",
-    "Never fabricate availability",
+    "New booking path",
+    "Cancel path",
     "America/New_York",
     "September 18, 2026",
     "update_intake",
     "find_availability",
-    "book_appointment",
+    "never invent offer_set_id",
   ], "astra backend");
 
   const fixedNow = new Date("2026-09-18T17:00:00.000Z");

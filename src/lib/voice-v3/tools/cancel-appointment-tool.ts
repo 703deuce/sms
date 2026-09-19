@@ -6,10 +6,20 @@ import { dispatchCancellationIfRequired } from "../calendar/cancel-dispatch";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { CANCEL_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const cancelArgsSchema = z.object({
-  confirmed: z.boolean(),
-  provider_event_id: z.string().nullable(),
+  confirmed: z
+    .boolean()
+    .describe(
+      "True only after the caller explicitly confirmed cancellation. False must not be sent — wait for confirmation instead.",
+    ),
+  provider_event_id: z
+    .string()
+    .nullable()
+    .describe(
+      "Verified provider_event_id from find_appointment. Null to use verified appointment in call state.",
+    ),
 });
 
 export type CancelAppointmentArgs = z.infer<typeof cancelArgsSchema>;
@@ -18,8 +28,7 @@ export function buildCancelAppointmentOpenAiTool(_config: VoiceV3AgentConfig): F
   const zodTool = zodResponsesFunction({
     name: "cancel_appointment",
     parameters: cancelArgsSchema,
-    description:
-      "Cancel an existing appointment only after find_appointment verified the record and the caller clearly confirmed cancellation. Never call before find_appointment. Calling this does not guarantee cancellation until the tool result says so.",
+    description: CANCEL_APPOINTMENT_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

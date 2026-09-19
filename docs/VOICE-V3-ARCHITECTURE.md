@@ -44,7 +44,7 @@ CALLER ↔ GPT-Live
 
 ## Tools (Astra only — Amy does not see tool schemas)
 
-`update_intake`, `find_availability`, `book_appointment`, `find_appointment`, `reschedule_appointment`, `cancel_appointment`, `transfer_call`, `end_call`
+`update_intake`, `find_availability`, `book_appointment`, `find_appointment`, `reschedule_appointment`, `cancel_appointment`, `transfer_call`, `end_call` — production contracts in `src/lib/voice-v3/tools/astra-tool-contracts.ts` + cross-tool rules in `src/lib/voice-v3/prompts/astra-cross-tool-instructions.ts`. Real Astra cert: `scripts/test-voice-v3-astra-tool-selection.ts` (after static audit `test-voice-v3-astra-tool-contracts-audit.ts`).
 
 ## Protocol
 

@@ -3,6 +3,10 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { applyIntakeToolPatch } from "../intake/merge-intake-state";
+import {
+  ACTIVE_GOAL_ENUM_DESCRIPTION,
+  UPDATE_INTAKE_TOOL_DESCRIPTION,
+} from "./astra-tool-contracts";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
@@ -18,8 +22,6 @@ function normalizeUpdateIntakeArguments(
   for (const f of config.intakeFields) {
     if (!(f.key in row)) row[f.key] = null;
   }
-  if (!("date_expression" in row)) row.date_expression = null;
-  if (!("time_expression" in row)) row.time_expression = null;
   if (!("active_goal" in row)) row.active_goal = null;
   return row;
 }
@@ -27,12 +29,18 @@ function normalizeUpdateIntakeArguments(
 function buildUpdateIntakeZod(config: VoiceV3AgentConfig) {
   const fieldShape: Record<string, z.ZodNullable<z.ZodString>> = {};
   for (const f of config.intakeFields) {
-    fieldShape[f.key] = z.string().nullable();
+    const hint = f.description?.trim() || `${f.label} (${f.type})`;
+    fieldShape[f.key] = z
+      .string()
+      .nullable()
+      .describe(
+        f.required
+          ? `Required intake: ${hint}. Null if caller did not provide or correct this field in this turn.`
+          : `Optional intake: ${hint}. Null if not provided this turn.`,
+      );
   }
   return z.object({
     ...fieldShape,
-    date_expression: z.string().nullable(),
-    time_expression: z.string().nullable(),
     active_goal: z
       .enum([
         "UNKNOWN",
@@ -43,7 +51,8 @@ function buildUpdateIntakeZod(config: VoiceV3AgentConfig) {
         "REQUEST_CALLBACK",
         "REQUEST_TRANSFER",
       ])
-      .nullable(),
+      .nullable()
+      .describe(ACTIVE_GOAL_ENUM_DESCRIPTION),
   });
 }
 
@@ -51,8 +60,7 @@ export function buildUpdateIntakeOpenAiTool(config: VoiceV3AgentConfig): Functio
   const zodTool = zodResponsesFunction({
     name: "update_intake",
     parameters: buildUpdateIntakeZod(config),
-    description:
-      "Update authoritative customer intake fields (name, email, phone) and active goal when the caller provides or corrects contact information. Do not call for availability-only questions — use find_availability. Does not book or search the calendar by itself.",
+    description: UPDATE_INTAKE_TOOL_DESCRIPTION,
   });
   return {
     type: "function",
@@ -96,8 +104,6 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
     const snap = ctx.runtime.getSnapshot();
     const applied = applyIntakeToolPatch(snap, config, {
       active_goal: args.active_goal,
-      date_expression: args.date_expression,
-      time_expression: args.time_expression,
       fieldValues,
     });
     ctx.runtime.replaceContext(applied.context);

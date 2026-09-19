@@ -10,11 +10,25 @@ import {
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const findArgsSchema = z.object({
-  date_expression: z.string().min(1),
-  time_expression: z.string().nullable(),
-  service_id: z.string().nullable(),
+  date_expression: z
+    .string()
+    .min(1)
+    .describe(
+      "Caller natural-language date for the search window (e.g. Tuesday, next Friday, March 3). Required.",
+    ),
+  time_expression: z
+    .string()
+    .nullable()
+    .describe(
+      "Optional natural-language time or daypart (e.g. afternoon, after 3pm). Null if caller gave date only.",
+    ),
+  service_id: z
+    .string()
+    .nullable()
+    .describe("Optional service id override. Null to use the default configured service for this line."),
 });
 
 export type FindAvailabilityArgs = z.infer<typeof findArgsSchema>;
@@ -23,8 +37,7 @@ export function buildFindAvailabilityOpenAiTool(_config: VoiceV3AgentConfig): Fu
   const zodTool = zodResponsesFunction({
     name: "find_availability",
     parameters: findArgsSchema,
-    description:
-      "Use when the caller wants to know which appointment times are actually available. Provide date_expression and optional time_expression; Transovo resolves timezone and queries Microsoft. Does not book. Do not use update_intake instead of this for availability questions.",
+    description: FIND_AVAILABILITY_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

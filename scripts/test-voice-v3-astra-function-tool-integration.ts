@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import OpenAI from "openai";
 import { VOICE_V3_BOOKING_TEST_CONFIG } from "./voice-v3-booking-test-config";
-import { buildUpdateIntakeOpenAiTool } from "../src/lib/voice-v3/tools/update-intake-tool";
+import { buildVoiceV3Prompts, resolveVoiceV3DefaultPromptInput } from "../src/lib/voice-v3/prompts/build-voice-v3-prompts";
+import { buildVoiceV3AstraFunctionTools } from "../src/lib/voice-v3/tools/build-openai-tools";
 
 async function main() {
   if (!process.env.OPENAI_API_KEY?.trim()) {
@@ -13,31 +14,30 @@ async function main() {
   }
 
   const client = new OpenAI();
-  const tool = buildUpdateIntakeOpenAiTool(VOICE_V3_BOOKING_TEST_CONFIG);
+  const tools = buildVoiceV3AstraFunctionTools(VOICE_V3_BOOKING_TEST_CONFIG).map((t) => ({
+    type: "function" as const,
+    name: t.name,
+    description: t.description ?? undefined,
+    parameters: t.parameters ?? {},
+    strict: t.strict ?? true,
+  }));
+  const { astraInstructions } = buildVoiceV3Prompts({
+    ...resolveVoiceV3DefaultPromptInput(new Date()),
+    agentConfig: VOICE_V3_BOOKING_TEST_CONFIG,
+  });
 
   const response = await client.responses.create({
     model: "gpt-6-astra",
+    instructions: astraInstructions,
     input: [
       {
-        role: "system",
-        content:
-          "You are Amy's reasoning backend. When the caller shares contact details, call update_intake with strict arguments.",
-      },
-      {
         role: "user",
-        content: 'Caller said: "My name is Anthony and my email is anthony@example.com."',
+        content:
+          'Caller said: "My name is Anthony and my email is anthony@example.com." (Not asking about calendar times.)',
       },
     ],
-    tools: [
-      {
-        type: "function",
-        name: tool.name,
-        description: tool.description ?? undefined,
-        parameters: tool.parameters ?? {},
-        strict: tool.strict ?? true,
-      },
-    ],
-    tool_choice: { type: "function", name: "update_intake" },
+    tools,
+    tool_choice: "auto",
     parallel_tool_calls: false,
   });
 

@@ -4,17 +4,20 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk } from "./types";
+import { END_CALL_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const endArgsSchema = z.object({
-  reason: z.string().nullable(),
+  reason: z
+    .string()
+    .nullable()
+    .describe("Brief reason the conversation is complete. Null if none."),
 });
 
 export function buildEndCallOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "end_call",
     parameters: endArgsSchema,
-    description:
-      "Signal that the conversation is complete and the call may end after Amy finishes closing remarks. Does not hang up immediately by itself.",
+    description: END_CALL_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

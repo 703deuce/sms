@@ -7,13 +7,20 @@ import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import type { VoiceV3CallContext } from "../state/call-context";
+import { BOOK_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { AvailabilityOfferSet } from "../calendar/offer-set";
 import type { AvailabilitySlot } from "../calendar/slot-generator";
 import type { SelectedAvailabilitySlot } from "../calendar/selected-slot";
 
 const bookArgsSchema = z.object({
-  offer_set_id: z.string().min(1),
-  slot_id: z.string().min(1),
+  offer_set_id: z
+    .string()
+    .min(1)
+    .describe("offer_set_id from the latest find_availability result for this call."),
+  slot_id: z
+    .string()
+    .min(1)
+    .describe("slot_id from that offer set matching the slot the caller chose."),
 });
 
 export type BookAppointmentArgs = z.infer<typeof bookArgsSchema>;
@@ -48,8 +55,7 @@ export function buildBookAppointmentOpenAiTool(_config: VoiceV3AgentConfig): Fun
   const zodTool = zodResponsesFunction({
     name: "book_appointment",
     parameters: bookArgsSchema,
-    description:
-      "Book the selected offered slot after caller confirmation. Requires complete intake and a valid offer_set_id + slot_id from find_availability. Success is only status confirmed after Microsoft Graph create.",
+    description: BOOK_APPOINTMENT_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

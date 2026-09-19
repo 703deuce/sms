@@ -4,17 +4,20 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { TRANSFER_CALL_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const transferArgsSchema = z.object({
-  reason: z.string().nullable(),
+  reason: z
+    .string()
+    .nullable()
+    .describe("Brief internal reason for transfer. Null if none."),
 });
 
 export function buildTransferCallOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "transfer_call",
     parameters: transferArgsSchema,
-    description:
-      "Transfer the live call to a human when the caller needs a person and policy allows. Does not transfer until tool result confirms success.",
+    description: TRANSFER_CALL_TOOL_DESCRIPTION,
   });
   return {
     type: "function",
