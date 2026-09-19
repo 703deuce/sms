@@ -5,6 +5,7 @@ import {
   normalizeSchedulingMeaning,
   schedulingMeaningHasSignal,
 } from "../time/scheduling-normalizer";
+import { parseSchedulingExpressionsToMeaning } from "../time/parse-scheduling-expressions";
 import {
   normalizedSchedulingEquals,
   type SchedulingMeaning,
@@ -65,24 +66,10 @@ function schedulingMeaningFromExpressions(
   dateExpression: string | null | undefined,
   timeExpression: string | null | undefined,
 ): SchedulingMeaning {
-  const base: SchedulingMeaning = {
-    date_relation: "UNSPECIFIED",
-    weekday: null,
-    date_expression: null,
-    time_expression: null,
-    time_kind: "UNSPECIFIED",
-    daypart: null,
-    clock_time: null,
-    timezone_hint: null,
-  };
-  if (dateExpression?.trim()) {
-    base.date_expression = dateExpression.trim();
-  }
-  if (timeExpression?.trim()) {
-    base.time_expression = timeExpression.trim();
-    base.time_kind = "DAYPART";
-  }
-  return base;
+  return parseSchedulingExpressionsToMeaning({
+    dateExpression,
+    timeExpression,
+  });
 }
 
 export function mergeSchedulingNaturalLanguage(

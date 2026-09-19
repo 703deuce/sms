@@ -69,7 +69,10 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
       return voiceToolError(
         "SCHEDULING_CLARIFICATION_REQUIRED",
         "Scheduling needs clarification before searching availability.",
-        { reason: rules.schedulingClarificationReason },
+        {
+          reason: rules.schedulingClarificationReason,
+          clarification_prompt: rules.schedulingClarificationPrompt,
+        },
         "not_ready",
       );
     }

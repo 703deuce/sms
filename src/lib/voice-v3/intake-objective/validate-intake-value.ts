@@ -97,10 +97,7 @@ export function hasUsableCapturedValue(
 export function verificationRequiredForField(
   field: IntakeFieldDefinition,
 ): boolean {
-  if (field.verificationRequired === true) return true;
-  if (field.verificationRequired === false) return false;
-  const strategy = defaultCollectionStrategy(field);
-  return strategy === "voice_email";
+  return field.verificationRequired === true;
 }
 
 export function intakeFieldStatusFromCapture(

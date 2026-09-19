@@ -43,12 +43,22 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
     const schema = compileVoiceV2IntakeSchema(config);
     const intakeFields =
       schema.fields.length > 0
-        ? schema.fields.map((f) => ({
-            key: f.key,
-            label: f.label,
-            type: mapValueType(f.valueType),
-            required: f.requirementLevel !== "OPTIONAL",
-          }))
+        ? schema.fields.map((f) => {
+            const type = mapValueType(f.valueType);
+            const description =
+              f.description?.trim() ||
+              f.label?.trim() ||
+              `Caller ${f.label || f.key}.`;
+            return {
+              key: f.key,
+              label: f.label,
+              type,
+              required: f.requirementLevel !== "OPTIONAL",
+              description,
+              collectionStrategy: type === "email" ? "voice_email" : "standard",
+              verificationRequired: type === "email" ? false : undefined,
+            };
+          })
         : envFallback.intakeFields;
 
     const enabledType =
@@ -87,7 +97,9 @@ export async function resolveVoiceV3AgentConfigForAgent(input: {
         config.businessName?.trim() ||
         envFallback.businessName,
       timezone,
+      intake: envFallback.intake,
       intakeFields,
+      operationRequirements: envFallback.operationRequirements,
       service,
       businessHours: envFallback.businessHours,
       calendar: {
