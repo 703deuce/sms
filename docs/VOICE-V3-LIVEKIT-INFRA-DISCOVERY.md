@@ -58,7 +58,7 @@ Business logic must not care which LiveKit deployment is underneath.
 
 Transovo **already has** a production-grade LiveKit Cloud integration (SDKs, env abstraction, SIP provisioning, Python `transovo-voice` worker, Telnyx FQDN patterns) and a **documented self-hosted alternate** (`MEDIA_BACKEND_MODE=self_hosted`).
 
-**Voice V3 PSTN certification today** still uses **Telnyx → OpenAI Live SIP** (`transfer_to_openai_live_sip`), not LiveKit. The migration is mostly **rewiring ingress + worker session** onto existing Cloud LiveKit, while keeping the **same** V3 delegation/Astra/tool layer — not standing up LiveKit from scratch.
+**Voice V3 PSTN certification today** still uses **Telnyx → OpenAI Live SIP** (`transfer_to_openai_live_sip`), not LiveKit. The migration is mostly **rewiring ingress + worker session** onto existing Cloud LiveKit, while keeping the **same Astra prompt, certified tool schemas, Transovo authorization, and business executors** — and **bypassing** custom OpenAI sideband/delegation coordinator plumbing on the LiveKit path (see implementation directive).
 
 ---
 
@@ -234,7 +234,7 @@ Do not silently create duplicate infrastructure.
 
 1. **Per cert number:** run `NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' npx tsx scripts/verify-571-livekit-callable.ts` (set `PHONE_E164`) and record PASS/FAIL for trunk, dispatch, worker join — **no creates** until gaps are listed.
 2. **Map** OpenAI SIP webhook URLs used by V3 today vs LiveKit room/job metadata contract (reuse Python `dispatch_resolver` / inbound metadata patterns).
-3. **Design spike:** one worker profile (`LIVEKIT_AGENT_NAME` or job metadata flag) → V3 adapter → same sideband/delegation code paths certified on conversation freshness.
+3. **Implement:** one worker profile (`LIVEKIT_AGENT_NAME` or dedicated V3 dispatch name) → generic Transovo adapter → **existing** `execute-voice-tool` / business executors; **bypass** custom OpenAI sideband/delegation coordinator on the LiveKit path.
 
 ---
 
