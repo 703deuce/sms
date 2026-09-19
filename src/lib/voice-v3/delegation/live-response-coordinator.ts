@@ -367,6 +367,17 @@ export class VoiceV3LiveResponseCoordinator {
     /** Initial greeting before any delegation exists */
     allowBeforeDelegation?: boolean;
   }): void {
+    const allowedConversational =
+      input.allowBeforeDelegation === true || input.reason === "initial_greeting";
+    if (!allowedConversational) {
+      console.log("LIVE_CONVERSATIONAL_RESPONSE_CREATE_BLOCKED", {
+        live_session_id: this.liveSessionId,
+        reason: input.reason,
+        hint: "GPT-Live owns conversation; app response.create is protocol-only",
+      });
+      return;
+    }
+
     if (this.sessionClosed) {
       console.log("LIVE_RESPONSE_SUPERSEDED", {
         live_session_id: this.liveSessionId,

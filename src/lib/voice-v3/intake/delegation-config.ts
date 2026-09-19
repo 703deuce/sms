@@ -6,12 +6,7 @@ import {
   buildCallerMeaningZodSchema,
   CALLER_MEANING_STRUCTURED_OUTPUT_NAME,
 } from "./caller-meaning-schema";
-import {
-  buildEmitCallerMeaningLiveFunctionTool,
-  EMIT_CALLER_MEANING_TOOL_NAME,
-} from "./emit-caller-meaning-tool";
 import { resolveVoiceV3IntakeTransport } from "./intake-transport";
-import { voiceV3UsesCapabilityTools } from "./tool-surface";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
 
 const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
@@ -24,8 +19,7 @@ const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
  * `Unknown parameter: session.delegation.responses.text.format` and the call
  * stays silent because accept never completes.
  *
- * Primary transport: typed capability function tools on delegated Responses,
- * or legacy strict `emit_caller_meaning` when `VOICE_V3_LEGACY_EMIT_CALLER_MEANING=1`.
+ * Primary transport: typed capability function tools on delegated Responses.
  *
  * Fallback: `VOICE_V3_INTAKE_TRANSPORT=output_text` — output_text JSON + Zod.
  *
@@ -39,13 +33,8 @@ export function buildVoiceV3AstraDelegationResponses(
   const intakeEnabled = voiceV3IntakePipelineEnabled();
   const transport = resolveVoiceV3IntakeTransport();
   const useFunctionTool = intakeEnabled && transport === "function_tool";
-  const capabilityTools = useFunctionTool && voiceV3UsesCapabilityTools();
 
-  const tools = capabilityTools
-    ? buildVoiceV3AstraFunctionTools(agentConfig)
-    : useFunctionTool
-      ? [buildEmitCallerMeaningLiveFunctionTool(agentConfig)]
-      : [];
+  const tools = useFunctionTool ? buildVoiceV3AstraFunctionTools(agentConfig) : [];
 
   return {
     model: VOICE_V3_ASTRA_MODEL,
@@ -56,12 +45,8 @@ export function buildVoiceV3AstraDelegationResponses(
     text: {
       verbosity: "low",
     },
-    parallel_tool_calls: capabilityTools,
-    tool_choice: capabilityTools
-      ? "auto"
-      : useFunctionTool
-        ? { type: "function", name: EMIT_CALLER_MEANING_TOOL_NAME }
-        : "auto",
+    parallel_tool_calls: useFunctionTool,
+    tool_choice: useFunctionTool ? "auto" : "auto",
     max_output_tokens: intakeEnabled ? 768 : 200,
     tools,
   };

@@ -152,11 +152,18 @@ export function scheduleSemanticStallBreakerForTurn(input: {
   );
 }
 
+/** Disabled by default — Astra tools own semantic routing; turns are telemetry-only. */
+const SEMANTIC_WATCHDOG_ENABLED =
+  process.env.VOICE_V3_SEMANTIC_WATCHDOG?.trim() === "1";
+
 export function onCallerTurnCommitted(input: {
   liveSessionId: string;
   turn: CallerTurn;
   rollingTranscript: string;
 }): void {
+  if (!SEMANTIC_WATCHDOG_ENABLED) {
+    return;
+  }
   const sessionId = input.liveSessionId.trim();
   const runtime = getVoiceV3CallRuntime(sessionId);
   if (!runtime) return;

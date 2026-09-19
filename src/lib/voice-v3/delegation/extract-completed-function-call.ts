@@ -1,5 +1,3 @@
-import { EMIT_CALLER_MEANING_TOOL_NAME } from "../intake/emit-caller-meaning-tool";
-import { isRegisteredVoiceTool } from "../tools/registry";
 import type { PendingFunctionCall } from "./types";
 
 /**
@@ -17,11 +15,8 @@ export function extractCompletedFunctionCallFromNested(
   const row = item as Record<string, unknown>;
   if (row.type !== "function_call") return null;
 
-  const name = typeof row.name === "string" ? row.name : "";
-  if (
-    !name ||
-    (name !== EMIT_CALLER_MEANING_TOOL_NAME && !isRegisteredVoiceTool(name))
-  ) {
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  if (!name) {
     return null;
   }
 

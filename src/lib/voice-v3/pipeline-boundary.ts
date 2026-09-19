@@ -24,4 +24,5 @@ export const VOICE_V3_PROHIBITED_LIVE_TOOL_NAMES: readonly string[] = [
   "record_current_field",
   "book_offered_slot",
   "get_booking_verification",
+  "emit_caller_meaning",
 ];

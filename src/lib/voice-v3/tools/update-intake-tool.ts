@@ -4,8 +4,6 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { applyCallerMeaningToContext } from "../intake/apply-caller-meaning";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
-import { buildAgentSnapshotLiveAppend } from "../agent/sync-agent-state-to-live";
-import { planAgentState } from "../agent/agent-planner";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { emptyCallerMeaningBase } from "./meaning-defaults";
@@ -117,9 +115,6 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
     const rules = evaluateVoiceV3Rules(ctx.runtime.getSnapshot(), config);
     const updated: string[] = [...applied.fieldsChanged];
     const stillRequired = rules.missingRequiredFields;
-
-    const snapshot = planAgentState(ctx.runtime.getSnapshot(), config);
-    ctx.sendContext(buildAgentSnapshotLiveAppend(ctx.runtime, snapshot));
 
     return toolOk("updated", {
       updated_fields: updated,

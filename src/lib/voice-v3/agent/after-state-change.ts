@@ -1,13 +1,8 @@
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
-import { planAgentState } from "./agent-planner";
 import { assertVoiceV3RuntimeInvariants } from "./runtime-invariants";
-import { buildAgentSnapshotLiveAppend } from "./sync-agent-state-to-live";
 import type { AgentStateSnapshot } from "./agent-state-snapshot";
-import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
-import {
-  noteSemanticTimingEvent,
-} from "../telemetry/caller-turn-timing";
+import { planAgentState } from "./agent-planner";
 
 export type LiveSendFn = (event: { type: string; [key: string]: unknown }) => void;
 
@@ -22,22 +17,9 @@ export function clearAgentSnapshotStore(): void {
   lastSnapshotByCall.clear();
 }
 
-function snapshotMateriallyChanged(
-  prev: AgentStateSnapshot | null,
-  next: AgentStateSnapshot,
-): boolean {
-  if (!prev) return true;
-  if (prev.stateVersion !== next.stateVersion) return true;
-  if (JSON.stringify(prev.nextConversationAction) !== JSON.stringify(next.nextConversationAction)) {
-    return true;
-  }
-  if (prev.blocker?.code !== next.blocker?.code) return true;
-  if (prev.allowedClaims.join() !== next.allowedClaims.join()) return true;
-  return false;
-}
-
 /**
- * Authoritative replan after state mutation — does not await network I/O.
+ * Post-mutation hook: invariants + diagnostic snapshot only.
+ * Does not plan Amy's speech or push planner snapshots to Live.
  */
 export function afterVoiceV3StateChange(input: {
   runtime: VoiceV3CallRuntime;
@@ -55,67 +37,27 @@ export function afterVoiceV3StateChange(input: {
     });
   }
 
-  const snapshot = planAgentState(ctx, input.runtime.config, input.now);
-  const prev = lastSnapshotByCall.get(ctx.callId) ?? null;
+  const planned = planAgentState(ctx, input.runtime.config, input.now);
+  const snapshot: AgentStateSnapshot = {
+    ...planned,
+    nextConversationAction: { type: "NONE" },
+  };
   lastSnapshotByCall.set(ctx.callId, snapshot);
 
-  console.log("AGENT_STATE_PLANNED", {
+  logVoiceV3Pipeline("state", "after_change", {
     call_id: ctx.callId,
     live_session_id: ctx.liveSessionId,
     state_version: snapshot.stateVersion,
     reason: input.reason,
-    active_goal: snapshot.activeGoal,
-    goal_status: snapshot.goalStatus,
-    known_field_keys: snapshot.knownFieldKeys,
-    missing_field_keys: snapshot.missingRequiredFieldKeys,
-    scheduling_status: snapshot.schedulingStatus,
-    availability_status: snapshot.availabilityStatus,
-    active_operation_types: snapshot.activeOperations.map((o) => o.type),
-    blocker_code: snapshot.blocker?.code ?? null,
-    next_conversation_action: snapshot.nextConversationAction.type,
     allowed_claims: snapshot.allowedClaims,
   });
 
-  logVoiceV3Pipeline("agent", "state_planned", {
-    call_id: ctx.callId,
-    live_session_id: ctx.liveSessionId,
-    state_version: snapshot.stateVersion,
-    reason: input.reason,
-    blocker_code: snapshot.blocker?.code ?? null,
-    next_action: snapshot.nextConversationAction.type,
-  });
-
-  if (snapshotMateriallyChanged(prev, snapshot)) {
-    console.log("NEXT_CONVERSATION_ACTION_CHANGED", {
-      call_id: ctx.callId,
-      state_version: snapshot.stateVersion,
-      action: snapshot.nextConversationAction.type,
-    });
-  }
-
-  if (ctx.booking.phase === "BOOKING_CONFIRMED" && input.send) {
-    getVoiceV3LiveResponseCoordinator(ctx.liveSessionId, input.send).supersedeStaleSpeaks({
-      minStateVersion: snapshot.stateVersion,
-    });
-  }
-
-  noteSemanticTimingEvent(ctx.liveSessionId, "plannerCompletedAt");
-  if (input.send && snapshotMateriallyChanged(prev, snapshot)) {
-    noteSemanticTimingEvent(ctx.liveSessionId, "liveContextSentAt");
-  }
-
-  if (input.send && snapshotMateriallyChanged(prev, snapshot)) {
-    const event = buildAgentSnapshotLiveAppend(input.runtime, snapshot);
-    queueMicrotask(() => {
-      try {
-        input.send!(event);
-        console.log("AGENT_SNAPSHOT_SENT_TO_LIVE", {
-          call_id: ctx.callId,
-          state_version: snapshot.stateVersion,
-        });
-      } catch (err) {
-        console.error("AGENT_SNAPSHOT_SEND_FAILED", { call_id: ctx.callId, err });
-      }
+  if (ctx.booking.phase === "BOOKING_CONFIRMED" && ctx.booking.confirmed && input.send) {
+    const display = ctx.booking.confirmed.displayTime;
+    input.send({
+      type: "session.commentary.append",
+      content: `Verified: appointment booking is confirmed for ${display}. You may tell the caller it is booked.`,
+      delegation_id: null,
     });
   }
 

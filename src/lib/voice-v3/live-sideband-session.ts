@@ -20,7 +20,7 @@ import {
   appendCallerTranscriptDelta,
   commitCallerTranscript,
 } from "./intake/caller-turn-buffer";
-import { noteCallerTranscriptDelta, forceCommitCallerTurn } from "./conversation/caller-turn-manager";
+import { noteCallerTranscriptDelta } from "./conversation/caller-turn-manager";
 import { appendAssistantTranscriptFragment } from "./conversation/transcript-accumulator";
 import {
   clearDelegatedMeaningSessionState,
@@ -124,7 +124,6 @@ async function attachVoiceV3LiveSidebandInner(input: {
 
     if (type === "session.delegation.created") {
       commitCallerTranscript(sessionId);
-      forceCommitCallerTurn(sessionId);
       const delegation = serverEvent.delegation as { id?: string; response_id?: string } | undefined;
       if (delegation) {
         getVoiceV3LiveResponseCoordinator(sessionId, send).onDelegationCreated(delegation);

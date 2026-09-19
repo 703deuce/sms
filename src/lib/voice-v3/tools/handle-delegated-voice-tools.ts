@@ -3,8 +3,8 @@ import { extractCompletedFunctionCallFromNested } from "../delegation/extract-co
 import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
 import { completeDelegatedFunctionCall } from "../delegation/complete-delegated-function-call";
 import { executeVoiceTool } from "./execute-voice-tool";
-import { EMIT_CALLER_MEANING_TOOL_NAME } from "../intake/emit-caller-meaning-tool";
 import { isRegisteredVoiceTool } from "./registry";
+import { voiceToolError } from "./types";
 import {
   markSemanticInterpretationEnded,
   markSemanticInterpretationStarted,
@@ -25,12 +25,16 @@ export async function handleDelegatedVoiceToolCall(input: {
 }): Promise<boolean> {
   const completed = extractCompletedFunctionCallFromNested(input.nested, input.delegationId);
   if (!completed) return false;
-  if (
-    completed.name === EMIT_CALLER_MEANING_TOOL_NAME ||
-    !isRegisteredVoiceTool(completed.name)
-  ) {
-    return false;
-  }
+
+  const isKnownTool = isRegisteredVoiceTool(completed.name);
+
+  console.log("ASTRA_FUNCTION_CALL_RECEIVED", {
+    live_session_id: input.liveSessionId,
+    tool: completed.name,
+    call_id: completed.callId,
+    delegation_id: completed.delegationId ?? input.delegationId ?? null,
+    known_tool: isKnownTool,
+  });
 
   const dedupeKey = executionKey(input.liveSessionId, completed.callId);
   if (executedCallIds.has(dedupeKey)) {
@@ -57,21 +61,29 @@ export async function handleDelegatedVoiceToolCall(input: {
   executedCallIds.add(dedupeKey);
 
   const snap = runtime.getSnapshot();
-  const result = await executeVoiceTool(
-    {
-      callId: snap.callId,
-      liveSessionId: input.liveSessionId,
-      delegationId: completed.delegationId ?? null,
-      functionCallId: completed.callId,
-      runtime,
-      tenantId: snap.callId,
-      sendContext: input.send,
-    },
-    completed.name,
-    completed.argumentsJson
-      ? (JSON.parse(completed.argumentsJson) as unknown)
-      : {},
-  );
+  const rawArgs = completed.argumentsJson
+    ? (JSON.parse(completed.argumentsJson) as unknown)
+    : {};
+
+  const result = isKnownTool
+    ? await executeVoiceTool(
+        {
+          callId: snap.callId,
+          liveSessionId: input.liveSessionId,
+          delegationId: completed.delegationId ?? null,
+          functionCallId: completed.callId,
+          runtime,
+          tenantId: snap.callId,
+          sendContext: input.send,
+        },
+        completed.name,
+        rawArgs,
+      )
+    : voiceToolError(
+        "UNKNOWN_TOOL",
+        `Tool ${completed.name} is not registered.`,
+        { tool_name: completed.name },
+      );
 
   const disposition = result.ok ? "APPLIED" : "DECODE_FAILED";
   completeDelegatedFunctionCall({
