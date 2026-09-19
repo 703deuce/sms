@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../../src/lib/voice-v3/config/agent-config";
+import { defaultNestedFromFlat } from "../../src/lib/voice-v3/config/default-nested-config";
 
 /**
  * Scripts-only fixture for dynamic-intake unit tests (odd field keys).
@@ -56,4 +57,15 @@ export const ODD_INTAKE_HARNESS_AGENT_CONFIG: VoiceV3AgentConfig = {
     calendarIds: ["primary"],
     smtp: null,
   },
+  ...defaultNestedFromFlat({
+    businessName: "Transovo Test",
+    timezone: "America/New_York",
+    service: {
+      id: "consultation",
+      name: "Consultation",
+      durationMinutes: 60,
+      slotStepMinutes: 30,
+    },
+    agentName: "Amy",
+  }),
 };

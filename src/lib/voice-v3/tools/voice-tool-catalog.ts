@@ -121,6 +121,9 @@ function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
   const caps = config.capabilities;
+  if (!caps) {
+    return entry.name === "update_intake" || entry.name === "end_call";
+  }
   switch (entry.name) {
     case "book_appointment":
       return caps.bookAppointments && isMicrosoftDirectStrategy(config);

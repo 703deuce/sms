@@ -27,9 +27,20 @@ function objective(ctx: ReturnType<typeof emptyCtx>) {
   return deriveIntakeObjective(config, ctx);
 }
 
-// Derivation: NOT_STARTED
+// Derivation: neutral UNKNOWN — no operation-specific requirements yet
 {
   const o = objective(emptyCtx());
+  assert.equal(o.status, "NOT_STARTED");
+  assert.deepEqual(o.missingRequiredFields, []);
+}
+
+// Booking operation when goal is explicit
+{
+  const ctx = {
+    ...emptyCtx(),
+    dialog: { activeGoal: "BOOK_APPOINTMENT" as const },
+  };
+  const o = objective(ctx);
   assert.equal(o.status, "NOT_STARTED");
   assert.deepEqual(o.missingRequiredFields.sort(), ["email", "mothers_name", "name"].sort());
 }
@@ -44,7 +55,11 @@ function objective(ctx: ReturnType<typeof emptyCtx>) {
     sourceCallId: "c",
     sourceDelegationId: null,
   });
-  const ctx = { ...emptyCtx(), intake: { values: merged.values } };
+  const ctx = {
+    ...emptyCtx(),
+    intake: { values: merged.values },
+    dialog: { activeGoal: "BOOK_APPOINTMENT" as const },
+  };
   const o = objective(ctx);
   assert.equal(o.status, "IN_PROGRESS");
   assert.ok(o.collectedFields.includes("name"));
@@ -64,7 +79,11 @@ function objective(ctx: ReturnType<typeof emptyCtx>) {
     sourceCallId: "c",
     sourceDelegationId: null,
   });
-  const ctx = { ...emptyCtx(), intake: { values: merged.values } };
+  const ctx = {
+    ...emptyCtx(),
+    intake: { values: merged.values },
+    dialog: { activeGoal: "BOOK_APPOINTMENT" as const },
+  };
   assert.equal(objective(ctx).status, "COMPLETE");
 }
 
@@ -179,6 +198,11 @@ async function toolIntegration() {
       sent.push(e);
     },
   };
+
+  runtime.replaceContext({
+    ...runtime.getSnapshot(),
+    dialog: { activeGoal: "BOOK_APPOINTMENT" },
+  });
 
   const result = await updateIntakeTool.execute(ctx, {
     name: "Anthony Johnson",

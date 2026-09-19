@@ -17,5 +17,7 @@ export {
 } from "./validate-intake-value";
 export {
   getMissingFieldsForOperation,
+  resolveActiveIntakeOperation,
+  UNRESOLVED_INTAKE_OPERATION,
   type VoiceOperationName,
 } from "./operation-requirements";

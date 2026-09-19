@@ -81,7 +81,7 @@ export function evaluateVoiceV3Rules(
     ctx.booking.phase === "BOOKING_CREATING" ||
     ctx.booking.phase === "BOOKING_OUTCOME_UNKNOWN";
 
-  const isBookGoal = goal === "BOOK_APPOINTMENT" || goal === "UNKNOWN";
+  const isBookGoal = goal === "BOOK_APPOINTMENT";
   const bookingReady =
     isBookGoal &&
     slotSelected &&

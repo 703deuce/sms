@@ -2,6 +2,7 @@ import type { LiveSidebandSend } from "../greeting";
 import { noteTurnDelegationContinued } from "../conversation/caller-turn-semantic-progress";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
+import { getVoiceV3CallRuntime } from "../state/call-runtime";
 import type { DelegationRuntime, PendingFunctionCall } from "./types";
 
 type ContinuationRequest = {
@@ -66,6 +67,8 @@ export class VoiceV3LiveResponseCoordinator {
         phase: "STARTED",
         pendingFunctionCalls: new Map(),
         submittedFunctionCallIds: new Set(),
+        observedFunctionNames: [],
+        messageOutputOccurred: false,
         protocolBarrierGeneration: 0,
         lastContinuationEventId: null,
       });
@@ -94,6 +97,8 @@ export class VoiceV3LiveResponseCoordinator {
           phase: "AWAITING_TOOL_OUTPUT",
           pendingFunctionCalls: new Map(),
           submittedFunctionCallIds: new Set(),
+          observedFunctionNames: [],
+          messageOutputOccurred: false,
           protocolBarrierGeneration: 0,
           lastContinuationEventId: null,
         } satisfies DelegationRuntime);
@@ -151,12 +156,34 @@ export class VoiceV3LiveResponseCoordinator {
       return;
     }
 
-    if (nestedType === "response.completed") {
-      if (id) {
+    if (nestedType === "response.output_item.done" && id) {
+      const item = nested.item;
+      if (item && typeof item === "object") {
+        const row = item as Record<string, unknown>;
         const d = this.delegations.get(id);
-        if (d) d.phase = "COMPLETED";
+        if (d) {
+          if (row.type === "message") {
+            d.messageOutputOccurred = true;
+          }
+          if (row.type === "function_call" && typeof row.name === "string" && row.name.trim()) {
+            d.observedFunctionNames.push(row.name.trim());
+          }
+        }
+      }
+    }
+
+    if (nestedType === "response.completed") {
+      const d = id ? this.delegations.get(id) : undefined;
+      if (id && d) {
+        d.phase = "COMPLETED";
       }
       this.protocolBarrierGenerationGlobal += 1;
+      const runtime = getVoiceV3CallRuntime(this.liveSessionId);
+      const snap = runtime?.getSnapshot() ?? null;
+      const config = runtime?.config ?? null;
+      const functionNames = d?.observedFunctionNames ?? [];
+      const callbackEnabled = config?.callHandling.callbackRequestsEnabled === true;
+      const callbackPersisted = Boolean(snap?.callback?.callbackRequestId);
       logVoiceV3Pipeline("live_out", "delegation.completed", {
         live_session_id: this.liveSessionId,
         delegation_id: id,
@@ -164,6 +191,16 @@ export class VoiceV3LiveResponseCoordinator {
       console.log("ASTRA_DELEGATION_COMPLETED", {
         live_session_id: this.liveSessionId,
         delegation_id: id,
+        active_goal: snap?.dialog.activeGoal ?? null,
+        function_call_count: functionNames.length,
+        function_names: functionNames,
+        message_output_occurred: d?.messageOutputOccurred ?? false,
+        callback_enabled: callbackEnabled,
+        callback_request_persisted: callbackPersisted,
+        callback_open:
+          callbackEnabled && !callbackPersisted && functionNames.length === 0
+            ? d?.messageOutputOccurred ?? false
+            : false,
       });
       console.log("DELEGATED_CONTINUATION_COMPLETED", {
         live_session_id: this.liveSessionId,

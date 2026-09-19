@@ -11,6 +11,7 @@ import {
   configuredRequiredKeysForActiveOperation,
   getMissingFieldsForOperation,
   resolveActiveIntakeOperation,
+  UNRESOLVED_INTAKE_OPERATION,
 } from "./operation-requirements";
 
 export function deriveIntakeObjective(
@@ -46,12 +47,17 @@ export function deriveIntakeObjective(
 
   const missingRequiredFields = getMissingFieldsForOperation(operation, config, context);
 
-  const status =
-    missingRequiredFields.length === 0
-      ? "COMPLETE"
-      : collectedFields.length === 0
-        ? "NOT_STARTED"
-        : "IN_PROGRESS";
+  let status: IntakeObjectiveState["status"];
+  if (operation === UNRESOLVED_INTAKE_OPERATION) {
+    status = collectedFields.length === 0 ? "NOT_STARTED" : "IN_PROGRESS";
+  } else {
+    status =
+      missingRequiredFields.length === 0
+        ? "COMPLETE"
+        : collectedFields.length === 0
+          ? "NOT_STARTED"
+          : "IN_PROGRESS";
+  }
 
   return {
     status,

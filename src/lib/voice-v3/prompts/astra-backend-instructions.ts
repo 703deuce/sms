@@ -1,5 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instructions";
+import { buildAstraCallbackInstructions } from "./astra-callback-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
 import { buildAstraIntakeInstructions } from "./astra-intake-instructions";
 
@@ -14,6 +15,7 @@ export type AstraBackendPromptContext = {
   bookingStrategy?: VoiceV3AgentConfig["scheduling"]["bookingStrategy"];
   capabilities?: VoiceV3AgentConfig["capabilities"];
   transferDestinations?: VoiceV3AgentConfig["transferDestinations"];
+  agentConfig?: VoiceV3AgentConfig;
 };
 
 function bookingStrategyAppend(
@@ -41,8 +43,10 @@ export function buildAstraBackendInstructions(
     return buildLegacyOutputTextInstructions(context);
   }
 
+  const agentConfig = context.agentConfig;
   const core = buildAstraBackendCoreInstructions();
-  const crossTool = buildAstraCrossToolInstructions();
+  const callback = agentConfig ? buildAstraCallbackInstructions(agentConfig) : "";
+  const crossTool = buildAstraCrossToolInstructions(agentConfig);
   const intake = buildAstraIntakeInstructions();
 
   return `
@@ -62,7 +66,7 @@ Booking strategy: ${context.bookingStrategy ?? "MICROSOFT_365"}
 
 ${bookingStrategyAppend(context.bookingStrategy)}
 
-${intake}
+${callback ? `${callback}\n\n` : ""}${intake}
 
 ${crossTool}
 

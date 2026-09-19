@@ -54,7 +54,11 @@ export function logVoiceV3ContractVersions(config: VoiceV3AgentConfig, callId?: 
     prompt_bundle: PROMPT_VERSION,
     live_instructions_hash: sha256Canonical(buildLiveFrontendInstructions({})),
     astra_instructions_hash: sha256Canonical(
-      buildAstraBackendInstructions({ businessName: config.businessName, timezone: config.timezone }),
+      buildAstraBackendInstructions({
+        businessName: config.businessName,
+        timezone: config.timezone,
+        agentConfig: config,
+      }),
     ),
   });
 }
