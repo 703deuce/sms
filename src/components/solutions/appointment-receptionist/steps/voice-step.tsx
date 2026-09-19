@@ -5,6 +5,13 @@ import {
   WIZARD_VOICES,
 } from "@/lib/solutions/appointment-receptionist/defaults";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
+import type {
+  BackchannelLevel,
+  CallerPausePatience,
+  InterruptionStyle,
+  SpeakingPaceLevel,
+  VoiceAccentStyle,
+} from "@/lib/voice-v3/prompts/live-prompt-controls";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Play, Volume2 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -33,9 +40,14 @@ export function VoiceStep({
     patch({
       voiceId: id,
       voiceLabel: label,
+      voiceSource: "builtin",
+      openAiCustomVoiceId: null,
       speakingSpeed: recommendedSpeed ?? state.speakingSpeed,
     });
   }
+
+  const customVoiceWizardEnabled =
+    process.env.NEXT_PUBLIC_OPENAI_CUSTOM_VOICE_WIZARD === "1";
 
   async function previewVoice(voiceId: string, speed?: number) {
     setPreviewing(voiceId);
@@ -285,43 +297,78 @@ export function VoiceStep({
               </div>
             </div>
 
-            <div className="space-y-4 pt-2">
-              {(
-                [
-                  ["speakingSpeed", "Speaking speed", "Slower", "Faster", 0.7, 1.3],
-                  ["responsiveness", "Responsiveness", "Less", "More responsive", 0, 1],
-                  [
-                    "interruptionSensitivity",
-                    "Interruption sensitivity",
-                    "Low",
-                    "High",
-                    0,
-                    1,
-                  ],
-                ] as const
-              ).map(([key, label, left, right, min, max]) => (
-                <div key={key}>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="font-medium text-foreground">{label}</span>
-                    <span className="text-muted-foreground">
-                      {left} → {right}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    step={0.05}
-                    value={state[key]}
-                    onChange={(e) => patch({ [key]: Number(e.target.value) })}
-                    className="w-full accent-[var(--primary)]"
+            <div className="space-y-4 pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground">
+                Pace, accent, and conversation style are applied through GPT-Live instructions
+                (not legacy TTS or VAD sliders).
+              </p>
+              <PromptSelect<SpeakingPaceLevel>
+                label="Speaking pace"
+                value={state.speakingPace ?? "normal"}
+                options={[
+                  ["slower", "Slower"],
+                  ["normal", "Normal"],
+                  ["faster", "Faster"],
+                ]}
+                onChange={(speakingPace) => patch({ speakingPace })}
+              />
+              <PromptSelect<VoiceAccentStyle>
+                label="Accent / dialect"
+                value={state.voiceAccent ?? "neutral_american"}
+                options={[
+                  ["neutral_american", "Neutral American"],
+                  ["southern_us", "Southern US"],
+                  ["british", "British English"],
+                  ["irish", "Irish English"],
+                ]}
+                onChange={(voiceAccent) => patch({ voiceAccent })}
+              />
+              <PromptSelect<BackchannelLevel>
+                label="Backchannels (yeah, uh-huh)"
+                value={state.backchannelLevel ?? "minimal"}
+                options={[
+                  ["none", "None"],
+                  ["minimal", "Minimal"],
+                  ["natural", "Natural"],
+                ]}
+                onChange={(backchannelLevel) => patch({ backchannelLevel })}
+              />
+              <PromptSelect<CallerPausePatience>
+                label="Patience when caller pauses"
+                value={state.callerPausePatience ?? "normal"}
+                options={[
+                  ["quick", "Quicker check-ins"],
+                  ["normal", "Normal"],
+                  ["patient", "Very patient"],
+                ]}
+                onChange={(callerPausePatience) => patch({ callerPausePatience })}
+              />
+              <PromptSelect<InterruptionStyle>
+                label="When caller interrupts"
+                value={state.interruptionStyle ?? "natural"}
+                options={[
+                  ["natural", "Natural rhythm"],
+                  ["yield_immediately", "Yield immediately"],
+                ]}
+                onChange={(interruptionStyle) => patch({ interruptionStyle })}
+              />
+              {customVoiceWizardEnabled ? (
+                <div className="space-y-2 rounded-lg border border-dashed border-border p-3">
+                  <Label>Authorized custom OpenAI voice ID</Label>
+                  <Input
+                    value={state.openAiCustomVoiceId ?? ""}
+                    onChange={(e) =>
+                      patch({
+                        openAiCustomVoiceId: e.target.value.trim() || null,
+                        voiceSource: e.target.value.trim() ? "custom" : "builtin",
+                      })
+                    }
+                    placeholder="voice_…"
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Requires OpenAI custom-voice access on your organization.
+                  </p>
                 </div>
-              ))}
-              {state.voiceId === "allie-ultra" ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Allie sounds best a bit faster — speed defaults to 1.15 when selected.
-                </p>
               ) : null}
             </div>
           </div>
@@ -348,6 +395,35 @@ export function VoiceStep({
           assistant that answers the phone after activate.
         </InfoCallout>
       </SidePanel>
+    </div>
+  );
+}
+
+function PromptSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<[T, string]>;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div>
+      <Label className="text-xs">{label}</Label>
+      <select
+        className="mt-1 h-9 w-full rounded-lg border border-border bg-card px-2 text-sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map(([v, text]) => (
+          <option key={v} value={v}>
+            {text}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

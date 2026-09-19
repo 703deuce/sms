@@ -19,6 +19,7 @@ import {
   bookingRequiredIntakeKeys,
   compileWizardCollectFieldsToV3Intake,
 } from "./wizard-collect-fields-v3";
+import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
 
 export type VoiceV3ProviderConnections = {
   microsoftConnectionId?: string | null;
@@ -362,6 +363,14 @@ export function compileVoiceV3AgentConfig(input: {
       ),
       conversationBehaviors: wizard.conversationBehaviors ?? nested.conversation.conversationBehaviors,
       guardrails: wizard.guardrails ?? [],
+      livePromptControls: resolveLivePromptControlsFromWizard({
+        speakingPace: wizard.speakingPace,
+        speakingSpeed: wizard.speakingSpeed,
+        voiceAccent: wizard.voiceAccent,
+        backchannelLevel: wizard.backchannelLevel,
+        callerPausePatience: wizard.callerPausePatience,
+        interruptionStyle: wizard.interruptionStyle,
+      }),
     },
     business: hotContextFromWizard(wizard),
     scheduling: {
@@ -397,15 +406,11 @@ export function compileVoiceV3AgentConfig(input: {
       connectionGreetingMode: wizard.connectionGreeting ?? "none",
       connectionGreetingText: wizard.connectionGreetingText,
       connectionGreetingAudioUrl: wizard.connectionGreetingAudioUrl,
-      liveVoiceId: safeLiveVoice(wizard.voiceId, envFallback.telephony.liveVoiceId),
+      ...resolveTelephonyVoiceFromWizard(wizard, envFallback.telephony.liveVoiceId),
       voiceLabel: wizard.voiceLabel,
       speaksFirst: wizard.speaksFirst === "caller" ? "caller" : "ai",
-      liveAudioControls: {
-        speakingSpeed: wizard.speakingSpeed,
-        responsiveness: wizard.responsiveness,
-        interruptionSensitivity: wizard.interruptionSensitivity,
-        executionSupport: "UNSUPPORTED_BY_CURRENT_LIVE_API" as const,
-      },
+      voiceSource: wizard.voiceSource ?? "builtin",
+      openAiCustomVoiceId: wizard.openAiCustomVoiceId ?? null,
     },
     controlPlane: {
       solutionName: wizard.solutionName,
@@ -425,4 +430,25 @@ function safeLiveVoice(wizardVoiceId: string | undefined, fallback: string): str
   const fromFallback = tryNormalizeVoiceV3LiveBuiltInVoice(fallback);
   if (fromFallback) return fromFallback;
   return "marin";
+}
+
+function resolveTelephonyVoiceFromWizard(
+  wizard: AppointmentReceptionistWizardState,
+  fallbackLiveVoiceId: string,
+): Pick<
+  VoiceV3AgentConfig["telephony"],
+  "liveVoiceId" | "liveVoiceOutput"
+> {
+  const customId = wizard.openAiCustomVoiceId?.trim();
+  if (wizard.voiceSource === "custom" && customId) {
+    return {
+      liveVoiceId: customId,
+      liveVoiceOutput: { id: customId },
+    };
+  }
+  const builtin = safeLiveVoice(wizard.voiceId, fallbackLiveVoiceId);
+  return {
+    liveVoiceId: builtin,
+    liveVoiceOutput: builtin,
+  };
 }

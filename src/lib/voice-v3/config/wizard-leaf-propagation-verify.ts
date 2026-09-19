@@ -13,6 +13,12 @@ import { resolveBookingServiceForRuntime } from "./resolve-booking-service";
 import { createInitialVoiceV3CallContext } from "@/lib/voice-v3/state/call-context";
 import { wizardPropagationBaseline } from "./wizard-propagation-fixture";
 import { ensureWizardOperatingMaturity } from "@/lib/solutions/appointment-receptionist/operating-maturity-wizard";
+import { buildLiveFrontendInstructions } from "@/lib/voice-v3/prompts/live-frontend-instructions";
+import { tryNormalizeVoiceV3LiveBuiltInVoice } from "./voice-v3-live-built-in-voices";
+
+function tryNormalizeWizardVoiceId(raw: string): string | null {
+  return tryNormalizeVoiceV3LiveBuiltInVoice(raw);
+}
 
 const MANIFEST_BY_PATH = new Map(
   WIZARD_V3_FIELD_MANIFEST.map((row) => [row.statePath, row]),
@@ -381,8 +387,37 @@ function assertCompiledForRow(
   if (row.v3ConfigPath === "identity.agentName" && config.identity.agentName !== wizard.agentName) {
     return { ok: false, reason: "agentName mismatch" };
   }
-  if (row.v3ConfigPath === "telephony.liveVoiceId" && config.telephony.liveVoiceId !== wizard.voiceId) {
-    return { ok: false, reason: "liveVoiceId mismatch" };
+  if (row.v3ConfigPath === "telephony.liveVoiceId" || row.statePath === "voiceId") {
+    const expectedBuiltin = config.telephony.liveVoiceId;
+    if (wizard.voiceSource !== "custom") {
+      const normalized = expectedBuiltin;
+      const fromWizard =
+        wizard.voiceId === normalized ||
+        tryNormalizeWizardVoiceId(wizard.voiceId) === normalized;
+      if (!fromWizard) {
+        return { ok: false, reason: "liveVoiceId mismatch" };
+      }
+    }
+  }
+  if (row.executionStatus === "LIVE_PROMPT_CONTROL") {
+    const controls = config.conversation.livePromptControls;
+    if (!controls) {
+      return { ok: false, reason: "missing conversation.livePromptControls" };
+    }
+    const field = row.statePath as keyof typeof controls;
+    const wizardVal = getAtPath(wizard, row.statePath);
+    if (wizardVal !== undefined && controls[field] !== wizardVal) {
+      return { ok: false, reason: `livePromptControls.${String(field)} mismatch` };
+    }
+    const instructions = buildLiveFrontendInstructions({
+      agentConfig: config,
+      businessName: config.businessName,
+      agentName: config.identity.agentName,
+    });
+    if (!instructions.includes("GPT-LIVE CONVERSATION TUNING")) {
+      return { ok: false, reason: "live instructions missing GPT-LIVE tuning block" };
+    }
+    return { ok: true };
   }
   if (row.v3ConfigPath.includes("conversation.openingGreeting")) {
     if (!config.conversation.openingGreeting?.includes(wizard.openingGreeting.slice(0, 20))) {
@@ -432,15 +467,38 @@ function assertRuntimeForRow(
   row: WizardV3FieldManifestRow,
   config: VoiceV3AgentConfig,
 ): { ok: boolean; reason?: string } {
-  if (row.executionStatus !== "ACTIVE_EXECUTION") {
+  if (
+    row.executionStatus !== "ACTIVE_EXECUTION" &&
+    row.executionStatus !== "LIVE_PROMPT_CONTROL"
+  ) {
     return { ok: true };
   }
 
-  if (row.v3ConfigPath === "telephony.liveVoiceId" || row.statePath === "voiceId") {
+  if (row.executionStatus === "LIVE_PROMPT_CONTROL") {
+    const instructions = buildLiveFrontendInstructions({ agentConfig: config });
+    if (!instructions.includes("GPT-LIVE CONVERSATION TUNING")) {
+      return { ok: false, reason: "runtime instructions missing GPT-LIVE tuning block" };
+    }
+    return { ok: true };
+  }
+
+  if (
+    row.v3ConfigPath === "telephony.liveVoiceId" ||
+    row.statePath === "voiceId" ||
+    row.v3ConfigPath === "telephony.liveVoiceOutput"
+  ) {
     const accept = buildBasicLiveSessionAcceptParams(new Date(), config);
-    const session = accept.session as { audio?: { output?: { voice?: string } } };
-    if (session.audio?.output?.voice !== config.telephony.liveVoiceId) {
-      return { ok: false, reason: "Live session voice does not read telephony.liveVoiceId" };
+    const session = accept.session as {
+      audio?: { output?: { voice?: string | { id?: string } } };
+    };
+    const voice = session.audio?.output?.voice;
+    const expected = config.telephony.liveVoiceOutput ?? config.telephony.liveVoiceId;
+    const matches =
+      typeof expected === "object" && expected && "id" in expected
+        ? typeof voice === "object" && voice && "id" in voice && voice.id === expected.id
+        : voice === expected;
+    if (!matches) {
+      return { ok: false, reason: "Live session voice does not read telephony voice config" };
     }
     return { ok: true };
   }

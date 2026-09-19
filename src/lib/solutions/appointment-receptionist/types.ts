@@ -276,9 +276,20 @@ export type AppointmentReceptionistWizardState = {
 
   voiceId: string;
   voiceLabel: string;
+  /** @deprecated Legacy numeric TTS speed — use speakingPace for GPT-Live. */
   speakingSpeed: number;
+  /** @deprecated Legacy VAD stack — not used by GPT-Live; kept for old drafts. */
   responsiveness: number;
+  /** @deprecated Legacy VAD stack — not used by GPT-Live; kept for old drafts. */
   interruptionSensitivity: number;
+  /** GPT-Live prompt-controlled pace (not an API speed parameter). */
+  speakingPace?: import("@/lib/voice-v3/prompts/live-prompt-controls").SpeakingPaceLevel;
+  voiceAccent?: import("@/lib/voice-v3/prompts/live-prompt-controls").VoiceAccentStyle;
+  backchannelLevel?: import("@/lib/voice-v3/prompts/live-prompt-controls").BackchannelLevel;
+  callerPausePatience?: import("@/lib/voice-v3/prompts/live-prompt-controls").CallerPausePatience;
+  interruptionStyle?: import("@/lib/voice-v3/prompts/live-prompt-controls").InterruptionStyle;
+  voiceSource?: "builtin" | "custom";
+  openAiCustomVoiceId?: string | null;
 
   testScenario: TestScenarioId;
   lastTestPassed: boolean | null;

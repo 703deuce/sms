@@ -911,9 +911,13 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["openingGreeting", "Opening greeting", "ACTIVE_EXECUTION", "conversation.openingGreeting"],
     ["voiceId", "Voice id", "ACTIVE_EXECUTION", "telephony.liveVoiceId"],
     ["voiceLabel", "Voice label", "CONTROL_PLANE_ONLY", "telephony.voiceLabel"],
-    ["speakingSpeed", "Speaking speed", "UNSUPPORTED_BY_CURRENT_LIVE_API", "telephony.liveAudioControls.speakingSpeed"],
-    ["responsiveness", "Responsiveness", "UNSUPPORTED_BY_CURRENT_LIVE_API", "telephony.liveAudioControls.responsiveness"],
-    ["interruptionSensitivity", "Interruption sensitivity", "UNSUPPORTED_BY_CURRENT_LIVE_API", "telephony.liveAudioControls.interruptionSensitivity"],
+    ["speakingPace", "Speaking pace", "LIVE_PROMPT_CONTROL", "conversation.livePromptControls.speakingPace"],
+    ["voiceAccent", "Accent / dialect", "LIVE_PROMPT_CONTROL", "conversation.livePromptControls.voiceAccent"],
+    ["backchannelLevel", "Backchannel level", "LIVE_PROMPT_CONTROL", "conversation.livePromptControls.backchannelLevel"],
+    ["callerPausePatience", "Caller pause patience", "LIVE_PROMPT_CONTROL", "conversation.livePromptControls.callerPausePatience"],
+    ["interruptionStyle", "Interruption style", "LIVE_PROMPT_CONTROL", "conversation.livePromptControls.interruptionStyle"],
+    ["voiceSource", "Voice source", "CONTROL_PLANE_ONLY", "telephony.voiceSource"],
+    ["openAiCustomVoiceId", "Custom OpenAI voice id", "CONTROL_PLANE_ONLY", "telephony.openAiCustomVoiceId"],
   ];
   for (const [path, label, exec, v3] of voiceScalars) {
     rows.push(
@@ -923,13 +927,24 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
         statePath: path,
         valueType: "varies",
         v3ConfigPath: v3,
-        destinations: exec === "UNSUPPORTED_BY_CURRENT_LIVE_API"
-          ? ["PROVIDER_CONFIG"]
-          : ["LIVE_FRONTEND_CONTEXT", "PROVIDER_CONFIG"],
+        destinations:
+          exec === "LIVE_PROMPT_CONTROL"
+            ? ["LIVE_FRONTEND_CONTEXT"]
+            : exec === "CONTROL_PLANE_ONLY"
+              ? ["CONTROL_PLANE_ONLY"]
+              : ["LIVE_FRONTEND_CONTEXT", "PROVIDER_CONFIG"],
         executionStatus: exec,
         scope: "YES_GENERAL",
-        compilerFunction: "compileVoiceV3AgentConfig.conversation/telephony",
-        runtimeConsumer: exec === "UNSUPPORTED_BY_CURRENT_LIVE_API" ? "stored only" : "Live accept + Amy",
+        compilerFunction:
+          exec === "LIVE_PROMPT_CONTROL"
+            ? "resolveLivePromptControlsFromWizard + buildLivePromptControlsInstructionBlock"
+            : "compileVoiceV3AgentConfig.conversation/telephony",
+        runtimeConsumer:
+          exec === "LIVE_PROMPT_CONTROL"
+            ? "GPT-Live instructions (prompt-controlled)"
+            : exec === "CONTROL_PLANE_ONLY"
+              ? "Wizard UI only"
+              : "Live accept + Amy",
         republishBehavior: "next_call",
         testCoverage: path === "agentName" || path === "openingGreeting" || path === "voiceId"
           ? "test-voice-v3-wizard-compiler"
@@ -1063,6 +1078,7 @@ export function summarizeWizardV3Manifest(rows: WizardV3FieldManifestRow[]) {
     total: rows.length,
     WIRED_V3_CONFIG: rows.length,
     ACTIVE_EXECUTION: 0,
+    LIVE_PROMPT_CONTROL: 0,
     CONFIGURED_NOT_IMPLEMENTED: 0,
     CONTROL_PLANE_ONLY: 0,
     UNSUPPORTED_BY_CURRENT_LIVE_API: 0,

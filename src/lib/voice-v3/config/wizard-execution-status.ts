@@ -1,6 +1,7 @@
 /** How a wizard field maps into runtime for the current milestone. */
 export type WizardV3ExecutionStatus =
   | "ACTIVE_EXECUTION"
+  | "LIVE_PROMPT_CONTROL"
   | "CONFIGURED_NOT_IMPLEMENTED"
   | "CONTROL_PLANE_ONLY"
   | "PROVIDER_CONFIG"

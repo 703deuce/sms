@@ -34,6 +34,19 @@ export function logVoiceV3BasicConfigOnce(): void {
  * Prompts: src/lib/voice-v3/prompts/* (SDK SessionAcceptParams.Session).
  * Architecture: docs/voice-v3/OPENAI-NATIVE-FIRST-ARCHITECTURE.md
  */
+function resolveLiveAudioOutputVoice(
+  config: VoiceV3AgentConfig,
+): string | { id: string } {
+  const output = config.telephony?.liveVoiceOutput;
+  if (output && typeof output === "object" && "id" in output && output.id?.trim()) {
+    return { id: output.id.trim() };
+  }
+  if (typeof output === "string" && output.trim()) {
+    return output.trim();
+  }
+  return config.telephony?.liveVoiceId?.trim() || "marin";
+}
+
 export function buildBasicLiveSession(
   at: Date = new Date(),
   agentConfig?: VoiceV3AgentConfig,
@@ -68,7 +81,7 @@ export function buildBasicLiveSession(
     instructions: prompts.liveInstructions,
     audio: {
       output: {
-        voice: config.telephony?.liveVoiceId?.trim() || "marin",
+        voice: resolveLiveAudioOutputVoice(config),
       },
     },
     delegation: {

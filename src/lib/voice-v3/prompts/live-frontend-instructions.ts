@@ -1,5 +1,9 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { buildLiveDelegationPolicySection } from "./live-delegation-policy";
+import {
+  buildLivePromptControlsInstructionBlock,
+  livePromptControlsFromAgentConfig,
+} from "./live-prompt-controls";
 
 export type LiveFrontendPromptContext = {
   agentName?: string;
@@ -104,6 +108,9 @@ export function buildLiveFrontendInstructions(
   const businessFacts = config ? buildAmyBusinessFactsSection(config) : "";
   const persona = config ? buildAmyPersonaSection(config) : "";
   const capabilities = config ? buildAmyCapabilitySummary(config) : "";
+  const liveTuning = config
+    ? buildLivePromptControlsInstructionBlock(livePromptControlsFromAgentConfig(config))
+    : "";
 
   const greetingHint =
     config?.conversation.openingGreeting?.trim() ||
@@ -124,6 +131,7 @@ or backend work is needed.
 ${capabilities ? `${capabilities}\n` : ""}
 ${businessFacts ? `${businessFacts}\n` : ""}
 ${persona ? `${persona}\n` : ""}
+${liveTuning ? `${liveTuning}\n` : ""}
 
 ${delegationPolicy}
 

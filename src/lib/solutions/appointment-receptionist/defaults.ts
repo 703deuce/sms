@@ -450,6 +450,13 @@ export function createDefaultWizardState(): AppointmentReceptionistWizardState {
     speakingSpeed: 1.08,
     responsiveness: 0.8,
     interruptionSensitivity: 0.75,
+    speakingPace: "normal",
+    voiceAccent: "neutral_american",
+    backchannelLevel: "minimal",
+    callerPausePatience: "normal",
+    interruptionStyle: "natural",
+    voiceSource: "builtin",
+    openAiCustomVoiceId: null,
 
     testScenario: "appointment_booking",
     lastTestPassed: null,

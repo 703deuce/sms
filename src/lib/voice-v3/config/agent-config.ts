@@ -91,6 +91,8 @@ export interface VoiceV3ConversationConfig {
     neverInventAvailability: boolean;
   };
   guardrails: string[];
+  /** GPT-Live prompt-controlled tuning (pace, accent, backchannels, etc.). */
+  livePromptControls?: import("../prompts/live-prompt-controls").VoiceV3LivePromptControls;
 }
 
 export interface VoiceV3HotBusinessContext {
@@ -135,14 +137,6 @@ export interface AppointmentReceptionistBookingBehavior {
   distinguishNewExisting: boolean;
 }
 
-export interface VoiceV3LiveAudioControlsConfig {
-  speakingSpeed: number;
-  responsiveness: number;
-  interruptionSensitivity: number;
-  /** OpenAI Live SessionAcceptParams only supports audio.output.voice at startup (openai@7.17). */
-  executionSupport: "voice_id_only" | "UNSUPPORTED_BY_CURRENT_LIVE_API";
-}
-
 export interface VoiceV3TelephonyConfig {
   phoneNumberId: string | null;
   phoneNumberE164: string | null;
@@ -158,9 +152,12 @@ export interface VoiceV3TelephonyConfig {
   connectionGreetingText?: string;
   connectionGreetingAudioUrl?: string;
   liveVoiceId: string;
+  /** Built-in name or authorized custom voice id for accept params. */
+  liveVoiceOutput?: string | { id: string };
   voiceLabel?: string;
   speaksFirst: "ai" | "caller";
-  liveAudioControls?: VoiceV3LiveAudioControlsConfig;
+  voiceSource?: "builtin" | "custom";
+  openAiCustomVoiceId?: string | null;
 }
 
 export interface VoiceV3CallHandlingConfig {
