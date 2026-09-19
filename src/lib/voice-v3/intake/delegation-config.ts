@@ -8,6 +8,7 @@ import {
 } from "./caller-meaning-schema";
 import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
+import { voiceV3DelegationParallelToolCallsEnabled } from "../tools/concurrency-policy";
 
 const VOICE_V3_ASTRA_MODEL = "gpt-6-astra";
 
@@ -45,7 +46,7 @@ export function buildVoiceV3AstraDelegationResponses(
     text: {
       verbosity: "low",
     },
-    parallel_tool_calls: useFunctionTool,
+    parallel_tool_calls: useFunctionTool && voiceV3DelegationParallelToolCallsEnabled(),
     tool_choice: useFunctionTool ? "auto" : "auto",
     max_output_tokens: intakeEnabled ? 768 : 200,
     tools,

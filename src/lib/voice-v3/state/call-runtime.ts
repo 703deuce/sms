@@ -10,6 +10,7 @@ import { formatConversationActionForSnapshot } from "../agent/snapshot-format";
 import { afterVoiceV3StateChange, type LiveSendFn } from "../agent/after-state-change";
 import { deriveVoiceV3Capabilities } from "../agent/capability-state";
 import { DEFAULT_VOICE_V3_ESCALATION_POLICY, initialEscalationCounters } from "../agent/escalation";
+import { logVoiceV3ContractVersions } from "../telemetry/contract-versions";
 
 const liveSendBySession = new Map<string, LiveSendFn>();
 
@@ -137,6 +138,7 @@ export function createVoiceV3CallRuntime(input: {
     calendar_connection_configured: Boolean(connectionId),
     service_id: config.service.id,
   });
+  logVoiceV3ContractVersions(config, callId);
   if (!connectionId) {
     console.error("VOICE_V3_CALENDAR_CONFIG_MISSING", {
       live_session_id: input.liveSessionId,

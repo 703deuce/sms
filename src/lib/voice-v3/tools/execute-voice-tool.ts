@@ -1,6 +1,7 @@
 import { getVoiceTool } from "./registry";
 import type { VoiceToolExecutionContext, VoiceToolResult } from "./types";
 import { voiceToolError } from "./types";
+import { isRetryableToolErrorCode } from "./tool-result-codes";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 
 function safeValidationDetails(err: unknown): Record<string, unknown> {
@@ -65,18 +66,25 @@ export async function executeVoiceTool(
 
   try {
     const result = await tool.execute(ctx, args);
+    const finalized =
+      result.ok || result.retryable != null
+        ? result
+        : { ...result, retryable: isRetryableToolErrorCode(result.code) };
     console.log(
-      result.ok ? "VOICE_TOOL_EXECUTION_SUCCEEDED" : "VOICE_TOOL_EXECUTION_FAILED",
+      finalized.ok ? "VOICE_TOOL_EXECUTION_SUCCEEDED" : "VOICE_TOOL_EXECUTION_FAILED",
       {
         call_id: ctx.callId,
         tool_name: name,
         function_call_id: ctx.functionCallId,
-        status: result.status,
-        code: result.ok ? undefined : result.code,
+        status: finalized.status,
+        code: finalized.ok ? undefined : finalized.code,
+        retryable: finalized.ok ? undefined : finalized.retryable,
+        tool_validation_ms: Date.now() - started,
+        tool_total_ms: Date.now() - started,
         elapsed_ms: Date.now() - started,
       },
     );
-    return result;
+    return finalized;
   } catch (err) {
     return mapToolFailure(err);
   }

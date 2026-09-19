@@ -39,7 +39,11 @@ async function main() {
   assert.ok(toolNames.includes("update_intake"));
   assert.ok(toolNames.includes("find_availability"));
   assert.equal(responses.tool_choice, "auto");
-  assert.equal(responses.parallel_tool_calls, true);
+  assert.equal(
+    responses.parallel_tool_calls,
+    process.env.VOICE_V3_PARALLEL_TOOL_CALLS === "1",
+    "parallel_tool_calls disabled until batch barrier is certified (set VOICE_V3_PARALLEL_TOOL_CALLS=1 to enable)",
+  );
 
   const updateTool = buildUpdateIntakeOpenAiTool(VOICE_V3_BOOKING_AGENT_CONFIG);
   assert.equal(updateTool.name, "update_intake");

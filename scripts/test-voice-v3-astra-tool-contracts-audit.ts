@@ -24,8 +24,17 @@ for (const expected of names) {
   assert.ok(t, `missing tool ${expected}`);
   assert.ok(t.description && t.description.length >= 200, `${expected} description too short`);
   assert.equal(t.strict, true, `${expected} must be strict`);
-  const params = t.parameters as { properties?: Record<string, { description?: string }> };
+  const params = t.parameters as {
+    properties?: Record<string, { description?: string }>;
+    required?: string[];
+    additionalProperties?: boolean;
+  };
   assert.ok(params.properties, `${expected} must have properties`);
+  assert.equal(params.additionalProperties, false, `${expected} must set additionalProperties false`);
+  const required = params.required ?? [];
+  for (const key of Object.keys(params.properties)) {
+    assert.ok(required.includes(key), `${expected}.${key} must be listed in required (strict)`);
+  }
   for (const [key, prop] of Object.entries(params.properties)) {
     assert.ok(
       prop.description && prop.description.length >= 8,

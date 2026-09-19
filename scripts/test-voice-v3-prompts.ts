@@ -39,6 +39,9 @@ function main() {
 
   const live = buildLiveFrontendInstructions({ agentName: "Amy", businessName: "Acme" });
   includesAll(live, [
+    "DELEGATION POLICY",
+    "Delegate to the backend when",
+    "Do not delegate to the backend when",
     "primary caller",
     "background noise",
     "OTHER PEOPLE SPEAKING",

@@ -7,10 +7,13 @@ import { toolOk, voiceToolError } from "./types";
 import { TRANSFER_CALL_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const transferArgsSchema = z.object({
-  reason: z
+  destination: z
     .string()
     .nullable()
-    .describe("Brief internal reason for transfer. Null if none."),
+    .describe(
+      "Configured transfer destination identifier (e.g. front_desk). Null when only one destination is configured. Never invent a number or destination.",
+    ),
+  reason: z.string().nullable().describe("Brief internal reason for transfer. Null if none."),
 });
 
 export function buildTransferCallOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
@@ -34,7 +37,16 @@ export const transferCallTool: VoiceToolDefinition<{ reason?: string | null }> =
   parameters: {},
   validate: (raw) => transferArgsSchema.parse(raw),
   execute: async (ctx, args) => {
-    const destination = process.env.VOICE_V3_TRANSFER_DESTINATION?.trim();
+    let destination = process.env.VOICE_V3_TRANSFER_DESTINATION?.trim() || null;
+    const mapRaw = process.env.VOICE_V3_TRANSFER_DESTINATIONS?.trim();
+    if (args.destination?.trim() && mapRaw) {
+      try {
+        const map = JSON.parse(mapRaw) as Record<string, string>;
+        destination = map[args.destination.trim()] ?? destination;
+      } catch {
+        /* ignore */
+      }
+    }
     if (!destination) {
       return voiceToolError(
         "TRANSFER_NOT_CONFIGURED",

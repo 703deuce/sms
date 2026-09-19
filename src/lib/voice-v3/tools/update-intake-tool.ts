@@ -28,15 +28,22 @@ function normalizeUpdateIntakeArguments(
 
 function buildUpdateIntakeZod(config: VoiceV3AgentConfig) {
   const fieldShape: Record<string, z.ZodNullable<z.ZodString>> = {};
+  const semanticHints: Record<string, string> = {
+    name: "Caller's full name as clearly provided or corrected by the caller.",
+    email: "Caller's email address as clearly provided or corrected by the caller.",
+    phone: "Caller's phone number when explicitly provided or when this field stores the verified caller number.",
+    service_reason: "Brief description of the service, issue, or reason for the caller's request.",
+  };
   for (const f of config.intakeFields) {
-    const hint = f.description?.trim() || `${f.label} (${f.type})`;
+    const hint =
+      semanticHints[f.key] ?? f.description?.trim() ?? `${f.label} (${f.type})`;
     fieldShape[f.key] = z
       .string()
       .nullable()
       .describe(
         f.required
-          ? `Required intake: ${hint}. Null if caller did not provide or correct this field in this turn.`
-          : `Optional intake: ${hint}. Null if not provided this turn.`,
+          ? `Required intake: ${hint} Null if caller did not provide or correct this field in this turn.`
+          : `Optional intake: ${hint} Null if not provided this turn.`,
       );
   }
   return z.object({

@@ -12,17 +12,20 @@ import { toolOk, voiceToolError } from "./types";
 import { RESCHEDULE_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const rescheduleArgsSchema = z.object({
-  offer_set_id: z
-    .string()
-    .min(1)
-    .describe("offer_set_id from latest find_availability for the new time."),
-  slot_id: z.string().min(1).describe("Chosen slot_id from that offer set."),
-  provider_event_id: z
+  appointment_id: z
     .string()
     .nullable()
     .describe(
-      "Verified provider_event_id from find_appointment. Null to use the appointment already verified in call state.",
+      "Stable identifier of the existing appointment to move (provider_event_id from find_appointment). Null to use verified appointment in call state. Never invent.",
     ),
+  offer_set_id: z
+    .string()
+    .min(1)
+    .describe("Identifier of the current verified availability offer containing the replacement slot."),
+  slot_id: z
+    .string()
+    .min(1)
+    .describe("Identifier of the replacement slot selected or clearly accepted by the caller."),
 });
 
 export type RescheduleAppointmentArgs = z.infer<typeof rescheduleArgsSchema>;
@@ -83,10 +86,13 @@ export const rescheduleAppointmentTool: VoiceToolDefinition<RescheduleAppointmen
         "not_ready",
       );
     }
-    if (args.provider_event_id && args.provider_event_id !== existing.providerEventId) {
-      return voiceToolError("APPOINTMENT_MISMATCH", "Provider event id does not match verified appointment.", {
-        expected: existing.providerEventId,
-      });
+    if (args.appointment_id && args.appointment_id !== existing.providerEventId) {
+      return voiceToolError(
+        "INVALID_IDENTIFIER",
+        "appointment_id does not match verified appointment.",
+        { expected: existing.providerEventId },
+        "invalid_selection",
+      );
     }
 
     const offer = snap.availability.activeOfferSet;

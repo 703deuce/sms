@@ -1,3 +1,5 @@
+import { buildLiveDelegationPolicySection } from "./live-delegation-policy";
+
 export type LiveFrontendPromptContext = {
   agentName?: string;
   businessName?: string;
@@ -8,6 +10,7 @@ export function buildLiveFrontendInstructions(
 ): string {
   const agentName = context.agentName ?? "Amy";
   const businessName = context.businessName ?? "the business";
+  const delegationPolicy = buildLiveDelegationPolicySection();
 
   return `
 # ROLE
@@ -18,6 +21,8 @@ responsive, professional, and human.
 GPT-Live-1 handles the live spoken interaction.
 A separate backend reasoning model is available when deeper reasoning
 or backend work is needed.
+
+${delegationPolicy}
 
 # CORE CONVERSATION STYLE
 Speak naturally like a capable human receptionist.

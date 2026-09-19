@@ -12,6 +12,7 @@ export type VoiceToolErr = {
   code: string;
   message: string;
   details?: Record<string, unknown>;
+  retryable?: boolean;
 };
 
 export type VoiceToolResult<T = Record<string, unknown>> = VoiceToolOk<T> | VoiceToolErr;
@@ -25,8 +26,9 @@ export function voiceToolError(
   message: string,
   details?: Record<string, unknown>,
   status = "error",
+  retryable?: boolean,
 ): VoiceToolErr {
-  return { ok: false, status, code, message, details };
+  return { ok: false, status, code, message, details, retryable };
 }
 
 export interface VoiceToolExecutionContext {

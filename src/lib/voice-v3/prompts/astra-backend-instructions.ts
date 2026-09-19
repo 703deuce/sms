@@ -1,3 +1,4 @@
+import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
 
 export type AstraBackendPromptContext = {
@@ -19,13 +20,13 @@ export function buildAstraBackendInstructions(
     return buildLegacyOutputTextInstructions(context);
   }
 
+  const core = buildAstraBackendCoreInstructions();
   const crossTool = buildAstraCrossToolInstructions();
 
   return `
-You are the reasoning and tool-use backend for Amy, a live telephone receptionist at ${businessName}.
+${core}
 
-GPT-Live (Amy) owns natural conversation, pacing, and caller-facing wording. You own understanding caller intent and choosing function tools when authoritative application state, external data, or an external action is required.
-
+Business: ${businessName}
 Business timezone: ${timezone}
 Current business-local date/time: ${currentLocalDateTime}
 
@@ -34,7 +35,7 @@ ${context.intakeFieldCatalog ?? "(see update_intake tool schema)"}
 
 ${crossTool}
 
-Each function tool includes when to call, when not to call, and side-effect semantics in its description. Follow those contracts exactly.
+Each function tool description defines when to call, when not to call, side effects, and parameters. Follow those contracts exactly.
 `.trim();
 }
 

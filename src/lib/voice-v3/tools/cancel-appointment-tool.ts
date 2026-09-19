@@ -9,16 +9,16 @@ import { toolOk, voiceToolError } from "./types";
 import { CANCEL_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const cancelArgsSchema = z.object({
+  appointment_id: z
+    .string()
+    .nullable()
+    .describe(
+      "Stable identifier of the existing appointment to cancel (from find_appointment). Null to use verified appointment in call state. Never invent.",
+    ),
   confirmed: z
     .boolean()
     .describe(
       "True only after the caller explicitly confirmed cancellation. False must not be sent — wait for confirmation instead.",
-    ),
-  provider_event_id: z
-    .string()
-    .nullable()
-    .describe(
-      "Verified provider_event_id from find_appointment. Null to use verified appointment in call state.",
     ),
 });
 
@@ -45,7 +45,7 @@ function prepareCancelContext(
 ): VoiceV3CallContext | null {
   const existing = ctx.appointmentManagement.verifiedExisting;
   if (!existing) return null;
-  if (args.provider_event_id && args.provider_event_id !== existing.providerEventId) {
+  if (args.appointment_id && args.appointment_id !== existing.providerEventId) {
     return null;
   }
   if (!args.confirmed) {

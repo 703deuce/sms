@@ -12,16 +12,16 @@ const findApptArgsSchema = z.object({
   phone: z
     .string()
     .nullable()
-    .describe("Caller phone (E.164 or spoken). Null to use intake phone already saved."),
+    .describe("Caller phone when explicitly provided. Null to use intake phone already saved."),
   email: z
     .string()
     .nullable()
-    .describe("Caller email. Null to use intake email already saved."),
-  date_hint: z
+    .describe("Caller email when explicitly provided. Null to use intake email already saved."),
+  date_expression: z
     .string()
     .nullable()
     .describe(
-      "Optional local date hint for the existing appointment (YYYY-MM-DD or natural language). Null if unknown.",
+      "Known or approximate date of the existing appointment if the caller supplied one (natural language or YYYY-MM-DD). Null if unknown.",
     ),
 });
 
@@ -65,7 +65,9 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
       phone,
       email,
       customerName: snap.intake.values.name?.value,
-      dateHint: args.date_hint ? { localDate: args.date_hint } : snap.scheduling.normalized,
+      dateHint: args.date_expression?.trim()
+        ? { localDate: args.date_expression.trim() }
+        : snap.scheduling.normalized,
     });
 
     if (result.status === "VERIFICATION_FAILED") {

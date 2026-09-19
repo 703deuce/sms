@@ -3,6 +3,7 @@ import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { assertVoiceV3RuntimeInvariants } from "./runtime-invariants";
 import type { AgentStateSnapshot } from "./agent-state-snapshot";
 import { planAgentState } from "./agent-planner";
+import { LiveContextPublisher } from "../live/live-context-publisher";
 
 export type LiveSendFn = (event: { type: string; [key: string]: unknown }) => void;
 
@@ -54,11 +55,9 @@ export function afterVoiceV3StateChange(input: {
 
   if (ctx.booking.phase === "BOOKING_CONFIRMED" && ctx.booking.confirmed && input.send) {
     const display = ctx.booking.confirmed.displayTime;
-    input.send({
-      type: "session.commentary.append",
-      content: `BOOKING_CONFIRMED: appointment verified in Microsoft calendar for ${display}.`,
-      delegation_id: null,
-    });
+    new LiveContextPublisher(input.send).appendCommentary(
+      `BOOKING_CONFIRMED: appointment verified in Microsoft calendar for ${display}.`,
+    );
   }
 
   return snapshot;

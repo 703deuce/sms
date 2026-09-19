@@ -50,6 +50,14 @@ export function applyFindAvailabilityResult(
   },
 ): VoiceV3CallContext {
   if (isStaleSchedulingPreference(ctx, input.schedulingGeneration)) {
+    console.log("VOICE_TOOL_STALE_RESULT_IGNORED", {
+      tool: "find_availability",
+      operation_id: input.requestKey,
+      operation_generation: input.schedulingGeneration,
+      current_generation: ctx.scheduling.generation,
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+    });
     console.log("AVAILABILITY_RESULT_STALE", {
       call_id: ctx.callId,
       live_session_id: ctx.liveSessionId,
