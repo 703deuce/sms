@@ -19,6 +19,9 @@ function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
   if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");
   if (c.transferCalls) lines.push("- Transferring to a human when appropriate.");
+  if (config.callHandling.callbackRequestsEnabled === true) {
+    lines.push("- Arranging a callback when the caller wants the business to call them back.");
+  }
   if (c.takeMessages) lines.push("- Taking a message when needed.");
   if (!c.bookAppointments) {
     lines.push("- You must not promise live calendar booking if it is disabled for this business.");

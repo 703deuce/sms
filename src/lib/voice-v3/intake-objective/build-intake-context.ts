@@ -3,7 +3,10 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import { deriveIntakeObjective } from "./derive-intake-objective";
 import { intakeFieldObjectiveLabel } from "./validate-intake-value";
 import { fieldDefinitionByKey } from "./types";
-import { resolveActiveIntakeOperation } from "./operation-requirements";
+import {
+  resolveActiveIntakeOperation,
+  UNRESOLVED_INTAKE_OPERATION,
+} from "./operation-requirements";
 
 /** Compact objective projection for Astra/Live thinking context — not conversational commands. */
 export function buildIntakeObjectiveContext(
@@ -12,9 +15,13 @@ export function buildIntakeObjectiveContext(
 ): string {
   const objective = deriveIntakeObjective(config, context);
   const operation = resolveActiveIntakeOperation(config, context);
-  const objectiveDescription =
-    config.intake?.objectiveDescription?.trim() ||
-    "Collect enough caller information to service and schedule the request.";
+  const unresolved = operation === UNRESOLVED_INTAKE_OPERATION;
+  const objectiveDescription = unresolved
+    ? "Understand what the caller needs. Shared caller facts are preserved; operation-specific requirements apply only after an operation is selected."
+    : config.intake?.objectiveDescription?.trim() ||
+      "Collect enough caller information to service and schedule the request.";
+
+  const activeOperationLabel = unresolved ? "unresolved (no operation selected yet)" : operation;
 
   const requiredKeySet = new Set(objective.requiredFields);
 
@@ -35,10 +42,10 @@ export function buildIntakeObjectiveContext(
   return `
 INTAKE OBJECTIVE
 Purpose: ${objectiveDescription}
-Active operation: ${operation}
+Active operation: ${activeOperationLabel}
 Status: ${objective.status}
 Required information (for this operation only):
-${requiredLines.join("\n") || "(none configured)"}
+${unresolved ? "(none — wait for the caller's intent and appropriate tool selection)" : requiredLines.join("\n") || "(none configured)"}
 Optional information:
 ${optionalLines.join("\n") || "(none configured)"}
 Rules:

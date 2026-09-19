@@ -31,9 +31,31 @@ export function buildLiveDelegationPolicySection(
   if (!caps || caps.transferCalls) {
     backendCaps.push("- Transfer the live call to an authorized human or destination.");
   }
+  if (config?.callHandling.callbackRequestsEnabled === true) {
+    backendCaps.push(
+      "- Record a request for the business to call the caller back.",
+    );
+  }
   backendCaps.push(
     "- End the telephone call through the telephony/application layer when appropriate.",
   );
+
+  const callbackDelegateWhen =
+    config?.callHandling.callbackRequestsEnabled === true
+      ? `
+- The caller asks the business or a person from the business to call them back.
+- The caller changes from another operation, including appointment booking, to requesting a callback.
+- A callback request is an authoritative business action; conversational acknowledgement alone does not record it.`
+      : "";
+
+  const callbackCompletion =
+    config?.callHandling.callbackRequestsEnabled === true
+      ? `
+Callback requests:
+- Do not tell the caller the callback has been arranged, recorded, requested, or confirmed until backend success confirms it.
+- If the backend indicates more caller information is required, naturally collect only that information and delegate again.
+- Once authoritative callback success is returned, you may confirm it to the caller.`
+      : "";
 
   return `
 # DELEGATION POLICY
@@ -52,7 +74,7 @@ Delegate to the backend when:
 - The caller asks for a real call transfer or accepts a transfer.
 - A correction changes backend work that has already been requested or is currently in progress.
 - The answer depends on authoritative application state, provider state, or an external action.
-- Careful backend reasoning is required beyond a simple conversational response.
+- Careful backend reasoning is required beyond a simple conversational response.${callbackDelegateWhen}
 
 Do not delegate to the backend when:
 - The caller is greeting you or making ordinary conversation.
@@ -67,5 +89,6 @@ Continue the natural spoken conversation while backend work is running when the 
 An interruption in conversation does not automatically cancel backend work.
 If the caller corrects or changes a backend request, delegate the correction so the backend can update the active work.
 Do not promise that an external action succeeded until verified backend/provider state supports that claim.
+${callbackCompletion}
 `.trim();
 }

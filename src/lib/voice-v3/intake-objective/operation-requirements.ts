@@ -8,6 +8,7 @@ import {
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
 
 export type VoiceOperationName =
+  | "unresolved"
   | "find_availability"
   | "book_appointment"
   | "find_appointment"
@@ -18,6 +19,9 @@ export type VoiceOperationName =
   | "request_callback"
   | "update_intake"
   | "end_call";
+
+/** No operation selected yet — not booking, callback, or send-link. */
+export const UNRESOLVED_INTAKE_OPERATION: VoiceOperationName = "unresolved";
 
 const READ_OPERATIONS: VoiceOperationName[] = [
   "find_availability",
@@ -37,6 +41,7 @@ function configuredRequiredForOperation(
 ): string[] {
   const overrides = config.operationRequirements?.[operation];
   if (overrides !== undefined) return [...overrides];
+  if (operation === "unresolved") return [];
   if (operation === "request_callback") {
     return resolveConfiguredCallbackRequiredKeys(config);
   }
@@ -70,10 +75,7 @@ export function resolveActiveIntakeOperation(
     case "UNKNOWN":
     case "GENERAL":
     default:
-      if (config.scheduling?.bookingStrategy === "SEND_LINK") {
-        return "send_booking_link";
-      }
-      return "book_appointment";
+      return UNRESOLVED_INTAKE_OPERATION;
   }
 }
 
@@ -90,6 +92,9 @@ export function getMissingFieldsForOperation(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
 ): string[] {
+  if (operation === "unresolved") {
+    return [];
+  }
   if (operation === "request_callback") {
     return getMissingCallbackRequirementKeys(config, context);
   }

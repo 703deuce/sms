@@ -63,6 +63,7 @@ export function buildVoiceV3Prompts(input: {
     bookingStrategy: agentConfig.scheduling?.bookingStrategy,
     capabilities: agentConfig.capabilities,
     transferDestinations: agentConfig.transferDestinations,
+    agentConfig,
   });
 
   if (input.toolNames) {

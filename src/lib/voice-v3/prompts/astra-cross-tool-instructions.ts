@@ -1,15 +1,37 @@
+import type { VoiceV3AgentConfig } from "../config/agent-config";
+
 /**
  * Cross-tool operating rules for delegated Astra — complements per-tool descriptions.
  */
 
-export function buildAstraCrossToolInstructions(): string {
+function buildCallbackPathBlock(config?: VoiceV3AgentConfig): string {
+  if (config?.callHandling?.callbackRequestsEnabled !== true) {
+    return "";
+  }
+  return `
+Callback path:
+1. When the caller wants the business to call them back, request_callback is the authoritative operation.
+2. This includes a caller changing from booking, send-booking-link, or another workflow to requesting a callback.
+3. Reuse caller facts already known in shared call state for this call.
+4. Do not continue collecting fields required only by the abandoned operation.
+5. Invoke request_callback as soon as the caller has clearly requested a callback — you do not need to believe every configured requirement is already satisfied; the trusted executor validates and may return needs_information.
+6. If it returns needs_information, missingFields is authoritative for what to collect next.
+7. Have Amy collect only those missing facts.
+8. Invoke request_callback again.
+9. Callback is complete only after authoritative callback_requested success.
+10. Never treat conversational acknowledgement as callback completion.`;
+}
+
+export function buildAstraCrossToolInstructions(config?: VoiceV3AgentConfig): string {
+  const callbackPath = buildCallbackPathBlock(config);
+  const callbackSection = callbackPath ? `\n${callbackPath}\n` : "";
   return `
 Tool discipline (production):
 1. One authoritative step at a time. Prefer the most specific tool for the caller's immediate need.
 2. New booking path: update_intake (contact fields as needed) → set_scheduling_preference (date/time semantics) → find_availability → caller chooses slot → book_appointment.
 3. Reschedule path: find_appointment → set_scheduling_preference (new time semantics) → find_availability → caller chooses slot → reschedule_appointment.
 4. Cancel path: find_appointment → explicit caller confirmation → cancel_appointment with confirmed=true.
-5. Never invent offer_set_id, slot_id, or provider_event_id. Only use values returned by tools in this call.
+${callbackSection}5. Never invent offer_set_id, slot_id, or provider_event_id. Only use values returned by tools in this call.
 6. A function call is a request, not proof of success. Read tool results before telling Amy anything is done.
 7. If a tool returns not_ready, missing fields, stale offer set, or clarification required, choose the corrective tool or let Amy ask — do not repeat the same failed mutation blindly.
 8. Do not call calendar mutation tools (book_appointment, reschedule_appointment, cancel_appointment) for small talk or vague curiosity.

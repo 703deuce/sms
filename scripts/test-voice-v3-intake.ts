@@ -59,16 +59,26 @@ function main() {
     config: ODD_INTAKE_HARNESS_AGENT_CONFIG,
   });
 
-  apply(runtime, meaning({ captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }] }));
+  apply(
+    runtime,
+    meaning({
+      active_goal: "BOOK_APPOINTMENT",
+      captured_fields: [{ key: "name", value: "Anthony", confidence: 0.95 }],
+    }),
+  );
   let ctx = runtime.getSnapshot();
   assert.equal(ctx.intake.values.name?.value, "Anthony");
+  assert.equal(ctx.dialog.activeGoal, "BOOK_APPOINTMENT");
   let rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);
   assert.equal(rules.intakeComplete, false);
   assert.deepEqual(rules.missingRequiredFields.sort(), ["email", "mothers_name"].sort());
 
   apply(
     runtime,
-    meaning({ captured_fields: [{ key: "email", value: "anthony@example.com", confidence: 0.9 }] }),
+    meaning({
+      active_goal: "BOOK_APPOINTMENT",
+      captured_fields: [{ key: "email", value: "anthony@example.com", confidence: 0.9 }],
+    }),
   );
   ctx = runtime.getSnapshot();
   rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);
@@ -76,7 +86,10 @@ function main() {
 
   apply(
     runtime,
-    meaning({ captured_fields: [{ key: "mothers_name", value: "Mary", confidence: 0.92 }] }),
+    meaning({
+      active_goal: "BOOK_APPOINTMENT",
+      captured_fields: [{ key: "mothers_name", value: "Mary", confidence: 0.92 }],
+    }),
   );
   ctx = runtime.getSnapshot();
   rules = evaluateVoiceV3Rules(ctx, ODD_INTAKE_HARNESS_AGENT_CONFIG);

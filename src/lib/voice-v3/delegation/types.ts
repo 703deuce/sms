@@ -24,6 +24,10 @@ export interface DelegationRuntime {
   phase: DelegationPhase;
   pendingFunctionCalls: Map<string, PendingFunctionCall>;
   submittedFunctionCallIds: Set<string>;
+  /** Function tool names observed on this delegation (telemetry). */
+  observedFunctionNames: string[];
+  /** Plain message output item completed (text is not applied to runtime). */
+  messageOutputOccurred: boolean;
   /** Incremented when a protocol continuation is sent for a completed tool barrier. */
   protocolBarrierGeneration: number;
   lastContinuationEventId: string | null;

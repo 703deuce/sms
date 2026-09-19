@@ -22,6 +22,33 @@ export const END_CALL_TOOL_DESCRIPTION = `End the current live telephone call wh
 
 export const SEND_BOOKING_LINK_TOOL_DESCRIPTION = `Send the business's configured self-service booking link by SMS after the caller has explicitly agreed to receive the text. Use when the published booking strategy is Send booking link and the caller asks to receive the link by text (for example "text me the link" or "send me the booking link") and SMS consent has been obtained. Do not use for Microsoft direct booking. Do not call find_availability or book_appointment first. Do not invent or supply a booking URL or sender number. Do not claim the text was sent until this tool returns a verified sent or already_sent result. For inbound calls, omit destination_phone to use the trusted inbound caller number; provide destination_phone only when the caller explicitly requested a different mobile number.`;
 
-export const REQUEST_CALLBACK_TOOL_DESCRIPTION = `Authoritative action to arrange a business callback on this call. Use when the caller asks for a callback, asks someone from the business to contact them later, cannot complete another action and wants human follow-up, or changes from another workflow such as booking or receiving a booking link to requesting a callback instead. Do not use merely because the caller has a general question you can answer from business knowledge. Before submitting, ensure only the configured callback-required information is known — reuse facts already collected during this call via update_intake and do not ask for booking-only fields (email, scheduling preference, booking notes, etc.) unless they are also required for callback. Null callback_phone uses the trusted inbound caller number when configured; provide callback_phone only when the caller wants a different number. Null reason is allowed when the reason is already stored in shared call facts. You must invoke this tool to arrange a callback — conversational reassurance alone does not record anything. Do not tell the caller that someone will call them back, that the callback is arranged, recorded, or confirmed until this tool returns callback_requested with success. If required callback facts are still missing, collect only those missing callback fields, then call this tool. If the tool fails or returns needs_information, do not claim success.`;
+export const REQUEST_CALLBACK_TOOL_DESCRIPTION = `request_callback — authoritative trusted-backend action to RECORD a human callback request.
+
+WHAT THIS TOOL DOES
+This function creates persistent business state: the caller wants someone from the business to contact them later by phone, and Transovo must record that callback request. Calling this tool is how the callback is actually requested — not conversational reassurance, not update_intake alone, not merely thinking about a callback, and not setting an active goal label. Only a successful result from this function (callback_requested) means the callback request was recorded.
+
+WHEN YOU MUST USE THIS TOOL
+Use request_callback when the caller clearly wants the business (a person, employee, representative, or the office) to call them back or contact them later by phone. Natural variations count as the same operation. Examples include: asking for a callback; asking someone to call them; asking to leave a request for someone to call them; needing human follow-up by phone when another workflow cannot finish; changing their mind during appointment booking and asking for a callback instead; changing from send-booking-link intent to wanting someone to call them; changing from another operation to requesting a human return call.
+
+OPERATION SWITCHING
+If the caller was previously booking, rescheduling, receiving a booking link, or in another workflow and now asks for a callback, treat callback as the CURRENT operation. Reuse caller facts already in shared authoritative state for this call. Do not continue collecting fields required only by the abandoned operation (for example booking-only email, scheduling preference, or booking notes unless they are also configured callback requirements).
+
+WHEN NOT TO USE THIS TOOL
+Do NOT use request_callback merely because: the caller asks an ordinary business question Amy can answer; the caller wants to keep talking to Amy; the caller wants to book an appointment and direct booking should continue; the caller wants a booking link and SEND_LINK is the correct workflow; the caller wants an immediate live transfer (use transfer_call); the caller only gives a phone number without requesting a return call; the caller uses the word "call" in conversation but is not asking the business to call them back later.
+
+CONFIGURED REQUIREMENTS (TENANT-SPECIFIC)
+Callback-required fields are defined by this business configuration and appear in your runtime instructions — they are NOT universal. Do not assume every tenant requires name, phone, and reason. Reuse shared caller facts already stored (including via update_intake). When inbound ANI is trusted to satisfy phone per configuration, do not unnecessarily ask for another number.
+
+VALIDATOR-DRIVEN LIFECYCLE (CRITICAL)
+You do NOT need to wait until you believe every configured callback requirement is satisfied before calling this function. When the caller has clearly requested a callback, invoke request_callback. The trusted Transovo executor validates configured requirements. If the result is needs_information, missingFields is authoritative: (1) callback remains the active operation, (2) have Amy collect ONLY those missing callback fields, (3) preserve previously collected shared facts, (4) invoke request_callback again, (5) repeat only if the backend still reports missing information. Do not claim success during this loop.
+
+SUCCESS BOUNDARY
+A callback does NOT exist because you or Amy said so. Success requires this function to return authoritative callback_requested. Only then may the caller be told the callback was recorded or arranged. A plain message, collecting fields, update_intake alone, or selecting callback intent without this tool result is NOT success.
+
+FAILURE / NON-SUCCESS
+If this function returns needs_information, not_available, an error, persistence failure, or an unknown outcome, do NOT tell the caller the callback was recorded. Respond according to the authoritative tool result.
+
+ARGUMENTS
+Use callback_phone, reason, preferred_time, and notes according to their parameter descriptions. Nulls are allowed where described.`;
 
 export const ACTIVE_GOAL_ENUM_DESCRIPTION = `Optional dialog goal when the caller's stated intent is clear and no more specific tool applies yet. Null when unknown or unchanged.`;
