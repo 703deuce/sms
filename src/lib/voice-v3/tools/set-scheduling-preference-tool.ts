@@ -11,6 +11,7 @@ import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { schedulingMeaningHasSignal } from "../time/scheduling-normalizer";
 import { SET_SCHEDULING_PREFERENCE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { VoiceToolDefinition } from "./types";
+import { shouldApplySemanticSteeringToActiveGoal } from "../delegation/conversation-freshness";
 import { toolOk, voiceToolError } from "./types";
 
 const setSchedulingArgsSchema = schedulingMeaningZodObject;
@@ -48,7 +49,15 @@ export const setSchedulingPreferenceTool: VoiceToolDefinition<SetSchedulingPrefe
 
     const snap = ctx.runtime.getSnapshot();
     const merged = mergeSchedulingMeaningIntoContext(snap, args);
-    let next = mergeDialogActiveGoalFromTool(merged.context, "BOOK_APPOINTMENT");
+    let next = merged.context;
+    if (
+      shouldApplySemanticSteeringToActiveGoal(
+        "set_scheduling_preference",
+        ctx.delegationSemanticallyFresh !== false ? "FRESH" : "STALE",
+      )
+    ) {
+      next = mergeDialogActiveGoalFromTool(next, "BOOK_APPOINTMENT");
+    }
     ctx.runtime.replaceContext(next);
     next = ctx.runtime.getSnapshot();
 

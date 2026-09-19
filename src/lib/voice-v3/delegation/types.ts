@@ -18,9 +18,14 @@ export interface PendingFunctionCall {
   outputSubmitted: boolean;
 }
 
+export type DelegationSemanticFreshness = "FRESH" | "STALE";
+
 export interface DelegationRuntime {
   delegationId: string;
   responseId?: string;
+  basedOnConversationRevision: number;
+  delegationCreatedOffsetMs?: number;
+  semanticFreshness: DelegationSemanticFreshness;
   phase: DelegationPhase;
   pendingFunctionCalls: Map<string, PendingFunctionCall>;
   submittedFunctionCallIds: Set<string>;

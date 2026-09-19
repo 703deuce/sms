@@ -40,6 +40,10 @@ export interface VoiceToolExecutionContext {
   tenantId: string;
   sendContext: (event: { type: string; [key: string]: unknown }) => void;
   abortSignal?: AbortSignal;
+  /** Conversation revision when the originating delegation was created. */
+  delegationBasedOnConversationRevision?: number;
+  currentConversationRevision?: number;
+  delegationSemanticallyFresh?: boolean;
 }
 
 export type VoiceToolDefinition<TArgs> = {

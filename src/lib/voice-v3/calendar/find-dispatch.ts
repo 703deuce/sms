@@ -15,6 +15,7 @@ import { pushVoiceV3RecoveryToLive } from "../recovery/push-recovery-to-live";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
 import { startOperation, transitionOperation } from "../operations/registry";
 import { noteBackendOperationDispatched } from "../telemetry/caller-turn-timing";
+import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 
 export type FindBusyFetcher = (input: {
   request: ReturnType<typeof buildFindAvailabilityRequest>;
@@ -31,24 +32,67 @@ type DispatchHooks = VoiceV3LiveRuntimeHooks & {
 };
 
 const defaultInFlight = new Map<string, number>();
+const inFlightConversationRevision = new Map<string, number>();
 
-export function markFindInFlight(liveSessionId: string, generation: number): void {
+export function markFindInFlight(
+  liveSessionId: string,
+  generation: number,
+  conversationRevision?: number,
+): void {
   defaultInFlight.set(liveSessionId, generation);
+  if (conversationRevision != null) {
+    inFlightConversationRevision.set(liveSessionId, conversationRevision);
+  }
 }
 
 export function clearFindInFlight(liveSessionId: string): void {
   defaultInFlight.delete(liveSessionId);
+  inFlightConversationRevision.delete(liveSessionId);
+}
+
+function isStaleConversationReadResult(
+  liveSessionId: string,
+  resultConversationRevision: number | undefined,
+  currentRevision: number,
+): boolean {
+  if (resultConversationRevision == null) return false;
+  return currentRevision > resultConversationRevision;
 }
 
 export function applyFindAvailabilityResult(
   ctx: VoiceV3CallContext,
   input: {
     schedulingGeneration: number;
+    conversationRevision?: number;
     offerSet: ReturnType<typeof buildAvailabilityOfferSet> | null;
     failure: FindAvailabilityFailure | null;
     requestKey: string;
   },
 ): VoiceV3CallContext {
+  const currentConversationRevision = getCurrentConversationRevision(ctx.liveSessionId);
+  const revisionAtDispatch =
+    input.conversationRevision ??
+    inFlightConversationRevision.get(ctx.liveSessionId) ??
+    currentConversationRevision;
+
+  if (
+    isStaleConversationReadResult(
+      ctx.liveSessionId,
+      revisionAtDispatch,
+      currentConversationRevision,
+    )
+  ) {
+    console.log("STALE_READ_RESULT_IGNORED", {
+      tool: "find_availability",
+      operation_id: input.requestKey,
+      based_on_conversation_revision: revisionAtDispatch,
+      current_conversation_revision: currentConversationRevision,
+      call_id: ctx.callId,
+      live_session_id: ctx.liveSessionId,
+    });
+    return ctx;
+  }
+
   if (isStaleSchedulingPreference(ctx, input.schedulingGeneration)) {
     console.log("VOICE_TOOL_STALE_RESULT_IGNORED", {
       tool: "find_availability",
@@ -177,7 +221,11 @@ export async function dispatchFindAvailabilityIfRequired(
     at: new Date(findStartedAt),
   });
   runtime.replaceContext(marked);
-  markFindInFlight(ctx.liveSessionId, request.schedulingGeneration);
+  markFindInFlight(
+    ctx.liveSessionId,
+    request.schedulingGeneration,
+    getCurrentConversationRevision(ctx.liveSessionId),
+  );
   noteBackendOperationDispatched(ctx.liveSessionId, opId);
 
   console.log("FIND_AVAILABILITY_DISPATCHED", {
@@ -353,6 +401,7 @@ async function completeFindAvailabilityAfterDispatch(input: {
 
   let updated = applyFindAvailabilityResult(latest, {
     schedulingGeneration: request.schedulingGeneration,
+    conversationRevision: inFlightConversationRevision.get(latest.liveSessionId),
     offerSet,
     failure,
     requestKey: request.requestKey,

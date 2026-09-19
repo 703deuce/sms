@@ -3,6 +3,7 @@ import { noteTurnDelegationContinued } from "../conversation/caller-turn-semanti
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 import { getVoiceV3CallRuntime } from "../state/call-runtime";
+import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 import type { DelegationRuntime, PendingFunctionCall } from "./types";
 
 type ContinuationRequest = {
@@ -54,16 +55,24 @@ export class VoiceV3LiveResponseCoordinator {
     this.send = send;
   }
 
-  onDelegationCreated(delegation: { id?: string; response_id?: string }): void {
+  onDelegationCreated(delegation: {
+    id?: string;
+    response_id?: string;
+    offset_ms?: number;
+  }): void {
     const delegationId = typeof delegation.id === "string" ? delegation.id : null;
     if (!delegationId) return;
 
     this.activeDelegationId = delegationId;
+    const basedOnConversationRevision = getCurrentConversationRevision(this.liveSessionId);
     const existing = this.delegations.get(delegationId);
     if (!existing) {
       this.delegations.set(delegationId, {
         delegationId,
         responseId: delegation.response_id,
+        basedOnConversationRevision,
+        delegationCreatedOffsetMs: delegation.offset_ms,
+        semanticFreshness: "FRESH",
         phase: "STARTED",
         pendingFunctionCalls: new Map(),
         submittedFunctionCallIds: new Set(),
@@ -73,19 +82,91 @@ export class VoiceV3LiveResponseCoordinator {
         lastContinuationEventId: null,
       });
     }
+    console.log("DELEGATION_REVISION_SNAPSHOTTED", {
+      live_session_id: this.liveSessionId,
+      delegation_id: delegationId,
+      based_on_conversation_revision: basedOnConversationRevision,
+      offset_ms: delegation.offset_ms ?? null,
+      response_id: delegation.response_id ?? null,
+    });
     logVoiceV3Pipeline("live_out", "delegation.registered", {
       live_session_id: this.liveSessionId,
       delegation_id: delegationId,
+      based_on_conversation_revision: basedOnConversationRevision,
     });
     noteSemanticTimingEvent(this.liveSessionId, "delegationCreatedAt");
     noteSemanticTimingEvent(this.liveSessionId, "delegationCount");
+  }
+
+  markDelegationsSemanticallyStale(currentConversationRevision: number): void {
+    for (const d of this.delegations.values()) {
+      if (
+        d.semanticFreshness === "FRESH" &&
+        currentConversationRevision > d.basedOnConversationRevision
+      ) {
+        d.semanticFreshness = "STALE";
+        console.log("DELEGATION_SEMANTICALLY_STALE", {
+          live_session_id: this.liveSessionId,
+          delegation_id: d.delegationId,
+          based_on_conversation_revision: d.basedOnConversationRevision,
+          current_conversation_revision: currentConversationRevision,
+        });
+      }
+    }
+  }
+
+  getDelegationRuntime(delegationId: string | null | undefined): DelegationRuntime | null {
+    if (!delegationId?.trim()) return null;
+    return this.delegations.get(delegationId.trim()) ?? null;
+  }
+
+  isDelegationSemanticallyStale(delegationId: string | null | undefined): boolean {
+    const d = this.getDelegationRuntime(delegationId);
+    return d?.semanticFreshness === "STALE";
+  }
+
+  /** Fresh delegation snapshotted at the given conversation revision (test + observability). */
+  hasFreshDelegationAtRevision(conversationRevision: number): boolean {
+    for (const d of this.delegations.values()) {
+      if (
+        d.semanticFreshness === "FRESH" &&
+        d.basedOnConversationRevision === conversationRevision
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  hasAnySemanticallyStaleDelegation(): boolean {
+    for (const d of this.delegations.values()) {
+      if (d.semanticFreshness === "STALE") return true;
+    }
+    return false;
+  }
+
+  /** Test-only: inspect pending call correlation. */
+  getPendingCallDelegationId(callId: string): string | null {
+    return this.pendingByCallId.get(callId)?.delegationId ?? null;
   }
 
   registerPendingFunctionCall(call: PendingFunctionCall): boolean {
     if (this.pendingByCallId.has(call.callId)) {
       return false;
     }
-    const delegationId = call.delegationId ?? this.activeDelegationId;
+    let delegationId = call.delegationId?.trim() || null;
+    if (!delegationId && this.delegations.size > 1) {
+      console.log("FUNCTION_CALL_MISSING_DELEGATION_ID", {
+        live_session_id: this.liveSessionId,
+        call_id: call.callId,
+        tool_name: call.name,
+        delegation_count: this.delegations.size,
+      });
+      return false;
+    }
+    if (!delegationId) {
+      delegationId = this.activeDelegationId;
+    }
     const enriched: PendingFunctionCall = { ...call, delegationId, outputSubmitted: false };
     this.pendingByCallId.set(call.callId, enriched);
 
@@ -94,6 +175,9 @@ export class VoiceV3LiveResponseCoordinator {
         this.delegations.get(delegationId) ??
         ({
           delegationId,
+          responseId: undefined,
+          basedOnConversationRevision: getCurrentConversationRevision(this.liveSessionId),
+          semanticFreshness: "FRESH",
           phase: "AWAITING_TOOL_OUTPUT",
           pendingFunctionCalls: new Map(),
           submittedFunctionCallIds: new Set(),
@@ -135,10 +219,19 @@ export class VoiceV3LiveResponseCoordinator {
     delegationId: string | null | undefined,
     nested: Record<string, unknown>,
   ): void {
-    const id =
+    const nestedType = String(nested.type || "");
+    const explicitId =
       typeof delegationId === "string" && delegationId.trim()
         ? delegationId.trim()
-        : this.activeDelegationId;
+        : null;
+    const id = explicitId;
+    if (!id && nestedType) {
+      console.log("DELEGATION_EVENT_MISSING_ID", {
+        live_session_id: this.liveSessionId,
+        nested_type: nestedType,
+      });
+      return;
+    }
     if (id) {
       this.onDelegationCreated({ id });
       const d = this.delegations.get(id);
@@ -146,8 +239,6 @@ export class VoiceV3LiveResponseCoordinator {
         d.phase = "STREAMING";
       }
     }
-
-    const nestedType = String(nested.type || "");
     if (nestedType === "response.created" || nestedType === "response.in_progress") {
       if (id) {
         const d = this.delegations.get(id);
@@ -365,6 +456,21 @@ export class VoiceV3LiveResponseCoordinator {
       }
     }
 
+    const delegationStale = delegationId
+      ? this.isDelegationSemanticallyStale(delegationId)
+      : false;
+    if (delegationStale) {
+      console.log("STALE_DELEGATION_PROTOCOL_CONTINUED", {
+        live_session_id: this.liveSessionId,
+        delegation_id: delegationId,
+        call_id: input.triggerCallId,
+        current_conversation_revision: getCurrentConversationRevision(this.liveSessionId),
+        based_on_conversation_revision:
+          this.getDelegationRuntime(delegationId)?.basedOnConversationRevision ?? null,
+        note: "protocol_completion_not_semantic_authorization",
+      });
+    }
+
     console.log("DELEGATED_CONTINUATION_REQUESTED", {
       live_session_id: this.liveSessionId,
       call_id: input.triggerCallId,
@@ -372,6 +478,7 @@ export class VoiceV3LiveResponseCoordinator {
       delegation_id: delegationId,
       caller_turn_id: input.callerTurnId,
       semantic_disposition: input.semanticDisposition,
+      delegation_semantically_stale: delegationStale,
       pending_output_count: 0,
       event_id: eventId,
       elapsed_ms: input.startedAtMs ? Date.now() - input.startedAtMs : null,

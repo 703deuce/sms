@@ -32,6 +32,7 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import { finishMutatingOperation } from "../operations/dispatch-mutations";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
 import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
+import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 
 export type RevalidateBusyFetcher = (input: {
   connectionId: string;
@@ -357,6 +358,10 @@ export async function dispatchBookingIfRequired(
 
     updateBookingAttemptPhase(latest.liveSessionId, attempt.bookingAttemptId, "READY_TO_COMMIT");
 
+    const conversationRevisionAtCommitStart = getCurrentConversationRevision(
+      latest.liveSessionId,
+    );
+
     const commitResult = await runAuthoritativeOperation({
       runtime,
       operationId: attempt.bookingAttemptId,
@@ -489,6 +494,21 @@ export async function dispatchBookingIfRequired(
           provider: "microsoft",
           duration_ms: value.durationMs,
         });
+
+        const currentConversationRevision = getCurrentConversationRevision(
+          afterCommit.liveSessionId,
+        );
+        if (currentConversationRevision > conversationRevisionAtCommitStart) {
+          console.log("COMMITTED_WRITE_RECONCILED_AFTER_REVISION", {
+            live_session_id: afterCommit.liveSessionId,
+            call_id: afterCommit.callId,
+            tool: "book_appointment",
+            operation_id: attempt.bookingAttemptId,
+            revision_at_commit_start: conversationRevisionAtCommitStart,
+            current_conversation_revision: currentConversationRevision,
+            provider_commit_state: "CONFIRMED",
+          });
+        }
 
         const append = buildLiveBookingConfirmedSessionAppend(confirmed);
         pushLiveThinkingEvent(hooks, append, "booking_confirmed");

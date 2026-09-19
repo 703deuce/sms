@@ -10,6 +10,13 @@ import {
   markSemanticInterpretationStarted,
 } from "../conversation/delegation-timing";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
+import { getCurrentConversationRevision } from "../conversation/conversation-revision";
+import {
+  buildSemanticSupersededToolResult,
+  classifyVoiceToolFreshness,
+  shouldBlockStaleToolPreDispatch,
+} from "../delegation/conversation-freshness";
+import type { VoiceToolResult } from "./types";
 
 const executedCallIds = new Set<string>();
 
@@ -53,6 +60,13 @@ export async function handleDelegatedVoiceToolCall(input: {
   noteSemanticTimingEvent(input.liveSessionId, "functionCallCompletedAt");
 
   const coordinator = getVoiceV3LiveResponseCoordinator(input.liveSessionId, input.send);
+  const delegationId = completed.delegationId ?? input.delegationId ?? null;
+  const delegationRuntime = coordinator.getDelegationRuntime(delegationId);
+  const currentConversationRevision = getCurrentConversationRevision(input.liveSessionId);
+  const basedOnConversationRevision =
+    delegationRuntime?.basedOnConversationRevision ?? currentConversationRevision;
+  const delegationSemanticallyFresh = delegationRuntime?.semanticFreshness !== "STALE";
+
   if (!coordinator.registerPendingFunctionCall(completed)) {
     markSemanticInterpretationEnded(input.liveSessionId);
     return true;
@@ -74,25 +88,66 @@ export async function handleDelegatedVoiceToolCall(input: {
     });
   }
 
-  const result = isKnownTool
-    ? await executeVoiceTool(
-        {
-          callId: snap.callId,
-          liveSessionId: input.liveSessionId,
-          delegationId: completed.delegationId ?? null,
-          functionCallId: completed.callId,
-          runtime,
-          tenantId: workspaceId || snap.callId,
-          sendContext: input.send,
-        },
-        completed.name,
-        rawArgs,
-      )
-    : voiceToolError(
-        "UNKNOWN_TOOL",
-        `Tool ${completed.name} is not registered.`,
-        { tool_name: completed.name },
-      );
+  let result: VoiceToolResult;
+  const staleBlocked =
+    isKnownTool &&
+    shouldBlockStaleToolPreDispatch(
+      completed.name,
+      delegationSemanticallyFresh ? "FRESH" : "STALE",
+    );
+
+  const toolClass = classifyVoiceToolFreshness(completed.name);
+  console.log("FRESHNESS_TOOL_AUTHORIZATION_DECISION", {
+    live_session_id: input.liveSessionId,
+    delegation_id: delegationId,
+    function_call_id: completed.callId,
+    tool_name: completed.name,
+    tool_class: toolClass,
+    based_on_conversation_revision: basedOnConversationRevision,
+    current_conversation_revision: currentConversationRevision,
+    semantic_freshness: delegationSemanticallyFresh ? "FRESH" : "STALE",
+    dispatch_authorized: !staleBlocked,
+  });
+
+  if (staleBlocked) {
+    console.log("STALE_TOOL_DISPATCH_BLOCKED", {
+      live_session_id: input.liveSessionId,
+      delegation_id: delegationId,
+      tool_name: completed.name,
+      call_id: completed.callId,
+      based_on_conversation_revision: basedOnConversationRevision,
+      current_conversation_revision: currentConversationRevision,
+    });
+    result = buildSemanticSupersededToolResult({
+      toolName: completed.name,
+      basedOnConversationRevision,
+      currentConversationRevision,
+      delegationId,
+    });
+  } else if (isKnownTool) {
+    result = await executeVoiceTool(
+      {
+        callId: snap.callId,
+        liveSessionId: input.liveSessionId,
+        delegationId,
+        functionCallId: completed.callId,
+        runtime,
+        tenantId: workspaceId || snap.callId,
+        sendContext: input.send,
+        delegationBasedOnConversationRevision: basedOnConversationRevision,
+        currentConversationRevision,
+        delegationSemanticallyFresh,
+      },
+      completed.name,
+      rawArgs,
+    );
+  } else {
+    result = voiceToolError(
+      "UNKNOWN_TOOL",
+      `Tool ${completed.name} is not registered.`,
+      { tool_name: completed.name },
+    );
+  }
 
   const disposition = result.ok ? "APPLIED" : "DECODE_FAILED";
   completeDelegatedFunctionCall({

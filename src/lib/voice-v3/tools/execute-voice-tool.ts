@@ -3,6 +3,7 @@ import type { VoiceToolExecutionContext, VoiceToolResult } from "./types";
 import { voiceToolError } from "./types";
 import { isRetryableToolErrorCode } from "./tool-result-codes";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
+import { getCurrentConversationRevision } from "../conversation/conversation-revision";
 
 function safeValidationDetails(err: unknown): Record<string, unknown> {
   if (err && typeof err === "object" && "message" in err) {
@@ -24,6 +25,15 @@ export async function executeVoiceTool(
   name: string,
   rawArgs: unknown,
 ): Promise<VoiceToolResult> {
+  const currentConversationRevision =
+    ctx.currentConversationRevision ?? getCurrentConversationRevision(ctx.liveSessionId);
+  const executionCtx: VoiceToolExecutionContext = {
+    ...ctx,
+    currentConversationRevision,
+    delegationBasedOnConversationRevision:
+      ctx.delegationBasedOnConversationRevision ?? currentConversationRevision,
+    delegationSemanticallyFresh: ctx.delegationSemanticallyFresh ?? true,
+  };
   const started = Date.now();
   console.log("VOICE_TOOL_REQUESTED", {
     call_id: ctx.callId,
@@ -65,7 +75,7 @@ export async function executeVoiceTool(
   });
 
   try {
-    const result = await tool.execute(ctx, args);
+    const result = await tool.execute(executionCtx, args);
     const finalized =
       result.ok || result.retryable != null
         ? result
