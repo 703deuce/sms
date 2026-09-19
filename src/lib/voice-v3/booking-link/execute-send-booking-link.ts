@@ -1,10 +1,10 @@
 import "server-only";
 
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { sendAppointmentSms } from "@/lib/appointments/sms-sender";
 import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import type { VoiceV3CallContext } from "../state/call-context";
-import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { voiceToolError, toolOk, type VoiceToolResult } from "../tools/types";
 import { buildSendBookingLinkSmsBody } from "./sms-body";
 import { compileVoiceBookingLinkSpokenDisclosure } from "./spoken-disclosure";
@@ -42,6 +42,29 @@ function initialBookingLinkState(): VoiceV3BookingLinkCallState {
 
 function bookingLinkFromContext(ctx: VoiceV3CallContext): VoiceV3BookingLinkCallState {
   return ctx.bookingLink ?? initialBookingLinkState();
+}
+
+/** Published wizard telephony wins for SEND_LINK — not LLM, not env default HP sender. */
+async function resolveSendLinkSenderE164(input: {
+  workspaceId: string;
+  agentId?: string | null;
+  config: VoiceV3AgentConfig;
+}): Promise<string> {
+  const tel = input.config.telephony;
+  const explicit = normalizePhoneE164(tel?.outboundSmsE164);
+  if (explicit) return explicit;
+
+  if (tel?.outboundSmsMode === "same_as_voice_line") {
+    const voiceDid = normalizePhoneE164(tel.phoneNumberE164);
+    if (voiceDid) return voiceDid;
+  }
+
+  return resolveVoiceOutboundSmsFrom({
+    workspaceId: input.workspaceId,
+    calledE164: tel?.phoneNumberE164 ?? null,
+    agentId: input.agentId,
+    config: null,
+  });
 }
 
 function buildAttemptId(input: {
@@ -202,11 +225,10 @@ export async function executeSendBookingLink(input: {
     const resolveFrom =
       input.deps?.resolveFromE164 ??
       (async (r) =>
-        resolveVoiceOutboundSmsFrom({
+        resolveSendLinkSenderE164({
           workspaceId: r.workspaceId,
-          calledE164: r.calledE164,
           agentId: input.agentId,
-          config: null,
+          config: r.config,
         }));
     fromE164 = await resolveFrom({
       workspaceId: input.workspaceId,
