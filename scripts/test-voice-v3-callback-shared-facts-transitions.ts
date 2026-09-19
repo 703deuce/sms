@@ -43,7 +43,8 @@ let ctx = createInitialVoiceV3CallContext({
   inboundCallerE164: "+15715550100",
 });
 
-// Simulate Microsoft booking intake while pursuing book_appointment
+// PSTN scenario: caller begins Microsoft booking, provides identity + reason + email;
+// then abandons booking for callback — must not re-collect name / reason / phone (ANI).
 const merged = mergeIntakeUpdate({
   current: ctx.intake.values,
   update: {
@@ -62,7 +63,12 @@ const missingCallback = getMissingFieldsForOperation("request_callback", config,
 assert.deepEqual(
   missingCallback,
   [],
-  "callback must reuse facts collected during booking — ANI satisfies callback phone",
+  "abandon Microsoft booking → callback: name, service_reason, phone(ANI) — no re-collection",
+);
+assert.equal(
+  config.operationRequirements?.request_callback?.includes("email"),
+  false,
+  "callback must not require booking-only email",
 );
 
 // Booking still requires explicit phone capture; callback does not re-ask.
