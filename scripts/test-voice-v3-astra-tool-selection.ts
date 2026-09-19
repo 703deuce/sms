@@ -43,7 +43,7 @@ const SCENARIOS: Scenario[] = [
   {
     label: "cancel",
     history:
-      "Caller: I need to cancel my existing appointment tomorrow. Locate the appointment first before any cancellation mutation.",
+      "Caller: I need to cancel my existing appointment tomorrow. They are not confirming cancellation yet — locate the current appointment record first using find_appointment before any cancel_appointment call.",
     expectTool: "find_appointment",
   },
   {

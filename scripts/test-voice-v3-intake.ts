@@ -5,6 +5,7 @@ import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/deleg
 import { CALLER_MEANING_STRUCTURED_OUTPUT_NAME } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import type { CallerMeaning } from "../src/lib/voice-v3/intake/caller-meaning-schema";
 import { evaluateVoiceV3Rules } from "../src/lib/voice-v3/state/call-rules";
+import { applyCallerMeaningToContext } from "../src/lib/voice-v3/intake/apply-caller-meaning";
 import {
   clearVoiceV3CallRuntimeStore,
   createVoiceV3CallRuntime,
@@ -28,7 +29,9 @@ function meaning(partial: Partial<CallerMeaning> & Pick<CallerMeaning, "captured
 }
 
 function apply(runtime: ReturnType<typeof createVoiceV3CallRuntime>, m: CallerMeaning) {
-  runtime.applyEvent({ type: "CALLER_MEANING_APPLIED", meaning: m });
+  const snap = runtime.getSnapshot();
+  const applied = applyCallerMeaningToContext(snap, runtime.config, m);
+  runtime.replaceContext(applied.context);
 }
 
 function main() {

@@ -78,4 +78,14 @@ for (const required of [
   assert.ok(toolsJson.includes(required), `delegation must expose capability tool "${required}"`);
 }
 
+const TOOL_PROHIBITED = ["apply-caller-meaning", "caller-meaning-schema", "goal-manager"];
+const toolsDir = join(SRC, "lib/voice-v3/tools");
+for (const file of walkTsFiles(toolsDir)) {
+  const rel = relative(process.cwd(), file).replace(/\\/g, "/");
+  const content = readFileSync(file, "utf8");
+  for (const marker of TOOL_PROHIBITED) {
+    assert.ok(!content.includes(marker), `${rel} must not import legacy semantic path "${marker}"`);
+  }
+}
+
 console.log("PASS voice-v3 pipeline boundary");
