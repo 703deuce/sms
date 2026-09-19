@@ -72,15 +72,27 @@ function main() {
   assert.equal(serialized.includes('"format"'), false);
   assert.equal((responses.text as { format?: unknown })?.format, undefined);
 
-  const emitTool = responses.tools?.find(
+  const toolNames = (responses.tools ?? [])
+    .map((t) => (t && typeof t === "object" && "name" in t ? String(t.name) : ""))
+    .filter(Boolean);
+  assert.ok(toolNames.includes("update_intake"), "default must register capability tools");
+  assert.ok(toolNames.includes("find_availability"));
+  assert.ok(toolNames.includes("book_appointment"));
+  assert.equal(responses.tool_choice, "auto");
+  assert.equal(responses.parallel_tool_calls, true);
+
+  process.env.VOICE_V3_LEGACY_EMIT_CALLER_MEANING = "1";
+  const legacyDelegation = buildVoiceV3AstraDelegationResponses("test", VOICE_V3_BOOKING_AGENT_CONFIG);
+  const emitTool = legacyDelegation.tools?.find(
     (t) => t && typeof t === "object" && t.name === EMIT_CALLER_MEANING_TOOL_NAME,
   );
-  assert.ok(emitTool, "default transport must register emit_caller_meaning");
+  assert.ok(emitTool, "legacy env must register emit_caller_meaning");
   assert.equal(emitTool?.strict, true);
-  assert.deepEqual(responses.tool_choice, {
+  assert.deepEqual(legacyDelegation.tool_choice, {
     type: "function",
     name: EMIT_CALLER_MEANING_TOOL_NAME,
   });
+  delete process.env.VOICE_V3_LEGACY_EMIT_CALLER_MEANING;
 
   const liveTool = buildEmitCallerMeaningLiveFunctionTool(VOICE_V3_BOOKING_AGENT_CONFIG);
   const format = voiceV3CallerMeaningTextFormat(VOICE_V3_BOOKING_AGENT_CONFIG) as {

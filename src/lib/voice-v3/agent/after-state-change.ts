@@ -4,7 +4,6 @@ import { planAgentState } from "./agent-planner";
 import { assertVoiceV3RuntimeInvariants } from "./runtime-invariants";
 import { buildAgentSnapshotLiveAppend } from "./sync-agent-state-to-live";
 import type { AgentStateSnapshot } from "./agent-state-snapshot";
-import { syncPlannerSpeakToLive } from "./live-speak-sync";
 import { getVoiceV3LiveResponseCoordinator } from "../delegation/live-response-coordinator";
 import {
   noteSemanticTimingEvent,
@@ -113,12 +112,6 @@ export function afterVoiceV3StateChange(input: {
         console.log("AGENT_SNAPSHOT_SENT_TO_LIVE", {
           call_id: ctx.callId,
           state_version: snapshot.stateVersion,
-        });
-        syncPlannerSpeakToLive({
-          liveSessionId: ctx.liveSessionId,
-          snapshot,
-          prevSnapshot: prev,
-          send: input.send,
         });
       } catch (err) {
         console.error("AGENT_SNAPSHOT_SEND_FAILED", { call_id: ctx.callId, err });

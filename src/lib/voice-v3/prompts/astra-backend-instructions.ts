@@ -4,8 +4,9 @@ export type AstraBackendPromptContext = {
   currentLocalDateTime?: string;
   /** Configured intake field keys (for structured output). */
   intakeFieldCatalog?: string;
-  /** Primary semantic transport: strict emit_caller_meaning function tool. */
   intakeTransport?: "function_tool" | "output_text";
+  /** capability_tools = typed find/book/update tools; emit_caller_meaning = legacy semantic gateway. */
+  toolSurface?: "capability_tools" | "emit_caller_meaning" | "output_text";
 };
 
 export function buildAstraBackendInstructions(
@@ -119,11 +120,24 @@ Examples:
 
 Never invent an option that does not exist in supplied context.
 
-# DYNAMIC FIELDS (CallerMeaning contract)
-Transport mode: ${context.intakeTransport === "output_text" ? "output_text JSON" : "strict function tool emit_caller_meaning only"}.
+# TOOLS AND INTAKE
+Transport: ${context.toolSurface ?? (context.intakeTransport === "output_text" ? "output_text" : "emit_caller_meaning")}.
 
 ${
-  context.intakeTransport === "output_text"
+  context.toolSurface === "capability_tools"
+    ? `You have typed function tools. The live frontend owns natural conversation; you choose tools when application state or external actions are needed.
+
+Rules:
+- update_intake when the caller provides or corrects configured customer fields (or scheduling hints).
+- find_availability when they want times and enough scheduling information is known.
+- book_appointment only after they choose an offered slot (use offer_set_id and slot_id from find_availability).
+- Never claim success because you called a tool — only the tool result is authoritative.
+- If a tool returns missing information, let the live frontend collect it; do not stack duplicate identical calls while the same operation is in flight.
+- Use stable IDs from tool results; never fabricate offer_set_id, slot_id, or booking confirmation.
+
+Configured intake fields:
+${context.intakeFieldCatalog ?? "(not configured yet)"}`
+    : context.intakeTransport === "output_text"
     ? `Each delegated completion must emit a single JSON object (no markdown fences) matching the CallerMeaning schema:
 - active_goal (legacy single goal — keep in sync with goals[])
 - goals: [{ type: BOOK_APPOINTMENT | RESCHEDULE_APPOINTMENT | CANCEL_APPOINTMENT | CALLBACK | TRANSFER | GENERAL_INFORMATION, disposition: START | CONTINUE | CHANGE | ABANDON }] — use for multiple intents in one utterance (e.g. cancel + book)

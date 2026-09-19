@@ -53,6 +53,10 @@ import {
 import { clearCallerTurnSemanticProgress } from "../conversation/caller-turn-semantic-progress";
 import { clearSemanticTurnWatchdog } from "../conversation/semantic-turn-watchdog";
 import { clearLiveSpeakSync } from "../agent/live-speak-sync";
+import {
+  clearDelegatedVoiceToolSessionState,
+  handleDelegatedVoiceToolCall,
+} from "../tools/handle-delegated-voice-tools";
 
 const meaningStartedSessions = new Set<string>();
 
@@ -409,15 +413,26 @@ export function handleDelegatedAstraResponseEvent(input: {
     if (item && typeof item === "object") {
       const row = item as Record<string, unknown>;
       if (row.type === "function_call") {
-        const name = row.name;
-        if (
-          name === EMIT_CALLER_MEANING_TOOL_NAME ||
-          name === undefined ||
-          name === null ||
-          name === ""
-        ) {
-          queueMicrotask(() => {
-            void (async () => {
+        queueMicrotask(() => {
+          void (async () => {
+            const handledTool = await handleDelegatedVoiceToolCall({
+              liveSessionId: sessionId,
+              nested: input.nested,
+              send: input.send,
+              delegationId: input.delegationId,
+            });
+            if (handledTool) {
+              meaningStartedSessions.delete(sessionId);
+              return;
+            }
+
+            const name = row.name;
+            if (
+              name === EMIT_CALLER_MEANING_TOOL_NAME ||
+              name === undefined ||
+              name === null ||
+              name === ""
+            ) {
               const runtime = getVoiceV3CallRuntime(sessionId);
               if (!runtime) {
                 meaningStartedSessions.delete(sessionId);
@@ -431,10 +446,10 @@ export function handleDelegatedAstraResponseEvent(input: {
                 delegationId: input.delegationId,
               });
               meaningStartedSessions.delete(sessionId);
-            })();
-          });
-          return;
-        }
+            }
+          })();
+        });
+        return;
       }
     }
     return;
@@ -465,4 +480,5 @@ export function clearDelegatedMeaningSessionState(liveSessionId: string): void {
   clearLiveSpeakSync(liveSessionId);
   clearGreetingTurnState(liveSessionId);
   clearVoiceV3LiveResponseCoordinator(liveSessionId);
+  clearDelegatedVoiceToolSessionState(liveSessionId);
 }
