@@ -6,6 +6,8 @@ export {
   hasOAuthTokens,
   insertGoogleEvent,
   insertMicrosoftEvent,
+  updateMicrosoftEvent,
+  deleteMicrosoftEvent,
   listMicrosoftCalendarEventsForAppointmentDiscovery,
   resolveBlockingCalendarIds,
   resolveWriteCalendarId,

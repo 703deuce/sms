@@ -123,6 +123,7 @@
     "test:voice-v3-reschedule": "tsx scripts/test-voice-v3-reschedule.ts",
     "test:voice-v3-cancellation": "tsx scripts/test-voice-v3-cancellation.ts",
     "test:voice-v3-microsoft-appointment-management": "tsx scripts/test-voice-v3-microsoft-appointment-management.ts",
+    "cert:voice-v3-microsoft-appointment-live": "NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' tsx scripts/cert-voice-v3-microsoft-appointment-live.ts",
     "test:voice-v3-appointment-discovery": "tsx scripts/test-voice-v3-appointment-discovery.ts",
     "test:voice-v3-astra-appointment-management-selection": "tsx scripts/test-voice-v3-astra-appointment-management-selection.ts",
     "test:voice-v3-recovery": "tsx scripts/test-voice-v3-order-permutation.ts && tsx scripts/test-voice-v3-recovery.ts",
