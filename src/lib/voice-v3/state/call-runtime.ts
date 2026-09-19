@@ -101,6 +101,7 @@ export function resolveVoiceV3AgentConfig(): VoiceV3AgentConfig {
 export function createVoiceV3CallRuntime(input: {
   liveSessionId: string;
   callId?: string | null;
+  inboundCallerE164?: string | null;
   config?: VoiceV3AgentConfig;
   now?: Date;
 }): VoiceV3CallRuntime {
@@ -113,6 +114,7 @@ export function createVoiceV3CallRuntime(input: {
     liveSessionId: input.liveSessionId.trim(),
     timezone: config.timezone,
     clock,
+    inboundCallerE164: input.inboundCallerE164,
     now,
   });
 

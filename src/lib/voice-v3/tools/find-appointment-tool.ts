@@ -10,12 +10,15 @@ import {
   resolveVerifiedAppointmentBySelectionId,
 } from "../calendar/find-existing-appointment";
 import { applyVerifiedExisting } from "../calendar/appointment-management-dispatch";
+import { buildAppointmentWhenFromSchedulingMeaning } from "../calendar/appointment-lookup-when";
 import type { VoiceV3CallContext } from "../state/call-context";
+import type { SchedulingMeaning } from "../time/scheduling-types";
+import { schedulingMeaningZodObject } from "../time/scheduling-meaning-schema";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
-const findApptArgsSchema = z.object({
+const findApptIdentitySchema = z.object({
   name: z
     .string()
     .nullable()
@@ -25,17 +28,13 @@ const findApptArgsSchema = z.object({
   phone: z
     .string()
     .nullable()
-    .describe("Caller phone when explicitly provided. Null to use intake phone already saved."),
+    .describe(
+      "Phone the caller stated is on the appointment — not inbound caller ID. Null to use intake phone already saved.",
+    ),
   email: z
     .string()
     .nullable()
     .describe("Caller email when explicitly provided. Null to use intake email already saved."),
-  date_expression: z
-    .string()
-    .nullable()
-    .describe(
-      "Known or approximate date of the existing appointment if the caller supplied one (natural language or YYYY-MM-DD). Null if unknown.",
-    ),
   service: z
     .string()
     .nullable()
@@ -59,6 +58,17 @@ const findApptArgsSchema = z.object({
     ),
 });
 
+const findApptArgsSchema = findApptIdentitySchema.merge(
+  schedulingMeaningZodObject.extend({
+    date_expression: schedulingMeaningZodObject.shape.date_expression.describe(
+      "When the caller describes the existing appointment date (Monday, tomorrow, YYYY-MM-DD). Null if unknown.",
+    ),
+    time_expression: schedulingMeaningZodObject.shape.time_expression.describe(
+      "When the caller describes the existing appointment time (2:30 PM, around 10 in the morning). Use with date_relation/time_kind/exact_time/daypart — same semantics as set_scheduling_preference but for locating an existing appointment, not booking a new slot.",
+    ),
+  }),
+);
+
 export type FindAppointmentArgs = z.infer<typeof findApptArgsSchema>;
 
 export function buildFindAppointmentOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
@@ -76,16 +86,34 @@ export function buildFindAppointmentOpenAiTool(_config: VoiceV3AgentConfig): Fun
   };
 }
 
+function schedulingMeaningFromFindArgs(args: FindAppointmentArgs): SchedulingMeaning {
+  return {
+    date_expression: args.date_expression,
+    date_relation: args.date_relation,
+    weekday: args.weekday,
+    explicit_date: args.explicit_date,
+    time_expression: args.time_expression,
+    time_kind: args.time_kind,
+    exact_time: args.exact_time,
+    start_time: args.start_time,
+    end_time: args.end_time,
+    daypart: args.daypart,
+  };
+}
+
 function mergeFindArgs(ctx: VoiceV3CallContext, args: FindAppointmentArgs) {
   const snap = ctx;
   return {
     name: args.name?.trim() || snap.intake.values.name?.value?.trim() || undefined,
     phone: args.phone?.trim() || snap.intake.values.phone?.value?.trim() || undefined,
     email: args.email?.trim() || snap.intake.values.email?.value?.trim() || undefined,
-    dateExpression: args.date_expression?.trim() || null,
     service: args.service?.trim() || undefined,
     location: args.location?.trim() || undefined,
   };
+}
+
+function trustedAni(ctx: VoiceV3CallContext): string | undefined {
+  return ctx.telephony.inboundCallerE164?.trim() || ctx.appointmentManagement.lookupState?.ani;
 }
 
 export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
@@ -97,6 +125,11 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
     const snap = ctx.runtime.getSnapshot();
     const merged = mergeFindArgs(snap, args);
     const lookupState = snap.appointmentManagement.lookupState;
+    const appointmentWhen = buildAppointmentWhenFromSchedulingMeaning(
+      schedulingMeaningFromFindArgs(args),
+      snap.clock,
+    );
+    const ani = trustedAni(snap);
 
     if (args.confirm_selection) {
       const selected = resolveVerifiedAppointmentBySelectionId(
@@ -137,10 +170,12 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
         service: merged.service,
         location: merged.location,
         dateHint: snap.scheduling.normalized,
-        dateExpression: merged.dateExpression,
+        dateExpression: args.explicit_date?.trim() || args.date_expression?.trim() || null,
         timezone: snap.business.timezone,
         microsoftLookup: true,
         lookupState,
+        appointmentWhen,
+        ani,
       },
       ctx.runtime.config,
     );
@@ -153,7 +188,8 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
         customerName: merged.name,
         service: merged.service,
         location: merged.location,
-        dateExpression: merged.dateExpression,
+        appointmentWhen,
+        ani,
         lookupState,
       },
       result,
@@ -163,7 +199,7 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
       ...base,
       appointmentManagement: {
         ...base.appointmentManagement,
-        lookupState: nextLookup,
+        lookupState: { ...nextLookup, ani: ani ?? nextLookup.ani },
       },
       runtime: { version: base.runtime.version + 1 },
     });

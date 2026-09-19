@@ -80,6 +80,7 @@ export async function dispatchAppointmentManagementIfRequired(
           timezone: ctx.business.timezone,
           microsoftLookup: true,
           lookupState: ctx.appointmentManagement.lookupState,
+          ani: ctx.telephony.inboundCallerE164 ?? undefined,
         },
         runtime.config,
       );

@@ -63,6 +63,10 @@ export interface VoiceV3CallContext {
   business: {
     timezone: string;
   };
+  /** Trusted telephony metadata — not LLM-supplied. */
+  telephony: {
+    inboundCallerE164: string | null;
+  };
   clock: VoiceV3CallClock;
   dialog: {
     activeGoal: VoiceV3Goal;
@@ -149,6 +153,7 @@ export function createInitialVoiceV3CallContext(input: {
   liveSessionId: string;
   timezone: string;
   clock: VoiceV3CallClock;
+  inboundCallerE164?: string | null;
   now?: Date;
 }): VoiceV3CallContext {
   const now = (input.now ?? new Date()).toISOString();
@@ -158,6 +163,7 @@ export function createInitialVoiceV3CallContext(input: {
     createdAt: now,
     updatedAt: now,
     business: { timezone: input.timezone },
+    telephony: { inboundCallerE164: input.inboundCallerE164?.trim() || null },
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     conversation: {

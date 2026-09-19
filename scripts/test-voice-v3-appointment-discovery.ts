@@ -15,6 +15,11 @@ import {
 } from "../src/lib/voice-v3/calendar/appointment-discovery-match";
 import { stableMicrosoftDiscoveryBookingId } from "../src/lib/voice-v3/calendar/microsoft-discovery-selection-id";
 import { findExistingAppointmentFromStore } from "../src/lib/voice-v3/calendar/find-existing-appointment";
+import {
+  buildAppointmentWhenFromSchedulingMeaning,
+  appointmentWhenHasSignal,
+} from "../src/lib/voice-v3/calendar/appointment-lookup-when";
+import { buildVoiceV3CallClock } from "../src/lib/voice-v3/time/call-clock";
 
 function mockRecord(partial: {
   id: string;
@@ -134,5 +139,62 @@ assert.ok(!stable1.includes("evt_x"));
 // Legacy store path still requires phone or email
 const legacyFail = findExistingAppointmentFromStore({ callId: "x", customerName: "John" });
 assert.equal(legacyFail.status, "VERIFICATION_FAILED");
+
+const clock = buildVoiceV3CallClock("America/New_York", new Date("2026-09-19T15:00:00.000Z"));
+const mondayWhen = buildAppointmentWhenFromSchedulingMeaning(
+  {
+    date_expression: "Monday",
+    date_relation: "THIS_WEEKDAY",
+    weekday: "MONDAY",
+    explicit_date: null,
+    time_expression: null,
+    time_kind: "UNSPECIFIED",
+    exact_time: null,
+    start_time: null,
+    end_time: null,
+    daypart: null,
+  },
+  clock,
+);
+assert.ok(mondayWhen && appointmentWhenHasSignal(mondayWhen));
+
+const timeOnlyWhen = buildAppointmentWhenFromSchedulingMeaning(
+  {
+    date_expression: null,
+    date_relation: "UNSPECIFIED",
+    weekday: null,
+    explicit_date: null,
+    time_expression: "10 in the morning",
+    time_kind: "EXACT",
+    exact_time: "10:00",
+    start_time: null,
+    end_time: null,
+    daypart: null,
+  },
+  clock,
+);
+assert.equal(timeOnlyWhen?.localTimeHm, "10:00");
+const at10 = mockRecord({
+  id: "t1",
+  subject: "Visit",
+  localStart: "2026-09-22T10:00:00-04:00",
+  phone: "5715551234",
+});
+const at14 = mockRecord({
+  id: "t2",
+  subject: "Visit",
+  localStart: "2026-09-22T14:00:00-04:00",
+  phone: "5715551234",
+});
+assert.equal(
+  narrowAppointmentCandidates([at10, at14], {
+    ani: "5715551234",
+    when: timeOnlyWhen,
+  }).length,
+  1,
+);
+
+const aniOnly = narrowAppointmentCandidates([johnA, johnB], { ani: "5715551111" });
+assert.equal(aniOnly.length, 1);
 
 console.log("PASS voice-v3 appointment discovery");

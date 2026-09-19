@@ -28,7 +28,7 @@ export async function handleVoiceV3BasicTelnyxWebhook(input: {
     transferredCallIds.add(callControlId);
     if (transferredCallIds.size > 5000) transferredCallIds.clear();
 
-    noteTelnyxPstnReceived(callControlId);
+    noteTelnyxPstnReceived(callControlId, String(input.eventPayload.from || ""));
     await tryNotePstnWizardBindingFromToE164({
       callControlId,
       toE164: String(input.eventPayload.to || ""),

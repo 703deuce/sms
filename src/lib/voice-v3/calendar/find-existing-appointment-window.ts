@@ -1,4 +1,5 @@
 import type { NormalizedSchedulingPreference } from "../time/scheduling-types";
+import type { AppointmentWhenConstraint } from "./appointment-lookup-when";
 import { resolveSearchWindowFromNormalized } from "./find-availability";
 import { parseYmd, wallTimeInZoneToUtc } from "../time/timezone";
 
@@ -9,14 +10,16 @@ const DEFAULT_LOOKAHEAD_DAYS = 60;
 export function buildFindExistingAppointmentWindow(input: {
   timezone: string;
   dateHint?: NormalizedSchedulingPreference | null;
+  appointmentWhen?: AppointmentWhenConstraint | null;
   dateExpression?: string | null;
   nowUtc?: Date;
   durationMinutes?: number;
 }): { rangeStartUtc: string; rangeEndUtc: string } {
   const durationMinutes = input.durationMinutes ?? 60;
-  if (input.dateHint) {
+  const whenNorm = input.appointmentWhen?.normalized ?? input.dateHint;
+  if (whenNorm) {
     const fromNormalized = resolveSearchWindowFromNormalized(
-      input.dateHint,
+      whenNorm,
       input.timezone,
       durationMinutes,
     );

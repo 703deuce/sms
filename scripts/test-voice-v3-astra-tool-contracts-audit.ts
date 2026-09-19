@@ -53,6 +53,9 @@ const findAppt = tools.find((t) => t.name === "find_appointment")!;
 const findApptProps = (findAppt.parameters as { properties?: Record<string, unknown> }).properties ?? {};
 assert.ok("name" in findApptProps, "find_appointment must accept name");
 assert.ok("confirm_selection" in findApptProps, "find_appointment must support confirm_selection");
+assert.ok("time_expression" in findApptProps, "find_appointment must expose time_expression");
+assert.ok("time_kind" in findApptProps, "find_appointment must expose semantic time_kind");
+assert.ok(!("ani" in findApptProps), "find_appointment must not expose ani to the LLM");
 assert.ok(findAppt.description?.includes("useful_discriminator"), "find_appointment description must explain discriminators");
 assert.ok(findAppt.description?.includes("find_availability"), "find_appointment must distinguish from find_availability");
 

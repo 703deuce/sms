@@ -174,6 +174,7 @@ export async function handleOpenAiLiveIncomingWebhook(input: {
     createVoiceV3CallRuntime({
       liveSessionId: sessionId,
       callId: pstnLeg?.callId || event.data?.call_id,
+      inboundCallerE164: pstnLeg?.fromE164,
       config: acceptAgentConfig,
     });
   }

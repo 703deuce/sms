@@ -1,4 +1,5 @@
 import type { NormalizedSchedulingPreference } from "../time/scheduling-types";
+import type { AppointmentWhenConstraint } from "./appointment-lookup-when";
 import type { ConfirmedBooking } from "./booking-types";
 
 export type AppointmentManagementMode = "NONE" | "RESCHEDULE" | "CANCEL";
@@ -94,6 +95,8 @@ export interface FindExistingAppointmentRequest {
   microsoftLookup?: boolean;
   /** Prior lookup constraints accumulated on this call. */
   lookupState?: AppointmentLookupState | null;
+  /** Semantic when-clue for the existing appointment (normalized via scheduling normalizer). */
+  appointmentWhen?: AppointmentWhenConstraint | null;
 }
 
 export type FindExistingAppointmentResult =

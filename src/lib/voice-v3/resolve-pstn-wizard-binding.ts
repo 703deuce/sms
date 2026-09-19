@@ -44,6 +44,7 @@ export async function tryNotePstnWizardBindingFromToE164(input: {
       callId: callControlId,
       workspaceId: phone.workspaceId,
       agentId: row.id,
+      fromE164: input.fromE164,
     });
     console.log("VOICE_V3_PSTN_WIZARD_BOUND_FROM_E164", {
       callControlId,

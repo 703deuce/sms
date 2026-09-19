@@ -310,13 +310,19 @@ export type RecentPstnLegContext = {
   callId?: string;
   workspaceId?: string;
   agentId?: string;
+  /** Telnyx PSTN caller ID (ANI) — trusted telephony, not LLM-supplied. */
+  fromE164?: string;
 };
 
 let lastPstnLeg: RecentPstnLegContext | null = null;
 
-export function noteTelnyxPstnReceived(callControlId: string): void {
+export function noteTelnyxPstnReceived(callControlId: string, fromE164?: string | null): void {
   if (!callControlId.trim()) return;
-  lastPstnLeg = { callControlId, atMs: Date.now() };
+  lastPstnLeg = {
+    callControlId,
+    atMs: Date.now(),
+    fromE164: fromE164?.trim() || undefined,
+  };
 }
 
 /** Attach wizard agent context before SIP forward so Live accept uses published intake config. */
@@ -325,6 +331,7 @@ export function notePstnLegWizardContext(input: {
   callId: string;
   workspaceId: string;
   agentId: string;
+  fromE164?: string | null;
 }): void {
   const callControlId = input.callControlId.trim();
   if (!callControlId) return;
@@ -334,6 +341,7 @@ export function notePstnLegWizardContext(input: {
     callId: input.callId.trim(),
     workspaceId: input.workspaceId.trim(),
     agentId: input.agentId.trim(),
+    fromE164: input.fromE164?.trim() || lastPstnLeg?.fromE164,
   };
 }
 

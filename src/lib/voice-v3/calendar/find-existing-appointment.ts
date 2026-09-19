@@ -18,6 +18,7 @@ import {
   type AppointmentDiscoveryRecord,
   type AppointmentLookupConstraints,
 } from "./appointment-discovery-match";
+import type { AppointmentWhenConstraint } from "./appointment-lookup-when";
 
 function resolveDateHintLocal(request: FindExistingAppointmentRequest): string | null | undefined {
   if (request.dateExpression?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(request.dateExpression.trim())) {
@@ -26,16 +27,25 @@ function resolveDateHintLocal(request: FindExistingAppointmentRequest): string |
   return request.dateHint?.localDate ?? request.lookupState?.localDate ?? null;
 }
 
+function mergeAppointmentWhen(
+  request: FindExistingAppointmentRequest,
+): AppointmentWhenConstraint | null | undefined {
+  return request.appointmentWhen ?? undefined;
+}
+
 function mergeLookupConstraints(request: FindExistingAppointmentRequest): AppointmentLookupConstraints {
   const prior = request.lookupState;
+  const when = mergeAppointmentWhen(request);
+  const localFromWhen = when?.normalized?.localDate ?? undefined;
   return {
     name: request.customerName?.trim() || prior?.name,
     phone: request.phone?.trim() || prior?.phone,
     email: request.email?.trim() || prior?.email,
-    localDate: resolveDateHintLocal(request) ?? undefined,
+    localDate: localFromWhen ?? resolveDateHintLocal(request) ?? undefined,
     service: request.service?.trim() || prior?.service,
     location: request.location?.trim() || prior?.location,
     ani: request.ani?.trim() || prior?.ani,
+    when: when ?? null,
   };
 }
 
@@ -78,7 +88,7 @@ function finalizeFromNarrowed(
     return { status: "NONE" };
   }
 
-  const discriminators = computeUsefulDiscriminators(narrowed);
+  const discriminators = computeUsefulDiscriminators(narrowed, constraints);
 
   if (narrowed.length === 1) {
     const one = narrowed[0]!;
@@ -120,9 +130,11 @@ async function loadMicrosoftCandidates(
   if (!resolved.ok) return [];
 
   const timezone = request.timezone ?? config.timezone ?? "America/New_York";
+  const when = mergeAppointmentWhen(request);
   const window = buildFindExistingAppointmentWindow({
     timezone,
     dateHint: request.dateHint,
+    appointmentWhen: when,
     dateExpression: request.dateExpression ?? request.lookupState?.localDate,
     durationMinutes: config.service.durationMinutes,
   });
@@ -179,7 +191,7 @@ export async function findExistingAppointment(
     return result;
   }
   if (result.status === "NONE" && pool.length > 0) {
-    const discriminators = computeUsefulDiscriminators(pool);
+    const discriminators = computeUsefulDiscriminators(pool, constraints);
     return {
       status: "NEEDS_MORE_INFORMATION",
       usefulDiscriminators: discriminators.length ? discriminators : ["name", "phone", "email"],
