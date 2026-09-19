@@ -2,8 +2,10 @@
  * One-off generator for docs/VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT.md
  * Audit-only — does not modify production runtime.
  */
-import { readFileSync, writeFileSync } from "fs";
+import { createHash } from "crypto";
+import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { execSync } from "child_process";
 import { buildLiveFrontendInstructions } from "../src/lib/voice-v3/prompts/live-frontend-instructions";
 import { buildLiveDelegationPolicySection } from "../src/lib/voice-v3/prompts/live-delegation-policy";
 import { buildAstraBackendCoreInstructions } from "../src/lib/voice-v3/prompts/astra-backend-core-instructions";
@@ -108,367 +110,329 @@ const masterTable = wizardFields
   )
   .join("\n");
 
-const doc = `# Voice V3 — Prompt, Wizard, and Runtime Mapping Audit
+const generatedAt = new Date().toISOString();
+const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
-**Status:** Audit only (no production changes).  
-**Generated:** ${new Date().toISOString()}  
-**Scope:** Production Voice V3 PSTN via \`/api/openai/live/incoming\` → \`sessions.accept\` with GPT-Live-1 + delegated GPT-6 Astra.
-
----
-
-## Production path proof (Voice V3 PSTN)
+const pathProof = `## Production path proof (Voice V3 PSTN)
 
 | Stage | File | Symbol |
 |-------|------|--------|
 | HTTP | \`src/app/api/openai/live/incoming/route.ts\` | \`POST\` → \`handleOpenAiLiveIncomingWebhook\` |
 | Webhook | \`src/lib/voice-v3-basic/openai-live-webhook.ts\` | \`handleOpenAiLiveIncomingWebhook\` |
-| Config resolve | \`src/lib/voice-v3/config/from-published-agent.ts\` | \`resolveVoiceV3AgentConfigForAgent\` (when PSTN leg has workspaceId+agentId) |
-| Session build | \`src/lib/voice-v3-basic/live-session-config.ts\` | \`buildBasicLiveSession\` / \`buildBasicLiveSessionAcceptParams\` |
-| Amy instructions | \`src/lib/voice-v3/prompts/build-voice-v3-prompts.ts\` | \`buildVoiceV3Prompts\` → \`buildLiveFrontendInstructions\` |
-| Astra delegation | \`src/lib/voice-v3/intake/delegation-config.ts\` | \`buildVoiceV3AstraDelegationResponses(astraInstructions, config)\` |
-| OpenAI API | \`openai-live-webhook.ts\` | \`client.live.sessions.accept(sessionId, acceptParams)\` |
+| Config resolve | \`src/lib/voice-v3/config/from-published-agent.ts\` | \`resolveVoiceV3AgentConfigForAgent\` |
+| Session build | \`src/lib/voice-v3-basic/live-session-config.ts\` | \`buildBasicLiveSession\` |
+| Amy instructions | \`src/lib/voice-v3/prompts/build-voice-v3-prompts.ts\` | \`buildLiveFrontendInstructions\` |
+| Astra delegation | \`src/lib/voice-v3/intake/delegation-config.ts\` | \`buildVoiceV3AstraDelegationResponses\` |
+| OpenAI API | \`openai-live-webhook.ts\` | \`client.live.sessions.accept\` |
 
-PSTN correlation: \`consumeRecentPstnLeg()\` in \`src/lib/voice-v3/telemetry/call-trace.ts\` supplies \`workspaceId\` / \`agentId\` for per-agent config.
+PSTN: \`consumeRecentPstnLeg()\` → \`workspaceId\` / \`agentId\` for per-agent config.`;
 
----
+const part1Meta = `# PART 1 — Production GPT-Live / Amy frontend instructions
 
-## PART 1 — Production GPT-Live / Amy frontend instructions
+**Generated:** ${generatedAt}
 
-### 1.1 Source files and constructors
+### Source files
 
-| # | Item | Location |
-|---|------|----------|
-| 1 | Prompt source files | \`src/lib/voice-v3/prompts/live-frontend-instructions.ts\`, \`src/lib/voice-v3/prompts/live-delegation-policy.ts\` |
-| 2 | Constructor | \`buildLiveFrontendInstructions(context)\` — includes \`buildLiveDelegationPolicySection()\` |
-| 3 | Wired into session | \`buildVoiceV3Prompts()\` → \`liveInstructions\` → \`buildBasicLiveSession()\` → \`SessionAcceptParams.Session.instructions\` |
-| 4 | Accept call site | \`src/lib/voice-v3-basic/openai-live-webhook.ts\` — \`buildBasicLiveSessionAcceptParams(new Date(), acceptAgentConfig)\` then \`sessions.accept\` |
+| Item | Location |
+|------|----------|
+| Prompt | \`src/lib/voice-v3/prompts/live-frontend-instructions.ts\` |
+| Delegation policy | \`src/lib/voice-v3/prompts/live-delegation-policy.ts\` |
+| Builder | \`buildLiveFrontendInstructions\` → \`buildVoiceV3Prompts\` → \`buildBasicLiveSession\` |
+| Accept | \`openai-live-webhook.ts\` → \`sessions.accept\` |
 
-### 1.2 Dynamic values (Amy)
+### Dynamic values (Amy)
 
-| Variable | Source | AgentConfig / DB | Default / fallback | Always vs conditional |
-|----------|--------|------------------|--------------------|------------------------|
-| \`agentName\` | \`buildVoiceV3Prompts({ agentName })\` from \`resolveVoiceV3DefaultPromptInput()\` | **Not** from wizard on V3 path | \`VOICE_V3_AGENT_NAME\` env or \`"Amy"\` | Always interpolated |
-| \`businessName\` | \`input.businessName ?? agentConfig.businessName\` | \`resolveVoiceV3AgentConfigForAgent\` → wizard \`businessName\` or \`VoiceAgentConfig.businessName\` or env fallback | \`VOICE_V3_BUSINESS_NAME\` / \`"Transovo"\` in booking fallback | Always |
-| Delegation policy | Static \`buildLiveDelegationPolicySection()\` | N/A | N/A | Always appended |
+| Variable | Source | DB / config | Fallback | Present |
+|----------|--------|-------------|----------|---------|
+| \`agentName\` | \`resolveVoiceV3DefaultPromptInput()\` | Not wizard on V3 | \`VOICE_V3_AGENT_NAME\` / Amy | Always |
+| \`businessName\` | \`agentConfig.businessName\` | wizard / VoiceAgentConfig | env / Transovo | Always |
+| Delegation policy | static | — | — | Always |
 
-**Important:** \`live-session-config.ts\` spreads \`resolveVoiceV3DefaultPromptInput()\` first, so \`agentName\` on PSTN calls is **environment-driven**, not wizard \`agentName\`, unless future code passes wizard identity into \`buildVoiceV3Prompts\`.
+**Note:** \`agentName\` is env-driven on PSTN, not wizard \`agentName\`.
 
-### 1.3 Post-accept Live context (not in main \`instructions\`)
+### Post-accept context (not in \`instructions\`)
 
-| Mechanism | Files | Purpose |
-|-----------|-------|---------|
-| \`session.commentary.append\` | \`src/lib/voice-v3/greeting.ts\` | Initial greeting trigger (uses \`resolveVoiceV3InitialGreetingText()\` — env defaults) |
-| \`session.thinking.append\` | \`src/lib/voice-v3/agent/sync-agent-state-to-live.ts\` | Authoritative agent snapshot (goals, missing fields, allowed/forbidden claims) |
-| \`session.thinking.append\` | \`src/lib/voice-v3/calendar/live-availability-context.ts\` | FIND results / speakable slots |
-| \`session.thinking.append\` | \`src/lib/voice-v3/calendar/live-booking-context.ts\`, \`live-management-context.ts\`, \`live-selected-slot-context.ts\` | Booking / reschedule / cancel verified state |
-| \`session.thinking.append\` / \`commentary\` | \`src/lib/voice-v3/live/live-context-publisher.ts\` | Central publisher used by tools |
-| \`session.thinking.append\` | \`src/lib/voice-v3/recovery/push-recovery-to-live.ts\`, \`live-runtime-hooks.ts\`, \`call-runtime.ts\` | Recovery / hooks |
+| Event | File |
+|-------|------|
+| \`session.commentary.append\` | \`greeting.ts\` (initial greeting) |
+| \`session.thinking.append\` | \`sync-agent-state-to-live.ts\`, \`live-availability-context.ts\`, \`live-booking-context.ts\`, \`live-management-context.ts\`, \`live-context-publisher.ts\`, \`push-recovery-to-live.ts\` |
 
-No \`session.instructions.append\` located under \`src/lib/voice-v3*\`.
+Wizard \`instructions.system\` is **not** loaded into V3 accept (V2/Telnyx only).
 
-### 1.4 Other Amy context (effective business knowledge)
+### Complete production Amy instructions
 
-- **Delegation policy** lists capabilities (intake, availability, book, find, reschedule, cancel, transfer, end) — not business-specific facts.
-- **Thinking append** carries runtime scheduling/intake truth after tools run.
-- **Wizard \`instructions.system\`** (\`compileVoiceAgentPromptFromWizard\`) is saved on publish but **not** loaded into V3 \`sessions.accept\` (Voice V2 / Telnyx path only).
-
-### 1.5 Complete production Amy instructions (template)
-
-Placeholders below match runtime interpolation (\`{{agentName}}\`, \`{{businessName}}\`).
+Placeholders: \`{{agentName}}\`, \`{{businessName}}\`. SHA256 prefix: \`${sha(amyTemplate)}\` · ${amyTemplate.length} chars.
 
 \`\`\`
 ${amyTemplate}
 \`\`\`
+`;
 
----
+const part2Meta = `# PART 2 — Production Astra backend instructions
 
-## PART 2 — Production Astra backend instructions
+**Generated:** ${generatedAt}
 
-### 2.1 Source files and constructors
+### Source files
 
-| # | Item | Location |
-|---|------|----------|
-| 1 | Core | \`src/lib/voice-v3/prompts/astra-backend-core-instructions.ts\` — \`buildAstraBackendCoreInstructions()\` |
-| 2 | Assembler | \`src/lib/voice-v3/prompts/astra-backend-instructions.ts\` — \`buildAstraBackendInstructions(context)\` |
-| 3 | Intake section | \`src/lib/voice-v3/prompts/astra-intake-instructions.ts\` |
-| 4 | Cross-tool section | \`src/lib/voice-v3/prompts/astra-cross-tool-instructions.ts\` |
-| 5 | Delegation config | \`src/lib/voice-v3/intake/delegation-config.ts\` — \`instructions: astraInstructions\`, \`model: gpt-6-astra\`, \`tools: buildVoiceV3AstraFunctionTools(config)\` |
+| Layer | File |
+|-------|------|
+| Core | \`astra-backend-core-instructions.ts\` |
+| Assembler | \`astra-backend-instructions.ts\` |
+| Intake rules | \`astra-intake-instructions.ts\` |
+| Cross-tool | \`astra-cross-tool-instructions.ts\` |
+| Delegation | \`delegation-config.ts\` (model \`gpt-6-astra\`, tools from catalog) |
 
-### 2.2 Dynamic values (Astra)
+### Dynamic values (Astra)
 
-| Variable | Source | AgentConfig / DB | Default | Conditional |
-|----------|--------|------------------|---------|-------------|
-| \`businessName\` | \`buildVoiceV3Prompts\` | \`VoiceV3AgentConfig.businessName\` from published agent | \`"the business"\` in builder | Always |
-| \`timezone\` | \`agentConfig.timezone\` | wizard \`timezone\` / config / env fallback | \`America/New_York\` | Always |
-| \`currentLocalDateTime\` | \`formatBusinessLocalDateTime(timezone, at)\` at accept | Computed at accept | \`"not yet provided"\` if missing | Always |
-| \`intakeFieldCatalog\` | Lines from \`agentConfig.intakeFields\` | \`compileVoiceV2IntakeSchema(loadVoiceAgentRuntimeConfig)\` via \`from-published-agent\` | Fallback \`VOICE_V3_BOOKING_AGENT_CONFIG.intakeFields\` | Always when intake pipeline on |
-| \`toolSurface\` | \`resolveVoiceV3DelegationToolSurface()\` | env/feature | \`capability_tools\` vs legacy \`output_text\` | Conditional legacy path |
+| Variable | Source | Fallback |
+|----------|--------|----------|
+| \`businessName\` | \`VoiceV3AgentConfig\` | the business |
+| \`timezone\` | wizard / config | America/New_York |
+| \`currentLocalDateTime\` | computed at accept | not yet provided |
+| \`intakeFieldCatalog\` | \`compileVoiceV2IntakeSchema\` | booking fallback fields |
 
-**Not in Astra text today:** wizard tone, role, guardrails, business hours text, services list prose, FAQs, pricing, transfer names, booking behavior toggles.
+**Not in Astra text:** wizard tone, role, guardrails, hours prose, FAQs, pricing, transfer names.
 
-### 2.3 Astra instruction layers
+### Astra tools registry
 
-1. **Base core** — \`buildAstraBackendCoreInstructions()\` (static)
-2. **Business header** — Business name, timezone, local datetime (dynamic)
-3. **Intake catalog** — dynamic list of configured fields
-4. **Intake rules** — \`buildAstraIntakeInstructions()\` (static)
-5. **Cross-tool rules** — \`buildAstraCrossToolInstructions()\` (static) — booking/reschedule/cancel paths, scheduling preference discipline
-6. **Per-tool contracts** — OpenAI \`tools[].description\` + Zod parameter schemas (see below)
+${toolRows}
 
-### 2.4 Complete production Astra instructions (sample assembly)
+### Complete assembled Astra instructions (sample)
 
-Example with placeholders for dynamic lines (real call uses resolved values + per-agent intake catalog):
+Placeholders: \`{{businessName}}\`, \`{{timezone}}\`, \`{{currentLocalDateTime}}\`, \`{{intakeFieldCatalog}}\`. SHA256 prefix: \`${sha(astraSample)}\` · ${astraSample.length} chars.
 
 \`\`\`
 ${astraSample}
 \`\`\`
 
-### 2.5 Astra tools registry
-
-${toolRows}
-
-### 2.6 Tool description contracts (\`astra-tool-contracts.ts\`)
+### Tool description contracts (\`astra-tool-contracts.ts\`)
 
 ${contractBlock}
 
-\`update_intake\` parameter schema is **dynamic** per agent: \`buildUpdateIntakeZodSchema(config)\` in \`src/lib/voice-v3/intake-objective/schema.ts\` (keys = configured intake fields).
+\`update_intake\` schema: dynamic per agent (\`buildUpdateIntakeZodSchema\`). \`transfer_call\`: enum only if \`config.transferDestinations\` set — wizard transfer **not** mapped in \`from-published-agent.ts\` today.
 
-\`transfer_call\` destination enum is **dynamic** when \`config.transferDestinations\` is populated (\`buildTransferCallOpenAiTool\`); \`from-published-agent.ts\` does **not** currently map wizard transfer destinations into \`VoiceV3AgentConfig.transferDestinations\`.
+### Static sections (also embedded above)
 
----
-
-## PART 3 — Amy vs Astra context comparison
-
-| Information | Amy | Astra | Source | Field / path | How injected | Why today |
-|-------------|-----|-------|--------|--------------|--------------|-----------|
-| Business name | Yes | Yes | Wizard / VoiceAgentConfig | \`businessName\` | Live \`instructions\`; Astra header line | Greeting + business context |
-| Agent name | Yes (env) | No | \`VOICE_V3_AGENT_NAME\` | env | Live \`instructions\` + greeting commentary | Persona |
-| Timezone | No | Yes | Wizard / config | \`timezone\` | Astra header | Scheduling normalization |
-| Current local datetime | No | Yes | computed at accept | N/A | Astra header | Relative date reasoning |
-| Intake field catalog | No | Yes | \`compileVoiceV2IntakeSchema\` | \`collectFields\` → \`voiceV2Intake\` | Astra text + \`update_intake\` schema | Intake capture |
-| Intake values (runtime) | Via thinking append | Via tool state | call runtime | \`update_intake\` | thinking append snapshot | Shared truth |
-| Availability slots | Via thinking append | Tool results | FIND pipeline | offer sets | thinking append | Amy speaks slots |
-| Booking / appt ids | Via thinking append | Tool results | BOOK/MANAGE | provider ids | thinking append | Confirmations |
-| Delegation capability list | Yes | No (has tools instead) | static | N/A | Live policy section | When to delegate |
-| Cross-tool workflow rules | No | Yes | static | N/A | Astra cross-tool block | Tool discipline |
-| Business hours | No | No* | wizard maturity / env fallback | \`operatingMaturity\`, \`businessHours\` in fallback config | FIND uses \`VoiceV3AgentConfig.businessHours\` deterministically, not prompt text | *Not in Astra prose |
-| Service name/duration | No | No* | appointment types | \`service\` on VoiceV3AgentConfig | FIND/BOOK executors | *Not in Astra prose |
-| Calendar connection | No | No | Prisma | \`voiceCalendarConnection\` | Microsoft adapter | Provider |
-| Tone / role / guardrails | No | No | wizard | \`instructions.*\` | V2 system prompt only | Not wired to V3 |
-| Business knowledge / FAQs | No | No | KB / Company Brain | \`knowledgeItems\`, KB ids | V2 prompt + retrieval | Not wired to V3 |
-| Transfer destinations | Policy only | Tool schema (if configured) | wizard transfers | \`transfers.*\` | V2; V3 tool often loose string | Partial |
-| Wizard opening greeting text | Partial | No | wizard | \`openingGreeting\` | commentary greeting (env template) | Misaligned |
-
-### Duplication
-
-- Conversation discipline (brief, one question, don't invent facts) appears in **static Amy prompt** and overlaps thematically with **Astra core** — not wizard-driven.
-- **Business name** can appear in Amy instructions, Astra header, and V2 \`instructions.system\` (wizard) simultaneously.
-
-### Neither model today (wizard-only examples)
-
-- \`tone\`, \`speakingStyle\`, \`role\`, \`guardrails\` (wizard → V2 prompt only)
-- \`knowledgeItems\`, website-scraped facts, document RAG (V2 + Company Brain)
-- \`bookingBehavior.*\` conversation rules (V2 workflow)
-- \`connectionGreeting\` audio (Telnyx/V2)
-- \`qualificationRules\`, zip gates
-- Most \`operatingMaturity\` prose
-
----
-
-## PART 4 — Wizard inventory (Steps 1–8)
-
-**UI shell:** \`src/components/solutions/appointment-receptionist/wizard.tsx\`  
-**Steps:** \`src/lib/solutions/appointment-receptionist/types.ts\` → \`WIZARD_STEPS\`  
-**Persistence API:** \`POST /api/solutions/appointment-receptionist\` → \`buildWizardAgentConfig\` + \`updateVoiceAgentDraft\` / publish  
-**Wizard snapshot:** \`config.advanced.appointmentReceptionistWizard\` (full \`AppointmentReceptionistWizardState\`)
-
-Detailed per-field rows are consolidated in **PART 8 (Master mapping worksheet)**. Step mapping:
-
-| Step | ID | Primary components |
-|------|-----|-------------------|
-| 1 | goals | \`steps/goals-step.tsx\` — capabilities, answerWhen, solutionName |
-| 2 | phone | \`steps/phone-step.tsx\` — number, ring, recording, connection greeting, outbound SMS |
-| 3 | information | \`steps/information-step.tsx\` — business, timezone, knowledge, uploads, operating maturity |
-| 4 | appointments | \`steps/appointments-step.tsx\` — booking strategy, calendar, types, collect fields, qualification |
-| 5 | call-handling | \`steps/call-handling-step.tsx\` — transfer, fallbacks, recovery, CRM, booking behavior |
-| 6 | voice | \`steps/voice-step.tsx\` — persona, greeting, voice picker, sliders |
-| 7 | test | \`steps/test-step.tsx\` — scenarios, voice test, quality studio |
-| 8 | activate | \`steps/activate-step.tsx\` — activation mode, publish |
-
-**State type reference:** \`AppointmentReceptionistWizardState\` in \`types.ts\` (lines 116–302) lists every persisted wizard field including nested \`bookingBehavior\`, \`collectFields\`, \`appointmentTypes\`, transfer arrays, Calendly/link fields, AI call recovery, operating maturity, etc.
-
----
-
-## PART 5 — Wizard → Voice V3 runtime traces (proved paths)
-
-### businessName
-
-\`wizard.businessName\` → \`buildWizardAgentConfig\` (\`identity.businessLocation\`, \`dynamicVariables.business_name\`) → published \`VoiceAgentVersion.config\` → \`loadVoiceAgentRuntimeConfig\` → \`resolveVoiceV3AgentConfigForAgent\` → \`VoiceV3AgentConfig.businessName\` → \`buildVoiceV3Prompts\` → **Amy** (\`buildLiveFrontendInstructions\`) + **Astra** header.
-
-### timezone
-
-\`wizard.timezone\` → same publish chain → \`VoiceV3AgentConfig.timezone\` → **Astra** header + \`formatBusinessLocalDateTime\` + scheduling normalizer / FIND windows (deterministic).
-
-### collectFields / intake
-
-\`wizard.collectFields\` → \`mergeAppointmentWizardAdvanced\` → \`advanced.voiceV2Intake\` + \`receptionistAdvanced.callerFields\` → \`compileVoiceV2IntakeSchema(config)\` → \`from-published-agent\` maps to \`intakeFields\` → **Astra** catalog + \`update_intake\` Zod schema + \`operationRequirements\` / book preconditions.
-
-### appointmentTypes (first enabled)
-
-\`wizard.appointmentTypes\` → published config conversationFlow → \`from-published-agent\` picks enabled type → \`VoiceV3AgentConfig.service\` (\`id\`, \`name\`, \`durationMinutes\`) → **find_availability** / **book_appointment** (deterministic), not prompt prose.
-
-### Microsoft calendar
-
-Wizard calendar connect → \`voiceCalendarConnection\` row → \`from-published-agent\` → \`VoiceV3AgentConfig.calendar.connectionId\` → Microsoft FIND/BOOK adapters.
-
-### agentName (wizard)
-
-\`wizard.agentName\` → \`identity.displayName\`, \`dynamicVariables.agent_name\`, V2 \`instructions.system\` → **SAVED BUT NOT CONSUMED BY VOICE V3** Live accept (uses \`VOICE_V3_AGENT_NAME\` unless code change).
-
-### openingGreeting (wizard)
-
-\`wizard.openingGreeting\` → \`callHandling.greeting\` → **SAVED BUT NOT CONSUMED BY VOICE V3** initial commentary (uses \`buildLiveFrontendGreetingLine\` with env/wizard-less defaults).
-
-### knowledgeBase / website / uploads
-
-→ \`advanced.knowledge\`, \`knowledgeBaseIds\`, Company Brain sync → V2 retrieval + \`instructions.system\` Business knowledge → **SAVED BUT NOT CONSUMED BY VOICE V3** PSTN Live path.
-
-### tone, role, guardrails, bookingBehavior
-
-→ \`instructions\` + \`receptionistAdvanced\` → V2 Telnyx → **SAVED BUT NOT CONSUMED BY VOICE V3**.
-
-### transfer destinations
-
-→ \`transfers.*\` in VoiceAgentConfig → V2 \`escalate_human\` → V3 \`transfer_call\` executor exists but \`VoiceV3AgentConfig.transferDestinations\` not populated from wizard in \`from-published-agent.ts\` → **partial / gap**.
-
----
-
-## PART 6 — File / document / knowledge features
-
-| Feature | Wizard | UI | Types | Upload / API | Storage | Consumer today | V3 PSTN | Index/search |
-|---------|--------|-----|-------|--------------|---------|----------------|---------|--------------|
-| Website scan | Step 3 | URL + import | website | \`POST /api/voice/knowledge\` action \`scan_website\` | Voice knowledge base + chunks | V2 prompt + retrieval | No | Yes (KB pipeline) |
-| Document upload | Step 3 | file input | PDF,DOCX,TXT,MD,CSV | \`POST /api/voice/knowledge/:id/upload\` | KB storage | V2 retrieval tool | No | Yes when enabled |
-| Guided profile items | Step 3 | knowledgeItems editor | text fields | wizard state → Company Brain | Company Brain / prompt section | V2 \`instructions.system\` | No | Partial |
-| Link existing KB | Step 3 | select | — | \`GET /api/voice/knowledge\` | \`knowledgeBaseIds\` on agent | V2 | No | Yes |
-| knowledgeBaseEnabled toggle | Step 3 | toggle | — | advanced.knowledge | feature flag | V2 RAG tool | No | When on |
-
-**No OpenAI Vector Store** is created in this codebase path for V3.
-
----
-
-## PART 7 — Authoritative configuration source
-
-| Layer | Model | Notes |
-|-------|-------|-------|
-| Wizard draft | \`AppointmentReceptionistWizardState\` embedded in \`VoiceAgent.draftConfig.advanced.appointmentReceptionistWizard\` | Full UI state |
-| Compiled agent config | \`VoiceAgentConfig\` via \`buildWizardAgentConfig\` | Includes \`instructions.system\`, telephony, transfers, KB ids |
-| Published | \`VoiceAgentVersion.config\` pointed to by \`VoiceAgent.publishedVersionId\` | What live V2 uses; V3 reads via \`loadVoiceAgentRuntimeConfig\` |
-| Voice V3 runtime slice | \`VoiceV3AgentConfig\` via \`resolveVoiceV3AgentConfigForAgent\` | **Subset** — not full wizard |
-| Per-call runtime | \`VoiceV3CallRuntime\` context snapshot | Mutable intake/scheduling state during call |
-
-**Draft vs publish:** \`POST /api/solutions/appointment-receptionist\` with \`action: activate\` publishes when checklist passes; \`save_draft\` updates draft only. Scheduled activation stores metadata without demoting ACTIVE agents.
-
-**Incoming call resolution:** PSTN → recent leg context → \`resolveVoiceV3AgentConfigForAgent(workspaceId, agentId)\` **at accept time** (reads **published** config first). This is live published config, not a historical snapshot — intake/catalog can change between calls.
-
-**Accept wiring:** Config loaded in \`openai-live-webhook.ts\` immediately before \`buildBasicLiveSessionAcceptParams\`.
-
----
-
-## PART 8 — Master mapping worksheet
-
-| Step | Field | Meaning | Persisted At | Current Consumer | Amy Today | Astra Today | Runtime/Tool Today | Provider Today | Currently Unused? | Potential Destination |
-|------|-------|---------|--------------|------------------|-----------|-------------|-------------------|----------------|-------------------|----------------------|
-${masterTable}
-
----
-
-## PART 9 — Discrepancy / gap list
-
-### A. Wizard fields useful but reaching neither Amy nor Astra (V3 PSTN)
-
-- Knowledge / website / document RAG / \`knowledgeItems\`
-- \`tone\`, \`role\`, \`speakingStyle\`, \`guardrails\`, \`conversationBehaviors\`
-- \`bookingBehavior\` toggles
-- \`qualification*\` rules
-- \`operatingMaturity\` prose (hours policies as text)
-- \`connectionGreeting\` / TeXML mask settings
-- AI call recovery / urgency / callback toggles
-
-### B. Amy prompt content without wizard source
-
-- Static delegation policy and conversation discipline (by design in \`live-frontend-instructions.ts\`)
-- Generic "Amy" persona behaviors not tied to wizard \`tone\` fields
-
-### C. Astra prompt content without wizard source
-
-- Entire \`buildAstraBackendCoreInstructions\` and \`buildAstraCrossToolInstructions\` blocks
-- Tool discipline paths (press-1 style ordering) — product-defined, not wizard
-
-### D. Duplicated information
-
-- Business name: wizard → V2 system prompt + V3 Amy + V3 Astra
-- "Do not invent availability/pricing" themes: static Amy + static Astra core + wizard guardrails (V2 only)
-
-### E. Wizard fields saved but unused (V3)
-
-See PART 5 traces marked **SAVED BUT NOT CONSUMED BY VOICE V3**.
-
-### F. Runtime configuration not controllable from wizard (V3)
-
-- \`VOICE_V3_*\` env overrides for agent name, fallback intake, business hours in \`VOICE_V3_BOOKING_AGENT_CONFIG\`
-- Live voice \`marin\` hardcoded in \`buildBasicLiveSession\`
-- \`operationRequirements\` / default intake fields when schema empty
-
-### G. Legacy / V2 still in wizard path
-
-- \`instructions.system\` from \`compileVoiceAgentPromptFromWizard\` (Telnyx / Voice V2)
-- \`enabledBuiltinTools\` (calendar_availability, escalate_human, etc.)
-- \`voiceV2PstnLiveBooking: false\` in \`wizard-advanced-bridge.ts\` (flag present but false)
-
-### H. Upload / knowledge features not connected to V3
-
-- All KB upload + \`knowledgeBaseEnabled\` paths (PART 6)
-
-### I. UI implies behavior change but V3 may not change
-
-- Changing **agent name**, **opening greeting**, **voice**, **tone** in wizard does not alter V3 \`sessions.accept\` payload today.
-- Changing **transfer** settings may not constrain V3 \`transfer_call\` destinations (config mapping gap).
-- **Booking strategy** non-Microsoft modes saved but V3 PSTN path assumes Microsoft FIND/BOOK.
-
----
-
-## Appendix — Static section sources (for diffing)
-
-### Amy delegation policy (also embedded in Amy prompt)
-
-\`\`\`
-${buildLiveDelegationPolicySection()}
-\`\`\`
-
-### Astra core only
+<details><summary>Astra core only (expand)</summary>
 
 \`\`\`
 ${buildAstraBackendCoreInstructions()}
 \`\`\`
 
-### Astra intake section only
+</details>
+`;
 
-\`\`\`
-${buildAstraIntakeInstructions()}
-\`\`\`
+const part3to7 = `# PARTS 3–7 — Compare, wizard, traces, knowledge, config
 
-### Astra cross-tool section only
+**Generated:** ${generatedAt}
 
-\`\`\`
-${buildAstraCrossToolInstructions()}
-\`\`\`
+${pathProof}
 
 ---
 
-*End of audit document.*
+## PART 3 — Amy vs Astra context
+
+| Information | Amy | Astra | Source | Field | Injection |
+|-------------|-----|-------|--------|-------|-----------|
+| Business name | Y | Y | wizard/config | businessName | Live instructions; Astra header |
+| Agent name | Y (env) | N | VOICE_V3_AGENT_NAME | env | Live + greeting commentary |
+| Timezone | N | Y | wizard | timezone | Astra header; FIND normalizer |
+| Local datetime | N | Y | accept time | computed | Astra header |
+| Intake catalog | N | Y | compileVoiceV2IntakeSchema | collectFields | Astra text + update_intake |
+| Intake/runtime values | thinking | tools | update_intake | snapshot append | Shared |
+| Availability slots | thinking | tool results | FIND | thinking append | Amy speaks |
+| Delegation policy | Y | N | static | — | Live only |
+| Cross-tool rules | N | Y | static | — | Astra |
+| Business knowledge/RAG | N | N | KB/wizard | knowledge* | V2 only |
+| Tone/role/guardrails | N | N | wizard | instructions.* | V2 only |
+
+**Duplication:** business name in Amy + Astra + V2 system prompt; discipline themes in static Amy + Astra core.
+
+**Neither model (V3):** tone, knowledgeItems, bookingBehavior, qualification, operatingMaturity prose, connectionGreeting.
+
+---
+
+## PART 4 — Wizard inventory (Steps 1–8)
+
+Shell: \`wizard.tsx\` · State: \`AppointmentReceptionistWizardState\` (\`types.ts\` L116–302)  
+Save: \`POST /api/solutions/appointment-receptionist\` → \`buildWizardAgentConfig\` · Snapshot: \`advanced.appointmentReceptionistWizard\`
+
+| Step | ID | Component / fields |
+|------|-----|-------------------|
+| 1 | goals | capabilities, answerWhen, solutionName, preset |
+| 2 | phone | numberSource, phone*, ring*, recording, connectionGreeting*, outboundSms* |
+| 3 | information | businessName, timezone, knowledge*, website, uploads, operatingMaturity |
+| 4 | appointments | bookingStrategy, calendar*, appointmentTypes, collectFields, bookingBehavior, qualification*, calendly/link |
+| 5 | call-handling | transfer*, fallbacks, urgency/callback/sales, aiCallRecovery, longTermMemory, crmEnabled |
+| 6 | voice | agentName, role/tone/style/language, greeting, behaviors, guardrails, voice*/sliders |
+| 7 | test | testScenario, qualityStudioLastRun, telnyxAssistantId |
+| 8 | activate | activationMode, scheduledAt |
+
+Per-field worksheet: **PART 8** in \`04-worksheet-and-gaps.md\`.
+
+---
+
+## PART 5 — Wizard → V3 traces
+
+| Field | Chain | V3 |
+|-------|-------|-----|
+| businessName | wizard → publish → from-published-agent → buildVoiceV3Prompts | Amy + Astra |
+| timezone | wizard → VoiceV3AgentConfig.timezone | Astra + FIND |
+| collectFields | voiceV2Intake → compileVoiceV2IntakeSchema → intakeFields | Astra + update_intake + book gates |
+| appointmentTypes[enabled] | → service.id/name/durationMinutes | FIND/BOOK |
+| calendar | voiceCalendarConnection | Microsoft adapter |
+| agentName | identity.displayName | **SAVED NOT CONSUMED V3** (env) |
+| openingGreeting | callHandling.greeting | **SAVED NOT CONSUMED V3** |
+| knowledge* | KB + instructions.system | **SAVED NOT CONSUMED V3** |
+| tone/role/guardrails/bookingBehavior | instructions | **SAVED NOT CONSUMED V3** |
+| transfer* | transfers.* | V2 escalate; V3 transfer_call **partial** (no transferDestinations map) |
+
+---
+
+## PART 6 — File / knowledge features
+
+| Feature | Step | API | V3 PSTN | Indexed |
+|---------|------|-----|---------|---------|
+| Website scan | 3 | POST /api/voice/knowledge scan_website | No | Yes |
+| Doc upload | 3 | POST /api/voice/knowledge/:id/upload | No | Yes |
+| Guided profile | 3 | wizard → Company Brain | No | Partial |
+| Link KB | 3 | GET /api/voice/knowledge | No | Yes |
+| knowledgeBaseEnabled | 3 | advanced.knowledge | No | When on |
+
+No OpenAI Vector Store on V3 path.
+
+---
+
+## PART 7 — Authoritative configuration
+
+| Layer | What |
+|-------|------|
+| Wizard draft | \`draftConfig.advanced.appointmentReceptionistWizard\` |
+| Compiled | \`VoiceAgentConfig\` via \`buildWizardAgentConfig\` |
+| Published | \`VoiceAgentVersion.config\` (\`publishedVersionId\`) |
+| V3 slice | \`VoiceV3AgentConfig\` via \`resolveVoiceV3AgentConfigForAgent\` |
+| Per-call | \`VoiceV3CallRuntime\` snapshot |
+
+Accept reads **published** config at call time (not immutable snapshot). Loaded in \`openai-live-webhook.ts\` before \`buildBasicLiveSessionAcceptParams\`.
 `;
 
-const out = join(process.cwd(), "docs/VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT.md");
-writeFileSync(out, doc, "utf8");
-console.log("Wrote", out, "bytes", doc.length);
+const part8to9 = `# PARTS 8–9 — Worksheet and gaps
+
+**Generated:** ${generatedAt}
+
+## PART 8 — Master mapping worksheet
+
+| Step | Field | Meaning | Persisted At | Consumer | Amy | Astra | Runtime | Provider | Unused? | Potential Destination |
+|------|-------|---------|--------------|----------|-----|-------|---------|----------|---------|----------------------|
+${masterTable}
+
+---
+
+## PART 9 — Discrepancy list
+
+**A.** Useful wizard fields → neither Amy nor Astra (V3): knowledge/RAG, tone/role/guardrails, bookingBehavior, qualification, operatingMaturity, connectionGreeting, recovery toggles.
+
+**B.** Amy without wizard source: static delegation policy + conversation discipline in \`live-frontend-instructions.ts\`.
+
+**C.** Astra without wizard source: core + cross-tool blocks; tool path ordering.
+
+**D.** Duplicated: business name; “don’t invent” themes (Amy + Astra + V2 guardrails).
+
+**E.** Saved unused V3: see PART 5 **SAVED NOT CONSUMED**.
+
+**F.** Runtime not from wizard: \`VOICE_V3_*\` env, voice \`marin\`, default intake when schema empty.
+
+**G.** Legacy: \`instructions.system\`, \`enabledBuiltinTools\`, \`voiceV2PstnLiveBooking: false\`.
+
+**H.** Upload/knowledge not on V3 PSTN.
+
+**I.** UI mismatch: agentName, greeting, voice, tone, transfer, non-Microsoft bookingStrategy may not change V3 accept behavior.
+`;
+
+const auditDir = join(process.cwd(), "docs/voice-v3-prompt-wizard-audit");
+mkdirSync(auditDir, { recursive: true });
+
+const files: Record<string, string> = {
+  "01-amy-production-prompt.md": part1Meta,
+  "02-astra-production-prompt.md": part2Meta,
+  "03-compare-wizard-traces-config-knowledge.md": part3to7,
+  "04-worksheet-and-gaps.md": part8to9,
+};
+
+for (const [name, body] of Object.entries(files)) {
+  const p = join(auditDir, name);
+  writeFileSync(p, body, "utf8");
+}
+
+const indexDoc = `# Voice V3 — Prompt / Wizard / Runtime audit (index)
+
+**Status:** Audit only · **Generated:** ${generatedAt}
+
+The full report was split into smaller files so each part downloads reliably. **All content from the original single file is preserved** (appendix duplicates removed — static Astra core is in part 2).
+
+## Download options
+
+| File | Contents | ~Size |
+|------|----------|-------|
+| [01-amy-production-prompt.md](./voice-v3-prompt-wizard-audit/01-amy-production-prompt.md) | PART 1 — full Amy/Live instructions + metadata | ${part1Meta.length} B |
+| [02-astra-production-prompt.md](./voice-v3-prompt-wizard-audit/02-astra-production-prompt.md) | PART 2 — full Astra instructions + tool contracts | ${part2Meta.length} B |
+| [03-compare-wizard-traces-config-knowledge.md](./voice-v3-prompt-wizard-audit/03-compare-wizard-traces-config-knowledge.md) | PARTS 3–7 | ${part3to7.length} B |
+| [04-worksheet-and-gaps.md](./voice-v3-prompt-wizard-audit/04-worksheet-and-gaps.md) | PARTS 8–9 | ${part8to9.length} B |
+| [VOICE-V3-AUDIT.zip](./voice-v3-prompt-wizard-audit/VOICE-V3-AUDIT.zip) | All four parts in one zip | — |
+| [VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT-CONDENSED.md](./VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT-CONDENSED.md) | Worksheet + gaps + path proof **without** full prompt bodies | small |
+
+## Regenerate
+
+\`npx tsx scripts/generate-voice-v3-prompt-wizard-audit-doc.ts\`
+
+## Quick findings
+
+- V3 Amy = \`live-frontend-instructions.ts\` (not wizard \`instructions.system\`).
+- Wizard → V3 subset: businessName, timezone, intake schema, first appointment type, Microsoft calendar.
+- Knowledge/RAG/Company Brain: saved, **not** on V3 PSTN accept.
+- Wizard \`agentName\` / \`openingGreeting\`: often **not** on V3 accept (env greeting path).
+
+---
+
+${pathProof}
+`;
+
+const condensedDoc = `# Voice V3 audit — condensed (no full prompt bodies)
+
+**Generated:** ${generatedAt}  
+Use **split files** or zip for full Amy/Astra prompt text. This file has path proof, comparison, wizard, traces, worksheet, and gaps only.
+
+---
+
+${pathProof}
+
+---
+
+${part3to7.split("---").slice(1).join("---")}
+
+---
+
+${part8to9}
+`;
+
+writeFileSync(join(process.cwd(), "docs/VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT.md"), indexDoc, "utf8");
+writeFileSync(
+  join(process.cwd(), "docs/VOICE-V3-PROMPT-WIZARD-MAPPING-AUDIT-CONDENSED.md"),
+  condensedDoc,
+  "utf8",
+);
+
+try {
+  execSync(
+    `cd "${auditDir}" && zip -q VOICE-V3-AUDIT.zip 01-amy-production-prompt.md 02-astra-production-prompt.md 03-compare-wizard-traces-config-knowledge.md 04-worksheet-and-gaps.md`,
+  );
+} catch {
+  // zip optional
+}
+
+console.log("Wrote index + split parts under docs/voice-v3-prompt-wizard-audit/");
+for (const [name, body] of Object.entries(files)) {
+  console.log(" ", name, body.length, "bytes");
+}
+console.log(" condensed:", condensedDoc.length, "bytes");
+console.log(" index:", indexDoc.length, "bytes");
