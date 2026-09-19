@@ -102,6 +102,8 @@ export async function executeRequestCallback(
     };
   }
 
+  ctx = withCallback(ctx, callbackFromContext(ctx));
+
   const missing = getMissingCallbackRequirementKeys(config, ctx, args);
   if (missing.length > 0) {
     console.log("VOICE_V3_CALLBACK_REQUIREMENTS_MISSING", {

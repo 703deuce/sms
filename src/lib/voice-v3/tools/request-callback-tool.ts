@@ -3,6 +3,7 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
+import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { authorizeRequestCallbackOrError } from "./authorize-tool-for-config";
 import { REQUEST_CALLBACK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
@@ -58,7 +59,8 @@ export const requestCallbackTool: VoiceToolDefinition<RequestCallbackArgs> = {
     const denied = authorizeRequestCallbackOrError(config);
     if (denied) return denied;
 
-    const snap = ctx.runtime.getSnapshot();
+    let snap = mergeDialogActiveGoalFromTool(ctx.runtime.getSnapshot(), "REQUEST_CALLBACK");
+    ctx.runtime.replaceContext(snap);
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
     const { executeRequestCallback } = await import("../callback/execute-request-callback");
     const { result, nextContext } = await executeRequestCallback({
