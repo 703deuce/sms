@@ -12,7 +12,7 @@ import { clearCallerTurnSemanticProgress } from "../conversation/caller-turn-sem
 import {
   clearSemanticTurnWatchdog,
   markSemanticInterpretationEnded,
-} from "../conversation/semantic-turn-watchdog";
+} from "../conversation/delegation-timing";
 import {
   clearDelegatedVoiceToolSessionState,
   handleDelegatedVoiceToolCall,

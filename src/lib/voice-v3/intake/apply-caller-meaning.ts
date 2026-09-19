@@ -1,3 +1,7 @@
+/**
+ * Legacy CallerMeaning merge for scripts/tests only — not on the production PSTN tool path.
+ * Production uses typed tools → merge-intake-state.ts and tool-specific handlers.
+ */
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext } from "../state/call-context";
 import type { CallerMeaning } from "./caller-meaning-schema";

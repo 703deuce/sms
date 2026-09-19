@@ -3,11 +3,13 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
-import { applyCallerMeaningToContext } from "../intake/apply-caller-meaning";
+import {
+  mergeDialogActiveGoalFromTool,
+  mergeSchedulingNaturalLanguage,
+} from "../intake/merge-intake-state";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
-import { emptyCallerMeaningBase } from "./meaning-defaults";
 
 const findArgsSchema = z.object({
   date_expression: z.string().min(1),
@@ -40,18 +42,13 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
   validate: (raw) => findArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
-    const meaning = emptyCallerMeaningBase();
-    meaning.active_goal = "BOOK_APPOINTMENT";
-    meaning.scheduling = {
-      ...meaning.scheduling,
-      date_expression: args.date_expression,
-      time_expression: args.time_expression ?? null,
-      time_kind: args.time_expression ? "DAYPART" : "UNSPECIFIED",
-    };
-
     let snap = ctx.runtime.getSnapshot();
-    const applied = applyCallerMeaningToContext(snap, config, meaning);
-    ctx.runtime.replaceContext(applied.context);
+    const sched = mergeSchedulingNaturalLanguage(snap, {
+      dateExpression: args.date_expression,
+      timeExpression: args.time_expression,
+    });
+    snap = mergeDialogActiveGoalFromTool(sched.context, "BOOK_APPOINTMENT");
+    ctx.runtime.replaceContext(snap);
     snap = ctx.runtime.getSnapshot();
 
     const rules = evaluateVoiceV3Rules(snap, config);

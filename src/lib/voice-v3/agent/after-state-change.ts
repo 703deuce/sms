@@ -56,7 +56,7 @@ export function afterVoiceV3StateChange(input: {
     const display = ctx.booking.confirmed.displayTime;
     input.send({
       type: "session.commentary.append",
-      content: `Verified: appointment booking is confirmed for ${display}. You may tell the caller it is booked.`,
+      content: `BOOKING_CONFIRMED: appointment verified in Microsoft calendar for ${display}.`,
       delegation_id: null,
     });
   }

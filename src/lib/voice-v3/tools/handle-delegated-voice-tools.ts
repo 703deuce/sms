@@ -8,7 +8,7 @@ import { voiceToolError } from "./types";
 import {
   markSemanticInterpretationEnded,
   markSemanticInterpretationStarted,
-} from "../conversation/semantic-turn-watchdog";
+} from "../conversation/delegation-timing";
 import { noteSemanticTimingEvent } from "../telemetry/caller-turn-timing";
 
 const executedCallIds = new Set<string>();

@@ -19,7 +19,7 @@ export function buildCancelAppointmentOpenAiTool(_config: VoiceV3AgentConfig): F
     name: "cancel_appointment",
     parameters: cancelArgsSchema,
     description:
-      "Cancel an existing appointment after the caller has clearly confirmed cancellation. Requires a verified appointment (find_appointment). Calling this does not guarantee cancellation until the tool result says so.",
+      "Cancel an existing appointment only after find_appointment verified the record and the caller clearly confirmed cancellation. Never call before find_appointment. Calling this does not guarantee cancellation until the tool result says so.",
   });
   return {
     type: "function",

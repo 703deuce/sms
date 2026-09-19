@@ -5,7 +5,7 @@ import {
   getRollingCallerTranscript,
   clearTranscriptAccumulator,
 } from "./transcript-accumulator";
-import { onCallerTurnCommitted } from "./semantic-turn-watchdog";
+import { onCallerTurnCommitted } from "./delegation-timing";
 import { ensureTurnProgressCommitted } from "./caller-turn-semantic-progress";
 import {
   mergeCapturingTranscriptTimingIntoTurn,

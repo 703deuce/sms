@@ -2,11 +2,10 @@ import { z } from "zod";
 import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { applyCallerMeaningToContext } from "../intake/apply-caller-meaning";
+import { applyIntakeToolPatch } from "../intake/merge-intake-state";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
-import { emptyCallerMeaningBase } from "./meaning-defaults";
 
 export type UpdateIntakeArgs = Record<string, unknown>;
 
@@ -86,30 +85,21 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
       );
     }
     const args = parsed.data;
-    const meaning = emptyCallerMeaningBase();
-    if (typeof args.active_goal === "string" && args.active_goal.trim()) {
-      meaning.active_goal = args.active_goal;
-    }
+    const fieldValues: Array<{ key: string; value: string }> = [];
     for (const field of config.intakeFields) {
       const v = args[field.key as keyof typeof args];
       if (typeof v === "string" && v.trim()) {
-        meaning.captured_fields.push({
-          key: field.key,
-          value: v.trim(),
-          confidence: 1,
-        });
+        fieldValues.push({ key: field.key, value: v.trim() });
       }
-    }
-    if (typeof args.date_expression === "string" && args.date_expression.trim()) {
-      meaning.scheduling.date_expression = args.date_expression.trim();
-    }
-    if (typeof args.time_expression === "string" && args.time_expression.trim()) {
-      meaning.scheduling.time_expression = args.time_expression.trim();
-      meaning.scheduling.time_kind = "DAYPART";
     }
 
     const snap = ctx.runtime.getSnapshot();
-    const applied = applyCallerMeaningToContext(snap, config, meaning);
+    const applied = applyIntakeToolPatch(snap, config, {
+      active_goal: args.active_goal,
+      date_expression: args.date_expression,
+      time_expression: args.time_expression,
+      fieldValues,
+    });
     ctx.runtime.replaceContext(applied.context);
 
     const rules = evaluateVoiceV3Rules(ctx.runtime.getSnapshot(), config);

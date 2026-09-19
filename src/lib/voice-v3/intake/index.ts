@@ -1,4 +1,12 @@
+/** @deprecated Production PSTN path — use merge-intake-state / tool handlers. Tests may import apply-caller-meaning directly. */
 export { applyCallerMeaningToContext, type ApplyCallerMeaningResult } from "./apply-caller-meaning";
+export {
+  applyIntakeToolPatch,
+  mergeDialogActiveGoalFromTool,
+  mergeIntakeFieldValues,
+  mergeSchedulingNaturalLanguage,
+  type IntakeMergeResult,
+} from "./merge-intake-state";
 export {
   buildCallerInterpretationContext,
   formatCallerInterpretationContextJson,

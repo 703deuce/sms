@@ -1,11 +1,9 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "../config/booking-agent-config";
-import { applyCallerMeaningToContext } from "../intake/apply-caller-meaning";
-import type { CallerMeaning } from "../intake/caller-meaning-schema";
 import { buildVoiceV3CallClock } from "../time/call-clock";
 import { createInitialVoiceV3CallContext, type VoiceV3CallContext } from "./call-context";
 import type { VoiceV3CallEvent } from "./call-events";
-import { evaluateVoiceV3Rules, type VoiceV3RuleEvaluation } from "./call-rules";
+import { evaluateVoiceV3Rules } from "./call-rules";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import { planAgentState } from "../agent/agent-planner";
 import { formatConversationActionForSnapshot } from "../agent/snapshot-format";
@@ -75,103 +73,11 @@ export class VoiceV3CallRuntime {
     };
   }
 
-  applyEvent(event: VoiceV3CallEvent): {
-    rules: VoiceV3RuleEvaluation;
-    fieldsChanged: string[];
-    correctionCount: number;
-  } {
+  applyEvent(event: VoiceV3CallEvent): void {
     if (event.type === "RUNTIME_DISPOSED") {
-      return {
-        rules: evaluateVoiceV3Rules(this.context, this.config),
-        fieldsChanged: [],
-        correctionCount: 0,
-      };
+      return;
     }
-
-    const started = Date.now();
-    const applied = applyCallerMeaningToContext(this.context, this.config, event.meaning);
-    this.context = applied.context;
-
-    const rules = evaluateVoiceV3Rules(this.context, this.config);
-    const latency = event.astraLatencyMs ?? Date.now() - started;
-
-    const sched = this.context.scheduling.normalized;
-    console.log("CALLER_MEANING_APPLIED", {
-      call_id: this.context.callId,
-      live_session_id: this.context.liveSessionId,
-      state_version: this.context.runtime.version,
-      astra_latency_ms: latency,
-      active_goal: this.context.dialog.activeGoal,
-      captured_field_keys: Object.keys(this.context.intake.values).filter((k) =>
-        Boolean(this.context.intake.values[k]?.value?.trim()),
-      ),
-      fields_changed: applied.fieldsChanged,
-      correction_count: applied.correctionCount,
-      scheduling_generation: this.context.scheduling.generation,
-      scheduling_precision: sched?.precision ?? null,
-      scheduling_local_date: sched?.localDate ?? null,
-      scheduling_daypart: this.context.scheduling.meaning?.daypart ?? null,
-      scheduling_time_kind: this.context.scheduling.meaning?.time_kind ?? null,
-      missing_required_field_keys: rules.missingRequiredFields,
-      find_ready: rules.findReady,
-      booking_ready: rules.bookingReady,
-    });
-
-    console.log("CALL_STATE_VERSION_CHANGED", {
-      call_id: this.context.callId,
-      live_session_id: this.context.liveSessionId,
-      state_version: this.context.runtime.version,
-    });
-
-    logVoiceV3Pipeline("rules", "evaluated", {
-      call_id: this.context.callId,
-      live_session_id: this.context.liveSessionId,
-      state_version: this.context.runtime.version,
-      intake_complete: rules.intakeComplete,
-      missing_required_fields: rules.missingRequiredFields,
-      has_scheduling_preference: rules.hasSchedulingPreference,
-      scheduling_requires_clarification: rules.schedulingRequiresClarification,
-      scheduling_clarification_reason: rules.schedulingClarificationReason,
-      required_action: rules.requiredAction,
-      may_find_availability: rules.mayFindAvailability,
-      booking_ready: rules.bookingReady,
-      slot_selected: rules.slotSelected,
-      scheduling_generation: this.context.scheduling.generation,
-    });
-
-    console.log("RULES_EVALUATED", {
-      call_id: this.context.callId,
-      live_session_id: this.context.liveSessionId,
-      state_version: this.context.runtime.version,
-      intake_complete: rules.intakeComplete,
-      missing_required_fields: rules.missingRequiredFields,
-      has_scheduling_preference: rules.hasSchedulingPreference,
-      scheduling_requires_clarification: rules.schedulingRequiresClarification,
-      required_action: rules.requiredAction,
-      may_find_availability: rules.mayFindAvailability,
-      scheduling_generation: this.context.scheduling.generation,
-    });
-
-    void persistSnapshot(this).catch((err) => {
-      console.error("VOICE_V3_PERSIST_SNAPSHOT_FAILED", {
-        live_session_id: this.context.liveSessionId,
-        err,
-      });
-    });
-
-    this.replan("caller_meaning_applied");
-
-    return {
-      rules,
-      fieldsChanged: applied.fieldsChanged,
-      correctionCount: applied.correctionCount,
-    };
   }
-}
-
-async function persistSnapshot(runtime: VoiceV3CallRuntime): Promise<void> {
-  // Placeholder for future durable store — intentionally non-blocking.
-  void runtime.getSnapshot();
 }
 
 function prune(now: number): void {
