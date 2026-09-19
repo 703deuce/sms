@@ -111,8 +111,22 @@ Deleted. `scripts/test-voice-v3-parse-scheduling-expressions.ts` deleted.
 
 ## 14. Real Astra certification
 
-- Static: `test-voice-v3-astra-tool-contracts-audit.ts`, updated `test-voice-v3-astra-tool-selection.ts` / `test-voice-v3-astra-intake-cert.ts` (expects `set_scheduling_preference` before FIND).
-- Live API scenarios require `OPENAI_API_KEY` (same as existing intake/tool-selection certs).
+**Script:** `npm run test:voice-v3-astra-scheduling-cert`
+
+**Live run (2026-09-19): PASS** — all eight scenarios produced valid `SchedulingMeaning` via `set_scheduling_preference`:
+
+| Scenario | Key semantics verified |
+|----------|------------------------|
+| Tuesday afternoon | THIS_WEEKDAY + TUESDAY + DAYPART + AFTERNOON |
+| Tomorrow at 3 | TOMORROW + EXACT + 15:00 |
+| Next Wednesday morning | NEXT_WEEKDAY + WEDNESDAY + MORNING |
+| After 3 Friday | AFTER + start_time 15:00 + FRIDAY |
+| Before noon tomorrow | TOMORROW + BEFORE + end_time 12:00 |
+| Between 2 and 5 Tuesday | BETWEEN + 14:00–17:00 |
+| September 28 at 11 | EXPLICIT_DATE 2026-09-28 + EXACT 11:00 |
+| Correction to Wednesday | WEDNESDAY + MORNING (not Tuesday) |
+
+Also: `test-voice-v3-astra-tool-selection.ts` (production contracts) PASS including `scheduling_correction` → `set_scheduling_preference`.
 
 ## 15–18. Verification commands
 
