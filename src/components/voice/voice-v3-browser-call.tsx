@@ -91,14 +91,30 @@ export function VoiceV3BrowserCall({
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      if (!offer.sdp) {
+
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === "complete") {
+          resolve();
+          return;
+        }
+        const timeout = window.setTimeout(() => resolve(), 4000);
+        pc.addEventListener("icegatheringstatechange", () => {
+          if (pc.iceGatheringState === "complete") {
+            window.clearTimeout(timeout);
+            resolve();
+          }
+        });
+      });
+
+      const offerSdp = pc.localDescription?.sdp?.trim();
+      if (!offerSdp) {
         throw new Error("Could not create WebRTC offer");
       }
 
       const res = await fetch(`/api/voice/agents/${agentId}/v3-wizard-live-test`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ offerSdp: offer.sdp }),
+        body: JSON.stringify({ offerSdp }),
       });
       const json = await res.json();
       if (!res.ok) {

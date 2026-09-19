@@ -431,7 +431,7 @@ export function CallHandlingStep({
       <SidePanel title="Call handling preview">
         <ol className="space-y-2 border-l border-border pl-3 text-xs">
           {(booking
-            ? FLOW_STEPS
+            ? LEGACY_BOOKING_FLOW_STEPS
             : [
                 "Greet caller",
                 "Answer from knowledge",

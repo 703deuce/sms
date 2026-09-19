@@ -1,7 +1,8 @@
 import "server-only";
 
 import { getAppBaseUrl } from "@/lib/messaging/telnyx/config";
-import { getMerchantConnection, refreshStripeConnectAccount } from "@/lib/merchant-payments/connection-store";
+import { getMerchantConnection } from "@/lib/merchant-payments/connection-store";
+import { refreshStripeConnectAccount } from "@/lib/merchant-payments/stripe-connect";
 import { PAYMENT_REQUEST_TRANSACTION_TYPE, isPaymentRequestCheckoutMetadata } from "@/lib/payment-requests/types";
 import { createDirectChargeCheckoutSession } from "@/lib/stripe-connect/checkout";
 import { getStripeTextToPayCapabilities } from "@/lib/stripe-connect/capabilities";

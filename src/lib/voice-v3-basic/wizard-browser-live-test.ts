@@ -9,7 +9,7 @@ import {
   type VoiceV3ProviderConnections,
 } from "@/lib/voice-v3/config/compile-voice-v3-agent-config";
 import { VOICE_V3_BOOKING_AGENT_CONFIG } from "@/lib/voice-v3/config/booking-agent-config";
-import { isAppointmentReceptionistAgent } from "@/lib/voice-v3/config/wizard-test-compilation";
+import { isAppointmentReceptionistVoiceAgent } from "@/lib/voice-v3/config/wizard-test-compilation";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { getVoiceV3BasicOpenAiClient } from "./openai-client";
 import {
@@ -98,7 +98,7 @@ export async function createWizardV3BrowserLiveTest(input: {
   }
 
   const draftConfig = parseVoiceAgentConfig(agent.draftConfig);
-  if (!isAppointmentReceptionistAgent(draftConfig)) {
+  if (!isAppointmentReceptionistVoiceAgent(draftConfig)) {
     return {
       ok: false,
       code: "not_appointment_receptionist",
