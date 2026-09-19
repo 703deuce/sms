@@ -50,3 +50,36 @@ export function compileWizardCollectFieldsToV3Intake(
 export function bookingRequiredIntakeKeys(fields: IntakeFieldDefinition[]): string[] {
   return fields.filter((f) => f.required).map((f) => f.key);
 }
+
+const DEFAULT_CALLBACK_REASON_KEYS = ["service_reason", "service", "notes", "reason"] as const;
+
+/**
+ * Per-operation callback requirements — independent from book_appointment intake.
+ */
+export function callbackRequiredIntakeKeys(
+  wizard: AppointmentReceptionistWizardState,
+  intakeFields: IntakeFieldDefinition[],
+): string[] {
+  const configuredIds = wizard.callbackRequiredCollectFieldIds;
+  if (configuredIds?.length) {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    for (const id of configuredIds) {
+      const rowId = wizardCollectFieldIdToCallerRowId(id);
+      const key = callerFieldIdToIntakeKey(rowId);
+      if (!key || seen.has(key)) continue;
+      if (!intakeFields.some((f) => f.key === key)) continue;
+      seen.add(key);
+      keys.push(key);
+    }
+    if (keys.length > 0) return keys;
+  }
+
+  const enabledKeys = new Set(intakeFields.map((f) => f.key));
+  const required: string[] = [];
+  if (enabledKeys.has("name")) required.push("name");
+  if (enabledKeys.has("phone")) required.push("phone");
+  const reasonKey = DEFAULT_CALLBACK_REASON_KEYS.find((k) => enabledKeys.has(k));
+  required.push(reasonKey ?? "service_reason");
+  return required;
+}

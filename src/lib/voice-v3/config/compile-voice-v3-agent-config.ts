@@ -17,6 +17,7 @@ import {
 import { defaultNestedFromFlat, mergeNestedConfig } from "./default-nested-config";
 import {
   bookingRequiredIntakeKeys,
+  callbackRequiredIntakeKeys,
   compileWizardCollectFieldsToV3Intake,
 } from "./wizard-collect-fields-v3";
 import { resolveLivePromptControlsFromWizard } from "../prompts/live-prompt-controls";
@@ -213,6 +214,7 @@ function callHandlingFromWizard(
     callbackUseAniByDefault: wizard.callbackUseAniByDefault !== false,
     callbackAskPreferredTime: wizard.callbackAskPreferredTime !== false,
     callbackConfirmNumber: wizard.callbackConfirmNumber !== false,
+    callbackRequiredCollectFieldIds: wizard.callbackRequiredCollectFieldIds ?? undefined,
     salesSolicitationEnabled: wizard.salesSolicitationEnabled === true,
     salesSolicitationAction: wizard.salesSolicitationAction ?? null,
   };
@@ -324,6 +326,7 @@ export function compileVoiceV3AgentConfig(input: {
     operationRequirements: {
       ...envFallback.operationRequirements,
       book_appointment: bookingRequiredIntakeKeys(intake),
+      request_callback: callbackRequiredIntakeKeys(wizard, intake),
     },
     service,
     businessHours,

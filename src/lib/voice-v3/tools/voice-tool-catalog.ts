@@ -18,7 +18,14 @@ import {
   buildSendBookingLinkOpenAiTool,
   sendBookingLinkTool,
 } from "./send-booking-link-tool";
-import { isSendBookingLinkAuthorized } from "./authorize-tool-for-config";
+import {
+  buildRequestCallbackOpenAiTool,
+  requestCallbackTool,
+} from "./request-callback-tool";
+import {
+  isRequestCallbackAuthorized,
+  isSendBookingLinkAuthorized,
+} from "./authorize-tool-for-config";
 
 export type VoiceToolCatalogEntry = {
   name: string;
@@ -99,6 +106,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     definition: sendBookingLinkTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildSendBookingLinkOpenAiTool,
   },
+  {
+    name: "request_callback",
+    kind: "mutation",
+    telemetryName: "request_callback",
+    definition: requestCallbackTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildRequestCallbackOpenAiTool,
+  },
 ];
 
 function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
@@ -120,6 +134,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       return caps.cancelAppointments && isMicrosoftDirectStrategy(config);
     case "send_booking_link":
       return isSendBookingLinkAuthorized(config);
+    case "request_callback":
+      return isRequestCallbackAuthorized(config);
     case "set_scheduling_preference":
       return isMicrosoftDirectStrategy(config);
     case "transfer_call":

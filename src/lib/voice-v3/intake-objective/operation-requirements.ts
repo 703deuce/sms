@@ -1,5 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
+import { getMissingCallbackRequirementKeys } from "../callback/callback-requirements";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
 
 export type VoiceOperationName =
@@ -10,6 +11,7 @@ export type VoiceOperationName =
   | "cancel_appointment"
   | "send_booking_link"
   | "transfer_call"
+  | "request_callback"
   | "update_intake"
   | "end_call";
 
@@ -43,6 +45,9 @@ export function getMissingFieldsForOperation(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
 ): string[] {
+  if (operation === "request_callback") {
+    return getMissingCallbackRequirementKeys(config, context);
+  }
   const requiredKeys = configuredRequiredForOperation(config, operation);
   const values = context.intake.values;
   return requiredKeys.filter((key) => {

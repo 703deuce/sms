@@ -244,6 +244,8 @@ export type AppointmentReceptionistWizardState = {
   callbackUseAniByDefault?: boolean | null;
   callbackAskPreferredTime?: boolean | null;
   callbackConfirmNumber?: boolean | null;
+  /** Collect field ids (wizard) required for Voice V3 request_callback. */
+  callbackRequiredCollectFieldIds?: string[] | null;
   salesSolicitationEnabled?: boolean | null;
   salesSolicitationAction?:
     | import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2SalesSolicitationAction

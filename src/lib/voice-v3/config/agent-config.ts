@@ -48,7 +48,8 @@ export type VoiceOperationRequirementKey =
   | "reschedule_appointment"
   | "cancel_appointment"
   | "send_booking_link"
-  | "transfer_call";
+  | "transfer_call"
+  | "request_callback";
 
 export interface VoiceV3ServiceConfig {
   id: string;
@@ -182,6 +183,8 @@ export interface VoiceV3CallHandlingConfig {
   callbackUseAniByDefault: boolean;
   callbackAskPreferredTime: boolean;
   callbackConfirmNumber: boolean;
+  /** Wizard collectField ids required for request_callback; compiled to intake keys. */
+  callbackRequiredCollectFieldIds?: string[];
   salesSolicitationEnabled: boolean;
   salesSolicitationAction: string | null;
 }

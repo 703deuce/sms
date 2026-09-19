@@ -30,6 +30,7 @@ import type { VoiceV3OperationsMap } from "../operations/types";
 import type { EscalationCounters, VoiceV3EscalationPolicy } from "../agent/escalation";
 import type { VoiceV3Capabilities } from "../agent/capability-state";
 import type { VoiceV3BookingLinkCallState } from "../booking-link/types";
+import type { VoiceV3CallbackCallState } from "../callback/types";
 
 export type VoiceV3Goal =
   | "UNKNOWN"
@@ -127,6 +128,7 @@ export interface VoiceV3CallContext {
     postBookChangeRequested: boolean;
   };
   bookingLink?: VoiceV3BookingLinkCallState;
+  callback?: VoiceV3CallbackCallState;
   appointmentManagement: {
     verifiedExisting: ExistingAppointment | null;
     candidateSet: ExistingAppointmentCandidateSet | null;

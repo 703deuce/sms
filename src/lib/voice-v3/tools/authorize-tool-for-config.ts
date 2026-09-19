@@ -8,7 +8,12 @@ export type VoiceV3AuthorizedToolName =
   | "reschedule_appointment"
   | "cancel_appointment"
   | "transfer_call"
-  | "send_booking_link";
+  | "send_booking_link"
+  | "request_callback";
+
+export function isRequestCallbackAuthorized(config: VoiceV3AgentConfig): boolean {
+  return config.callHandling.callbackRequestsEnabled === true;
+}
 
 function isMicrosoftDirectStrategy(config: VoiceV3AgentConfig): boolean {
   return config.scheduling?.bookingStrategy === "MICROSOFT_365";
@@ -43,6 +48,8 @@ export function isVoiceV3ToolAuthorized(
         caps.transferCalls &&
         (config.transferDestinations?.some((d) => d.enabled !== false) ?? false)
       );
+    case "request_callback":
+      return isRequestCallbackAuthorized(config);
     default:
       return false;
   }
@@ -82,4 +89,16 @@ export function authorizeVoiceV3ToolOrError(
 
 export function authorizeSendBookingLinkOrError(config: VoiceV3AgentConfig) {
   return authorizeVoiceV3ToolOrError(config, "send_booking_link");
+}
+
+export function authorizeRequestCallbackOrError(config: VoiceV3AgentConfig) {
+  if (!isRequestCallbackAuthorized(config)) {
+    return voiceToolError(
+      "CALLBACK_DISABLED",
+      "Callback requests are not enabled for this agent.",
+      { status: "not_available" },
+      "not_available",
+    );
+  }
+  return null;
 }

@@ -89,6 +89,7 @@ const STEP_OWNED_FIELDS: Record<
     "callbackUseAniByDefault",
     "callbackAskPreferredTime",
     "callbackConfirmNumber",
+    "callbackRequiredCollectFieldIds",
     "salesSolicitationEnabled",
     "salesSolicitationAction",
   ],
