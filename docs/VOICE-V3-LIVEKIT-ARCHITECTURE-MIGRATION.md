@@ -70,10 +70,10 @@ No `response.cancel` in codebase today; cut-off risk = stacked `response.create`
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 1 | This migration doc | **Done** |
-| 2–4 | `src/lib/voice-v3/tools/*` registry + execution | **In progress** |
-| 5–9 | Typed tools (intake, find, book, …) | **Partial** (intake, find, book first) |
-| 10–12 | Remove planner/recovery speak | **In progress** |
-| 13–14 | Delegation batch barrier + parallel tools | **In progress** |
+| 2–4 | `src/lib/voice-v3/tools/*` registry + execution | **Done** (wired to delegation) |
+| 5–9 | Typed tools (intake, find, book, …) | **Partial** (intake, find, book; reschedule/cancel pending) |
+| 10–12 | Remove planner/recovery speak | **Partial** (`syncPlannerSpeakToLive` removed from replan) |
+| 13–14 | Delegation batch barrier + parallel tools | **Done** (barrier + `parallel_tool_calls`) |
 | 15 | thinking/commentary without speak | **In progress** |
 | 16 | Decouple `CALLER_TURN_COMMITTED` | **Pending** |
 | 17–18 | Greeting tool gating / availability | **Pending** |
