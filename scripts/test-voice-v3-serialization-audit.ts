@@ -18,25 +18,20 @@ import {
   clearCallerTurnManager,
   getCallerTurns,
 } from "../src/lib/voice-v3/conversation/caller-turn-manager";
-import { emptySchedulingMeaning } from "../src/lib/voice-v3/time/scheduling-types";
-import { emptySlotSelectionMeaning } from "../src/lib/voice-v3/intake/slot-selection-schema";
 import { setCallerUtteranceForTests } from "./voice-v3-test-helpers";
 import { clearSemanticExtractionRetryState } from "../src/lib/voice-v3/intake/semantic-extraction-retry";
 
 const SESSION = "live_serialization_audit";
 const NOW = new Date("2026-09-18T20:00:00.000Z");
 
-function meaningArgs(): string {
+function updateIntakeArgs(): string {
   return JSON.stringify({
+    name: "Anthony",
+    email: null,
+    phone: null,
+    date_expression: "Friday",
+    time_expression: "afternoon",
     active_goal: "BOOK_APPOINTMENT",
-    captured_fields: [],
-    scheduling: emptySchedulingMeaning(),
-    slot_selection: emptySlotSelectionMeaning(),
-    post_book_intent: "NONE",
-    appointment_selection: { selection_type: "NONE", ordinal: null },
-    cancellation_confirmation: "NONE",
-    corrections: [],
-    ambiguities: [],
   });
 }
 
@@ -95,8 +90,8 @@ async function testNoDelegationDrainedOnFunctionTool(): Promise<void> {
         type: "function_call",
         id: "fc_audit",
         call_id: "call_audit",
-        name: "emit_caller_meaning",
-        arguments: meaningArgs(),
+        name: "update_intake",
+        arguments: updateIntakeArgs(),
       },
     },
     send,
@@ -108,10 +103,11 @@ async function testNoDelegationDrainedOnFunctionTool(): Promise<void> {
 
   assert.equal(
     turn.status,
-    "SEMANTIC_APPLIED",
-    "delegation apply should mark turn applied without delegation_drained retry",
+    "COMMITTED",
+    "capability tools update runtime without legacy semantic-turn apply",
   );
   assert.ok(runtime.getSnapshot().dialog.activeGoal === "BOOK_APPOINTMENT");
+  assert.equal(runtime.getSnapshot().intake.values.name?.value, "Anthony");
   clearVoiceV3LiveResponseCoordinator(SESSION);
 }
 

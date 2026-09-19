@@ -7,8 +7,6 @@ import {
   VOICE_V3_BASIC_BACKEND_MODEL,
   VOICE_V3_BASIC_LIVE_MODEL,
 } from "../src/lib/voice-v3-basic/live-session-config";
-import { voiceV3CallerMeaningTextFormat } from "../src/lib/voice-v3/intake/delegation-config";
-import { resolveVoiceV3AgentConfig } from "../src/lib/voice-v3/state/call-runtime";
 import {
   extractLiveSessionIdFromWebhookEvent,
   isIncomingOpenAiSipWebhookEvent,
@@ -31,19 +29,17 @@ function main() {
       : null;
   assert.ok(responses);
   assert.equal(responses.model, VOICE_V3_BASIC_BACKEND_MODEL);
-  const emitTool = responses.tools?.find(
-    (t) => t && typeof t === "object" && "name" in t && t.name === "emit_caller_meaning",
+  const updateIntake = responses.tools?.find(
+    (t) => t && typeof t === "object" && "name" in t && t.name === "update_intake",
   );
-  assert.ok(emitTool, "Live accept should include emit_caller_meaning when intake pipeline enabled");
-  assert.equal((emitTool as { strict?: boolean })?.strict, true);
-  const bookingConfig = resolveVoiceV3AgentConfig();
-  const format = voiceV3CallerMeaningTextFormat(bookingConfig) as {
-    schema?: { properties?: { captured_fields?: { items?: { properties?: { key?: { enum?: string[] } } } } } };
-  };
-  const intakeKeys =
-    format.schema?.properties?.captured_fields?.items?.properties?.key?.enum?.sort() ?? [];
-  assert.deepEqual(intakeKeys, ["email", "name", "phone"]);
-  assert.equal(intakeKeys.includes("mothers_name"), false);
+  assert.ok(updateIntake, "Live accept should include update_intake capability tool");
+  assert.equal((updateIntake as { strict?: boolean })?.strict, true);
+  const toolNames = (responses.tools ?? [])
+    .map((t) => (t && typeof t === "object" && "name" in t ? (t as { name: string }).name : null))
+    .filter(Boolean);
+  assert.ok(toolNames.includes("find_availability"));
+  assert.ok(toolNames.includes("book_appointment"));
+  assert.equal(toolNames.includes("emit_caller_meaning"), false);
   const liveText = responses.text as { format?: unknown } | null | undefined;
   assert.equal(liveText?.format, undefined, "Live accept must not include text.format");
   assertNoDelegationIdOnOutbound(acceptParams);

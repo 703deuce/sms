@@ -207,16 +207,20 @@ async function testProtocolBarrier(): Promise<void> {
   const coord = getVoiceV3LiveResponseCoordinator(sid, send);
   coord.registerPendingFunctionCall({
     callId: "fc_barrier",
-    name: "emit_caller_meaning",
+    name: "update_intake",
     argumentsJson: "{}",
     delegationId: "del_b",
     outputSubmitted: false,
   });
-  coord.requestResponseCreate({ reason: "blocked", allowBeforeDelegation: true });
+  coord.requestResponseCreate({ reason: "planner_inform_result" });
   assert.equal(sent.filter((e) => e.type === "response.create").length, 0);
-  coord.submitFunctionCallOutput("fc_barrier", { accepted: true });
+  coord.submitFunctionCallOutput("fc_barrier", { ok: true });
   await new Promise((r) => setTimeout(r, 5));
-  assert.equal(sent.filter((e) => e.type === "response.create").length, 1);
+  assert.equal(
+    sent.filter((e) => e.type === "response.create").length,
+    1,
+    "only delegated protocol continuation may response.create",
+  );
   peekVoiceV3LiveResponseCoordinator(sid)?.clear();
 }
 

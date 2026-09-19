@@ -49,17 +49,28 @@ function emptyMeaningPayload(): string {
   return meaningPayload({ active_goal: "UNKNOWN" });
 }
 
-function outputItemDone(callId: string, args: string) {
+function outputItemDone(callId: string, name: string, args: string) {
   return {
     type: "response.output_item.done",
     item: {
       type: "function_call",
       id: `fc_${callId}`,
       call_id: callId,
-      name: "emit_caller_meaning",
+      name,
       arguments: args,
     },
   };
+}
+
+function nullIntakeArgs(): string {
+  return JSON.stringify({
+    name: null,
+    email: null,
+    phone: null,
+    date_expression: null,
+    time_expression: null,
+    active_goal: null,
+  });
 }
 
 async function testA_greetingPhantom(): Promise<void> {
@@ -74,7 +85,7 @@ async function testA_greetingPhantom(): Promise<void> {
 
   handleDelegatedAstraResponseEvent({
     liveSessionId: `${SESSION}_a`,
-    nested: outputItemDone("call_phantom", emptyMeaningPayload()),
+    nested: outputItemDone("call_phantom", "emit_caller_meaning", emptyMeaningPayload()),
     send,
     delegationId: "del_phantom",
   });
@@ -89,7 +100,18 @@ async function testA_greetingPhantom(): Promise<void> {
 
   handleDelegatedAstraResponseEvent({
     liveSessionId: `${SESSION}_a`,
-    nested: outputItemDone("call_real", meaningPayload()),
+    nested: outputItemDone(
+      "call_real",
+      "update_intake",
+      JSON.stringify({
+        name: "Anthony",
+        email: null,
+        phone: null,
+        date_expression: "next Friday",
+        time_expression: "afternoon",
+        active_goal: "BOOK_APPOINTMENT",
+      }),
+    ),
     send,
     delegationId: "del_real",
   });

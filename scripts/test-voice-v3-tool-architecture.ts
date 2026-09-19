@@ -20,7 +20,17 @@ async function main() {
 
   const delegation = buildVoiceV3AstraDelegationResponses("test", VOICE_V3_BOOKING_AGENT_CONFIG);
   const names = (delegation.tools ?? []).map((t) => String((t as { name?: string }).name));
-  assert.deepEqual(names.sort(), ["book_appointment", "find_availability", "update_intake"].sort());
+  const expectedTools = [
+    "book_appointment",
+    "cancel_appointment",
+    "end_call",
+    "find_appointment",
+    "find_availability",
+    "reschedule_appointment",
+    "transfer_call",
+    "update_intake",
+  ];
+  assert.deepEqual(names.sort(), expectedTools.sort());
 
   clearVoiceV3CallRuntimeStore();
   const liveSessionId = "live_tool_arch";

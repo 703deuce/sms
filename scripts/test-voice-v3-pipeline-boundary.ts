@@ -46,6 +46,17 @@ const toolsJson = JSON.stringify(delegation.tools ?? []);
 for (const banned of VOICE_V3_PROHIBITED_LIVE_TOOL_NAMES) {
   assert.ok(!toolsJson.includes(banned), `delegation must not expose legacy tool "${banned}"`);
 }
-assert.ok(toolsJson.includes("emit_caller_meaning"));
+for (const required of [
+  "update_intake",
+  "find_availability",
+  "book_appointment",
+  "find_appointment",
+  "cancel_appointment",
+  "reschedule_appointment",
+  "transfer_call",
+  "end_call",
+]) {
+  assert.ok(toolsJson.includes(required), `delegation must expose capability tool "${required}"`);
+}
 
 console.log("PASS voice-v3 pipeline boundary");

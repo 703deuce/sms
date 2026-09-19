@@ -20,7 +20,6 @@ import {
   buildVoiceV3AstraDelegationResponses,
 } from "../src/lib/voice-v3/intake/delegation-config";
 import { resolveVoiceV3AgentConfig } from "../src/lib/voice-v3/state/call-runtime";
-import { EMIT_CALLER_MEANING_TOOL_NAME } from "../src/lib/voice-v3/intake/emit-caller-meaning-tool";
 
 function includesAll(haystack: string, needles: string[], label: string): void {
   for (const needle of needles) {
@@ -61,16 +60,15 @@ function main() {
     currentLocalDateTime: "Friday, September 18, 2026 at 1:00:00 PM EDT",
   });
   includesAll(astra, [
-    "authority order",
-    "CALLER MEANING",
-    "CORRECTIONS",
-    "AMBIGUITY",
+    "reasoning and tool-use backend",
+    "Choose tools directly",
+    "function call is a request",
+    "Never fabricate availability",
     "America/New_York",
     "September 18, 2026",
-    "DYNAMIC FIELDS",
-    "DATE AND TIME LANGUAGE",
-    "SPOKEN REFERENCES",
-    "Do not claim that an external action succeeded",
+    "update_intake",
+    "find_availability",
+    "book_appointment",
   ], "astra backend");
 
   const fixedNow = new Date("2026-09-18T17:00:00.000Z");
@@ -104,11 +102,12 @@ function main() {
   );
 
   const tools = session.delegation.responses.tools ?? [];
-  const emitTool = tools.find(
-    (t) => t && typeof t === "object" && "name" in t && t.name === EMIT_CALLER_MEANING_TOOL_NAME,
+  const updateIntakeTool = tools.find(
+    (t) => t && typeof t === "object" && "name" in t && t.name === "update_intake",
   );
-  if (emitTool && typeof emitTool === "object" && "strict" in emitTool) {
-    assert.equal(emitTool.strict, true, "emit_caller_meaning must be strict function tool");
+  assert.ok(updateIntakeTool, "delegation must include update_intake capability tool");
+  if (updateIntakeTool && typeof updateIntakeTool === "object" && "strict" in updateIntakeTool) {
+    assert.equal(updateIntakeTool.strict, true, "update_intake must be strict function tool");
   }
 
   const webhookSrc = readFileSync(
@@ -128,7 +127,9 @@ function main() {
     frontendModel: VOICE_V3_BASIC_LIVE_MODEL,
     backendModel: VOICE_V3_BASIC_BACKEND_MODEL,
     reasoningEffort: "low",
-    semanticTool: emitTool ? EMIT_CALLER_MEANING_TOOL_NAME : null,
+    capabilityTools: tools.map((t) =>
+      t && typeof t === "object" && "name" in t ? (t as { name: string }).name : null,
+    ),
     hasTextFormatOnAccept: false,
   });
 
