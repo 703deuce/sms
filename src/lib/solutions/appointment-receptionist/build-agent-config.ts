@@ -374,7 +374,9 @@ export function buildWizardAgentConfig(
   const recordingOn = state.callRecording !== "off";
   const bookingStrategy = deriveBookingStrategyFromWizard(state);
   const useOpenAiRealtimeTelnyxTransport =
-    bookingStrategy === "MICROSOFT_365" || bookingStrategy === "CALENDLY";
+    bookingStrategy === "MICROSOFT_365" ||
+    bookingStrategy === "CALENDLY" ||
+    bookingStrategy === "SEND_LINK";
 
   const draft = applyAmyMinimumSideEffectConfig({
     ...base,
