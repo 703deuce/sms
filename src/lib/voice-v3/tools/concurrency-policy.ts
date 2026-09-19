@@ -6,6 +6,7 @@ export type VoiceToolKind = "state_update" | "read" | "mutation" | "lifecycle";
 
 export const VOICE_TOOL_KIND_BY_NAME: Record<string, VoiceToolKind> = {
   update_intake: "state_update",
+  set_scheduling_preference: "state_update",
   find_availability: "read",
   find_appointment: "read",
   book_appointment: "mutation",
@@ -25,6 +26,10 @@ export function voiceV3DelegationParallelToolCallsEnabled(): boolean {
 
 export function toolsMayRunInParallel(a: string, b: string): boolean {
   if (a === b) return false;
+  const findSetPair =
+    (a === "find_availability" && b === "set_scheduling_preference") ||
+    (a === "set_scheduling_preference" && b === "find_availability");
+  if (findSetPair) return false;
   const ka = VOICE_TOOL_KIND_BY_NAME[a];
   const kb = VOICE_TOOL_KIND_BY_NAME[b];
   if (!ka || !kb) return false;

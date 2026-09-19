@@ -27,6 +27,7 @@ async function main() {
     "find_appointment",
     "find_availability",
     "reschedule_appointment",
+    "set_scheduling_preference",
     "transfer_call",
     "update_intake",
   ];

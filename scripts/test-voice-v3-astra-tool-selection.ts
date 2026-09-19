@@ -23,8 +23,8 @@ const SCENARIOS: Scenario[] = [
     label: "availability",
     history:
       "Amy greeted the caller. Caller: What appointment times do you have open Tuesday afternoon?",
-    expectTool: "find_availability",
-    forbiddenTools: ["update_intake", "book_appointment"],
+    expectTool: "set_scheduling_preference",
+    forbiddenTools: ["update_intake", "book_appointment", "find_availability"],
   },
   {
     category: "obvious",
@@ -63,8 +63,8 @@ const SCENARIOS: Scenario[] = [
     label: "availability_not_intake",
     history:
       "Caller: Do you have anything open Friday morning? (No name, email, or phone provided.)",
-    expectTool: "find_availability",
-    forbiddenTools: ["update_intake"],
+    expectTool: "set_scheduling_preference",
+    forbiddenTools: ["update_intake", "find_availability"],
   },
   {
     category: "boundary",
@@ -78,8 +78,8 @@ const SCENARIOS: Scenario[] = [
     label: "scheduling_correction",
     history:
       "Caller previously asked about Monday afternoon but now says: Actually forget Monday — check Tuesday afternoon instead.",
-    expectTool: "find_availability",
-    forbiddenTools: ["update_intake"],
+    expectTool: "set_scheduling_preference",
+    forbiddenTools: ["update_intake", "find_availability"],
   },
   {
     category: "cancel_boundary",

@@ -1,9 +1,12 @@
 import { z } from "zod";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { schedulingMeaningZodObject } from "../time/scheduling-meaning-schema";
 import { slotSelectionMeaningZodObject } from "./slot-selection-schema";
 import { appointmentSelectionMeaningZodObject } from "./appointment-selection-schema";
 import { cancellationConfirmationSchema } from "./cancellation-confirmation-schema";
 import { callerGoalsZodArray } from "./caller-goal-meaning";
+
+export { schedulingMeaningZodObject } from "../time/scheduling-meaning-schema";
 
 const voiceV3GoalSchema = z.enum([
   "UNKNOWN",
@@ -17,52 +20,7 @@ const voiceV3GoalSchema = z.enum([
 
 export const CALLER_MEANING_STRUCTURED_OUTPUT_NAME = "voice_v3_caller_meaning";
 
-const schedulingDateRelationSchema = z.enum([
-  "TODAY",
-  "TOMORROW",
-  "DAY_AFTER_TOMORROW",
-  "THIS_WEEKDAY",
-  "NEXT_WEEKDAY",
-  "EXPLICIT_DATE",
-  "UNSPECIFIED",
-]);
-
-const schedulingWeekdaySchema = z.enum([
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-  "SUNDAY",
-]);
-
-const schedulingTimeKindSchema = z.enum([
-  "EXACT",
-  "AFTER",
-  "BEFORE",
-  "BETWEEN",
-  "DAYPART",
-  "ANYTIME",
-  "UNSPECIFIED",
-]);
-
-const schedulingDaypartSchema = z.enum(["MORNING", "AFTERNOON", "EVENING"]);
-
 const postBookIntentSchema = z.enum(["NONE", "CHANGE_CONFIRMED_APPOINTMENT"]);
-
-export const schedulingMeaningZodObject = z.object({
-  date_expression: z.string().nullable(),
-  date_relation: schedulingDateRelationSchema,
-  weekday: schedulingWeekdaySchema.nullable(),
-  explicit_date: z.string().nullable(),
-  time_expression: z.string().nullable(),
-  time_kind: schedulingTimeKindSchema,
-  exact_time: z.string().nullable(),
-  start_time: z.string().nullable(),
-  end_time: z.string().nullable(),
-  daypart: schedulingDaypartSchema.nullable(),
-});
 
 function intakeFieldKeySchema(config: VoiceV3AgentConfig) {
   const keys = config.intakeFields.map((f) => f.key).filter(Boolean);

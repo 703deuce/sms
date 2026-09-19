@@ -70,6 +70,7 @@ function main() {
     "America/New_York",
     "September 18, 2026",
     "update_intake",
+    "set_scheduling_preference",
     "find_availability",
     "never invent offer_set_id",
   ], "astra backend");

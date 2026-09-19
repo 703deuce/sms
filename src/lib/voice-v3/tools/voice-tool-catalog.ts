@@ -3,6 +3,10 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import type { VoiceToolKind } from "./concurrency-policy";
 import { buildUpdateIntakeOpenAiTool, updateIntakeTool } from "./update-intake-tool";
+import {
+  buildSetSchedulingPreferenceOpenAiTool,
+  setSchedulingPreferenceTool,
+} from "./set-scheduling-preference-tool";
 import { buildFindAvailabilityOpenAiTool, findAvailabilityTool } from "./find-availability-tool";
 import { buildBookAppointmentOpenAiTool, bookAppointmentTool } from "./book-appointment-tool";
 import { buildFindAppointmentOpenAiTool, findAppointmentTool } from "./find-appointment-tool";
@@ -26,6 +30,13 @@ export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
     telemetryName: "update_intake",
     definition: updateIntakeTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildUpdateIntakeOpenAiTool,
+  },
+  {
+    name: "set_scheduling_preference",
+    kind: "state_update",
+    telemetryName: "set_scheduling_preference",
+    definition: setSchedulingPreferenceTool as VoiceToolDefinition<unknown>,
+    buildOpenAiTool: buildSetSchedulingPreferenceOpenAiTool,
   },
   {
     name: "find_availability",

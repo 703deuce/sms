@@ -3,28 +3,13 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { dispatchFindAvailabilityIfRequired } from "../calendar/find-dispatch";
-import {
-  mergeDialogActiveGoalFromTool,
-  mergeSchedulingNaturalLanguage,
-} from "../intake/merge-intake-state";
+import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_AVAILABILITY_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const findArgsSchema = z.object({
-  date_expression: z
-    .string()
-    .min(1)
-    .describe(
-      "Caller natural-language date for the search window (e.g. Tuesday, next Friday, March 3). Required.",
-    ),
-  time_expression: z
-    .string()
-    .nullable()
-    .describe(
-      "Optional natural-language time or daypart (e.g. afternoon, after 3pm). Null if caller gave date only.",
-    ),
   service_id: z
     .string()
     .nullable()
@@ -53,18 +38,23 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
   description: "find_availability",
   parameters: {},
   validate: (raw) => findArgsSchema.parse(raw),
-  execute: async (ctx, args) => {
+  execute: async (ctx, _args) => {
     const config = ctx.runtime.config;
     let snap = ctx.runtime.getSnapshot();
-    const sched = mergeSchedulingNaturalLanguage(snap, {
-      dateExpression: args.date_expression,
-      timeExpression: args.time_expression,
-    });
-    snap = mergeDialogActiveGoalFromTool(sched.context, "BOOK_APPOINTMENT");
+    snap = mergeDialogActiveGoalFromTool(snap, "BOOK_APPOINTMENT");
     ctx.runtime.replaceContext(snap);
     snap = ctx.runtime.getSnapshot();
 
     const rules = evaluateVoiceV3Rules(snap, config);
+    if (!rules.hasSchedulingPreference) {
+      return voiceToolError(
+        "SCHEDULING_PREFERENCE_REQUIRED",
+        "A normalized scheduling preference is required before searching availability.",
+        { required_tool: "set_scheduling_preference" },
+        "not_ready",
+      );
+    }
+
     if (rules.schedulingRequiresClarification) {
       return voiceToolError(
         "SCHEDULING_CLARIFICATION_REQUIRED",
@@ -72,6 +62,7 @@ export const findAvailabilityTool: VoiceToolDefinition<FindAvailabilityArgs> = {
         {
           reason: rules.schedulingClarificationReason,
           clarification_prompt: rules.schedulingClarificationPrompt,
+          required_tool: "set_scheduling_preference",
         },
         "not_ready",
       );

@@ -51,7 +51,7 @@ assert.ok(live.includes("DELEGATION POLICY"), "Live prompt must include canonica
 assert.ok(!live.includes("update_intake"), "Live prompt must not embed Astra tool schemas");
 
 const toolsJson = JSON.stringify(buildVoiceV3AstraFunctionTools(VOICE_V3_BOOKING_TEST_CONFIG));
-assert.equal(VOICE_TOOL_CATALOG.length, 8, "registry must list eight tools");
+assert.equal(VOICE_TOOL_CATALOG.length, 9, "registry must list nine tools");
 
 const callerTurn = readFileSync(
   join(SRC, "lib/voice-v3/conversation/caller-turn-manager.ts"),
